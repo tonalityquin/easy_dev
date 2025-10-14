@@ -24,6 +24,9 @@ class MonthlyParkingManagement extends StatefulWidget {
 }
 
 class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
+  // 좌측 상단(11시) 라벨 텍스트
+  static const String _screenTag = 'monthly management';
+
   String? _selectedDocId;
   final ScrollController _scrollController = ScrollController();
   static const int animationDurationMs = 250;
@@ -141,13 +144,9 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
           ),
         ],
       ),
-    ) ??
-        false;
+    ) ?? false;
 
     if (!ok) return;
-
-    // 삭제 전에 area를 도출(문서가 plateNumber_area 규칙)
-    // final areaForReport = _inferAreaFromPlateStatusDocId(_selectedDocId!);
 
     try {
       await FirebaseFirestore.instance.collection('plate_status').doc(_selectedDocId).delete();
@@ -182,6 +181,36 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
     super.dispose();
   }
 
+  // 좌측 상단(11시) 라벨 위젯 (LocationManagement와 동일 패턴)
+  Widget _buildScreenTag(BuildContext context) {
+    final base = Theme.of(context).textTheme.labelSmall;
+    final style = (base ??
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        )).copyWith(
+      color: Colors.black54,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
+    );
+
+    return SafeArea(
+      child: IgnorePointer(
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 12, top: 4),
+            child: Semantics(
+              label: 'screen_tag: $_screenTag',
+              child: Text(_screenTag, style: style),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentArea = context.read<UserState>().currentArea.trim();
@@ -193,6 +222,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
         backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: Colors.black87,
+        flexibleSpace: _buildScreenTag(context), // ◀️ 11시 라벨 (AppBar에 배치)
         title: const Text('정기 주차 관리 페이지', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         automaticallyImplyLeading: false,
@@ -259,11 +289,10 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                   key: _cardKeys[docId],
                   elevation: isSelected ? 6 : 1,
                   surfaceTintColor: _SvcColors.light,
-                  // 카드 톤 살짝
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                     side: isSelected
-                        ? const BorderSide(color: _SvcColors.base, width: 2) // 강조색(Deep Blue)
+                        ? const BorderSide(color: _SvcColors.base, width: 2)
                         : BorderSide(color: Colors.black.withOpacity(0.06)),
                   ),
                   color: Colors.white,
@@ -291,7 +320,8 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                         // 상세 보기
                         AnimatedCrossFade(
                           duration: const Duration(milliseconds: animationDurationMs),
-                          crossFadeState: isSelected ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+                          crossFadeState:
+                          isSelected ? CrossFadeState.showSecond : CrossFadeState.showFirst,
                           firstChild: const SizedBox.shrink(),
                           secondChild: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -300,12 +330,12 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                                 children: const [
                                   _InfoIcon(icon: Icons.attach_money, color: _SvcColors.base),
                                   SizedBox(width: 6),
-                                  // 텍스트는 아래에서 동적으로
                                 ],
                               ),
                               Padding(
                                 padding: const EdgeInsets.only(left: 26),
-                                child: Text('요금: ₩${won.format(regularAmount)}', style: const TextStyle(fontSize: 16)),
+                                child: Text('요금: ₩${won.format(regularAmount)}',
+                                    style: const TextStyle(fontSize: 16)),
                               ),
                               const SizedBox(height: 6),
                               Row(
@@ -316,7 +346,8 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                               ),
                               Padding(
                                 padding: const EdgeInsets.only(left: 26),
-                                child: Text('주차 시간: $duration$periodUnit', style: const TextStyle(fontSize: 16)),
+                                child: Text('주차 시간: $duration$periodUnit',
+                                    style: const TextStyle(fontSize: 16)),
                               ),
                               const SizedBox(height: 6),
                               Row(
@@ -327,7 +358,8 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                               ),
                               Padding(
                                 padding: const EdgeInsets.only(left: 26),
-                                child: Text('기간: $startDate ~ $endDate', style: const TextStyle(fontSize: 16)),
+                                child: Text('기간: $startDate ~ $endDate',
+                                    style: const TextStyle(fontSize: 16)),
                               ),
                               const SizedBox(height: 6),
                               Row(
@@ -335,14 +367,16 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                                   const _InfoIcon(icon: Icons.info_outline, color: _SvcColors.base),
                                   const SizedBox(width: 6),
                                   Expanded(
-                                    child: Text('상태 메시지: $customStatus', style: const TextStyle(fontSize: 16)),
+                                    child: Text('상태 메시지: $customStatus',
+                                        style: const TextStyle(fontSize: 16)),
                                   ),
                                 ],
                               ),
                               const Divider(height: 24),
 
                               // 결제 내역
-                              if (data['payment_history'] != null && data['payment_history'] is List)
+                              if (data['payment_history'] != null &&
+                                  data['payment_history'] is List)
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -352,13 +386,15 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                                     ),
                                     const SizedBox(height: 8),
                                     ...(() {
-                                      final payments = List<Map<String, dynamic>>.from(data['payment_history']);
+                                      final payments =
+                                      List<Map<String, dynamic>>.from(data['payment_history']);
                                       final reversed = payments.reversed.toList(); // ✅ 역순 1회
                                       return reversed.map((payment) {
                                         final paidAtRaw = payment['paidAt'] ?? '';
                                         String paidAt;
                                         try {
-                                          paidAt = DateFormat('yyyy.MM.dd HH:mm').format(DateTime.parse(paidAtRaw));
+                                          paidAt = DateFormat('yyyy.MM.dd HH:mm')
+                                              .format(DateTime.parse(paidAtRaw));
                                         } catch (_) {
                                           paidAt = paidAtRaw;
                                         }
@@ -391,7 +427,9 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                                               Row(
                                                 children: [
                                                   const _InfoIcon(
-                                                      icon: Icons.calendar_today, size: 16, color: _SvcColors.dark),
+                                                      icon: Icons.calendar_today,
+                                                      size: 16,
+                                                      color: _SvcColors.dark),
                                                   const SizedBox(width: 6),
                                                   Text(
                                                     paidAt,
@@ -405,13 +443,18 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                                               const SizedBox(height: 4),
                                               Row(
                                                 children: [
-                                                  const _InfoIcon(icon: Icons.person, size: 16, color: _SvcColors.base),
+                                                  const _InfoIcon(
+                                                      icon: Icons.person,
+                                                      size: 16,
+                                                      color: _SvcColors.base),
                                                   const SizedBox(width: 6),
-                                                  Text('결제자: $paidBy', style: const TextStyle(fontSize: 14)),
+                                                  Text('결제자: $paidBy',
+                                                      style: const TextStyle(fontSize: 14)),
                                                   if (extended)
                                                     Container(
                                                       margin: const EdgeInsets.only(left: 8),
-                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                                      padding: const EdgeInsets.symmetric(
+                                                          horizontal: 8, vertical: 2),
                                                       decoration: BoxDecoration(
                                                         color: _SvcColors.light.withOpacity(.16),
                                                         borderRadius: BorderRadius.circular(999),
@@ -434,7 +477,9 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                                               Row(
                                                 children: [
                                                   const _InfoIcon(
-                                                      icon: Icons.attach_money, size: 16, color: _SvcColors.base),
+                                                      icon: Icons.attach_money,
+                                                      size: 16,
+                                                      color: _SvcColors.base),
                                                   const SizedBox(width: 6),
                                                   Text(
                                                     '₩${won.format(amount)}',
@@ -450,7 +495,10 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                                                 Row(
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
-                                                    const _InfoIcon(icon: Icons.note, size: 16, color: _SvcColors.dark),
+                                                    const _InfoIcon(
+                                                        icon: Icons.note,
+                                                        size: 16,
+                                                        color: _SvcColors.dark),
                                                     const SizedBox(width: 6),
                                                     Expanded(
                                                       child: Text(
@@ -487,10 +535,8 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
         bottomGap: _fabBottomGap,
         spacing: _fabSpacing,
         hasSelection: _selectedDocId != null,
-        onPrimary: () => _handlePrimaryAction(context),
-        // 추가/수정
-        onDelete: _selectedDocId != null ? () => _handleDelete(context) : null,
-        // 삭제
+        onPrimary: () => _handlePrimaryAction(context), // 추가/수정
+        onDelete: _selectedDocId != null ? () => _handleDelete(context) : null, // 삭제
         cs: cs,
       ),
     );
@@ -514,7 +560,7 @@ class _InfoIcon extends StatelessWidget {
   }
 }
 
-/// 현대적인 파브 세트(라운드 필 버튼 스타일 + 하단 spacer로 높이 조절)
+/// 현대적인 파브 세트(라운드 필 버튼 스타일 + 하단 spacer로 위치 조절)
 class _FabStack extends StatelessWidget {
   const _FabStack({
     required this.bottomGap,

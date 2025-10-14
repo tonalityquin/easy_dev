@@ -113,6 +113,35 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
     super.dispose();
   }
 
+  // 11시 라벨(상단 좌측 고정)
+  Widget _buildScreenTag(BuildContext context) {
+    final base = Theme.of(context).textTheme.labelSmall;
+    final style = (base ??
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        ))
+        .copyWith(
+      color: Colors.black54,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
+    );
+
+    return IgnorePointer(
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 12, top: 4),
+          child: Semantics(
+            label: 'screen_tag: user setting',
+            child: Text('user setting', style: style),
+          ),
+        ),
+      ),
+    );
+  }
+
   // --- Helpers ---
 
   bool _validateInputs() {
@@ -214,320 +243,359 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
     final effectiveHeight = screenHeight - bottomInset; // ✅ 최상단까지 차오르도록 높이 고정
 
     return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.only(bottom: bottomInset), // ✅ 키보드 여백
-        child: SizedBox(
-          height: effectiveHeight,
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
-              color: Colors.white, // 바텀시트 배경
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Drag handle
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: theme.dividerColor,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
+      child: Stack(
+        children: [
+          Padding(
+            padding: EdgeInsets.only(bottom: bottomInset), // ✅ 키보드 여백
+            child: SizedBox(
+              height: effectiveHeight,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: const BoxDecoration(
+                  color: Colors.white, // 바텀시트 배경
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
                 ),
-
-                // 상단 브랜드 배지 느낌의 타이틀
-                Row(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: _SvcColors.light.withOpacity(.20),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: _SvcColors.light.withOpacity(.45)),
-                      ),
-                      child: const Icon(Icons.person_outline, color: _SvcColors.dark),
-                    ),
-                    const SizedBox(width: 10),
-                    const Expanded(
-                      child: Text(
-                        '사용자 정보',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: _SvcColors.dark,
+                    // Drag handle
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: theme.dividerColor,
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 16),
 
-                // ===== 본문 스크롤 영역 =====
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
+                    // 상단 브랜드 배지 느낌의 타이틀
+                    Row(
                       children: [
-                        // 입력 섹션(이름/전화/이메일 로컬파트)
-                        UserInputSection(
-                          nameController: _nameController,
-                          phoneController: _phoneController,
-                          emailController: _emailController,
-                          nameFocus: _nameFocus,
-                          phoneFocus: _phoneFocus,
-                          emailFocus: _emailFocus,
-                          errorMessage: _errorMessage,
-                        ),
-                        const SizedBox(height: 16),
-
-                        // 권한 드롭다운 (브랜드 테두리 감싸기)
                         Container(
-                          padding: const EdgeInsets.all(10),
+                          width: 36,
+                          height: 36,
                           decoration: BoxDecoration(
-                            color: _SvcColors.light.withOpacity(.06),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: _SvcColors.light.withOpacity(.35)),
+                            color: _SvcColors.light.withOpacity(.20),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                                color: _SvcColors.light.withOpacity(.45)),
                           ),
-                          child: UserRoleDropdownSection(
-                            selectedRole: _selectedRole,
-                            onChanged: (value) => setState(() => _selectedRole = value),
-                          ),
+                          child: const Icon(Icons.person_outline,
+                              color: _SvcColors.dark),
                         ),
-                        const SizedBox(height: 16),
-
-                        // 직책
-                        TextField(
-                          controller: _positionController,
-                          onTapOutside: (_) => FocusScope.of(context).unfocus(),
-                          decoration: InputDecoration(
-                            labelText: '직책',
-                            focusedBorder: OutlineInputBorder(
-                              borderSide: const BorderSide(color: _SvcColors.base, width: 1.2),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                              borderSide: BorderSide(
-                                color: _SvcColors.light.withOpacity(.45),
-                              ),
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            isDense: true,
-                            contentPadding:
-                            const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // 비밀번호 표시
-                        UserPasswordDisplaySection(controller: _passwordController),
-                        const SizedBox(height: 16),
-
-                        // 출근/퇴근 시간 선택 (브랜드 톤 Outlined)
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () => _selectTime(isStartTime: true),
-                                icon: const Icon(Icons.schedule),
-                                label: Text('출근: ${_formatTimeOfDay(_startTime)}'),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: _SvcColors.dark,
-                                  side: BorderSide(color: _SvcColors.light.withOpacity(.75)),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                    horizontal: 12,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                onPressed: () => _selectTime(isStartTime: false),
-                                icon: const Icon(Icons.schedule),
-                                label: Text('퇴근: ${_formatTimeOfDay(_endTime)}'),
-                                style: OutlinedButton.styleFrom(
-                                  foregroundColor: _SvcColors.dark,
-                                  side: BorderSide(color: _SvcColors.light.withOpacity(.75)),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 12,
-                                    horizontal: 12,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-
-                        // 고정 휴일
-                        Align(
-                          alignment: Alignment.centerLeft,
+                        const SizedBox(width: 10),
+                        const Expanded(
                           child: Text(
-                            '고정 휴일 선택 (선택사항)',
-                            style: theme.textTheme.bodyLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
+                            '사용자 정보',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
                               color: _SvcColors.dark,
                             ),
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          children: _days.map((day) {
-                            final isSelected = _selectedHolidays.contains(day);
-                            return FilterChip(
-                              label: Text(day),
-                              selected: isSelected,
-                              selectedColor: _SvcColors.light.withOpacity(.25),
-                              checkmarkColor: _SvcColors.dark,
-                              onSelected: (selected) {
-                                setState(() {
-                                  if (selected) {
-                                    _selectedHolidays.add(day);
-                                  } else {
-                                    _selectedHolidays.remove(day);
-                                  }
-                                });
-                              },
-                            );
-                          }).toList(),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // 현재 지역 Pill
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: _SvcColors.light.withOpacity(.18),
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(color: _SvcColors.light.withOpacity(.35)),
-                            ),
-                            child: Text(
-                              '현재 지역: ${widget.areaValue}',
-                              style: const TextStyle(
-                                color: _SvcColors.dark,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                        ),
-
-                        if (_errorMessage != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 12),
-                            child: Text(
-                              _errorMessage!,
-                              style: TextStyle(color: cs.error),
-                            ),
-                          ),
                       ],
                     ),
-                  ),
-                ),
+                    const SizedBox(height: 16),
 
-                const SizedBox(height: 24),
-
-                // ===== 하단 버튼 =====
-                Row(
-                  children: [
+                    // ===== 본문 스크롤 영역 =====
                     Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: _SvcColors.dark,
-                          side: BorderSide(color: _SvcColors.light.withOpacity(.75)),
-                          shape: const StadiumBorder(),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // 입력 섹션(이름/전화/이메일 로컬파트)
+                            UserInputSection(
+                              nameController: _nameController,
+                              phoneController: _phoneController,
+                              emailController: _emailController,
+                              nameFocus: _nameFocus,
+                              phoneFocus: _phoneFocus,
+                              emailFocus: _emailFocus,
+                              errorMessage: _errorMessage,
+                            ),
+                            const SizedBox(height: 16),
+
+                            // 권한 드롭다운 (브랜드 테두리 감싸기)
+                            Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: _SvcColors.light.withOpacity(.06),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                    color:
+                                    _SvcColors.light.withOpacity(.35)),
+                              ),
+                              child: UserRoleDropdownSection(
+                                selectedRole: _selectedRole,
+                                onChanged: (value) =>
+                                    setState(() => _selectedRole = value),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // 직책
+                            TextField(
+                              controller: _positionController,
+                              onTapOutside: (_) =>
+                                  FocusScope.of(context).unfocus(),
+                              decoration: InputDecoration(
+                                labelText: '직책',
+                                focusedBorder: OutlineInputBorder(
+                                  borderSide: const BorderSide(
+                                      color: _SvcColors.base, width: 1.2),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                  borderSide: BorderSide(
+                                    color: _SvcColors.light.withOpacity(.45),
+                                  ),
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                isDense: true,
+                                contentPadding:
+                                const EdgeInsets.symmetric(
+                                    vertical: 12, horizontal: 12),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // 비밀번호 표시
+                            UserPasswordDisplaySection(
+                                controller: _passwordController),
+                            const SizedBox(height: 16),
+
+                            // 출근/퇴근 시간 선택 (브랜드 톤 Outlined)
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () =>
+                                        _selectTime(isStartTime: true),
+                                    icon: const Icon(Icons.schedule),
+                                    label: Text(
+                                        '출근: ${_formatTimeOfDay(_startTime)}'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: _SvcColors.dark,
+                                      side: BorderSide(
+                                          color: _SvcColors.light
+                                              .withOpacity(.75)),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                        BorderRadius.circular(12),
+                                      ),
+                                      padding:
+                                      const EdgeInsets.symmetric(
+                                        vertical: 12,
+                                        horizontal: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () =>
+                                        _selectTime(isStartTime: false),
+                                    icon: const Icon(Icons.schedule),
+                                    label: Text(
+                                        '퇴근: ${_formatTimeOfDay(_endTime)}'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: _SvcColors.dark,
+                                      side: BorderSide(
+                                          color: _SvcColors.light
+                                              .withOpacity(.75)),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                        BorderRadius.circular(12),
+                                      ),
+                                      padding:
+                                      const EdgeInsets.symmetric(
+                                        vertical: 12,
+                                        horizontal: 12,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+
+                            // 고정 휴일
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                '고정 휴일 선택 (선택사항)',
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: _SvcColors.dark,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              children: _days.map((day) {
+                                final isSelected =
+                                _selectedHolidays.contains(day);
+                                return FilterChip(
+                                  label: Text(day),
+                                  selected: isSelected,
+                                  selectedColor:
+                                  _SvcColors.light.withOpacity(.25),
+                                  checkmarkColor: _SvcColors.dark,
+                                  onSelected: (selected) {
+                                    setState(() {
+                                      if (selected) {
+                                        _selectedHolidays.add(day);
+                                      } else {
+                                        _selectedHolidays.remove(day);
+                                      }
+                                    });
+                                  },
+                                );
+                              }).toList(),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // 현재 지역 Pill
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: _SvcColors.light.withOpacity(.18),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                      color: _SvcColors.light
+                                          .withOpacity(.35)),
+                                ),
+                                child: Text(
+                                  '현재 지역: ${widget.areaValue}',
+                                  style: const TextStyle(
+                                    color: _SvcColors.dark,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                            if (_errorMessage != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: Text(
+                                  _errorMessage!,
+                                  style: TextStyle(color: cs.error),
+                                ),
+                              ),
+                          ],
                         ),
-                        child: const Text('취소'),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () async {
-                          FocusScope.of(context).unfocus();
 
-                          // 1) 필드 검증
-                          if (!_validateInputs()) return;
+                    const SizedBox(height: 24),
 
-                          // 2) 이메일 로컬파트 추가 검증
-                          if (!_isValidEmailLocalPart(_emailController.text)) {
-                            _setErrorMessage('이메일을 다시 확인하세요');
-                            return;
-                          }
-
-                          // 3) 시간 정합성 검증
-                          if (!_validateTimes()) return;
-
-                          final fullEmail = '${_emailController.text}@gmail.com';
-
-                          // 저장 콜백 호출 전/후 어느 시점이든 무방하나,
-                          // 일반적으로 저장 성공 후 예약하는 편이 안전합니다.
-                          widget.onSave(
-                            _nameController.text,
-                            _phoneController.text,
-                            fullEmail,
-                            _selectedRole.name,
-                            _passwordController.text,
-                            widget.areaValue,
-                            widget.division,
-                            false, // isWorking 초기 정책
-                            false, // isSaved 초기 정책
-                            widget.areaValue, // selectedArea
-                            _timeToString(_startTime),
-                            _timeToString(_endTime),
-                            _selectedHolidays.toList(),
-                            _positionController.text,
-                          );
-
-                          // 🔔 추가: endTime(계정별 HH:mm)로 알림 예약/취소
-                          final endTime = _timeToString(_endTime);
-                          if (endTime != null) {
-                            await EndtimeReminderService.instance
-                                .scheduleDailyOneHourBefore(endTime);
-                          } else {
-                            await EndtimeReminderService.instance.cancel();
-                          }
-
-                          if (mounted) {
-                            Navigator.pop(context);
-                          }
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _SvcColors.base,
-                          foregroundColor: _SvcColors.fg,
-                          shape: const StadiumBorder(),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
+                    // ===== 하단 버튼 =====
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: _SvcColors.dark,
+                              side: BorderSide(
+                                  color:
+                                  _SvcColors.light.withOpacity(.75)),
+                              shape: const StadiumBorder(),
+                              padding:
+                              const EdgeInsets.symmetric(vertical: 14),
+                            ),
+                            child: const Text('취소'),
+                          ),
                         ),
-                        child: Text(isEditMode ? '수정' : '생성'),
-                      ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              FocusScope.of(context).unfocus();
+
+                              // 1) 필드 검증
+                              if (!_validateInputs()) return;
+
+                              // 2) 이메일 로컬파트 추가 검증
+                              if (!_isValidEmailLocalPart(
+                                  _emailController.text)) {
+                                _setErrorMessage('이메일을 다시 확인하세요');
+                                return;
+                              }
+
+                              // 3) 시간 정합성 검증
+                              if (!_validateTimes()) return;
+
+                              final fullEmail =
+                                  '${_emailController.text}@gmail.com';
+
+                              // 저장 콜백
+                              widget.onSave(
+                                _nameController.text,
+                                _phoneController.text,
+                                fullEmail,
+                                _selectedRole.name,
+                                _passwordController.text,
+                                widget.areaValue,
+                                widget.division,
+                                false, // isWorking 초기 정책
+                                false, // isSaved 초기 정책
+                                widget.areaValue, // selectedArea
+                                _timeToString(_startTime),
+                                _timeToString(_endTime),
+                                _selectedHolidays.toList(),
+                                _positionController.text,
+                              );
+
+                              // 🔔 endTime 기준 알림 스케줄링/취소
+                              final endTime = _timeToString(_endTime);
+                              if (endTime != null) {
+                                await EndtimeReminderService.instance
+                                    .scheduleDailyOneHourBefore(endTime);
+                              } else {
+                                await EndtimeReminderService.instance
+                                    .cancel();
+                              }
+
+                              if (mounted) {
+                                Navigator.pop(context);
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _SvcColors.base,
+                              foregroundColor: _SvcColors.fg,
+                              shape: const StadiumBorder(),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 14),
+                            ),
+                            child: Text(isEditMode ? '수정' : '생성'),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
+
+          // 11시 라벨 오버레이
+          _buildScreenTag(context),
+        ],
       ),
     );
   }

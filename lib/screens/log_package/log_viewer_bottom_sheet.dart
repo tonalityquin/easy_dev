@@ -30,13 +30,13 @@ class LogViewerBottomSheet extends StatefulWidget {
   });
 
   static Future<void> show(
-    BuildContext context, {
-    required String division,
-    required String area,
-    required DateTime requestTime,
-    String? initialPlateNumber,
-    String? plateId,
-  }) async {
+      BuildContext context, {
+        required String division,
+        required String area,
+        required DateTime requestTime,
+        String? initialPlateNumber,
+        String? plateId,
+      }) async {
     if (Navigator.canPop(context)) {
       Navigator.pop(context);
       await Future.delayed(const Duration(milliseconds: 150));
@@ -79,6 +79,9 @@ class LogViewerBottomSheet extends StatefulWidget {
 }
 
 class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
+  /// 화면 식별 태그(FAQ/에러 리포트용)
+  static const String screenTag = 'plate log';
+
   /// true: 최신순, false: 오래된순 (기본: 오래된순)
   bool _desc = false;
 
@@ -223,6 +226,35 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
     return Colors.blueGrey;
   }
 
+  // 좌측 상단(11시) 고정 태그
+  Widget _buildScreenTag(BuildContext context) {
+    final base = Theme.of(context).textTheme.labelSmall;
+    final style = (base ??
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        ))
+        .copyWith(
+      color: Colors.black54,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
+    );
+
+    return IgnorePointer( // 제스처 간섭 방지
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 12, top: 4),
+          child: Semantics(
+            label: 'screen_tag: $screenTag',
+            child: Text(screenTag, style: style),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final plateTitle = widget.initialPlateNumber != null ? '${widget.initialPlateNumber} 로그' : '번호판 로그';
@@ -254,7 +286,7 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                 child: Column(
                   children: [
-                    // 드래그 핸들 + 헤더
+                    // 드래그 핸들
                     Container(
                       width: 40,
                       height: 4,
@@ -264,6 +296,9 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
+                    // ⬇️ 좌측 상단(11시) 화면 태그
+                    _buildScreenTag(context),
+
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
                       child: Row(
@@ -306,72 +341,72 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
                       child: _isLoading
                           ? const Center(child: CircularProgressIndicator())
                           : (_errorMessage != null)
-                              ? _ErrorState(message: _errorMessage!)
-                              : (_logs.isEmpty)
-                                  ? const _EmptyState(text: '📭 로그가 없습니다.')
-                                  : ListView.separated(
-                                      itemCount: _logs.length,
-                                      separatorBuilder: (_, __) => const Divider(height: 1),
-                                      itemBuilder: (_, index) {
-                                        final log = _logs[index];
-                                        final tsText = _formatTs(log.timestamp);
-                                        final color = _actionColor(log.action);
+                          ? _ErrorState(message: _errorMessage!)
+                          : (_logs.isEmpty)
+                          ? const _EmptyState(text: '📭 로그가 없습니다.')
+                          : ListView.separated(
+                        itemCount: _logs.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (_, index) {
+                          final log = _logs[index];
+                          final tsText = _formatTs(log.timestamp);
+                          final color = _actionColor(log.action);
 
-                                        final String? feeText =
-                                            (log.lockedFee != null) ? _formatWon(log.lockedFee) : null;
-                                        final String? payText =
-                                            (log.paymentMethod != null && log.paymentMethod!.trim().isNotEmpty)
-                                                ? log.paymentMethod
-                                                : null;
-                                        final String? reasonText =
-                                            (log.reason != null && log.reason!.trim().isNotEmpty) ? log.reason : null;
+                          final String? feeText =
+                          (log.lockedFee != null) ? _formatWon(log.lockedFee) : null;
+                          final String? payText =
+                          (log.paymentMethod != null && log.paymentMethod!.trim().isNotEmpty)
+                              ? log.paymentMethod
+                              : null;
+                          final String? reasonText =
+                          (log.reason != null && log.reason!.trim().isNotEmpty) ? log.reason : null;
 
-                                        return ListTile(
-                                          leading: Icon(_actionIcon(log.action), color: color),
-                                          title: Text(
-                                            log.action,
-                                            style: TextStyle(color: color),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          subtitle: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
-                                            children: [
-                                              if (log.from.isNotEmpty || log.to.isNotEmpty)
-                                                Text(
-                                                  '${log.from} → ${log.to}',
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              if (log.performedBy.isNotEmpty) const SizedBox(height: 2),
-                                              if (log.performedBy.isNotEmpty)
-                                                Text(
-                                                  '담당자: ${log.performedBy}',
-                                                  style: const TextStyle(fontSize: 12),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
+                          return ListTile(
+                            leading: Icon(_actionIcon(log.action), color: color),
+                            title: Text(
+                              log.action,
+                              style: TextStyle(color: color),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                if (log.from.isNotEmpty || log.to.isNotEmpty)
+                                  Text(
+                                    '${log.from} → ${log.to}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                if (log.performedBy.isNotEmpty) const SizedBox(height: 2),
+                                if (log.performedBy.isNotEmpty)
+                                  Text(
+                                    '담당자: ${log.performedBy}',
+                                    style: const TextStyle(fontSize: 12),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
 
-                                              // 사전 정산 관련 정보 (있을 때만 표시)
-                                              if (feeText != null || payText != null || reasonText != null)
-                                                const SizedBox(height: 2),
-                                              if (feeText != null)
-                                                Text('확정요금: $feeText', style: const TextStyle(fontSize: 12)),
-                                              if (payText != null)
-                                                Text('결제수단: $payText', style: const TextStyle(fontSize: 12)),
-                                              if (reasonText != null)
-                                                Text('사유: $reasonText',
-                                                    style: const TextStyle(fontSize: 12),
-                                                    maxLines: 2,
-                                                    overflow: TextOverflow.ellipsis),
-                                            ],
-                                          ),
-                                          trailing: Text(tsText, style: const TextStyle(fontSize: 12)),
-                                          isThreeLine: true,
-                                          dense: true,
-                                        );
-                                      },
-                                    ),
+                                // 사전 정산 관련 정보 (있을 때만 표시)
+                                if (feeText != null || payText != null || reasonText != null)
+                                  const SizedBox(height: 2),
+                                if (feeText != null)
+                                  Text('확정요금: $feeText', style: const TextStyle(fontSize: 12)),
+                                if (payText != null)
+                                  Text('결제수단: $payText', style: const TextStyle(fontSize: 12)),
+                                if (reasonText != null)
+                                  Text('사유: $reasonText',
+                                      style: const TextStyle(fontSize: 12),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis),
+                              ],
+                            ),
+                            trailing: Text(tsText, style: const TextStyle(fontSize: 12)),
+                            isThreeLine: true,
+                            dense: true,
+                          );
+                        },
+                      ),
                     ),
 
                     // 하단 액션

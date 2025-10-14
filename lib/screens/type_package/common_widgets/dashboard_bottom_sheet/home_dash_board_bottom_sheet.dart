@@ -20,8 +20,40 @@ class HomeDashBoardBottomSheet extends StatefulWidget {
 }
 
 class _HomeDashBoardBottomSheetState extends State<HomeDashBoardBottomSheet> {
+  // 화면 식별 태그(FAQ/에러 리포트 연계용)
+  static const String screenTag = 'DashBoard B';
+
   // true = 숨김(기본), false = 펼침
   bool _layerHidden = true;
+
+  // 좌측 상단(11시) 고정 태그
+  Widget _buildScreenTag(BuildContext context) {
+    final base = Theme.of(context).textTheme.labelSmall;
+    final style = (base ??
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        ))
+        .copyWith(
+      color: Colors.black54,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
+    );
+
+    return IgnorePointer( // 드래그/스크롤 제스처 간섭 방지
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 12, top: 4),
+          child: Semantics(
+            label: 'screen_tag: $screenTag',
+            child: Text(screenTag, style: style),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +90,11 @@ class _HomeDashBoardBottomSheetState extends State<HomeDashBoardBottomSheet> {
                         borderRadius: BorderRadius.circular(3),
                       ),
                     ),
-                    const SizedBox(height: 24),
+
+                    // ⬇️ 좌측 상단(11시) 화면 태그
+                    const SizedBox(height: 4),
+                    _buildScreenTag(context),
+
                     const SizedBox(height: 16),
                     const HomeUserInfoCard(),
                     const SizedBox(height: 16),

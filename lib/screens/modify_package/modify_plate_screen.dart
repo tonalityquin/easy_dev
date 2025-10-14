@@ -36,6 +36,9 @@ class ModifyPlateScreen extends StatefulWidget {
 }
 
 class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
+  // ⬇️ 화면 식별 태그(FAQ/에러 리포트 연계용)
+  static const String screenTag = 'plate modify';
+
   late ModifyPlateController _controller;
   late ModifyCameraHelper _cameraHelper;
 
@@ -150,6 +153,37 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
     super.dispose();
   }
 
+  // 좌측 상단(11시) 화면 태그 위젯
+  Widget _buildScreenTag(BuildContext context) {
+    final base = Theme.of(context).textTheme.labelSmall;
+    final style = (base ??
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        ))
+        .copyWith(
+      color: Colors.black54,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
+    );
+
+    return SafeArea(
+      child: IgnorePointer( // 제스처 간섭 방지
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 12, top: 4),
+            child: Semantics(
+              label: 'screen_tag: $screenTag',
+              child: Text(screenTag, style: style),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final viewInset = MediaQuery.of(context).viewInsets.bottom;
@@ -158,10 +192,13 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false, // ⬅️ 뒤로가기 화살표 제거
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 1,
+        // ⬇️ 좌측 상단(11시)에 'plate modify' 텍스트 고정
+        flexibleSpace: _buildScreenTag(context),
         title: const Text(
           "번호판 수정",
           style: TextStyle(color: Colors.grey, fontSize: 16),

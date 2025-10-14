@@ -16,6 +16,43 @@ DocumentReference<Map<String, dynamic>> latestMessageRef(String roomId) =>
 //   헤더/패널/오픈 버튼은 전역 LatestMessageService가 유일하게 snapshots()를 구독하고,
 //   UI는 ValueListenableBuilder로 latest를 구독합니다.
 
+/// 좌측 상단(11시) 라벨 텍스트
+const String _screenTag = 'chat';
+
+/// 11시 라벨 위젯 (LocationManagement와 동일 스타일)
+Widget _buildScreenTag(BuildContext context) {
+  final base = Theme.of(context).textTheme.labelSmall;
+  final style = (base ??
+      const TextStyle(
+        fontSize: 11,
+        color: Colors.black54,
+        fontWeight: FontWeight.w600,
+      )).copyWith(
+    color: Colors.black54,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 0.2,
+  );
+
+  return SafeArea(
+    top: true,
+    bottom: false,
+    left: false,
+    right: false,
+    child: IgnorePointer(
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 12, top: 4),
+          child: Semantics(
+            label: 'screen_tag: $_screenTag',
+            child: Text(_screenTag, style: style),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
 /// 구역 채팅 바텀시트 열기
 /// (⚠️ 이 함수에서는 Firestore 작업이 없으므로 UsageReporter 계측 없음)
 void chatBottomSheet(BuildContext context) {
@@ -30,8 +67,7 @@ void chatBottomSheet(BuildContext context) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    useSafeArea: false,
-    // 내부에서 SafeArea 처리
+    useSafeArea: false, // 내부에서 SafeArea 처리
     backgroundColor: Colors.transparent,
     elevation: 0,
     barrierColor: Colors.black.withOpacity(0.25),
@@ -66,59 +102,67 @@ void chatBottomSheet(BuildContext context) {
                   left: false,
                   right: false,
                   bottom: false,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.max,
+                  child: Stack(
                     children: [
-                      // ── 헤더
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
-                        child: Column(
-                          children: [
-                            // 드래그 핸들
-                            Container(
-                              width: 40,
-                              height: 4,
-                              decoration: BoxDecoration(
-                                color: Colors.grey[300],
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Row(
+                      // 11시 라벨 오버레이
+                      _buildScreenTag(ctx),
+
+                      // 본문
+                      Column(
+                        mainAxisSize: MainAxisSize.max,
+                        children: [
+                          // ── 헤더
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
+                            child: Column(
                               children: [
-                                const SizedBox(width: 4),
-                                const Icon(Icons.forum, size: 20, color: Colors.black87),
-                                const SizedBox(width: 8),
-                                const Expanded(
-                                  child: Text(
-                                    '구역 채팅',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.black87,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
+                                // 드래그 핸들
+                                Container(
+                                  width: 40,
+                                  height: 4,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[300],
+                                    borderRadius: BorderRadius.circular(2),
                                   ),
                                 ),
-                                IconButton(
-                                  tooltip: '닫기',
-                                  icon: const Icon(Icons.close),
-                                  onPressed: () => Navigator.of(ctx).pop(),
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    const SizedBox(width: 4),
+                                    const Icon(Icons.forum, size: 20, color: Colors.black87),
+                                    const SizedBox(width: 8),
+                                    const Expanded(
+                                      child: Text(
+                                        '구역 채팅',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.black87,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    IconButton(
+                                      tooltip: '닫기',
+                                      icon: const Icon(Icons.close),
+                                      onPressed: () => Navigator.of(ctx).pop(),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      const Divider(height: 1, thickness: 1, color: Color(0xFFEAEAEA)),
+                          ),
+                          const SizedBox(height: 6),
+                          const Divider(height: 1, thickness: 1, color: Color(0xFFEAEAEA)),
 
-                      // ── 콘텐츠(가변 영역)
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                          child: ChatPanel(roomId: roomId),
-                        ),
+                          // ── 콘텐츠(가변 영역)
+                          Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                              child: ChatPanel(roomId: roomId),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

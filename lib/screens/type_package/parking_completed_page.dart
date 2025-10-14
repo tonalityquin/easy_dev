@@ -65,6 +65,9 @@ class ParkingCompletedPage extends StatefulWidget {
 }
 
 class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
+  // 화면 식별 태그(FAQ/에러 리포트 연계용) ⬅️ 추가
+  static const String screenTag = 'parking completed';
+
   ParkingViewMode _mode = ParkingViewMode.status; // 기본은 현황 화면
   String? _selectedParkingArea; // 선택된 주차 구역(location)
   bool _isSorted = true; // true=최신순
@@ -213,7 +216,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   // ⛳ 새 로직: "구역 선택" 시 plateList 모드 대신, 조건 만족 시 번호판 BottomSheet 표시
   //   - 조건: 해당 구역(location)의 입차 완료 문서 count() ≤ N   ← location 단위 선가드
   //   - N: 먼저 서버 개별 리미트(location_limits: area+location 필드로 조회) → 없으면 SharedPreferences 전역 기본값
-  //   - 만족 시: 해당 구역의 plateNumber 목록을 소량 조회하여 BottomSheet로 표시
+  //   - 만족 시: 선택된 location에서 실제 목록을 소량 조회 (번호판만 사용)
   //   - 불만족 시: Snackbar로 잠금 안내
   // ---------------------------------------------------------------------------
   Future<void> _tryShowPlateNumbersBottomSheet(String locationName) async {
@@ -294,16 +297,16 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       for (final d in qs.docs) {
         final data = d.data();
         final pn = (data['plate_number'] // ✅ 실제 스키마
-                ??
-                data['plateNumber'] // 호환
-                ??
-                data['plate'] // 호환
-                ??
-                data['number'] // 호환
-                ??
-                data['licensePlate'] // 호환
-                ??
-                data['carNumber']) // 호환
+            ??
+            data['plateNumber'] // 호환
+            ??
+            data['plate'] // 호환
+            ??
+            data['number'] // 호환
+            ??
+            data['licensePlate'] // 호환
+            ??
+            data['carNumber']) // 호환
             ?.toString()
             .trim();
         if (pn != null && pn.isNotEmpty) {
@@ -450,6 +453,37 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     );
   }
 
+  // 좌측 상단(11시 방향) 화면 태그 위젯 ⬅️ 추가
+  Widget _buildScreenTag(BuildContext context) {
+    final base = Theme.of(context).textTheme.labelSmall;
+    final style = (base ??
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        ))
+        .copyWith(
+      color: Colors.black54,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
+    );
+
+    return SafeArea(
+      child: IgnorePointer( // 제스처 간섭 방지
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 12, top: 4),
+            child: Semantics(
+              label: 'screen_tag: $screenTag',
+              child: Text(screenTag, style: style),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   // ---------------------------------------------------------------------------
 
   @override
@@ -494,6 +528,8 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           backgroundColor: Colors.white,
           foregroundColor: Colors.black,
           elevation: 0,
+          // ⬇️ 좌측 상단(11시 방향)에 'parking completed' 텍스트 고정 ⬅️ 추가
+          flexibleSpace: _buildScreenTag(context),
         ),
         body: _buildBody(context),
         bottomNavigationBar: ParkingCompletedControlButtons(
@@ -524,7 +560,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
     switch (_mode) {
       case ParkingViewMode.status:
-        // 🔹 현황 화면을 탭하면 위치 선택 화면으로 전환
+      // 🔹 현황 화면을 탭하면 위치 선택 화면으로 전환
         return GestureDetector(
           onTap: () {
             setState(() => _mode = ParkingViewMode.locationPicker);
@@ -538,7 +574,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
         );
 
       case ParkingViewMode.locationPicker:
-        // 🔹 위치 선택 시: plateList 모드로 가지 않고, 번호판 BottomSheet 시도
+      // 🔹 위치 선택 시: plateList 모드로 가지 않고, 번호판 BottomSheet 시도
         return ParkingCompletedLocationPicker(
           onLocationSelected: (locationName) {
             _selectedParkingArea = locationName; // 선택된 구역 저장(필요 시)
@@ -548,13 +584,13 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
         );
 
       case ParkingViewMode.plateList:
-        // 🔹 기존 plateList 화면은 보존(다른 경로에서 필요할 수 있음). 현재 기본 흐름에선 사용 안 함.
+      // 🔹 기존 plateList 화면은 보존(다른 경로에서 필요할 수 있음). 현재 기본 흐름에선 사용 안 함.
         List<PlateModel> plates = plateState.getPlatesByCollection(PlateType.parkingCompleted);
         if (_selectedParkingArea != null) {
           plates = plates.where((p) => p.location == _selectedParkingArea).toList();
         }
         plates.sort(
-          (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
+              (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
         );
 
         return ListView(
@@ -566,11 +602,11 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
               filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
               onPlateTap: (plateNumber, area) {
                 context.read<PlateState>().togglePlateIsSelected(
-                      collection: PlateType.parkingCompleted,
-                      plateNumber: plateNumber,
-                      userName: userName,
-                      onError: (msg) => showFailedSnackbar(context, msg),
-                    );
+                  collection: PlateType.parkingCompleted,
+                  plateNumber: plateNumber,
+                  userName: userName,
+                  onError: (msg) => showFailedSnackbar(context, msg),
+                );
                 _log('tap plate: $plateNumber');
               },
             ),

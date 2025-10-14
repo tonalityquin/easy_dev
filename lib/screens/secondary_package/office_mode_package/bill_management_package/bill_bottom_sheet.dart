@@ -25,6 +25,9 @@ class BillSettingBottomSheet extends StatefulWidget {
 }
 
 class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
+  // 11시 라벨 텍스트
+  static const String _sheetTag = 'bill setting';
+
   // 일반(변동) 정산
   final TextEditingController _billController = TextEditingController();
   final TextEditingController _basicAmountController = TextEditingController();
@@ -97,6 +100,35 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
     Navigator.pop(context);
   }
 
+  // 11시 라벨 위젯
+  Widget _buildScreenTag(BuildContext context) {
+    final base = Theme.of(context).textTheme.labelSmall;
+    final style = (base ??
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        ))
+        .copyWith(
+      color: Colors.black54,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
+    );
+
+    return IgnorePointer(
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 4, top: 4),
+          child: Semantics(
+            label: 'sheet_tag: $_sheetTag',
+            child: Text(_sheetTag, style: style),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // ✅ 최상단까지 차오르도록 높이 고정 + 키보드 여백 반영
@@ -109,102 +141,109 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
         padding: EdgeInsets.only(bottom: bottomInset), // 키보드 여백
         child: SizedBox(
           height: effectiveHeight, // 화면 높이(키보드 제외)만큼 고정
-          child: Container(
-            decoration: const BoxDecoration(
-              color: serviceCardBg,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-            ),
-            child: Column(
-              children: [
-                // ===== 상단 헤더 영역 =====
-                const SizedBox(height: 16),
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
+          child: Stack(
+            children: [
+              Container(
+                decoration: const BoxDecoration(
+                  color: serviceCardBg,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                 ),
-                const Text(
-                  '정산 유형 추가',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-
-                // ===== 본문 스크롤 영역 =====
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                    child: Column(
-                      children: [
-                        // 변동 정산 입력 섹션
-                        BillTypeInputSection(controller: _billController),
-                        const SizedBox(height: 16),
-
-                        // 기본 기준/금액
-                        BillStandardAndAmountRowSection(
-                          selectedValue: _basicStandardValue,
-                          options: _basicStandardOptions,
-                          onChanged: (val) => setState(() => _basicStandardValue = val),
-                          amountController: _basicAmountController,
-                          standardLabel: '기본 시간',
-                          amountLabel: '기본 요금',
-                          amountInputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        ),
-                        const SizedBox(height: 16),
-
-                        // 추가 기준/금액
-                        BillStandardAndAmountRowSection(
-                          selectedValue: _addStandardValue,
-                          options: _addStandardOptions,
-                          onChanged: (val) => setState(() => _addStandardValue = val),
-                          amountController: _addAmountController,
-                          standardLabel: '추가 시간',
-                          amountLabel: '추가 요금',
-                          amountInputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                        ),
-
-                        const SizedBox(height: 16),
-                        BillErrorMessageTextSection(message: _errorMessage),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // ===== 하단 버튼 고정 영역 =====
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  child: Theme(
-                    // 하단 공용 섹션 버튼들도 팔레트 느낌 살리기
-                    data: Theme.of(context).copyWith(
-                      elevatedButtonTheme: ElevatedButtonThemeData(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: serviceCardBase,
-                          foregroundColor: serviceCardFg,
-                          shape: const StadiumBorder(),
-                        ),
-                      ),
-                      outlinedButtonTheme: OutlinedButtonThemeData(
-                        style: OutlinedButton.styleFrom(
-                          shape: const StadiumBorder(),
-                          side: const BorderSide(color: serviceCardLight),
-                          foregroundColor: serviceCardDark,
+                child: Column(
+                  children: [
+                    // ===== 상단 헤더 영역 =====
+                    const SizedBox(height: 16),
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(2),
                         ),
                       ),
                     ),
-                    child: BillBottomButtonsSection(
-                      onCancel: () => Navigator.pop(context),
-                      onSave: _handleSave,
+                    const Text(
+                      '정산 유형 추가',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
                     ),
-                  ),
+                    const SizedBox(height: 16),
+
+                    // ===== 본문 스크롤 영역 =====
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                        child: Column(
+                          children: [
+                            // 변동 정산 입력 섹션
+                            BillTypeInputSection(controller: _billController),
+                            const SizedBox(height: 16),
+
+                            // 기본 기준/금액
+                            BillStandardAndAmountRowSection(
+                              selectedValue: _basicStandardValue,
+                              options: _basicStandardOptions,
+                              onChanged: (val) => setState(() => _basicStandardValue = val),
+                              amountController: _basicAmountController,
+                              standardLabel: '기본 시간',
+                              amountLabel: '기본 요금',
+                              amountInputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            ),
+                            const SizedBox(height: 16),
+
+                            // 추가 기준/금액
+                            BillStandardAndAmountRowSection(
+                              selectedValue: _addStandardValue,
+                              options: _addStandardOptions,
+                              onChanged: (val) => setState(() => _addStandardValue = val),
+                              amountController: _addAmountController,
+                              standardLabel: '추가 시간',
+                              amountLabel: '추가 요금',
+                              amountInputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                            ),
+
+                            const SizedBox(height: 16),
+                            BillErrorMessageTextSection(message: _errorMessage),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // ===== 하단 버튼 고정 영역 =====
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      child: Theme(
+                        // 하단 공용 섹션 버튼들도 팔레트 느낌 살리기
+                        data: Theme.of(context).copyWith(
+                          elevatedButtonTheme: ElevatedButtonThemeData(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: serviceCardBase,
+                              foregroundColor: serviceCardFg,
+                              shape: const StadiumBorder(),
+                            ),
+                          ),
+                          outlinedButtonTheme: OutlinedButtonThemeData(
+                            style: OutlinedButton.styleFrom(
+                              shape: const StadiumBorder(),
+                              side: const BorderSide(color: serviceCardLight),
+                              foregroundColor: serviceCardDark,
+                            ),
+                          ),
+                        ),
+                        child: BillBottomButtonsSection(
+                          onCancel: () => Navigator.pop(context),
+                          onSave: _handleSave,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+
+              // 11시 라벨(시트 좌측 상단)
+              _buildScreenTag(context),
+            ],
           ),
         ),
       ),

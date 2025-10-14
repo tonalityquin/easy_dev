@@ -27,6 +27,9 @@ class DepartureRequestPage extends StatefulWidget {
 }
 
 class _DepartureRequestPageState extends State<DepartureRequestPage> {
+  // ⬇️ 화면 식별 태그(FAQ/에러 리포트 연계용)
+  static const String screenTag = 'departure request';
+
   bool _isSorted = true;
   bool _isLocked = false;
 
@@ -96,6 +99,37 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     }
   }
 
+  // 좌측 상단(11시 방향) 화면 태그 위젯
+  Widget _buildScreenTag(BuildContext context) {
+    final base = Theme.of(context).textTheme.labelSmall;
+    final style = (base ??
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        ))
+        .copyWith(
+      color: Colors.black54,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
+    );
+
+    return SafeArea(
+      child: IgnorePointer( // 제스처 간섭 방지
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 12, top: 4),
+            child: Semantics(
+              label: 'screen_tag: $screenTag',
+              child: Text(screenTag, style: style),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final plateState = context.read<PlateState>();
@@ -129,6 +163,8 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
           backgroundColor: Colors.white,
           foregroundColor: Colors.black,
           elevation: 0,
+          // ⬇️ 좌측 상단(11시)에 'departure request' 텍스트 고정
+          flexibleSpace: _buildScreenTag(context),
         ),
         body: Consumer<PlateState>(
           builder: (context, plateState, child) {

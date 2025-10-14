@@ -33,6 +33,9 @@ class InputPlateScreen extends StatefulWidget {
 class _InputPlateScreenState extends State<InputPlateScreen> {
   final controller = InputPlateController();
 
+  // ⬇️ 화면 식별 태그(FAQ/에러 리포트 연계용)
+  static const String screenTag = 'plate input';
+
   List<String> selectedStatusNames = [];
   Key statusSectionKey = UniqueKey();
 
@@ -268,6 +271,37 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     );
   }
 
+  // 좌측 상단(11시) 화면 태그 위젯
+  Widget _buildScreenTag(BuildContext context) {
+    final base = Theme.of(context).textTheme.labelSmall;
+    final style = (base ??
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        ))
+        .copyWith(
+      color: Colors.black54,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
+    );
+
+    return SafeArea(
+      child: IgnorePointer( // 제스처 간섭 방지
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 12, top: 4),
+            child: Semantics(
+              label: 'screen_tag: $screenTag',
+              child: Text(screenTag, style: style),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // ✅ (2) 키보드/인셋을 반영하여 하단 패딩 보정
@@ -290,6 +324,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           backgroundColor: Colors.white,
           foregroundColor: Colors.black,
           elevation: 1,
+          // ⬇️ 좌측 상단(11시)에 'plate input' 텍스트 고정
+          flexibleSpace: _buildScreenTag(context),
           title: Align(
             alignment: Alignment.centerRight,
             child: Text(

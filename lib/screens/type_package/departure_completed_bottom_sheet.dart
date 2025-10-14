@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -20,9 +21,41 @@ class DepartureCompletedBottomSheet extends StatefulWidget {
 }
 
 class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottomSheet> {
+  // 화면 식별 태그(FAQ/에러 리포트 연계용)
+  static const String screenTag = 'departure completed';
+
   final bool _isSorted = true;
 
   bool _areaEquals(String a, String b) => a.trim().toLowerCase() == b.trim().toLowerCase();
+
+  // 좌측 상단(11시) 태그 위젯
+  Widget _buildScreenTag(BuildContext context) {
+    final base = Theme.of(context).textTheme.labelSmall;
+    final style = (base ??
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        ))
+        .copyWith(
+      color: Colors.black54,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
+    );
+
+    return IgnorePointer( // 시트 제스처와의 간섭 방지
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 12, top: 6),
+          child: Semantics(
+            label: 'screen_tag: $screenTag',
+            child: Text(screenTag, style: style),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -46,7 +79,7 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
     }).toList();
 
     firestorePlates.sort(
-      (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
+          (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
     );
 
     final selectedPlate = plateState.getSelectedPlate(PlateType.departureCompleted, userName);
@@ -87,6 +120,7 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
                       body: Column(
                         children: [
                           const SizedBox(height: 12),
+                          // 상단 드래그 핸들
                           Center(
                             child: Container(
                               width: 60,
@@ -97,7 +131,10 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
                               ),
                             ),
                           ),
-                          const SizedBox(height: 16),
+                          // ⬇️ 좌측 상단(11시) 화면 태그
+                          _buildScreenTag(context),
+
+                          const SizedBox(height: 8),
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 8.0),
                             child: TabBar(

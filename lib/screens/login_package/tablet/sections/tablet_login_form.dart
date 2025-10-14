@@ -69,8 +69,7 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
           borderSide: const BorderSide(color: Colors.redAccent, width: 1.8),
         ),
         // 내용 패딩 기본값
-        contentPadding:
-        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       ),
       // 버튼 계열 대비(아이콘 버튼 등) 미세 톤
       iconTheme: const IconThemeData(color: _base),
@@ -99,6 +98,26 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
             child: Column(
               children: [
                 const SizedBox(height: 12),
+
+                // ⬇️ 화면 식별 태그(11시 고정 느낌으로 상단에 작게 표기)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 8),
+                    child: Semantics(
+                      label: 'screen_tag: tablet login',
+                      child: const Text(
+                        'tablet login',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black54,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
 
                 GestureDetector(
                   child: SizedBox(

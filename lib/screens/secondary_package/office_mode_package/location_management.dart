@@ -29,6 +29,36 @@ class _LocationManagementState extends State<LocationManagement> {
   static const double _fabBottomGap = 48.0; // 하단에서 띄우기
   static const double _fabSpacing = 10.0; // 버튼 간 간격
 
+  // 11시 라벨
+  Widget _buildScreenTag(BuildContext context) {
+    final base = Theme.of(context).textTheme.labelSmall;
+    final style = (base ??
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        )).copyWith(
+      color: Colors.black54,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
+    );
+
+    return SafeArea(
+      child: IgnorePointer(
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 12, top: 4),
+            child: Semantics(
+              label: 'screen_tag: location management',
+              child: Text('location management', style: style),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<bool> _confirmDelete(BuildContext context) async {
     return await showDialog<bool>(
       context: context,
@@ -46,8 +76,7 @@ class _LocationManagementState extends State<LocationManagement> {
           ),
         ],
       ),
-    ) ??
-        false;
+    ) ?? false;
   }
 
   /// 추가(보텀시트)
@@ -172,6 +201,7 @@ class _LocationManagementState extends State<LocationManagement> {
         backgroundColor: serviceCardBg,
         elevation: 0,
         foregroundColor: Colors.black87,
+        flexibleSpace: _buildScreenTag(context), // ◀️ 11시 라벨
         title: Text(
           '주차구역',
           style: const TextStyle(fontWeight: FontWeight.bold).copyWith(color: serviceCardDark),
@@ -309,18 +339,26 @@ class _LocationManagementState extends State<LocationManagement> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(
-            color: isSelected
-                ? serviceCardBase
-                : serviceCardLight.withOpacity(.28),
+            color: isSelected ? serviceCardBase : serviceCardLight.withOpacity(.28),
             width: isSelected ? 1.5 : 1,
           ),
         ),
         child: ListTile(
-          title: Text(
-            loc.locationName,
-            style: const TextStyle(fontWeight: FontWeight.w600),
+          title: const Text(
+            ' ', // placeholder to keep alignment if needed
+            style: TextStyle(fontSize: 0),
           ),
-          subtitle: loc.capacity > 0 ? Text('공간 ${loc.capacity}대') : null,
+          // Real title below (kept original layout)
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                loc.locationName,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              if (loc.capacity > 0) Text('공간 ${loc.capacity}대'),
+            ],
+          ),
           leading: Container(
             width: 36,
             height: 36,
@@ -334,9 +372,8 @@ class _LocationManagementState extends State<LocationManagement> {
               size: 20,
             ),
           ),
-          trailing: isSelected
-              ? const Icon(Icons.check_circle, color: serviceCardBase)
-              : Icon(Icons.chevron_right, color: cs.outline),
+          trailing:
+          isSelected ? const Icon(Icons.check_circle, color: serviceCardBase) : Icon(Icons.chevron_right, color: cs.outline),
           selected: isSelected,
           onTap: () => state.toggleLocationSelection(loc.id),
         ),
@@ -385,8 +422,7 @@ class _LocationManagementState extends State<LocationManagement> {
                 title: Text(loc.locationName),
                 subtitle: loc.capacity > 0 ? Text('공간 ${loc.capacity}대') : null,
                 leading: Icon(Icons.subdirectory_arrow_right, color: cs.onSurfaceVariant),
-                trailing:
-                isSelected ? const Icon(Icons.check_circle, color: serviceCardBase) : null,
+                trailing: isSelected ? const Icon(Icons.check_circle, color: serviceCardBase) : null,
                 selected: isSelected,
                 onTap: () => state.toggleLocationSelection(loc.id),
               );
@@ -416,9 +452,7 @@ class _LocationManagementState extends State<LocationManagement> {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
             side: BorderSide(
-              color: isSelected
-                  ? serviceCardBase
-                  : serviceCardLight.withOpacity(.28),
+              color: isSelected ? serviceCardBase : serviceCardLight.withOpacity(.28),
               width: isSelected ? 1.5 : 1,
             ),
           ),
@@ -458,8 +492,7 @@ class _LocationManagementState extends State<LocationManagement> {
       }) {
     return ListView(
       children: grouped.entries.map((entry) {
-        final totalCapacity =
-        entry.value.fold<int>(0, (sum, loc) => sum + loc.capacity);
+        final totalCapacity = entry.value.fold<int>(0, (sum, loc) => sum + loc.capacity);
 
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -478,8 +511,7 @@ class _LocationManagementState extends State<LocationManagement> {
                 textColor: colorScheme.onSurface,
                 collapsedTextColor: colorScheme.onSurface,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                collapsedShape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
             child: ExpansionTile(
@@ -494,10 +526,8 @@ class _LocationManagementState extends State<LocationManagement> {
                 return ListTile(
                   title: Text(loc.locationName),
                   subtitle: loc.capacity > 0 ? Text('공간 ${loc.capacity}대') : null,
-                  leading:
-                  Icon(Icons.subdirectory_arrow_right, color: colorScheme.onSurfaceVariant),
-                  trailing:
-                  isSelected ? const Icon(Icons.check_circle, color: serviceCardBase) : null,
+                  leading: Icon(Icons.subdirectory_arrow_right, color: colorScheme.onSurfaceVariant),
+                  trailing: isSelected ? const Icon(Icons.check_circle, color: serviceCardBase) : null,
                   selected: isSelected,
                   onTap: () => state.toggleLocationSelection(loc.id),
                 );

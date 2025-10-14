@@ -6,6 +6,7 @@
 // - 스위치 activeColor/아이콘/보조 텍스트 컬러 일치
 // - 토글 중에는 스피너로 상태 표시(중복 동작 방지)
 // - 잠금(LOCK) 시 입력 차단 + 오버레이 유지
+// - ⬅️ 11시 라벨 추가: "subscribe"
 //
 // 동작은 기존과 동일합니다.
 
@@ -69,6 +70,37 @@ class _BackEndControllerState extends State<BackEndController> {
     });
   }
 
+  // ⬇️ 좌측 상단(11시) 고정 라벨: 'subscribe'
+  Widget _buildScreenTag(BuildContext context) {
+    final base = Theme.of(context).textTheme.labelSmall;
+    final style = (base ??
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        ))
+        .copyWith(
+      color: Colors.black54,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
+    );
+
+    return SafeArea(
+      child: IgnorePointer( // 제스처 간섭 방지
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 12, top: 4),
+            child: Semantics(
+              label: 'screen_tag: subscribe',
+              child: Text('subscribe', style: style),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final plateState = context.watch<PlateState>();
@@ -87,6 +119,8 @@ class _BackEndControllerState extends State<BackEndController> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         elevation: 0,
+        // ⬅️ 11시 라벨을 AppBar 영역에 고정
+        flexibleSpace: _buildScreenTag(context),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(height: 1, color: Colors.black.withOpacity(0.06)),

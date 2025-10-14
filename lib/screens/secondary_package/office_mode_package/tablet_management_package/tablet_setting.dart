@@ -45,6 +45,9 @@ class TabletSettingBottomSheet extends StatefulWidget {
 }
 
 class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
+  // 좌측 상단(11시) 라벨 텍스트
+  static const String _screenTag = 'tablet setting';
+
   // --- Controllers & Focus ---
   final _nameController = TextEditingController();
   final _handleController = TextEditingController(); // 소문자 영문 아이디
@@ -117,6 +120,35 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
     return (10000 + random.nextInt(90000)).toString(); // 5자리 숫자
   }
 
+  // 11시 라벨 위젯
+  Widget _buildScreenTag(BuildContext context) {
+    final base = Theme.of(context).textTheme.labelSmall;
+    final style = (base ??
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        ))
+        .copyWith(
+      color: Colors.black54,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
+    );
+
+    return IgnorePointer(
+      child: Align(
+        alignment: Alignment.topLeft,
+        child: Padding(
+          padding: const EdgeInsets.only(left: 4, top: 4),
+          child: Semantics(
+            label: 'screen_tag: $_screenTag',
+            child: Text(_screenTag, style: style),
+          ),
+        ),
+      ),
+    );
+  }
+
   // --- Build ---
 
   @override
@@ -147,146 +179,154 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
               borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
               border: Border.all(color: _SvcColors.base.withOpacity(.06)), // 미세한 톤 라인
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+            child: Stack(
               children: [
-                // Drag handle
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: _SvcColors.base.withOpacity(.25), // 서비스 톤으로 살짝
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
+                // 11시 라벨
+                _buildScreenTag(context),
 
-                // 헤더
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                // 본문
+                Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      width: 26,
-                      height: 26,
-                      decoration: const BoxDecoration(
-                        color: _SvcColors.base,
-                        shape: BoxShape.circle,
+                    // Drag handle
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: _SvcColors.base.withOpacity(.25), // 서비스 톤으로 살짝
+                          borderRadius: BorderRadius.circular(2),
+                        ),
                       ),
-                      child: const Icon(Icons.tablet_mac_rounded, size: 16, color: Colors.white),
                     ),
-                    const SizedBox(width: 8),
-                    Text('사용자 정보', style: titleStyle),
-                  ],
-                ),
-                const SizedBox(height: 16),
 
-                // ===== 본문 스크롤 영역 =====
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
+                    // 헤더
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // 입력 섹션(이름/아이디/이메일 로컬파트)
-                        TabletInputSection(
-                          nameController: _nameController,
-                          handleController: _handleController,
-                          emailController: _emailController,
-                          nameFocus: _nameFocus,
-                          handleFocus: _handleFocus,
-                          emailFocus: _emailFocus,
-                          errorMessage: _errorMessage,
-                        ),
-                        const SizedBox(height: 16),
-
-                        // 권한 드롭다운
-                        TabletRoleDropdownSection(
-                          selectedRole: _selectedRole,
-                          onChanged: (value) => setState(() => _selectedRole = value),
-                        ),
-                        const SizedBox(height: 16),
-
-                        // 비밀번호 표시
-                        TabletPasswordDisplay(controller: _passwordController),
-
-                        const SizedBox(height: 16),
-
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            '현재 지역: ${widget.areaValue}',
-                            style: theme.textTheme.bodyLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: _SvcColors.dark, // 포인트 컬러
-                            ),
+                        Container(
+                          width: 26,
+                          height: 26,
+                          decoration: const BoxDecoration(
+                            color: _SvcColors.base,
+                            shape: BoxShape.circle,
                           ),
+                          child: const Icon(Icons.tablet_mac_rounded, size: 16, color: Colors.white),
                         ),
-
-                        if (_errorMessage != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 12),
-                            child: Text(
-                              _errorMessage!,
-                              style: TextStyle(color: theme.colorScheme.error),
-                            ),
-                          ),
+                        const SizedBox(width: 8),
+                        Text('사용자 정보', style: titleStyle),
                       ],
                     ),
-                  ),
-                ),
+                    const SizedBox(height: 16),
 
-                const SizedBox(height: 24),
-
-                // ===== 하단 버튼 =====
-                Row(
-                  children: [
+                    // ===== 본문 스크롤 영역 =====
                     Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: _SvcColors.base,
-                          side: BorderSide(color: _SvcColors.base.withOpacity(.35)),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // 입력 섹션(이름/아이디/이메일 로컬파트)
+                            TabletInputSection(
+                              nameController: _nameController,
+                              handleController: _handleController,
+                              emailController: _emailController,
+                              nameFocus: _nameFocus,
+                              handleFocus: _handleFocus,
+                              emailFocus: _emailFocus,
+                              errorMessage: _errorMessage,
+                            ),
+                            const SizedBox(height: 16),
+
+                            // 권한 드롭다운
+                            TabletRoleDropdownSection(
+                              selectedRole: _selectedRole,
+                              onChanged: (value) => setState(() => _selectedRole = value),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // 비밀번호 표시
+                            TabletPasswordDisplay(controller: _passwordController),
+
+                            const SizedBox(height: 16),
+
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                '현재 지역: ${widget.areaValue}',
+                                style: theme.textTheme.bodyLarge?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: _SvcColors.dark, // 포인트 컬러
+                                ),
+                              ),
+                            ),
+
+                            if (_errorMessage != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: Text(
+                                  _errorMessage!,
+                                  style: TextStyle(color: theme.colorScheme.error),
+                                ),
+                              ),
+                          ],
                         ),
-                        child: const Text('취소'),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: () {
-                          FocusScope.of(context).unfocus();
 
-                          // 1) 필드 검증
-                          if (!_validateInputs()) return;
+                    const SizedBox(height: 24),
 
-                          // 2) 이메일 로컬파트 추가 검증
-                          if (!_isValidEmailLocalPart(_emailController.text)) {
-                            _setErrorMessage('이메일을 다시 확인하세요');
-                            return;
-                          }
-
-                          final fullEmail = '${_emailController.text}@gmail.com';
-
-                          // 3) 저장 콜백
-                          widget.onSave(
-                            _nameController.text,
-                            _handleController.text,
-                            fullEmail,
-                            _selectedRole.name,
-                            _passwordController.text,
-                            widget.areaValue,
-                            widget.division,
-                          );
-
-                          Navigator.pop(context);
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _SvcColors.base, // 서비스 톤
-                          foregroundColor: Colors.white,
+                    // ===== 하단 버튼 =====
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: _SvcColors.base,
+                              side: BorderSide(color: _SvcColors.base.withOpacity(.35)),
+                            ),
+                            child: const Text('취소'),
+                          ),
                         ),
-                        child: Text(isEditMode ? '수정' : '생성'),
-                      ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: () {
+                              FocusScope.of(context).unfocus();
+
+                              // 1) 필드 검증
+                              if (!_validateInputs()) return;
+
+                              // 2) 이메일 로컬파트 추가 검증
+                              if (!_isValidEmailLocalPart(_emailController.text)) {
+                                _setErrorMessage('이메일을 다시 확인하세요');
+                                return;
+                              }
+
+                              final fullEmail = '${_emailController.text}@gmail.com';
+
+                              // 3) 저장 콜백
+                              widget.onSave(
+                                _nameController.text,
+                                _handleController.text,
+                                fullEmail,
+                                _selectedRole.name,
+                                _passwordController.text,
+                                widget.areaValue,
+                                widget.division,
+                              );
+
+                              Navigator.pop(context);
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _SvcColors.base, // 서비스 톤
+                              foregroundColor: Colors.white,
+                            ),
+                            child: Text(isEditMode ? '수정' : '생성'),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),

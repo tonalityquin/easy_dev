@@ -265,12 +265,12 @@ class _DashboardSettingState extends State<DashboardSetting> {
                     controller: textCtrl,
                     keyboardType: TextInputType.url,
                     textInputAction: TextInputAction.done,
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       labelText: '스프레드시트 ID 또는 URL (붙여넣기 가능)',
                       helperText: 'URL 전체를 붙여넣어도 ID만 자동 추출됩니다.',
-                      border: const OutlineInputBorder(),
-                      prefixIcon: const Icon(Icons.link_rounded, color: _SvcColors.dark),
-                      focusedBorder: const OutlineInputBorder(
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.link_rounded, color: _SvcColors.dark),
+                      focusedBorder: OutlineInputBorder(
                         borderSide: BorderSide(color: _SvcColors.base, width: 1.2),
                         borderRadius: BorderRadius.all(Radius.circular(4)),
                       ),
@@ -340,6 +340,37 @@ class _DashboardSettingState extends State<DashboardSetting> {
     String two(int n) => n.toString().padLeft(2, '0');
     final d = dt.toLocal();
     return '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}';
+  }
+
+  // ⬇️ 좌측 상단(11시) 고정 라벨: 'controller'
+  Widget _buildScreenTag(BuildContext context) {
+    final base = Theme.of(context).textTheme.labelSmall;
+    final style = (base ??
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        ))
+        .copyWith(
+      color: Colors.black54,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
+    );
+
+    return SafeArea(
+      child: IgnorePointer(
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 12, top: 4),
+            child: Semantics(
+              label: 'screen_tag: Setting',
+              child: Text('Setting', style: style),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -560,13 +591,14 @@ class _DashboardSettingState extends State<DashboardSetting> {
       appBar: AppBar(
         title: const Text(
           '대시보드 설정',
-          style: TextStyle(fontWeight: FontWeight.bold),
         ),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         elevation: 0,
         centerTitle: true,
         automaticallyImplyLeading: false,
+        // ⬇️ 11시 라벨을 AppBar 영역에 고정
+        flexibleSpace: _buildScreenTag(context),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(height: 1, color: Colors.black.withOpacity(0.06)),

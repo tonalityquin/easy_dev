@@ -25,6 +25,9 @@ class ParkingRequestPage extends StatefulWidget {
 }
 
 class _ParkingRequestPageState extends State<ParkingRequestPage> {
+  // 화면 식별 태그(FAQ/에러 리포트 연계용)
+  static const String screenTag = 'parking request';
+
   bool _isSorted = true; // 최신순(true) / 오래된순(false)
   bool _isLocked = false; // 화면 잠금
 
@@ -131,6 +134,37 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
     }
   }
 
+  // 좌측 상단(11시 방향) 화면 태그 위젯
+  Widget _buildScreenTag(BuildContext context) {
+    final base = Theme.of(context).textTheme.labelSmall;
+    final style = (base ??
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        ))
+        .copyWith(
+      color: Colors.black54,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
+    );
+
+    return SafeArea(
+      child: IgnorePointer( // 제스처 간섭 방지
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 12, top: 4),
+            child: Semantics(
+              label: 'screen_tag: $screenTag',
+              child: Text(screenTag, style: style),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final userName = context.read<UserState>().name;
@@ -162,17 +196,17 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
           backgroundColor: Colors.white,
           foregroundColor: Colors.black,
           elevation: 0,
+
+          // ⬇️ 좌측 상단(11시 방향)에 'parking request' 텍스트 고정
+          flexibleSpace: _buildScreenTag(context),
         ),
         body: Consumer<PlateState>(
           builder: (context, plateState, child) {
-            final plates = [
-              ...plateState.getPlatesByCollection(PlateType.parkingRequests)
-            ];
+            final plates = [...plateState.getPlatesByCollection(PlateType.parkingRequests)];
 
             if (kDebugMode) {
               debugPrint('📦 PlateState: parkingRequests 총 개수 → ${plates.length}');
-              final selectedPlate =
-              plateState.getSelectedPlate(PlateType.parkingRequests, userName);
+              final selectedPlate = plateState.getSelectedPlate(PlateType.parkingRequests, userName);
               debugPrint('✅ 선택된 Plate → ${selectedPlate?.plateNumber ?? "없음"}');
             }
 
@@ -222,15 +256,14 @@ class _ParkingRequestPageState extends State<ParkingRequestPage> {
         // ⬇️ FAB: 보류가 존재 + 여전히 의미가 있을 때만 표시(잠금 시 숨김)
         floatingActionButton: Consumer<PlateState>(
           builder: (context, s, _) {
-            final showFab = s.hasPendingSelection &&
-                s.pendingStillValidFor(PlateType.parkingRequests) &&
-                !_isLocked;
+            final showFab =
+                s.hasPendingSelection && s.pendingStillValidFor(PlateType.parkingRequests) && !_isLocked;
 
             // 동적 FAB 라벨/아이콘/색상: 보류가 선택(true)이면 '주행', 해제(false)이면 '해제'
             final isSelecting = s.pendingIsSelected ?? true;
             final fabLabel = isSelecting ? '주행' : '해제';
-            final fabIcon  = isSelecting ? Icons.directions_car_filled : Icons.undo;
-            final fabBg    = isSelecting ? const Color(0xFF0D47A1) : Colors.grey;
+            final fabIcon = isSelecting ? Icons.directions_car_filled : Icons.undo;
+            final fabBg = isSelecting ? const Color(0xFF0D47A1) : Colors.grey;
 
             if (!showFab) return const SizedBox.shrink();
             return SafeArea(

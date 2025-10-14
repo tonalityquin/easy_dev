@@ -23,6 +23,9 @@ class BillManagement extends StatefulWidget {
 }
 
 class _BillManagementState extends State<BillManagement> {
+  // 좌측 상단(11시) 라벨 텍스트
+  static const String _screenTag = 'bill management';
+
   // didChangeDependencies가 여러 번 불리는 문제를 피하기 위해 initState에서 1회만 새로고침
   @override
   void initState() {
@@ -121,13 +124,42 @@ class _BillManagementState extends State<BillManagement> {
     showSelectedSnackbar(context, '수정 기능은 준비 중입니다.');
   }
 
+  // 11시 라벨 위젯 (LocationManagement와 동일 패턴)
+  Widget _buildScreenTag(BuildContext context) {
+    final base = Theme.of(context).textTheme.labelSmall;
+    final style = (base ??
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        )).copyWith(
+      color: Colors.black54,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
+    );
+
+    return SafeArea(
+      child: IgnorePointer(
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 12, top: 4),
+            child: Semantics(
+              label: 'screen_tag: $_screenTag',
+              child: Text(_screenTag, style: style),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentArea = context.watch<AreaState>().currentArea.trim();
     final hasSelection = context.select<BillState, bool>((s) => s.selectedBillId != null);
 
     final won = NumberFormat.decimalPattern();
-
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -135,6 +167,7 @@ class _BillManagementState extends State<BillManagement> {
         backgroundColor: serviceCardBg, // 화이트 고정
         elevation: 0,
         foregroundColor: Colors.black87,
+        flexibleSpace: _buildScreenTag(context), // ◀️ 11시 라벨 (AppBar에 배치)
         title: const Text('정산유형', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         automaticallyImplyLeading: false,

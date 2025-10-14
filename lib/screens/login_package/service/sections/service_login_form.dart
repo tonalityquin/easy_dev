@@ -82,10 +82,10 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                 borderRadius: BorderRadius.circular(10),
               ),
               prefixIconColor: MaterialStateColor.resolveWith(
-                (states) => states.contains(MaterialState.focused) ? _base : Colors.black54,
+                    (states) => states.contains(MaterialState.focused) ? _base : Colors.black54,
               ),
               suffixIconColor: MaterialStateColor.resolveWith(
-                (states) => states.contains(MaterialState.focused) ? _base : Colors.black54,
+                    (states) => states.contains(MaterialState.focused) ? _base : Colors.black54,
               ),
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             ),
@@ -101,7 +101,27 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
               children: [
                 const SizedBox(height: 12),
 
-                // 로고 탭 → 협업 캘린더로 이동(현재는 동작 없음)
+                // ⬇️ 화면 식별 태그(11시 고정 느낌으로 상단에 작게 표기)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 4, bottom: 8),
+                    child: Semantics(
+                      label: 'screen_tag: service login',
+                      child: const Text(
+                        'service login',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black54,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // 로고 (탭 → 협업 캘린더로 이동 가능: 현재는 동작 없음)
                 GestureDetector(
                   onTap: () {},
                   child: SizedBox(
@@ -160,7 +180,7 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
 
                 const SizedBox(height: 32),
 
-                // ▶ 팔레트 반영된 기본 ElevatedButtonTheme 사용
+                // ▶ 버튼 라벨: 영어 "service login" 적용
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
@@ -182,7 +202,8 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                 // ▼ 펠리컨: 탭하면 LoginSelectorPage로 복귀
                 Center(
                   child: InkWell(
-                    onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.selector, (route) => false),
+                    onTap: () => Navigator.of(context)
+                        .pushNamedAndRemoveUntil(AppRoutes.selector, (route) => false),
                     borderRadius: BorderRadius.circular(8),
                     child: SizedBox(
                       height: 80,

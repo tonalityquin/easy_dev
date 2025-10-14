@@ -36,6 +36,9 @@ class TabletManagement extends StatefulWidget {
 }
 
 class _TabletManagementState extends State<TabletManagement> {
+  // ⬇️ 화면 식별 태그(FAQ/에러 리포트 연계용)
+  static const String screenTag = 'tablet management';
+
   // ▼ 버튼 하단 여백(화면 하단으로부터 띄우는 높이) & 버튼 간격
   static const double _fabBottomGap = 48.0;
   static const double _fabSpacing = 10.0;
@@ -47,6 +50,37 @@ class _TabletManagementState extends State<TabletManagement> {
       // ✅ 태블릿 전용 초기 로드 (캐시 우선)
       context.read<UserState>().loadTabletsOnly();
     });
+  }
+
+  // 좌측 상단(11시) 화면 태그 위젯
+  Widget _buildScreenTag(BuildContext context) {
+    final base = Theme.of(context).textTheme.labelSmall;
+    final style = (base ??
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        ))
+        .copyWith(
+      color: Colors.black54,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
+    );
+
+    return SafeArea(
+      child: IgnorePointer( // 제스처 간섭 방지
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 12, top: 4),
+            child: Semantics(
+              label: 'screen_tag: $screenTag',
+              child: Text(screenTag, style: style),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   String formatTime(TimeOfDay? time) {
@@ -290,11 +324,13 @@ class _TabletManagementState extends State<TabletManagement> {
 
     return Scaffold(
       appBar: AppBar(
+        centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
         foregroundColor: Colors.black87,
+        // ⬇️ 좌측 상단(11시)에 'tablet management' 텍스트 고정
+        flexibleSpace: _buildScreenTag(context),
         title: const Text('태블릿 계정 관리', style: TextStyle(fontWeight: FontWeight.bold)),
-        centerTitle: true,
         automaticallyImplyLeading: false,
         actions: [
           IconButton(

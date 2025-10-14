@@ -7,6 +7,7 @@
 // - FAB(추가/수정/삭제) 라운드 필 버튼 일관 스타일
 // - 스낵바는 snackbar_helper 사용 (변경 없음)
 // - 기능/로직은 기존과 동일
+// - ⬅️ 11시 라벨 추가: "user management"
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -54,6 +55,37 @@ class _UserManagementState extends State<UserManagement> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<UserState>().loadUsersOnly();
     });
+  }
+
+  // 좌측 상단(11시) 화면 태그: 'user management'
+  Widget _buildScreenTag(BuildContext context) {
+    final base = Theme.of(context).textTheme.labelSmall;
+    final style = (base ??
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        ))
+        .copyWith(
+      color: Colors.black54,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
+    );
+
+    return SafeArea(
+      child: IgnorePointer(
+        child: Align(
+          alignment: Alignment.topLeft,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 12, top: 4),
+            child: Semantics(
+              label: 'screen_tag: user management',
+              child: Text('user management', style: style),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   // ▼ 각 파일에 동일하게 두는 갱신 로직 (복제본)
@@ -311,7 +343,8 @@ class _UserManagementState extends State<UserManagement> {
       final areas = u.areas;
       final divisions = u.divisions;
       final areaOk = currentArea.isEmpty || areas.contains(currentArea);
-      final divisionOk = currentDivision.isEmpty || divisions.contains(currentDivision);
+      final divisionOk =
+          currentDivision.isEmpty || divisions.contains(currentDivision);
       return areaOk && divisionOk;
     }
 
@@ -326,6 +359,8 @@ class _UserManagementState extends State<UserManagement> {
         title: const Text('계정', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         automaticallyImplyLeading: false,
+        // ⬅️ 11시 라벨을 AppBar에 고정
+        flexibleSpace: _buildScreenTag(context),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
@@ -350,7 +385,6 @@ class _UserManagementState extends State<UserManagement> {
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         itemCount: filteredUsers.length + 1,
         itemBuilder: (context, index) {
-          if (index == 0) const _HeaderBanner();
           if (index == 0) {
             return const _HeaderBanner();
           }
@@ -557,7 +591,7 @@ class _ElevatedPillButton extends StatelessWidget {
     Key? key,
   }) : super(key: key);
 
-  // ✅ const 제거 + factory로 위임 (상수 제약 해소)
+  // const 사용 대신 factory로 생성(아이콘/라벨 동적 조합)
   factory _ElevatedPillButton.icon({
     required IconData icon,
     required String label,

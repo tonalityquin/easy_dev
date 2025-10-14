@@ -65,8 +65,7 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
       builder: (sheetCtx) {
         return DraggableScrollableSheet(
           expand: false,
-          initialChildSize: 1.0,
-          // 최상단까지
+          initialChildSize: 1.0, // 최상단까지
           minChildSize: 0.25,
           maxChildSize: 1.0,
           builder: (ctx, scrollController) {
@@ -187,6 +186,32 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
     );
   }
 
+  // ⬇️ 좌측 상단(11시) 고정 라벨: 'commute screen'
+  Widget _buildScreenTag(BuildContext context) {
+    final base = Theme.of(context).textTheme.labelSmall;
+    final style = (base ??
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        )).copyWith(
+      color: Colors.black54,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.2,
+    );
+
+    return Positioned(
+      top: 12,
+      left: 12,
+      child: IgnorePointer(
+        child: Semantics(
+          label: 'screen_tag: commute screen',
+          child: Text('commute screen', style: style),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // ✅ 이 화면에서만 뒤로가기로 앱 종료되지 않도록 차단 (스낵바 안내 없음)
@@ -200,6 +225,9 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
             return SafeArea(
               child: Stack(
                 children: [
+                  // 11시 라벨
+                  _buildScreenTag(context),
+
                   SingleChildScrollView(
                     child: Center(
                       child: Padding(
