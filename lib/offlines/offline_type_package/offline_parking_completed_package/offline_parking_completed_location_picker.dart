@@ -15,9 +15,9 @@ import '../../sql/offline_auth_service.dart';
 
 import '../../../utils/snackbar_helper.dart';
 
-/// Deep Blue 팔레트(서비스 카드와 동일 계열)
+/// Offline Service Palette (오프라인 카드와 동일 계열)
 class _Palette {
-  static const base = Color(0xFF0D47A1); // primary
+  static const base = Color(0xFFF4511E); // primary (주황 계열)
 }
 
 // status_type 키(PlateType 의존 제거)

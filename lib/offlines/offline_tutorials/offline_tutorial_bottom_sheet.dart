@@ -54,10 +54,10 @@ class _TutorialList extends StatefulWidget {
 }
 
 class _TutorialListState extends State<_TutorialList> {
-  // 팔레트
-  static const base = Color(0xFF0D47A1);
-  static const dark = Color(0xFF09367D);
-  static const light = Color(0xFF5472D3);
+  // 팔레트 (오프라인 서비스 카드와 동일 계열)
+  static const base = Color(0xFFF4511E);
+  static const dark = Color(0xFFD84315);
+  static const light = Color(0xFFFFAB91);
   static const fg = Color(0xFFFFFFFF);
 
   int? _expandedIndex;
@@ -65,6 +65,25 @@ class _TutorialListState extends State<_TutorialList> {
   final Map<int, ChewieController> _cCtrls = {};
   final Map<int, Duration> _durationCache = {};
   final Map<String, Future<Uint8List?>> _thumbFutures = {}; // assetPath -> Future
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // 타이틀 → 실제 asset 경로 매핑 (description 사용 전환에 따른 호환 레이어)
+  static const Map<String, String> _assetByTitle = {
+    "00 · 완료": "assets/tutorials/00completed.mp4",
+    "00 · 출차 완료": "assets/tutorials/00departurecompleted.mp4",
+    "00 · 출차 요청": "assets/tutorials/00departurerequest.mp4",
+    "00 · 주차 완료": "assets/tutorials/00parkingcompleted.mp4",
+    "00 · 요청": "assets/tutorials/00request.mp4",
+    "00 · 로그 보기": "assets/tutorials/00showlog.mp4",
+    "01 · 요청": "assets/tutorials/01request.mp4",
+    "02 · 요청": "assets/tutorials/02request.mp4",
+    "03 · 요청": "assets/tutorials/03request.mp4",
+  };
+
+  String _assetOf(TutorialVideoItem item) {
+    return _assetByTitle[item.title] ?? "assets/tutorials/00request.mp4";
+  }
+  // ───────────────────────────────────────────────────────────────────────────
 
   @override
   void dispose() {
@@ -298,18 +317,19 @@ class _TutorialListState extends State<_TutorialList> {
 
   Widget _buildRow(int index, TutorialVideoItem item) {
     final isExpanded = _expandedIndex == index;
+    final assetPath = _assetOf(item);
 
     return Column(
       children: [
         InkWell(
-          onTap: () => _togglePreview(index, item.assetPath), // 탭 → 미리보기 토글
+          onTap: () => _togglePreview(index, assetPath), // 탭 → 미리보기 토글
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 6.0),
             child: Row(
               children: [
                 // 썸네일
                 FutureBuilder<Uint8List?>(
-                  future: _thumbnailForAsset(item.assetPath),
+                  future: _thumbnailForAsset(assetPath),
                   builder: (context, snap) {
                     final bytes = snap.data;
                     final thumb = (bytes != null && bytes.isNotEmpty)
@@ -328,7 +348,7 @@ class _TutorialListState extends State<_TutorialList> {
                 ),
                 const SizedBox(width: 12),
 
-                // 제목/경로/길이
+                // 제목/설명/길이
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -341,14 +361,16 @@ class _TutorialListState extends State<_TutorialList> {
                       Row(
                         children: [
                           Expanded(
-                            child: Text(item.assetPath,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(color: Colors.grey.shade700)),
+                            child: Text(
+                              item.description, // ⬅︎ path 대신 설명 노출
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: Colors.grey.shade700),
+                            ),
                           ),
                           const SizedBox(width: 8),
                           FutureBuilder<Duration?>(
-                            future: _loadDuration(index, item.assetPath),
+                            future: _loadDuration(index, assetPath),
                             builder: (context, snap) {
                               final d = snap.data;
                               return Text(

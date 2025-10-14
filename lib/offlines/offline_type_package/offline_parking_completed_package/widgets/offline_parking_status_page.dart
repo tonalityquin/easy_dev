@@ -7,6 +7,8 @@
 //   · 주차 완료 대수: offline_plates.status_type='parkingCompleted' AND area=?
 // - 화면 가시성일 때 1회 집계 + area 변경 감지 시 재집계
 //
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 // ▼ SQLite / 세션
@@ -58,6 +60,7 @@ class _OfflineParkingStatusPageState extends State<OfflineParkingStatusPage> {
     final uid = (session?.userId ?? '').trim();
 
     Map<String, Object?>? row;
+
     if (uid.isNotEmpty) {
       final r1 = await db.query(
         OfflineAuthDb.tableAccounts,
@@ -68,13 +71,16 @@ class _OfflineParkingStatusPageState extends State<OfflineParkingStatusPage> {
       );
       if (r1.isNotEmpty) row = r1.first;
     }
-    row ??= (await db.query(
-      OfflineAuthDb.tableAccounts,
-      columns: const ['currentArea', 'selectedArea'],
-      where: 'isSelected = 1',
-      limit: 1,
-    ))
-        .firstOrNull;
+
+    if (row == null) {
+      final r2 = await db.query(
+        OfflineAuthDb.tableAccounts,
+        columns: const ['currentArea', 'selectedArea'],
+        where: 'isSelected = 1',
+        limit: 1,
+      );
+      if (r2.isNotEmpty) row = r2.first;
+    }
 
     final area = ((row?['currentArea'] as String?) ??
         (row?['selectedArea'] as String?) ??
@@ -232,6 +238,13 @@ class _OfflineParkingStatusPageState extends State<OfflineParkingStatusPage> {
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                   textAlign: TextAlign.center,
                 ),
+
+                const SizedBox(height: 24),
+
+                // ⬇️ 하단 자동 순환 카드: 한 화면에 한 장, 2초마다 전환
+                const _AutoCyclingReminderCards(),
+
+                const SizedBox(height: 12),
               ],
             ),
 
@@ -248,4 +261,178 @@ class _OfflineParkingStatusPageState extends State<OfflineParkingStatusPage> {
       ),
     );
   }
+}
+
+/// 하단에 표시되는 자동 순환 카드 뷰
+/// - 한 번에 한 카드만 표시
+/// - [cycleInterval]마다 자동으로 다음 카드로 애니메이션
+/// - 마지막까지 읽으면 다시 첫 카드로 순환
+class _AutoCyclingReminderCards extends StatefulWidget {
+  const _AutoCyclingReminderCards();
+
+  @override
+  State<_AutoCyclingReminderCards> createState() => _AutoCyclingReminderCardsState();
+}
+
+class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
+  // ✔ 2초 주기로 전환
+  static const Duration cycleInterval = Duration(seconds: 2);
+  static const Duration animDuration = Duration(milliseconds: 400);
+  static const Curve animCurve = Curves.easeInOut;
+
+  final PageController _pageController = PageController();
+  Timer? _timer;
+  int _currentIndex = 0;
+
+  // 중앙 정렬 카드 컨텐츠 (업무 리마인더)
+  static const List<_ReminderContent> _cards = [
+    _ReminderContent(
+      title: '사내 공지란',
+      lines: [
+        '• 공지 1',
+        '• 공지 2',
+      ],
+    ),
+    _ReminderContent(
+      title: '사내 공지란 2',
+      lines: [
+        '• 공지 3',
+        '• 공지 4',
+      ],
+    ),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _startAutoCycle();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _startAutoCycle() {
+    _timer?.cancel();
+    if (_cards.length <= 1) return; // 카드가 1장 이하이면 순환 불필요
+    _timer = Timer.periodic(cycleInterval, (_) {
+      if (!mounted) return;
+      final next = (_currentIndex + 1) % _cards.length;
+      _animateToPage(next);
+    });
+  }
+
+  void _animateToPage(int index) {
+    _currentIndex = index;
+    if (!mounted) return;
+    _pageController.animateToPage(
+      index,
+      duration: animDuration,
+      curve: animCurve,
+    );
+    setState(() {}); // 현재 인덱스 반영(인디케이터 등 확장 시 대비)
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // ListView 안에 들어가므로 높이를 고정해 주어야 함
+    return SizedBox(
+      height: 170,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // 가운데 정렬로 한 카드씩만 보이게
+          Align(
+            alignment: Alignment.center,
+            child: FractionallySizedBox(
+              widthFactor: 0.98, // 좌우 여백 약간
+              child: PageView.builder(
+                controller: _pageController,
+                physics: const NeverScrollableScrollPhysics(), // 스와이프 대신 자동 전환
+                onPageChanged: (i) => _currentIndex = i,
+                itemCount: _cards.length,
+                itemBuilder: (context, index) {
+                  final c = _cards[index];
+                  return Center(
+                    child: Card(
+                      color: Colors.white, // 카드 배경 하얀색
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center, // 중앙 정렬
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.fact_check, size: 18),
+                                const SizedBox(width: 8),
+                                Text(
+                                  c.title,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            ...c.lines.map(
+                                  (t) => Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Text(
+                                  t,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+
+          // (선택) 하단 점 인디케이터 - 중앙 정렬
+          Positioned(
+            bottom: 6,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(_cards.length, (i) {
+                final active = i == _currentIndex;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: active ? 10 : 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: active ? Colors.black87 : Colors.black26,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReminderContent {
+  final String title;
+  final List<String> lines;
+  const _ReminderContent({required this.title, required this.lines});
 }

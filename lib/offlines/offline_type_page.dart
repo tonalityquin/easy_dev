@@ -17,11 +17,11 @@ import '../utils/snackbar_helper.dart';
 import 'sql/offline_auth_db.dart';        // ← 경로 조정
 import 'sql/offline_auth_service.dart';   // ← 경로 조정
 
-/// Deep Blue 팔레트(서비스 카드와 동일 계열)
+/// Offline Service Palette (오프라인 카드와 동일 계열)
 class _Palette {
-  static const base = Color(0xFF0D47A1); // primary
-  static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
-  static const fg = Color(0xFFFFFFFF); // 전경(흰색)
+  static const base = Color(0xFFF4511E); // primary (오프라인)
+  static const dark = Color(0xFFD84315); // 강조 텍스트/아이콘
+  static const fg = Color(0xFFFFFFFF);   // 전경(흰색)
 }
 
 class OfflineTypePage extends StatefulWidget {

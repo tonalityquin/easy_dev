@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:easydev/offlines/sql/offline_auth_service.dart';
 import 'package:easydev/offlines/sql/offline_session_model.dart';
 
-/// Deep Blue Palette
+/// Offline Service Palette (오프라인 카드와 동일 계열)
 class _Palette {
-  static const base = Color(0xFF0D47A1); // primary
-  static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
-  static const light = Color(0xFF5472D3); // 톤 변형/보더
+  static const base = Color(0xFFF4511E); // primary (오프라인 카드 base)
+  static const dark = Color(0xFFD84315); // 강조 텍스트/아이콘
+  static const light = Color(0xFFFFAB91); // 톤 변형/보더(tint)
   static const fg = Color(0xFFFFFFFF);   // 전경(아이콘/텍스트)
 }
 

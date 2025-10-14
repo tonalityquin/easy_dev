@@ -279,7 +279,7 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
     _ReminderContent(
       title: '업무 중',
       lines: [
-        '• 업무와 무관한 행위는 피하기',
+        '• 지정된 위치에서 친절한 서비스 제공하기',
         '• 잠시 부재 중일 경우 꼭 보고하기',
       ],
     ),
@@ -301,7 +301,7 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
       title: '업무 종료',
       lines: [
         '• 휴게 및 퇴근 보고는 반드시 하기',
-        '• 제공된 유니폼 관리하기',
+        '• 제공된 유니폼 정돈 및 청결하게 관리하기',
       ],
     ),
   ];

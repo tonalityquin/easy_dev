@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:easydev/offlines/sql/offline_auth_service.dart';
 import 'package:easydev/offlines/sql/offline_session_model.dart';
 
-/// Deep Blue 팔레트(서비스 카드 계열)
+/// Offline Service Palette (오프라인 카드 계열)
 class _Palette {
-  static const base  = Color(0xFF0D47A1); // primary
-  static const dark  = Color(0xFF09367D); // 강조 텍스트/아이콘
-  static const light = Color(0xFF5472D3); // 톤 변형/보더
+  static const base  = Color(0xFFF4511E); // primary
+  static const dark  = Color(0xFFD84315); // 강조 텍스트/아이콘
+  static const light = Color(0xFFFFAB91); // 톤 변형/보더
   static const fg    = Colors.white;      // 전경(아이콘/텍스트)
 }
 
@@ -90,7 +90,7 @@ class HomeUserInfoCard extends StatelessWidget {
           child: Card(
             elevation: 2,
             color: Colors.white,
-            surfaceTintColor: _Palette.light, // 살짝 블루 틴트
+            surfaceTintColor: _Palette.light, // 살짝 틴트
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
               side: BorderSide(color: _Palette.light.withOpacity(.35)),
@@ -101,7 +101,7 @@ class HomeUserInfoCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 헤더 라벨 (원본과 동일한 타이틀)
+                  // 헤더 라벨
                   Row(
                     children: [
                       Icon(Icons.badge, size: 14, color: _Palette.dark.withOpacity(.9)),

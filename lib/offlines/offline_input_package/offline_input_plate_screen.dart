@@ -14,6 +14,13 @@ import 'widgets/offline_input_bottom_navigation.dart';
 
 import 'offline_live_ocr_page.dart';
 
+/// Offline Service Palette (오프라인 카드 계열)
+class _Palette {
+  static const base  = Color(0xFFF4511E); // primary
+  static const dark  = Color(0xFFD84315); // 강조 텍스트/아이콘
+  static const light = Color(0xFFFFAB91); // 톤 변형/보더
+}
+
 class OfflineInputPlateScreen extends StatefulWidget {
   const OfflineInputPlateScreen({super.key});
 
@@ -63,7 +70,7 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
   void initState() {
     super.initState();
 
-    // ⬇️ 추가: 시트 사이즈 변화에 따라 _sheetOpen 동기화 (드래그로 여닫을 때도 반영)
+    // ⬇️ 시트 사이즈 변화에 따라 _sheetOpen 동기화 (드래그로 여닫을 때도 반영)
     _sheetController.addListener(() {
       try {
         final s = _sheetController.size; // 0.0~1.0
@@ -81,7 +88,8 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
       final text = controller.controllerBackDigit.text;
       if (text.length == 4 && controller.isInputValid()) {}
     });
-    // ⬇️ 첫 빌드 직후 한 번만 자동으로 LiveOcrPage 열기
+
+    // 첫 빌드 직후 한 번만 자동으로 LiveOcrPage 열기
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (_openedScannerOnce) return;
       _openedScannerOnce = true;
@@ -91,18 +99,17 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
 
   @override
   void dispose() {
-    // ✅ (1) 컨트롤러 정리
     _sheetController.dispose();
     controller.dispose();
     super.dispose();
   }
 
-  // 🔽 스캐너로 이동 → 성공 시 입력칸 자동 채우기 (사용자가 닫으면 plate == null)
+  // 스캐너로 이동 → 성공 시 입력칸 자동 채우기 (사용자가 닫으면 plate == null)
   Future<void> _openLiveScanner() async {
     final plate = await Navigator.of(context).push<String>(
       MaterialPageRoute(builder: (_) => const OfflineLiveOcrPage()),
     );
-    if (plate == null) return; // 사용자가 LiveOcrPage를 넘긴(닫은) 경우
+    if (plate == null) return;
 
     final m = RegExp(r'^(\d{2,3})([가-힣])(\d{4})$').firstMatch(plate);
     if (m == null) {
@@ -114,8 +121,8 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
     }
 
     final front = m.group(1)!; // 2 or 3 digits
-    final mid = m.group(2)!; // 한글 1글자
-    final back = m.group(3)!; // 4 digits
+    final mid = m.group(2)!;   // 한글 1글자
+    final back = m.group(3)!;  // 4 digits
 
     setState(() {
       controller.setFrontDigitMode(front.length == 3);
@@ -169,7 +176,7 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
     );
   }
 
-  // ⬇️ showKeypad일 때, 번호판 도크 + 키패드를 함께 표시
+  // showKeypad일 때, 번호판 도크 + 키패드를 함께 표시
   Widget _buildDockAndKeypad() {
     if (!controller.showKeypad) return _buildKeypad();
     return Column(
@@ -192,17 +199,17 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ (2) 키보드/인셋을 반영하여 하단 패딩 보정
+    // 키보드/인셋 반영 하단 패딩
     final viewInset = MediaQuery.of(context).viewInsets.bottom;
     final bottomSafePadding = (controller.showKeypad ? 280.0 : 140.0) + viewInset;
 
-    // 🔽 뒤로가기 처리: 시트가 열려 있으면 먼저 닫고, 닫혀 있으면 pop 허용
+    // 뒤로가기: 시트가 열려 있으면 먼저 닫고, 닫혀 있으면 pop 허용
     return PopScope(
       canPop: !_sheetOpen,
       onPopInvoked: (didPop) async {
-        if (didPop) return; // 이미 pop된 경우
+        if (didPop) return;
         if (_sheetOpen) {
-          await _animateSheet(open: false); // 시트 먼저 닫기
+          await _animateSheet(open: false);
         }
       },
       child: Scaffold(
@@ -220,11 +227,10 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
             ),
           ),
           actions: [
-            // 수동으로도 다시 열 수 있도록 버튼 유지
             IconButton(
               tooltip: '실시간 OCR 스캔',
               onPressed: _openLiveScanner,
-              icon: const Icon(Icons.auto_awesome_motion),
+              icon: const Icon(Icons.auto_awesome_motion, color: _Palette.base),
             ),
           ],
         ),
@@ -232,18 +238,15 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
           builder: (context, constraints) {
             return Stack(
               children: [
-                // 상단(기본) 콘텐츠: 번호판/위치/사진 섹션 — ✅ 세로 스크롤 가능
+                // 상단(기본) 콘텐츠
                 Positioned.fill(
                   child: SingleChildScrollView(
-                    // 🔹 작은 폰 보완: 항상 세로 스크롤 가능 + 드래그 시 키보드 닫기
                     physics: const AlwaysScrollableScrollPhysics(),
                     keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: EdgeInsets.fromLTRB(16, 16, 16, bottomSafePadding),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ⚠️ 업종 드롭다운은 보통 InputPlateSection 내부에 있으므로
-                        // 그 파일에서 숨겨야 UI에서 완전히 사라집니다.
                         OfflineInputPlateSection(
                           dropdownValue: controller.dropdownValue,
                           regions: controller.regions,
@@ -255,8 +258,6 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
                             setState(() {
                               controller.clearInput();
                               controller.setActiveController(controller.controllerFrontDigit);
-                              // 필요 시 아래 라인 활성화하면 탭 시 항상 하단 키패드+도크가 열립니다.
-                              // controller.showKeypad = true;
                             });
                           },
                           onRegionChanged: (region) {
@@ -273,39 +274,30 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
                           capturedImages: controller.capturedImages,
                           plateNumber: controller.buildPlateNumber(),
                         ),
-                        // 필요 시 추가 안내/여백
                         const SizedBox(height: 8),
                       ],
                     ),
                   ),
                 ),
 
-                // 하단 시트: 컨트롤러로 열고 닫을 때 애니메이션 + 최상단까지 열림
+                // 하단 DraggableScrollableSheet (불투명 처리)
                 DraggableScrollableSheet(
                   controller: _sheetController,
                   initialChildSize: _sheetClosed,
                   minChildSize: _sheetClosed,
                   maxChildSize: _sheetOpened,
-                  // ★ 1.0 = 최상단까지
                   snap: true,
                   snapSizes: const [_sheetClosed, _sheetOpened],
                   builder: (context, scrollController) {
-                    // 메인 배경(화이트)와 구분되는 아주 옅은 톤
-                    const sheetBg = Color(0xFFF6F8FF); // subtle blue-tinted light gray
-
-                    return Container(
-                      decoration: const BoxDecoration(
-                        color: sheetBg, // 기존: Colors.white
+                    return Material(
+                      // ❗ 완전 불투명 처리
+                      color: Colors.white,
+                      elevation: 4,
+                      shadowColor: _Palette.dark.withOpacity(.18),
+                      shape: const RoundedRectangleBorder(
                         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black26,
-                            blurRadius: 10,
-                            offset: Offset(0, -4),
-                          ),
-                        ],
                       ),
-                      // ✅ SafeArea: 상단만 보호 / 하단은 우리가 직접 패딩 관리
+                      clipBehavior: Clip.antiAlias, // 라운드 상단 모서리 내 콘텐츠도 클립
                       child: SafeArea(
                         top: true,
                         bottom: false,
@@ -331,8 +323,7 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
                                       width: 40,
                                       height: 4,
                                       decoration: BoxDecoration(
-                                        // 핸들 색도 살짝 진하게 해서 대비 ↑ (선택)
-                                        color: Colors.black38, // 기존: Colors.black26
+                                        color: Colors.black38,
                                         borderRadius: BorderRadius.circular(2),
                                       ),
                                     ),
@@ -340,9 +331,9 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
                                     Row(
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
-                                        Text(
-                                          _sheetOpen ? '정산 유형 / 메모 카드 닫기' : '정산 유형 / 메모 카드 열기',
-                                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                                        const Text(
+                                          '정산 유형 / 메모 카드',
+                                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                                         ),
                                         Text(
                                           controller.buildPlateNumber(),
@@ -403,7 +394,7 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
           children: [
             OfflineInputBottomNavigation(
               showKeypad: controller.showKeypad,
-              keypad: _buildDockAndKeypad(), // ★ 도크 + 키패드 묶음 (그대로 유지, 키패드가 있으면 위에 도크 표시)
+              keypad: _buildDockAndKeypad(), // 도크 + 키패드 묶음
               actionButton: OfflineInputBottomActionSection(
                 controller: controller,
                 mountedContext: mounted,
@@ -439,21 +430,19 @@ class _PlateDock extends StatelessWidget {
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       filled: true,
-      fillColor: active ? Colors.yellow.shade50 : Colors.white,
+      // 활성 시 아주 옅은 오렌지 톤
+      fillColor: active ? _Palette.light.withOpacity(.22) : Colors.white,
       counterText: '',
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(
-          color: active ? Colors.amber : Colors.grey.shade300,
-          width: active ? 2 : 1,
+          color: Colors.grey.shade300,
+          width: 1,
         ),
       ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(
-          color: Colors.amber.shade700,
-          width: 2,
-        ),
+      focusedBorder: const OutlineInputBorder(
+        borderRadius: BorderRadius.all(Radius.circular(10)),
+        borderSide: BorderSide(color: _Palette.base, width: 2),
       ),
     );
   }
