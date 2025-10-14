@@ -1,13 +1,18 @@
-// Enhanced: Chewie 컨트롤 적용(전체화면, 배속, 시크 등)
 // Location: lib/offlines/tutorial/offline_video_player_page.dart
+// Purpose : 전체화면 전용 플레이어. 오직 item.assetPath만 사용 (매핑/기본값 제거)
+
 import 'dart:async';
+
 import 'package:chewie/chewie.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
+
 import 'offline_tutorial_items.dart';
 
 class OfflineVideoPlayerPage extends StatefulWidget {
-  final TutorialVideoItem item;
+  final TutorialVideoItem item; // title/description/category/assetPath 포함
+
   const OfflineVideoPlayerPage({super.key, required this.item});
 
   @override
@@ -15,87 +20,96 @@ class OfflineVideoPlayerPage extends StatefulWidget {
 }
 
 class _OfflineVideoPlayerPageState extends State<OfflineVideoPlayerPage> {
-  late final VideoPlayerController _videoCtrl;
+  VideoPlayerController? _videoCtrl;
   ChewieController? _chewieCtrl;
-  late Future<void> _initF;
-
-  // 타이틀 → 실제 asset 경로 매핑 (bottom_sheet와 동일)
-  static const Map<String, String> _assetByTitle = {
-    "00 · 완료": "assets/tutorials/00completed.mp4",
-    "00 · 출차 완료": "assets/tutorials/00departurecompleted.mp4",
-    "00 · 출차 요청": "assets/tutorials/00departurerequest.mp4",
-    "00 · 주차 완료": "assets/tutorials/00parkingcompleted.mp4",
-    "00 · 요청": "assets/tutorials/00request.mp4",
-    "00 · 로그 보기": "assets/tutorials/00showlog.mp4",
-    "01 · 요청": "assets/tutorials/01request.mp4",
-    "02 · 요청": "assets/tutorials/02request.mp4",
-    "03 · 요청": "assets/tutorials/03request.mp4",
-  };
-
-  String _assetOf(TutorialVideoItem item) {
-    return _assetByTitle[item.title] ?? "assets/tutorials/00request.mp4";
-  }
+  Future<void>? _initFuture;
 
   @override
   void initState() {
     super.initState();
-    _videoCtrl = VideoPlayerController.asset(_assetOf(widget.item));
-    _initF = _init();
+    _initFuture = _init();
   }
 
   Future<void> _init() async {
-    await _videoCtrl.initialize();
-    _chewieCtrl = ChewieController(
-      videoPlayerController: _videoCtrl,
+    // 🔒 핵심: 타이틀 기반 매핑/기본값 제거. 오직 item.assetPath 사용.
+    final assetPath = widget.item.assetPath;
+
+    final v = VideoPlayerController.asset(assetPath);
+    await v.initialize();
+
+    // 기기 방향/시스템 UI 제어는 Chewie에 맡김
+    final c = ChewieController(
+      videoPlayerController: v,
       autoPlay: true,
       looping: false,
-      allowFullScreen: true,
-      allowPlaybackSpeedChanging: true,
-      allowMuting: true,
       showControls: true,
-      materialProgressColors: ChewieProgressColors(
-        playedColor: Colors.blueAccent,
-        handleColor: Colors.white,
-        backgroundColor: Colors.black26,
-        bufferedColor: Colors.white38,
-      ),
+      // 전체화면 지원: 가로 고정 권장. 필요 시 세로 포함 가능.
+      deviceOrientationsOnEnterFullScreen: const [
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ],
+      deviceOrientationsAfterFullScreen: const [
+        DeviceOrientation.portraitUp,
+        DeviceOrientation.portraitDown,
+      ],
+      allowFullScreen: true,
+      allowMuting: true,
     );
+
+    setState(() {
+      _videoCtrl = v;
+      _chewieCtrl = c;
+    });
   }
 
   @override
   void dispose() {
     _chewieCtrl?.dispose();
-    _videoCtrl.dispose();
+    _videoCtrl?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // assetPath는 UI에 노출하지 않음
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        elevation: 0,
         title: Text(
           widget.item.title,
+          style: const TextStyle(color: Colors.white),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
       ),
       body: FutureBuilder<void>(
-        future: _initF,
+        future: _initFuture,
         builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done || _chewieCtrl == null) {
+          if (snap.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
           }
-          final aspect = _videoCtrl.value.aspectRatio == 0
-              ? (16 / 9)
-              : _videoCtrl.value.aspectRatio;
+          final c = _chewieCtrl;
+          if (c == null) {
+            return const Center(
+              child: Text(
+                '영상을 불러오지 못했습니다.',
+                style: TextStyle(color: Colors.white70),
+              ),
+            );
+          }
+          // 가로/세로 비율은 VideoPlayerController가 가진 값을 따름
+          final v = _videoCtrl!;
+          final size = v.value.size;
+          final aspect = (size.width > 0 && size.height > 0)
+              ? size.width / size.height
+              : 16 / 9;
+
           return Center(
             child: AspectRatio(
               aspectRatio: aspect,
-              child: Chewie(controller: _chewieCtrl!),
+              child: Chewie(controller: c),
             ),
           );
         },

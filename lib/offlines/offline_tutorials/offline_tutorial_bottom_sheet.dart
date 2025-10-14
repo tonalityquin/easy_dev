@@ -1,5 +1,7 @@
 // Enhanced: 섹션/썸네일/길이표시 + 탭 시 미리보기(Chewie) + 전체화면 재생
+// - 타이틀→경로 매핑 제거, TutorialVideoItem.assetPath 직접 사용 (UI에는 노출하지 않음)
 // Location: lib/offlines/tutorial/offline_tutorial_bottom_sheet.dart
+
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
@@ -35,7 +37,10 @@ Future<void> offlineTutorialBottomSheet({
           builder: (sheetCtx, scrollController) {
             return SafeArea(
               top: false,
-              child: _TutorialList(rootContext: rootContext, scrollController: scrollController),
+              child: _TutorialList(
+                rootContext: rootContext,
+                scrollController: scrollController,
+              ),
             );
           },
         ),
@@ -47,7 +52,10 @@ Future<void> offlineTutorialBottomSheet({
 class _TutorialList extends StatefulWidget {
   final BuildContext rootContext;
   final ScrollController scrollController;
-  const _TutorialList({required this.rootContext, required this.scrollController});
+  const _TutorialList({
+    required this.rootContext,
+    required this.scrollController,
+  });
 
   @override
   State<_TutorialList> createState() => _TutorialListState();
@@ -65,25 +73,6 @@ class _TutorialListState extends State<_TutorialList> {
   final Map<int, ChewieController> _cCtrls = {};
   final Map<int, Duration> _durationCache = {};
   final Map<String, Future<Uint8List?>> _thumbFutures = {}; // assetPath -> Future
-
-  // ───────────────────────────────────────────────────────────────────────────
-  // 타이틀 → 실제 asset 경로 매핑 (description 사용 전환에 따른 호환 레이어)
-  static const Map<String, String> _assetByTitle = {
-    "00 · 완료": "assets/tutorials/00completed.mp4",
-    "00 · 출차 완료": "assets/tutorials/00departurecompleted.mp4",
-    "00 · 출차 요청": "assets/tutorials/00departurerequest.mp4",
-    "00 · 주차 완료": "assets/tutorials/00parkingcompleted.mp4",
-    "00 · 요청": "assets/tutorials/00request.mp4",
-    "00 · 로그 보기": "assets/tutorials/00showlog.mp4",
-    "01 · 요청": "assets/tutorials/01request.mp4",
-    "02 · 요청": "assets/tutorials/02request.mp4",
-    "03 · 요청": "assets/tutorials/03request.mp4",
-  };
-
-  String _assetOf(TutorialVideoItem item) {
-    return _assetByTitle[item.title] ?? "assets/tutorials/00request.mp4";
-  }
-  // ───────────────────────────────────────────────────────────────────────────
 
   @override
   void dispose() {
@@ -238,8 +227,10 @@ class _TutorialListState extends State<_TutorialList> {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          Text('튜토리얼',
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700).copyWith(color: dark)),
+          Text(
+            '튜토리얼',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700).copyWith(color: dark),
+          ),
           const SizedBox(height: 8),
 
           // 리스트
@@ -317,7 +308,8 @@ class _TutorialListState extends State<_TutorialList> {
 
   Widget _buildRow(int index, TutorialVideoItem item) {
     final isExpanded = _expandedIndex == index;
-    final assetPath = _assetOf(item);
+    // 사용자에게는 assetPath를 노출하지 않음 (내부 사용만)
+    final assetPath = item.assetPath;
 
     return Column(
       children: [
@@ -348,7 +340,7 @@ class _TutorialListState extends State<_TutorialList> {
                 ),
                 const SizedBox(width: 12),
 
-                // 제목/설명/길이
+                // 제목/설명/길이 (assetPath는 노출하지 않음)
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -362,7 +354,7 @@ class _TutorialListState extends State<_TutorialList> {
                         children: [
                           Expanded(
                             child: Text(
-                              item.description, // ⬅︎ path 대신 설명 노출
+                              item.description,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(color: Colors.grey.shade700),

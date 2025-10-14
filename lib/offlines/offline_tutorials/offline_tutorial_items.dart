@@ -1,15 +1,17 @@
-// Enhanced: 카테고리 필드 + 설명(description) 필드로 변경
+// Enhanced: 카테고리 필드 + 설명(description) 필드 + assetPath 필드(사용자에게 비노출)
 // Location: lib/offlines/tutorial/offline_tutorial_items.dart
 
 class TutorialVideoItem {
   final String title;
-  final String description; // ⬅ assetPath 대신 설명 필드 사용
-  final String category; // 섹션 구분용
+  final String description; // 사용자 표시용 설명 (assetPath는 노출하지 않음)
+  final String category;    // 섹션(카테고리) 구분
+  final String assetPath;   // 실제 영상 파일 경로 (UI에는 숨김)
 
   const TutorialVideoItem({
     required this.title,
     required this.description,
     required this.category,
+    required this.assetPath,
   });
 }
 
@@ -31,54 +33,70 @@ class TutorialCategories {
 }
 
 /// 튜토리얼 목록.
-/// 기존 assetPath 기반이 아니라, 사람 친화적인 설명(description)을 담습니다.
-/// (영상 파일 경로나 로딩 방식은 별도 매핑 테이블/서비스에서 다루세요.)
+/// - 화면에는 title/description/category만 쓰고,
+/// - 재생/썸네일/길이 계산은 assetPath를 내부적으로만 사용합니다.
 class TutorialVideos {
   static const List<TutorialVideoItem> items = [
+    // 요청 섹션
     TutorialVideoItem(
       title: "00 · 단순 입차 요청",
       description: "정산 선택",
       category: TutorialCategories.request,
+      assetPath: "assets/tutorials/00request.mp4",
     ),
     TutorialVideoItem(
       title: "01 · 상세 메모 입차 요청",
       description: "정산 선택, 메모 작성",
       category: TutorialCategories.request,
+      assetPath: "assets/tutorials/01request.mp4",
     ),
     TutorialVideoItem(
       title: "02 · 기존 메모 입차 요청",
       description: "메모 불러오기, 정산 선택",
       category: TutorialCategories.request,
+      assetPath: "assets/tutorials/02request.mp4",
     ),
     TutorialVideoItem(
       title: "03 · 정기 차량 입차 요청",
       description: "정기 주차,",
       category: TutorialCategories.request,
+      assetPath: "assets/tutorials/03request.mp4",
     ),
+
+    // 주차 섹션
     TutorialVideoItem(
       title: "00 · 즉시 입차 완료",
       description: "정산 선택, 구역 선택",
       category: TutorialCategories.parking,
+      assetPath: "assets/tutorials/00parkingcompleted.mp4",
     ),
     TutorialVideoItem(
       title: "01 · 변경 입차 완료",
       description: "번호 선택, 구역 선택",
       category: TutorialCategories.parking,
+      assetPath: "assets/tutorials/00completed.mp4",
     ),
+
+    // 출차 섹션
     TutorialVideoItem(
       title: "00 · 변경 출차 요청",
       description: "번호 검색, 출차 요청",
       category: TutorialCategories.departure,
+      assetPath: "assets/tutorials/00departurerequest.mp4",
     ),
     TutorialVideoItem(
       title: "00 · 변경 출차 완료",
       description: "번호 선택, 출차 완료",
       category: TutorialCategories.departure,
+      assetPath: "assets/tutorials/00departurecompleted.mp4",
     ),
+
+    // 기타 섹션
     TutorialVideoItem(
       title: "00 · 로그 보기",
       description: "번호 선택, 로그 선택",
       category: TutorialCategories.etc,
+      assetPath: "assets/tutorials/00showlog.mp4",
     ),
   ];
 
