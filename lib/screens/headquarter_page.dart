@@ -1,8 +1,6 @@
 // lib/screens/headquarter_page.dart
-import 'package:easydev/screens/secondary_page.dart';
 import 'package:easydev/states/page/hq_state.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../routes.dart';
@@ -101,72 +99,51 @@ class _BrandFooter extends StatelessWidget {
 class RefreshableBody extends StatelessWidget {
   const RefreshableBody({super.key});
 
-  static const _kSwipeVelocityThreshold = 300; // px/s
-
-  void _handleDrag(BuildContext context, double velocity) {
-    // 왼쪽으로 스와이프(velocity < -threshold) 시 보조 페이지로 전환
-    if (velocity < -_kSwipeVelocityThreshold) {
-      Navigator.of(context).push(_slidePage(const SecondaryPage(), fromLeft: false));
-    }
-  }
-
-  PageRouteBuilder _slidePage(Widget page, {required bool fromLeft}) {
-    return PageRouteBuilder(
-      transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (_, __, ___) => page,
-      transitionsBuilder: (_, animation, __, child) {
-        final begin = Offset(fromLeft ? -1.0 : 1.0, 0);
-        final end = Offset.zero;
-        final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
-        return SlideTransition(position: animation.drive(tween), child: child);
-      },
-    );
-  }
+  // 🔧 스와이프하여 SecondaryPage로 이동하는 로직 제거됨
+  //  - _kSwipeVelocityThreshold 상수
+  //  - _handleDrag 메서드
+  //  - _slidePage 메서드
+  //  - GestureDetector의 onHorizontalDragEnd 핸들러
+  // 위 항목들을 모두 삭제하고, Consumer만 바로 렌더링합니다.
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onHorizontalDragEnd: (details) {
-        _handleDrag(context, details.primaryVelocity ?? 0);
-      },
-      child: Consumer<HqState>(
-        builder: (context, state, child) {
-          final pages = state.pages;
+    return Consumer<HqState>(
+      builder: (context, state, child) {
+        final pages = state.pages;
 
-          // ✅ 안전 인덱스(범위 클램프) — int 캐스팅
-          final safeIndex = pages.isEmpty
-              ? 0
-              : state.selectedIndex.clamp(0, pages.length - 1);
+        // ✅ 안전 인덱스(범위 클램프) — int 캐스팅
+        final safeIndex =
+        pages.isEmpty ? 0 : state.selectedIndex.clamp(0, pages.length - 1);
 
-          // ✅ children이 비어 있으면 IndexedStack이 깨지므로 최소 1개는 유지
-          final children = pages.isEmpty
-              ? const <Widget>[SizedBox.shrink()]
-              : pages.map((p) => p.page).toList();
+        // ✅ children이 비어 있으면 IndexedStack이 깨지므로 최소 1개는 유지
+        final children = pages.isEmpty
+            ? const <Widget>[SizedBox.shrink()]
+            : pages.map((p) => p.page).toList();
 
-          return Stack(
-            children: [
-              IndexedStack(
-                index: safeIndex,
-                children: children,
-              ),
-              if (state.isLoading)
-                Container(
-                  color: Colors.white.withOpacity(.35),
-                  child: const Center(
-                    child: SizedBox(
-                      width: 28,
-                      height: 28,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 3,
-                        valueColor: AlwaysStoppedAnimation<Color>(_HqPalette.base),
-                      ),
+        return Stack(
+          children: [
+            IndexedStack(
+              index: safeIndex,
+              children: children,
+            ),
+            if (state.isLoading)
+              Container(
+                color: Colors.white.withOpacity(.35),
+                child: const Center(
+                  child: SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      valueColor: AlwaysStoppedAnimation<Color>(_HqPalette.base),
                     ),
                   ),
                 ),
-            ],
-          );
-        },
-      ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
