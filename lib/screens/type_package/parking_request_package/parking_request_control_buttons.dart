@@ -1,3 +1,4 @@
+// lib/screens/type_pages/parking_requests_package/parking_request_control_buttons.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // HapticFeedback
@@ -67,9 +68,27 @@ class ParkingRequestControlButtons extends StatelessWidget {
         BottomNavigationBarItem(
           icon: Tooltip(
             message: isPlateSelected ? '정산 관리' : '화면 잠금',
-            child: Icon(
-              isPlateSelected ? Icons.payments : (isLocked ? Icons.lock : Icons.lock_open),
-              color: isPlateSelected ? _Palette.base : muted,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              transitionBuilder: (child, anim) =>
+                  ScaleTransition(scale: anim, child: child),
+              child: isPlateSelected
+                  ? Icon(
+                Icons.payments,
+                key: const ValueKey('payments'),
+                color: _Palette.base,
+              )
+                  : (isLocked
+                  ? Icon(
+                Icons.lock,
+                key: const ValueKey('locked'),
+                color: muted,
+              )
+                  : Icon(
+                Icons.lock_open,
+                key: const ValueKey('unlocked'),
+                color: muted,
+              )),
             ),
           ),
           label: isPlateSelected ? '정산 관리' : '화면 잠금',
@@ -138,7 +157,8 @@ class ParkingRequestControlButtons extends StatelessWidget {
                     plate.area,
                   );
                   HapticFeedback.mediumImpact();
-                  showSuccessSnackbar(context, "입차 요청이 취소되었습니다: ${plate.plateNumber}");
+                  showSuccessSnackbar(
+                      context, "입차 요청이 취소되었습니다: ${plate.plateNumber}");
                 } catch (e, st) {
                   debugPrint('cancel entry request error: $e\n$st');
                   showFailedSnackbar(context, "입차 요청 취소 중 오류가 발생했습니다.");
@@ -164,13 +184,15 @@ class ParkingRequestControlButtons extends StatelessWidget {
     final now = DateTime.now();
 
     final String documentId = selectedPlate.id;
-    final int entryTime = selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+    final int entryTime =
+        selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
     final int currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
 
     final type = (selectedPlate.billingType ?? '').trim();
     final isFixed = type == '고정';
     final bool isZeroAutoLock =
-        (((selectedPlate.basicAmount ?? 0) == 0) && ((selectedPlate.addAmount ?? 0) == 0)) ||
+        (((selectedPlate.basicAmount ?? 0) == 0) &&
+            ((selectedPlate.addAmount ?? 0) == 0)) ||
             (isFixed && (selectedPlate.regularAmount ?? 0) == 0);
 
     // 0원 + 이미 잠금 → 해제 금지
@@ -193,7 +215,8 @@ class ParkingRequestControlButtons extends StatelessWidget {
 
       try {
         await repo.addOrUpdatePlate(documentId, updatedPlate);
-        await plateState.updatePlateLocally(PlateType.parkingRequests, updatedPlate);
+        await plateState.updatePlateLocally(
+            PlateType.parkingRequests, updatedPlate);
 
         final autoLog = {
           'action': '사전 정산(자동 잠금: 0원)',
@@ -251,7 +274,8 @@ class ParkingRequestControlButtons extends StatelessWidget {
 
       try {
         await repo.addOrUpdatePlate(documentId, updatedPlate);
-        await plateState.updatePlateLocally(PlateType.parkingRequests, updatedPlate);
+        await plateState.updatePlateLocally(
+            PlateType.parkingRequests, updatedPlate);
 
         final cancelLog = {
           'action': '사전 정산 취소',
@@ -307,7 +331,8 @@ class ParkingRequestControlButtons extends StatelessWidget {
 
     try {
       await repo.addOrUpdatePlate(documentId, updatedPlate);
-      await plateState.updatePlateLocally(PlateType.parkingRequests, updatedPlate);
+      await plateState.updatePlateLocally(
+          PlateType.parkingRequests, updatedPlate);
 
       final log = {
         'action': '사전 정산',

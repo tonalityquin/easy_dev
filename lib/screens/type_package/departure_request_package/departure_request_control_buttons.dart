@@ -1,3 +1,4 @@
+// lib/screens/type_pages/departure_requests_package/departure_request_control_buttons.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // HapticFeedback
@@ -68,7 +69,8 @@ class DepartureRequestControlButtons extends StatelessWidget {
           PlateType.departureRequests,
           userName,
         );
-        final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
+        final isPlateSelected =
+            selectedPlate != null && selectedPlate.isSelected;
 
         return BottomNavigationBar(
           backgroundColor: Colors.white,
@@ -83,9 +85,27 @@ class DepartureRequestControlButtons extends StatelessWidget {
             BottomNavigationBarItem(
               icon: Tooltip(
                 message: isPlateSelected ? '정산 관리' : '화면 잠금',
-                child: Icon(
-                  isPlateSelected ? Icons.payments : (isLocked ? Icons.lock : Icons.lock_open),
-                  color: muted,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 220),
+                  transitionBuilder: (child, anim) =>
+                      ScaleTransition(scale: anim, child: child),
+                  child: isPlateSelected
+                      ? Icon(
+                    Icons.payments,
+                    key: const ValueKey('payments'),
+                    color: muted, // 기존 디자인 유지
+                  )
+                      : (isLocked
+                      ? Icon(
+                    Icons.lock,
+                    key: const ValueKey('locked'),
+                    color: muted,
+                  )
+                      : Icon(
+                    Icons.lock_open,
+                    key: const ValueKey('unlocked'),
+                    color: muted,
+                  )),
                 ),
               ),
               label: isPlateSelected ? '정산 관리' : '화면 잠금',
@@ -140,18 +160,21 @@ class DepartureRequestControlButtons extends StatelessWidget {
             final userName = context.read<UserState>().name;
             final now = DateTime.now();
             final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
-            final entryTime = plate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+            final entryTime =
+                plate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
             final documentId = plate.id;
 
             if (index == 0) {
               final type = (plate.billingType ?? '').trim();
               final isFixed = type == '고정';
               final isZeroAutoLock =
-                  (((plate.basicAmount ?? 0) == 0) && ((plate.addAmount ?? 0) == 0)) ||
+                  (((plate.basicAmount ?? 0) == 0) &&
+                      ((plate.addAmount ?? 0) == 0)) ||
                       (isFixed && (plate.regularAmount ?? 0) == 0);
 
               if (isZeroAutoLock && plate.isLockedFee) {
-                showFailedSnackbar(context, '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.');
+                showFailedSnackbar(
+                    context, '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.');
                 return;
               }
 
@@ -201,7 +224,8 @@ class DepartureRequestControlButtons extends StatelessWidget {
 
               final billingType = plate.billingType ?? '';
               if (billingType.trim().isEmpty) {
-                showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
+                showFailedSnackbar(
+                    context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
                 return;
               }
 
@@ -288,7 +312,8 @@ class DepartureRequestControlButtons extends StatelessWidget {
                     'timestamp': now.toIso8601String(),
                     'lockedFee': result.lockedFee,
                     'paymentMethod': result.paymentMethod,
-                    if (result.reason != null && result.reason!.trim().isNotEmpty)
+                    if (result.reason != null &&
+                        result.reason!.trim().isNotEmpty)
                       'reason': result.reason!.trim(),
                   };
 

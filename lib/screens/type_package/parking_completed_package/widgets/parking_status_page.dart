@@ -1,4 +1,6 @@
 // lib/screens/type_pages/parking_completed_pages/widgets/parking_status_page.dart
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -137,11 +139,13 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              // capacity 합계는 로컬 state로 계산
-              final totalCapacity = locationState.locations.fold<int>(0, (sum, l) => sum + l.capacity);
+              // capacity 합계는 로컬 state로 계산 (요청: 유지)
+              final totalCapacity =
+              locationState.locations.fold<int>(0, (sum, l) => sum + l.capacity);
               final occupiedCount = _occupiedCount;
 
-              final double usageRatio = totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
+              final double usageRatio =
+              totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
               final String usagePercent = (usageRatio * 100).toStringAsFixed(1);
 
               if (_hadError) {
@@ -179,6 +183,7 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
                 );
               }
 
+              // ------ 상단 영역: "디자인/텍스트 수정 금지" 요청 반영 ------
               return ListView(
                 padding: const EdgeInsets.all(20),
                 children: [
@@ -208,6 +213,14 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
                     style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                     textAlign: TextAlign.center,
                   ),
+                  // ------ 상단 영역 끝 (수정 없음) ------
+
+                  const SizedBox(height: 24),
+
+                  // ⬇️ 하단 자동 순환 카드: 한 화면에 한 장, 몇 초마다 다음 카드로 애니메이션
+                  const _AutoCyclingReminderCards(),
+
+                  const SizedBox(height: 12),
                 ],
               );
             },
@@ -224,4 +237,206 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
       ),
     );
   }
+}
+
+/// 하단에 표시되는 자동 순환 카드 뷰
+/// - 한 번에 한 카드만 표시
+/// - [cycleInterval]마다 자동으로 다음 카드로 애니메이션
+/// - 마지막까지 읽으면 다시 첫 카드로 순환
+class _AutoCyclingReminderCards extends StatefulWidget {
+  const _AutoCyclingReminderCards();
+
+  @override
+  State<_AutoCyclingReminderCards> createState() => _AutoCyclingReminderCardsState();
+}
+
+class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
+  // ✔ 2초 주기로 전환
+  static const Duration cycleInterval = Duration(seconds: 2);
+  static const Duration animDuration = Duration(milliseconds: 400);
+  static const Curve animCurve = Curves.easeInOut;
+
+  final PageController _pageController = PageController();
+  Timer? _timer;
+  int _currentIndex = 0;
+
+  // 중앙 정렬 카드 컨텐츠 (업무 리마인더)
+  static const List<_ReminderContent> _cards = [
+    _ReminderContent(
+      title: '주의사항',
+      lines: [
+        '• 보조 페이지는 꼭 잠그기',
+        '• 업무와 관련 없는 행위는 피하기',
+      ],
+    ),
+    _ReminderContent(
+      title: '업무 시작 시',
+      lines: [
+        '• 업무 시작 전과 후 청결하게 청소하기',
+        '• 유니폼, 무전기 등 점검하기',
+      ],
+    ),
+    _ReminderContent(
+      title: '업무 중',
+      lines: [
+        '• 업무와 무관한 행위는 피하기',
+        '• 잠시 부재 중일 경우 꼭 보고하기',
+      ],
+    ),
+    _ReminderContent(
+      title: '사고 발생 시',
+      lines: [
+        '• 현장 및 지정 관리자에게 보고하기',
+        '• 관리자의 메뉴얼을 준수하기',
+      ],
+    ),
+    _ReminderContent(
+      title: '컴플레인 발생 시',
+      lines: [
+        '• 컴플레인 당사자와의 다툼은 절대 피하기',
+        '• 현장 관리자를 통해서 컴플레인 해결하기',
+      ],
+    ),
+    _ReminderContent(
+      title: '업무 종료',
+      lines: [
+        '• 휴게 및 퇴근 보고는 반드시 하기',
+        '• 제공된 유니폼 관리하기',
+      ],
+    ),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _startAutoCycle();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _startAutoCycle() {
+    _timer?.cancel();
+    if (_cards.length <= 1) return; // 카드가 1장 이하이면 순환 불필요
+    _timer = Timer.periodic(cycleInterval, (_) {
+      if (!mounted) return;
+      final next = (_currentIndex + 1) % _cards.length;
+      _animateToPage(next);
+    });
+  }
+
+  void _animateToPage(int index) {
+    _currentIndex = index;
+    if (!mounted) return;
+    _pageController.animateToPage(
+      index,
+      duration: animDuration,
+      curve: animCurve,
+    );
+    setState(() {}); // 현재 인덱스 반영(인디케이터 등 확장 시 대비)
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // ListView 안에 들어가므로 높이를 고정해 주어야 함
+    return SizedBox(
+      height: 170,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // 가운데 정렬로 한 카드씩만 보이게
+          Align(
+            alignment: Alignment.center,
+            child: FractionallySizedBox(
+              widthFactor: 0.98, // 좌우 여백 약간
+              child: PageView.builder(
+                controller: _pageController,
+                physics: const NeverScrollableScrollPhysics(), // 스와이프 대신 자동 전환
+                onPageChanged: (i) => _currentIndex = i,
+                itemCount: _cards.length,
+                itemBuilder: (context, index) {
+                  final c = _cards[index];
+                  return Center(
+                    child: Card(
+                      color: Colors.white, // 카드 배경 하얀색
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center, // 중앙 정렬
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(Icons.fact_check, size: 18),
+                                const SizedBox(width: 8),
+                                Text(
+                                  c.title,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            ...c.lines.map(
+                                  (t) => Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Text(
+                                  t,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+
+          // (선택) 하단 점 인디케이터 - 중앙 정렬
+          Positioned(
+            bottom: 6,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(_cards.length, (i) {
+                final active = i == _currentIndex;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: active ? 10 : 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: active ? Colors.black87 : Colors.black26,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReminderContent {
+  final String title;
+  final List<String> lines;
+  const _ReminderContent({required this.title, required this.lines});
 }

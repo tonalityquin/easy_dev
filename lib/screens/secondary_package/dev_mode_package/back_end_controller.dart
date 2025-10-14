@@ -112,7 +112,7 @@ class _BackEndControllerState extends State<BackEndController> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          '근태 문서',
+          '실시간 컨트롤러',
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
         centerTitle: true,
