@@ -6,6 +6,7 @@ import 'dart:ui' show Rect;
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // <- systemOverlayStyle 적용을 위해 추가
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -416,7 +417,11 @@ class _OfflineLiveOcrPageState extends State<OfflineLiveOcrPage> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('자동 번호판 인식'),
+        automaticallyImplyLeading: false,                  // 🔹 뒤로가기 화살표 제거
+        backgroundColor: Colors.black,                     // 🔹 검정 배경
+        foregroundColor: Colors.white,                     // 🔹 아이콘/텍스트 흰색
+        systemOverlayStyle: SystemUiOverlayStyle.light,    // 🔹 상태바 아이콘 밝게
+        elevation: 0,
         actions: [
           // 강제 자동삽입 토글(임의문자 허용)
           IconButton(
@@ -440,7 +445,11 @@ class _OfflineLiveOcrPageState extends State<OfflineLiveOcrPage> {
           IconButton(
             tooltip: _autoRunning ? '일시정지' : '재생',
             onPressed: () {
-              if (_autoRunning) _stopAuto(); else _startAuto();
+              if (_autoRunning) {
+                _stopAuto();
+              } else {
+                _startAuto();
+              }
               setState(() {});
             },
             icon: Icon(_autoRunning ? Icons.pause_circle_filled : Icons.play_circle_fill),
@@ -512,21 +521,23 @@ class _OfflineLiveOcrPageState extends State<OfflineLiveOcrPage> {
         ],
       );
     }
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center, // 칩 묶음도 가운데 정렬
       children: [
         Wrap(
           spacing: 8,
           runSpacing: 8,
+          alignment: WrapAlignment.center,     // 가로 가운데
+          runAlignment: WrapAlignment.center,  // 줄 바꿈 행도 가운데
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: _candidates.map((cand) {
             return ActionChip(
               label: Text(cand),
               labelStyle: const TextStyle(color: Colors.white),
               backgroundColor: Colors.blueGrey.shade700,
               tooltip: '이 값(오타/누락 포함)으로 삽입',
-              onPressed: () {
-                _return(cand); // 그대로 삽입
-              },
+              onPressed: () => _return(cand),
             );
           }).toList(),
         ),
