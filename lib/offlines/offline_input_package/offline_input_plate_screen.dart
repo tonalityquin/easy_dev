@@ -1,3 +1,4 @@
+// lib/screens/input_package/offline_input_plate_screen.dart
 import 'package:flutter/material.dart';
 
 import 'offline_input_plate_controller.dart';
@@ -39,10 +40,10 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
   bool _openedScannerOnce = false;
 
   final DraggableScrollableController _sheetController = DraggableScrollableController();
-  bool _sheetOpen = false; // 현재 열림 상태
+  bool _sheetOpen = false;
 
-  static const double _sheetClosed = 0.16; // 헤더만 살짝
-  static const double _sheetOpened = 1.00; // ★ 최상단까지 (화면 높이 꽉 채움)
+  static const double _sheetClosed = 0.16;
+  static const double _sheetOpened = 1.00;
 
   Future<void> _animateSheet({required bool open}) async {
     final target = open ? _sheetOpened : _sheetClosed;
@@ -54,7 +55,6 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
       );
       if (mounted) setState(() => _sheetOpen = open);
     } catch (_) {
-      // 컨트롤러가 아직 attach되지 않았을 수 있음 → 프레임 이후 재시도
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _sheetController.jumpTo(target);
         if (mounted) setState(() => _sheetOpen = open);
@@ -62,26 +62,18 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
     }
   }
 
-  void _toggleSheet() {
-    _animateSheet(open: !_sheetOpen);
-  }
+  void _toggleSheet() => _animateSheet(open: !_sheetOpen);
 
   @override
   void initState() {
     super.initState();
 
-    // ⬇️ 시트 사이즈 변화에 따라 _sheetOpen 동기화 (드래그로 여닫을 때도 반영)
     _sheetController.addListener(() {
       try {
-        final s = _sheetController.size; // 0.0~1.0
-        // 닫힘(0.16)과 열림(1.0) 중간값(≈0.58)을 기준으로 열림/닫힘 판정
+        final s = _sheetController.size;
         final bool openNow = s >= ((_sheetClosed + _sheetOpened) / 2);
-        if (openNow != _sheetOpen && mounted) {
-          setState(() => _sheetOpen = openNow);
-        }
-      } catch (_) {
-        // attach 전 접근 등은 무시
-      }
+        if (openNow != _sheetOpen && mounted) setState(() => _sheetOpen = openNow);
+      } catch (_) {}
     });
 
     controller.controllerBackDigit.addListener(() async {
@@ -89,11 +81,10 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
       if (text.length == 4 && controller.isInputValid()) {}
     });
 
-    // 첫 빌드 직후 한 번만 자동으로 LiveOcrPage 열기
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (_openedScannerOnce) return;
       _openedScannerOnce = true;
-      await _openLiveScanner(); // 사용자가 닫으면 plate == null 로 처리
+      await _openLiveScanner();
     });
   }
 
@@ -104,35 +95,58 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
     super.dispose();
   }
 
-  // 스캐너로 이동 → 성공 시 입력칸 자동 채우기 (사용자가 닫으면 plate == null)
+  // 스캐너 → plate 수신 → 칸 분배 (가운데 임의문자/누락 허용)
   Future<void> _openLiveScanner() async {
     final plate = await Navigator.of(context).push<String>(
       MaterialPageRoute(builder: (_) => const OfflineLiveOcrPage()),
     );
     if (plate == null) return;
 
-    final m = RegExp(r'^(\d{2,3})([가-힣])(\d{4})$').firstMatch(plate);
-    if (m == null) {
+    final normalized = plate.replaceAll(RegExp(r'\s+'), '');
+
+    // 1) 완전형: 앞(2~3) + 임의문자(1) + 뒤(4)
+    RegExpMatch? m = RegExp(r'^(\d{2,3})(.)(\d{4})$').firstMatch(normalized);
+
+    // 2) 누락형: digits-only (6 또는 7)
+    final m2 = m ?? RegExp(r'^(\d{2,3})(\d{4})$').firstMatch(normalized);
+
+    if (m != null) {
+      final front = m.group(1)!;
+      final mid   = m.group(2)!;  // 임의문자 허용(+, 4, 영문 등)
+      final back  = m.group(3)!;
+
+      setState(() {
+        controller.setFrontDigitMode(front.length == 3);
+        controller.controllerFrontDigit.text = front;
+        controller.controllerMidDigit.text   = mid;
+        controller.controllerBackDigit.text  = back;
+        controller.showKeypad = false;
+      });
+      return;
+    } else if (m2 != null) {
+      final front = m2.group(1)!; // 2 또는 3
+      final back  = m2.group(2)!; // 4
+
+      setState(() {
+        controller.setFrontDigitMode(front.length == 3);
+        controller.controllerFrontDigit.text = front;
+        controller.controllerMidDigit.text   = '';  // 누락
+        controller.controllerBackDigit.text  = back;
+        controller.setActiveController(controller.controllerMidDigit); // 중간칸 보정 유도
+        controller.showKeypad = true;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('가운데 문자가 누락되었습니다. 중간 칸을 입력해 주세요. (원본: $plate)')),
+      );
+      return;
+    } else {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('인식값 형식 확인 필요: $plate')),
       );
-      return;
     }
-
-    final front = m.group(1)!; // 2 or 3 digits
-    final mid = m.group(2)!;   // 한글 1글자
-    final back = m.group(3)!;  // 4 digits
-
-    setState(() {
-      controller.setFrontDigitMode(front.length == 3);
-      controller.controllerFrontDigit.text = front;
-      controller.controllerMidDigit.text = mid;
-      controller.controllerBackDigit.text = back;
-      controller.showKeypad = false;
-    });
-
-    if (!mounted) return;
   }
 
   Widget _buildKeypad() {
@@ -145,9 +159,7 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
         maxLength: controller.isThreeDigit ? 3 : 2,
         onComplete: () => setState(() => controller.setActiveController(controller.controllerMidDigit)),
         onChangeFrontDigitMode: (defaultThree) {
-          setState(() {
-            controller.setFrontDigitMode(defaultThree);
-          });
+          setState(() => controller.setFrontDigitMode(defaultThree));
         },
         enableDigitModeSwitch: true,
       );
@@ -199,18 +211,16 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 키보드/인셋 반영 하단 패딩
+    // 키보드/인셋 + 시스템 하단 안전영역 반영
     final viewInset = MediaQuery.of(context).viewInsets.bottom;
-    final bottomSafePadding = (controller.showKeypad ? 280.0 : 140.0) + viewInset;
+    final sysBottom = MediaQuery.of(context).padding.bottom;
+    final bottomSafePadding = (controller.showKeypad ? 280.0 : 140.0) + viewInset + sysBottom;
 
-    // 뒤로가기: 시트가 열려 있으면 먼저 닫고, 닫혀 있으면 pop 허용
     return PopScope(
       canPop: !_sheetOpen,
       onPopInvoked: (didPop) async {
         if (didPop) return;
-        if (_sheetOpen) {
-          await _animateSheet(open: false);
-        }
+        if (_sheetOpen) await _animateSheet(open: false);
       },
       child: Scaffold(
         appBar: AppBar(
@@ -290,28 +300,27 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
                   snapSizes: const [_sheetClosed, _sheetOpened],
                   builder: (context, scrollController) {
                     return Material(
-                      // ❗ 완전 불투명 처리
                       color: Colors.white,
                       elevation: 4,
                       shadowColor: _Palette.dark.withOpacity(.18),
                       shape: const RoundedRectangleBorder(
                         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                       ),
-                      clipBehavior: Clip.antiAlias, // 라운드 상단 모서리 내 콘텐츠도 클립
+                      clipBehavior: Clip.antiAlias,
                       child: SafeArea(
                         top: true,
-                        bottom: false,
+                        bottom: false, // 하단은 우리가 별도 패딩으로 반영
                         child: ListView(
                           controller: scrollController,
-                          physics: const NeverScrollableScrollPhysics(), // 내부 스크롤 금지(요청 유지)
+                          physics: const NeverScrollableScrollPhysics(),
                           padding: EdgeInsets.fromLTRB(
                             16,
                             8,
                             16,
-                            16 + (controller.showKeypad ? 260 : 100) + viewInset,
+                            16 + (controller.showKeypad ? 260 : 100) + viewInset + sysBottom,
                           ),
                           children: [
-                            // 헤더(탭으로 열고 닫기 + 애니메이션)
+                            // 헤더
                             GestureDetector(
                               behavior: HitTestBehavior.opaque,
                               onTap: _toggleSheet,
@@ -320,8 +329,7 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
                                 child: Column(
                                   children: [
                                     Container(
-                                      width: 40,
-                                      height: 4,
+                                      width: 40, height: 4,
                                       decoration: BoxDecoration(
                                         color: Colors.black38,
                                         borderRadius: BorderRadius.circular(2),
@@ -331,14 +339,10 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
                                     Row(
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
-                                        const Text(
-                                          '정산 유형 / 메모 카드',
-                                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                                        ),
-                                        Text(
-                                          controller.buildPlateNumber(),
-                                          style: const TextStyle(color: Colors.black54),
-                                        ),
+                                        const Text('정산 유형 / 메모 카드',
+                                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                                        Text(controller.buildPlateNumber(),
+                                            style: const TextStyle(color: Colors.black54)),
                                       ],
                                     ),
                                   ],
@@ -347,7 +351,7 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
                             ),
                             const SizedBox(height: 12),
 
-                            // ⬇️ 정산 영역
+                            // 정산 영역
                             OfflineInputBillSection(
                               selectedBill: controller.selectedBill,
                               onChanged: (value) => setState(() => controller.selectedBill = value),
@@ -358,7 +362,7 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
 
                             const SizedBox(height: 24),
 
-                            // 차량 상태 토글은 제거, 메모 섹션만 유지
+                            // 메모 섹션
                             OfflineInputCustomStatusSection(
                               controller: controller,
                               fetchedCustomStatus: controller.fetchedCustomStatus,
@@ -389,33 +393,34 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
             );
           },
         ),
-        bottomNavigationBar: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            OfflineInputBottomNavigation(
-              showKeypad: controller.showKeypad,
-              keypad: _buildDockAndKeypad(), // 도크 + 키패드 묶음
-              actionButton: OfflineInputBottomActionSection(
-                controller: controller,
-                mountedContext: mounted,
-                onStateRefresh: () => setState(() {}),
+        // 하단 네비/제스처 바와 겹치지 않게 SafeArea로 감쌈
+        bottomNavigationBar: SafeArea(
+          top: false, left: false, right: false, bottom: true,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              OfflineInputBottomNavigation(
+                showKeypad: controller.showKeypad,
+                keypad: _buildDockAndKeypad(),
+                actionButton: OfflineInputBottomActionSection(
+                  controller: controller,
+                  mountedContext: mounted,
+                  onStateRefresh: () => setState(() {}),
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: SizedBox(
-                height: 48,
-                child: Image.asset('assets/images/pelican.png'),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: SizedBox(height: 48, child: Image.asset('assets/images/pelican.png')),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// 하단 도크: 번호판 입력 3분할을 키패드 바로 위에 고정해 시선/손 집중을 돕는다.
+/// 하단 도크: 번호판 입력 3분할을 키패드 바로 위에 고정
 class _PlateDock extends StatelessWidget {
   final OfflineInputPlateController controller;
   final void Function(TextEditingController target) onActivate;
@@ -430,15 +435,11 @@ class _PlateDock extends StatelessWidget {
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       filled: true,
-      // 활성 시 아주 옅은 오렌지 톤
       fillColor: active ? _Palette.light.withOpacity(.22) : Colors.white,
       counterText: '',
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(
-          color: Colors.grey.shade300,
-          width: 1,
-        ),
+        borderSide: BorderSide(color: Colors.grey.shade300, width: 1),
       ),
       focusedBorder: const OutlineInputBorder(
         borderRadius: BorderRadius.all(Radius.circular(10)),
@@ -450,8 +451,8 @@ class _PlateDock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isFrontActive = controller.activeController == controller.controllerFrontDigit;
-    final isMidActive = controller.activeController == controller.controllerMidDigit;
-    final isBackActive = controller.activeController == controller.controllerBackDigit;
+    final isMidActive   = controller.activeController == controller.controllerMidDigit;
+    final isBackActive  = controller.activeController == controller.controllerBackDigit;
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
@@ -459,13 +460,11 @@ class _PlateDock extends StatelessWidget {
       decoration: const BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        boxShadow: [
-          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2)),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2))],
       ),
       child: Row(
         children: [
-          // 앞자리 (2~3자리)
+          // 앞자리 (2~3)
           Expanded(
             flex: 28,
             child: GestureDetector(
@@ -484,7 +483,7 @@ class _PlateDock extends StatelessWidget {
           ),
           const SizedBox(width: 8),
 
-          // 한글 (1글자)
+          // 가운데 (1)
           Expanded(
             flex: 18,
             child: GestureDetector(
@@ -503,7 +502,7 @@ class _PlateDock extends StatelessWidget {
           ),
           const SizedBox(width: 8),
 
-          // 뒷자리 (4자리)
+          // 뒷자리 (4)
           Expanded(
             flex: 36,
             child: GestureDetector(

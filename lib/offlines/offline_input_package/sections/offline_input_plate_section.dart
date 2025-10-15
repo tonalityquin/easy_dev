@@ -1,3 +1,4 @@
+// lib/screens/input_package/sections/offline_input_plate_section.dart
 import 'package:flutter/material.dart';
 import '../utils/offline_input_plate_field.dart';
 import '../widgets/offline_input_region_bottom_sheet.dart';
