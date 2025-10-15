@@ -13,11 +13,15 @@ class OfflineInputBottomActionSection extends StatefulWidget {
   final bool mountedContext;
   final VoidCallback onStateRefresh;
 
+  /// ✅ 저장 성공 직후 실행할 콜백(TTS 등)
+  final Future<void> Function()? onAfterSavedSuccess;
+
   const OfflineInputBottomActionSection({
     super.key,
     required this.controller,
     required this.mountedContext,
     required this.onStateRefresh,
+    this.onAfterSavedSuccess,
   });
 
   @override
@@ -103,7 +107,9 @@ class _OfflineInputBottomActionSectionState extends State<OfflineInputBottomActi
           isLocationSelected: widget.controller.isLocationSelected,
           onPressed: () => widget.controller.submitPlateEntry(
             context,
-            widget.onStateRefresh, // ✅ bool 제거, 2개만 전달
+            widget.onStateRefresh,
+            // ✅ 저장 성공 후(TTS 등) 실행
+            onAfterSavedSuccess: widget.onAfterSavedSuccess,
           ),
         ),
       ],

@@ -8,6 +8,7 @@
 // - 선택/뒤로가기/정렬 등은 전부 offline_plates 직접 질의로 구현
 // - 검색: 기존 CommonPlateSearchBottomSheet 대신 모달 바텀시트로 안내 텍스트만 표시
 // - ✅ 목록 아이템을 박스(UI)로 리팩터링하고, 번호 + 위치 + 정산 유형(요약) 함께 출력
+// - ✅ DB 변경 알림(OfflineDbNotifier) 구독/발행 추가 → 다른 화면 변경도 즉시 반영
 //
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -16,19 +17,20 @@ import 'package:flutter/material.dart';
 import '../sql/offline_auth_db.dart';
 import '../sql/offline_auth_service.dart';
 
+// ▼ DB 변경 알림 (전역 Notifier)
+import '../sql/offline_db_notifier.dart';
+
 import '../../utils/snackbar_helper.dart';
 
-// 위치 선택 바텀시트 (기존 프로젝트의 것을 사용)
+// 위치 선택 바텀시트
 import 'offline_parking_request_package/offline_parking_location_bottom_sheet.dart';
 
-// 상단 네비게이션 (기존 프로젝트의 것을 사용)
+// 상단 네비게이션
 import '../offline_navigation/offline_top_navigation.dart';
 
-// 하단 컨트롤 버튼(기존 프로젝트 위젯 시그니처에 맞춰 콜백 제공)
+// 하단 컨트롤 버튼
 import 'offline_parking_request_package/offline_parking_request_control_buttons.dart';
 
-// ⛳ PlateType 제거: 상태 문자열을 직접 사용
-//   스키마: offline_plates.status_type TEXT
 const String _kStatusParkingCompleted = 'parkingCompleted';
 const String _kStatusParkingRequests = 'parkingRequests';
 
@@ -40,14 +42,13 @@ class OfflineParkingRequestPage extends StatefulWidget {
 }
 
 class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
-  bool _isSorted = true; // 최신순(true) / 오래된순(false)
-  bool _isLocked = false; // 화면 잠금
-
-  // 검색 바텀시트 중복 오픈 방지
+  bool _isSorted = true;
+  bool _isLocked = false;
   bool _openingSearch = false;
 
-  // 위치 리미트 캐시 (area::location → capacity)
   final Map<String, int> _locationLimitCache = {};
+
+  VoidCallback? _dbListener;
 
   void _log(String msg) {
     if (kDebugMode) debugPrint('[ParkingRequest] $msg');
@@ -55,9 +56,23 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
 
   int _nowMs() => DateTime.now().millisecondsSinceEpoch;
 
-  // ─────────────────────────────────────────────────────────────
-  // 세션/영역 로딩
-  // ─────────────────────────────────────────────────────────────
+  @override
+  void initState() {
+    super.initState();
+    _dbListener = () {
+      if (mounted) setState(() {});
+    };
+    OfflineDbNotifier.instance.tick.addListener(_dbListener!);
+  }
+
+  @override
+  void dispose() {
+    if (_dbListener != null) {
+      OfflineDbNotifier.instance.tick.removeListener(_dbListener!);
+    }
+    super.dispose();
+  }
+
   Future<(String uid, String uname)> _loadSessionIdentity() async {
     final s = await OfflineAuthService.instance.currentSession();
     final uid = (s?.userId ?? '').trim();
@@ -100,9 +115,6 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
     return area;
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // 위치 리미트(capacity) 및 카운트
-  // ─────────────────────────────────────────────────────────────
   Future<int?> _getLocationLimit(String area, String loc) async {
     final key = '$area::$loc';
     if (_locationLimitCache.containsKey(key)) return _locationLimitCache[key];
@@ -140,9 +152,6 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
     return c;
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // 검색 다이얼로그 → 모달 바텀시트로 안내 문구 표시
-  // ─────────────────────────────────────────────────────────────
   Future<void> _showSearchDialog() async {
     if (_openingSearch) return;
     _openingSearch = true;
@@ -151,12 +160,12 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
 
       await showModalBottomSheet<void>(
         context: context,
-        isScrollControlled: true,        // ✅ 풀스크린 높이 사용
-        useSafeArea: true,               // ✅ 노치/상단 안전영역까지 차오르되 컨텐츠는 안전영역 내 배치
+        isScrollControlled: true,
+        useSafeArea: true,
         backgroundColor: Colors.white,
         builder: (sheetContext) {
           return FractionallySizedBox(
-            heightFactor: 1,             // ✅ 화면 전체 높이
+            heightFactor: 1,
             child: SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -197,9 +206,6 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // '입차 완료' 플로우
-  // ─────────────────────────────────────────────────────────────
   Future<void> _handleParkingCompleted() async {
     if (_isLocked) {
       showSelectedSnackbar(context, '화면이 잠금 상태입니다.');
@@ -209,7 +215,6 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
     final db = await OfflineAuthDb.instance.database;
     final (uid, uname) = await _loadSessionIdentity();
 
-    // 현재 선택된 요청 1건
     final rows = await db.query(
       OfflineAuthDb.tablePlates,
       columns: const ['id', 'plate_number', 'area'],
@@ -242,7 +247,7 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
         },
       );
 
-      if (selectedLocation == null) break; // 닫힘
+      if (selectedLocation == null) break;
       if (selectedLocation == 'refresh') continue;
 
       final loc = selectedLocation.trim();
@@ -251,7 +256,6 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
         continue;
       }
 
-      // 리미트 체크
       final limit = await _getLocationLimit(area, loc);
       if (limit == null || limit <= 0) {
         showFailedSnackbar(context, '"$loc" 리미트가 설정되지 않았습니다. 관리자에 문의하세요.');
@@ -263,22 +267,23 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
         continue;
       }
 
-      // 전환 처리
       try {
         await db.update(
           OfflineAuthDb.tablePlates,
           {
             'status_type': _kStatusParkingCompleted,
             'location': loc,
-            'is_selected': 0, // 완료 시 선택 해제
+            'is_selected': 0,
             'updated_at': _nowMs(),
           },
           where: 'id = ?',
           whereArgs: [id],
         );
+        OfflineDbNotifier.instance.bump();
+
         if (!mounted) return;
         showSuccessSnackbar(context, '입차 완료: $plateNumber ($loc)');
-        setState(() {}); // 목록 재빌드
+        setState(() {});
         break;
       } catch (e) {
         if (kDebugMode) debugPrint('입차 완료 처리 실패: $e');
@@ -288,15 +293,11 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // 선택 토글
-  // ─────────────────────────────────────────────────────────────
   Future<void> _togglePlateSelection(int id) async {
     final db = await OfflineAuthDb.instance.database;
     final (uid, uname) = await _loadSessionIdentity();
 
     await db.transaction((txn) async {
-      // 현재 선택 상태
       final r = await txn.query(
         OfflineAuthDb.tablePlates,
         columns: const ['is_selected'],
@@ -306,7 +307,6 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
       );
       final curSel = r.isNotEmpty ? ((r.first['is_selected'] as int?) ?? 0) : 0;
 
-      // 나의 기존 선택 해제(같은 status 범위)
       await txn.update(
         OfflineAuthDb.tablePlates,
         {'is_selected': 0},
@@ -315,7 +315,6 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
         whereArgs: [_kStatusParkingRequests, uid, uname],
       );
 
-      // 대상 토글
       await txn.update(
         OfflineAuthDb.tablePlates,
         {
@@ -328,9 +327,10 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
         whereArgs: [id],
       );
     });
+
+    OfflineDbNotifier.instance.bump();
   }
 
-  // 뒤로가기: 선택 해제
   Future<bool> _clearSelectedIfAny() async {
     final db = await OfflineAuthDb.instance.database;
     final (uid, uname) = await _loadSessionIdentity();
@@ -355,10 +355,11 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
       where: 'id = ?',
       whereArgs: [id],
     );
+
+    OfflineDbNotifier.instance.bump();
+
     return true;
   }
-
-  // ─────────────────────────────────────────────────────────────
 
   void _toggleSortIcon() {
     setState(() => _isSorted = !_isSorted);
@@ -369,7 +370,6 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
-        // 선택 해제 먼저 시도
         if (await _clearSelectedIfAny()) {
           _log('clear selection');
           return false;
@@ -434,7 +434,6 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
       return const Center(child: Text('현재 지역 정보를 확인할 수 없습니다.'));
     }
 
-    // ✅ 위치, 정산 유형(오프라인 플레이트의 billing_type 및 요약) 함께 조회
     final rows = await db.query(
       OfflineAuthDb.tablePlates,
       columns: const [
@@ -495,10 +494,10 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
           }
           await _togglePlateSelection(id);
           if (!mounted) return;
-          setState(() {}); // 재빌드
+          setState(() {});
         },
         child: Container(
-          width: double.infinity, // ✅ 가로 꽉차게
+          width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             color: selected ? Colors.black.withOpacity(0.04) : Colors.white,
@@ -527,7 +526,6 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 차량 번호(크게)
                     Text(
                       title,
                       maxLines: 1,
@@ -538,7 +536,6 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
                       ),
                     ),
                     const SizedBox(height: 4),
-                    // 위치
                     Text(
                       locationText,
                       maxLines: 1,
@@ -550,7 +547,6 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
                       ),
                     ),
                     const SizedBox(height: 2),
-                    // 정산 유형 + 요약
                     Text(
                       billingText,
                       maxLines: 2,
@@ -575,7 +571,7 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       itemCount: tiles.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10), // ✅ 박스 간격
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (_, i) => tiles[i],
     );
   }

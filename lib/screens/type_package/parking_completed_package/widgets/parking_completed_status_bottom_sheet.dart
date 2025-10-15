@@ -18,6 +18,9 @@ import '../../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 
 // import '../../../../utils/usage_reporter.dart';
 
+// ✅ TTS (오프라인 TTS 사용)
+import '../../../../offlines/tts/offline_tts.dart';
+
 Future<void> showParkingCompletedStatusBottomSheet({
   required BuildContext context,
   required PlateModel plate,
@@ -164,8 +167,7 @@ class _FullHeightSheet extends StatelessWidget {
                     'timestamp': now.toIso8601String(),
                     'lockedFee': result.lockedFee,
                     'paymentMethod': result.paymentMethod,
-                    if (result.reason != null && result.reason!.trim().isNotEmpty)
-                      'reason': result.reason!.trim(),
+                    if (result.reason != null && result.reason!.trim().isNotEmpty) 'reason': result.reason!.trim(),
                   };
                   await firestore.collection('plates').doc(plate.id).update({
                     'logs': FieldValue.arrayUnion([log])
@@ -173,8 +175,7 @@ class _FullHeightSheet extends StatelessWidget {
                   _reportDbSafe(
                     area: plate.area,
                     action: 'write',
-                    source:
-                    'parkingCompletedStatus.prebill.plates.update.logs.arrayUnion',
+                    source: 'parkingCompletedStatus.prebill.plates.update.logs.arrayUnion',
                     n: 1,
                   );
 
@@ -236,8 +237,7 @@ class _FullHeightSheet extends StatelessWidget {
                   _reportDbSafe(
                     area: plate.area,
                     action: 'write',
-                    source:
-                    'parkingCompletedStatus.unlock.repo.addOrUpdatePlate',
+                    source: 'parkingCompletedStatus.unlock.repo.addOrUpdatePlate',
                     n: 1,
                   );
 
@@ -257,8 +257,7 @@ class _FullHeightSheet extends StatelessWidget {
                   _reportDbSafe(
                     area: plate.area,
                     action: 'write',
-                    source:
-                    'parkingCompletedStatus.unlock.plates.update.logs.arrayUnion',
+                    source: 'parkingCompletedStatus.unlock.plates.update.logs.arrayUnion',
                     n: 1,
                   );
 
@@ -296,6 +295,14 @@ class _FullHeightSheet extends StatelessWidget {
                   plate.area,
                   plate.location,
                 );
+
+                // ✅ TTS: 출차 요청 안내 (“차량 뒷번호#### 출차 요청”)
+                // plateFourDigit 필드가 모델에 있다면 fourDigit 전달해도 좋습니다.
+                // 여기서는 plateNumber만 넘기고 내부에서 뒷 4자리 추출합니다.
+                OfflineTts.instance.sayDepartureRequested(
+                  plateNumber: plate.plateNumber,
+                );
+
                 if (!context.mounted) return;
                 Navigator.pop(context);
               },
@@ -432,10 +439,10 @@ void _reportDbSafe({
 }
 
 Future<void> handleEntryParkingRequest(
-    BuildContext context,
-    String plateNumber,
-    String area,
-    ) async {
+  BuildContext context,
+  String plateNumber,
+  String area,
+) async {
   final movementPlate = context.read<MovementPlate>();
   await movementPlate.goBackToParkingRequest(
     fromType: PlateType.parkingCompleted,

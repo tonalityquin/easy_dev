@@ -41,31 +41,8 @@ class OfflineInputPlateController {
   List<String> fetchedStatusList = [];
 
   final List<String> regions = const [
-    '전국',
-    '강원',
-    '경기',
-    '경남',
-    '경북',
-    '광주',
-    '대구',
-    '대전',
-    '부산',
-    '서울',
-    '울산',
-    '인천', // NOTE: 필요 시 원문 유지 가능
-    '전남',
-    '전북',
-    '제주',
-    '충남',
-    '충북',
-    '국기',
-    '대표',
-    '영사',
-    '외교',
-    '임시',
-    '준영',
-    '준외',
-    '협정',
+    '전국','강원','경기','경남','경북','광주','대구','대전','부산','서울','울산','인천',
+    '전남','전북','제주','충남','충북','국기','대표','영사','외교','임시','준영','준외','협정',
   ];
 
   late TextEditingController activeController;
@@ -162,7 +139,6 @@ class OfflineInputPlateController {
 
     final db = await OfflineAuthDb.instance.database;
     await db.transaction((txn) async {
-      // 최신 1건 조회
       final rows = await txn.query(
         OfflineAuthDb.tablePlates,
         columns: const ['id'],
@@ -188,16 +164,17 @@ class OfflineInputPlateController {
     });
   }
 
+  /// 로컬 등록 + UI/스낵바 + (옵션) 저장 성공 후 콜백(TTS 등)
   Future<void> submitPlateEntry(
       BuildContext context,
-      VoidCallback refreshUI,
-      ) async {
+      VoidCallback refreshUI, {
+        Future<void> Function()? onAfterSavedSuccess, // ✅ 추가
+      }) async {
     final plateNumber = buildPlateNumber();
 
     isLoading = true;
     refreshUI();
 
-    // await 전이므로 context 사용 OK
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -206,11 +183,11 @@ class OfflineInputPlateController {
 
     try {
       final wasSuccessful = await OfflineInputPlateService.registerPlateEntry(
-        context: context, // 내부에서도 mounted 체크 필요
+        context: context,
         plateNumber: plateNumber,
         location: locationController.text,
         isLocationSelected: isLocationSelected,
-        selectedBill: selectedBill, // ✅ 변경 반영
+        selectedBill: selectedBill,
         selectedStatuses: selectedStatuses,
         basicStandard: selectedBasicStandard,
         basicAmount: selectedBasicAmount,
@@ -223,13 +200,16 @@ class OfflineInputPlateController {
         selectedBillType: selectedBillType,
       );
 
-      // ✅ Firestore 연동 제거 (로컬만 사용)
-
-      // async gap 이후 BuildContext 안전성 확인
       if (!context.mounted) return;
 
       Navigator.of(context).pop();
+
       if (wasSuccessful) {
+        // ✅ 저장 성공 직후 훅: TTS 등
+        if (onAfterSavedSuccess != null) {
+          await onAfterSavedSuccess();
+        }
+
         showSuccessSnackbar(context, '차량 정보 등록 완료');
         resetForm();
       }

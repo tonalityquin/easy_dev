@@ -1,12 +1,12 @@
 // lib/screens/type_pages/offline_departure_request_page.dart
 //
 // 변경 요약 👇
-// - Firestore/Provider 제거, SQLite(offline_auth_db/offline_auth_service)만 사용
-// - PlateType/PlateModel 의존 제거 → status_type 문자열 상수로 대체
-// - 출차 요청 목록/선택/출차 완료/뒤로가기(선택 해제) 전부 offline_plates 직접 질의
-// - ✅ 목록 아이템을 박스(UI)로 리팩터링하고, 번호 + 위치 + 정산 유형(요약)을 함께 출력
-// - 검색 바텀시트: 공용 BottomSheet 제거 → 로컬 풀스크린 모달 바텀시트로 안내 텍스트만 표시
-//
+// - SQLite만 사용
+// - PlateType 의존 제거
+// - 출차 요청 목록/선택/출차 완료
+// - 안내 바텀시트는 로컬
+// - ✅ DB 변경 알림(OfflineDbNotifier) 구독/발행
+// - ✅ 출차 완료 TTS 반영 ("차량 뒷번호#### 출차 완료되었습니다.")
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -14,16 +14,20 @@ import 'package:flutter/material.dart';
 import '../sql/offline_auth_db.dart';
 import '../sql/offline_auth_service.dart';
 
-import '../../utils/snackbar_helper.dart';
+// ▼ DB 변경 알림 (전역 Notifier)
+import '../sql/offline_db_notifier.dart';
 
+import '../../utils/snackbar_helper.dart';
 import '../offline_navigation/offline_top_navigation.dart';
 
 // 컨트롤 버튼
 import 'offline_departure_request_package/offline_departure_request_control_buttons.dart';
 
-// ⛳ PlateType 제거: status_type을 문자열 상수로 사용
+// ✅ TTS
+import '../../offlines/tts/offline_tts.dart';
+
 const String _kStatusDepartureRequests = 'departureRequests';
-const String _kStatusDepartured       = 'departured'; // 프로젝트 정책에 맞게 수정 가능
+const String _kStatusDepartured       = 'departured';
 
 class OfflineDepartureRequestPage extends StatefulWidget {
   const OfflineDepartureRequestPage({super.key});
@@ -33,11 +37,11 @@ class OfflineDepartureRequestPage extends StatefulWidget {
 }
 
 class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPage> {
-  bool _isSorted = true;  // true: 최신순
-  bool _isLocked = false; // 화면 잠금
+  bool _isSorted = true;
+  bool _isLocked = false;
 
-  // 검색 바텀시트 중복 오픈 방지
   bool _openingSearch = false;
+  VoidCallback? _dbListener;
 
   void _log(String msg) {
     if (kDebugMode) debugPrint('[DepartureRequest] $msg');
@@ -45,9 +49,23 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
 
   int _nowMs() => DateTime.now().millisecondsSinceEpoch;
 
-  // ─────────────────────────────────────────────────────────────
-  // 세션/영역 로딩
-  // ─────────────────────────────────────────────────────────────
+  @override
+  void initState() {
+    super.initState();
+    _dbListener = () {
+      if (mounted) setState(() {});
+    };
+    OfflineDbNotifier.instance.tick.addListener(_dbListener!);
+  }
+
+  @override
+  void dispose() {
+    if (_dbListener != null) {
+      OfflineDbNotifier.instance.tick.removeListener(_dbListener!);
+    }
+    super.dispose();
+  }
+
   Future<(String uid, String uname)> _loadSessionIdentity() async {
     final s = await OfflineAuthService.instance.currentSession();
     final uid = (s?.userId ?? '').trim();
@@ -90,9 +108,6 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
     return area;
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // 검색 바텀시트 → 로컬 풀스크린 모달로 안내 텍스트만 표시
-  // ─────────────────────────────────────────────────────────────
   Future<void> _showSearchDialog() async {
     if (_openingSearch) return;
     _openingSearch = true;
@@ -100,12 +115,12 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
       if (!mounted) return;
       await showModalBottomSheet<void>(
         context: context,
-        isScrollControlled: true,   // ✅ 최상단까지
-        useSafeArea: true,          // ✅ 노치/상단 안전영역 반영
+        isScrollControlled: true,
+        useSafeArea: true,
         backgroundColor: Colors.white,
         builder: (sheetContext) {
           return FractionallySizedBox(
-            heightFactor: 1,        // ✅ 전체 화면 높이
+            heightFactor: 1,
             child: SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -133,7 +148,6 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
                       '입차 요청 및 출차 요청에 있는 번호판 위치를 검색할 수 있습니다.',
                       style: TextStyle(fontSize: 15),
                     ),
-                    const SizedBox(height: 12),
                   ],
                 ),
               ),
@@ -146,9 +160,7 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
     }
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // 출차 완료 처리
-  // ─────────────────────────────────────────────────────────────
+  // ─────────── 출차 완료 + TTS ───────────
   Future<void> _handleDepartureCompleted() async {
     if (_isLocked) {
       showSelectedSnackbar(context, '화면이 잠금 상태입니다.');
@@ -159,9 +171,10 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
       final db = await OfflineAuthDb.instance.database;
       final (uid, uname) = await _loadSessionIdentity();
 
+      // fourDigit도 함께 조회 → "뒷번호####"
       final rows = await db.query(
         OfflineAuthDb.tablePlates,
-        columns: const ['id', 'plate_number'],
+        columns: const ['id', 'plate_number', 'plate_four_digit'],
         where: '''
           is_selected = 1
           AND COALESCE(status_type,'') = ?
@@ -177,8 +190,9 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
         return;
       }
 
-      final id = rows.first['id'] as int;
-      final pn = (rows.first['plate_number'] as String?) ?? '';
+      final id   = rows.first['id'] as int;
+      final pn   = (rows.first['plate_number'] as String?)?.trim() ?? '';
+      final four = (rows.first['plate_four_digit'] as String?)?.trim() ?? '';
 
       await db.update(
         OfflineAuthDb.tablePlates,
@@ -191,24 +205,28 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
         whereArgs: [id],
       );
 
+      // 변경 알림 + ✅ TTS (출차 완료)
+      OfflineDbNotifier.instance.bump();
+      await OfflineTts.instance.sayDepartureCompleted(
+        plateNumber: pn.isNotEmpty ? pn : null,
+        fourDigit  : four.isNotEmpty ? four : null,
+      );
+
       if (!mounted) return;
-      showSuccessSnackbar(context, '출차 완료: $pn');
-      setState(() {}); // 목록 갱신 → 컨트롤 바도 재빌드되어 선택상태 재판단(FutureBuilder)
+      showSuccessSnackbar(context, '출차 완료: ${pn.isNotEmpty ? pn : (four.isNotEmpty ? "****-$four" : "미상")}');
+      setState(() {});
     } catch (e) {
       if (kDebugMode) debugPrint("출차 완료 처리 실패: $e");
       if (mounted) showFailedSnackbar(context, "출차 완료 중 오류 발생: $e");
     }
   }
+  // ──────────────────────────────────────
 
-  // ─────────────────────────────────────────────────────────────
-  // 선택 토글 (departureRequests 범위에서 내 선택을 1건으로 유지)
-  // ─────────────────────────────────────────────────────────────
   Future<void> _togglePlateSelection(int id) async {
     final db = await OfflineAuthDb.instance.database;
     final (uid, uname) = await _loadSessionIdentity();
 
     await db.transaction((txn) async {
-      // 현재 선택 상태
       final r = await txn.query(
         OfflineAuthDb.tablePlates,
         columns: const ['is_selected'],
@@ -218,7 +236,6 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
       );
       final curSel = r.isNotEmpty ? ((r.first['is_selected'] as int?) ?? 0) : 0;
 
-      // 같은 status 범위에서 나의 기존 선택 해제
       await txn.update(
         OfflineAuthDb.tablePlates,
         {'is_selected': 0},
@@ -226,7 +243,6 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
         whereArgs: [_kStatusDepartureRequests, uid, uname],
       );
 
-      // 대상 토글
       await txn.update(
         OfflineAuthDb.tablePlates,
         {
@@ -240,10 +256,11 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
       );
     });
 
-    if (mounted) setState(() {}); // ✅ 부모 재빌드 → 컨트롤 바 FutureBuilder가 재조회
+    OfflineDbNotifier.instance.bump();
+
+    if (mounted) setState(() {});
   }
 
-  // 뒤로가기: 선택 해제
   Future<bool> _clearSelectedIfAny() async {
     final db = await OfflineAuthDb.instance.database;
     final (uid, uname) = await _loadSessionIdentity();
@@ -268,12 +285,12 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
       where: 'id = ?',
       whereArgs: [id],
     );
+
+    OfflineDbNotifier.instance.bump();
+
     return true;
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // UI
-  // ─────────────────────────────────────────────────────────────
   void _toggleSortIcon() => setState(() => _isSorted = !_isSorted);
   void _toggleLock()     => setState(() => _isLocked = !_isLocked);
 
@@ -297,7 +314,6 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
-        // 먼저 선택 해제 시도
         if (await _clearSelectedIfAny()) {
           _log('clear selection');
           return false;
@@ -324,7 +340,6 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
             return snap.data ?? const SizedBox.shrink();
           },
         ),
-        // FAB 없음: SQLite 즉시반영
         bottomNavigationBar: OfflineDepartureRequestControlButtons(
           isSorted: _isSorted,
           isLocked: _isLocked,
@@ -332,7 +347,6 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
           toggleSortIcon: _toggleSortIcon,
           toggleLock: _toggleLock,
           handleDepartureCompleted: _handleDepartureCompleted,
-          // ⛔️ 리팩터링: handleEntryParkingRequest / handleEntryParkingCompleted 제거됨
         ),
       ),
     );
@@ -342,7 +356,9 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
     final db = await OfflineAuthDb.instance.database;
     final area = await _loadCurrentArea();
     if (area.isEmpty) {
-      return const Center(child: Text('현재 지역 정보를 확인할 수 없습니다.'));
+      return const Center(
+        child: Text('현재 지역 정보를 확인할 수 없습니다.'),
+      );
     }
 
     final rows = await db.query(
@@ -377,7 +393,6 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
       );
     }
 
-    // ✅ 주차 요청 페이지와 동일한 박스형 리스트 아이템 (정산 유형 포함)
     final tiles = rows.map((r) {
       final id = r['id'] as int;
       final pn = (r['plate_number'] as String?)?.trim();
@@ -414,7 +429,7 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
           await _togglePlateSelection(id);
         },
         child: Container(
-          width: double.infinity, // ✅ 가로 꽉차게
+          width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             color: selected ? Colors.black.withOpacity(0.04) : Colors.white,
@@ -443,7 +458,6 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // 차량 번호(크게)
                     Text(
                       title,
                       maxLines: 1,
@@ -454,7 +468,6 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
                       ),
                     ),
                     const SizedBox(height: 4),
-                    // 위치
                     Text(
                       locationText,
                       maxLines: 1,
@@ -466,7 +479,6 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
                       ),
                     ),
                     const SizedBox(height: 2),
-                    // 정산 유형 + 요약
                     Text(
                       billingText,
                       maxLines: 2,
@@ -491,7 +503,7 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       itemCount: tiles.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10), // ✅ 박스 간격
+      separatorBuilder: (_, __) => const SizedBox(height: 10),
       itemBuilder: (_, i) => tiles[i],
     );
   }

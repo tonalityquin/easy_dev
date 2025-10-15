@@ -15,14 +15,15 @@ import 'widgets/offline_input_bottom_navigation.dart';
 
 import 'offline_live_ocr_page.dart';
 
-/// Offline Service Palette (오프라인 카드 계열)
+// ✅ TTS
+import '../../offlines/tts/offline_tts.dart';
+
 class _Palette {
-  static const base  = Color(0xFFF4511E); // primary
-  static const dark  = Color(0xFFD84315); // 강조 텍스트/아이콘
-  static const light = Color(0xFFFFAB91); // 톤 변형/보더
+  static const base  = Color(0xFFF4511E);
+  static const dark  = Color(0xFFD84315);
+  static const light = Color(0xFFFFAB91);
 }
 
-/// 도크에서 어떤 칸을 편집 중인지 구분
 enum _DockField { front, mid, back }
 
 class OfflineInputPlateScreen extends StatefulWidget {
@@ -45,7 +46,6 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
   final DraggableScrollableController _sheetController = DraggableScrollableController();
   bool _sheetOpen = false;
 
-  // 도크에서 편집을 시작했는지(완료 시 키패드 닫기 위한 플래그)
   _DockField? _dockEditing;
 
   static const double _sheetClosed = 0.16;
@@ -84,7 +84,9 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
 
     controller.controllerBackDigit.addListener(() async {
       final text = controller.controllerBackDigit.text;
-      if (text.length == 4 && controller.isInputValid()) {}
+      if (text.length == 4 && controller.isInputValid()) {
+        // 입력 완료 시점 이벤트 필요시 추가
+      }
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -101,7 +103,6 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
     super.dispose();
   }
 
-  // 스캐너 → plate 수신 → 칸 분배 (가운데 임의문자/누락 허용)
   Future<void> _openLiveScanner() async {
     final plate = await Navigator.of(context).push<String>(
       MaterialPageRoute(builder: (_) => const OfflineLiveOcrPage()),
@@ -110,15 +111,12 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
 
     final normalized = plate.replaceAll(RegExp(r'\s+'), '');
 
-    // 1) 완전형: 앞(2~3) + 임의문자(1) + 뒤(4)
     RegExpMatch? m = RegExp(r'^(\d{2,3})(.)(\d{4})$').firstMatch(normalized);
-
-    // 2) 누락형: digits-only (6 또는 7)
     final m2 = m ?? RegExp(r'^(\d{2,3})(\d{4})$').firstMatch(normalized);
 
     if (m != null) {
       final front = m.group(1)!;
-      final mid   = m.group(2)!;  // 임의문자 허용(+, 4, 영문 등)
+      final mid   = m.group(2)!;
       final back  = m.group(3)!;
 
       setState(() {
@@ -131,15 +129,15 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
       });
       return;
     } else if (m2 != null) {
-      final front = m2.group(1)!; // 2 또는 3
-      final back  = m2.group(2)!; // 4
+      final front = m2.group(1)!;
+      final back  = m2.group(2)!;
 
       setState(() {
         controller.setFrontDigitMode(front.length == 3);
         controller.controllerFrontDigit.text = front;
-        controller.controllerMidDigit.text   = '';  // 누락
+        controller.controllerMidDigit.text   = '';
         controller.controllerBackDigit.text  = back;
-        controller.showKeypad = true; // 사용자가 직접 중간 칸을 입력
+        controller.showKeypad = true;
         _dockEditing = null;
       });
 
@@ -156,7 +154,6 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
     }
   }
 
-  /// 도크에서 특정 칸 편집 시작: 해당 칸만 비우고 활성화 + 키패드 열기
   void _beginDockEdit(_DockField field) {
     setState(() {
       _dockEditing = field;
@@ -187,12 +184,10 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
         controller: controller.controllerFrontDigit,
         maxLength: controller.isThreeDigit ? 3 : 2,
         onComplete: () => setState(() {
-          // 도크에서 시작한 앞칸 편집이면 완료 후 닫기
           if (_dockEditing == _DockField.front) {
             controller.showKeypad = false;
             _dockEditing = null;
           } else {
-            // 일반 흐름: 가운데 칸으로 이동
             controller.setActiveController(controller.controllerMidDigit);
           }
         }),
@@ -208,19 +203,16 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
         key: const ValueKey('midKeypad'),
         controller: controller.controllerMidDigit,
         onComplete: () => setState(() {
-          // 도크에서 시작한 가운데 칸 편집이면 완료 후 닫기
           if (_dockEditing == _DockField.mid) {
             controller.showKeypad = false;
             _dockEditing = null;
           } else {
-            // 일반 흐름: 뒷칸으로 이동
             controller.setActiveController(controller.controllerBackDigit);
           }
         }),
       );
     }
 
-    // 뒷칸: 원래도 완료 시 키패드 닫음
     return NumKeypad(
       key: const ValueKey('backKeypad'),
       controller: controller.controllerBackDigit,
@@ -240,11 +232,6 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
     );
   }
 
-  // ─────────────────────────────────────────────
-  // 도크 위치 스위칭:
-  //  - showKeypad == true : keypad 슬롯 내 [도크 + 키패드]
-  //  - showKeypad == false: bottomNavigationBar 액션바 바로 윗행에 [도크]만
-  // ─────────────────────────────────────────────
   Widget _buildDock() {
     return _PlateDock(
       controller: controller,
@@ -259,10 +246,13 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
       controller: controller,
       mountedContext: mounted,
       onStateRefresh: () => setState(() {}),
+      // ✅ 저장 성공 직후 TTS 호출
+      onAfterSavedSuccess: () async {
+        await OfflineTts.instance.sayParkingInserted();
+      },
     );
 
     if (controller.showKeypad) {
-      // ✅ 키패드 열림: keypad 슬롯에 도크 + 키패드 함께
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -285,7 +275,6 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
         ],
       );
     } else {
-      // ✅ 키패드 닫힘: 액션바 바로 윗행에 도크
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -309,10 +298,8 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // 키보드/인셋 + 시스템 하단 안전영역 반영
     final viewInset = MediaQuery.of(context).viewInsets.bottom;
     final sysBottom = MediaQuery.of(context).padding.bottom;
-    // 패딩: 키패드 열림(도크+키패드) ≈ 280, 닫힘(도크만) ≈ 140
     final bottomSafePadding = (controller.showKeypad ? 280.0 : 140.0) + viewInset + sysBottom;
 
     return PopScope(
@@ -347,7 +334,6 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
           builder: (context, constraints) {
             return Stack(
               children: [
-                // 상단(기본) 콘텐츠
                 Positioned.fill(
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
@@ -389,8 +375,6 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
                     ),
                   ),
                 ),
-
-                // 하단 DraggableScrollableSheet (불투명 처리)
                 DraggableScrollableSheet(
                   controller: _sheetController,
                   initialChildSize: _sheetClosed,
@@ -409,7 +393,7 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
                       clipBehavior: Clip.antiAlias,
                       child: SafeArea(
                         top: true,
-                        bottom: false, // 하단은 우리가 별도 패딩으로 반영
+                        bottom: false,
                         child: ListView(
                           controller: scrollController,
                           physics: const NeverScrollableScrollPhysics(),
@@ -420,7 +404,6 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
                             16 + (controller.showKeypad ? 260 : 100) + viewInset + sysBottom,
                           ),
                           children: [
-                            // 헤더
                             GestureDetector(
                               behavior: HitTestBehavior.opaque,
                               onTap: _toggleSheet,
@@ -450,8 +433,6 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
                               ),
                             ),
                             const SizedBox(height: 12),
-
-                            // 정산 영역
                             OfflineInputBillSection(
                               selectedBill: controller.selectedBill,
                               onChanged: (value) => setState(() => controller.selectedBill = value),
@@ -459,10 +440,7 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
                               onTypeChanged: (newType) => setState(() => selectedBillType = newType),
                               countTypeController: controller.countTypeController,
                             ),
-
                             const SizedBox(height: 24),
-
-                            // 메모 섹션
                             OfflineInputCustomStatusSection(
                               controller: controller,
                               fetchedCustomStatus: controller.fetchedCustomStatus,
@@ -481,7 +459,6 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
                                 });
                               },
                             ),
-
                             const SizedBox(height: 8),
                           ],
                         ),
@@ -493,7 +470,6 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
             );
           },
         ),
-        // showKeypad 상태에 따라 도크 위치 전환
         bottomNavigationBar: SafeArea(
           top: false, left: false, right: false, bottom: true,
           child: _buildBottomBar(),
@@ -503,7 +479,6 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
   }
 }
 
-/// 하단 도크: 번호판 입력 3분할을 키패드/액션바 주변에 배치
 class _PlateDock extends StatelessWidget {
   final OfflineInputPlateController controller;
   final VoidCallback onActivateFront;
@@ -545,11 +520,10 @@ class _PlateDock extends StatelessWidget {
       decoration: const BoxDecoration(color: Colors.transparent),
       child: Row(
         children: [
-          // 앞자리 (2~3)
           Expanded(
             flex: 28,
             child: GestureDetector(
-              onTap: onActivateFront, // 탭 → 해당 칸만 비우고 활성화 + 키패드 열기
+              onTap: onActivateFront,
               child: AbsorbPointer(
                 child: TextField(
                   controller: controller.controllerFrontDigit,
@@ -563,12 +537,10 @@ class _PlateDock extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-
-          // 가운데 (1)
           Expanded(
             flex: 18,
             child: GestureDetector(
-              onTap: onActivateMid, // 탭 → 해당 칸만 비우고 활성화 + 키패드 열기
+              onTap: onActivateMid,
               child: AbsorbPointer(
                 child: TextField(
                   controller: controller.controllerMidDigit,
@@ -582,12 +554,10 @@ class _PlateDock extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-
-          // 뒷자리 (4)
           Expanded(
             flex: 36,
             child: GestureDetector(
-              onTap: onActivateBack, // 탭 → 해당 칸만 비우고 활성화 + 키패드 열기
+              onTap: onActivateBack,
               child: AbsorbPointer(
                 child: TextField(
                   controller: controller.controllerBackDigit,
