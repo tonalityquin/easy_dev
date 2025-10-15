@@ -1,3 +1,4 @@
+// lib/screens/input_package/input_plate_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -75,7 +76,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   void initState() {
     super.initState();
 
-    // ⬇️ 추가: 시트 사이즈 변화에 따라 _sheetOpen 동기화 (드래그로 여닫을 때도 반영)
+    // ⬇️ 시트 사이즈 변화에 따라 _sheetOpen 동기화 (드래그로 여닫을 때도 반영)
     _sheetController.addListener(() {
       try {
         final s = _sheetController.size; // 0.0~1.0
@@ -142,7 +143,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   @override
   void dispose() {
-    // ✅ (1) 컨트롤러 정리
+    // ✅ 컨트롤러 정리
     _sheetController.dispose();
     controller.dispose();
     super.dispose();
@@ -178,6 +179,142 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     }
   }
 
+  // ─────────────────────────────
+  // 🔽 가운데 임의문자/누락 허용 파서 + 폴백
+  // ─────────────────────────────
+
+  // 허용 한글 가운데 글자(국내 번호판)
+  static const List<String> _allowedKoreanMids = [
+    '가','나','다','라','마','거','너','더','러','머','버','서','어','저',
+    '고','노','도','로','모','보','소','오','조','구','누','두','루','무','부','수','우','주',
+    '하','허','호','배'
+  ];
+
+  // 흔한 OCR 혼동 치환
+  static const Map<String, String> _charMap = {
+    'O': '0', 'o': '0',
+    'I': '1', 'l': '1',
+    'B': '8', 'S': '5',
+  };
+
+  // 가운데 글자 보정(리→러 등)
+  static const Map<String, String> _midNormalize = {
+    '리': '러',
+    '이': '어',
+    '지': '저',
+    '히': '허',
+    '기': '거',
+    '니': '너',
+    '디': '더',
+    '미': '머',
+    '비': '버',
+    '시': '서',
+  };
+
+  String _normalize(String s) {
+    var t = s.trim().replaceAll(RegExp(r'\s+'), '');
+    _charMap.forEach((k, v) => t = t.replaceAll(k, v));
+    return t;
+  }
+
+  /// 엄격: (2~3)숫자 + (허용한글 1) + (4)숫자
+  RegExp get _rxStrict {
+    final allowed = _allowedKoreanMids.join();
+    return RegExp(r'^(\d{2,3})([' + allowed + r'])(\d{4})$');
+    // 예: 12가3456, 123허4567
+  }
+
+  /// 임의문자 허용: (2~3)숫자 + (.) + (4)숫자
+  final RegExp _rxAnyMid = RegExp(r'^(\d{2,3})(.)(\d{4})$');
+
+  /// 누락 케이스: 숫자만 7(3+4) 또는 6(2+4)
+  final RegExp _rxOnly7 = RegExp(r'^\d{7}$');
+  final RegExp _rxOnly6 = RegExp(r'^\d{6}$');
+
+  /// 스캐너에서 돌아온 plate 문자열을 엄격→임의문자→숫자만 순서로 파싱하여 적용
+  void _applyPlateWithFallback(String plate) {
+    final raw = _normalize(plate);
+
+    // 1) 엄격
+    final s = _rxStrict.firstMatch(raw);
+    if (s != null) {
+      final front = s.group(1)!;
+      var mid = s.group(2)!;
+      final back = s.group(3)!;
+
+      // 가운데 보정(있으면)
+      mid = _midNormalize[mid] ?? mid;
+
+      _applyToFields(front: front, mid: mid, back: back);
+      return;
+    }
+
+    // 2) 임의문자 허용
+    final a = _rxAnyMid.firstMatch(raw);
+    if (a != null) {
+      final front = a.group(1)!;
+      var mid = a.group(2)!; // 한글이 아니어도 그대로 수용
+      final back = a.group(3)!;
+
+      // 한글이면 보정 후 허용 목록 안에 있으면 치환(선택적)
+      if (RegExp(r'^[가-힣]$').hasMatch(mid)) {
+        final fixed = _midNormalize[mid];
+        if (fixed != null) mid = fixed;
+      }
+
+      _applyToFields(front: front, mid: mid, back: back);
+      return;
+    }
+
+    // 3) 숫자만 7자리 → 3+4 (가운데 누락)
+    if (_rxOnly7.hasMatch(raw)) {
+      final front = raw.substring(0, 3);
+      final back = raw.substring(3, 7);
+      _applyToFields(front: front, mid: '', back: back, promptMid: true);
+      return;
+    }
+
+    // 4) 숫자만 6자리 → 2+4 (가운데 누락)
+    if (_rxOnly6.hasMatch(raw)) {
+      final front = raw.substring(0, 2);
+      final back = raw.substring(2, 6);
+      _applyToFields(front: front, mid: '', back: back, promptMid: true);
+      return;
+    }
+
+    // 그 외: 형식 불명 → 사용자 안내
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('인식값 형식 확인 필요: $plate')),
+    );
+  }
+
+  /// 컨트롤러와 키패드/포커스를 실제로 갱신
+  void _applyToFields({
+    required String front,
+    required String mid,
+    required String back,
+    bool promptMid = false, // 가운데 누락 시 true로 주면 중간칸 포커스 + 키패드 오픈
+  }) {
+    setState(() {
+      controller.setFrontDigitMode(front.length == 3);
+      controller.controllerFrontDigit.text = front;
+      controller.controllerMidDigit.text = mid;   // 임의문자 허용
+      controller.controllerBackDigit.text = back;
+
+      if (promptMid || mid.isEmpty) {
+        controller.setActiveController(controller.controllerMidDigit);
+        controller.showKeypad = true;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('가운데 글자가 누락되었습니다. 가운데 한 글자를 입력해 주세요.')),
+        );
+      } else {
+        controller.showKeypad = false;
+      }
+    });
+  }
+
+  // ─────────────────────────────
+
   // 🔽 스캐너로 이동 → 성공 시 입력칸 자동 채우기 (사용자가 닫으면 plate == null)
   Future<void> _openLiveScanner() async {
     final plate = await Navigator.of(context).push<String>(
@@ -185,28 +322,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     );
     if (plate == null) return; // 사용자가 LiveOcrPage를 넘긴(닫은) 경우
 
-    final m = RegExp(r'^(\d{2,3})([가-힣])(\d{4})$').firstMatch(plate);
-    if (m == null) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('인식값 형식 확인 필요: $plate')),
-      );
-      return;
-    }
-
-    final front = m.group(1)!; // 2 or 3 digits
-    final mid = m.group(2)!; // 한글 1글자
-    final back = m.group(3)!; // 4 digits
-
-    setState(() {
-      controller.setFrontDigitMode(front.length == 3);
-      controller.controllerFrontDigit.text = front;
-      controller.controllerMidDigit.text = mid;
-      controller.controllerBackDigit.text = back;
-      controller.showKeypad = false;
-    });
-
-    if (!mounted) return;
+    _applyPlateWithFallback(plate);
   }
 
   Widget _buildKeypad() {
@@ -217,7 +333,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         key: const ValueKey('frontKeypad'),
         controller: controller.controllerFrontDigit,
         maxLength: controller.isThreeDigit ? 3 : 2,
-        onComplete: () => setState(() => controller.setActiveController(controller.controllerMidDigit)),
+        onComplete: () =>
+            setState(() => controller.setActiveController(controller.controllerMidDigit)),
         onChangeFrontDigitMode: (defaultThree) {
           setState(() {
             controller.setFrontDigitMode(defaultThree);
@@ -231,7 +348,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       return KorKeypad(
         key: const ValueKey('midKeypad'),
         controller: controller.controllerMidDigit,
-        onComplete: () => setState(() => controller.setActiveController(controller.controllerBackDigit)),
+        onComplete: () =>
+            setState(() => controller.setActiveController(controller.controllerBackDigit)),
       );
     }
 
@@ -304,11 +422,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ (2) 키보드/인셋을 반영하여 하단 패딩 보정
+    // ✅ 키보드/인셋 + 시스템 하단 안전영역 반영
     final viewInset = MediaQuery.of(context).viewInsets.bottom;
-    final bottomSafePadding = (controller.showKeypad ? 280.0 : 140.0) + viewInset;
+    final sysBottom = MediaQuery.of(context).padding.bottom;
+    final bottomSafePadding = (controller.showKeypad ? 280.0 : 140.0) + viewInset + sysBottom;
 
-    // 🔽 뒤로가기 처리: 시트가 열려 있으면 먼저 닫고, 닫혀 있으면 pop 허용
+    // 🔽 뒤로가기: 시트가 열려 있으면 먼저 닫고, 닫혀 있으면 pop 허용
     return PopScope(
       canPop: !_sheetOpen,
       onPopInvoked: (didPop) async {
@@ -430,7 +549,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                             16,
                             8,
                             16,
-                            16 + (controller.showKeypad ? 260 : 100) + viewInset,
+                            16 + (controller.showKeypad ? 260 : 100) + viewInset + sysBottom,
                           ),
                           children: [
                             // 헤더(탭으로 열고 닫기 + 애니메이션)
@@ -512,26 +631,30 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             );
           },
         ),
-        bottomNavigationBar: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            InputBottomNavigation(
-              showKeypad: controller.showKeypad,
-              keypad: _buildDockAndKeypad(), // ★ 도크 + 키패드 묶음 (그대로 유지, 키패드가 있으면 위에 도크 표시)
-              actionButton: InputBottomActionSection(
-                controller: controller,
-                mountedContext: mounted,
-                onStateRefresh: () => setState(() {}),
+        // ✅ 하단 제스처 바와 겹치지 않게 SafeArea로 감싸기
+        bottomNavigationBar: SafeArea(
+          top: false, left: false, right: false, bottom: true,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              InputBottomNavigation(
+                showKeypad: controller.showKeypad,
+                keypad: _buildDockAndKeypad(), // ★ 도크 + 키패드 묶음
+                actionButton: InputBottomActionSection(
+                  controller: controller,
+                  mountedContext: mounted,
+                  onStateRefresh: () => setState(() {}),
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: SizedBox(
-                height: 48,
-                child: Image.asset('assets/images/pelican.png'),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: SizedBox(
+                  height: 48,
+                  child: Image.asset('assets/images/pelican.png'),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
