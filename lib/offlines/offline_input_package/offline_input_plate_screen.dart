@@ -22,6 +22,9 @@ class _Palette {
   static const light = Color(0xFFFFAB91); // 톤 변형/보더
 }
 
+/// 도크에서 어떤 칸을 편집 중인지 구분
+enum _DockField { front, mid, back }
+
 class OfflineInputPlateScreen extends StatefulWidget {
   const OfflineInputPlateScreen({super.key});
 
@@ -41,6 +44,9 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
 
   final DraggableScrollableController _sheetController = DraggableScrollableController();
   bool _sheetOpen = false;
+
+  // 도크에서 편집을 시작했는지(완료 시 키패드 닫기 위한 플래그)
+  _DockField? _dockEditing;
 
   static const double _sheetClosed = 0.16;
   static const double _sheetOpened = 1.00;
@@ -121,6 +127,7 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
         controller.controllerMidDigit.text   = mid;
         controller.controllerBackDigit.text  = back;
         controller.showKeypad = false;
+        _dockEditing = null;
       });
       return;
     } else if (m2 != null) {
@@ -132,8 +139,8 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
         controller.controllerFrontDigit.text = front;
         controller.controllerMidDigit.text   = '';  // 누락
         controller.controllerBackDigit.text  = back;
-        controller.setActiveController(controller.controllerMidDigit); // 중간칸 보정 유도
-        controller.showKeypad = true;
+        controller.showKeypad = true; // 사용자가 직접 중간 칸을 입력
+        _dockEditing = null;
       });
 
       if (!mounted) return;
@@ -149,6 +156,28 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
     }
   }
 
+  /// 도크에서 특정 칸 편집 시작: 해당 칸만 비우고 활성화 + 키패드 열기
+  void _beginDockEdit(_DockField field) {
+    setState(() {
+      _dockEditing = field;
+      switch (field) {
+        case _DockField.front:
+          controller.controllerFrontDigit.clear();
+          controller.setActiveController(controller.controllerFrontDigit);
+          break;
+        case _DockField.mid:
+          controller.controllerMidDigit.clear();
+          controller.setActiveController(controller.controllerMidDigit);
+          break;
+        case _DockField.back:
+          controller.controllerBackDigit.clear();
+          controller.setActiveController(controller.controllerBackDigit);
+          break;
+      }
+      controller.showKeypad = true;
+    });
+  }
+
   Widget _buildKeypad() {
     final active = controller.activeController;
 
@@ -157,7 +186,16 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
         key: const ValueKey('frontKeypad'),
         controller: controller.controllerFrontDigit,
         maxLength: controller.isThreeDigit ? 3 : 2,
-        onComplete: () => setState(() => controller.setActiveController(controller.controllerMidDigit)),
+        onComplete: () => setState(() {
+          // 도크에서 시작한 앞칸 편집이면 완료 후 닫기
+          if (_dockEditing == _DockField.front) {
+            controller.showKeypad = false;
+            _dockEditing = null;
+          } else {
+            // 일반 흐름: 가운데 칸으로 이동
+            controller.setActiveController(controller.controllerMidDigit);
+          }
+        }),
         onChangeFrontDigitMode: (defaultThree) {
           setState(() => controller.setFrontDigitMode(defaultThree));
         },
@@ -169,44 +207,104 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
       return KorKeypad(
         key: const ValueKey('midKeypad'),
         controller: controller.controllerMidDigit,
-        onComplete: () => setState(() => controller.setActiveController(controller.controllerBackDigit)),
+        onComplete: () => setState(() {
+          // 도크에서 시작한 가운데 칸 편집이면 완료 후 닫기
+          if (_dockEditing == _DockField.mid) {
+            controller.showKeypad = false;
+            _dockEditing = null;
+          } else {
+            // 일반 흐름: 뒷칸으로 이동
+            controller.setActiveController(controller.controllerBackDigit);
+          }
+        }),
       );
     }
 
+    // 뒷칸: 원래도 완료 시 키패드 닫음
     return NumKeypad(
       key: const ValueKey('backKeypad'),
       controller: controller.controllerBackDigit,
       maxLength: 4,
-      onComplete: () => setState(() => controller.showKeypad = false),
+      onComplete: () => setState(() {
+        controller.showKeypad = false;
+        _dockEditing = null;
+      }),
       enableDigitModeSwitch: false,
       onReset: () {
         setState(() {
           controller.clearInput();
           controller.setActiveController(controller.controllerFrontDigit);
+          _dockEditing = null;
         });
       },
     );
   }
 
-  // showKeypad일 때, 번호판 도크 + 키패드를 함께 표시
-  Widget _buildDockAndKeypad() {
-    if (!controller.showKeypad) return _buildKeypad();
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _PlateDock(
-          controller: controller,
-          onActivate: (target) {
-            setState(() {
-              controller.setActiveController(target);
-              controller.showKeypad = true; // 도크 탭 시 키패드 유지
-            });
-          },
-        ),
-        const SizedBox(height: 8),
-        _buildKeypad(),
-      ],
+  // ─────────────────────────────────────────────
+  // 도크 위치 스위칭:
+  //  - showKeypad == true : keypad 슬롯 내 [도크 + 키패드]
+  //  - showKeypad == false: bottomNavigationBar 액션바 바로 윗행에 [도크]만
+  // ─────────────────────────────────────────────
+  Widget _buildDock() {
+    return _PlateDock(
+      controller: controller,
+      onActivateFront: () => _beginDockEdit(_DockField.front),
+      onActivateMid:   () => _beginDockEdit(_DockField.mid),
+      onActivateBack:  () => _beginDockEdit(_DockField.back),
     );
+  }
+
+  Widget _buildBottomBar() {
+    final actionButton = OfflineInputBottomActionSection(
+      controller: controller,
+      mountedContext: mounted,
+      onStateRefresh: () => setState(() {}),
+    );
+
+    if (controller.showKeypad) {
+      // ✅ 키패드 열림: keypad 슬롯에 도크 + 키패드 함께
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          OfflineInputBottomNavigation(
+            showKeypad: true,
+            keypad: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildDock(),
+                const SizedBox(height: 8),
+                _buildKeypad(),
+              ],
+            ),
+            actionButton: actionButton,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: SizedBox(height: 48, child: Image.asset('assets/images/pelican.png')),
+          ),
+        ],
+      );
+    } else {
+      // ✅ 키패드 닫힘: 액션바 바로 윗행에 도크
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 12, right: 12, top: 6, bottom: 8),
+            child: _buildDock(),
+          ),
+          OfflineInputBottomNavigation(
+            showKeypad: false,
+            keypad: const SizedBox.shrink(),
+            actionButton: actionButton,
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: SizedBox(height: 48, child: Image.asset('assets/images/pelican.png')),
+          ),
+        ],
+      );
+    }
   }
 
   @override
@@ -214,6 +312,7 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
     // 키보드/인셋 + 시스템 하단 안전영역 반영
     final viewInset = MediaQuery.of(context).viewInsets.bottom;
     final sysBottom = MediaQuery.of(context).padding.bottom;
+    // 패딩: 키패드 열림(도크+키패드) ≈ 280, 닫힘(도크만) ≈ 140
     final bottomSafePadding = (controller.showKeypad ? 280.0 : 140.0) + viewInset + sysBottom;
 
     return PopScope(
@@ -268,6 +367,7 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
                             setState(() {
                               controller.clearInput();
                               controller.setActiveController(controller.controllerFrontDigit);
+                              _dockEditing = null;
                             });
                           },
                           onRegionChanged: (region) {
@@ -393,41 +493,28 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
             );
           },
         ),
-        // 하단 네비/제스처 바와 겹치지 않게 SafeArea로 감쌈
+        // showKeypad 상태에 따라 도크 위치 전환
         bottomNavigationBar: SafeArea(
           top: false, left: false, right: false, bottom: true,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              OfflineInputBottomNavigation(
-                showKeypad: controller.showKeypad,
-                keypad: _buildDockAndKeypad(),
-                actionButton: OfflineInputBottomActionSection(
-                  controller: controller,
-                  mountedContext: mounted,
-                  onStateRefresh: () => setState(() {}),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: SizedBox(height: 48, child: Image.asset('assets/images/pelican.png')),
-              ),
-            ],
-          ),
+          child: _buildBottomBar(),
         ),
       ),
     );
   }
 }
 
-/// 하단 도크: 번호판 입력 3분할을 키패드 바로 위에 고정
+/// 하단 도크: 번호판 입력 3분할을 키패드/액션바 주변에 배치
 class _PlateDock extends StatelessWidget {
   final OfflineInputPlateController controller;
-  final void Function(TextEditingController target) onActivate;
+  final VoidCallback onActivateFront;
+  final VoidCallback onActivateMid;
+  final VoidCallback onActivateBack;
 
   const _PlateDock({
     required this.controller,
-    required this.onActivate,
+    required this.onActivateFront,
+    required this.onActivateMid,
+    required this.onActivateBack,
   });
 
   InputDecoration _dec(BuildContext context, bool active) {
@@ -455,20 +542,14 @@ class _PlateDock extends StatelessWidget {
     final isBackActive  = controller.activeController == controller.controllerBackDigit;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2))],
-      ),
+      decoration: const BoxDecoration(color: Colors.transparent),
       child: Row(
         children: [
           // 앞자리 (2~3)
           Expanded(
             flex: 28,
             child: GestureDetector(
-              onTap: () => onActivate(controller.controllerFrontDigit),
+              onTap: onActivateFront, // 탭 → 해당 칸만 비우고 활성화 + 키패드 열기
               child: AbsorbPointer(
                 child: TextField(
                   controller: controller.controllerFrontDigit,
@@ -487,7 +568,7 @@ class _PlateDock extends StatelessWidget {
           Expanded(
             flex: 18,
             child: GestureDetector(
-              onTap: () => onActivate(controller.controllerMidDigit),
+              onTap: onActivateMid, // 탭 → 해당 칸만 비우고 활성화 + 키패드 열기
               child: AbsorbPointer(
                 child: TextField(
                   controller: controller.controllerMidDigit,
@@ -506,7 +587,7 @@ class _PlateDock extends StatelessWidget {
           Expanded(
             flex: 36,
             child: GestureDetector(
-              onTap: () => onActivate(controller.controllerBackDigit),
+              onTap: onActivateBack, // 탭 → 해당 칸만 비우고 활성화 + 키패드 열기
               child: AbsorbPointer(
                 child: TextField(
                   controller: controller.controllerBackDigit,
