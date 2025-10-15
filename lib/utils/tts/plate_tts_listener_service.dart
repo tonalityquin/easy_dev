@@ -297,7 +297,7 @@ class PlateTtsListenerService {
                 _safeSpeak(utter);
                 didSpeak = true;
               } else if (newType == PlateType.departureCompleted.firestoreValue) {
-                final utter = '출차 완료 $spokenTail, $location';
+                final utter = '$spokenTail 출차 완료 되었습니다.';
                 _log('SPEAK(modified→type change×$_completionRepeat): $utter (id=$docId, area=$_currentArea)');
                 _speakRepeated(utter, times: _completionRepeat, gap: _completionRepeatGap);
                 didSpeak = true;

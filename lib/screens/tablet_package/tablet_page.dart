@@ -101,89 +101,111 @@ class _TabletPageState extends State<TabletPage> {
       });
     }
 
-    return Scaffold(
-      backgroundColor: Colors.white,
+    // ✅ 뒤로가기(시스템 back)로 이 라우트를 pop하지 않음 → 앱이 종료되지 않음
+    return PopScope(
+      canPop: false, // 루트 pop 차단
+      onPopInvoked: (didPop) {
+        if (didPop) return;
+        // 안내만 제공(원하면 삭제 가능)
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        messenger?.hideCurrentSnackBar();
+        messenger?.showSnackBar(
+          const SnackBar(
+            content: Text('뒤로가기가 비활성화되어 앱이 종료되지 않습니다. 상단 메뉴에서 이동하세요.'),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      },
+      // Flutter <3.7 사용 시:
+      // return WillPopScope(
+      //   onWillPop: () async => false,
+      //   child: Scaffold(...),
+      // );
+      child: Scaffold(
+        backgroundColor: Colors.white,
 
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(kToolbarHeight),
-        child: const SafeArea(
-          bottom: false,
-          child: TabletTopNavigation(isAreaSelectable: true),
+        appBar: const PreferredSize(
+          preferredSize: Size.fromHeight(kToolbarHeight),
+          child: SafeArea(
+            bottom: false,
+            child: TabletTopNavigation(isAreaSelectable: true),
+          ),
         ),
-      ),
 
-      body: SafeArea(
-        top: false,
-        child: Column(
-          children: [
-            _StickyNoticeBar(
-              plates: _completedChips,
-              selectedPlates: _selectedChips,
-              onToggleSelect: _toggleChipSelection,
-              onRemove: _removeCompletedChip,
-            ),
+        body: SafeArea(
+          top: false,
+          child: Column(
+            children: [
+              _StickyNoticeBar(
+                plates: _completedChips,
+                selectedPlates: _selectedChips,
+                onToggleSelect: _toggleChipSelection,
+                onRemove: _removeCompletedChip,
+              ),
 
-            Expanded(
-              child: padMode == PadMode.show
-              // ▶ show 모드: 왼쪽 패널만 전체 화면
-                  ? ColoredBox(
-                color: const Color(0xFFF7F8FA),
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: LeftPaneDeparturePlates(
-                    key: ValueKey('left-pane-$area-show'),
+              Expanded(
+                child: padMode == PadMode.show
+                // ▶ show 모드: 왼쪽 패널만 전체 화면
+                    ? ColoredBox(
+                  color: const Color(0xFFF7F8FA),
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: LeftPaneDeparturePlates(
+                      key: ValueKey('left-pane-$area-show'),
+                    ),
                   ),
-                ),
-              )
-              // ▶ big/small: 2열 유지 (small은 우측 패널 내부에서 키패드 100%)
-                  : Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // ⬅️ 왼쪽 패널
-                  Expanded(
-                    child: ColoredBox(
-                      color: const Color(0xFFF7F8FA),
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: LeftPaneDeparturePlates(
-                          key: ValueKey('left-pane-$area'),
+                )
+                // ▶ big/small: 2열 유지 (small은 우측 패널 내부에서 키패드 100%)
+                    : Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // ⬅️ 왼쪽 패널
+                    Expanded(
+                      child: ColoredBox(
+                        color: const Color(0xFFF7F8FA),
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: LeftPaneDeparturePlates(
+                            key: ValueKey('left-pane-$area'),
+                          ),
                         ),
                       ),
                     ),
-                  ),
 
-                  const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFEBEDF0)),
+                    const VerticalDivider(width: 1, thickness: 1, color: Color(0xFFEBEDF0)),
 
-                  // ➡️ 오른쪽 패널
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: const BorderRadius.only(topLeft: Radius.circular(12)),
-                      child: RightPaneSearchPanel(
-                        key: ValueKey('right-pane-$area'),
-                        area: area,
+                    // ➡️ 오른쪽 패널
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.only(topLeft: Radius.circular(12)),
+                        child: RightPaneSearchPanel(
+                          key: ValueKey('right-pane-$area'),
+                          area: area,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
 
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: SizedBox(
-                height: 48,
-                child: Image.asset('assets/images/pelican.png'),
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: SizedBox(
+                  height: 48,
+                  child: Image.asset('assets/images/pelican.png'),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

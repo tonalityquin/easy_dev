@@ -109,11 +109,15 @@ class PlateState extends ChangeNotifier {
   // ─────────────────────────────────────────────────────────────
   // 공개 스위치: 필드 페이지에서만 구독 활성화/비활성화
   // ─────────────────────────────────────────────────────────────
-  void enableForTypePages() {
+  /// withDefaults=true면 기본 3종(입차요청/출차요청/출차완료)을 즉시 구독합니다.
+  /// 태블릿에서 “출차 요청만” 구독하려면 withDefaults=false로 켭니다.
+  void enableForTypePages({bool withDefaults = true}) {
     if (_enabled) return;
     _enabled = true;
-    debugPrint('🔔 PlateState enabled (Type pages)');
-    _initDefaultSubscriptions();
+    debugPrint('🔔 PlateState enabled (Type pages) / withDefaults=$withDefaults');
+    if (withDefaults) {
+      _initDefaultSubscriptions();
+    }
   }
 
   void disableAll() {
@@ -121,6 +125,43 @@ class PlateState extends ChangeNotifier {
     _enabled = false;
     debugPrint('🔕 PlateState disabled (HQ or leaving type pages)');
     _cancelAllSubscriptions();
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 📱 태블릿 전용 헬퍼들
+  // ─────────────────────────────────────────────────────────────
+
+  /// 📱 태블릿 전용: 기본 구독 없이 enable만 수행
+  void tabletEnableWithoutDefaults() {
+    debugPrint('📱 [Tablet] tabletEnableWithoutDefaults() → area=$currentArea');
+    enableForTypePages(withDefaults: false);
+  }
+
+  /// 📱 태블릿 전용: 출차 요청만 구독 (기본 구독 없이 보장)
+  void tabletSubscribeDeparture() {
+    debugPrint('📱 [Tablet] tabletSubscribeDeparture() → before: enabled=$_enabled, area=$currentArea, '
+        'desired=${_desiredSubscriptions.map((e) => e.name).toList()}');
+    enableForTypePages(withDefaults: false);
+    if (!isSubscribed(PlateType.departureRequests)) {
+      subscribeType(PlateType.departureRequests);
+      debugPrint('📱 [Tablet] ▶ subscribeType(departureRequests) started for area=$currentArea');
+    } else {
+      // 이미 구독 중이더라도 지역이 달라진 경우 subscribeType 내부에서 재구독 처리
+      subscribeType(PlateType.departureRequests);
+      debugPrint('📱 [Tablet] ℹ️ departureRequests already desired → ensured (area=$currentArea)');
+    }
+  }
+
+  /// 📱 태블릿 전용: 출차 요청 구독 해제
+  void tabletUnsubscribeDeparture() {
+    debugPrint('📱 [Tablet] tabletUnsubscribeDeparture() → before: enabled=$_enabled, area=$currentArea, '
+        'desired=${_desiredSubscriptions.map((e) => e.name).toList()}');
+    if (isSubscribed(PlateType.departureRequests)) {
+      unsubscribeType(PlateType.departureRequests);
+      debugPrint('📱 [Tablet] ⏹ unsubscribeType(departureRequests) for area=$currentArea');
+    } else {
+      debugPrint('📱 [Tablet] ⚠️ departureRequests not subscribed (no-op)');
+    }
   }
 
   // ─────────────────────────────────────────────────────────────
