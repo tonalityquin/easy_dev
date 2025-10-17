@@ -22,36 +22,12 @@ class RoadmapItem {
 
 const List<RoadmapItem> _roadmapData = [
   RoadmapItem(
-    load: RoadmapLoad.medium,
-    title: '베타 버전 릴리즈',
-    notes: [
-      'Play Console 초기 버전 릴리즈',
-    ],
-    status: RoadmapStatus.done,
-  ),
-  RoadmapItem(
-    load: RoadmapLoad.heavy,
-    title: '번호판 OCR 기술 적용',
-    notes: [
-      '카메라로 감지한 번호판 데이터가 번호판 컨트롤러에 삽입',
-    ],
-    status: RoadmapStatus.done,
-  ),
-  RoadmapItem(
-    load: RoadmapLoad.medium,
-    title: '로컬에 저장한 출근, 퇴근 시간 알림 기능',
-    notes: [
-      '퇴근 1시간 전에 근무자 핸드폰에서 퇴근 버튼 누를 것을 장려하는 알람이 울리도록',
-    ],
-    status: RoadmapStatus.done,
-  ),
-  RoadmapItem(
     load: RoadmapLoad.light,
     title: '로컬 모드',
     notes: [
       '비 동기화 무료 1인용 사용 모드 지원',
     ],
-    status: RoadmapStatus.inProgress,
+    status: RoadmapStatus.done,
   ),
   RoadmapItem(
     load: RoadmapLoad.light,
@@ -60,16 +36,15 @@ const List<RoadmapItem> _roadmapData = [
       '페이지 별로 FAQ 키워드 단어 삽입',
       '사용자가 어려움 혹은 오류 발생 시 키워드를 검색해서 대처할 수 있도록',
     ],
-    status: RoadmapStatus.planned,
+    status: RoadmapStatus.done,
   ),
   RoadmapItem(
-    load: RoadmapLoad.light,
-    title: '근무지 현황 카드 리팩토링',
+    load: RoadmapLoad.heavy,
+    title: '업무 통계 접근성 완화 지원',
     notes: [
-      '지역 별 최근 출근 찍은 직원들 목록 나열'
-          '\n지역 별 현재 근무 차량 수 표기',
+      '외부 프로그램으로 업무 통계 데이터 제공',
     ],
-    status: RoadmapStatus.planned,
+    status: RoadmapStatus.done,
   ),
   RoadmapItem(
     load: RoadmapLoad.light,
@@ -78,7 +53,7 @@ const List<RoadmapItem> _roadmapData = [
       '서류 별 양식 시각적 확인'
           '\n필요 형식 직관적 확인',
     ],
-    status: RoadmapStatus.planned,
+    status: RoadmapStatus.inProgress,
   ),
   RoadmapItem(
     load: RoadmapLoad.light,
@@ -86,13 +61,14 @@ const List<RoadmapItem> _roadmapData = [
     notes: [
       '앱에서 캡처 등을 통해 특정 난이도 있는 행동들에 대한 가이드 북 삽입',
     ],
-    status: RoadmapStatus.planned,
+    status: RoadmapStatus.inProgress,
   ),
   RoadmapItem(
-    load: RoadmapLoad.heavy,
-    title: '업무 통계 접근성 완화 지원',
+    load: RoadmapLoad.light,
+    title: '근무지 현황 카드 리팩토링',
     notes: [
-      '외부 프로그램으로 업무 통계 데이터 제공',
+      '지역 별 최근 출근 찍은 직원들 목록 나열'
+          '\n지역 별 현재 근무 차량 수 표기',
     ],
     status: RoadmapStatus.planned,
   ),
@@ -113,8 +89,6 @@ const List<RoadmapItem> _roadmapData = [
     ],
     status: RoadmapStatus.planned,
   ),
-
-  
 ];
 
 class RoadmapBottomSheet extends StatelessWidget {

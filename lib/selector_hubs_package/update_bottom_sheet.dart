@@ -11,6 +11,15 @@ class UpdateBottomSheet extends StatelessWidget {
   /// 예시 기본 데이터 (실서비스에선 서버/로컬에서 가져오세요)
   static final List<UpdateEntry> defaultEntries = [
     UpdateEntry(
+      version: 'v1.0.0+9',
+      highlights: [
+        'OCR 인식 기능 개선',
+        '삽입한 번호판 부분 수정 기능 추가',
+        '일일 업무 로그 저장 스프레드 시트 추가',
+        '태블릿 모드 개선',
+      ],
+    ),
+    UpdateEntry(
       version: 'v1.0.0+8',
       highlights: [
         '서비스 카드 내 본사 기능 "본사 카드" 내부로 이관(일부 기능 미비)',
