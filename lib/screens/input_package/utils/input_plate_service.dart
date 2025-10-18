@@ -1,3 +1,4 @@
+// lib/screens/input_package/utils/input_plate_service.dart
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -6,75 +7,14 @@ import 'package:camera/camera.dart';
 
 // GCS
 import 'package:googleapis/storage/v1.dart' as gcs;
-import 'package:googleapis_auth/googleapis_auth.dart' as auth;
 
-// OAuth (google_sign_in v7 + extension)
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
+// ✅ 중앙 OAuth 세션만 사용 (최초 1회 로그인 후 재사용)
+import '../../../utils/google_auth_session.dart';
 
 import '../../../utils/gcs_image_uploader.dart';
 import '../../../states/plate/input_plate.dart';
 import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
-
-/// ✅ GSI v7: 웹 애플리케이션 클라이언트 ID (Android에선 serverClientId로 사용)
-const String _kWebClientId =
-    '470236709494-kgk29jdhi8ba25f7ujnqhpn8f22fhf25.apps.googleusercontent.com';
-
-class _OAuthHelper {
-  static bool _inited = false;
-
-  static Future<void> _ensureInit() async {
-    if (_inited) return;
-    try {
-      // 28444 방지: Android는 반드시 serverClientId 지정
-      await GoogleSignIn.instance.initialize(serverClientId: _kWebClientId);
-    } catch (_) {}
-    _inited = true;
-  }
-
-  static Future<GoogleSignInAccount> _waitForSignIn() async {
-    final signIn = GoogleSignIn.instance;
-    final c = Completer<GoogleSignInAccount>();
-    late final StreamSubscription sub;
-    sub = signIn.authenticationEvents.listen((event) {
-      switch (event) {
-        case GoogleSignInAuthenticationEventSignIn():
-          if (!c.isCompleted) c.complete(event.user);
-        case GoogleSignInAuthenticationEventSignOut():
-          break;
-      }
-    }, onError: (e) {
-      if (!c.isCompleted) c.completeError(e);
-    });
-
-    try {
-      try {
-        await signIn.attemptLightweightAuthentication();
-      } catch (_) {}
-      if (signIn.supportsAuthenticate()) {
-        await signIn.authenticate(); // 필요 시 UI
-      }
-      return await c.future
-          .timeout(const Duration(seconds: 90), onTimeout: () => throw Exception('Google 로그인 응답 시간 초과'));
-    } finally {
-      await sub.cancel();
-    }
-  }
-
-  /// GCS 읽기 전용 클라이언트
-  static Future<auth.AuthClient> gcsReadonlyClient() async {
-    await _ensureInit();
-    const scopes = [gcs.StorageApi.devstorageReadOnlyScope];
-    final user = await _waitForSignIn();
-
-    var authorization =
-    await user.authorizationClient.authorizationForScopes(scopes);
-    authorization ??= await user.authorizationClient.authorizeScopes(scopes);
-
-    return authorization.authClient(scopes: scopes);
-  }
-}
 
 class InputPlateService {
   static Future<List<String>> uploadCapturedImages(
@@ -111,7 +51,7 @@ class InputPlateService {
       for (int attempt = 0; attempt < 3; attempt++) {
         try {
           debugPrint('⬆️ [${i + 1}/${images.length}] 업로드 시도 #${attempt + 1}: $gcsPath');
-          // NOTE: GcsImageUploader가 내부에서 OAuth를 사용하도록 이미 리팩터링되어 있다고 가정
+          // NOTE: GcsImageUploader 내부가 OAuth(중앙 세션) 사용하도록 리팩터링되어 있다고 가정
           gcsUrl = await uploader.inputUploadImage(file, gcsPath);
           if (gcsUrl != null) {
             debugPrint('✅ 업로드 성공: $gcsUrl');
@@ -195,44 +135,45 @@ class InputPlateService {
     );
   }
 
-  /// ✅ 서비스계정 제거 → OAuth로 GCS 객체 목록 조회
+  // ─────────────────────────────────────────
+  // GCS 목록 조회 (중앙 세션 사용)
+  // ─────────────────────────────────────────
+  static Future<gcs.StorageApi> _storage() async {
+    final client = await GoogleAuthSession.instance.client();
+    return gcs.StorageApi(client);
+  }
+
+  /// ✅ 서비스계정/개별 OAuth 제거 → 중앙 OAuth로 GCS 객체 목록 조회
   static Future<List<String>> listPlateImages({
     required BuildContext context,
     required String plateNumber,
   }) async {
     const bucketName = 'easydev-image';
     final area = context.read<AreaState>().currentArea;
-    final division = context.read<AreaState>().currentDivision;
+    final division = context.read<AreaState>().currentDivision; // ← ✅ 여기 오탈자 수정
 
-    auth.AuthClient? client;
-    try {
-      client = await _OAuthHelper.gcsReadonlyClient();
-      final storage = gcs.StorageApi(client);
+    final storage = await _storage();
+    final prefix = '$division/$area/images/';
+    final urls = <String>[];
 
-      final prefix = '$division/$area/images/';
-      final urls = <String>[];
-
-      // 페이지네이션 대응
-      String? pageToken;
-      do {
-        final res = await storage.objects.list(
-          bucketName,
-          prefix: prefix,
-          pageToken: pageToken,
-        );
-        final items = res.items ?? const <gcs.Object>[];
-        for (final obj in items) {
-          final name = obj.name;
-          if (name != null && name.endsWith('.jpg') && name.contains(plateNumber)) {
-            urls.add('https://storage.googleapis.com/$bucketName/$name');
-          }
+    // 페이지네이션 대응
+    String? pageToken;
+    do {
+      final res = await storage.objects.list(
+        bucketName,
+        prefix: prefix,
+        pageToken: pageToken,
+      );
+      final items = res.items ?? const <gcs.Object>[];
+      for (final obj in items) {
+        final name = obj.name;
+        if (name != null && name.endsWith('.jpg') && name.contains(plateNumber)) {
+          urls.add('https://storage.googleapis.com/$bucketName/$name');
         }
-        pageToken = res.nextPageToken;
-      } while (pageToken != null && pageToken.isNotEmpty);
+      }
+      pageToken = res.nextPageToken;
+    } while (pageToken != null && pageToken.isNotEmpty);
 
-      return urls;
-    } finally {
-      client?.close();
-    }
+    return urls;
   }
 }

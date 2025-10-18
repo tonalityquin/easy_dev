@@ -1,61 +1,102 @@
+// lib/offlines/.../departure_completed_merged_log_section.dart
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
-import 'package:flutter/services.dart' show rootBundle;
-import 'package:googleapis/storage/v1.dart';
-import 'package:googleapis_auth/auth_io.dart';
+import 'package:googleapis/storage/v1.dart' as gcs;
 
-// ⬇️ 사진 다이얼로그(경로는 프로젝트 구조에 맞게 조정하세요)
+// 사진 다이얼로그(프로젝트 구조에 맞게 조정)
 import 'departure_completed_plate_image_dialog.dart';
+
+// ✅ OAuth 헬퍼 (패키지 import로 고정; 필요 시 상대경로로 교체 가능)
+//   ex) import '../../../../utils/google_auth_v7.dart';
+import 'package:easydev/utils/google_auth_v7.dart';
 
 /// === GCS 설정 ===
 const String kBucketName = 'easydev-image';
-const String kServiceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
 /// === 내부 레이아웃 상수 ===
 const double _kRowHeight = 56.0;
 const double _kTimeColWidth = 84.0; // HH:mm:ss 고정폭
 const double _kChevronWidth = 28.0; // 펼침 아이콘
 
-/// === GCS 헬퍼 ===
+/// === GCS 헬퍼 (OAuth 사용) ===
 class _GcsHelper {
+  /// prefix 하위 object 목록 (페이지네이션 대응)
   Future<List<String>> listObjects(String prefix) async {
-    final credentialsJson = await rootBundle.loadString(kServiceAccountPath);
-    final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
-    final client = await clientViaServiceAccount(
-      accountCredentials,
-      [StorageApi.devstorageFullControlScope],
+    final client = await GoogleAuthV7.authedClient(
+      [gcs.StorageApi.devstorageReadOnlyScope],
     );
     try {
-      final storage = StorageApi(client);
-      final res = await storage.objects.list(kBucketName, prefix: prefix);
-      final items = res.items ?? const <Object>[];
-      return items.where((o) => o.name != null).map((o) => o.name!).toList();
+      final storage = gcs.StorageApi(client);
+      final acc = <String>[];
+      String? pageToken;
+      do {
+        final res = await storage.objects.list(
+          kBucketName,
+          prefix: prefix,
+          pageToken: pageToken,
+        );
+        final items = res.items ?? const <gcs.Object>[];
+        for (final o in items) {
+          final name = o.name;
+          if (name != null && name.isNotEmpty) acc.add(name);
+        }
+        pageToken = res.nextPageToken;
+      } while (pageToken != null && pageToken.isNotEmpty);
+      return acc;
     } finally {
       client.close();
     }
   }
 
+  /// public URL로 JSON 로드(버킷이 공개라면 그대로 사용).
+  /// 비공개 버킷이면 아래 주석의 objects.get(fullMedia) 방식으로 교체하세요.
   Future<Map<String, dynamic>> loadJsonByObjectName(String objectName) async {
     final url = Uri.parse('https://storage.googleapis.com/$kBucketName/$objectName');
     final httpClient = HttpClient();
     try {
       final req = await httpClient.getUrl(url);
       final resp = await req.close();
+      if (resp.statusCode != 200) {
+        throw HttpException('GCS GET failed with ${resp.statusCode}');
+      }
       final text = await resp.transform(utf8.decoder).join();
-      return jsonDecode(text) as Map<String, dynamic>;
+      final decoded = jsonDecode(text);
+      if (decoded is Map<String, dynamic>) return decoded;
+      return <String, dynamic>{};
     } finally {
       httpClient.close(force: true);
     }
+
+    /*
+    // 🔒 비공개 버킷일 때는 아래처럼 OAuth 클라이언트로 직접 다운(캐스팅 주의)
+    final client = await GoogleAuthV7.authedClient(
+      [gcs.StorageApi.devstorageReadOnlyScope],
+    );
+    try {
+      final storage = gcs.StorageApi(client);
+      final dynamic res = await storage.objects.get(
+        kBucketName,
+        objectName,
+        downloadOptions: gcs.DownloadOptions.fullMedia,
+      );
+      if (res is! gcs.Media) {
+        throw StateError('Unexpected response type: ${res.runtimeType}');
+      }
+      final bytes = await res.stream.expand((e) => e).toList();
+      final decoded = jsonDecode(utf8.decode(bytes));
+      return (decoded is Map<String, dynamic>) ? decoded : <String, dynamic>{};
+    } finally {
+      client.close();
+    }
+    */
   }
 }
 
-/// === 상단 컨트롤: 안 A) 날짜 범위 한 개 버튼 + 불러오기 ===
-/// - showDateRangePicker로 시작/종료를 한 번에 선택
-/// - 한 줄 고정(높이 44)
+/// === 상단 컨트롤: 날짜 범위 버튼 + 불러오기 ===
 class RangeControls extends StatelessWidget {
   const RangeControls({
     super.key,
@@ -73,7 +114,6 @@ class RangeControls extends StatelessWidget {
   final VoidCallback onLoad;
 
   String _two(int n) => n.toString().padLeft(2, '0');
-
   String _ymd(DateTime d) => '${d.year}-${_two(d.month)}-${_two(d.day)}';
 
   Future<void> _pickRange(BuildContext context) async {
@@ -91,10 +131,9 @@ class RangeControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 44, // ⬅️ 고정 높이로 버튼 늘어짐 방지
+      height: 44,
       child: Row(
         children: [
-          // 날짜 범위 버튼
           Expanded(
             flex: 5,
             child: OutlinedButton.icon(
@@ -107,7 +146,6 @@ class RangeControls extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          // 불러오기 버튼
           Expanded(
             flex: 3,
             child: FilledButton.icon(
@@ -175,11 +213,8 @@ class _MergedLogSectionState extends State<MergedLogSection> {
 
   // ===== 유틸 =====
   String _two(int n) => n.toString().padLeft(2, '0');
-
   String _yyyymmdd(DateTime d) => '${d.year}-${_two(d.month)}-${_two(d.day)}';
-
   bool _validTail(String s) => RegExp(r'^\d{4}$').hasMatch(s);
-
   String _digitsOnly(String s) => s.replaceAll(RegExp(r'\D'), '');
 
   DateTime? _parseTs(dynamic ts) {
@@ -255,9 +290,9 @@ class _MergedLogSectionState extends State<MergedLogSection> {
     });
 
     try {
-      final gcs = _GcsHelper();
+      final gcsHelper = _GcsHelper();
       final prefix = '${widget.division}/${widget.area}/logs/';
-      final names = await gcs.listObjects(prefix);
+      final names = await gcsHelper.listObjects(prefix);
 
       final wantedSuffix = <String>{};
       for (DateTime d = _start; !d.isAfter(_end); d = d.add(const Duration(days: 1))) {
@@ -269,7 +304,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
         final m = RegExp(r'_ToDoLogs_(\d{4}-\d{2}-\d{2})\.json$').firstMatch(objectName);
         final dateStr = m?.group(1) ?? 'Unknown';
 
-        final json = await gcs.loadJsonByObjectName(objectName);
+        final json = await gcsHelper.loadJsonByObjectName(objectName);
         final List items = (json['items'] as List?) ?? (json['data'] as List?) ?? const [];
 
         final docs = <_DocBundle>[];
@@ -280,8 +315,10 @@ class _MergedLogSectionState extends State<MergedLogSection> {
           final docId = (map['docId'] ?? '').toString();
           final plate = (map['plateNumber'] ?? docId.split('_').first).toString();
 
-          final logs =
-          ((map['logs'] as List?) ?? const []).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+          final logs = ((map['logs'] as List?) ?? const [])
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
 
           // 로그는 오름차순(과거->최근)으로
           logs.sort((a, b) {
@@ -293,7 +330,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
           docs.add(_DocBundle(docId: docId, plateNumber: plate, logs: logs));
         }
 
-        // 문서 정렬: 각 문서의 "마지막 로그 시간" 기준 **오름차순**
+        // 문서 정렬: 각 문서의 "마지막 로그 시간" 기준 오름차순
         docs.sort((a, b) {
           final at = a.logs.isNotEmpty ? _parseTs(a.logs.last['timestamp']) : null;
           final bt = b.logs.isNotEmpty ? _parseTs(b.logs.last['timestamp']) : null;
@@ -356,7 +393,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 상단 컨트롤: 한 줄 고정(안 A 적용)
+        // 상단 컨트롤
         Row(
           children: [
             Expanded(
@@ -380,8 +417,11 @@ class _MergedLogSectionState extends State<MergedLogSection> {
                 tooltip: _currentPage == 0 ? '검색 화면으로' : '목록 화면으로',
                 onPressed: () {
                   final next = (_currentPage == 0) ? 1 : 0;
-                  _pageController.animateToPage(next,
-                      duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+                  _pageController.animateToPage(
+                    next,
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                  );
                 },
                 icon: Icon(_currentPage == 0 ? Icons.search : Icons.list),
                 visualDensity: VisualDensity.compact,
@@ -403,9 +443,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
               ? const Center(child: Text('기간을 설정하고 불러오기를 눌러주세요.'))
               : PageView(
             controller: _pageController,
-            onPageChanged: (i) {
-              setState(() => _currentPage = i);
-            },
+            onPageChanged: (i) => setState(() => _currentPage = i),
             children: [
               // 페이지 0: 날짜/문서 목록 (시간 + 번호판만)
               Scrollbar(
@@ -426,7 +464,6 @@ class _MergedLogSectionState extends State<MergedLogSection> {
                             children: [
                               Text(day.dateStr, style: const TextStyle(fontWeight: FontWeight.bold)),
                               const SizedBox(height: 8),
-                              // 컬럼 라벨 (시간 | 번호판)
                               SizedBox(
                                 height: 24,
                                 child: Row(
@@ -483,7 +520,6 @@ class _MergedLogSectionState extends State<MergedLogSection> {
                                   child: Row(
                                     crossAxisAlignment: CrossAxisAlignment.center,
                                     children: [
-                                      // 시간(고정폭)
                                       SizedBox(
                                         width: _kTimeColWidth,
                                         child: Text(
@@ -496,12 +532,9 @@ class _MergedLogSectionState extends State<MergedLogSection> {
                                         ),
                                       ),
                                       const SizedBox(width: 8),
-                                      // 번호판
                                       Expanded(
                                         child: Text(
-                                          doc.plateNumber.isNotEmpty
-                                              ? doc.plateNumber
-                                              : doc.docId,
+                                          doc.plateNumber.isNotEmpty ? doc.plateNumber : doc.docId,
                                           maxLines: 1,
                                           softWrap: false,
                                           overflow: TextOverflow.ellipsis,
@@ -509,7 +542,6 @@ class _MergedLogSectionState extends State<MergedLogSection> {
                                           style: const TextStyle(fontSize: 16),
                                         ),
                                       ),
-                                      // 펼침 아이콘(상태 반영)
                                       SizedBox(
                                         width: _kChevronWidth,
                                         child: Icon(
@@ -523,7 +555,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
                                 ),
                               ),
 
-                              // 펼침부: 로그 상세(중첩 스크롤 방지 위해 비스크롤)
+                              // 펼침부: 로그 상세(중첩 스크롤 방지)
                               if (expanded)
                                 _buildLogsDetail(
                                   doc.logs,
@@ -545,7 +577,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
           ),
         ),
 
-        // 페이지 인디케이터
+        // 페이지 인디케이터 (현재 페이지 반영)
         Padding(
           padding: const EdgeInsets.only(top: 6.0),
           child: Row(
@@ -615,7 +647,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
               );
             },
           )
-          // 선택된 문서 상세 화면(전체 높이, 스크롤 가능, 해제 + 사진 버튼)
+          // 선택된 문서 상세 화면(세로 스크롤 허용)
               : Column(
             children: [
               Container(
@@ -650,7 +682,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // ⬇️ 사진 버튼: 선택된 번호판의 사진 보기
+                    // 사진 보기 버튼
                     ElevatedButton.icon(
                       onPressed: () {
                         final plate = _selectedHit!.doc.plateNumber.isNotEmpty
@@ -671,12 +703,11 @@ class _MergedLogSectionState extends State<MergedLogSection> {
                 ),
               ),
               const SizedBox(height: 6),
-              // 전체 영역을 차지하면서 세로 스크롤 가능
               Expanded(
                 child: _buildLogsDetail(
                   _selectedHit!.doc.logs,
                   plateNumber: _selectedHit!.doc.plateNumber,
-                  scrollable: true, // ⬅️ 스크롤 활성화
+                  scrollable: true,
                 ),
               ),
             ],
@@ -687,8 +718,6 @@ class _MergedLogSectionState extends State<MergedLogSection> {
   }
 
   /// 로그 상세 리스트
-  ///  - 일반 목록의 펼침부에서는 scrollable=false (중첩 스크롤 방지)
-  ///  - 검색 상세 화면에서는 scrollable=true (세로 스크롤 허용)
   Widget _buildLogsDetail(
       List<Map<String, dynamic>> logs, {
         required String plateNumber,
@@ -702,9 +731,9 @@ class _MergedLogSectionState extends State<MergedLogSection> {
     }
 
     final listView = ListView.separated(
-      // 스크롤 옵션 분기
-      physics:
-      scrollable ? const AlwaysScrollableScrollPhysics() : const NeverScrollableScrollPhysics(),
+      physics: scrollable
+          ? const AlwaysScrollableScrollPhysics()
+          : const NeverScrollableScrollPhysics(),
       shrinkWrap: !scrollable,
       itemCount: logs.length,
       separatorBuilder: (_, __) => const Divider(height: 1),
@@ -719,9 +748,12 @@ class _MergedLogSectionState extends State<MergedLogSection> {
 
         final feeNum = (e['lockedFee'] ?? e['lockedFeeAmount']);
         final fee = (feeNum is num) ? _fmtWon(feeNum) : null;
-        final pay =
-        (e['paymentMethod']?.toString().trim().isNotEmpty ?? false) ? e['paymentMethod'].toString() : null;
-        final reason = (e['reason']?.toString().trim().isNotEmpty ?? false) ? e['reason'].toString() : null;
+        final pay = (e['paymentMethod']?.toString().trim().isNotEmpty ?? false)
+            ? e['paymentMethod'].toString()
+            : null;
+        final reason = (e['reason']?.toString().trim().isNotEmpty ?? false)
+            ? e['reason'].toString()
+            : null;
 
         final color = _actionColor(action);
 

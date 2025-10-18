@@ -2,84 +2,19 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:googleapis/sheets/v4.dart' as sheets;
-
-// OAuth (google_sign_in v7.x + extension v3.x)
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
-import 'package:googleapis_auth/googleapis_auth.dart' as auth;
-
 import 'package:shared_preferences/shared_preferences.dart';
+
+// ✅ 중앙 인증 세션만 사용 (최초 1회 로그인 후 재사용)
+import 'package:easydev/utils/google_auth_session.dart';
 
 enum TimesheetTab { attendance, breakTime }
 
 // ────────────────────────────────────────────────────────────
-// OAuth 헬퍼
+// Sheets API 핸들러 (중앙 세션 재사용)
 // ────────────────────────────────────────────────────────────
-
-/// ✅ GCP “웹 애플리케이션” 클라이언트 ID (Android에선 serverClientId로 사용)
-const String _kWebClientId =
-    '470236709494-kgk29jdhi8ba25f7ujnqhpn8f22fhf25.apps.googleusercontent.com';
-
-bool _gsInitialized = false;
-
-Future<void> _ensureGsInitialized() async {
-  if (_gsInitialized) return;
-  try {
-    // Android: 28444(DEVELOPER_ERROR) 회피를 위해 웹 클라ID를 serverClientId로 지정
-    await GoogleSignIn.instance.initialize(serverClientId: _kWebClientId);
-  } catch (_) {
-    // 이미 초기화된 경우 등은 무시
-  }
-  _gsInitialized = true;
-}
-
-/// GoogleSignIn v7 이벤트 기반으로 로그인 완료 계정 획득
-Future<GoogleSignInAccount> _waitForSignInEvent() async {
-  final signIn = GoogleSignIn.instance;
-  final completer = Completer<GoogleSignInAccount>();
-  late final StreamSubscription sub;
-
-  sub = signIn.authenticationEvents.listen((event) {
-    switch (event) {
-      case GoogleSignInAuthenticationEventSignIn():
-        if (!completer.isCompleted) completer.complete(event.user);
-      case GoogleSignInAuthenticationEventSignOut():
-        break;
-    }
-  }, onError: (e) {
-    if (!completer.isCompleted) completer.completeError(e);
-  });
-
-  try {
-    try {
-      await signIn.attemptLightweightAuthentication(); // 무 UI 시도
-    } catch (_) {}
-    if (signIn.supportsAuthenticate()) {
-      await signIn.authenticate(); // 필요 시 UI 인증
-    }
-    final user = await completer.future.timeout(
-      const Duration(seconds: 90),
-      onTimeout: () => throw Exception('Google 로그인 응답 시간 초과'),
-    );
-    return user;
-  } finally {
-    await sub.cancel();
-  }
-}
-
-/// Sheets용 OAuth AuthClient (읽기 전용/읽기쓰기 분리 가능)
-Future<auth.AuthClient> _getSheetsAuthClient({required bool write}) async {
-  await _ensureGsInitialized();
-  final scopes = write
-      ? <String>[sheets.SheetsApi.spreadsheetsScope] // 읽기/쓰기
-      : <String>[sheets.SheetsApi.spreadsheetsReadonlyScope]; // 읽기 전용
-
-  final user = await _waitForSignInEvent();
-  var authorization =
-  await user.authorizationClient.authorizationForScopes(scopes);
-  authorization ??= await user.authorizationClient.authorizeScopes(scopes);
-
-  return authorization.authClient(scopes: scopes);
+Future<sheets.SheetsApi> _sheetsApi() async {
+  final client = await GoogleAuthSession.instance.client();
+  return sheets.SheetsApi(client);
 }
 
 // ────────────────────────────────────────────────────────────
@@ -204,11 +139,9 @@ class _TimesheetPageState extends State<TimesheetPage>
       _error = null;
     });
 
-    auth.AuthClient? client;
     try {
-      // ✅ OAuth로 인증된 클라이언트(읽기 전용 스코프) 생성
-      client = await _getSheetsAuthClient(write: false);
-      final api = sheets.SheetsApi(client);
+      // ✅ 중앙 세션에서 받은 AuthClient로 SheetsApi 생성
+      final api = await _sheetsApi();
 
       final range = '$_sheetName!A1:G'; // 탭에 따라 시트 범위 전환
       final resp = await api.spreadsheets.values.get(id, range);
@@ -239,7 +172,6 @@ class _TimesheetPageState extends State<TimesheetPage>
         _areaOptions = [];
       });
     } finally {
-      client?.close();
       if (mounted) setState(() => _loading = false);
     }
   }

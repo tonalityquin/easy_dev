@@ -5,11 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
-// GCS 목록 조회용 (OAuth)
+// ✅ GCS 목록 조회용 (중앙 OAuth 세션 사용)
 import 'package:googleapis/storage/v1.dart' as gcs;
-import 'package:googleapis_auth/googleapis_auth.dart' as auth;
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
+
+// ✅ 중앙 인증 세션만 사용 (최초 1회 로그인 후 재사용)
+import '../../../utils/google_auth_session.dart';
 
 import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
@@ -19,95 +19,27 @@ import '../../../utils/snackbar_helper.dart';
 /// ===== GCS 설정 =====
 const String _kBucketName = 'easydev-image';
 
-/// ===== Google Sign-In v7 (OAuth) 헬퍼 =====
-/// ※ GCP 콘솔의 “웹 애플리케이션” 클라이언트 ID (Android에선 serverClientId로 필요)
-const String _kWebClientId =
-    '470236709494-kgk29jdhi8ba25f7ujnqhpn8f22fhf25.apps.googleusercontent.com';
-
-class _OAuthHelper {
-  static bool _inited = false;
-
-  static Future<void> _ensureInit() async {
-    if (_inited) return;
-    try {
-      // 28444 방지: Android는 serverClientId 지정
-      await GoogleSignIn.instance.initialize(serverClientId: _kWebClientId);
-    } catch (_) {}
-    _inited = true;
-  }
-
-  /// Sign-In 이벤트를 기다려 사용자 계정을 얻음
-  static Future<GoogleSignInAccount> _waitForSignIn() async {
-    final signIn = GoogleSignIn.instance;
-    final c = Completer<GoogleSignInAccount>();
-    late final StreamSubscription sub;
-
-    sub = signIn.authenticationEvents.listen((event) {
-      switch (event) {
-        case GoogleSignInAuthenticationEventSignIn():
-          if (!c.isCompleted) c.complete(event.user);
-        case GoogleSignInAuthenticationEventSignOut():
-          break;
-      }
-    }, onError: (e) {
-      if (!c.isCompleted) c.completeError(e);
-    });
-
-    try {
-      try {
-        await signIn.attemptLightweightAuthentication(); // 기존 세션이면 UI 없이 통과
-      } catch (_) {}
-      if (signIn.supportsAuthenticate()) {
-        await signIn.authenticate(); // 필요 시 UI
-      }
-      return await c.future.timeout(
-        const Duration(seconds: 90),
-        onTimeout: () => throw Exception('Google 로그인 응답 시간 초과'),
-      );
-    } finally {
-      await sub.cancel();
-    }
-  }
-
-  /// GCS 읽기 전용 AuthClient
-  static Future<auth.AuthClient> gcsReadonlyClient() async {
-    await _ensureInit();
-    const scopes = [gcs.StorageApi.devstorageReadOnlyScope];
-    final user = await _waitForSignIn();
-
-    var authorization =
-    await user.authorizationClient.authorizationForScopes(scopes);
-    authorization ??= await user.authorizationClient.authorizeScopes(scopes);
-
-    return authorization.authClient(scopes: scopes);
-  }
-}
-
-/// 간단 GCS 헬퍼: prefix 하위 객체 목록 조회 (OAuth 기반)
+/// 간단 GCS 헬퍼: prefix 하위 객체 목록 조회 (중앙 OAuth 기반)
 class _GcsHelper {
   Future<List<gcs.Object>> listObjects(String prefix) async {
-    auth.AuthClient? client;
-    try {
-      client = await _OAuthHelper.gcsReadonlyClient();
-      final storage = gcs.StorageApi(client);
+    // 중앙 세션에서 AuthClient 획득 → StorageApi 생성
+    final client = await GoogleAuthSession.instance.client();
+    final storage = gcs.StorageApi(client);
 
-      // 페이지네이션 안전 처리
-      final List<gcs.Object> all = [];
-      String? pageToken;
-      do {
-        final res = await storage.objects.list(
-          _kBucketName,
-          prefix: prefix,
-          pageToken: pageToken,
-        );
-        if (res.items != null) all.addAll(res.items!);
-        pageToken = res.nextPageToken;
-      } while (pageToken != null && pageToken.isNotEmpty);
+    // 페이지네이션 안전 처리
+    final List<gcs.Object> all = [];
+    String? pageToken;
+    do {
+      final res = await storage.objects.list(
+        _kBucketName,
+        prefix: prefix,
+        pageToken: pageToken,
+      );
+      if (res.items != null) all.addAll(res.items!);
+      pageToken = res.nextPageToken;
+    } while (pageToken != null && pageToken.isNotEmpty);
 
-      return all;
-    } finally {
-      client?.close();
-    }
+    return all;
   }
 }
 
@@ -389,7 +321,7 @@ class _StatisticsState extends State<Statistics> {
 
     final prefix = '$division/$area/reports/';
     try {
-      // 1) GCS 리스트에서 날짜 매칭 파일 찾기 (OAuth)
+      // 1) GCS 리스트에서 날짜 매칭 파일 찾기 (중앙 OAuth)
       final helper = _GcsHelper();
       final items = await helper.listObjects(prefix);
 

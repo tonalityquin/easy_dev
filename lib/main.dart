@@ -27,7 +27,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 // ⬇️ 플랫폼 분기(웹/안드/IOS)에서 사용
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 
+// ✅ (신규) OAuth를 앱 최초 1회만 수행하여 전역 재사용
+import 'utils/google_auth_session.dart';
+
 const kIsWorkingPrefsKey = 'isWorking';
+
+/// ✅ GSI v7 “웹 애플리케이션” 클라이언트 ID (Android에선 serverClientId로 사용)
+const String kWebClientId =
+    '470236709494-kgk29jdhi8ba25f7ujnqhpn8f22fhf25.apps.googleusercontent.com';
 
 String _ts() => DateTime.now().toIso8601String();
 
@@ -186,6 +193,18 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
     // ✅ Firebase
     debugPrint('[MAIN][${_ts()}] Firebase.initializeApp');
     await Firebase.initializeApp();
+
+    // ✅ (신규) OAuth 1회 초기화 — 이후 전역 재사용
+    //  - 모바일(Android/iOS)은 여기서 한 번 인증해두면 이후 기능이 같은 AuthClient 공유
+    //  - 웹은 사용자 제스처 문맥이 필요할 수 있으므로, 지원 플랫폼에서만 UI 인증 발생
+    debugPrint('[MAIN][${_ts()}] GoogleAuthSession.init (one-time OAuth)');
+    try {
+      await GoogleAuthSession.instance.init(serverClientId: kWebClientId);
+      debugPrint('[MAIN][${_ts()}] GoogleAuthSession.init done');
+    } catch (e) {
+      // 초기 인증 실패하더라도 앱은 실행되며, 이후 기능에서 재시도 가능
+      debugPrint('[MAIN][${_ts()}] GoogleAuthSession.init failed: $e');
+    }
 
     // ✅ 개발용 리소스 등록 (비용 방지: 현재 비활성화)
     // debugPrint('[MAIN][${_ts()}] registerDevResources');
