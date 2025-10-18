@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:googleapis/storage/v1.dart' as gcs;
 
-import 'google_auth_v7.dart';
+import 'google_auth_session.dart';
 
 class GcsImageUploader {
   final String bucketName = 'easydev-image';
@@ -21,17 +21,11 @@ class GcsImageUploader {
     final fileSize = await file.length();
     debugPrint('🚀 [$purpose] 이미지 업로드 시작: $destinationPath (${fileSize}B)');
 
-    final client = await GoogleAuthV7.authedClient(
-      [gcs.StorageApi.devstorageFullControlScope],
-    );
+    final client = await GoogleAuthSession.instance.client();
 
     try {
       final storage = gcs.StorageApi(client);
-      final media = gcs.Media(
-        file.openRead(),
-        fileSize,
-        contentType: 'image/jpeg', // ✅ 명시적 콘텐츠 타입
-      );
+      final media = gcs.Media(file.openRead(), fileSize, contentType: 'image/jpeg');
 
       final object = await storage.objects.insert(
         gcs.Object()..name = destinationPath,
@@ -49,7 +43,7 @@ class GcsImageUploader {
       debugPrint('🔥 Stack Trace: $stack');
       rethrow;
     } finally {
-      client.close();
+      // 세션 클라이언트는 닫지 않습니다.
     }
   }
 

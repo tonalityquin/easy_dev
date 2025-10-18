@@ -195,8 +195,6 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
     await Firebase.initializeApp();
 
     // ✅ (신규) OAuth 1회 초기화 — 이후 전역 재사용
-    //  - 모바일(Android/iOS)은 여기서 한 번 인증해두면 이후 기능이 같은 AuthClient 공유
-    //  - 웹은 사용자 제스처 문맥이 필요할 수 있으므로, 지원 플랫폼에서만 UI 인증 발생
     debugPrint('[MAIN][${_ts()}] GoogleAuthSession.init (one-time OAuth)');
     try {
       await GoogleAuthSession.instance.init(serverClientId: kWebClientId);
@@ -205,10 +203,6 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
       // 초기 인증 실패하더라도 앱은 실행되며, 이후 기능에서 재시도 가능
       debugPrint('[MAIN][${_ts()}] GoogleAuthSession.init failed: $e');
     }
-
-    // ✅ 개발용 리소스 등록 (비용 방지: 현재 비활성화)
-    // debugPrint('[MAIN][${_ts()}] registerDevResources');
-    // await registerDevResources();
 
     // ✅ 권한 요청
     debugPrint('[MAIN][${_ts()}] request permissions');
@@ -235,8 +229,6 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
     await DevMemo.init();
     debugPrint('[MAIN][${_ts()}] HeadMemo.init');
     await HeadMemo.init();
-
-    // ⬇️ CommuteOutsideFloating.init 제거됨
 
     debugPrint('[MAIN][${_ts()}] _initializeApp done');
   }
@@ -268,7 +260,6 @@ class MyApp extends StatelessWidget {
             debugPrint('[MAIN][${_ts()}] postFrameCallback → mountIfNeeded');
             DevMemo.mountIfNeeded();
             HeadMemo.mountIfNeeded();
-            // ⬇️ CommuteOutsideFloating.mountIfNeeded 제거됨
           });
           return child!;
         },

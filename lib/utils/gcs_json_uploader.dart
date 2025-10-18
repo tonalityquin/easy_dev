@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:googleapis/storage/v1.dart' as gcs;
 
-import 'google_auth_v7.dart';
+import 'google_auth_session.dart';
 
 class GcsJsonUploader {
   final String bucketName = 'easydev-image';
@@ -20,9 +20,7 @@ class GcsJsonUploader {
     DateTime? parseTs(dynamic ts) {
       if (ts == null) return null;
       if (ts is int) {
-        if (ts > 100000000000) {
-          return DateTime.fromMillisecondsSinceEpoch(ts).toLocal();
-        }
+        if (ts > 100000000000) return DateTime.fromMillisecondsSinceEpoch(ts).toLocal();
         return DateTime.fromMillisecondsSinceEpoch(ts * 1000).toLocal();
       }
       if (ts is String) return DateTime.tryParse(ts)?.toLocal();
@@ -33,14 +31,12 @@ class GcsJsonUploader {
     final wantedSuffix = '_ToDoLogs_$dateStr.json';
     final prefix = '$division/$area/logs/';
 
-    final client = await GoogleAuthV7.authedClient(
-      [gcs.StorageApi.devstorageReadOnlyScope],
-    );
+    final client = await GoogleAuthSession.instance.client();
 
     try {
       final storage = gcs.StorageApi(client);
 
-      // 1) 지정 prefix 목록 조회 (페이지네이션)
+      // 페이지네이션 대응
       final List<gcs.Object> all = [];
       String? pageToken;
       do {
@@ -66,7 +62,7 @@ class GcsJsonUploader {
       });
       final objectName = candidates.last.name!;
 
-      // 2) 객체 다운로드 → JSON
+      // 객체 다운로드 → JSON
       final dynamic res = await storage.objects.get(
         bucketName,
         objectName,
@@ -80,7 +76,7 @@ class GcsJsonUploader {
       final bytes = await media.stream.expand((e) => e).toList();
       final decoded = jsonDecode(utf8.decode(bytes));
 
-      // 3) items 또는 data 배열 지원
+      // items 또는 data 배열 지원
       final List rootItems = (decoded is Map && decoded['items'] is List)
           ? decoded['items'] as List
           : (decoded is Map && decoded['data'] is List)
@@ -123,7 +119,7 @@ class GcsJsonUploader {
       debugPrint('⚠️ loadPlateLogs 실패: $e');
       return <Map<String, dynamic>>[];
     } finally {
-      client.close();
+      // 세션 클라이언트는 닫지 않습니다.
     }
   }
 }

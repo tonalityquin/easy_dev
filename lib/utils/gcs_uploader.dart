@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:googleapis/storage/v1.dart' as gcs;
-import 'google_auth_v7.dart';
+import 'google_auth_session.dart';
 
 const String kBucketName = 'easydev-image';
 
@@ -12,16 +12,12 @@ Future<gcs.Object> _uploadJsonToGcs({
   required String destinationPath,
   bool makePublicRead = true,
 }) async {
-  // 1) 임시 파일 생성
   final temp = File(
     '${Directory.systemTemp.path}/gcs_upload_${DateTime.now().microsecondsSinceEpoch}.json',
   );
   await temp.writeAsString(jsonEncode(json), encoding: utf8);
 
-  // 2) OAuth 클라이언트
-  final client = await GoogleAuthV7.authedClient(
-    [gcs.StorageApi.devstorageFullControlScope],
-  );
+  final client = await GoogleAuthSession.instance.client();
 
   try {
     final storage = gcs.StorageApi(client);
@@ -41,10 +37,10 @@ Future<gcs.Object> _uploadJsonToGcs({
     );
     return res;
   } finally {
-    client.close();
     try {
       await temp.delete();
     } catch (_) {}
+    // 세션 클라이언트는 닫지 않습니다.
   }
 }
 
@@ -58,8 +54,6 @@ Future<String?> uploadEndWorkReportJson({
   final dateStr = now.toIso8601String().split('T').first;
   final ts = now.millisecondsSinceEpoch;
   final safeUser = userName.replaceAll(RegExp(r'[^a-zA-Z0-9_\-\.]'), '_');
-
-  // ✅ 보간 변수 뒤에 문자를 붙일 땐 중괄호 사용
   final fileName = 'report_${safeUser}_${dateStr}_$ts.json';
   final path = '$division/$area/reports/$fileName';
 
@@ -86,8 +80,6 @@ Future<String?> uploadEndLogJson({
   final dateStr = now.toIso8601String().split('T').first;
   final ts = now.millisecondsSinceEpoch;
   final safeUser = userName.replaceAll(RegExp(r'[^a-zA-Z0-9_\-\.]'), '_');
-
-  // ✅ 동일 수정
   final fileName = 'logs_${safeUser}_${dateStr}_$ts.json';
   final path = '$division/$area/logs/$fileName';
 
