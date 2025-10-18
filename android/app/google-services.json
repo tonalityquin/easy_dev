@@ -12,7 +12,20 @@
           "package_name": "com.quintus.dev"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "470236709494-rsndjpgufvbv90tnbjjae0tsq53jucm5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.quintus.dev",
+            "certificate_hash": "9490d3b8a47bfbdf49177f85ba13a93bbc24ff85"
+          }
+        },
+        {
+          "client_id": "470236709494-kgk29jdhi8ba25f7ujnqhpn8f22fhf25.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCGZDQxQRaSTeO6ujcTm9cE414tfftSb7k"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "470236709494-kgk29jdhi8ba25f7ujnqhpn8f22fhf25.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

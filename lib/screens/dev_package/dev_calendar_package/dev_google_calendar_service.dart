@@ -1,36 +1,85 @@
-import 'dart:convert';
-import 'package:flutter/services.dart' show rootBundle;
+import 'dart:async';
 import 'package:googleapis/calendar/v3.dart' as gcal;
-import 'package:googleapis_auth/auth_io.dart' as auth;
-import 'package:http/http.dart' as http;
+import 'package:googleapis_auth/googleapis_auth.dart' as auth;
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
 
-/// 구글 캘린더 읽기/쓰기 서비스 (서비스 계정 사용)
+/// ✅ 웹 “클라이언트 ID”(Web Application)
+const String kWebClientId =
+    '470236709494-kgk29jdhi8ba25f7ujnqhpn8f22fhf25.apps.googleusercontent.com';
+
 class DevGoogleCalendarService {
-  // CRUD를 위해 이벤트 쓰기 스코프 사용
-  static const _scopes = [
-    gcal.CalendarApi.calendarEventsScope, // 이벤트 읽기/쓰기
-    // gcal.CalendarApi.calendarReadonlyScope, // 필요시 추가
+  // R/W가 필요하면 calendarEventsScope 권장
+  static const _scopes = <String>[
+    gcal.CalendarApi.calendarEventsScope,
   ];
 
-  final http.Client _base = http.Client();
+  bool _initialized = false;
   auth.AuthClient? _client;
   gcal.CalendarApi? _api;
 
+  Future<void> _ensureInitialized() async {
+    if (_initialized) return;
+    // ✅ Android: serverClientId로 웹 클라ID 지정(28444 방지)
+    await GoogleSignIn.instance.initialize(serverClientId: kWebClientId);
+    _initialized = true;
+  }
+
+  Future<GoogleSignInAccount> _waitForSignInEvent() async {
+    final signIn = GoogleSignIn.instance;
+    final completer = Completer<GoogleSignInAccount>();
+    late final StreamSubscription sub;
+    sub = signIn.authenticationEvents.listen((event) {
+      switch (event) {
+        case GoogleSignInAuthenticationEventSignIn():
+          if (!completer.isCompleted) completer.complete(event.user);
+        case GoogleSignInAuthenticationEventSignOut():
+          break;
+      }
+    }, onError: (e) {
+      if (!completer.isCompleted) completer.completeError(e);
+    });
+
+    try {
+      try {
+        await signIn.attemptLightweightAuthentication();
+      } catch (_) {}
+      if (signIn.supportsAuthenticate()) {
+        // UI 인증은 확실히 기다림
+        await signIn.authenticate();
+      }
+      final user = await completer.future.timeout(
+        const Duration(seconds: 90),
+        onTimeout: () => throw Exception('Google 로그인 응답 시간 초과'),
+      );
+      return user;
+    } finally {
+      await sub.cancel();
+    }
+  }
+
   Future<void> _ensureAuthClient() async {
-    if (_client != null) return;
+    if (_client != null && _api != null) return;
 
-    // pubspec.yaml 의 assets 경로와 일치해야 합니다.
-    final jsonStr = await rootBundle.loadString('assets/keys/easydev-97fb6-e31d7e6b30f9.json');
-    final Map<String, dynamic> jsonMap = json.decode(jsonStr);
+    await _ensureInitialized();
 
-    final creds = auth.ServiceAccountCredentials.fromJson(jsonMap);
-    _client = await auth.clientViaServiceAccount(creds, _scopes, baseClient: _base);
+    // 1) 사용자 확보
+    final user = await _waitForSignInEvent();
+
+    // 2) 스코프 인가 확보
+    var authorization =
+    await user.authorizationClient.authorizationForScopes(_scopes);
+    authorization ??=
+    await user.authorizationClient.authorizeScopes(_scopes);
+
+    // 3) AuthClient 생성
+    _client = authorization.authClient(scopes: _scopes);
     _api = gcal.CalendarApi(_client!);
   }
 
   // ===== Read =====
   Future<List<gcal.Event>> listEvents({
-    required String calendarId,
+    required String calendarId, // 보통 'primary'
     DateTime? timeMin,
     DateTime? timeMax,
     int maxResults = 100,
@@ -38,8 +87,10 @@ class DevGoogleCalendarService {
     await _ensureAuthClient();
     final resp = await _api!.events.list(
       calendarId,
-      timeMin: (timeMin ?? DateTime.now().subtract(const Duration(days: 30))).toUtc(),
-      timeMax: (timeMax ?? DateTime.now().add(const Duration(days: 60))).toUtc(),
+      timeMin:
+      (timeMin ?? DateTime.now().subtract(const Duration(days: 30))).toUtc(),
+      timeMax:
+      (timeMax ?? DateTime.now().add(const Duration(days: 60))).toUtc(),
       singleEvents: true,
       orderBy: 'startTime',
       maxResults: maxResults,
@@ -49,13 +100,13 @@ class DevGoogleCalendarService {
 
   // ===== Create =====
   Future<gcal.Event> createEvent({
-    required String calendarId,
+    required String calendarId, // 'primary'
     required String summary,
     String? description,
     required DateTime start,
     required DateTime end,
     bool allDay = false,
-    String? colorId, // "1"~"11" 또는 null
+    String? colorId,
   }) async {
     await _ensureAuthClient();
 
@@ -68,7 +119,6 @@ class DevGoogleCalendarService {
     }
 
     if (allDay) {
-      // 날짜만 세팅 (end는 '다음날 0시' 의미로 date만 지정)
       final s = DateTime(start.year, start.month, start.day);
       final e = DateTime(end.year, end.month, end.day);
       event.start = gcal.EventDateTime(date: s);
@@ -91,7 +141,7 @@ class DevGoogleCalendarService {
     DateTime? start,
     DateTime? end,
     bool? allDay,
-    String? colorId, // null이면 변경 안 함
+    String? colorId,
   }) async {
     await _ensureAuthClient();
 
@@ -100,7 +150,6 @@ class DevGoogleCalendarService {
     if (description != null) patch.description = description;
     if (colorId != null) patch.colorId = colorId;
 
-    // 시간 변경은 start/end 둘 다 들어온 경우에만 적용
     if (start != null && end != null) {
       if (allDay == true) {
         final s = DateTime(start.year, start.month, start.day);
@@ -126,8 +175,12 @@ class DevGoogleCalendarService {
     await _api!.events.delete(calendarId, eventId);
   }
 
-  void dispose() {
+  Future<void> signOut() async {
+    try {
+      await GoogleSignIn.instance.disconnect(); // 이전 세션 정리
+    } catch (_) {}
     _client?.close();
-    _base.close();
+    _client = null;
+    _api = null;
   }
 }

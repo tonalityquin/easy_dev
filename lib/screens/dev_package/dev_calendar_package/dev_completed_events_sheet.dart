@@ -1,37 +1,85 @@
-// lib/screens/head_package/calendar_package/completed_events_sheet.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 import 'package:intl/intl.dart';
 
-// ✅ 서비스계정 인증 유틸
-import 'package:googleapis_auth/auth_io.dart';
-import 'package:flutter/services.dart' show rootBundle;
+// OAuth (google_sign_in v7.x + extension v3.x)
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
+import 'package:googleapis_auth/googleapis_auth.dart' as auth;
 
-// ✅ 스낵바 헬퍼
+// 스낵바 헬퍼
 import '../../../utils/snackbar_helper.dart';
 
-// ---- 서비스계정 JSON 경로(프로젝트에 맞게 유지/수정) ----
-const String _serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
+/// ✅ 웹 “클라이언트 ID”(Web Application) — 콘솔에서 만든 값
+const String kWebClientId =
+    '470236709494-kgk29jdhi8ba25f7ujnqhpn8f22fhf25.apps.googleusercontent.com';
 
-/// 작업별 필요 스코프 반환 (삭제에는 Calendar RW 필요)
+/// 쓰기여부에 따른 스코프
 List<String> _scopesFor(bool write) {
-  if (write) {
-    return <String>[
-      gcal.CalendarApi.calendarScope, // 캘린더 RW
-    ];
-  } else {
-    return <String>[
-      gcal.CalendarApi.calendarReadonlyScope, // 캘린더 RO
-    ];
+  return write
+      ? <String>[gcal.CalendarApi.calendarEventsScope] // R/W
+      : <String>[gcal.CalendarApi.calendarReadonlyScope]; // Readonly
+}
+
+// google_sign_in v7.x: initialize()는 반드시 1회만.
+bool _gsInitialized = false;
+Future<void> _ensureGsInitialized() async {
+  if (_gsInitialized) return;
+  // ✅ Android에선 serverClientId로 “웹 클라ID”를 넣어야 함(28444 방지)
+  _gsInitialized = true;
+}
+
+/// 인증 이벤트에서 SignIn 이벤트를 기다려 GoogleSignInAccount 획득
+Future<GoogleSignInAccount> _waitForSignInEvent() async {
+  final signIn = GoogleSignIn.instance;
+  final completer = Completer<GoogleSignInAccount>();
+  late final StreamSubscription sub;
+
+  sub = signIn.authenticationEvents.listen((event) {
+    switch (event) {
+      case GoogleSignInAuthenticationEventSignIn():
+        if (!completer.isCompleted) completer.complete(event.user);
+      case GoogleSignInAuthenticationEventSignOut():
+        break;
+    }
+  }, onError: (e) {
+    if (!completer.isCompleted) completer.completeError(e);
+  });
+
+  try {
+    try {
+      await signIn.attemptLightweightAuthentication(); // 무UI 시도
+    } catch (_) {}
+
+    if (signIn.supportsAuthenticate()) {
+      // UI 인증은 확실히 기다립니다(경쟁상황 방지)
+      await signIn.authenticate();
+    }
+
+    final user = await completer.future.timeout(
+      const Duration(seconds: 90),
+      onTimeout: () => throw Exception('Google 로그인 응답 시간 초과'),
+    );
+    return user;
+  } finally {
+    await sub.cancel();
   }
 }
 
-/// 서비스 계정으로 인증된 HTTP 클라이언트
-Future<AutoRefreshingAuthClient> getAuthClient({bool write = false}) async {
-  final jsonString = await rootBundle.loadString(_serviceAccountPath);
-  final credentials = ServiceAccountCredentials.fromJson(jsonString);
+/// OAuth 기반 AuthClient 만들기 (v7 권장 흐름)
+Future<auth.AuthClient> getAuthClient({bool write = false}) async {
   final scopes = _scopesFor(write);
-  return clientViaServiceAccount(credentials, scopes);
+  await _ensureGsInitialized();
+
+  // 1) 사용자 확보(이벤트 기반) → 2) 스코프 인가 → 3) AuthClient
+  final user = await _waitForSignInEvent();
+
+  var authorization =
+  await user.authorizationClient.authorizationForScopes(scopes);
+  authorization ??= await user.authorizationClient.authorizeScopes(scopes);
+
+  return authorization.authClient(scopes: scopes);
 }
 
 // ---------------------------
@@ -46,9 +94,7 @@ int _extractProgress(String? description) {
   return v == 100 ? 100 : 0;
 }
 
-/// 완료된 이벤트 바텀시트(흰 배경) 오픈
-///
-/// [onEdit]를 넘기면 리스트 아이템 탭 시 수정 시트를 열 수 있어요.
+/// 완료된 이벤트 바텀시트 오픈
 Future<void> openCompletedEventsSheet({
   required BuildContext context,
   required List<gcal.Event> allEvents,
@@ -71,7 +117,7 @@ Future<void> openCompletedEventsSheet({
     context: context,
     useSafeArea: true,
     isScrollControlled: true,
-    backgroundColor: Colors.white, // ✅ 흰색 고정
+    backgroundColor: Colors.white,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
@@ -111,7 +157,6 @@ Future<void> openCompletedEventsSheet({
                           ),
                         ),
                       ),
-                      // 🗑️ 휴지통 버튼 (제목에 가장 가까운 위치)
                       IconButton(
                         tooltip: '완료 이벤트 삭제',
                         icon: const Icon(Icons.delete_outline_rounded,
@@ -119,7 +164,6 @@ Future<void> openCompletedEventsSheet({
                         onPressed: () => _deleteCompletedEventsFromGoogleCalendar(
                           context,
                           completed,
-                          // 필요 시 특정 캘린더를 지정하세요:
                           // calendarId: 'primary',
                         ),
                       ),
@@ -177,10 +221,7 @@ Future<void> openCompletedEventsSheet({
                         const Icon(Icons.done, color: Colors.red),
                         title: Text(
                           e.summary ?? '(제목 없음)',
-                          style: const TextStyle(
-                            color: Colors.black87,
-                            decoration: TextDecoration.lineThrough,
-                          ),
+                          style: const TextStyle(color: Colors.black87),
                         ),
                         subtitle: Text(
                           when,
@@ -190,7 +231,6 @@ Future<void> openCompletedEventsSheet({
                         onTap: onEdit != null
                             ? () => onEdit(context, e)
                             : null,
-                        // ❌ 항목별 삭제 버튼은 없음 (헤더 휴지통으로 일괄 삭제)
                       );
                     },
                   ),
@@ -204,11 +244,7 @@ Future<void> openCompletedEventsSheet({
   );
 }
 
-// ---------------------------
-// 삭제 유틸 (휴지통 버튼 동작)
-// ---------------------------
-
-/// 가능한 calendarId 추론(없으면 null)
+/// (참고용) calendarId 추정. OAuth에서는 'primary' 사용 권장.
 String? _guessCalendarId(List<gcal.Event> events) {
   for (final e in events) {
     final cand = e.organizer?.email ??
@@ -217,33 +253,30 @@ String? _guessCalendarId(List<gcal.Event> events) {
             ?.firstWhere(
               (a) => a.self == true && (a.email?.isNotEmpty ?? false),
           orElse: () => gcal.EventAttendee(),
-        )
-            .email);
+        ))
+            ?.email;
     if (cand != null && cand.isNotEmpty) return cand;
   }
   return null;
 }
 
-/// 완료(progress:100) 이벤트 일괄 삭제
+/// 완료(progress:100) 이벤트 일괄 삭제 (OAuth)
 Future<void> _deleteCompletedEventsFromGoogleCalendar(
     BuildContext context,
     List<gcal.Event> completed, {
       String? calendarId,
     }) async {
   if (completed.isEmpty) {
-    // ✅ snackbar_helper 사용
     showSelectedSnackbar(context, '삭제할 완료 이벤트가 없습니다.');
     return;
   }
 
-  // calendarId 없으면 추정 시도
-  final calId = (calendarId ?? _guessCalendarId(completed));
-  if (calId == null || calId.trim().isEmpty) {
-    // ✅ snackbar_helper 사용
-    showFailedSnackbar(
-        context, '캘린더 ID를 확인할 수 없습니다. (organizer/creator 기반 추정 실패)');
-    return;
-  }
+  // 전달값 > 추정값 > primary
+  final calId = (() {
+    final explicit = calendarId?.trim();
+    if (explicit != null && explicit.isNotEmpty) return explicit;
+    return _guessCalendarId(completed) ?? 'primary';
+  })();
 
   final ok = await showModalBottomSheet<bool>(
     context: context,
@@ -298,13 +331,12 @@ Future<void> _deleteCompletedEventsFromGoogleCalendar(
   if (!ok) return;
 
   try {
-    final client = await getAuthClient(write: true); // 캘린더 RW 스코프 포함
+    final client = await getAuthClient(write: true);
     final api = gcal.CalendarApi(client);
 
     int success = 0;
     int failed = 0;
 
-    // 순차 삭제
     for (final e in completed) {
       final id = e.id;
       if (id == null || id.isEmpty) {
@@ -320,13 +352,10 @@ Future<void> _deleteCompletedEventsFromGoogleCalendar(
     }
 
     if (context.mounted) {
-      // 바텀시트 유지: 결과만 안내
-      // ✅ snackbar_helper 사용
       showSuccessSnackbar(context, '삭제 완료: $success건 / 실패: $failed건');
     }
   } catch (e) {
     if (context.mounted) {
-      // ✅ snackbar_helper 사용
       showFailedSnackbar(context, '삭제 실패: $e');
     }
   }
