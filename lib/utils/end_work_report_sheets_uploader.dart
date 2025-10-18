@@ -1,18 +1,17 @@
 // lib/utils/end_work_report_sheets_uploader.dart
-import 'package:googleapis/sheets/v4.dart';
-import 'package:googleapis_auth/auth_io.dart';
-import 'package:flutter/services.dart' show rootBundle;
+import 'dart:async';
 import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:googleapis/sheets/v4.dart';
+import 'package:googleapis_auth/googleapis_auth.dart' as auth;
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
+
 import 'sheets_config.dart';
 
 class EndWorkReportSheetsUploader {
   /// 기본 시트(탭) 이름
   static const String _defaultSheetName = '업무종료보고';
 
-  /// 서비스 계정 키 경로(프로젝트에 맞게 변경)
-  static const String _serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
-
-  /// 1행 헤더 정의 (A~G) — 요청에 따라 uploadedAt/reportUrl/logsUrl/snapshotCount 제거
   /// A: createdAt
   /// B: division
   /// C: area
@@ -30,8 +29,72 @@ class EndWorkReportSheetsUploader {
     'uploadedBy',
   ];
 
+  // ─────────────────────────────────────────
+  // OAuth 헬퍼 (Google Sign-In v7)
+  // ─────────────────────────────────────────
+
+  /// ✅ GCP 콘솔의 “웹 애플리케이션” 클라이언트 ID (Android에선 serverClientId로 사용)
+  static const String _kWebClientId =
+      '470236709494-kgk29jdhi8ba25f7ujnqhpn8f22fhf25.apps.googleusercontent.com';
+
+  static bool _gsInitialized = false;
+
+  static Future<void> _ensureGsInitialized() async {
+    if (_gsInitialized) return;
+    try {
+      // 28444 방지: Android에선 serverClientId 필수
+      await GoogleSignIn.instance.initialize(serverClientId: _kWebClientId);
+    } catch (_) {}
+    _gsInitialized = true;
+  }
+
+  static Future<GoogleSignInAccount> _waitForSignInEvent() async {
+    final signIn = GoogleSignIn.instance;
+    final c = Completer<GoogleSignInAccount>();
+    late final StreamSubscription sub;
+
+    sub = signIn.authenticationEvents.listen((event) {
+      switch (event) {
+        case GoogleSignInAuthenticationEventSignIn():
+          if (!c.isCompleted) c.complete(event.user);
+        case GoogleSignInAuthenticationEventSignOut():
+          break;
+      }
+    }, onError: (e) {
+      if (!c.isCompleted) c.completeError(e);
+    });
+
+    try {
+      try {
+        await signIn.attemptLightweightAuthentication();
+      } catch (_) {}
+      if (signIn.supportsAuthenticate()) {
+        await signIn.authenticate(); // 필요 시 UI 표시
+      }
+      return await c.future
+          .timeout(const Duration(seconds: 90), onTimeout: () => throw Exception('Google 로그인 응답 시간 초과'));
+    } finally {
+      await sub.cancel();
+    }
+  }
+
+  static Future<auth.AuthClient> _getSheetsAuthClientRW() async {
+    await _ensureGsInitialized();
+    const scopes = [SheetsApi.spreadsheetsScope]; // RW
+    final user = await _waitForSignInEvent();
+
+    var authorization = await user.authorizationClient.authorizationForScopes(scopes);
+    authorization ??= await user.authorizationClient.authorizeScopes(scopes);
+
+    return authorization.authClient(scopes: scopes);
+  }
+
+  // ─────────────────────────────────────────
+  // 공개 API
+  // ─────────────────────────────────────────
+
   /// GCS 업로드가 끝난 뒤 시트에 한 줄 append
-  /// - 링크/카운트(보고/로그 URL, snapshotCount)는 더 이상 시트에 쓰지 않습니다.
+  /// - 링크/카운트(보고/로그 URL, snapshotCount)는 더 이상 시트에 쓰지 않음.
   /// - [sheetName]을 지정하면 해당 탭으로 기록(기본: '업무종료보고')
   static Future<bool> appendRow({
     required Map<String, dynamic> reportJson,
@@ -43,8 +106,9 @@ class EndWorkReportSheetsUploader {
       return false;
     }
 
-    final client = await _getSheetsClient();
+    auth.AuthClient? client;
     try {
+      client = await _getSheetsAuthClientRW();
       final api = SheetsApi(client);
 
       // 1) 탭 존재 보장(없으면 자동 생성)
@@ -86,9 +150,13 @@ class EndWorkReportSheetsUploader {
       debugPrint('❌ [EndWorkReport] 스프레드시트 append 실패: $e');
       return false;
     } finally {
-      client.close();
+      client?.close();
     }
   }
+
+  // ─────────────────────────────────────────
+  // 내부 유틸
+  // ─────────────────────────────────────────
 
   /// 탭 존재 확인 후 없으면 생성
   static Future<void> _ensureSheetExists(
@@ -97,8 +165,7 @@ class EndWorkReportSheetsUploader {
       String sheetName,
       ) async {
     final meta = await api.spreadsheets.get(spreadsheetId);
-    final exists = (meta.sheets ?? const <Sheet>[])
-        .any((s) => s.properties?.title == sheetName);
+    final exists = (meta.sheets ?? const <Sheet>[]).any((s) => s.properties?.title == sheetName);
 
     if (exists) return;
 
@@ -109,7 +176,7 @@ class EndWorkReportSheetsUploader {
             addSheet: AddSheetRequest(
               properties: SheetProperties(title: sheetName),
             ),
-          )
+          ),
         ],
       ),
       spreadsheetId,
@@ -128,9 +195,7 @@ class EndWorkReportSheetsUploader {
       '$sheetName!A1:G1',
     );
 
-    final hasHeader = (res.values != null &&
-        res.values!.isNotEmpty &&
-        res.values!.first.isNotEmpty);
+    final hasHeader = (res.values != null && res.values!.isNotEmpty && res.values!.first.isNotEmpty);
     if (hasHeader) return;
 
     await api.spreadsheets.values.update(
@@ -140,14 +205,5 @@ class EndWorkReportSheetsUploader {
       valueInputOption: 'RAW',
     );
     debugPrint('ℹ️ [EndWorkReport] 헤더가 없어 A1에 생성 완료: $sheetName');
-  }
-
-  static Future<AuthClient> _getSheetsClient() async {
-    final jsonStr = await rootBundle.loadString(_serviceAccountPath);
-    final credentials = ServiceAccountCredentials.fromJson(jsonStr);
-    return await clientViaServiceAccount(
-      credentials,
-      [SheetsApi.spreadsheetsScope],
-    );
   }
 }

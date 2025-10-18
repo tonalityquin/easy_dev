@@ -1,39 +1,112 @@
 // lib/screens/head_package/mgmt_package/statistics.dart
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
-// GCS 목록 조회용
-import 'package:flutter/services.dart' show rootBundle;
+// GCS 목록 조회용 (OAuth)
 import 'package:googleapis/storage/v1.dart' as gcs;
-import 'package:googleapis_auth/auth_io.dart';
+import 'package:googleapis_auth/googleapis_auth.dart' as auth;
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
 
 import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
 import 'statistics_chart_page.dart';
-import '../../../utils/snackbar_helper.dart'; // ✅ 추가
+import '../../../utils/snackbar_helper.dart';
 
-/// ===== GCS 설정 (업로드와 동일) =====
+/// ===== GCS 설정 =====
 const String _kBucketName = 'easydev-image';
-const String _kServiceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
-/// 간단 GCS 헬퍼: prefix 하위 객체 목록 조회
-class _GcsHelper {
-  Future<List<gcs.Object>> listObjects(String prefix) async {
-    final credentialsJson = await rootBundle.loadString(_kServiceAccountPath);
-    final accountCredentials = ServiceAccountCredentials.fromJson(credentialsJson);
-    final client = await clientViaServiceAccount(
-      accountCredentials,
-      [gcs.StorageApi.devstorageFullControlScope],
-    );
+/// ===== Google Sign-In v7 (OAuth) 헬퍼 =====
+/// ※ GCP 콘솔의 “웹 애플리케이션” 클라이언트 ID (Android에선 serverClientId로 필요)
+const String _kWebClientId =
+    '470236709494-kgk29jdhi8ba25f7ujnqhpn8f22fhf25.apps.googleusercontent.com';
+
+class _OAuthHelper {
+  static bool _inited = false;
+
+  static Future<void> _ensureInit() async {
+    if (_inited) return;
+    try {
+      // 28444 방지: Android는 serverClientId 지정
+      await GoogleSignIn.instance.initialize(serverClientId: _kWebClientId);
+    } catch (_) {}
+    _inited = true;
+  }
+
+  /// Sign-In 이벤트를 기다려 사용자 계정을 얻음
+  static Future<GoogleSignInAccount> _waitForSignIn() async {
+    final signIn = GoogleSignIn.instance;
+    final c = Completer<GoogleSignInAccount>();
+    late final StreamSubscription sub;
+
+    sub = signIn.authenticationEvents.listen((event) {
+      switch (event) {
+        case GoogleSignInAuthenticationEventSignIn():
+          if (!c.isCompleted) c.complete(event.user);
+        case GoogleSignInAuthenticationEventSignOut():
+          break;
+      }
+    }, onError: (e) {
+      if (!c.isCompleted) c.completeError(e);
+    });
 
     try {
-      final storage = gcs.StorageApi(client);
-      final res = await storage.objects.list(_kBucketName, prefix: prefix);
-      return res.items ?? const <gcs.Object>[];
+      try {
+        await signIn.attemptLightweightAuthentication(); // 기존 세션이면 UI 없이 통과
+      } catch (_) {}
+      if (signIn.supportsAuthenticate()) {
+        await signIn.authenticate(); // 필요 시 UI
+      }
+      return await c.future.timeout(
+        const Duration(seconds: 90),
+        onTimeout: () => throw Exception('Google 로그인 응답 시간 초과'),
+      );
     } finally {
-      client.close();
+      await sub.cancel();
+    }
+  }
+
+  /// GCS 읽기 전용 AuthClient
+  static Future<auth.AuthClient> gcsReadonlyClient() async {
+    await _ensureInit();
+    const scopes = [gcs.StorageApi.devstorageReadOnlyScope];
+    final user = await _waitForSignIn();
+
+    var authorization =
+    await user.authorizationClient.authorizationForScopes(scopes);
+    authorization ??= await user.authorizationClient.authorizeScopes(scopes);
+
+    return authorization.authClient(scopes: scopes);
+  }
+}
+
+/// 간단 GCS 헬퍼: prefix 하위 객체 목록 조회 (OAuth 기반)
+class _GcsHelper {
+  Future<List<gcs.Object>> listObjects(String prefix) async {
+    auth.AuthClient? client;
+    try {
+      client = await _OAuthHelper.gcsReadonlyClient();
+      final storage = gcs.StorageApi(client);
+
+      // 페이지네이션 안전 처리
+      final List<gcs.Object> all = [];
+      String? pageToken;
+      do {
+        final res = await storage.objects.list(
+          _kBucketName,
+          prefix: prefix,
+          pageToken: pageToken,
+        );
+        if (res.items != null) all.addAll(res.items!);
+        pageToken = res.nextPageToken;
+      } while (pageToken != null && pageToken.isNotEmpty);
+
+      return all;
+    } finally {
+      client?.close();
     }
   }
 }
@@ -81,7 +154,8 @@ class _StatisticsState extends State<Statistics> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('📁 Division: $division', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              Text('📁 Division: $division',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 20),
               const Text('🏷️ Area 선택'),
               const SizedBox(height: 8),
@@ -123,7 +197,6 @@ class _StatisticsState extends State<Statistics> {
                       setState(() {
                         _savedReports.clear();
                       });
-                      // ✅ 기본 SnackBar → 커스텀 스낵바
                       showSuccessSnackbar(context, "🗑️ 보관된 통계가 초기화되었습니다.");
                     }
                         : null,
@@ -167,7 +240,8 @@ class _StatisticsState extends State<Statistics> {
                       '🗓 선택 날짜: ${_selectedDate!.toIso8601String().split("T").first}',
                       style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                     ),
-                    if (_savedReports.any((r) => r['date'] == _selectedDate!.toIso8601String().split("T").first))
+                    if (_savedReports
+                        .any((r) => r['date'] == _selectedDate!.toIso8601String().split("T").first))
                       const Padding(
                         padding: EdgeInsets.only(top: 6),
                         child: Text(
@@ -192,14 +266,15 @@ class _StatisticsState extends State<Statistics> {
   }
 
   Widget _buildReportCard(Map<String, dynamic> report) {
-    // 업로드 평면 스키마 + 하위호환(중첩 vehicleCount) 모두 지원
     int? asInt(dynamic v) {
       if (v is num) return v.toInt();
       if (v is String) return int.tryParse(v);
       return null;
     }
 
-    final vc = (report['vehicleCount'] is Map) ? (report['vehicleCount'] as Map).cast<String, dynamic>() : null;
+    final vc = (report['vehicleCount'] is Map)
+        ? (report['vehicleCount'] as Map).cast<String, dynamic>()
+        : null;
     final inCount = asInt(report['vehicleInput'] ?? vc?['vehicleInput']);
     final outCount = asInt(report['vehicleOutput'] ?? vc?['vehicleOutput']);
     final lockedFee = asInt(report['totalLockedFee'] ?? vc?['totalLockedFee']);
@@ -253,10 +328,11 @@ class _StatisticsState extends State<Statistics> {
                 label: const Text('보관'),
                 onPressed: () {
                   if (_selectedDate != null) {
-                    final dateStr = _selectedDate!.toIso8601String().split('T').first;
-                    final already = _savedReports.any((r) => r['date'] == dateStr);
+                    final dateStr =
+                        _selectedDate!.toIso8601String().split('T').first;
+                    final already =
+                    _savedReports.any((r) => r['date'] == dateStr);
                     if (already) {
-                      // ✅ 정보성 → 선택 스낵바
                       showSelectedSnackbar(context, "ℹ️ 이미 보관된 날짜입니다.");
                       return;
                     }
@@ -268,7 +344,6 @@ class _StatisticsState extends State<Statistics> {
                         '정산금': lockedFee ?? 0,
                       });
                     });
-                    // ✅ 성공 스낵바
                     showSuccessSnackbar(context, "✅ 통계가 보관되었습니다.");
                   }
                 },
@@ -314,13 +389,14 @@ class _StatisticsState extends State<Statistics> {
 
     final prefix = '$division/$area/reports/';
     try {
-      // 1) GCS 리스트에서 날짜 매칭 파일 찾기
+      // 1) GCS 리스트에서 날짜 매칭 파일 찾기 (OAuth)
       final helper = _GcsHelper();
       final items = await helper.listObjects(prefix);
 
       // `_ToDoReports_YYYY-MM-DD.json`으로 끝나는 항목 필터
       final suffix = '_ToDoReports_$dateStr.json';
-      final candidates = items.where((o) => (o.name ?? '').endsWith(suffix)).toList();
+      final candidates =
+      items.where((o) => (o.name ?? '').endsWith(suffix)).toList();
 
       if (candidates.isEmpty) {
         setState(() => _reportData = null);
@@ -330,12 +406,12 @@ class _StatisticsState extends State<Statistics> {
       // 최신(updated) 기준으로 정렬 후 마지막 선택
       candidates.sort((a, b) {
         final au = a.updated ?? DateTime.fromMillisecondsSinceEpoch(0);
-        final bu = b.updated ?? DateTime.fromMillisecondsSinceEpoch(0); // ← ‘the’ 제거
+        final bu = b.updated ?? DateTime.fromMillisecondsSinceEpoch(0);
         return au.compareTo(bu);
       });
       final target = candidates.last.name!;
 
-      // 2) 공개 URL로 JSON 다운로드 (캐시 버스터 부착)
+      // 2) 공개 URL로 JSON 다운로드 (버킷이 퍼블릭인 경우)
       final bust = DateTime.now().millisecondsSinceEpoch;
       final url = 'https://storage.googleapis.com/$_kBucketName/$target?ts=$bust';
 
@@ -344,7 +420,8 @@ class _StatisticsState extends State<Statistics> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         setState(() {
-          _reportData = (data is Map<String, dynamic>) ? data : <String, dynamic>{};
+          _reportData =
+          (data is Map<String, dynamic>) ? data : <String, dynamic>{};
         });
       } else {
         setState(() => _reportData = null);

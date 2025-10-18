@@ -1,11 +1,90 @@
 // lib/screens/head_package/timesheet_page.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:googleapis/sheets/v4.dart' as sheets;
-import 'package:googleapis_auth/auth_io.dart';
+
+// OAuth (google_sign_in v7.x + extension v3.x)
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
+import 'package:googleapis_auth/googleapis_auth.dart' as auth;
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum TimesheetTab { attendance, breakTime }
+
+// ────────────────────────────────────────────────────────────
+// OAuth 헬퍼
+// ────────────────────────────────────────────────────────────
+
+/// ✅ GCP “웹 애플리케이션” 클라이언트 ID (Android에선 serverClientId로 사용)
+const String _kWebClientId =
+    '470236709494-kgk29jdhi8ba25f7ujnqhpn8f22fhf25.apps.googleusercontent.com';
+
+bool _gsInitialized = false;
+
+Future<void> _ensureGsInitialized() async {
+  if (_gsInitialized) return;
+  try {
+    // Android: 28444(DEVELOPER_ERROR) 회피를 위해 웹 클라ID를 serverClientId로 지정
+    await GoogleSignIn.instance.initialize(serverClientId: _kWebClientId);
+  } catch (_) {
+    // 이미 초기화된 경우 등은 무시
+  }
+  _gsInitialized = true;
+}
+
+/// GoogleSignIn v7 이벤트 기반으로 로그인 완료 계정 획득
+Future<GoogleSignInAccount> _waitForSignInEvent() async {
+  final signIn = GoogleSignIn.instance;
+  final completer = Completer<GoogleSignInAccount>();
+  late final StreamSubscription sub;
+
+  sub = signIn.authenticationEvents.listen((event) {
+    switch (event) {
+      case GoogleSignInAuthenticationEventSignIn():
+        if (!completer.isCompleted) completer.complete(event.user);
+      case GoogleSignInAuthenticationEventSignOut():
+        break;
+    }
+  }, onError: (e) {
+    if (!completer.isCompleted) completer.completeError(e);
+  });
+
+  try {
+    try {
+      await signIn.attemptLightweightAuthentication(); // 무 UI 시도
+    } catch (_) {}
+    if (signIn.supportsAuthenticate()) {
+      await signIn.authenticate(); // 필요 시 UI 인증
+    }
+    final user = await completer.future.timeout(
+      const Duration(seconds: 90),
+      onTimeout: () => throw Exception('Google 로그인 응답 시간 초과'),
+    );
+    return user;
+  } finally {
+    await sub.cancel();
+  }
+}
+
+/// Sheets용 OAuth AuthClient (읽기 전용/읽기쓰기 분리 가능)
+Future<auth.AuthClient> _getSheetsAuthClient({required bool write}) async {
+  await _ensureGsInitialized();
+  final scopes = write
+      ? <String>[sheets.SheetsApi.spreadsheetsScope] // 읽기/쓰기
+      : <String>[sheets.SheetsApi.spreadsheetsReadonlyScope]; // 읽기 전용
+
+  final user = await _waitForSignInEvent();
+  var authorization =
+  await user.authorizationClient.authorizationForScopes(scopes);
+  authorization ??= await user.authorizationClient.authorizeScopes(scopes);
+
+  return authorization.authClient(scopes: scopes);
+}
+
+// ────────────────────────────────────────────────────────────
+// 본문
+// ────────────────────────────────────────────────────────────
 
 class TimesheetPage extends StatefulWidget {
   const TimesheetPage({super.key, this.initialTab = TimesheetTab.attendance});
@@ -20,9 +99,6 @@ class _TimesheetPageState extends State<TimesheetPage>
     with SingleTickerProviderStateMixin {
   // 저장 키(공용): 같은 ID를 출/퇴근 & 휴게시간 탭에서 사용
   static const _prefsKey = 'hq_sheet_id';
-  // 서비스 계정 키
-  static const _serviceAccountPath =
-      'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
   // 팔레트(Company Calendar와 톤 맞춤)
   static const _base = Color(0xFF43A047);
@@ -112,14 +188,6 @@ class _TimesheetPageState extends State<TimesheetPage>
     if (v.isNotEmpty) _load();
   }
 
-  Future<sheets.SheetsApi> _getSheets() async {
-    final json = await rootBundle.loadString(_serviceAccountPath);
-    final cred = ServiceAccountCredentials.fromJson(json);
-    const scopes = [sheets.SheetsApi.spreadsheetsScope];
-    final client = await clientViaServiceAccount(cred, scopes);
-    return sheets.SheetsApi(client);
-  }
-
   Future<void> _load() async {
     final id = _idCtrl.text.trim();
     if (id.isEmpty) {
@@ -136,8 +204,12 @@ class _TimesheetPageState extends State<TimesheetPage>
       _error = null;
     });
 
+    auth.AuthClient? client;
     try {
-      final api = await _getSheets();
+      // ✅ OAuth로 인증된 클라이언트(읽기 전용 스코프) 생성
+      client = await _getSheetsAuthClient(write: false);
+      final api = sheets.SheetsApi(client);
+
       final range = '$_sheetName!A1:G'; // 탭에 따라 시트 범위 전환
       final resp = await api.spreadsheets.values.get(id, range);
       final raw = resp.values ?? const [];
@@ -167,6 +239,7 @@ class _TimesheetPageState extends State<TimesheetPage>
         _areaOptions = [];
       });
     } finally {
+      client?.close();
       if (mounted) setState(() => _loading = false);
     }
   }
@@ -199,8 +272,7 @@ class _TimesheetPageState extends State<TimesheetPage>
     }
     // 못 찾으면 안전 기본값
     _idxRecordedDate ??= 0;
-    _idxUserName ??=
-    (header.length > 3 ? 3 : 0); // (날짜,시간,ID,이름,area,division,status) 가정
+    _idxUserName ??= (header.length > 3 ? 3 : 0); // (날짜,시간,ID,이름,area,division,status) 가정
     _idxArea ??= (header.length > 4 ? 4 : 0);
   }
 
@@ -436,7 +508,6 @@ class _TimesheetPageState extends State<TimesheetPage>
           ),
         ],
       ),
-
       body: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
         child: Column(
@@ -771,10 +842,8 @@ class _SheetPage extends StatelessWidget {
     // 기본 포맷 보조: userId(2), division(5)
     if (header.length >= 6) {
       // 이미 탐지되지 않았다면 보조로 추가
-      if (!hidden.contains(2) &&
-          _norm(header[2]) == 'userid') hidden.add(2);
-      if (!hidden.contains(5) &&
-          _norm(header[5]) == 'division') hidden.add(5);
+      if (!hidden.contains(2) && _norm(header[2]) == 'userid') hidden.add(2);
+      if (!hidden.contains(5) && _norm(header[5]) == 'division') hidden.add(5);
     }
     return hidden;
   }
@@ -805,8 +874,7 @@ class _SheetPage extends StatelessWidget {
     // 숨김 컬럼 결정 및 가시 컬럼 인덱스 매핑
     final hiddenSet = _hiddenColumnIndices(header);
     final visibleIndices = <int>[
-      for (int i = 0; i < header.length; i++)
-        if (!hiddenSet.contains(i)) i
+      for (int i = 0; i < header.length; i++) if (!hiddenSet.contains(i)) i
     ];
 
     // 정렬 인덱스(원본)를 가시 인덱스로 변환 (정렬 아이콘 표시용)
@@ -842,8 +910,8 @@ class _SheetPage extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             primary: false,
             child: ConstrainedBox(
-              constraints:
-              BoxConstraints(minWidth: (visibleIndices.length * 140).toDouble()),
+              constraints: BoxConstraints(
+                  minWidth: (visibleIndices.length * 140).toDouble()),
               child: Scrollbar(
                 controller: vController,
                 thumbVisibility: true,

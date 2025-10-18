@@ -1,8 +1,9 @@
 // lib/screens/head_package/hr_package/utils/google_sheets_helper.dart
 import 'dart:async';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:googleapis/sheets/v4.dart';
-import 'package:googleapis_auth/auth_io.dart';
+import 'package:googleapis_auth/googleapis_auth.dart' as auth;
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
 import 'package:intl/intl.dart';
 
 /// 출퇴근 배치 저장용 모델
@@ -44,27 +45,81 @@ class BreakRow {
 }
 
 class GoogleSheetsHelper {
-  static const _serviceAccountPath =
-      'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
+  // ───────────────────────────────────────────────────────────────────────────
+  // OAuth 설정
+  // ───────────────────────────────────────────────────────────────────────────
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // 인증 클라이언트
-  // ───────────────────────────────────────────────────────────────────────────
-  static Future<AutoRefreshingAuthClient> _getSheetsClient() async {
-    final jsonString = await rootBundle.loadString(_serviceAccountPath);
-    final credentials = ServiceAccountCredentials.fromJson(jsonString);
-    const scopes = [SheetsApi.spreadsheetsScope];
-    return await clientViaServiceAccount(credentials, scopes);
+  /// ✅ GCP “웹 애플리케이션” 클라이언트 ID (Android에선 serverClientId로 사용)
+  static const String _kWebClientId =
+      '470236709494-kgk29jdhi8ba25f7ujnqhpn8f22fhf25.apps.googleusercontent.com';
+
+  /// 스코프
+  static List<String> _scopesFor(bool write) => write
+      ? <String>[SheetsApi.spreadsheetsScope] // 읽기/쓰기
+      : <String>[SheetsApi.spreadsheetsReadonlyScope]; // 읽기 전용
+
+  static bool _gsInitialized = false;
+
+  static Future<void> _ensureGsInitialized() async {
+    if (_gsInitialized) return;
+    try {
+      await GoogleSignIn.instance.initialize(serverClientId: _kWebClientId);
+    } catch (_) {
+      // 이미 초기화된 경우 등은 무시
+    }
+    _gsInitialized = true;
+  }
+
+  static Future<GoogleSignInAccount> _waitForSignInEvent() async {
+    final signIn = GoogleSignIn.instance;
+    final completer = Completer<GoogleSignInAccount>();
+    late final StreamSubscription sub;
+
+    sub = signIn.authenticationEvents.listen((event) {
+      switch (event) {
+        case GoogleSignInAuthenticationEventSignIn():
+          if (!completer.isCompleted) completer.complete(event.user);
+        case GoogleSignInAuthenticationEventSignOut():
+          break;
+      }
+    }, onError: (e) {
+      if (!completer.isCompleted) completer.completeError(e);
+    });
+
+    try {
+      try {
+        await signIn.attemptLightweightAuthentication(); // 무 UI 시도
+      } catch (_) {}
+      if (signIn.supportsAuthenticate()) {
+        await signIn.authenticate(); // UI 인증
+      }
+      final user = await completer.future.timeout(
+        const Duration(seconds: 90),
+        onTimeout: () => throw Exception('Google 로그인 응답 시간 초과'),
+      );
+      return user;
+    } finally {
+      await sub.cancel();
+    }
+  }
+
+  /// ✅ Sheets용 OAuth AuthClient
+  static Future<auth.AuthClient> _getSheetsAuthClient({required bool write}) async {
+    await _ensureGsInitialized();
+    final scopes = _scopesFor(write);
+
+    final user = await _waitForSignInEvent();
+    var authorization = await user.authorizationClient.authorizationForScopes(scopes);
+    authorization ??= await user.authorizationClient.authorizeScopes(scopes);
+
+    return authorization.authClient(scopes: scopes);
   }
 
   // ───────────────────────────────────────────────────────────────────────────
   // 공통 유틸
   // ───────────────────────────────────────────────────────────────────────────
   static List<List<String>> _convertRows(List<List<Object?>>? rawRows) {
-    return rawRows
-        ?.map((row) => row.map((cell) => cell.toString()).toList())
-        .toList() ??
-        [];
+    return rawRows?.map((row) => row.map((cell) => cell.toString()).toList()).toList() ?? [];
   }
 
   // ───────────────────────────────────────────────────────────────────────────
@@ -72,11 +127,13 @@ class GoogleSheetsHelper {
   // ───────────────────────────────────────────────────────────────────────────
   static Future<List<List<String>>> loadClockInOutRecordsById(
       String spreadsheetId) async {
-    final client = await _getSheetsClient();
+    final client = await _getSheetsAuthClient(write: false);
     try {
       final sheetsApi = SheetsApi(client);
-      final result =
-      await sheetsApi.spreadsheets.values.get(spreadsheetId, '출퇴근기록!A2:G');
+      final result = await sheetsApi.spreadsheets.values.get(
+        spreadsheetId,
+        '출퇴근기록!A2:G',
+      );
       return _convertRows(result.values);
     } finally {
       client.close();
@@ -85,11 +142,13 @@ class GoogleSheetsHelper {
 
   static Future<List<List<String>>> loadBreakRecordsById(
       String spreadsheetId) async {
-    final client = await _getSheetsClient();
+    final client = await _getSheetsAuthClient(write: false);
     try {
       final sheetsApi = SheetsApi(client);
-      final result =
-      await sheetsApi.spreadsheets.values.get(spreadsheetId, '휴게기록!A2:G');
+      final result = await sheetsApi.spreadsheets.values.get(
+        spreadsheetId,
+        '휴게기록!A2:G',
+      );
       return _convertRows(result.values);
     } finally {
       client.close();
@@ -137,7 +196,7 @@ class GoogleSheetsHelper {
   }
 
   // ───────────────────────────────────────────────────────────────────────────
-  // 쓰기 API (단건 upsert) — 기존 호환 유지
+  // 쓰기 API (단건 upsert) — 기존 시그니처 유지
   // ───────────────────────────────────────────────────────────────────────────
   static Future<void> updateClockInOutRecordById({
     required String spreadsheetId,
@@ -149,13 +208,12 @@ class GoogleSheetsHelper {
     required String status, // '출근' | '퇴근'
     required String time,
   }) async {
-    final client = await _getSheetsClient();
+    final client = await _getSheetsAuthClient(write: true);
     try {
       final sheetsApi = SheetsApi(client);
 
       const range = '출퇴근기록!A2:G';
-      final response =
-      await sheetsApi.spreadsheets.values.get(spreadsheetId, range);
+      final response = await sheetsApi.spreadsheets.values.get(spreadsheetId, range);
       final rows = response.values ?? [];
 
       final targetDate = DateFormat('yyyy-MM-dd').format(date);
@@ -209,13 +267,12 @@ class GoogleSheetsHelper {
     required String division,
     required String time,
   }) async {
-    final client = await _getSheetsClient();
+    final client = await _getSheetsAuthClient(write: true);
     try {
       final sheetsApi = SheetsApi(client);
 
       const range = '휴게기록!A2:G';
-      final response =
-      await sheetsApi.spreadsheets.values.get(spreadsheetId, range);
+      final response = await sheetsApi.spreadsheets.values.get(spreadsheetId, range);
       final rows = response.values ?? [];
 
       final targetDate = DateFormat('yyyy-MM-dd').format(date);
@@ -270,7 +327,7 @@ class GoogleSheetsHelper {
   }) async {
     if (rows.isEmpty) return;
 
-    final client = await _getSheetsClient();
+    final client = await _getSheetsAuthClient(write: true);
     try {
       final api = SheetsApi(client);
       const range = '출퇴근기록!A2:G';
@@ -351,7 +408,7 @@ class GoogleSheetsHelper {
   }) async {
     if (rows.isEmpty) return;
 
-    final client = await _getSheetsClient();
+    final client = await _getSheetsAuthClient(write: true);
     try {
       final api = SheetsApi(client);
       const range = '휴게기록!A2:G';

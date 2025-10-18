@@ -1,19 +1,23 @@
 // lib/screens/dev_package/google_docs_doc_bottom_sheet.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle, Clipboard, HapticFeedback;
+import 'package:flutter/services.dart' show Clipboard, HapticFeedback;
 import 'package:googleapis/docs/v1.dart' as gdocs;
-import 'package:googleapis_auth/auth_io.dart';
+import 'package:googleapis_auth/googleapis_auth.dart' as auth;
 import 'package:shared_preferences/shared_preferences.dart';
+
+// ===== OAuth (google_sign_in v7.x + extension v3.x) =====
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
+// =======================================================
 
 import '../../utils/app_navigator.dart'; // navigatorKey 사용
 
-/// 드래그 가능한 플로팅 버블 + 풀높이(최상단) 바텀시트로
+/// 드래그 가능한 플로팅 버블 + 풀높이 바텀시트 UI로
 /// Google Docs 문서를 "플레인 텍스트"로 불러오고/저장하는 패널.
-///
 /// - 문서 생성 ❌ (기존 문서만 사용)
-/// - ID는 SharedPreferences에 저장/복원
-/// - 서비스 계정 인증(json 키 파일 필요)
+/// - 문서 ID는 SharedPreferences에 저장/복원
+/// - ✅ 인증 방식: OAuth (사용자 계정)
 class GoogleDocsDocPanel {
   GoogleDocsDocPanel._();
 
@@ -28,7 +32,6 @@ class GoogleDocsDocPanel {
 
   /// 앱 시작 시 한 번 호출(선택)
   static Future<void> init() async {
-    // 필요 시 부팅 시점에 enabled.value = true 로 기본 ON 설정 가능
     enabled.addListener(() {
       if (enabled.value) {
         _showOverlay();
@@ -147,6 +150,78 @@ class _GDocBubbleState extends State<_GDocBubble> {
   }
 }
 
+// ======================= OAuth 유틸 =======================
+
+/// ✅ GCP에서 만든 “웹 클라이언트 ID”(Web application) — Android에선 serverClientId로 사용
+const String _kWebClientId =
+    '470236709494-kgk29jdhi8ba25f7ujnqhpn8f22fhf25.apps.googleusercontent.com';
+
+/// Docs API 스코프
+const List<String> _kDocsScopes = <String>[
+  gdocs.DocsApi.documentsScope, // https://www.googleapis.com/auth/documents
+];
+
+bool _gsInitialized = false;
+Future<void> _ensureGsInitialized() async {
+  if (_gsInitialized) return;
+  try {
+    await GoogleSignIn.instance.initialize(serverClientId: _kWebClientId);
+  } catch (_) {
+    // 이미 초기화된 경우 등은 무시
+  }
+  _gsInitialized = true;
+}
+
+Future<GoogleSignInAccount> _waitForSignInEvent() async {
+  final signIn = GoogleSignIn.instance;
+  final completer = Completer<GoogleSignInAccount>();
+  late final StreamSubscription sub;
+
+  sub = signIn.authenticationEvents.listen((event) {
+    switch (event) {
+      case GoogleSignInAuthenticationEventSignIn():
+        if (!completer.isCompleted) completer.complete(event.user);
+      case GoogleSignInAuthenticationEventSignOut():
+        break;
+    }
+  }, onError: (e) {
+    if (!completer.isCompleted) completer.completeError(e);
+  });
+
+  try {
+    try {
+      await signIn.attemptLightweightAuthentication();
+    } catch (_) {}
+    if (signIn.supportsAuthenticate()) {
+      await signIn.authenticate();
+    }
+    final user = await completer.future
+        .timeout(const Duration(seconds: 90), onTimeout: () => throw Exception('Google 로그인 응답 시간 초과'));
+    return user;
+  } finally {
+    await sub.cancel();
+  }
+}
+
+/// OAuth 기반 AuthClient 생성
+Future<auth.AuthClient> _getAuthClientForDocs() async {
+  await _ensureGsInitialized();
+  final user = await _waitForSignInEvent();
+
+  var authorization = await user.authorizationClient.authorizationForScopes(_kDocsScopes);
+  authorization ??= await user.authorizationClient.authorizeScopes(_kDocsScopes);
+
+  return authorization.authClient(scopes: _kDocsScopes);
+}
+
+/// Docs API 핸들러
+Future<gdocs.DocsApi> _getDocsApiWithOAuth() async {
+  final client = await _getAuthClientForDocs();
+  return gdocs.DocsApi(client);
+}
+
+// ========================================================
+
 /// 풀높이 바텀시트 본문
 class _GoogleDocsDocBottomSheet extends StatefulWidget {
   const _GoogleDocsDocBottomSheet();
@@ -157,7 +232,6 @@ class _GoogleDocsDocBottomSheet extends StatefulWidget {
 
 class _GoogleDocsDocBottomSheetState extends State<_GoogleDocsDocBottomSheet> {
   static const _prefsDocIdKey = 'dev_google_docs_document_id';
-  static const _serviceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
   final _docIdCtrl = TextEditingController();
   final _editorCtrl = TextEditingController();
@@ -185,14 +259,6 @@ class _GoogleDocsDocBottomSheetState extends State<_GoogleDocsDocBottomSheet> {
     await p.setString(_prefsDocIdKey, _docIdCtrl.text.trim());
   }
 
-  Future<gdocs.DocsApi> _getDocsApi() async {
-    final json = await rootBundle.loadString(_serviceAccountPath);
-    final creds = ServiceAccountCredentials.fromJson(json);
-    const scopes = [gdocs.DocsApi.documentsScope]; // https://www.googleapis.com/auth/documents
-    final client = await clientViaServiceAccount(creds, scopes);
-    return gdocs.DocsApi(client);
-  }
-
   /// 문서 불러오기(기존 문서만)
   Future<void> _loadDocument() async {
     try {
@@ -200,7 +266,7 @@ class _GoogleDocsDocBottomSheetState extends State<_GoogleDocsDocBottomSheet> {
       final id = _docIdCtrl.text.trim();
       if (id.isEmpty) throw Exception('문서 ID를 입력해주세요.');
 
-      final api = await _getDocsApi();
+      final api = await _getDocsApiWithOAuth();
       final doc = await api.documents.get(id);
 
       final text = _flattenPlainText(doc);
@@ -231,7 +297,7 @@ class _GoogleDocsDocBottomSheetState extends State<_GoogleDocsDocBottomSheet> {
       final id = _docIdCtrl.text.trim();
       if (id.isEmpty) throw Exception('문서 ID를 입력해주세요.');
 
-      final api = await _getDocsApi();
+      final api = await _getDocsApiWithOAuth();
 
       // 현재 문서 길이를 알아내기 위해 get
       final doc = await api.documents.get(id);
@@ -352,13 +418,13 @@ class _GoogleDocsDocBottomSheetState extends State<_GoogleDocsDocBottomSheet> {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return FractionallySizedBox(
-      heightFactor: 1.0, // ⬅️ 최상단까지
+      heightFactor: 1.0,
       child: ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         child: Material(
           color: Colors.white,
           child: SafeArea(
-            top: false, // useSafeArea가 true이므로 내부 top은 false 유지
+            top: false,
             child: Padding(
               padding: EdgeInsets.only(bottom: bottomInset),
               child: Column(
@@ -380,20 +446,14 @@ class _GoogleDocsDocBottomSheetState extends State<_GoogleDocsDocBottomSheet> {
                           valueListenable: GoogleDocsDocPanel.enabled,
                           builder: (_, on, __) => Row(
                             children: [
-                              Text(
-                                on ? 'On' : 'Off',
-                                style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 12),
-                              ),
+                              Text(on ? 'On' : 'Off',
+                                  style: TextStyle(color: Theme.of(context).colorScheme.outline, fontSize: 12)),
                               const SizedBox(width: 6),
-                              Switch(
-                                value: on,
-                                onChanged: (v) => GoogleDocsDocPanel.enabled.value = v,
-                              ),
+                              Switch(value: on, onChanged: (v) => GoogleDocsDocPanel.enabled.value = v),
                             ],
                           ),
                         ),
-                        if (_busy)
-                          const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                        if (_busy) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
                         IconButton(
                           tooltip: '닫기',
                           icon: const Icon(Icons.close_rounded),
@@ -418,13 +478,12 @@ class _GoogleDocsDocBottomSheetState extends State<_GoogleDocsDocBottomSheet> {
                             // ID 입력 (+ 잠금)
                             TextField(
                               controller: _docIdCtrl,
-                              readOnly: _idLocked, // ✅ 잠금 시 편집 불가
+                              readOnly: _idLocked,
                               decoration: InputDecoration(
                                 labelText: '문서 ID',
                                 hintText: '1A2B3C... (문서 URL의 /d/ 와 /edit 사이)',
                                 border: const OutlineInputBorder(),
                                 isDense: true,
-                                // ✅ 잠금 토글 버튼
                                 suffixIcon: IconButton(
                                   tooltip: _idLocked ? 'ID 잠금 해제' : 'ID 잠금',
                                   icon: Icon(_idLocked ? Icons.lock : Icons.lock_open),
@@ -434,17 +493,15 @@ class _GoogleDocsDocBottomSheetState extends State<_GoogleDocsDocBottomSheet> {
                               onSubmitted: (_) async {
                                 if (_idLocked) {
                                   if (!mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('잠금을 해제한 뒤 ID를 수정하세요.')),
-                                  );
+                                  ScaffoldMessenger.of(context)
+                                      .showSnackBar(const SnackBar(content: Text('잠금을 해제한 뒤 ID를 수정하세요.')));
                                   return;
                                 }
                                 await _savePrefs();
                                 HapticFeedback.selectionClick();
                                 if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('문서 ID를 저장했습니다.')),
-                                  );
+                                  ScaffoldMessenger.of(context)
+                                      .showSnackBar(const SnackBar(content: Text('문서 ID를 저장했습니다.')));
                                 }
                               },
                             ),
@@ -453,7 +510,6 @@ class _GoogleDocsDocBottomSheetState extends State<_GoogleDocsDocBottomSheet> {
                               spacing: 8,
                               runSpacing: 8,
                               children: [
-                                // 붙여넣기 (잠금 시 비활성화)
                                 Tooltip(
                                   message: _idLocked ? '잠금 해제 후 붙여넣기 가능' : '클립보드에서 붙여넣기',
                                   child: OutlinedButton.icon(
@@ -469,8 +525,7 @@ class _GoogleDocsDocBottomSheetState extends State<_GoogleDocsDocBottomSheet> {
                                         await _savePrefs();
                                         if (mounted) {
                                           ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(content: Text('문서 ID를 저장했습니다.')),
-                                          );
+                                              const SnackBar(content: Text('문서 ID를 저장했습니다.')));
                                         }
                                       }
                                     },
@@ -490,7 +545,7 @@ class _GoogleDocsDocBottomSheetState extends State<_GoogleDocsDocBottomSheet> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              _lastMessage ?? '서비스 계정에 해당 문서의 편집 권한이 있어야 합니다.',
+                              _lastMessage ?? '현재 로그인한 Google 계정이 문서에 접근/편집 권한을 가지고 있어야 합니다.',
                               style: TextStyle(color: Colors.black.withOpacity(0.6), fontSize: 12),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
@@ -507,8 +562,7 @@ class _GoogleDocsDocBottomSheetState extends State<_GoogleDocsDocBottomSheet> {
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                       child: Stack(
                         children: [
-                          TextField
-                            (
+                          TextField(
                             controller: _editorCtrl,
                             expands: true,
                             maxLines: null,
