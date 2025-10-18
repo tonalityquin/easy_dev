@@ -99,7 +99,6 @@ flutter:
     - assets/icons/icon_easyvalet.PNG
     - assets/icons/app_icon.png        # 런처 아이콘 원본을 앱 내에서도 쓸 거면 유지, 아니면 삭제해도 됨
     - assets/icons/app_icon_ios.png
-    - assets/keys/easydev-97fb6-e31d7e6b30f9.json
     - assets/tutorials/
 
 
