@@ -1,4 +1,4 @@
-// lib/screens/head_package/labors/statement_form_page.dart
+// lib/screens/type_package/common_widgets/dashboard_bottom_sheet/statement_form_page.dart
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -12,9 +12,10 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:googleapis/gmail/v1.dart' as gmail;
 
 // ✅ v7 호환 레이어(전역 세션에서 AuthClient 재사용)
-import '../../../utils/google_auth_v7.dart';
+// (현재 파일 위치에서 utils 까지의 상대경로: ../../../../utils/)
+import '../../../../utils/google_auth_v7.dart';
 // ✅ 수신자(To)만 저장소에서 로드
-import '../../../utils/email_config.dart';
+import '../../../../utils/email_config.dart';
 
 class StatementFormPage extends StatefulWidget {
   const StatementFormPage({super.key});
@@ -323,8 +324,6 @@ class _StatementFormPageState extends State<StatementFormPage> {
         : pw.ThemeData.base();
 
     final doc = pw.Document();
-    final now = DateTime.now();
-
     final fields = <MapEntry<String, String>>[
       MapEntry('소속', _deptCtrl.text),
       MapEntry('성명', _nameCtrl.text),
@@ -441,7 +440,7 @@ class _StatementFormPageState extends State<StatementFormPage> {
         footer: (context) => pw.Align(
           alignment: pw.Alignment.centerRight,
           child: pw.Text(
-            '생성 시각: ${_fmtCompact(now)}',
+            '생성 시각: ${_fmtCompact(DateTime.now())}',
             style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
           ),
         ),
@@ -462,8 +461,7 @@ class _StatementFormPageState extends State<StatementFormPage> {
     final client = await GoogleAuthV7.authedClient(const <String>[]);
     final api = gmail.GmailApi(client);
 
-    final boundary =
-        'dart-mail-boundary-${DateTime.now().millisecondsSinceEpoch}';
+    final boundary = 'dart-mail-boundary-${DateTime.now().millisecondsSinceEpoch}';
     final subjectB64 = base64.encode(utf8.encode(subject));
     final sb = StringBuffer()
       ..writeln('To: $to')
@@ -587,8 +585,7 @@ class _StatementFormPageState extends State<StatementFormPage> {
                       ),
                       textInputAction: TextInputAction.next,
                       onFieldSubmitted: (_) => _nameNode.requestFocus(),
-                      validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? '소속을 입력하세요.' : null,
+                      validator: (v) => (v == null || v.trim().isEmpty) ? '소속을 입력하세요.' : null,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -611,8 +608,7 @@ class _StatementFormPageState extends State<StatementFormPage> {
                       ),
                       textInputAction: TextInputAction.next,
                       onFieldSubmitted: (_) => _positionNode.requestFocus(),
-                      validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? '성명을 입력하세요.' : null,
+                      validator: (v) => (v == null || v.trim().isEmpty) ? '성명을 입력하세요.' : null,
                     ),
                   ),
                 ],
@@ -631,13 +627,11 @@ class _StatementFormPageState extends State<StatementFormPage> {
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  contentPadding:
-                  const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
                 ),
                 textInputAction: TextInputAction.next,
                 onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
-                validator: (v) =>
-                (v == null || v.trim().isEmpty) ? '직책을 입력하세요.' : null,
+                validator: (v) => (v == null || v.trim().isEmpty) ? '직책을 입력하세요.' : null,
               ),
               _gap(12),
 
@@ -664,25 +658,20 @@ class _StatementFormPageState extends State<StatementFormPage> {
                   filled: true,
                   fillColor: cs.surfaceVariant.withOpacity(.35),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  contentPadding:
-                  const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
                 ),
                 keyboardType: TextInputType.multiline,
                 minLines: 8,
                 maxLines: 16,
-                validator: (v) =>
-                (v == null || v.trim().isEmpty) ? '내용을 입력하세요.' : null,
+                validator: (v) => (v == null || v.trim().isEmpty) ? '내용을 입력하세요.' : null,
               ),
 
               _gap(20),
 
-              // ✉️ 메일 전송 내용 (이 화면에서 작성)
+              // ✉️ 메일 전송 내용
               Text(
                 '메일 전송 내용',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w600),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
               TextFormField(
@@ -693,12 +682,10 @@ class _StatementFormPageState extends State<StatementFormPage> {
                   filled: true,
                   fillColor: cs.surfaceVariant.withOpacity(.35),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  contentPadding:
-                  const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
                 ),
                 textInputAction: TextInputAction.next,
-                validator: (v) =>
-                (v == null || v.trim().isEmpty) ? '메일 제목을 입력하세요.' : null,
+                validator: (v) => (v == null || v.trim().isEmpty) ? '메일 제목을 입력하세요.' : null,
               ),
               const SizedBox(height: 8),
               TextFormField(
@@ -709,8 +696,7 @@ class _StatementFormPageState extends State<StatementFormPage> {
                   filled: true,
                   fillColor: cs.surfaceVariant.withOpacity(.35),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  contentPadding:
-                  const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
                 ),
                 minLines: 3,
                 maxLines: 8,
@@ -721,10 +707,7 @@ class _StatementFormPageState extends State<StatementFormPage> {
               // 전자서명 섹션
               Text(
                 '전자서명',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w600),
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
 

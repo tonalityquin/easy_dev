@@ -1,14 +1,16 @@
-// lib/screens/.../HqDashBoardPage.dart
+// lib/screens/type_package/common_widgets/dashboard_bottom_sheet/hq_dash_board_page.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../../states/user/user_state.dart';
 
-import '../../../../utils/external_openers.dart';
 import '../../../../utils/logout_helper.dart';
 import 'home_dash_board_controller.dart';
 import 'widgets/home_user_info_card.dart';
 import 'widgets/home_break_button_widget.dart';
+
+// ✅ 서류함 바텀시트 오픈 (같은 폴더)
+import 'document_box_sheet.dart';
 
 class HqDashBoardPage extends StatefulWidget {
   const HqDashBoardPage({super.key});
@@ -88,14 +90,14 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
                       ),
                       const SizedBox(height: 16),
 
-                      // 3) Gmail 열기
+                      // 3) 서류함 열기 — 사용자 전용 인벤토리(바텀시트) 열기
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
-                          icon: const Icon(Icons.email),
-                          label: const Text('Gmail 열기'),
-                          style: _gmailBtnStyle(),
-                          onPressed: () => openGmailInbox(context),
+                          icon: const Icon(Icons.folder_open),
+                          label: const Text('서류함 열기'),
+                          style: _docBoxBtnStyle(),
+                          onPressed: () => openDocumentBox(context),
                         ),
                       ),
                     ],
@@ -150,7 +152,7 @@ ButtonStyle _logoutBtnStyle() {
   );
 }
 
-ButtonStyle _gmailBtnStyle() {
+ButtonStyle _docBoxBtnStyle() {
   return ElevatedButton.styleFrom(
     backgroundColor: Colors.white,
     foregroundColor: Colors.black,
