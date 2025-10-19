@@ -13,6 +13,8 @@ import 'package:googleapis/gmail/v1.dart' as gmail;
 
 // ✅ v7 호환 레이어(전역 세션에서 AuthClient 재사용)
 import '../../../utils/google_auth_v7.dart';
+// ✅ 수신자(To)만 저장소에서 로드
+import '../../../utils/email_config.dart';
 
 class StatementFormPage extends StatefulWidget {
   const StatementFormPage({super.key});
@@ -24,7 +26,7 @@ class StatementFormPage extends StatefulWidget {
 class _StatementFormPageState extends State<StatementFormPage> {
   final _formKey = GlobalKey<FormState>();
 
-  // Controllers
+  // 본문 입력 컨트롤러들
   final _writerCtrl = TextEditingController();
   final _deptCtrl = TextEditingController();
   final _contactCtrl = TextEditingController();
@@ -33,6 +35,10 @@ class _StatementFormPageState extends State<StatementFormPage> {
   final _peopleCtrl = TextEditingController();
   final _detailCtrl = TextEditingController();
   final _preventionCtrl = TextEditingController();
+
+  // ✉️ 메일 제목/본문(이 화면에서 직접 작성)
+  final _mailSubjectCtrl = TextEditingController();
+  final _mailBodyCtrl = TextEditingController();
 
   DateTime? _eventDateTime;
 
@@ -55,7 +61,6 @@ class _StatementFormPageState extends State<StatementFormPage> {
   @override
   void initState() {
     super.initState();
-    // 작성자가 바뀌면 서명자 라벨 갱신
     _writerCtrl.addListener(() => setState(() {}));
   }
 
@@ -69,6 +74,8 @@ class _StatementFormPageState extends State<StatementFormPage> {
     _peopleCtrl.dispose();
     _detailCtrl.dispose();
     _preventionCtrl.dispose();
+    _mailSubjectCtrl.dispose();
+    _mailBodyCtrl.dispose();
 
     _writerNode.dispose();
     _deptNode.dispose();
@@ -113,7 +120,7 @@ class _StatementFormPageState extends State<StatementFormPage> {
       context: context,
       initialTime: TimeOfDay.fromDateTime(_eventDateTime ?? now),
       builder: (ctx, child) => MediaQuery(
-        data: MediaQuery.of(ctx!).copyWith(alwaysUse24HourFormat: true),
+        data: MediaQuery.of(ctx).copyWith(alwaysUse24HourFormat: true),
         child: child!,
       ),
     );
@@ -134,6 +141,8 @@ class _StatementFormPageState extends State<StatementFormPage> {
     _peopleCtrl.clear();
     _detailCtrl.clear();
     _preventionCtrl.clear();
+    _mailSubjectCtrl.clear();
+    _mailBodyCtrl.clear();
     setState(() {
       _eventDateTime = null;
       _signaturePngBytes = null;
@@ -165,6 +174,9 @@ class _StatementFormPageState extends State<StatementFormPage> {
       '',
       signInfo,
       '작성일: ${_fmtDT(context, DateTime.now())}',
+      '',
+      '※ 메일 제목: ${_mailSubjectCtrl.text}',
+      '※ 메일 본문: ${_mailBodyCtrl.text}',
     ].join('\n');
   }
 
@@ -227,16 +239,44 @@ class _StatementFormPageState extends State<StatementFormPage> {
 
     setState(() => _sending = true);
     try {
+      // ① 저장된 수신자(To) 로드 및 검증
+      final cfg = await EmailConfig.load();
+      if (!EmailConfig.isValidToList(cfg.to)) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('수신자(To)가 비어있거나 형식이 올바르지 않습니다. 설정에서 수신자를 저장해 주세요.')),
+        );
+        return;
+      }
+      final toCsv = cfg.to
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .join(', ');
+
+      // ② 이 화면에서 입력한 메일 제목/본문 확보(제목 필수)
+      final subject = _mailSubjectCtrl.text.trim();
+      final body = _mailBodyCtrl.text.trim();
+      if (subject.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('메일 제목을 입력해 주세요.')),
+        );
+        return;
+      }
+
+      // ③ PDF 생성
       final pdfBytes = await _buildPdfBytes();
       final filename =
       _safeFileName(_titleCtrl.text.isEmpty ? '경위서' : _titleCtrl.text);
 
+      // ④ Gmail API 전송
       await _sendEmailViaGmail(
         pdfBytes: pdfBytes,
         filename: '$filename.pdf',
-        to: 'belivus150119@gmail.com',
-        subject: '경위서',
-        body: '경위서임.',
+        to: toCsv,
+        subject: subject,
+        body: body,
       );
 
       if (!mounted) return;
@@ -258,33 +298,29 @@ class _StatementFormPageState extends State<StatementFormPage> {
     return s.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
   }
 
-  // -------------------- PDF 생성 (여기서만 NotoSansKR 사용) --------------------
+  // -------------------- PDF 생성 --------------------
   Future<Uint8List> _buildPdfBytes() async {
     pw.Font? regular;
     pw.Font? bold;
 
-    // ⬇ PDF에서만 assets/fonts/NotoSansKR/... 경로를 로드
     try {
       final regData =
       await rootBundle.load('assets/fonts/NotoSansKR/NotoSansKR-Regular.ttf');
       regular = pw.Font.ttf(regData);
-    } catch (_) {
-      // 로드 실패 시 null 유지 → 기본 폰트 사용
-    }
+    } catch (_) {}
 
     try {
       final boldData =
       await rootBundle.load('assets/fonts/NotoSansKR/NotoSansKR-Bold.ttf');
       bold = pw.Font.ttf(boldData);
     } catch (_) {
-      // Bold가 없으면 Regular로 대체
       bold = regular;
     }
 
     final theme = (regular != null)
         ? pw.ThemeData.withFont(
         base: regular, bold: bold ?? regular, italic: regular, boldItalic: bold ?? regular)
-        : pw.ThemeData.base(); // 폰트가 없으면 기본 폰트(한글 깨질 수 있음)
+        : pw.ThemeData.base();
 
     final doc = pw.Document();
 
@@ -327,9 +363,7 @@ class _StatementFormPageState extends State<StatementFormPage> {
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         pw.SizedBox(height: 8),
-        pw.Text(title,
-            style: pw.TextStyle(
-                fontSize: 13, fontWeight: pw.FontWeight.bold)),
+        pw.Text(title, style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 4),
         pw.Container(
           width: double.infinity,
@@ -338,33 +372,26 @@ class _StatementFormPageState extends State<StatementFormPage> {
             border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
             borderRadius: pw.BorderRadius.circular(4),
           ),
-          child: pw.Text(body.isEmpty ? '-' : body,
-              style: const pw.TextStyle(fontSize: 11)),
+          child: pw.Text(body.isEmpty ? '-' : body, style: const pw.TextStyle(fontSize: 11)),
         ),
       ],
     );
 
     pw.Widget buildSignature() {
       final name = _signerName.isEmpty ? '이름 미입력' : _signerName;
-      final timeText =
-      _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
+      final timeText = _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
 
       return pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.SizedBox(height: 8),
-          pw.Text('전자서명',
-              style: pw.TextStyle(
-                  fontSize: 13, fontWeight: pw.FontWeight.bold)),
+          pw.Text('전자서명', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 4),
           pw.Row(
             children: [
-              pw.Expanded(
-                  child: pw.Text('서명자: $name',
-                      style: const pw.TextStyle(fontSize: 11))),
+              pw.Expanded(child: pw.Text('서명자: $name', style: const pw.TextStyle(fontSize: 11))),
               pw.SizedBox(width: 8),
-              pw.Text('서명 일시: $timeText',
-                  style: const pw.TextStyle(fontSize: 11)),
+              pw.Text('서명 일시: $timeText', style: const pw.TextStyle(fontSize: 11)),
             ],
           ),
           pw.SizedBox(height: 4),
@@ -378,8 +405,7 @@ class _StatementFormPageState extends State<StatementFormPage> {
             child: _signaturePngBytes == null
                 ? pw.Center(
                 child: pw.Text('서명 이미지 없음',
-                    style: const pw.TextStyle(
-                        fontSize: 10, color: PdfColors.grey)))
+                    style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey)))
                 : pw.Padding(
               padding: const pw.EdgeInsets.all(6),
               child: pw.Image(
@@ -400,8 +426,7 @@ class _StatementFormPageState extends State<StatementFormPage> {
         build: (context) => [
           pw.Center(
             child: pw.Text('경위서',
-                style: pw.TextStyle(
-                    fontSize: 20, fontWeight: pw.FontWeight.bold)),
+                style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
           ),
           pw.SizedBox(height: 12),
           buildFieldTable(),
@@ -428,16 +453,12 @@ class _StatementFormPageState extends State<StatementFormPage> {
     required String subject,
     required String body,
   }) async {
-    // ✅ 전역 세션에서 승인된 AuthClient(http.Client) 획득
     final client = await GoogleAuthV7.authedClient(const <String>[]);
-
-    // Gmail API 클라이언트
     final api = gmail.GmailApi(client);
 
-    // 멀티파트 MIME 작성
     final boundary =
         'dart-mail-boundary-${DateTime.now().millisecondsSinceEpoch}';
-    final subjectB64 = base64.encode(utf8.encode(subject)); // 제목 인코딩
+    final subjectB64 = base64.encode(utf8.encode(subject));
     final sb = StringBuffer()
       ..writeln('To: $to')
       ..writeln('Subject: =?utf-8?B?$subjectB64?=')
@@ -458,9 +479,8 @@ class _StatementFormPageState extends State<StatementFormPage> {
       ..writeln(base64.encode(pdfBytes))
       ..writeln('--$boundary--');
 
-    // Gmail API는 base64url(raw) 요구(= URL-safe + padding 제거)
-    final raw = base64UrlEncode(utf8.encode(sb.toString())).replaceAll('=', '');
-
+    final raw =
+    base64UrlEncode(utf8.encode(sb.toString())).replaceAll('=', '');
     final msg = gmail.Message()..raw = raw;
     await api.users.messages.send(msg, 'me');
   }
@@ -716,6 +736,48 @@ class _StatementFormPageState extends State<StatementFormPage> {
 
               _gap(20),
 
+              // ✉️ 메일 전송 내용 (이 화면에서 작성)
+              Text(
+                '메일 전송 내용',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _mailSubjectCtrl,
+                decoration: InputDecoration(
+                  labelText: '메일 제목(필수)',
+                  hintText: '예: 경위서 – 10월 18일 장비 파손 건',
+                  filled: true,
+                  fillColor: cs.surfaceVariant.withOpacity(.35),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding:
+                  const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                ),
+                textInputAction: TextInputAction.next,
+                validator: (v) =>
+                (v == null || v.trim().isEmpty) ? '메일 제목을 입력하세요.' : null,
+              ),
+              const SizedBox(height: 8),
+              TextFormField(
+                controller: _mailBodyCtrl,
+                decoration: InputDecoration(
+                  labelText: '메일 본문',
+                  hintText: '메일 본문을 입력하세요. (선택)',
+                  filled: true,
+                  fillColor: cs.surfaceVariant.withOpacity(.35),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  contentPadding:
+                  const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+                ),
+                minLines: 3,
+                maxLines: 8,
+              ),
+
+              _gap(20),
+
               // 전자서명 섹션
               Text(
                 '전자서명',
@@ -727,8 +789,7 @@ class _StatementFormPageState extends State<StatementFormPage> {
               const SizedBox(height: 8),
 
               Container(
-                padding:
-                const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                 decoration: BoxDecoration(
                   color: cs.surfaceVariant.withOpacity(.35),
                   borderRadius: BorderRadius.circular(12),
@@ -775,7 +836,6 @@ class _StatementFormPageState extends State<StatementFormPage> {
               ),
               const SizedBox(height: 8),
 
-              // 저장된 서명 미리보기(있을 때만)
               if (_signaturePngBytes != null)
                 Container(
                   decoration: BoxDecoration(
@@ -839,7 +899,7 @@ class _StatementFormPageState extends State<StatementFormPage> {
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
- * 풀스크린 서명 다이얼로그 (실시간 서명 영역)
+ * 풀스크린 서명 다이얼로그
  * ──────────────────────────────────────────────────────────────────────────── */
 class _SignatureFullScreenDialog extends StatefulWidget {
   const _SignatureFullScreenDialog({
@@ -964,12 +1024,10 @@ class _SignatureFullScreenDialogState
           ),
           body: Column(
             children: [
-              // 상단 정보 바(오버플로우 방지)
+              // 상단 정보 바
               Container(
-                padding:
-                const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-                decoration: BoxDecoration(
-                    color: cs.surfaceVariant.withOpacity(.35)),
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                decoration: BoxDecoration(color: cs.surfaceVariant.withOpacity(.35)),
                 child: Row(
                   children: [
                     Expanded(
@@ -1007,8 +1065,7 @@ class _SignatureFullScreenDialogState
                     ),
                     const SizedBox(width: 8),
                     TextButton.icon(
-                      onPressed: () =>
-                          setState(() => _signDateTime = DateTime.now()),
+                      onPressed: () => setState(() => _signDateTime = DateTime.now()),
                       icon: const Icon(Icons.schedule),
                       label: const Text('지금'),
                     ),
@@ -1016,7 +1073,7 @@ class _SignatureFullScreenDialogState
                 ),
               ),
 
-              // 실시간 서명 영역
+              // 서명 영역
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(12),
@@ -1028,10 +1085,8 @@ class _SignatureFullScreenDialogState
                         builder: (context, constraints) {
                           return GestureDetector(
                             behavior: HitTestBehavior.translucent,
-                            onPanStart: (d) =>
-                                setState(() => _points.add(d.localPosition)),
-                            onPanUpdate: (d) =>
-                                setState(() => _points.add(d.localPosition)),
+                            onPanStart: (d) => setState(() => _points.add(d.localPosition)),
+                            onPanUpdate: (d) => setState(() => _points.add(d.localPosition)),
                             onPanEnd: (_) => setState(() => _points.add(null)),
                             child: CustomPaint(
                               painter: _SignaturePainter(

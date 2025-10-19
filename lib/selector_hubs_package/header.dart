@@ -4,9 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
-// ▼ 추가: 시트 ID 관련 유틸 & 스낵바 헬퍼
+// ▼ 시트 ID 관련 유틸 & 스낵바 헬퍼
 import '../../utils/sheets_config.dart';
 import '../../utils/snackbar_helper.dart';
+
+// ▼ Gmail 수신자 로컬 설정 (To 만 저장)
+import '../../utils/email_config.dart';
 
 class Header extends StatefulWidget {
   const Header({super.key});
@@ -59,17 +62,14 @@ class _TopRow extends StatelessWidget {
   final bool expanded;
   final VoidCallback onToggle;
 
-  // 앱 종료 처리:
-  // 1) Android: flutter_foreground_task가 실행 중이면 중지 시도 → 앱 종료
-  // 2) 그 외: 바로 앱 종료 (iOS는 정책상 완전 종료가 보장되지 않을 수 있음)
+  // 앱 종료 처리
   Future<void> _exitApp(BuildContext context) async {
     try {
       if (Platform.isAndroid) {
         bool running = false;
         try {
           running = await FlutterForegroundTask.isRunningService;
-        } catch (_) { /* 일부 기기에서 조회 실패 가능 → 무시 */ }
-
+        } catch (_) {}
         if (running) {
           try {
             final stopped = await FlutterForegroundTask.stopService();
@@ -96,7 +96,7 @@ class _TopRow extends StatelessWidget {
     }
   }
 
-  // ▼ 추가: “설정” 바텀시트 (최상단까지) — 두 시트(업로드/업무종료) 한 번에 관리
+  // “설정” 바텀시트 — Google Sheets + Gmail(수신자만)
   Future<void> _openSheetsLinkSheet(BuildContext context) async {
     // 현재 저장된 값 선조회
     final commuteCurrent = await SheetsConfig.getCommuteSheetId();
@@ -104,6 +104,10 @@ class _TopRow extends StatelessWidget {
 
     final commuteCtrl = TextEditingController(text: commuteCurrent ?? '');
     final endReportCtrl = TextEditingController(text: endReportCurrent ?? '');
+
+    // Gmail 수신자 로드 (To 만)
+    final emailCfg = await EmailConfig.load();
+    final mailToCtrl = TextEditingController(text: emailCfg.to);
 
     await showModalBottomSheet(
       context: context,
@@ -117,15 +121,13 @@ class _TopRow extends StatelessWidget {
           maxChildSize: 1.0,
           minChildSize: 0.4,
           builder: (ctx, sc) {
-            // StatefulBuilder로 내부 setState(시트 상태) 사용
             return StatefulBuilder(
               builder: (ctx, setSheetState) {
-                // 공통 섹션 위젯 빌더
+                // 공통 섹션(시트)
                 Widget buildSheetSection({
                   required IconData icon,
                   required String title,
                   required TextEditingController controller,
-                  required String? currentValue,
                   required Future<void> Function(String id) onSave,
                   required Future<void> Function() onClear,
                 }) {
@@ -161,30 +163,48 @@ class _TopRow extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            // 현재값 복사 / 초기화
-                            IconButton(
-                              tooltip: '복사',
-                              onPressed: (currentValue == null || currentValue.isEmpty)
-                                  ? null
-                                  : () async {
-                                await Clipboard.setData(ClipboardData(text: currentValue));
-                                if (!ctx.mounted) return;
-                                showSuccessSnackbar(context, '현재 ID를 복사했습니다.');
+                            // 현재 입력값 기준으로 복사/초기화 활성화
+                            ValueListenableBuilder<TextEditingValue>(
+                              valueListenable: controller,
+                              builder: (ctx2, value, _) {
+                                final hasText = value.text.trim().isNotEmpty;
+                                return Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      tooltip: '복사',
+                                      onPressed: hasText
+                                          ? () async {
+                                        await Clipboard.setData(
+                                            ClipboardData(
+                                                text: value.text));
+                                        if (!ctx.mounted) return;
+                                        showSuccessSnackbar(
+                                            context, '현재 입력값을 복사했습니다.');
+                                      }
+                                          : null,
+                                      icon: const Icon(Icons.copy_rounded,
+                                          color: Colors.black87),
+                                    ),
+                                    IconButton(
+                                      tooltip: '초기화',
+                                      onPressed: hasText
+                                          ? () async {
+                                        await onClear();
+                                        controller.text = '';
+                                        setSheetState(() {});
+                                        if (!ctx.mounted) return;
+                                        showSelectedSnackbar(
+                                            context, 'ID를 초기화했습니다.');
+                                      }
+                                          : null,
+                                      icon: const Icon(
+                                          Icons.delete_outline_rounded,
+                                          color: Colors.black87),
+                                    ),
+                                  ],
+                                );
                               },
-                              icon: const Icon(Icons.copy_rounded, color: Colors.black87),
-                            ),
-                            IconButton(
-                              tooltip: '초기화',
-                              onPressed: (currentValue == null || currentValue.isEmpty)
-                                  ? null
-                                  : () async {
-                                await onClear();
-                                if (!ctx.mounted) return;
-                                controller.text = '';
-                                setSheetState(() {}); // 버튼 활성/비활성 갱신
-                                showSelectedSnackbar(context, 'ID를 초기화했습니다.');
-                              },
-                              icon: const Icon(Icons.delete_outline_rounded, color: Colors.black87),
                             ),
                           ],
                         ),
@@ -210,9 +230,11 @@ class _TopRow extends StatelessWidget {
                                 onPressed: () async {
                                   final raw = controller.text.trim();
                                   if (raw.isEmpty) return;
-                                  await Clipboard.setData(ClipboardData(text: raw));
+                                  await Clipboard.setData(
+                                      ClipboardData(text: raw));
                                   if (!ctx.mounted) return;
-                                  showSuccessSnackbar(context, '입력값을 복사했습니다.');
+                                  showSuccessSnackbar(
+                                      context, '입력값을 복사했습니다.');
                                 },
                                 label: const Text('입력값 복사'),
                               ),
@@ -224,11 +246,11 @@ class _TopRow extends StatelessWidget {
                                 onPressed: () async {
                                   final raw = controller.text.trim();
                                   if (raw.isEmpty) return;
-                                  final id = SheetsConfig.extractSpreadsheetId(raw);
+                                  final id =
+                                  SheetsConfig.extractSpreadsheetId(raw);
                                   await onSave(id);
                                   if (!ctx.mounted) return;
                                   showSuccessSnackbar(context, '저장되었습니다.');
-                                  // 상단 현재값/버튼 상태 갱신
                                   setSheetState(() {});
                                 },
                                 style: ElevatedButton.styleFrom(
@@ -245,6 +267,123 @@ class _TopRow extends StatelessWidget {
                   );
                 }
 
+                // Gmail 수신자 섹션(To 만)
+                Widget buildGmailSection() {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.black.withOpacity(.08)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(.06),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(Icons.mail_outline,
+                                  size: 20, color: Colors.black87),
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Text(
+                                '메일 전송 설정 (수신자만)',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: '기본값으로 초기화',
+                              onPressed: () async {
+                                await EmailConfig.clear(); // 수신자 빈 값으로 복원
+                                final cfg = await EmailConfig.load();
+                                mailToCtrl.text = cfg.to;
+                                if (!ctx.mounted) return;
+                                showSelectedSnackbar(context, '수신자를 기본값(빈 값)으로 복원했습니다.');
+                              },
+                              icon: const Icon(Icons.restore,
+                                  color: Colors.black87),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+
+                        TextField(
+                          controller: mailToCtrl,
+                          keyboardType: TextInputType.emailAddress,
+                          textInputAction: TextInputAction.done,
+                          decoration: const InputDecoration(
+                            labelText: '수신자(To)',
+                            border: OutlineInputBorder(),
+                            prefixIcon:
+                            Icon(Icons.person_add_alt_1_outlined),
+                            helperText:
+                            '쉼표로 여러 명 입력 가능 (예: a@x.com, b@y.com)',
+                          ),
+                          onSubmitted: (_) => FocusScope.of(ctx).unfocus(),
+                        ),
+                        const SizedBox(height: 12),
+
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                icon: const Icon(Icons.check_circle_outline),
+                                onPressed: () async {
+                                  final to = mailToCtrl.text.trim();
+                                  if (!EmailConfig.isValidToList(to)) {
+                                    if (!ctx.mounted) return;
+                                    showFailedSnackbar(context,
+                                        '수신자 이메일 형식을 확인해 주세요.');
+                                    return;
+                                  }
+                                  await EmailConfig.save(
+                                      EmailConfig(to: to));
+                                  if (!ctx.mounted) return;
+                                  showSuccessSnackbar(
+                                      context, '수신자 설정을 저장했습니다.');
+                                },
+                                label: const Text('저장'),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                icon: const Icon(Icons.copy_all_outlined),
+                                onPressed: () async {
+                                  final raw = 'To: ${mailToCtrl.text}';
+                                  await Clipboard.setData(
+                                      ClipboardData(text: raw));
+                                  if (!ctx.mounted) return;
+                                  showSuccessSnackbar(
+                                      context, '현재 수신자 설정을 복사했습니다.');
+                                },
+                                label: const Text('설정 복사'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        const Text(
+                          '※ 저장되는 항목은 수신자(To)뿐입니다. 메일 제목·본문은 경위서 화면에서 작성합니다.',
+                          style:
+                          TextStyle(fontSize: 12, color: Colors.black54),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
                 return SingleChildScrollView(
                   controller: sc,
                   child: Padding(
@@ -252,7 +391,8 @@ class _TopRow extends StatelessWidget {
                       left: 16,
                       right: 16,
                       top: 16,
-                      bottom: MediaQuery.of(ctx).viewInsets.bottom + 24, // 키보드 패딩
+                      bottom:
+                      MediaQuery.of(ctx).viewInsets.bottom + 24,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -279,7 +419,8 @@ class _TopRow extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Divider(height: 1, color: Colors.black.withOpacity(.08)),
+                        Divider(height: 1,
+                            color: Colors.black.withOpacity(.08)),
                         const SizedBox(height: 16),
 
                         // 업로드용 Google Sheets
@@ -287,10 +428,8 @@ class _TopRow extends StatelessWidget {
                           icon: Icons.assignment_outlined,
                           title: '업로드용 Google Sheets',
                           controller: commuteCtrl,
-                          currentValue: commuteCurrent,
                           onSave: (id) async {
                             await SheetsConfig.setCommuteSheetId(id);
-                            // 최신 현재값으로 갱신
                             final cur = await SheetsConfig.getCommuteSheetId();
                             commuteCtrl.text = cur ?? '';
                           },
@@ -304,16 +443,19 @@ class _TopRow extends StatelessWidget {
                           icon: Icons.assignment_turned_in_outlined,
                           title: '업무 종료 보고용 Google Sheets',
                           controller: endReportCtrl,
-                          currentValue: endReportCurrent,
                           onSave: (id) async {
                             await SheetsConfig.setEndReportSheetId(id);
-                            final cur = await SheetsConfig.getEndReportSheetId();
+                            final cur =
+                            await SheetsConfig.getEndReportSheetId();
                             endReportCtrl.text = cur ?? '';
                           },
                           onClear: () async {
                             await SheetsConfig.clearEndReportSheetId();
                           },
                         ),
+
+                        // Gmail 수신자(To) 설정
+                        buildGmailSection(),
                       ],
                     ),
                   ),
@@ -328,42 +470,35 @@ class _TopRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 버튼 자체가 가로로 줄 수 있도록 Flexible 로 감싸고,
-    // 폭을 직접 애니메이션하지 않고 Size/Fade로 등장·퇴장시킵니다.
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // 왼쪽: 설정 (바텀시트 열기)
         _AnimatedSide(
           show: expanded,
-          axisAlignment: -1.0, // 왼쪽에서 펼쳐지는 느낌
+          axisAlignment: -1.0,
           child: FilledButton.icon(
             onPressed: () => _openSheetsLinkSheet(context),
             style: FilledButton.styleFrom(
-              minimumSize: const Size(0, 40),       // 가로 최소=0으로 수축 허용
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              minimumSize: const Size(0, 40),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 12),
             ),
             icon: const Icon(Icons.settings_outlined),
             label: const Text('설정'),
           ),
         ),
-
         const SizedBox(width: 12),
-
-        // 중앙 배지(아이콘). 탭하면 회전 + onToggle 호출로 좌/우 버튼 토글
         HeaderBadge(size: 64, ring: 3, onToggle: onToggle),
-
         const SizedBox(width: 12),
-
-        // 오른쪽: 앱 종료 (포그라운드 서비스까지 종료)
         _AnimatedSide(
           show: expanded,
-          axisAlignment: 1.0, // 오른쪽에서 펼쳐지는 느낌
+          axisAlignment: 1.0,
           child: FilledButton.icon(
             onPressed: () async => _exitApp(context),
             style: FilledButton.styleFrom(
               minimumSize: const Size(0, 40),
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 12),
             ),
             icon: const Icon(Icons.power_settings_new),
             label: const Text('앱 종료'),
@@ -374,14 +509,11 @@ class _TopRow extends StatelessWidget {
   }
 }
 
-/// 좌/우 버튼의 등장/퇴장 애니메이션
-/// - 폭을 직접 0→확대하지 않고, SizeTransition(가로) + Fade로 처리
-/// - Flexible 로 감싸 Row 내에서 수축/확장을 허용
 class _AnimatedSide extends StatelessWidget {
   const _AnimatedSide({
     required this.show,
     required this.child,
-    this.axisAlignment = 0.0, // -1.0(좌측), 1.0(우측), 0.0(중심)
+    this.axisAlignment = 0.0,
   });
 
   final bool show;
@@ -402,7 +534,7 @@ class _AnimatedSide extends StatelessWidget {
               axis: Axis.horizontal,
               sizeFactor: anim,
               axisAlignment: axisAlignment,
-              child: ClipRect(child: child), // 그려지는 영역을 안전하게 클립
+              child: ClipRect(child: child),
             ),
           );
         },
@@ -447,8 +579,8 @@ class HeaderBadge extends StatelessWidget {
             color: Colors.black,
           ),
           child: Padding(
-            padding: EdgeInsets.all(ring),           // ring 값 적용
-            child: _HeaderBadgeInner(onToggle: onToggle), // 콜백 전달
+            padding: EdgeInsets.all(ring),
+            child: _HeaderBadgeInner(onToggle: onToggle),
           ),
         ),
       ),
@@ -458,7 +590,6 @@ class HeaderBadge extends StatelessWidget {
 
 class _HeaderBadgeInner extends StatefulWidget {
   const _HeaderBadgeInner({this.onToggle});
-
   final VoidCallback? onToggle;
 
   @override
@@ -474,7 +605,7 @@ class _HeaderBadgeInnerState extends State<_HeaderBadgeInner>
     super.initState();
     _rotCtrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 600), // 회전 시간
+      duration: const Duration(milliseconds: 600),
     );
   }
 
@@ -485,8 +616,8 @@ class _HeaderBadgeInnerState extends State<_HeaderBadgeInner>
   }
 
   void _onTap() {
-    _rotCtrl.forward(from: 0);     // 360도 회전
-    widget.onToggle?.call();       // 좌/우 버튼 토글
+    _rotCtrl.forward(from: 0);
+    widget.onToggle?.call();
   }
 
   @override
@@ -507,7 +638,6 @@ class _HeaderBadgeInnerState extends State<_HeaderBadgeInner>
           ),
           child: Stack(
             children: [
-              // 배지 전체 탭 → 회전 + 토글
               Positioned.fill(
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
@@ -529,8 +659,6 @@ class _HeaderBadgeInnerState extends State<_HeaderBadgeInner>
                   ),
                 ),
               ),
-
-              // 빛 반사 하이라이트(탭 방해 X)
               Positioned(
                 top: cons.maxHeight * 0.12,
                 left: cons.maxWidth * 0.22,
