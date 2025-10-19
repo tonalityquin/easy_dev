@@ -26,67 +26,54 @@ class StatementFormPage extends StatefulWidget {
 class _StatementFormPageState extends State<StatementFormPage> {
   final _formKey = GlobalKey<FormState>();
 
-  // 본문 입력 컨트롤러들
-  final _writerCtrl = TextEditingController();
-  final _deptCtrl = TextEditingController();
-  final _contactCtrl = TextEditingController();
-  final _titleCtrl = TextEditingController();
-  final _placeCtrl = TextEditingController();
-  final _peopleCtrl = TextEditingController();
-  final _detailCtrl = TextEditingController();
-  final _preventionCtrl = TextEditingController();
+  // ── 입력 컨트롤러 ────────────────────────────────────────────────────────────
+  final _deptCtrl = TextEditingController();      // 소속
+  final _nameCtrl = TextEditingController();      // 성명
+  final _positionCtrl = TextEditingController();  // 직책
+  final _contentCtrl = TextEditingController();   // 내용(육하원칙 기반)
 
   // ✉️ 메일 제목/본문(이 화면에서 직접 작성)
   final _mailSubjectCtrl = TextEditingController();
   final _mailBodyCtrl = TextEditingController();
 
-  DateTime? _eventDateTime;
+  DateTime? _eventDateTime; // 일시
 
-  // FocusNodes
-  final _writerNode = FocusNode();
+  // ── 포커스 ─────────────────────────────────────────────────────────────────
   final _deptNode = FocusNode();
-  final _contactNode = FocusNode();
-  final _placeNode = FocusNode();
-  final _peopleNode = FocusNode();
-  final _detailNode = FocusNode();
-  final _preventionNode = FocusNode();
+  final _nameNode = FocusNode();
+  final _positionNode = FocusNode();
+  final _contentNode = FocusNode();
 
-  // 전자서명 상태
+  // ── 전자서명 상태 ─────────────────────────────────────────────────────────
   Uint8List? _signaturePngBytes;
   DateTime? _signDateTime;
-  String get _signerName => _writerCtrl.text.trim();
+  String get _signerName => _nameCtrl.text.trim();
 
   bool _sending = false;
 
   @override
   void initState() {
     super.initState();
-    _writerCtrl.addListener(() => setState(() {}));
+    _nameCtrl.addListener(() => setState(() {})); // 서명자 라벨 갱신용
   }
 
   @override
   void dispose() {
-    _writerCtrl.dispose();
     _deptCtrl.dispose();
-    _contactCtrl.dispose();
-    _titleCtrl.dispose();
-    _placeCtrl.dispose();
-    _peopleCtrl.dispose();
-    _detailCtrl.dispose();
-    _preventionCtrl.dispose();
+    _nameCtrl.dispose();
+    _positionCtrl.dispose();
+    _contentCtrl.dispose();
     _mailSubjectCtrl.dispose();
     _mailBodyCtrl.dispose();
 
-    _writerNode.dispose();
     _deptNode.dispose();
-    _contactNode.dispose();
-    _placeNode.dispose();
-    _peopleNode.dispose();
-    _detailNode.dispose();
-    _preventionNode.dispose();
+    _nameNode.dispose();
+    _positionNode.dispose();
+    _contentNode.dispose();
     super.dispose();
   }
 
+  // ── 유틸 ───────────────────────────────────────────────────────────────────
   String _fmtDT(BuildContext context, DateTime? dt) {
     if (dt == null) return '미선택';
     final loc = MaterialLocalizations.of(context);
@@ -105,6 +92,13 @@ class _StatementFormPageState extends State<StatementFormPage> {
     final hh = dt.hour.toString().padLeft(2, '0');
     final mm = dt.minute.toString().padLeft(2, '0');
     return '$y-$m-$d $hh:$mm';
+  }
+
+  String _dateTag(DateTime dt) {
+    final y = dt.year.toString().padLeft(4, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final d = dt.day.toString().padLeft(2, '0');
+    return '$y$m$d';
   }
 
   Future<void> _pickDateTime() async {
@@ -133,14 +127,10 @@ class _StatementFormPageState extends State<StatementFormPage> {
 
   void _reset() {
     _formKey.currentState?.reset();
-    _writerCtrl.clear();
     _deptCtrl.clear();
-    _contactCtrl.clear();
-    _titleCtrl.clear();
-    _placeCtrl.clear();
-    _peopleCtrl.clear();
-    _detailCtrl.clear();
-    _preventionCtrl.clear();
+    _nameCtrl.clear();
+    _positionCtrl.clear();
+    _contentCtrl.clear();
     _mailSubjectCtrl.clear();
     _mailBodyCtrl.clear();
     setState(() {
@@ -158,19 +148,13 @@ class _StatementFormPageState extends State<StatementFormPage> {
     return [
       '— 경위서 —',
       '',
-      '제목: ${_titleCtrl.text}',
-      '작성자: ${_writerCtrl.text}',
-      '소속/직위: ${_deptCtrl.text}',
-      '연락처: ${_contactCtrl.text}',
-      '사건 발생 일시: ${_fmtDT(context, _eventDateTime)}',
-      '장소: ${_placeCtrl.text}',
-      '관련자: ${_peopleCtrl.text}',
+      '소속: ${_deptCtrl.text}',
+      '성명: ${_nameCtrl.text}',
+      '직책: ${_positionCtrl.text}',
+      '일시: ${_fmtDT(context, _eventDateTime)}',
       '',
-      '[경위 상세]',
-      _detailCtrl.text,
-      '',
-      '[재발 방지 대책]',
-      _preventionCtrl.text,
+      '[내용(육하원칙 기반)]',
+      _contentCtrl.text,
       '',
       signInfo,
       '작성일: ${_fmtDT(context, DateTime.now())}',
@@ -244,7 +228,9 @@ class _StatementFormPageState extends State<StatementFormPage> {
       if (!EmailConfig.isValidToList(cfg.to)) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('수신자(To)가 비어있거나 형식이 올바르지 않습니다. 설정에서 수신자를 저장해 주세요.')),
+          const SnackBar(
+            content: Text('수신자(To)가 비어있거나 형식이 올바르지 않습니다. 설정에서 수신자를 저장해 주세요.'),
+          ),
         );
         return;
       }
@@ -254,7 +240,7 @@ class _StatementFormPageState extends State<StatementFormPage> {
           .where((s) => s.isNotEmpty)
           .join(', ');
 
-      // ② 이 화면에서 입력한 메일 제목/본문 확보(제목 필수)
+      // ② 화면에서 입력한 메일 제목/본문 확보(제목 필수)
       final subject = _mailSubjectCtrl.text.trim();
       final body = _mailBodyCtrl.text.trim();
       if (subject.isEmpty) {
@@ -265,12 +251,22 @@ class _StatementFormPageState extends State<StatementFormPage> {
         return;
       }
 
-      // ③ PDF 생성
-      final pdfBytes = await _buildPdfBytes();
-      final filename =
-      _safeFileName(_titleCtrl.text.isEmpty ? '경위서' : _titleCtrl.text);
+      // ③ 필수 항목 재검증 (일시 포함)
+      if (_eventDateTime == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('일시를 선택해 주세요.')),
+        );
+        return;
+      }
 
-      // ④ Gmail API 전송
+      // ④ PDF 생성
+      final pdfBytes = await _buildPdfBytes();
+      final now = DateTime.now();
+      final nameForFile = _nameCtrl.text.trim().isEmpty ? '무기명' : _nameCtrl.text.trim();
+      final filename = _safeFileName('경위서_${nameForFile}_${_dateTag(now)}');
+
+      // ⑤ Gmail API 전송
       await _sendEmailViaGmail(
         pdfBytes: pdfBytes,
         filename: '$filename.pdf',
@@ -298,7 +294,7 @@ class _StatementFormPageState extends State<StatementFormPage> {
     return s.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
   }
 
-  // -------------------- PDF 생성 --------------------
+  // ── PDF 생성 ────────────────────────────────────────────────────────────────
   Future<Uint8List> _buildPdfBytes() async {
     pw.Font? regular;
     pw.Font? bold;
@@ -319,22 +315,21 @@ class _StatementFormPageState extends State<StatementFormPage> {
 
     final theme = (regular != null)
         ? pw.ThemeData.withFont(
-        base: regular, bold: bold ?? regular, italic: regular, boldItalic: bold ?? regular)
+      base: regular,
+      bold: bold ?? regular,
+      italic: regular,
+      boldItalic: bold ?? regular,
+    )
         : pw.ThemeData.base();
 
     final doc = pw.Document();
-
     final now = DateTime.now();
+
     final fields = <MapEntry<String, String>>[
-      MapEntry('제목', _titleCtrl.text),
-      MapEntry('작성자', _writerCtrl.text),
-      MapEntry('소속/직위', _deptCtrl.text),
-      MapEntry('연락처', _contactCtrl.text),
-      MapEntry('사건 발생 일시',
-          _eventDateTime == null ? '미선택' : _fmtCompact(_eventDateTime!)),
-      MapEntry('장소', _placeCtrl.text),
-      MapEntry('관련자', _peopleCtrl.text),
-      MapEntry('작성일', _fmtCompact(now)),
+      MapEntry('소속', _deptCtrl.text),
+      MapEntry('성명', _nameCtrl.text),
+      MapEntry('직책', _positionCtrl.text),
+      MapEntry('일시', _fmtCompact(_eventDateTime!)),
     ];
 
     pw.Widget buildFieldTable() => pw.Table(
@@ -363,7 +358,8 @@ class _StatementFormPageState extends State<StatementFormPage> {
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         pw.SizedBox(height: 8),
-        pw.Text(title, style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+        pw.Text(title,
+            style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 4),
         pw.Container(
           width: double.infinity,
@@ -372,7 +368,10 @@ class _StatementFormPageState extends State<StatementFormPage> {
             border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
             borderRadius: pw.BorderRadius.circular(4),
           ),
-          child: pw.Text(body.isEmpty ? '-' : body, style: const pw.TextStyle(fontSize: 11)),
+          child: pw.Text(
+            body.isEmpty ? '-' : body,
+            style: const pw.TextStyle(fontSize: 11),
+          ),
         ),
       ],
     );
@@ -385,11 +384,14 @@ class _StatementFormPageState extends State<StatementFormPage> {
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.SizedBox(height: 8),
-          pw.Text('전자서명', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+          pw.Text('전자서명',
+              style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 4),
           pw.Row(
             children: [
-              pw.Expanded(child: pw.Text('서명자: $name', style: const pw.TextStyle(fontSize: 11))),
+              pw.Expanded(
+                child: pw.Text('서명자: $name', style: const pw.TextStyle(fontSize: 11)),
+              ),
               pw.SizedBox(width: 8),
               pw.Text('서명 일시: $timeText', style: const pw.TextStyle(fontSize: 11)),
             ],
@@ -404,8 +406,9 @@ class _StatementFormPageState extends State<StatementFormPage> {
             ),
             child: _signaturePngBytes == null
                 ? pw.Center(
-                child: pw.Text('서명 이미지 없음',
-                    style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey)))
+              child: pw.Text('서명 이미지 없음',
+                  style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey)),
+            )
                 : pw.Padding(
               padding: const pw.EdgeInsets.all(6),
               child: pw.Image(
@@ -425,19 +428,22 @@ class _StatementFormPageState extends State<StatementFormPage> {
         margin: const pw.EdgeInsets.fromLTRB(32, 36, 32, 36),
         build: (context) => [
           pw.Center(
-            child: pw.Text('경위서',
-                style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+            child: pw.Text(
+              '경위서',
+              style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+            ),
           ),
           pw.SizedBox(height: 12),
           buildFieldTable(),
-          buildSection('[경위 상세]', _detailCtrl.text),
-          buildSection('[재발 방지 대책]', _preventionCtrl.text),
+          buildSection('[내용(육하원칙 기반)]', _contentCtrl.text),
           buildSignature(),
         ],
         footer: (context) => pw.Align(
           alignment: pw.Alignment.centerRight,
-          child: pw.Text('생성 시각: ${_fmtCompact(now)}',
-              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
+          child: pw.Text(
+            '생성 시각: ${_fmtCompact(now)}',
+            style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+          ),
         ),
       ),
     );
@@ -445,7 +451,7 @@ class _StatementFormPageState extends State<StatementFormPage> {
     return doc.save();
   }
 
-  // -------------------- Gmail API로 첨부 메일 전송 --------------------
+  // ── Gmail API로 첨부 메일 전송 ──────────────────────────────────────────────
   Future<void> _sendEmailViaGmail({
     required Uint8List pdfBytes,
     required String filename,
@@ -479,12 +485,13 @@ class _StatementFormPageState extends State<StatementFormPage> {
       ..writeln(base64.encode(pdfBytes))
       ..writeln('--$boundary--');
 
-    final raw =
-    base64UrlEncode(utf8.encode(sb.toString())).replaceAll('=', '');
+    // Gmail API는 base64url(raw) 요구(= URL-safe + padding 제거)
+    final raw = base64UrlEncode(utf8.encode(sb.toString())).replaceAll('=', '');
     final msg = gmail.Message()..raw = raw;
     await api.users.messages.send(msg, 'me');
   }
 
+  // ── UI ─────────────────────────────────────────────────────────────────────
   Widget _gap(double h) => SizedBox(height: h);
 
   Future<void> _openSignatureDialog() async {
@@ -553,155 +560,107 @@ class _StatementFormPageState extends State<StatementFormPage> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Text(
-                  '사실에 근거해 간결하고 명확하게 작성해 주세요. 필요 시 관련 증빙(사진, 로그, 메일 등)을 첨부하여 제출합니다.',
+                  '사실에 근거해 간결하고 명확하게 작성해 주세요. (내용은 육하원칙: 누가/언제/어디서/무엇을/왜/어떻게)',
                 ),
               ),
               _gap(16),
 
-              // 제목
-              TextFormField(
-                controller: _titleCtrl,
-                decoration: InputDecoration(
-                  labelText: '제목',
-                  hintText: '예: 10월 18일 장비 파손 경위서',
-                  filled: true,
-                  fillColor: cs.surfaceVariant.withOpacity(.35),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  contentPadding:
-                  const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                ),
-                textInputAction: TextInputAction.next,
-                onFieldSubmitted: (_) => _writerNode.requestFocus(),
-                validator: (v) =>
-                (v == null || v.trim().isEmpty) ? '제목을 입력하세요.' : null,
-              ),
-              _gap(12),
-
-              // 작성자 / 소속
+              // 소속 / 성명
               Row(
                 children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _writerCtrl,
-                      focusNode: _writerNode,
-                      decoration: InputDecoration(
-                        labelText: '작성자',
-                        filled: true,
-                        fillColor: cs.surfaceVariant.withOpacity(.35),
-                        border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        contentPadding: const EdgeInsets.symmetric(
-                            vertical: 14, horizontal: 12),
-                      ),
-                      textInputAction: TextInputAction.next,
-                      onFieldSubmitted: (_) => _deptNode.requestFocus(),
-                      validator: (v) => (v == null || v.trim().isEmpty)
-                          ? '작성자를 입력하세요.'
-                          : null,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
                   Expanded(
                     child: TextFormField(
                       controller: _deptCtrl,
                       focusNode: _deptNode,
                       decoration: InputDecoration(
-                        labelText: '소속/직위',
+                        labelText: '소속 (필수)',
+                        hintText: '예: 본사 IT본부',
                         filled: true,
                         fillColor: cs.surfaceVariant.withOpacity(.35),
                         border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         contentPadding: const EdgeInsets.symmetric(
-                            vertical: 14, horizontal: 12),
+                          vertical: 14,
+                          horizontal: 12,
+                        ),
                       ),
                       textInputAction: TextInputAction.next,
-                      onFieldSubmitted: (_) => _contactNode.requestFocus(),
+                      onFieldSubmitted: (_) => _nameNode.requestFocus(),
+                      validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? '소속을 입력하세요.' : null,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: _nameCtrl,
+                      focusNode: _nameNode,
+                      decoration: InputDecoration(
+                        labelText: '성명 (필수)',
+                        hintText: '예: 홍길동',
+                        filled: true,
+                        fillColor: cs.surfaceVariant.withOpacity(.35),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 14,
+                          horizontal: 12,
+                        ),
+                      ),
+                      textInputAction: TextInputAction.next,
+                      onFieldSubmitted: (_) => _positionNode.requestFocus(),
+                      validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? '성명을 입력하세요.' : null,
                     ),
                   ),
                 ],
               ),
               _gap(12),
 
-              // 연락처
+              // 직책
               TextFormField(
-                controller: _contactCtrl,
-                focusNode: _contactNode,
+                controller: _positionCtrl,
+                focusNode: _positionNode,
                 decoration: InputDecoration(
-                  labelText: '연락처',
-                  hintText: '예: 010-1234-5678',
+                  labelText: '직책 (필수)',
+                  hintText: '예: 매니저 / 대리 / 주임 등',
                   filled: true,
                   fillColor: cs.surfaceVariant.withOpacity(.35),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  contentPadding:
-                  const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                ),
-                keyboardType: TextInputType.phone,
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(RegExp(r'[0-9\-]'))
-                ],
-                textInputAction: TextInputAction.next,
-                onFieldSubmitted: (_) => _placeNode.requestFocus(),
-              ),
-              _gap(12),
-
-              // 장소
-              TextFormField(
-                controller: _placeCtrl,
-                focusNode: _placeNode,
-                decoration: InputDecoration(
-                  labelText: '장소',
-                  hintText: '예: 본사 3층 서버실',
-                  filled: true,
-                  fillColor: cs.surfaceVariant.withOpacity(.35),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   contentPadding:
                   const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
                 ),
                 textInputAction: TextInputAction.next,
-                onFieldSubmitted: (_) => _peopleNode.requestFocus(),
+                onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
                 validator: (v) =>
-                (v == null || v.trim().isEmpty) ? '장소를 입력하세요.' : null,
+                (v == null || v.trim().isEmpty) ? '직책을 입력하세요.' : null,
               ),
               _gap(12),
 
-              // 관련자
-              TextFormField(
-                controller: _peopleCtrl,
-                focusNode: _peopleNode,
-                decoration: InputDecoration(
-                  labelText: '관련자',
-                  hintText: '예: 홍길동, 김노무',
-                  filled: true,
-                  fillColor: cs.surfaceVariant.withOpacity(.35),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  contentPadding:
-                  const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                ),
-                textInputAction: TextInputAction.next,
-                onFieldSubmitted: (_) => _detailNode.requestFocus(),
-              ),
-              _gap(12),
-
-              // 사건 일시
+              // 일시
               ListTile(
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                   side: BorderSide(color: cs.outlineVariant),
                 ),
-                title: const Text('사건 발생 일시'),
+                title: const Text('일시 (필수)'),
                 subtitle: Text(_fmtDT(context, _eventDateTime)),
                 trailing: const Icon(Icons.event_outlined),
                 onTap: _pickDateTime,
               ),
               _gap(12),
 
-              // 경위 상세
+              // 내용(육하원칙)
               TextFormField(
-                controller: _detailCtrl,
-                focusNode: _detailNode,
+                controller: _contentCtrl,
+                focusNode: _contentNode,
                 decoration: InputDecoration(
-                  labelText: '경위 상세',
-                  hintText: '사실 관계를 시간 순으로 상세히 기술',
+                  labelText: '내용 (육하원칙 기반, 필수)',
+                  hintText: '누가/언제/어디서/무엇을/왜/어떻게 순으로 구체적으로 작성해 주세요.',
                   filled: true,
                   fillColor: cs.surfaceVariant.withOpacity(.35),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -709,29 +668,10 @@ class _StatementFormPageState extends State<StatementFormPage> {
                   const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
                 ),
                 keyboardType: TextInputType.multiline,
-                minLines: 6,
-                maxLines: 12,
+                minLines: 8,
+                maxLines: 16,
                 validator: (v) =>
-                (v == null || v.trim().isEmpty) ? '경위 상세를 입력하세요.' : null,
-              ),
-              _gap(12),
-
-              // 재발 방지 대책
-              TextFormField(
-                controller: _preventionCtrl,
-                focusNode: _preventionNode,
-                decoration: InputDecoration(
-                  labelText: '재발 방지 대책',
-                  hintText: '개선 방안 및 일정',
-                  filled: true,
-                  fillColor: cs.surfaceVariant.withOpacity(.35),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  contentPadding:
-                  const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                ),
-                keyboardType: TextInputType.multiline,
-                minLines: 3,
-                maxLines: 10,
+                (v == null || v.trim().isEmpty) ? '내용을 입력하세요.' : null,
               ),
 
               _gap(20),
@@ -749,7 +689,7 @@ class _StatementFormPageState extends State<StatementFormPage> {
                 controller: _mailSubjectCtrl,
                 decoration: InputDecoration(
                   labelText: '메일 제목(필수)',
-                  hintText: '예: 경위서 – 10월 18일 장비 파손 건',
+                  hintText: '예: 경위서 – ${DateTime.now().month}월 ${DateTime.now().day}일 건',
                   filled: true,
                   fillColor: cs.surfaceVariant.withOpacity(.35),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
