@@ -1,5 +1,7 @@
-// lib/screens/labor_guide_page.dart
+// lib/screens/head_package/labor_guide_page.dart
 import 'package:flutter/material.dart';
+
+import 'labors/statement_form_page.dart';
 
 class LaborGuidePage extends StatelessWidget {
   const LaborGuidePage({super.key});
@@ -40,6 +42,7 @@ class LaborGuidePage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
+
             ListTile(
               leading: const Icon(Icons.description_outlined),
               title: const Text('근로시간/연장근로 안내'),
@@ -59,6 +62,19 @@ class LaborGuidePage extends StatelessWidget {
               title: const Text('신청/보고 서식'),
               subtitle: const Text('연차신청서, 휴직신청서, 야근보고서 등'),
               onTap: () {},
+            ),
+
+            // 경위서 양식 연결
+            const Divider(height: 1),
+            ListTile(
+              leading: const Icon(Icons.edit_note_outlined),
+              title: const Text('경위서 양식'),
+              subtitle: const Text('사건/사고 경위 작성 및 제출'),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const StatementFormPage()),
+                );
+              },
             ),
           ],
         ),

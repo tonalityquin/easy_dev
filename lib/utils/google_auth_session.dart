@@ -1,7 +1,7 @@
 // lib/utils/google_auth_session.dart
 //
 // Google 계정 인증을 앱 전역에서 "한 번"만 수행하고,
-// 이후 Calendar / Sheets / Docs / GCS 등 모든 기능이 동일한 AuthClient를 재사용하는 세션.
+// 이후 Calendar / Sheets / Docs / Gmail / GCS 등 모든 기능이 동일한 AuthClient를 재사용하는 세션.
 // google_sign_in v7 API에 맞춰 작성.
 
 import 'dart:async';
@@ -13,6 +13,8 @@ class AppScopes {
   static const String calendarEvents = 'https://www.googleapis.com/auth/calendar.events';
   static const String spreadsheets   = 'https://www.googleapis.com/auth/spreadsheets';
   static const String documents      = 'https://www.googleapis.com/auth/documents';
+  // Gmail 전송(민감 스코프) — 전체 mail.google.com(제한 스코프) 대신 최소 권한 사용
+  static const String gmailSend      = 'https://www.googleapis.com/auth/gmail.send';
   // GCS 업로드까지 사용한다면 full_control 사용(환경에 따라 read_write로 낮춰도 됨)
   static const String gcsFullControl = 'https://www.googleapis.com/auth/devstorage.full_control';
   // static const String gcsReadWrite = 'https://www.googleapis.com/auth/devstorage.read_write';
@@ -21,6 +23,7 @@ class AppScopes {
     calendarEvents,
     spreadsheets,
     documents,
+    gmailSend,      // ✅ 추가: Gmail 전송 스코프
     gcsFullControl, // 또는 gcsReadWrite
   }.toList();
 }
@@ -40,7 +43,12 @@ class GoogleAuthSession {
     String? serverClientId,
     List<String>? additionalScopes,
   }) async {
-    if (_initialized) return;
+    if (_initialized) {
+      // 이미 초기화된 경우에도 새 스코프가 들어오면 머지
+      final merged = {..._scopes, ...?additionalScopes};
+      _scopes = merged.toList();
+      return;
+    }
     _initialized = true;
 
     _scopes = {...AppScopes.all(), ...?additionalScopes}.toList();
@@ -94,6 +102,7 @@ class GoogleAuthSession {
     throw StateError('AuthClient 생성 실패: 로그인/스코프 권한 확인 필요');
   }
 
+  /// 스코프가 바뀌었거나 토큰 갱신이 필요할 때 강제 재승인
   Future<void> refreshIfNeeded() async {
     _client = null;
     await _ensureAuthorizedClient(forceAuthorize: true);

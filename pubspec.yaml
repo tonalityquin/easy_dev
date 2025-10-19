@@ -79,12 +79,14 @@ dependencies:
   chewie: ^1.13.0
   video_thumbnail: ^0.5.6
 
+  # PDF For Send Mail
+  pdf: ^3.11.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
-  flutter_launcher_icons: ^0.14.4   # ← 버전만 둡니다
-
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
   uses-material-design: true
@@ -97,10 +99,11 @@ flutter:
     - assets/images/move_to_service.png
     - assets/icons/icon_belivussnc.PNG
     - assets/icons/icon_easyvalet.PNG
-    - assets/icons/app_icon.png        # 런처 아이콘 원본을 앱 내에서도 쓸 거면 유지, 아니면 삭제해도 됨
+    - assets/icons/app_icon.png
     - assets/icons/app_icon_ios.png
     - assets/tutorials/
-
+    # ⬇⬇⬇ PDF 전용 폰트 자원(디렉터리 전체 포함)
+    - assets/fonts/NotoSansKR/
 
 # ↓↓↓ 최상위 레벨 설정 블록 (dev_dependencies 밖)
 flutter_launcher_icons:
@@ -110,6 +113,3 @@ flutter_launcher_icons:
   adaptive_icon_background: "#FFFFFF"
   adaptive_icon_foreground: assets/icons/app_icon.png
   remove_alpha_ios: true
-
-
-
