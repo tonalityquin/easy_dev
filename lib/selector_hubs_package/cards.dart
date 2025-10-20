@@ -1,9 +1,8 @@
 // lib/screens/selector_hubs_package/cards.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';                // Provider 사용
 import '../../routes.dart';
-import '../../states/user/user_state.dart';            // selectedArea 확인
+import '../../utils/google_auth_session.dart'; // ✅ OAuth 세션 사용
 
 /// 공통 카드 바디(아이콘 배지 → 타이틀 → 이동 버튼)
 class CardBody extends StatefulWidget {
@@ -222,12 +221,18 @@ class FaqCard extends StatelessWidget {
 }
 
 class HeadquarterCard extends StatelessWidget {
-  const HeadquarterCard({super.key, this.enabled = true});
-  final bool enabled;
+  const HeadquarterCard({super.key});
 
   static const Color _base = Color(0xFF1E88E5);
   static const Color _dark = Color(0xFF1565C0);
   static const Color _light = Color(0xFF64B5F6);
+
+  static const Set<String> _allowedEmails = {
+    'belivus02@gmail.com',
+    'belivus150119@gmail.com',
+    'surge1868@gmail.com',
+    'gyoshinc@gmail.com',
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -242,31 +247,27 @@ class HeadquarterCard extends StatelessWidget {
         bg: _base, iconColor: Colors.white,
         titleWidget: title,
         buttonBg: _base, buttonFg: Colors.white,
-        enabled: enabled,
-        disabledHint: '저장된 모드가 service일 때만 선택할 수 있어요',
-        onPressed: () {
-          // ✅ 이미 로그인 상태면 selectedArea 기준으로 본사 진입 허용/차단
+        onPressed: () async {
           try {
-            final us = context.read<UserState>();
-            if (us.isLoggedIn) {
-              final sel = us.user?.selectedArea?.trim() ?? '';
-              if (sel == 'belivus') {
-                Navigator.of(context).pushReplacementNamed(AppRoutes.headStub);
-              } else {
-                // 본사 조건 불충족 → 허브로 회귀
-                Navigator.of(context).pushReplacementNamed(AppRoutes.selector);
-              }
-              return;
-            }
-          } catch (_) {
-            // Provider 미주입 시엔 아래 기존 흐름 수행
-          }
+            // 1) 필요 시 이 시점에 계정 인증/선택(최초 1회만 동의창)
+            await GoogleAuthSession.instance.client();
 
-          // 미로그인: 서비스 로그인으로 이동(성공 시 Head Stub로 리다이렉트)
-          Navigator.of(context).pushReplacementNamed(
-            AppRoutes.serviceLogin,
-            arguments: {'redirectAfterLogin': AppRoutes.headStub, 'requiredMode': 'service'},
-          );
+            // 2) 현재 Google 계정 이메일 확인
+            final email = GoogleAuthSession.instance.currentUser?.email.toLowerCase() ?? '';
+
+            // 3) 화이트리스트 검사
+            if (_allowedEmails.contains(email)) {
+              Navigator.of(context).pushReplacementNamed(AppRoutes.headStub);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('본사 접근 권한이 없는 계정입니다. 관리자에게 문의하세요.')),
+              );
+            }
+          } catch (e) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Google 인증에 실패했습니다: $e')),
+            );
+          }
         },
       ),
     );

@@ -21,9 +21,6 @@ import 'head_package/company_calendar_page.dart'; // ⬅️ 바텀시트 헬퍼 
 // ▼ (추가) 회사 노무도 바텀시트로 열기 위한 import
 import 'head_package/labor_guide_page.dart'; // ⬅️ 바텀시트 헬퍼 사용
 
-// ▼ (신규) 허브 퀵 액션 버블 오버레이
-import 'head_package/hub_quick_actions.dart';
-
 class HeadStubPage extends StatelessWidget {
   const HeadStubPage({super.key});
 
@@ -31,11 +28,6 @@ class HeadStubPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-
-    // 첫 프레임 이후, 퀵 액션 버블 필요 시 장착
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      HeadHubActions.mountIfNeeded();
-    });
 
     // ✅ 이 화면에서만 뒤로가기 pop을 막아 앱 종료 방지 (스낵바 없음)
     return PopScope(
@@ -67,20 +59,6 @@ class HeadStubPage extends StatelessWidget {
             preferredSize: const Size.fromHeight(1),
             child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
           ),
-          actions: [
-            // ── (신규) 허브 퀵 액션 버블 토글 ─────────────────────
-            ValueListenableBuilder<bool>(
-              valueListenable: HeadHubActions.enabled,
-              builder: (_, on, __) => IconButton(
-                tooltip: on ? '퀵 액션 숨기기' : '퀵 액션 보이기',
-                icon: Icon(on ? Icons.flash_off_rounded : Icons.flash_on_rounded),
-                onPressed: () {
-                  HeadHubActions.enabled.value = !on;
-                },
-              ),
-            ),
-            const SizedBox(width: 4),
-          ],
         ),
         body: SafeArea(
           child: Container(
@@ -155,6 +133,7 @@ class HeadStubPage extends StatelessWidget {
                           tintColor: calLight,
                           titleColor: calDark,
                           onTap: () {
+                            // ⬇️ 라우트 푸시 → "전체 화면 바텀시트"로 오픈
                             CompanyCalendarPage.showAsBottomSheet(context);
                           },
                         ),
@@ -167,6 +146,7 @@ class HeadStubPage extends StatelessWidget {
                           tintColor: laborLight,
                           titleColor: laborDark,
                           onTap: () {
+                            // ⬇️ 라우트 푸시 → "전체 화면 바텀시트"로 오픈
                             LaborGuidePage.showAsBottomSheet(context);
                           },
                         ),
@@ -181,6 +161,7 @@ class HeadStubPage extends StatelessWidget {
                           tintColor: hrLight,
                           titleColor: hrDark,
                           onTap: () {
+                            // ✅ 페이지 push → 바텀시트 헬퍼 호출로 변경
                             hr_att.AttendanceCalendar.showAsBottomSheet(context);
                           },
                         ),
@@ -195,6 +176,7 @@ class HeadStubPage extends StatelessWidget {
                           tintColor: attLight,
                           titleColor: attDark,
                           onTap: () {
+                            // ⬇️ 페이지 push → 바텀시트 헬퍼로 변경
                             hr_break.BreakCalendar.showAsBottomSheet(context);
                           },
                         ),

@@ -99,7 +99,7 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
 
     final List<List<Widget>> pages = [
       [ ServiceCard(enabled: serviceEnabled), TabletCard(enabled: tabletEnabled), ],
-      [ HeadquarterCard(enabled: serviceEnabled), const FaqCard(), ],
+      [ const HeadquarterCard(), const FaqCard(), ], // ← 변경: 항상 활성화 & 조건 제거
       [ const CommunityCard(), if (_devAuthorized) const ParkingCard(), ],
       if (_devAuthorized) [ DevCard(onTap: () =>
           Navigator.of(context).pushReplacementNamed(AppRoutes.devStub)), ],
