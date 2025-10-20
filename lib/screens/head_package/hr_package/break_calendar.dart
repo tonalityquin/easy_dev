@@ -1,3 +1,4 @@
+// lib/screens/head_package/hr_package/break_calendar.dart
 import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -12,8 +13,35 @@ import '../../../utils/sheets_config.dart';
 import 'widgets/time_edit_sheet.dart';
 // import '../../../utils/usage_reporter.dart';
 
+/// 휴게(브레이크) 캘린더
+/// - asBottomSheet=true: 아래에서 92% 높이로 올라오는 바텀시트 UI
+/// - [BreakCalendar.showAsBottomSheet] 헬퍼로 간편 호출
 class BreakCalendar extends StatefulWidget {
-  const BreakCalendar({super.key});
+  const BreakCalendar({super.key, this.asBottomSheet = false});
+
+  /// true면 AppBar 대신 시트 전용 헤더(핸들/닫기/액션)를 사용
+  final bool asBottomSheet;
+
+  /// 바텀시트(92%)로 열기
+  static Future<T?> showAsBottomSheet<T>(BuildContext context) {
+    return showModalBottomSheet<T>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black54,
+      builder: (sheetCtx) {
+        final insets = MediaQuery.of(sheetCtx).viewInsets;
+        return Padding(
+          padding: EdgeInsets.only(bottom: insets.bottom),
+          child: const _BottomSheetFrame(
+            heightFactor: 1, // ✅ 진짜 바텀시트 느낌(전체 화면 X)
+            child: BreakCalendar(asBottomSheet: true),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   State<BreakCalendar> createState() => _BreakCalendarState();
@@ -186,17 +214,6 @@ class _BreakCalendarState extends State<BreakCalendar> {
     showSelectedSnackbar(context, '모든 데이터를 초기화했어요.');
   }
 
-  // ✅ area 추론: selectedArea > docId(phone-area)의 suffix > 'unknown'
-  String _inferAreaFromUserDoc(String docId, Map<String, dynamic>? data) {
-    final a = (data?['selectedArea'] as String?)?.trim();
-    if (a != null && a.isNotEmpty) return a;
-    final idx = docId.lastIndexOf('-');
-    if (idx > 0 && idx < docId.length - 1) {
-      return docId.substring(idx + 1).trim();
-    }
-    return 'unknown';
-  }
-
   Future<UserModel?> _findUserByInput(String input) async {
     final raw = input.trim();
     if (raw.isEmpty) return null;
@@ -216,15 +233,6 @@ class _BreakCalendarState extends State<BreakCalendar> {
       if (area != null && area.isNotEmpty) {
         final docId = '$phone-$area';
         final doc = await col.doc(docId).get();
-
-        // ✅ Firestore read 보고 (정확한 area로 +1)
-        /*await UsageReporter.instance.report(
-          area: area,
-          action: 'read',
-          n: 1,
-          source: 'BreakCalendar._findUserByInput/user_accounts.doc.get',
-        );*/
-
         if (doc.exists && doc.data() != null) {
           return UserModel.fromMap(doc.id, doc.data()!);
         }
@@ -232,32 +240,6 @@ class _BreakCalendarState extends State<BreakCalendar> {
 
       // 2) phone으로 다건 조회
       final qs = await col.where('phone', isEqualTo: phone).limit(10).get();
-
-      // ✅ 결과 문서 수만큼 area 버킷으로 read 집계 (없으면 unknown +1)
-      if (qs.docs.isEmpty) {
-        /*await UsageReporter.instance.report(
-          area: 'unknown',
-          action: 'read',
-          n: 1,
-          source: 'BreakCalendar._findUserByInput/user_accounts.where(phone).get',
-        );*/
-      } else {
-        final buckets = <String, int>{};
-        for (final d in qs.docs) {
-          final areaGuess = _inferAreaFromUserDoc(d.id, d.data());
-          buckets.update(areaGuess, (v) => v + 1, ifAbsent: () => 1);
-        }
-        // ignore: unused_local_variable
-        for (final e in buckets.entries) {
-          /*await UsageReporter.instance.report(
-            area: e.key,
-            action: 'read',
-            n: e.value,
-            source:
-            'BreakCalendar._findUserByInput/user_accounts.where(phone).get',
-          );*/
-        }
-      }
 
       if (qs.docs.isEmpty) return null;
       if (qs.docs.length == 1) {
@@ -421,179 +403,209 @@ class _BreakCalendarState extends State<BreakCalendar> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: Colors.black87,
-        centerTitle: true,
-        title: const Text('휴식 캘린더', style: TextStyle(fontWeight: FontWeight.w800)),
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            tooltip: '전체 지우기',
-            icon: const Icon(Icons.delete_sweep),
-            onPressed: _clearAll,
+    // 공통 본문(페이지/시트 공용)
+    final body = CustomScrollView(
+      slivers: [
+        // Legend (Wrap)
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+            child: _LegendRowBreak(base: _base, light: _light),
           ),
-          IconButton(
-            tooltip: '시트 ID 설정',
-            icon: const Icon(Icons.assignment_add),
-            onPressed: _openSetSheetIdSheet,
-          ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: Colors.black.withOpacity(.06)),
         ),
-      ),
 
-      // 저장 FAB
-      floatingActionButton: _selectedUser == null
-          ? null
-          : FloatingActionButton.extended(
-        onPressed: _saveAllChangesToSheets,
-        backgroundColor: _base,
-        foregroundColor: _fg,
-        icon: const Icon(Icons.save_rounded),
-        label: const Text('변경사항 저장'),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-
-      body: CustomScrollView(
-        slivers: [
-          // Legend (Wrap)
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-              child: _LegendRowBreak(base: _base, light: _light),
+        // User Picker
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: _UserPickerCard(
+              controller: _userInputCtrl,
+              focusNode: _userInputFocus,
+              suffixWidth: _suffixWidth,
+              isSearching: _isSearching,
+              onSearch: _onSearchUserPressed,
+              selectedUser: _selectedUser,
+              onClearUser: _clearAll,
+              paletteBase: _base,
+              paletteDark: _dark,
+              paletteLight: _light,
             ),
           ),
+        ),
 
-          // User Picker
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-              child: _UserPickerCard(
-                controller: _userInputCtrl,
-                focusNode: _userInputFocus,
-                suffixWidth: _suffixWidth,
-                isSearching: _isSearching,
-                onSearch: _onSearchUserPressed,
-                selectedUser: _selectedUser,
-                onClearUser: _clearAll,
-                paletteBase: _base,
-                paletteDark: _dark,
-                paletteLight: _light,
-              ),
+        // Month Selector
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+            child: _MonthSelector(
+              focusedDay: _focusedDay,
+              onPrev: () {
+                final prev = DateTime(_focusedDay.year, _focusedDay.month - 1, 1);
+                setState(() => _focusedDay = prev);
+                if (_selectedUser != null) _loadBreakTimes(_selectedUser!);
+              },
+              onNext: () {
+                final next = DateTime(_focusedDay.year, _focusedDay.month + 1, 1);
+                setState(() => _focusedDay = next);
+                if (_selectedUser != null) _loadBreakTimes(_selectedUser!);
+              },
+              color: _base,
             ),
           ),
+        ),
 
-          // Month Selector
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-              child: _MonthSelector(
-                focusedDay: _focusedDay,
-                onPrev: () {
-                  final prev = DateTime(_focusedDay.year, _focusedDay.month - 1, 1);
-                  setState(() => _focusedDay = prev);
-                  if (_selectedUser != null) _loadBreakTimes(_selectedUser!);
-                },
-                onNext: () {
-                  final next = DateTime(_focusedDay.year, _focusedDay.month + 1, 1);
-                  setState(() => _focusedDay = next);
-                  if (_selectedUser != null) _loadBreakTimes(_selectedUser!);
-                },
-                color: _base,
-              ),
-            ),
-          ),
+        // Calendar
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Card(
+              elevation: 1,
+              surfaceTintColor: _light,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(6, 8, 6, 10),
+                child: TableCalendar(
+                  firstDay: DateTime.utc(2025, 1, 1),
+                  lastDay: DateTime.utc(2025, 12, 31),
+                  focusedDay: _focusedDay,
+                  rowHeight: 84,
+                  // 가독성 향상
+                  selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                  onDaySelected: (selectedDay, focusedDay) async {
+                    setState(() {
+                      _selectedDay = selectedDay;
+                      _focusedDay = focusedDay;
+                    });
 
-          // Calendar
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              child: Card(
-                elevation: 1,
-                surfaceTintColor: _light,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(6, 8, 6, 10),
-                  child: TableCalendar(
-                    firstDay: DateTime.utc(2025, 1, 1),
-                    lastDay: DateTime.utc(2025, 12, 31),
-                    focusedDay: _focusedDay,
-                    rowHeight: 84,
-                    // 가독성 향상
-                    selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-                    onDaySelected: (selectedDay, focusedDay) async {
-                      setState(() {
-                        _selectedDay = selectedDay;
-                        _focusedDay = focusedDay;
-                      });
-
-                      if (_selectedUser != null) {
-                        await _showEditBottomSheet(selectedDay);
-                      }
-                    },
-                    onPageChanged: (focusedDay) async {
-                      setState(() => _focusedDay = focusedDay);
-                      if (_selectedUser != null) {
-                        await _loadBreakTimes(_selectedUser!);
-                      }
-                    },
-                    availableGestures: AvailableGestures.none,
-                    calendarStyle: CalendarStyle(
-                      outsideDaysVisible: true,
-                      isTodayHighlighted: false,
-                      cellMargin: const EdgeInsets.all(4),
-                      defaultDecoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.black12),
-                      ),
-                      outsideDecoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.black12),
-                        color: Colors.black.withOpacity(.02),
-                      ),
-                      weekendDecoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.black12),
-                        color: _light.withOpacity(.05),
-                      ),
-                      selectedDecoration: BoxDecoration(
-                        color: _base.withOpacity(.10),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: _base, width: 1.6),
-                      ),
-                      todayDecoration: BoxDecoration(
-                        color: Colors.transparent,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: _light, width: 1.2),
-                      ),
+                    if (_selectedUser != null) {
+                      await _showEditBottomSheet(selectedDay);
+                    }
+                  },
+                  onPageChanged: (focusedDay) async {
+                    setState(() => _focusedDay = focusedDay);
+                    if (_selectedUser != null) {
+                      await _loadBreakTimes(_selectedUser!);
+                    }
+                  },
+                  availableGestures: AvailableGestures.none,
+                  calendarStyle: CalendarStyle(
+                    outsideDaysVisible: true,
+                    isTodayHighlighted: false,
+                    cellMargin: const EdgeInsets.all(4),
+                    defaultDecoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.black12),
                     ),
-                    headerStyle: const HeaderStyle(
-                      formatButtonVisible: false,
-                      titleCentered: true,
-                      headerPadding: EdgeInsets.only(bottom: 6),
+                    outsideDecoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.black12),
+                      color: Colors.black.withOpacity(.02),
                     ),
-                    calendarBuilders: CalendarBuilders(
-                      defaultBuilder: _buildCell,
-                      todayBuilder: _buildCell,
-                      selectedBuilder: _buildCell,
+                    weekendDecoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.black12),
+                      color: _light.withOpacity(.05),
                     ),
+                    selectedDecoration: BoxDecoration(
+                      color: _base.withOpacity(.10),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: _base, width: 1.6),
+                    ),
+                    todayDecoration: BoxDecoration(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: _light, width: 1.2),
+                    ),
+                  ),
+                  headerStyle: const HeaderStyle(
+                    formatButtonVisible: false,
+                    titleCentered: true,
+                    headerPadding: EdgeInsets.only(bottom: 6),
+                  ),
+                  calendarBuilders: CalendarBuilders(
+                    defaultBuilder: _buildCell,
+                    todayBuilder: _buildCell,
+                    selectedBuilder: _buildCell,
                   ),
                 ),
               ),
             ),
           ),
+        ),
 
-          // FAB와 겹치지 않도록 바닥 여백
-          const SliverToBoxAdapter(child: SizedBox(height: 96)),
-        ],
-      ),
+        // FAB와 겹치지 않도록 바닥 여백
+        const SliverToBoxAdapter(child: SizedBox(height: 96)),
+      ],
+    );
+
+    // 저장 FAB (공용 위젯)
+    final fab = _selectedUser == null
+        ? null
+        : FloatingActionButton.extended(
+      onPressed: _saveAllChangesToSheets,
+      backgroundColor: _base,
+      foregroundColor: _fg,
+      icon: const Icon(Icons.save_rounded),
+      label: const Text('변경사항 저장'),
+    );
+
+    // ===== 페이지 모드 =====
+    if (!widget.asBottomSheet) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        appBar: AppBar(
+          backgroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          elevation: 0,
+          foregroundColor: Colors.black87,
+          centerTitle: true,
+          title: const Text('휴식 캘린더', style: TextStyle(fontWeight: FontWeight.w800)),
+          automaticallyImplyLeading: false,
+          actions: [
+            IconButton(
+              tooltip: '전체 지우기',
+              icon: const Icon(Icons.delete_sweep),
+              onPressed: _clearAll,
+            ),
+            IconButton(
+              tooltip: '시트 ID 설정',
+              icon: const Icon(Icons.assignment_add),
+              onPressed: _openSetSheetIdSheet,
+            ),
+          ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Container(height: 1, color: Colors.black.withOpacity(.06)),
+          ),
+        ),
+        floatingActionButton: fab,
+        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+        body: body,
+      );
+    }
+
+    // ===== 바텀시트 모드(92%) =====
+    return _SheetScaffold(
+      title: '휴식 캘린더',
+      onClose: () => Navigator.of(context).maybePop(),
+      body: body,
+      trailingActions: [
+        IconButton(
+          tooltip: '전체 지우기',
+          icon: const Icon(Icons.delete_sweep),
+          onPressed: _clearAll,
+        ),
+        IconButton(
+          tooltip: '시트 ID 설정',
+          icon: const Icon(Icons.assignment_add),
+          onPressed: _openSetSheetIdSheet,
+        ),
+      ],
+      // FAB를 시트 하단 우측에 띄우기
+      fab: fab,
+      fabAlignment: Alignment.bottomRight,
+      fabLift: 20,
+      fabPadding: const EdgeInsets.only(right: 16, bottom: 16),
     );
   }
 
@@ -719,6 +731,143 @@ class _BreakCalendarState extends State<BreakCalendar> {
     setState(() {
       _breakTimeMap[dayKey] = newTime;
     });
+  }
+}
+
+/// ===== 가변 높이 바텀시트 프레임 =====
+/// - heightFactor(기본 0.92)로 “바텀시트” 느낌 유지
+class _BottomSheetFrame extends StatelessWidget {
+  const _BottomSheetFrame({
+    required this.child,
+    this.heightFactor = 1,
+  });
+
+  final Widget child;
+  final double heightFactor;
+
+  @override
+  Widget build(BuildContext context) {
+    return FractionallySizedBox(
+      heightFactor: heightFactor,
+      widthFactor: 1.0,
+      child: SafeArea(
+        top: false, // ⬅️ 상단은 살짝 아래서 시작해야 시트 느낌
+        bottom: true,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+          child: DecoratedBox(
+            decoration: const BoxDecoration(boxShadow: [
+              BoxShadow(
+                blurRadius: 24,
+                spreadRadius: 8,
+                color: Color(0x33000000),
+                offset: Offset(0, 8),
+              ),
+            ]),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16), // ⬅️ 고정 라운드
+              child: Material(
+                color: Colors.white,
+                child: child,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// ===== 바텀시트 전용 스캐폴드 =====
+/// - AppBar 대체(핸들 + 타이틀 + 닫기 버튼 + 우측 액션)
+/// - body + (선택) FAB를 하단에 띄울 수 있음
+class _SheetScaffold extends StatelessWidget {
+  const _SheetScaffold({
+    required this.title,
+    required this.onClose,
+    required this.body,
+    this.trailingActions,
+    this.fab,
+    this.fabAlignment = Alignment.bottomCenter,
+    this.fabLift = 24.0,
+    this.fabPadding = const EdgeInsets.only(bottom: 12),
+  });
+
+  final String title;
+  final VoidCallback onClose;
+  final List<Widget>? trailingActions;
+  final Widget body;
+
+  // FAB 옵션(선택)
+  final Widget? fab;
+  final Alignment fabAlignment;
+  final double fabLift;
+  final EdgeInsets fabPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        // 본문
+        Column(
+          children: [
+            const SizedBox(height: 8),
+            // 상단 핸들
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 8),
+            // 헤더(타이틀/닫기/액션)
+            ListTile(
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+              title: Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (trailingActions != null) ...trailingActions!,
+                  IconButton(
+                    tooltip: '닫기',
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: onClose,
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // 본문 스크롤
+            Expanded(child: body),
+            const SizedBox(height: 64), // FAB 공간 확보
+          ],
+        ),
+
+        // FAB (선택)
+        if (fab != null)
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: false,
+              child: Align(
+                alignment: fabAlignment,
+                child: Transform.translate(
+                  offset: Offset(0, -fabLift),
+                  child: Padding(
+                    padding: fabPadding,
+                    child: fab!,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
   }
 }
 

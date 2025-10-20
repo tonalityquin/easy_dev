@@ -151,7 +151,7 @@ class HeadStubPage extends StatelessWidget {
                           },
                         ),
 
-                        // ▼ 출/퇴근 → 출석 캘린더(AttendanceCalendar)로 바로 이동
+                        // ▼ 출/퇴근 → 출석 캘린더: ✅ “바텀시트(92%)”로 열기
                         _ActionCard(
                           icon: Icons.how_to_reg_rounded,
                           title: '출/퇴근',
@@ -161,15 +161,12 @@ class HeadStubPage extends StatelessWidget {
                           tintColor: hrLight,
                           titleColor: hrDark,
                           onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const hr_att.AttendanceCalendar(),
-                              ),
-                            );
+                            // ✅ 페이지 push → 바텀시트 헬퍼 호출로 변경
+                            hr_att.AttendanceCalendar.showAsBottomSheet(context);
                           },
                         ),
 
-                        // ▼ 휴게 관리 → 휴식 캘린더(BreakCalendar)
+                        // ▼ 휴게 관리 → 휴식 캘린더(BreakCalendar) : ✅ 바텀시트(92%)로 열기
                         _ActionCard(
                           icon: Icons.free_breakfast_rounded,
                           title: '휴게 관리',
@@ -179,11 +176,8 @@ class HeadStubPage extends StatelessWidget {
                           tintColor: attLight,
                           titleColor: attDark,
                           onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const hr_break.BreakCalendar(),
-                              ),
-                            );
+                            // ⬇️ 페이지 push → 바텀시트 헬퍼로 변경
+                            hr_break.BreakCalendar.showAsBottomSheet(context);
                           },
                         ),
 

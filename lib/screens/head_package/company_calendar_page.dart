@@ -342,7 +342,7 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) {
         return FractionallySizedBox(
-          heightFactor: 0.92,
+          heightFactor: 1,
           child: _BoardSheetScaffold(
             child: BoardKanbanView(
               allEvents: model.events,
