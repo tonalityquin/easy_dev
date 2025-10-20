@@ -16,8 +16,8 @@ import 'head_package/mgmt_package/statistics.dart' as mgmt_stats;
 import 'head_package/hr_package/attendance_calendar.dart' as hr_att;
 import 'head_package/hr_package/break_calendar.dart' as hr_break;
 
-// 공용 FAB
-import 'head_package/shared/hq_switch_fab.dart';
+// ▼ (추가) 본사 달력 바텀시트로 열기 위한 import
+import 'head_package/company_calendar_page.dart'; // ⬅️ 추가: 바텀시트 헬퍼 사용
 
 class HeadStubPage extends StatelessWidget {
   const HeadStubPage({super.key});
@@ -81,9 +81,11 @@ class HeadStubPage extends StatelessWidget {
                           : 2;
 
                       const spacing = 12.0;
-                      final textScale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
+                      final textScale =
+                      MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
 
-                      final tileWidth = (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
+                      final tileWidth =
+                          (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
                       const baseTileHeight = 150.0;
                       final tileHeight = baseTileHeight * textScale;
                       final childAspectRatio = tileWidth / tileHeight;
@@ -129,7 +131,8 @@ class HeadStubPage extends StatelessWidget {
                           tintColor: calLight,
                           titleColor: calDark,
                           onTap: () {
-                            Navigator.of(context).pushNamed(AppRoutes.companyCalendar);
+                            // ⬇️ 변경: 라우트 푸시 → "전체 화면 바텀시트"로 오픈
+                            CompanyCalendarPage.showAsBottomSheet(context);
                           },
                         ),
                         _ActionCard(
@@ -288,14 +291,7 @@ class HeadStubPage extends StatelessWidget {
             ),
           ),
         ),
-        // ✅ 두 페이지에서 동일 위치(endFloat)에 노출되는 상호 이동 FAB
-        floatingActionButton: HqSwitchFab(
-          label: '본사 기능',
-          icon: Icons.apartment_rounded,
-          onPressed: () => Navigator.of(context)
-              .pushReplacementNamed(AppRoutes.headquarterPage),
-        ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+        // ✅ 상호 이동 FAB 제거됨
       ),
     );
   }

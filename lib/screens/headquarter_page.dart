@@ -3,9 +3,7 @@ import 'package:easydev/states/page/hq_state.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../routes.dart';
 import '../states/page/page_info.dart';
-import 'head_package/shared/hq_switch_fab.dart';
 
 /// Headquarter 전용 팔레트
 class _HqPalette {
@@ -35,14 +33,7 @@ class HeadquarterPage extends StatelessWidget {
                 top: false,
                 child: _BottomArea(),
               ),
-              // ✅ 두 페이지에서 동일 위치(endFloat)에 노출되는 상호 이동 FAB
-              floatingActionButton: HqSwitchFab(
-                label: '본사 허브',
-                icon: Icons.dashboard_customize_rounded,
-                onPressed: () => Navigator.of(context)
-                    .pushReplacementNamed(AppRoutes.headStub),
-              ),
-              floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+              // ✅ 상호 이동 FAB 제거됨
             ),
           );
         },
@@ -98,13 +89,6 @@ class _BrandFooter extends StatelessWidget {
 
 class RefreshableBody extends StatelessWidget {
   const RefreshableBody({super.key});
-
-  // 🔧 스와이프하여 SecondaryPage로 이동하는 로직 제거됨
-  //  - _kSwipeVelocityThreshold 상수
-  //  - _handleDrag 메서드
-  //  - _slidePage 메서드
-  //  - GestureDetector의 onHorizontalDragEnd 핸들러
-  // 위 항목들을 모두 삭제하고, Consumer만 바로 렌더링합니다.
 
   @override
   Widget build(BuildContext context) {

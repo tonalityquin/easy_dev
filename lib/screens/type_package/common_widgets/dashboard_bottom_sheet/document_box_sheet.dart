@@ -6,7 +6,7 @@ import '../../../../../../states/user/user_state.dart';
 import 'document_inventory_repository.dart';
 
 // ✅ 경위서 화면 (동일 코드 사본을 같은 폴더에 둠)
-import 'statement_form_page.dart';
+import 'user_statement_form_page.dart';
 import 'widgets/document_item.dart';
 
 /// 현재 화면 위에 띄우는 바텀시트 오픈 함수
@@ -115,7 +115,7 @@ class _DocumentBoxSheet extends StatelessWidget {
                               // ✅ 같은 Navigator 트리에서 풀스크린 페이지 push → 스트림 유지
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
-                                    builder: (_) => const StatementFormPage(),
+                                    builder: (_) => const UserStatementFormPage(),
                                     fullscreenDialog: true,
                                   ),
                                 );

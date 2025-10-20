@@ -24,8 +24,41 @@ class _CalColors {
   static const fg = Color(0xFFFFFFFF);
 }
 
+///
+/// 회사 달력 페이지
+/// - asBottomSheet=true 로 표시하면 “핸드폰 최상단까지 올라오는” 전체 화면 바텀시트 형태로 렌더링됩니다.
+/// - [CompanyCalendarPage.showAsBottomSheet] 헬퍼로 간편 호출 가능.
+///
 class CompanyCalendarPage extends StatefulWidget {
-  const CompanyCalendarPage({super.key});
+  const CompanyCalendarPage({
+    super.key,
+    this.asBottomSheet = false,
+  });
+
+  /// true 이면 Scaffold AppBar 대신 시트 헤더(핸들/닫기 버튼)를 사용하고,
+  /// 바닥에 FAB Row를 고정한 전체 높이 바텀시트 UI로 렌더링합니다.
+  final bool asBottomSheet;
+
+  /// 전체 화면 바텀시트로 열기(권장)
+  static Future<T?> showAsBottomSheet<T>(BuildContext context) {
+    return showModalBottomSheet<T>(
+      context: context,
+      isScrollControlled: true,           // ⬅️ 키보드/전체 높이 제어
+      useSafeArea: true,                  // ⬅️ 노치/상단 안전영역 고려
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black54,
+      builder: (sheetCtx) {
+        // 키보드가 올라올 때를 대비하여 viewInsets 반영
+        final insets = MediaQuery.of(sheetCtx).viewInsets;
+        return Padding(
+          padding: EdgeInsets.only(bottom: insets.bottom),
+          child: const _FullHeightBottomSheetFrame(
+            child: CompanyCalendarPage(asBottomSheet: true),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   State<CompanyCalendarPage> createState() => _CompanyCalendarPageState();
@@ -105,114 +138,139 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
   Widget build(BuildContext context) {
     final model = context.watch<CalendarModel>();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('회사 달력'),
-        centerTitle: true,
-        backgroundColor: Colors.white,         // ✅ 흰 배경
-        foregroundColor: Colors.black87,       // ✅ 검은 글자/아이콘
-        surfaceTintColor: Colors.white,        // ✅ 머티리얼3 틴트도 흰색으로
-        elevation: 0,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
-        ),
-        actions: [
-          IconButton(
-            tooltip: '완료된 이벤트 보기',
-            icon: const Icon(Icons.done_all),
-            onPressed: () => openCompletedEventsSheet(
-              context: context,
-              allEvents: model.events,
-              onEdit: _openEditSheet, // 리스트 탭 시 수정 시트 열기(선택)
+    final Widget pageBody = Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          // 안내 배너 (리팩토링 + 팔레트 적용)
+          const _InfoBanner(),
+          const SizedBox(height: 12),
+
+          // 입력 + 버튼 (리팩토링 + 팔레트 적용)
+          _CalendarIdSection(
+            controller: _idCtrl,
+            locked: _idLocked,
+            loading: model.loading,
+            onToggleLock: () => setState(() => _idLocked = !_idLocked),
+            onClear: () => setState(() => _idCtrl.clear() ),
+            onLoad: () async {
+              FocusScope.of(context).unfocus();
+              await context.read<CalendarModel>().load(newCalendarId: _idCtrl.text);
+              if (mounted && model.error == null && model.calendarId.isNotEmpty) {
+                _idCtrl.text = model.calendarId;
+                await _saveLastCalendarId(model.calendarId);
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+
+          if (model.loading) const LinearProgressIndicator(color: _CalColors.base),
+          if (model.error != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              model.error!,
+              style: const TextStyle(color: Colors.redAccent),
+            ),
+          ],
+
+          const SizedBox(height: 8),
+
+          // 본문: 좌우 스와이프 전환 (보드 페이지도 유지)
+          Expanded(
+            child: PageView(
+              controller: _pageController,
+              onPageChanged: (i) => setState(() => _viewIndex = i),
+              children: [
+                // 0) 캘린더 뷰(기본)
+                MonthCalendarView(
+                  allEvents: model.events,
+                  progressOf: (e) => _extractProgress(e.description),
+                  onEdit: _openEditSheet,
+                  onDelete: _confirmDelete,
+                  onToggleProgress: _toggleProgress,
+                  onMonthRequested: (monthStart, monthEnd) async {
+                    await context.read<CalendarModel>().loadRange(
+                      timeMin: monthStart,
+                      timeMax: monthEnd,
+                    );
+                  },
+                ),
+                // 1) 목록(Agenda)
+                EventList(
+                  events: model.events,
+                  onEdit: _openEditSheet,
+                  onDelete: _confirmDelete,
+                  onToggleProgress: _toggleProgress,
+                  progressOf: (e) => _extractProgress(e.description),
+                ),
+                // 2) 보드(오늘/이번주/나중에/완료) — 페이지에서도 사용 가능(유지)
+                BoardKanbanView(
+                  allEvents: model.events,
+                  progressOf: (e) => _extractProgress(e.description),
+                  onToggleProgress: _toggleProgress,
+                ),
+              ],
             ),
           ),
         ],
       ),
+    );
 
-      // ✅ FAB를 하단 중앙으로 이동
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-
-      // ✅ Dev와 동일: 왼쪽 '보드', 오른쪽 '새 이벤트' (두 버튼 통일 디자인)
-      floatingActionButton: _buildFabRow(context),
-
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // 안내 배너 (리팩토링 + 팔레트 적용)
-            const _InfoBanner(),
-            const SizedBox(height: 12),
-
-            // 입력 + 버튼 (리팩토링 + 팔레트 적용)
-            _CalendarIdSection(
-              controller: _idCtrl,
-              locked: _idLocked,
-              loading: model.loading,
-              onToggleLock: () => setState(() => _idLocked = !_idLocked),
-              onClear: () => setState(() => _idCtrl.clear() ),
-              onLoad: () async {
-                FocusScope.of(context).unfocus();
-                await context.read<CalendarModel>().load(newCalendarId: _idCtrl.text);
-                if (mounted && model.error == null && model.calendarId.isNotEmpty) {
-                  _idCtrl.text = model.calendarId;
-                  await _saveLastCalendarId(model.calendarId);
-                }
-              },
-            ),
-            const SizedBox(height: 12),
-
-            if (model.loading) const LinearProgressIndicator(color: _CalColors.base),
-            if (model.error != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                model.error!,
-                style: const TextStyle(color: Colors.redAccent),
-              ),
-            ],
-
-            const SizedBox(height: 8),
-
-            // 본문: 좌우 스와이프 전환 (보드 페이지도 유지)
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                onPageChanged: (i) => setState(() => _viewIndex = i),
-                children: [
-                  // 0) 캘린더 뷰(기본)
-                  MonthCalendarView(
-                    allEvents: model.events,
-                    progressOf: (e) => _extractProgress(e.description),
-                    onEdit: _openEditSheet,
-                    onDelete: _confirmDelete,
-                    onToggleProgress: _toggleProgress,
-                    onMonthRequested: (monthStart, monthEnd) async {
-                      await context.read<CalendarModel>().loadRange(
-                        timeMin: monthStart,
-                        timeMax: monthEnd,
-                      );
-                    },
-                  ),
-                  // 1) 목록(Agenda)
-                  EventList(
-                    events: model.events,
-                    onEdit: _openEditSheet,
-                    onDelete: _confirmDelete,
-                    onToggleProgress: _toggleProgress,
-                    progressOf: (e) => _extractProgress(e.description),
-                  ),
-                  // 2) 보드(오늘/이번주/나중에/완료) — 페이지에서도 사용 가능(유지)
-                  BoardKanbanView(
-                    allEvents: model.events,
-                    progressOf: (e) => _extractProgress(e.description),
-                    onToggleProgress: _toggleProgress,
-                  ),
-                ],
+    // ✅ asBottomSheet 여부에 따라 서로 다른 스캐폴드로 감싼다.
+    if (!widget.asBottomSheet) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('회사 달력'),
+          centerTitle: true,
+          backgroundColor: Colors.white, // ✅ 흰 배경
+          foregroundColor: Colors.black87, // ✅ 검은 글자/아이콘
+          surfaceTintColor: Colors.white, // ✅ 머티리얼3 틴트도 흰색으로
+          elevation: 0,
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
+          ),
+          actions: [
+            IconButton(
+              tooltip: '완료된 이벤트 보기',
+              icon: const Icon(Icons.done_all),
+              onPressed: () => openCompletedEventsSheet(
+                context: context,
+                allEvents: model.events,
+                onEdit: _openEditSheet, // 리스트 탭 시 수정 시트 열기(선택)
               ),
             ),
           ],
         ),
-      ),
+
+        // ✅ FAB를 하단 중앙으로 이동
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+
+        // ✅ Dev와 동일: 왼쪽 '보드', 오른쪽 '새 이벤트' (두 버튼 통일 디자인)
+        floatingActionButton: _buildFabRow(context),
+
+        body: pageBody,
+      );
+    }
+
+    // ====== 전체 화면 바텀시트 모드 ======
+    return _SheetScaffold(
+      title: '회사 달력',
+      onClose: () => Navigator.of(context).maybePop(),
+      trailingActions: [
+        IconButton(
+          tooltip: '완료된 이벤트 보기',
+          icon: const Icon(Icons.done_all),
+          onPressed: () => openCompletedEventsSheet(
+            context: context,
+            allEvents: model.events,
+            onEdit: _openEditSheet,
+          ),
+        ),
+      ],
+      body: pageBody,
+      fab: _buildFabRow(context),
+      fabLift: _fabLift,
     );
   }
 
@@ -420,6 +478,132 @@ class _CompanyCalendarPageState extends State<CompanyCalendarPage> {
   }
 }
 
+// ===== “전체 화면” 바텀시트 프레임 =====
+// - showModalBottomSheet 의 builder에서 바로 사용.
+// - 상/하 SafeArea, 둥근 모서리, 배경 투명 + 그림자 포함.
+class _FullHeightBottomSheetFrame extends StatelessWidget {
+  const _FullHeightBottomSheetFrame({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return FractionallySizedBox(
+      heightFactor: 1.0, // ⬅️ 최상단까지
+      widthFactor: 1.0,
+      child: SafeArea(
+        // 상단까지 차오르되 노치/상태바는 피함
+        top: true,
+        bottom: true,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          child: DecoratedBox(
+            decoration: const BoxDecoration(boxShadow: [
+              BoxShadow(
+                blurRadius: 24,
+                spreadRadius: 8,
+                color: Color(0x33000000),
+                offset: Offset(0, 8),
+              ),
+            ]),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Material(
+                color: Colors.white,
+                child: child,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ===== 바텀시트용 “페이지” 스캐폴드 =====
+// - AppBar 대체(핸들 + 타이틀 + 닫기 버튼)
+// - body + 하단 FAB Row(중앙 부근 떠 있는 버튼들)
+class _SheetScaffold extends StatelessWidget {
+  const _SheetScaffold({
+    required this.title,
+    required this.onClose,
+    required this.body,
+    this.trailingActions,
+    this.fab,
+    this.fabLift = 24.0,
+  });
+
+  final String title;
+  final VoidCallback onClose;
+  final List<Widget>? trailingActions;
+  final Widget body;
+  final Widget? fab;
+  final double fabLift;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        // 본문
+        Column(
+          children: [
+            const SizedBox(height: 8),
+            // 상단 핸들
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 8),
+            // 헤더(타이틀/닫기)
+            ListTile(
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+              title: Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (trailingActions != null) ...trailingActions!,
+                  IconButton(
+                    tooltip: '닫기',
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: onClose,
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // 본문 스크롤
+            Expanded(child: body),
+            const SizedBox(height: 64), // FAB Row 공간 확보
+          ],
+        ),
+
+        // FAB Row (하단 중앙)
+        if (fab != null)
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: false,
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Transform.translate(
+                  offset: Offset(0, -fabLift),
+                  child: fab!,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 // ===== 바텀시트용 보드 래퍼(상단 핸들/닫기 버튼 포함) =====
 class _BoardSheetScaffold extends StatelessWidget {
   const _BoardSheetScaffold({required this.child});
@@ -496,7 +680,7 @@ class _InfoBanner extends StatelessWidget {
           SizedBox(width: 10),
           Expanded(
             child: Text(
-                  '이벤트 완료는 보드에서,\n이벤트 수정 및 삭제와 상세 보기는 목록에서',
+              '이벤트 완료는 보드에서,\n이벤트 수정 및 삭제와 상세 보기는 목록에서',
               style: TextStyle(
                 color: _CalColors.fg,
                 fontWeight: FontWeight.w700,
@@ -538,7 +722,11 @@ class _CalendarIdSection extends StatelessWidget {
       ),
       onPressed: loading ? null : onLoad,
       icon: loading
-          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: _CalColors.fg))
+          ? const SizedBox(
+        width: 16,
+        height: 16,
+        child: CircularProgressIndicator(strokeWidth: 2, color: _CalColors.fg),
+      )
           : const Icon(Icons.download_rounded),
       label: const Text('불러오기'),
     );
@@ -598,7 +786,6 @@ class _CalendarIdSection extends StatelessWidget {
                     ],
                   ),
                 ),
-
               ),
             );
           },

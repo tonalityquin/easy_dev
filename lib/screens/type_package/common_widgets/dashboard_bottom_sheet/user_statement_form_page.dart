@@ -11,27 +11,60 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:googleapis/gmail/v1.dart' as gmail;
 
-// ✅ v7 호환 레이어(전역 세션에서 AuthClient 재사용)
-// (현재 파일 위치에서 utils 까지의 상대경로: ../../../../utils/)
 import '../../../../utils/google_auth_v7.dart';
-// ✅ 수신자(To)만 저장소에서 로드
 import '../../../../utils/email_config.dart';
 
-class StatementFormPage extends StatefulWidget {
-  const StatementFormPage({super.key});
+class UserStatementFormPage extends StatefulWidget {
+  const UserStatementFormPage({super.key});
 
   @override
-  State<StatementFormPage> createState() => _StatementFormPageState();
+  State<UserStatementFormPage> createState() => _UserStatementFormPageState();
 }
 
-class _StatementFormPageState extends State<StatementFormPage> {
+/// 앱 공통 버튼 스타일(참고: HomeBreakButtonWidget)
+class _AppButtonStyles {
+  static const _radius = 8.0;
+
+  /// AppBar 등 가로 제약이 있는 곳에서도 안전하게 동작하도록
+  /// minWidth=0, minHeight만 지정 (⚠️ Size.fromHeight 사용 금지)
+  static ButtonStyle primary({double minHeight = 55}) {
+    return ElevatedButton.styleFrom(
+      backgroundColor: Colors.white,
+      foregroundColor: Colors.black,
+      minimumSize: Size(0, minHeight), // ✅ 가로 무한 너비 방지
+      padding: EdgeInsets.zero,
+      side: const BorderSide(color: Colors.grey, width: 1.0),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_radius)),
+      elevation: 0,
+    ).copyWith(
+      overlayColor: MaterialStateProperty.resolveWith<Color?>(
+            (states) => states.contains(MaterialState.pressed) ? Colors.black12 : null,
+      ),
+    );
+  }
+
+  static ButtonStyle outlined({double minHeight = 55}) {
+    return OutlinedButton.styleFrom(
+      foregroundColor: Colors.black,
+      backgroundColor: Colors.white,
+      side: const BorderSide(color: Colors.grey, width: 1.0),
+      minimumSize: Size(0, minHeight), // ✅ 가로 무한 너비 방지
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_radius)),
+    );
+  }
+
+  static ButtonStyle smallPrimary() => primary(minHeight: 44);
+  static ButtonStyle smallOutlined() => outlined(minHeight: 44);
+}
+
+class _UserStatementFormPageState extends State<UserStatementFormPage> {
   final _formKey = GlobalKey<FormState>();
 
   // ── 입력 컨트롤러 ────────────────────────────────────────────────────────────
-  final _deptCtrl = TextEditingController();      // 소속
-  final _nameCtrl = TextEditingController();      // 성명
-  final _positionCtrl = TextEditingController();  // 직책
-  final _contentCtrl = TextEditingController();   // 내용(육하원칙 기반)
+  final _deptCtrl = TextEditingController(); // 소속
+  final _nameCtrl = TextEditingController(); // 성명
+  final _positionCtrl = TextEditingController(); // 직책
+  final _contentCtrl = TextEditingController(); // 내용(육하원칙 기반)
 
   // ✉️ 메일 제목/본문(이 화면에서 직접 작성)
   final _mailSubjectCtrl = TextEditingController();
@@ -103,6 +136,7 @@ class _StatementFormPageState extends State<StatementFormPage> {
   }
 
   Future<void> _pickDateTime() async {
+    HapticFeedback.selectionClick();
     final now = DateTime.now();
     final date = await showDatePicker(
       context: context,
@@ -127,6 +161,7 @@ class _StatementFormPageState extends State<StatementFormPage> {
   }
 
   void _reset() {
+    HapticFeedback.lightImpact();
     _formKey.currentState?.reset();
     _deptCtrl.clear();
     _nameCtrl.clear();
@@ -149,9 +184,9 @@ class _StatementFormPageState extends State<StatementFormPage> {
     return [
       '— 경위서 —',
       '',
-      '소속: ${_deptCtrl.text}',
-      '성명: ${_nameCtrl.text}',
-      '직책: ${_positionCtrl.text}',
+      '소속: ${(_deptCtrl.text).trim()}',
+      '성명: ${(_nameCtrl.text).trim()}',
+      '직책: ${(_positionCtrl.text).trim()}',
       '일시: ${_fmtDT(context, _eventDateTime)}',
       '',
       '[내용(육하원칙 기반)]',
@@ -166,6 +201,7 @@ class _StatementFormPageState extends State<StatementFormPage> {
   }
 
   Future<void> _showPreview() async {
+    HapticFeedback.lightImpact();
     final text = _buildPreviewText(context);
     await showDialog(
       context: context,
@@ -173,35 +209,38 @@ class _StatementFormPageState extends State<StatementFormPage> {
         title: const Text('미리보기'),
         content: SizedBox(
           width: 520,
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SelectableText(text),
-                const SizedBox(height: 12),
-                if (_signaturePngBytes != null) ...[
-                  const Text('서명 이미지'),
-                  const SizedBox(height: 8),
-                  Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.black26),
-                      borderRadius: BorderRadius.circular(8),
+          child: Scrollbar(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SelectableText(text),
+                  const SizedBox(height: 12),
+                  if (_signaturePngBytes != null) ...[
+                    const Text('서명 이미지'),
+                    const SizedBox(height: 8),
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.black26),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      padding: const EdgeInsets.all(6),
+                      child: Image.memory(
+                        _signaturePngBytes!,
+                        fit: BoxFit.contain,
+                        height: 160,
+                      ),
                     ),
-                    padding: const EdgeInsets.all(6),
-                    child: Image.memory(
-                      _signaturePngBytes!,
-                      fit: BoxFit.contain,
-                      height: 160,
-                    ),
-                  ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () async {
+              HapticFeedback.selectionClick();
               await Clipboard.setData(ClipboardData(text: text));
               if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
@@ -222,6 +261,7 @@ class _StatementFormPageState extends State<StatementFormPage> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
+    HapticFeedback.lightImpact();
     setState(() => _sending = true);
     try {
       // ① 저장된 수신자(To) 로드 및 검증
@@ -358,7 +398,8 @@ class _StatementFormPageState extends State<StatementFormPage> {
       children: [
         pw.SizedBox(height: 8),
         pw.Text(title,
-            style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+            style:
+            pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
         pw.SizedBox(height: 4),
         pw.Container(
           width: double.infinity,
@@ -377,7 +418,8 @@ class _StatementFormPageState extends State<StatementFormPage> {
 
     pw.Widget buildSignature() {
       final name = _signerName.isEmpty ? '이름 미입력' : _signerName;
-      final timeText = _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
+      final timeText =
+      _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
 
       return pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -389,10 +431,12 @@ class _StatementFormPageState extends State<StatementFormPage> {
           pw.Row(
             children: [
               pw.Expanded(
-                child: pw.Text('서명자: $name', style: const pw.TextStyle(fontSize: 11)),
+                child: pw.Text('서명자: $name',
+                    style: const pw.TextStyle(fontSize: 11)),
               ),
               pw.SizedBox(width: 8),
-              pw.Text('서명 일시: $timeText', style: const pw.TextStyle(fontSize: 11)),
+              pw.Text('서명 일시: $timeText',
+                  style: const pw.TextStyle(fontSize: 11)),
             ],
           ),
           pw.SizedBox(height: 4),
@@ -406,7 +450,8 @@ class _StatementFormPageState extends State<StatementFormPage> {
             child: _signaturePngBytes == null
                 ? pw.Center(
               child: pw.Text('서명 이미지 없음',
-                  style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey)),
+                  style: const pw.TextStyle(
+                      fontSize: 10, color: PdfColors.grey)),
             )
                 : pw.Padding(
               padding: const pw.EdgeInsets.all(6),
@@ -429,7 +474,8 @@ class _StatementFormPageState extends State<StatementFormPage> {
           pw.Center(
             child: pw.Text(
               '경위서',
-              style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+              style:
+              pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
             ),
           ),
           pw.SizedBox(height: 12),
@@ -461,7 +507,8 @@ class _StatementFormPageState extends State<StatementFormPage> {
     final client = await GoogleAuthV7.authedClient(const <String>[]);
     final api = gmail.GmailApi(client);
 
-    final boundary = 'dart-mail-boundary-${DateTime.now().millisecondsSinceEpoch}';
+    final boundary =
+        'dart-mail-boundary-${DateTime.now().millisecondsSinceEpoch}';
     final subjectB64 = base64.encode(utf8.encode(subject));
     final sb = StringBuffer()
       ..writeln('To: $to')
@@ -490,9 +537,67 @@ class _StatementFormPageState extends State<StatementFormPage> {
   }
 
   // ── UI ─────────────────────────────────────────────────────────────────────
+  InputDecoration _inputDec({
+    required String labelText,
+    String? hintText,
+  }) {
+    return InputDecoration(
+      labelText: labelText,
+      hintText: hintText,
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.grey),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.grey),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Colors.black),
+      ),
+      contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+    );
+  }
+
+  Widget _sectionCard({
+    required String title,
+    required Widget child,
+    EdgeInsetsGeometry padding = const EdgeInsets.all(12),
+    EdgeInsetsGeometry? margin,
+  }) {
+    return Card(
+      elevation: 0,
+      margin: margin ?? const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Colors.black12),
+      ),
+      color: Colors.white,
+      child: Padding(
+        padding: padding,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 10),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _gap(double h) => SizedBox(height: h);
 
   Future<void> _openSignatureDialog() async {
+    HapticFeedback.selectionClick();
     final result = await showGeneralDialog<_SignatureResult>(
       context: context,
       barrierLabel: '서명',
@@ -525,295 +630,357 @@ class _StatementFormPageState extends State<StatementFormPage> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
+      backgroundColor: const Color(0xFFF6F7F9),
       appBar: AppBar(
         title: const Text('경위서 작성'),
         centerTitle: true,
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
-        bottom: const PreferredSize(
-          preferredSize: Size.fromHeight(1),
-          child: SizedBox(height: 1, child: ColoredBox(color: Colors.black12)),
+        surfaceTintColor: Colors.transparent,
+        shape: const Border(
+          bottom: BorderSide(color: Colors.black12, width: 1),
         ),
         actions: [
-          IconButton(
-            tooltip: '미리보기',
-            onPressed: _showPreview,
-            icon: const Icon(Icons.visibility_outlined),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ElevatedButton.icon(
+              onPressed: _showPreview,
+              icon: const Icon(Icons.visibility_outlined),
+              label: const Text('미리보기'),
+              style: _AppButtonStyles.smallPrimary(), // ✅ AppBar 안전 스타일
+            ),
           ),
         ],
       ),
+
+      /// ✅ 키패드가 올라와도 제출 버튼이 자동으로 위로 올라오도록 bottomNavigationBar 사용
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 10,
+            // 키보드 높이만큼 추가로 올림
+            bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              top: BorderSide(color: Colors.black12, width: 1),
+            ),
+          ),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _sending ? null : _submit,
+              icon: _sending
+                  ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor:
+                  AlwaysStoppedAnimation<Color>(Colors.black),
+                ),
+              )
+                  : const Icon(Icons.send_outlined),
+              label: Text(
+                _sending ? '전송 중…' : '제출',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              style: _AppButtonStyles.primary(),
+            ),
+          ),
+        ),
+      ),
+
       body: SafeArea(
         child: Form(
           key: _formKey,
           autovalidateMode: AutovalidateMode.onUserInteraction,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              // 상단 안내
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: cs.secondaryContainer.withOpacity(.7),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Text(
-                  '사실에 근거해 간결하고 명확하게 작성해 주세요. (내용은 육하원칙: 누가/언제/어디서/무엇을/왜/어떻게)',
-                ),
-              ),
-              _gap(16),
-
-              // 소속 / 성명
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _deptCtrl,
-                      focusNode: _deptNode,
-                      decoration: InputDecoration(
-                        labelText: '소속 (필수)',
-                        hintText: '예: 본사 IT본부',
-                        filled: true,
-                        fillColor: cs.surfaceVariant.withOpacity(.35),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 14,
-                          horizontal: 12,
-                        ),
-                      ),
-                      textInputAction: TextInputAction.next,
-                      onFieldSubmitted: (_) => _nameNode.requestFocus(),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? '소속을 입력하세요.' : null,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _nameCtrl,
-                      focusNode: _nameNode,
-                      decoration: InputDecoration(
-                        labelText: '성명 (필수)',
-                        hintText: '예: 홍길동',
-                        filled: true,
-                        fillColor: cs.surfaceVariant.withOpacity(.35),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 14,
-                          horizontal: 12,
-                        ),
-                      ),
-                      textInputAction: TextInputAction.next,
-                      onFieldSubmitted: (_) => _positionNode.requestFocus(),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? '성명을 입력하세요.' : null,
-                    ),
-                  ),
-                ],
-              ),
-              _gap(12),
-
-              // 직책
-              TextFormField(
-                controller: _positionCtrl,
-                focusNode: _positionNode,
-                decoration: InputDecoration(
-                  labelText: '직책 (필수)',
-                  hintText: '예: 매니저 / 대리 / 주임 등',
-                  filled: true,
-                  fillColor: cs.surfaceVariant.withOpacity(.35),
-                  border: OutlineInputBorder(
+          child: Scrollbar(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                // 안내 배너
+                Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: cs.outlineVariant),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                ),
-                textInputAction: TextInputAction.next,
-                onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
-                validator: (v) => (v == null || v.trim().isEmpty) ? '직책을 입력하세요.' : null,
-              ),
-              _gap(12),
-
-              // 일시
-              ListTile(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  side: BorderSide(color: cs.outlineVariant),
-                ),
-                title: const Text('일시 (필수)'),
-                subtitle: Text(_fmtDT(context, _eventDateTime)),
-                trailing: const Icon(Icons.event_outlined),
-                onTap: _pickDateTime,
-              ),
-              _gap(12),
-
-              // 내용(육하원칙)
-              TextFormField(
-                controller: _contentCtrl,
-                focusNode: _contentNode,
-                decoration: InputDecoration(
-                  labelText: '내용 (육하원칙 기반, 필수)',
-                  hintText: '누가/언제/어디서/무엇을/왜/어떻게 순으로 구체적으로 작성해 주세요.',
-                  filled: true,
-                  fillColor: cs.surfaceVariant.withOpacity(.35),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                ),
-                keyboardType: TextInputType.multiline,
-                minLines: 8,
-                maxLines: 16,
-                validator: (v) => (v == null || v.trim().isEmpty) ? '내용을 입력하세요.' : null,
-              ),
-
-              _gap(20),
-
-              // ✉️ 메일 전송 내용
-              Text(
-                '메일 전송 내용',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _mailSubjectCtrl,
-                decoration: InputDecoration(
-                  labelText: '메일 제목(필수)',
-                  hintText: '예: 경위서 – ${DateTime.now().month}월 ${DateTime.now().day}일 건',
-                  filled: true,
-                  fillColor: cs.surfaceVariant.withOpacity(.35),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                ),
-                textInputAction: TextInputAction.next,
-                validator: (v) => (v == null || v.trim().isEmpty) ? '메일 제목을 입력하세요.' : null,
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _mailBodyCtrl,
-                decoration: InputDecoration(
-                  labelText: '메일 본문',
-                  hintText: '메일 본문을 입력하세요. (선택)',
-                  filled: true,
-                  fillColor: cs.surfaceVariant.withOpacity(.35),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-                ),
-                minLines: 3,
-                maxLines: 8,
-              ),
-
-              _gap(20),
-
-              // 전자서명 섹션
-              Text(
-                '전자서명',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                decoration: BoxDecoration(
-                  color: cs.surfaceVariant.withOpacity(.35),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Wrap(
-                  spacing: 16,
-                  runSpacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.person_outline, size: 18),
-                        const SizedBox(width: 6),
-                        Text('서명자: ${_signerName.isEmpty ? "이름 미입력" : _signerName}'),
+                  color: Colors.white,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Icon(Icons.info_outline, size: 18),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            '사실에 근거해 간결하고 명확하게 작성해 주세요. (육하원칙: 누가/언제/어디서/무엇을/왜/어떻게)',
+                          ),
+                        ),
                       ],
                     ),
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.access_time, size: 18),
-                        const SizedBox(width: 6),
-                        Text('서명 일시: ${_signDateTime == null ? "저장 시 자동" : _fmtCompact(_signDateTime!)}'),
-                      ],
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: _openSignatureDialog,
-                      icon: const Icon(Icons.border_color),
-                      label: const Text('서명하기'),
-                    ),
-                    if (_signaturePngBytes != null)
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          setState(() {
-                            _signaturePngBytes = null;
-                            _signDateTime = null;
-                          });
-                        },
-                        icon: const Icon(Icons.delete_outline),
-                        label: const Text('서명 삭제'),
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 8),
-
-              if (_signaturePngBytes != null)
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(color: cs.outlineVariant),
-                    borderRadius: BorderRadius.circular(12),
                   ),
-                  padding: const EdgeInsets.all(8),
-                  child: Row(
+                ),
+                _gap(12),
+
+                // 기본 정보
+                _sectionCard(
+                  title: '기본 정보',
+                  child: Column(
                     children: [
-                      Expanded(
-                        child: Image.memory(
-                          _signaturePngBytes!,
-                          height: 120,
-                          fit: BoxFit.contain,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: _deptCtrl,
+                              focusNode: _deptNode,
+                              decoration: _inputDec(
+                                labelText: '소속 (필수)',
+                                hintText: '예: 본사 IT본부',
+                              ),
+                              textInputAction: TextInputAction.next,
+                              onFieldSubmitted: (_) => _nameNode.requestFocus(),
+                              validator: (v) =>
+                              (v == null || v.trim().isEmpty) ? '소속을 입력하세요.' : null,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextFormField(
+                              controller: _nameCtrl,
+                              focusNode: _nameNode,
+                              decoration: _inputDec(
+                                labelText: '성명 (필수)',
+                                hintText: '예: 홍길동',
+                              ),
+                              textInputAction: TextInputAction.next,
+                              onFieldSubmitted: (_) => _positionNode.requestFocus(),
+                              validator: (v) =>
+                              (v == null || v.trim().isEmpty) ? '성명을 입력하세요.' : null,
+                            ),
+                          ),
+                        ],
+                      ),
+                      _gap(12),
+                      TextFormField(
+                        controller: _positionCtrl,
+                        focusNode: _positionNode,
+                        decoration: _inputDec(
+                          labelText: '직책 (필수)',
+                          hintText: '예: 매니저 / 대리 / 주임 등',
+                        ),
+                        textInputAction: TextInputAction.next,
+                        onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
+                        validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? '직책을 입력하세요.' : null,
+                      ),
+                      _gap(12),
+                      // 일시 선택
+                      InkWell(
+                        onTap: _pickDateTime,
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 12),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.event_outlined),
+                              const SizedBox(width: 10),
+                              const Text('일시 (필수)',
+                                  style: TextStyle(fontWeight: FontWeight.w600)),
+                              const Spacer(),
+                              Text(
+                                _fmtDT(context, _eventDateTime),
+                                style: const TextStyle(color: Colors.black54),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
 
-              _gap(20),
+                // 내용 섹션
+                _sectionCard(
+                  title: '내용 (육하원칙 기반, 필수)',
+                  child: TextFormField(
+                    controller: _contentCtrl,
+                    focusNode: _contentNode,
+                    decoration: _inputDec(
+                      labelText: '내용',
+                      hintText:
+                      '누가/언제/어디서/무엇을/왜/어떻게 순으로 구체적으로 작성해 주세요.',
+                    ),
+                    keyboardType: TextInputType.multiline,
+                    minLines: 8,
+                    maxLines: 16,
+                    validator: (v) =>
+                    (v == null || v.trim().isEmpty) ? '내용을 입력하세요.' : null,
+                  ),
+                ),
 
-              // 액션 버튼들
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _sending ? null : _reset,
-                      icon: const Icon(Icons.refresh_outlined),
-                      label: const Text('초기화'),
-                    ),
+                // 메일 전송 내용
+                _sectionCard(
+                  title: '메일 전송 내용',
+                  child: Column(
+                    children: [
+                      TextFormField(
+                        controller: _mailSubjectCtrl,
+                        decoration: _inputDec(
+                          labelText: '메일 제목(필수)',
+                          hintText:
+                          '예: 경위서 – ${DateTime.now().month}월 ${DateTime.now().day}일 건',
+                        ),
+                        textInputAction: TextInputAction.next,
+                        validator: (v) =>
+                        (v == null || v.trim().isEmpty) ? '메일 제목을 입력하세요.' : null,
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _mailBodyCtrl,
+                        decoration: _inputDec(
+                          labelText: '메일 본문',
+                          hintText: '메일 본문을 입력하세요. (선택)',
+                        ),
+                        minLines: 3,
+                        maxLines: 8,
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _sending ? null : _showPreview,
-                      icon: const Icon(Icons.visibility_outlined),
-                      label: const Text('미리보기'),
-                    ),
+                ),
+
+                // 전자서명
+                _sectionCard(
+                  title: '전자서명',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 8, horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(color: Colors.black12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Wrap(
+                          spacing: 16,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.person_outline, size: 18),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '서명자: ${_signerName.isEmpty ? "이름 미입력" : _signerName}',
+                                  style:
+                                  const TextStyle(fontWeight: FontWeight.w500),
+                                ),
+                              ],
+                            ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.access_time, size: 18),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '서명 일시: ${_signDateTime == null ? "저장 시 자동" : _fmtCompact(_signDateTime!)}',
+                                  style: const TextStyle(color: Colors.black87),
+                                ),
+                              ],
+                            ),
+                            ElevatedButton.icon(
+                              onPressed: _openSignatureDialog,
+                              icon: const Icon(Icons.border_color),
+                              label: const Text('서명하기'),
+                              style: _AppButtonStyles.smallPrimary(),
+                            ),
+                            if (_signaturePngBytes != null)
+                              OutlinedButton.icon(
+                                onPressed: () {
+                                  HapticFeedback.selectionClick();
+                                  setState(() {
+                                    _signaturePngBytes = null;
+                                    _signDateTime = null;
+                                  });
+                                },
+                                icon: const Icon(Icons.delete_outline),
+                                label: const Text('서명 삭제'),
+                                style: _AppButtonStyles.smallOutlined(),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      if (_signaturePngBytes != null)
+                        Container(
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.black12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          padding: const EdgeInsets.all(8),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Image.memory(
+                                  _signaturePngBytes!,
+                                  height: 120,
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
                   ),
-                ],
-              ),
-              _gap(12),
-              FilledButton.icon(
-                onPressed: _sending ? null : _submit,
-                icon: _sending
-                    ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-                    : const Icon(Icons.send_outlined),
-                label: Text(_sending ? '전송 중…' : '제출'),
-              ),
-            ],
+                ),
+
+                _gap(8),
+
+                // 액션 버튼들 (미리보기/초기화)
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _sending ? null : _reset,
+                        icon: const Icon(Icons.refresh_outlined),
+                        label: const Text('초기화'),
+                        style: _AppButtonStyles.outlined(),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _sending ? null : _showPreview,
+                        icon: const Icon(Icons.visibility_outlined),
+                        label: const Text('미리보기'),
+                        style: _AppButtonStyles.primary(),
+                      ),
+                    ),
+                  ],
+                ),
+
+                // 리스트 끝부분에 여유를 둬서 스크롤 막힘/가림 방지
+                const SizedBox(height: 20),
+              ],
+            ),
           ),
         ),
       ),
@@ -854,9 +1021,13 @@ class _SignatureFullScreenDialogState
 
   bool get _hasAny => _points.any((p) => p != null);
 
-  void _clear() => setState(() => _points.clear());
+  void _clear() {
+    HapticFeedback.selectionClick();
+    setState(() => _points.clear());
+  }
 
   void _undo() {
+    HapticFeedback.selectionClick();
     if (_points.isEmpty) return;
     int i = _points.length - 1;
     if (_points[i] == null) {
@@ -875,6 +1046,7 @@ class _SignatureFullScreenDialogState
 
   Future<void> _save() async {
     try {
+      HapticFeedback.lightImpact();
       setState(() {
         _signDateTime = DateTime.now(); // 저장 시각 자동
       });
@@ -908,7 +1080,6 @@ class _SignatureFullScreenDialogState
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     final name = widget.name.isEmpty ? '이름 미입력' : widget.name;
     final timeText =
     _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
@@ -919,9 +1090,14 @@ class _SignatureFullScreenDialogState
         child: Scaffold(
           backgroundColor: Colors.white,
           appBar: AppBar(
-            backgroundColor: cs.surface,
+            backgroundColor: Colors.white,
             title: const Text('전자서명'),
             centerTitle: true,
+            elevation: 0,
+            surfaceTintColor: Colors.transparent,
+            shape: const Border(
+              bottom: BorderSide(color: Colors.black12, width: 1),
+            ),
             leading: IconButton(
               icon: const Icon(Icons.close),
               onPressed: () => Navigator.of(context).pop(),
@@ -940,17 +1116,14 @@ class _SignatureFullScreenDialogState
               ),
               const SizedBox(width: 4),
             ],
-            bottom: const PreferredSize(
-              preferredSize: Size.fromHeight(1),
-              child: SizedBox(height: 1, child: ColoredBox(color: Colors.black12)),
-            ),
           ),
           body: Column(
             children: [
               // 상단 정보 바
               Container(
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-                decoration: BoxDecoration(color: cs.surfaceVariant.withOpacity(.35)),
+                padding:
+                const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                decoration: const BoxDecoration(color: Colors.white),
                 child: Row(
                   children: [
                     Expanded(
@@ -988,7 +1161,8 @@ class _SignatureFullScreenDialogState
                     ),
                     const SizedBox(width: 8),
                     TextButton.icon(
-                      onPressed: () => setState(() => _signDateTime = DateTime.now()),
+                      onPressed: () =>
+                          setState(() => _signDateTime = DateTime.now()),
                       icon: const Icon(Icons.schedule),
                       label: const Text('지금'),
                     ),
@@ -1008,8 +1182,10 @@ class _SignatureFullScreenDialogState
                         builder: (context, constraints) {
                           return GestureDetector(
                             behavior: HitTestBehavior.translucent,
-                            onPanStart: (d) => setState(() => _points.add(d.localPosition)),
-                            onPanUpdate: (d) => setState(() => _points.add(d.localPosition)),
+                            onPanStart: (d) =>
+                                setState(() => _points.add(d.localPosition)),
+                            onPanUpdate: (d) =>
+                                setState(() => _points.add(d.localPosition)),
                             onPanEnd: (_) => setState(() => _points.add(null)),
                             child: CustomPaint(
                               painter: _SignaturePainter(
@@ -1040,14 +1216,16 @@ class _SignatureFullScreenDialogState
                         onPressed: () => Navigator.of(context).pop(),
                         icon: const Icon(Icons.cancel_outlined),
                         label: const Text('취소'),
+                        style: _AppButtonStyles.outlined(),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: FilledButton.icon(
+                      child: ElevatedButton.icon(
                         onPressed: _hasAny ? _save : null,
                         icon: const Icon(Icons.save_alt),
                         label: const Text('저장'),
+                        style: _AppButtonStyles.primary(),
                       ),
                     ),
                   ],
@@ -1107,6 +1285,11 @@ class _SignaturePainter extends CustomPainter {
       ..color = Colors.black12
       ..strokeWidth = 1;
     canvas.drawLine(
+      const Offset(8, 40), // 상단 가이드가 좋으면 이 값을 바꾸세요
+      Offset(size.width - 8, 40),
+      guide,
+    );
+    canvas.drawLine(
       Offset(8, size.height - 40),
       Offset(size.width - 8, size.height - 40),
       guide,
@@ -1152,7 +1335,7 @@ class _SignaturePainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: size.width - 16);
 
-    final pad = 8.0;
+    const pad = 8.0;
     final dx = size.width - overlayTP.width - pad;
     final dy = size.height - overlayTP.height - pad;
     overlayTP.paint(canvas, Offset(dx, dy));
