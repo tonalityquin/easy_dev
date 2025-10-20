@@ -4,14 +4,23 @@
 //   await DashMemo.init();           // (지연 초기화 가능)
 //   DashMemo.mountIfNeeded();        // enabled=true면 버블 부착
 //   await DashMemo.togglePanel();    // 메모 시트 열기
+//
+// 변경 사항:
+// - ".txt로 내보내기" 버튼/기능 제거
+// - 이메일 전송(첨부)만 제공: 헤더에 "이메일" 버튼 추가
 
+import 'dart:convert';
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, HapticFeedback;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:googleapis/gmail/v1.dart' as gmail;
 
 import '../../../../../utils/app_navigator.dart';
+import '../../../../../utils/google_auth_session.dart';
+import '../../../../../utils/email_config.dart';
 
 class DashMemo {
   DashMemo._();
@@ -293,6 +302,7 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
   final TextEditingController _inputCtrl = TextEditingController();
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = '';
+  bool _sending = false;
 
   @override
   void initState() {
@@ -329,7 +339,7 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
                   _DragHandle(),
                   const SizedBox(height: 12),
 
-                  // 헤더: 타이틀 · 온/오프 · 닫기
+                  // 헤더: 타이틀 · 온/오프 · 이메일 · 닫기
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
@@ -338,6 +348,7 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
                         const SizedBox(width: 8),
                         Text('메모', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
                         const Spacer(),
+                        // on/off
                         ValueListenableBuilder<bool>(
                           valueListenable: DashMemo.enabled,
                           builder: (_, on, __) => Row(
@@ -347,6 +358,16 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
                               Switch(value: on, onChanged: (v) => DashMemo.enabled.value = v),
                             ],
                           ),
+                        ),
+                        const SizedBox(width: 8),
+                        // 이메일 전송 (내보내기 버튼 제거됨)
+                        IconButton(
+                          tooltip: _sending ? '전송 중...' : '이메일로 보내기',
+                          onPressed: _sending ? null : _sendNotesByEmail,
+                          icon: _sending
+                              ? const SizedBox(
+                              width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.email_outlined),
                         ),
                         IconButton(
                           tooltip: '닫기',
@@ -494,6 +515,79 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
           ),
         ),
       ),
+    );
+  }
+
+  // ---------- 이메일 전송 ----------
+
+  Future<void> _sendNotesByEmail() async {
+    final notes = DashMemo.notes.value;
+    if (notes.isEmpty) {
+      _showSnack('보낼 메모가 없습니다.');
+      return;
+    }
+
+    final cfg = await EmailConfig.load();
+    if (!EmailConfig.isValidToList(cfg.to)) {
+      _showSnack('수신자(To) 설정이 필요합니다: 설정 화면에서 이메일을 입력하세요.');
+      return;
+    }
+
+    setState(() => _sending = true);
+    try {
+      // 본문/첨부 내용 생성
+      final now = DateTime.now();
+      final subject = 'DashMemo export (${DateFormat('yyyy-MM-dd').format(now)})';
+      final filename = 'dash_memo_${DateFormat('yyyyMMdd_HHmmss').format(now)}.txt';
+      final contentLines = notes; // 이미 최신순 문자열 리스트
+      final fileText = contentLines.join('\n'); // LF 사용, UTF-8
+
+      // MIME multipart 작성
+      final boundary = 'dashmemo_${now.millisecondsSinceEpoch}';
+      final bodyText = '첨부된 텍스트 파일에 메모가 포함되어 있습니다.';
+      final toCsv = cfg.to;
+
+      final attachmentB64 = base64.encode(utf8.encode(fileText)); // 표준 base64
+      final mime = StringBuffer()
+        ..writeln('MIME-Version: 1.0')
+        ..writeln('To: $toCsv')
+        ..writeln('Subject: $subject')
+        ..writeln('Content-Type: multipart/mixed; boundary="$boundary"')
+        ..writeln()
+        ..writeln('--$boundary')
+        ..writeln('Content-Type: text/plain; charset="utf-8"')
+        ..writeln('Content-Transfer-Encoding: 7bit')
+        ..writeln()
+        ..writeln(bodyText)
+        ..writeln()
+        ..writeln('--$boundary')
+        ..writeln('Content-Type: text/plain; charset="utf-8"; name="$filename"')
+        ..writeln('Content-Disposition: attachment; filename="$filename"')
+        ..writeln('Content-Transfer-Encoding: base64')
+        ..writeln()
+        ..writeln(attachmentB64)
+        ..writeln('--$boundary--');
+
+      // 전체 RAW를 base64url 인코딩
+      final raw = base64Url.encode(utf8.encode(mime.toString()));
+
+      final client = await GoogleAuthSession.instance.client(); // googleapis_auth.AuthClient
+      final api = gmail.GmailApi(client);
+      final message = gmail.Message()..raw = raw;
+
+      await api.users.messages.send(message, 'me');
+
+      _showSnack('이메일을 보냈습니다.');
+    } catch (e) {
+      _showSnack('전송 실패: $e');
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  void _showSnack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating, duration: const Duration(seconds: 2)),
     );
   }
 

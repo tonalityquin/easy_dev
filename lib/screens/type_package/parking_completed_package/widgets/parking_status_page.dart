@@ -7,6 +7,9 @@ import 'package:provider/provider.dart';
 
 import '../../../../states/location/location_state.dart';
 import '../../../../states/area/area_state.dart';
+
+// ⬇️ 추가: DashMemo 메모를 읽어오기 위해 import
+import '../../../type_package/common_widgets/dashboard_bottom_sheet/memo/dash_memo.dart';
 // import '../../../../utils/usage_reporter.dart';;
 
 class ParkingStatusPage extends StatefulWidget {
@@ -217,8 +220,13 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
 
                   const SizedBox(height: 24),
 
-                  // ⬇️ 하단 자동 순환 카드: 한 화면에 한 장, 몇 초마다 다음 카드로 애니메이션
+                  // ⬇️ 기존 자동 순환 카드 (2초 주기, 고정 문구)
                   const _AutoCyclingReminderCards(),
+
+                  const SizedBox(height: 12),
+
+                  // ⬇️ 추가: DashMemo 메모 자동 순환 카드 (1초 주기)
+                  const _AutoCyclingMemoCards(),
 
                   const SizedBox(height: 12),
                 ],
@@ -439,4 +447,231 @@ class _ReminderContent {
   final String title;
   final List<String> lines;
   const _ReminderContent({required this.title, required this.lines});
+}
+
+// ⬇️ 추가: DashMemo 메모를 1초 주기로 넘기는 자동 순환 카드
+class _AutoCyclingMemoCards extends StatefulWidget {
+  const _AutoCyclingMemoCards();
+
+  @override
+  State<_AutoCyclingMemoCards> createState() => _AutoCyclingMemoCardsState();
+}
+
+class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
+  // ✔ 1초 주기로 전환 (요청사항)
+  static const Duration cycleInterval = Duration(milliseconds: 1500);
+  static const Duration animDuration = Duration(milliseconds: 300);
+  static const Curve animCurve = Curves.easeInOut;
+
+  final PageController _pageController = PageController();
+  Timer? _timer;
+  int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _startAutoCycle();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _startAutoCycle() {
+    _timer?.cancel();
+    _timer = Timer.periodic(cycleInterval, (_) {
+      if (!mounted) return;
+      final list = DashMemo.notes.value;
+      if (list.length <= 1) return; // 0/1개면 넘기지 않음
+      final next = (_currentIndex + 1) % list.length;
+      _animateToPage(next);
+    });
+  }
+
+  void _animateToPage(int index) {
+    _currentIndex = index;
+    if (!mounted) return;
+    // itemCount가 줄어든 경우를 대비해 안전 처리
+    final total = DashMemo.notes.value.length;
+    if (total == 0) return;
+    if (_currentIndex >= total) _currentIndex = 0;
+
+    _pageController.animateToPage(
+      _currentIndex,
+      duration: animDuration,
+      curve: animCurve,
+    );
+    setState(() {}); // 인디케이터 확장 대비
+  }
+
+  // "YYYY-MM-DD HH:mm | 내용" → (time, text) 파싱
+  (String, String) _parseLine(String line) {
+    final split = line.indexOf('|');
+    if (split < 0) return ('', line.trim());
+    final time = line.substring(0, split).trim();
+    final text = line.substring(split + 1).trim();
+    return (time, text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 170,
+      child: ValueListenableBuilder<List<String>>(
+        valueListenable: DashMemo.notes,
+        builder: (context, list, _) {
+          // 페이지 수가 바뀌면 현재 인덱스 보정
+          if (list.isNotEmpty && _currentIndex >= list.length) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              _currentIndex = 0;
+              _pageController.jumpToPage(0);
+              setState(() {});
+            });
+          }
+
+          final itemCount = list.isEmpty ? 1 : list.length;
+
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              Align(
+                alignment: Alignment.center,
+                child: FractionallySizedBox(
+                  widthFactor: 0.98,
+                  child: PageView.builder(
+                    controller: _pageController,
+                    physics: const NeverScrollableScrollPhysics(),
+                    onPageChanged: (i) => _currentIndex = i,
+                    itemCount: itemCount,
+                    itemBuilder: (context, index) {
+                      if (list.isEmpty) {
+                        // 저장된 메모가 없을 때 표시 (간단한 안내 카드)
+                        return Center(
+                          child: Card(
+                            color: Colors.white,
+                            elevation: 2,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment: CrossAxisAlignment.center,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.notes_rounded, size: 18),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        '메모',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ],
+                                  ),
+                                  SizedBox(height: 12),
+                                  Text(
+                                    '저장된 메모가 없습니다.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(fontSize: 14),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      }
+
+                      final (time, text) = _parseLine(list[index]);
+                      return Center(
+                        child: Card(
+                          color: Colors.white,
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Icon(Icons.notes_rounded, size: 18),
+                                    SizedBox(width: 8),
+                                    Text(
+                                      '메모',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                if (text.isNotEmpty)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 6),
+                                    child: Text(
+                                      text,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(fontSize: 14),
+                                      maxLines: 3,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                if (time.isNotEmpty)
+                                  Text(
+                                    time,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+
+              // 하단 점 인디케이터(메모 개수 기준)
+              Positioned(
+                bottom: 6,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: List.generate(list.isEmpty ? 1 : list.length, (i) {
+                    final active = i == _currentIndex && list.isNotEmpty;
+                    return AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      margin: const EdgeInsets.symmetric(horizontal: 3),
+                      width: active ? 10 : 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: active ? Colors.black87 : Colors.black26,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                    );
+                  }),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
 }
