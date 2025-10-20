@@ -5,9 +5,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/app_navigator.dart';
 
 /// EasyMemo
-/// - 전역 navigatorKey로 안전한 컨텍스트 확보 (showModalBottomSheet/Overlay)
+/// - 전역 navigatorKey로 안전한 컨텍스트 확보 (showModalBottomSheet)
 /// - 토글/메모 SharedPreferences 영속화
-/// - 드래그 가능한 플로팅 버블 + 90% 높이 바텀시트 패널
+/// - 90% 높이 바텀시트 패널 (버블 제거됨)
 class HeadMemo {
   HeadMemo._();
 
@@ -23,7 +23,6 @@ class HeadMemo {
   static const _kNotesKey = 'head_memo_notes_v1';
 
   static SharedPreferences? _prefs;
-  static OverlayEntry? _entry;
 
   // ===== 패널 토글 상태 & 중복 호출 가드 =====
   static bool _isPanelOpen = false;
@@ -35,20 +34,10 @@ class HeadMemo {
     enabled.value = _prefs!.getBool(_kEnabledKey) ?? false;
     notes.value = _prefs!.getStringList(_kNotesKey) ?? const <String>[];
 
-    // 토글 변경 시 저장 + 오버레이 토글
+    // 토글 변경 시 저장 (버블 제거 → 오버레이 토글 없음)
     enabled.addListener(() {
       _prefs?.setBool(_kEnabledKey, enabled.value);
-      if (enabled.value) {
-        _showOverlay();
-      } else {
-        _hideOverlay();
-      }
     });
-  }
-
-  /// 첫 프레임 이후 오버레이 필요 시 부착 (MaterialApp 생성 후 보장)
-  static void mountIfNeeded() {
-    if (enabled.value) _showOverlay();
   }
 
   /// Navigator 의 overlay.context 를 최우선으로 사용 → MediaQuery/Theme 보장
@@ -61,7 +50,7 @@ class HeadMemo {
   /// (호환용) 기존 API는 토글로 라우팅
   static Future<void> openPanel() => togglePanel();
 
-  /// ✅ 버블/카드가 부를 토글 API: 열려 있으면 닫고, 닫혀 있으면 연다
+  /// ✅ 패널 토글 API: 열려 있으면 닫고, 닫혀 있으면 연다
   static Future<void> togglePanel() async {
     final ctx = _bestContext();
     if (ctx == null) {
@@ -93,24 +82,6 @@ class HeadMemo {
     await _panelFuture;
   }
 
-  // ----------------- 내부: 오버레이(버블) -----------------
-
-  static void _showOverlay() {
-    if (_entry != null) return;
-    final overlay = navigatorKey.currentState?.overlay;
-    if (overlay == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _showOverlay());
-      return;
-    }
-    _entry = OverlayEntry(builder: (context) => const _HeadMemoBubble());
-    overlay.insert(_entry!);
-  }
-
-  static void _hideOverlay() {
-    _entry?.remove();
-    _entry = null;
-  }
-
   // ----------------- 데이터 조작 -----------------
 
   static Future<void> add(String text) async {
@@ -134,71 +105,6 @@ class HeadMemo {
     final list = List<String>.from(notes.value)..remove(line);
     notes.value = list;
     await _prefs?.setStringList(_kNotesKey, list);
-  }
-}
-
-/// 드래그 가능한 플로팅 버블(엣지 스냅)
-class _HeadMemoBubble extends StatefulWidget {
-  const _HeadMemoBubble();
-
-  @override
-  State<_HeadMemoBubble> createState() => _HeadMemoBubbleState();
-}
-
-class _HeadMemoBubbleState extends State<_HeadMemoBubble> {
-  static const double _bubbleSize = 56;
-  Offset _pos = const Offset(12, 200);
-
-  @override
-  Widget build(BuildContext context) {
-    final media = MediaQuery.maybeOf(context);
-    final screen = media?.size ?? Size.zero;
-    final bottomInset = media?.padding.bottom ?? 0;
-    final cs = Theme.of(context).colorScheme;
-
-    return Positioned(
-      left: _pos.dx,
-      top: _pos.dy,
-      child: GestureDetector(
-        onPanUpdate: (d) {
-          setState(() {
-            _pos = Offset(
-              (_pos.dx + d.delta.dx).clamp(0.0, screen.width - _bubbleSize),
-              (_pos.dy + d.delta.dy).clamp(0.0, screen.height - _bubbleSize - bottomInset),
-            );
-          });
-        },
-        onPanEnd: (_) {
-          // 좌/우 엣지 스냅
-          final snapX = (_pos.dx + _bubbleSize / 2) < screen.width / 2
-              ? 8.0
-              : screen.width - _bubbleSize - 8.0;
-          setState(() => _pos = Offset(snapX, _pos.dy));
-        },
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: HeadMemo.togglePanel, // ✅ 토글로 변경
-            customBorder: const CircleBorder(),
-            child: Container(
-              width: _bubbleSize,
-              height: _bubbleSize,
-              decoration: BoxDecoration(
-                color: cs.primary.withOpacity(0.5), // ✅ 50% 반투명
-                shape: BoxShape.circle,
-                border: Border.all(color: cs.onSurface.withOpacity(.08)),
-                boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black26)],
-              ),
-              alignment: Alignment.center,
-              child: Icon(
-                Icons.sticky_note_2_rounded,
-                color: Colors.white.withOpacity(0.95), // 대비 강화
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }
 

@@ -1,4 +1,3 @@
-// lib/main.dart
 import 'dart:async'; // ⬅️ 권한 초기화 중복 방지용 Completer
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -29,6 +28,9 @@ import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, Tar
 
 // ✅ (신규) OAuth를 앱 최초 1회만 수행하여 전역 재사용
 import 'utils/google_auth_session.dart';
+
+// ✅ (신규) 본사 허브 퀵 액션 오버레이 전역 초기화/부착
+import 'screens/head_package/hub_quick_actions.dart';
 
 const kIsWorkingPrefsKey = 'isWorking';
 
@@ -224,11 +226,16 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
     );
     debugPrint('[MAIN][${_ts()}] startService done');
 
-    // ✅ 플로팅/메모 초기화(상태 로드). enabled가 true일 때만 mount됨
+    // ✅ 플로팅/메모 초기화(상태 로드).
     debugPrint('[MAIN][${_ts()}] DevMemo.init');
     await DevMemo.init();
+
     debugPrint('[MAIN][${_ts()}] HeadMemo.init');
     await HeadMemo.init();
+
+    // ✅ (신규) 허브 퀵 액션 버블 전역 초기화
+    debugPrint('[MAIN][${_ts()}] HeadHubActions.init');
+    await HeadHubActions.init();
 
     debugPrint('[MAIN][${_ts()}] _initializeApp done');
   }
@@ -250,16 +257,19 @@ class MyApp extends StatelessWidget {
         routes: appRoutes,
         onUnknownRoute: (_) => MaterialPageRoute(builder: (_) => const NotFoundPage()),
 
-        // ✅ 앱 전역 네비게이터 키(오버레이/시트 컨텍스트 안정성)
+        // ✅ 앱 전역 네비게이터 키(시트 컨텍스트 안정성)
         navigatorKey: AppNavigator.key,
         scaffoldMessengerKey: AppNavigator.scaffoldMessengerKey,
 
-        // ✅ 첫 프레임 후, 각 플로팅이 켜져있다면 오버레이 장착
+        // ✅ 첫 프레임 후, 필요한 플로팅이 켜져있다면 오버레이 장착
         builder: (context, child) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             debugPrint('[MAIN][${_ts()}] postFrameCallback → mountIfNeeded');
             DevMemo.mountIfNeeded();
-            HeadMemo.mountIfNeeded();
+            // HeadMemo: 버블 제거 → mountIfNeeded 호출 없음
+
+            // ✅ (신규) 허브 퀵 액션 버블 부착
+            HeadHubActions.mountIfNeeded();
           });
           return child!;
         },
