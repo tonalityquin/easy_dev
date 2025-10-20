@@ -17,7 +17,9 @@ import 'head_package/hr_package/attendance_calendar.dart' as hr_att;
 import 'head_package/hr_package/break_calendar.dart' as hr_break;
 
 // ▼ (추가) 본사 달력 바텀시트로 열기 위한 import
-import 'head_package/company_calendar_page.dart'; // ⬅️ 추가: 바텀시트 헬퍼 사용
+import 'head_package/company_calendar_page.dart'; // ⬅️ 바텀시트 헬퍼 사용
+// ▼ (추가) 회사 노무도 바텀시트로 열기 위한 import
+import 'head_package/labor_guide_page.dart'; // ⬅️ 바텀시트 헬퍼 사용
 
 class HeadStubPage extends StatelessWidget {
   const HeadStubPage({super.key});
@@ -131,7 +133,7 @@ class HeadStubPage extends StatelessWidget {
                           tintColor: calLight,
                           titleColor: calDark,
                           onTap: () {
-                            // ⬇️ 변경: 라우트 푸시 → "전체 화면 바텀시트"로 오픈
+                            // ⬇️ 라우트 푸시 → "전체 화면 바텀시트"로 오픈
                             CompanyCalendarPage.showAsBottomSheet(context);
                           },
                         ),
@@ -144,7 +146,8 @@ class HeadStubPage extends StatelessWidget {
                           tintColor: laborLight,
                           titleColor: laborDark,
                           onTap: () {
-                            Navigator.of(context).pushNamed(AppRoutes.laborGuide);
+                            // ⬇️ 라우트 푸시 → "전체 화면 바텀시트"로 오픈
+                            LaborGuidePage.showAsBottomSheet(context);
                           },
                         ),
 
