@@ -14,6 +14,9 @@ import 'widgets/home_show_report_dialog.dart';
 // ✅ 서류함 바텀시트 오픈 (같은 폴더)
 import 'document_box_sheet.dart';
 
+// ✅ 신규: 대시보드 전용 메모 + 플로팅 버블
+import 'memo/dash_memo.dart';
+
 class HomeDashBoardBottomSheet extends StatefulWidget {
   const HomeDashBoardBottomSheet({super.key});
 
@@ -122,6 +125,23 @@ class _HomeDashBoardBottomSheetState extends State<HomeDashBoardBottomSheet> {
                       firstChild: const SizedBox.shrink(),
                       secondChild: Column(
                         children: [
+                          // 0) 메모 (신규) — 휴게 버튼 위에 위치
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.sticky_note_2_rounded),
+                              label: const Text('메모'),
+                              style: _memoBtnStyle(),
+                              onPressed: () async {
+                                // 필요 시 지연 초기화 + 오버레이 부착
+                                await DashMemo.init();
+                                DashMemo.mountIfNeeded();
+                                await DashMemo.togglePanel();
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
                           // 1) 휴게 사용 확인 (기존 위젯 재사용)
                           HomeBreakButtonWidget(controller: controller),
                           const SizedBox(height: 16),
@@ -188,6 +208,18 @@ ButtonStyle _layerToggleBtnStyle() {
     backgroundColor: Colors.white,
     foregroundColor: Colors.black,
     minimumSize: const Size.fromHeight(48),
+    padding: EdgeInsets.zero,
+    side: const BorderSide(color: Colors.grey, width: 1.0),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+  );
+}
+
+ButtonStyle _memoBtnStyle() {
+  // 메모 버튼도 동일 톤
+  return ElevatedButton.styleFrom(
+    backgroundColor: Colors.white,
+    foregroundColor: Colors.black,
+    minimumSize: const Size.fromHeight(55),
     padding: EdgeInsets.zero,
     side: const BorderSide(color: Colors.grey, width: 1.0),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

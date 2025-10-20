@@ -32,6 +32,9 @@ import 'utils/google_auth_session.dart';
 // ✅ (신규) 본사 허브 퀵 액션 오버레이 전역 초기화/부착
 import 'screens/head_package/hub_quick_actions.dart';
 
+// ✅ (신규) DashMemo 전역 오버레이 부착을 위해 추가
+import 'screens/type_package/common_widgets/dashboard_bottom_sheet/memo/dash_memo.dart';
+
 const kIsWorkingPrefsKey = 'isWorking';
 
 /// ✅ GSI v7 “웹 애플리케이션” 클라이언트 ID (Android에선 serverClientId로 사용)
@@ -233,6 +236,10 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
     debugPrint('[MAIN][${_ts()}] HeadMemo.init');
     await HeadMemo.init();
 
+    // ✅ (신규) DashMemo 전역 초기화 — 이후 mountIfNeeded로 부착
+    debugPrint('[MAIN][${_ts()}] DashMemo.init');
+    await DashMemo.init();
+
     // ✅ (신규) 허브 퀵 액션 버블 전역 초기화
     debugPrint('[MAIN][${_ts()}] HeadHubActions.init');
     await HeadHubActions.init();
@@ -270,6 +277,9 @@ class MyApp extends StatelessWidget {
 
             // ✅ (신규) 허브 퀵 액션 버블 부착
             HeadHubActions.mountIfNeeded();
+
+            // ✅ (신규) DashMemo 전역 버블 부착: 다른 화면에서도 계속 떠 있도록
+            DashMemo.mountIfNeeded();
           });
           return child!;
         },

@@ -25,6 +25,10 @@ import '../utils/tts/tts_manager.dart';
 // ⬇️ 추가: 전역 최신 메시지 서비스(실시간 구독 + 캐시)
 import '../services/latest_message_service.dart';
 
+// ⬇️ 추가: 역 바텀시트(Top Sheet)
+import 'type_package/parking_completed_package/reverse_sheet/reverse_page_top_sheet.dart';
+import 'type_package/parking_completed_package/reverse_sheet/parking_completed_reverse_page.dart';
+
 /// Deep Blue 팔레트(서비스 카드와 동일 계열)
 class _Palette {
   static const base = Color(0xFF0D47A1); // primary
@@ -240,17 +244,22 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   // ── 가로 스와이프(좌/우 페이지 전환)
   double _dragDistance = 0.0;
 
-  // ── 세로 스와이프(아래→위: 채팅 바텀시트)
+  // ── 세로 스와이프
+  //   - 아래→위: 채팅 바텀시트
+  //   - 위→아래: 역 바텀시트(Top Sheet)
   double _vDragDistance = 0.0;
-  double? _vStartDy;
-  bool _chatOpening = false; // 중복 오픈 방지
+  bool _chatOpening = false; // 중복 오픈 방지(채팅)
+  bool _topOpening = false; // 중복 오픈 방지(역 바텀시트)
 
   // 임계값
   static const double _hDistanceThreshold = 80.0;
   static const double _hVelocityThreshold = 1000.0;
 
-  static const double _vDistanceThreshold = 80.0;
-  static const double _vVelocityThreshold = 1000.0;
+  // ⬇️ 민감도 상향(더 널널)
+  static const double _vDistanceThresholdUp = 70.0;
+  static const double _vVelocityThresholdUp = 900.0;
+  static const double _vDistanceThresholdDown = 50.0;
+  static const double _vVelocityThresholdDown = 700.0;
 
   void _handleHorizontalDragEnd(BuildContext context, double velocity) {
     if (_dragDistance > _hDistanceThreshold && velocity > _hVelocityThreshold) {
@@ -263,28 +272,44 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     _dragDistance = 0.0;
   }
 
+  Future<void> _openReverseTopSheet(BuildContext context) async {
+    // iOS 제스처 충돌 방지용 아주 짧은 디바운스
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    if (!mounted) return;
+
+    await showReversePageTopSheet(
+      context: context,
+      maxHeightFactor: 0.92,
+      builder: (_) => const ParkingCompletedReversePage(),
+    );
+  }
+
   Future<void> _handleVerticalDragEnd(BuildContext context, DragEndDetails details) async {
-    final vy = details.primaryVelocity ?? 0.0; // 위로 스와이프는 음수
+    final vy = details.primaryVelocity ?? 0.0; // 위로 스와이프는 음수, 아래로는 양수
 
-    // 화면 어디서든 위로 빠르게 스와이프하면 실행
-    final fired = _vDragDistance < -_vDistanceThreshold && vy < -_vVelocityThreshold;
+    // 위로 빠르게 스와이프 → 채팅 (둘 중 하나만 만족해도 트리거)
+    final firedUp = (_vDragDistance < -_vDistanceThresholdUp) || (vy < -_vVelocityThresholdUp);
+    // 아래로 빠르게 스와이프 → 역 바텀시트 (둘 중 하나만 만족해도 트리거)
+    final firedDown = (_vDragDistance > _vDistanceThresholdDown) || (vy > _vVelocityThresholdDown);
 
-    if (fired && !_chatOpening) {
+    if (firedUp && !_chatOpening) {
       _chatOpening = true;
-      debugPrint(
-        '✅[V] 채팅 오픈 트리거: startDy=${_vStartDy?.toStringAsFixed(1)}, '
-            '거리(${_vDragDistance.toStringAsFixed(1)}), 속도($vy)',
-      );
-      // iOS 제스처 충돌 방지용 아주 짧은 디바운스
+      debugPrint('✅[V-UP] 채팅 오픈: 거리=${_vDragDistance.toStringAsFixed(1)} / 속도=$vy '
+          '(need dist<-${_vDistanceThresholdUp} OR vy<-${_vVelocityThresholdUp})');
       await Future<void>.delayed(const Duration(milliseconds: 10));
       if (mounted) chatBottomSheet(context);
       _chatOpening = false;
+    } else if (firedDown && !_topOpening) {
+      _topOpening = true;
+      debugPrint('✅[V-DOWN] 역 바텀시트 오픈: 거리=${_vDragDistance.toStringAsFixed(1)} / 속도=$vy '
+          '(need dist>${_vDistanceThresholdDown} OR vy>${_vVelocityThresholdDown})');
+      await _openReverseTopSheet(context);
+      _topOpening = false;
     } else {
-      debugPrint('⏸[V] 거리(${_vDragDistance.toStringAsFixed(1)}), 속도($vy) → 조건 미충족(무시)');
+      debugPrint('⏸[V] 거리=${_vDragDistance.toStringAsFixed(1)}, 속도=$vy → 조건 미충족(무시)');
     }
 
-    _vDragDistance = 0.0;
-    _vStartDy = null;
+    _vDragDistance = 0.0; // reset
   }
 
   PageRouteBuilder _slidePage(Widget page, {required bool fromLeft}) {
@@ -313,13 +338,11 @@ class _RefreshableBodyState extends State<RefreshableBody> {
         details.primaryVelocity ?? 0,
       ),
 
-      // ── 세로 스와이프(아래→위: 채팅)
-      onVerticalDragStart: (details) {
-        _vStartDy = details.globalPosition.dy;
+      // ── 세로 스와이프(아래→위: 채팅 / 위→아래: 역 바텀시트)
+      onVerticalDragStart: (_) {
         _vDragDistance = 0.0; // 시작 시 리셋
       },
-      onVerticalDragUpdate: (details) => _vDragDistance += details.delta.dy,
-      // 위로 음수 누적
+      onVerticalDragUpdate: (details) => _vDragDistance += details.delta.dy, // 위로 음수, 아래로 양수
       onVerticalDragEnd: (details) => _handleVerticalDragEnd(context, details),
 
       child: Consumer<PageState>(
