@@ -6,7 +6,6 @@ import '../../../repositories/location_repo_services/location_repository.dart';
 import '../../../utils/snackbar_helper.dart';
 import 'ui/parking_completed_table_sheet.dart'; // ✅ 커스텀 스낵바 헬퍼 사용
 
-
 /// Deep Blue 팔레트(서비스 카드와 동일 계열)
 class _Palette {
   static const base = Color(0xFF0D47A1); // primary
@@ -64,6 +63,27 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
       if (mounted) setState(() => _refreshingNames.remove(displayName));
     }
   }
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // 버튼 스타일: 흰 배경 + 회색 테두리 + 검정 전경(참고한 아이콘/텍스트 톤)
+  ButtonStyle _whiteBorderButtonStyle(BuildContext context) {
+    return ElevatedButton.styleFrom(
+      backgroundColor: Colors.white,
+      foregroundColor: Colors.black,
+      disabledBackgroundColor: Colors.white,
+      disabledForegroundColor: Colors.black45,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      minimumSize: const Size(0, 44),
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      side: BorderSide(color: Colors.grey.shade300, width: 1.0),
+    ).copyWith(
+      overlayColor: MaterialStateProperty.resolveWith(
+            (states) => states.contains(MaterialState.pressed) ? Colors.black12 : null,
+      ),
+    );
+  }
+  // ────────────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -174,35 +194,44 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                 return ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    // ================================
-                    // ✅ 액션 바: "테이블 열기" 버튼 (신규)
-                    // ================================
-                    Row(
-                      children: [
-                        const Expanded(
-                          child: Text(
-                            '데이터 뷰어',
-                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    // ============================================================
+                    // ✅ 액션 바: "테이블 열기" 버튼 (가운데 정렬 + 아이콘 디자인 반영)
+                    //    - 흰 배경/테두리 버튼
+                    //    - 아이콘 20, 간격 6
+                    //    - 가운데 정렬
+                    // ============================================================
+                    Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 360),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton(
+                            onPressed: widget.isLocked
+                                ? null
+                                : () {
+                              showModalBottomSheet(
+                                context: context,
+                                isScrollControlled: true,
+                                backgroundColor: Colors.transparent,
+                                builder: (_) => const ParkingCompletedTableSheet(),
+                              );
+                            },
+                            style: _whiteBorderButtonStyle(context),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: const [
+                                Icon(Icons.table_chart_outlined, size: 20),
+                                SizedBox(width: 6),
+                                Text('테이블 열기'),
+                              ],
+                            ),
                           ),
                         ),
-                        // 호환성을 위해 ElevatedButton.icon 사용
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            showModalBottomSheet(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              builder: (_) => const ParkingCompletedTableSheet(),
-                            );
-                          },
-                          icon: const Icon(Icons.table_chart_outlined),
-                          label: const Text('테이블 열기'),
-                        ),
-                      ],
+                      ),
                     ),
                     const SizedBox(height: 12),
 
-                    // 단일 주차 구역ㄱ
+                    // 단일 주차 구역
                     const Text(
                       '단일 주차 구역',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),

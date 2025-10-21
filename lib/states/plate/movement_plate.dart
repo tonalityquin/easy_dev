@@ -2,9 +2,14 @@ import 'package:flutter/foundation.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import '../../repositories/plate_repo_services/plate_write_service.dart';
+import '../../screens/type_package/parking_completed_package/services/local_transition_guard.dart';
 import '../../screens/type_package/parking_completed_package/services/parking_completed_logger.dart';
+import '../../screens/type_package/parking_completed_package/services/status_mapping.dart';
 import '../user/user_state.dart';
 // import '../../utils/usage_reporter.dart';
+
+// ▼ 로거/상태/가드
+
 
 class MovementPlate extends ChangeNotifier {
   final PlateWriteService _write;
@@ -31,19 +36,17 @@ class MovementPlate extends ChangeNotifier {
       forceOverride: forceOverride,
     );
 
+    // ✅ 내 단말: 즉시 로깅 + 스트림 재유입 중복 방지 마킹
     await ParkingCompletedLogger.instance.maybeLogCompleted(
       plateNumber: plateNumber,
       area: area,
       oldStatus: kStatusEntryRequest,
       newStatus: kStatusEntryDone,
     );
-
-    /*await UsageReporter.instance.report(
+    LocalTransitionGuard.instance.markUserParkingCompleted(
+      plateNumber: plateNumber,
       area: area,
-      action: 'write',
-      n: 1,
-      source: 'MovementPlate.setParkingCompleted',
-    );*/
+    );
   }
 
   /// 출차 요청 (parking_completed → departure_requests)
@@ -64,13 +67,6 @@ class MovementPlate extends ChangeNotifier {
       extraFields: {'location': location, 'area': area},
       forceOverride: forceOverride,
     );
-
-    /*await UsageReporter.instance.report(
-      area: area,
-      action: 'write',
-      n: 1,
-      source: 'MovementPlate.setDepartureRequested',
-    );*/
   }
 
   /// 출차 완료 (departure_requests → departure_completed)
@@ -92,13 +88,6 @@ class MovementPlate extends ChangeNotifier {
       },
       forceOverride: forceOverride,
     );
-
-    /*await UsageReporter.instance.report(
-      area: selectedPlate.area,
-      action: 'write',
-      n: 1,
-      source: 'MovementPlate.setDepartureCompleted',
-    );*/
   }
 
   /// (옵션) 출차 요청 → 입차 완료 되돌리기
@@ -120,18 +109,17 @@ class MovementPlate extends ChangeNotifier {
       forceOverride: forceOverride,
     );
 
+    // ✅ 내 단말: 즉시 로깅 + 스트림 재유입 중복 방지 마킹
     await ParkingCompletedLogger.instance.maybeLogCompleted(
       plateNumber: plateNumber,
       area: area,
       oldStatus: kStatusExitRequest,
       newStatus: kStatusEntryDone,
     );
-    /*await UsageReporter.instance.report(
+    LocalTransitionGuard.instance.markUserParkingCompleted(
+      plateNumber: plateNumber,
       area: area,
-      action: 'write',
-      n: 1,
-      source: 'MovementPlate.goBackToParkingCompleted',
-    );*/
+    );
   }
 
   /// (옵션) 임의 상태 → 입차 요청 되돌리기
@@ -153,12 +141,5 @@ class MovementPlate extends ChangeNotifier {
       extraFields: {'area': area, 'location': newLocation},
       forceOverride: forceOverride,
     );
-
-    /*await UsageReporter.instance.report(
-      area: area,
-      action: 'write',
-      n: 1,
-      source: 'MovementPlate.goBackToParkingRequest',
-    );*/
   }
 }

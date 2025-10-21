@@ -1,5 +1,6 @@
+import 'dart:math' as math;
+import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
-
 
 import '../../../../utils/snackbar_helper.dart';
 import '../repositories/parking_completed_repository.dart';
@@ -17,6 +18,10 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
   bool _loading = true;
   List<ParkingCompletedRecord> _rows = [];
   final _searchCtrl = TextEditingController();
+
+  // 테이블 최소 너비(좁은 폰에선 가로 스크롤)
+  static const double _tableMinWidth = 720;
+  static const double _headerHeight = 44;
 
   @override
   void initState() {
@@ -67,6 +72,183 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
     _load();
   }
 
+  // ────────────────── UI Helpers (SQL-like cells) ──────────────────
+  TextStyle get _headStyle => Theme.of(context).textTheme.labelMedium!.copyWith(
+    fontWeight: FontWeight.w700,
+    letterSpacing: .2,
+  );
+
+  TextStyle get _cellStyle => Theme.of(context).textTheme.bodyMedium!.copyWith(
+    height: 1.2,
+  );
+
+  TextStyle get _monoStyle => _cellStyle.copyWith(
+    fontFeatures: const [FontFeature.tabularFigures()], // 자리 고정 숫자
+    fontFamilyFallback: const ['monospace'],
+  );
+
+  Widget _th(String label, {double? width, int flex = 0, TextAlign align = TextAlign.left}) {
+    final cell = Container(
+      height: _headerHeight,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      alignment: _alignTo(align),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(.6),
+        border: Border(
+          bottom: BorderSide(color: Theme.of(context).dividerColor),
+        ),
+      ),
+      child: Text(label, style: _headStyle),
+    );
+    if (flex > 0) return Expanded(flex: flex, child: cell);
+    return SizedBox(width: width, child: cell);
+  }
+
+  Widget _td(
+      Widget child, {
+        double? width,
+        int flex = 0,
+        TextAlign align = TextAlign.left,
+        Color? bg,
+        bool showRightBorder = false,
+      }) {
+    final cell = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+      alignment: _alignTo(align),
+      decoration: BoxDecoration(
+        color: bg,
+        border: Border(
+          bottom: BorderSide(color: Theme.of(context).dividerColor.withOpacity(.8), width: .8),
+          right: showRightBorder
+              ? BorderSide(color: Theme.of(context).dividerColor.withOpacity(.8), width: .8)
+              : BorderSide.none,
+        ),
+      ),
+      child: child,
+    );
+    if (flex > 0) return Expanded(flex: flex, child: cell);
+    return SizedBox(width: width, child: cell);
+  }
+
+  Alignment _alignTo(TextAlign align) {
+    switch (align) {
+      case TextAlign.center:
+        return Alignment.center;
+      case TextAlign.right:
+        return Alignment.centerRight;
+      case TextAlign.left:
+      default:
+        return Alignment.centerLeft;
+    }
+  }
+
+  String _fmtDate(dynamic v) {
+    return v?.toString() ?? '';
+  }
+
+  /// pinned header + 세로/가로 스크롤 테이블
+  Widget _buildTable(ScrollController scrollCtrl) {
+    if (_loading) return const ExpandedLoading();
+    if (_rows.isEmpty) return const ExpandedEmpty(message: '기록이 없습니다.');
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tableWidth = math.max(_tableMinWidth, constraints.maxWidth);
+
+        return Scrollbar(
+          controller: scrollCtrl,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: tableWidth,
+                maxWidth: tableWidth,
+              ),
+              child: CustomScrollView(
+                controller: scrollCtrl,
+                slivers: [
+                  // ── 고정 헤더 (Pinned) ───────────────────────────────
+                  SliverPersistentHeader(
+                    pinned: true,
+                    delegate: _HeaderDelegate(
+                      height: _headerHeight,
+                      child: Row(
+                        children: [
+                          _th('ID', width: 72, align: TextAlign.right),
+                          _th('Plate Number', flex: 2),
+                          _th('Area', flex: 2),
+                          _th('Created At', flex: 3),
+                          _th('Actions', width: 90, align: TextAlign.center),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // ── 바디 (행 리스트) ───────────────────────────────
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                          (context, i) {
+                        final r = _rows[i];
+                        final idStr = (r.id ?? 0).toString();
+                        final plate = r.plateNumber ?? '';
+                        final area = r.area ?? '';
+                        final created = _fmtDate(r.createdAt);
+                        final bg = (i % 2 == 0) ? Colors.grey.shade50 : Colors.white;
+
+                        return Row(
+                          children: [
+                            _td(
+                              Text(idStr, style: _monoStyle, textAlign: TextAlign.right),
+                              width: 72,
+                              align: TextAlign.right,
+                              bg: bg,
+                            ),
+                            _td(
+                              Text(
+                                plate,
+                                style: _cellStyle.copyWith(fontWeight: FontWeight.w600),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              flex: 2,
+                              bg: bg,
+                            ),
+                            _td(
+                              Text(area, style: _cellStyle, overflow: TextOverflow.ellipsis),
+                              flex: 2,
+                              bg: bg,
+                            ),
+                            _td(
+                              Text(created, style: _monoStyle, overflow: TextOverflow.ellipsis),
+                              flex: 3,
+                              bg: bg,
+                            ),
+                            _td(
+                              Center(
+                                child: IconButton(
+                                  tooltip: '삭제',
+                                  icon: const Icon(Icons.delete_outline),
+                                  onPressed: r.id == null ? null : () => _delete(r.id!),
+                                ),
+                              ),
+                              width: 90,
+                              align: TextAlign.center,
+                              bg: bg,
+                            ),
+                          ],
+                        );
+                      },
+                      childCount: _rows.length,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -89,46 +271,82 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
                 children: [
                   const SizedBox(height: 8),
                   Container(
-                    width: 42, height: 4,
+                    width: 42,
+                    height: 4,
                     decoration: BoxDecoration(
                       color: Colors.black12,
                       borderRadius: BorderRadius.circular(999),
                     ),
                   ),
                   const SizedBox(height: 8),
-                  // 헤더
+
+                  // ─────────────── 상단 툴바(타이틀 1행 + 액션 2행) ───────────────
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.table_chart_outlined, color: cs.primary),
-                        const SizedBox(width: 8),
-                        Text('Parking Completed 테이블',
-                            style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-                        const Spacer(),
-                        IconButton(
-                          tooltip: '새로고침',
-                          onPressed: _load,
-                          icon: const Icon(Icons.refresh),
+                        // 1행: 아이콘 + 타이틀(Expanded)
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Icon(Icons.table_chart_outlined, color: cs.primary),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Parking Completed 테이블',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                              ),
+                            ),
+                          ],
                         ),
-                        IconButton(
-                          tooltip: '전체 비우기',
-                          onPressed: _rows.isEmpty ? null : _clearAll,
-                          icon: const Icon(Icons.delete_sweep),
-                        ),
-                        IconButton(
-                          tooltip: '닫기',
-                          onPressed: () => Navigator.of(context).pop(),
-                          icon: const Icon(Icons.close),
+                        const SizedBox(height: 6),
+                        // 2행: 우측 정렬 가로 배열 액션들
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: OverflowBar(
+                            alignment: MainAxisAlignment.end,
+                            spacing: 4,
+                            overflowSpacing: 2,
+                            children: [
+                              if (!_loading)
+                                Padding(
+                                  padding: const EdgeInsets.only(right: 4),
+                                  child: Text(
+                                    'Rows: ${_rows.length}',
+                                    style: text.labelMedium?.copyWith(color: cs.outline),
+                                  ),
+                                ),
+                              IconButton(
+                                tooltip: '새로고침',
+                                onPressed: _load,
+                                icon: const Icon(Icons.refresh),
+                              ),
+                              IconButton(
+                                tooltip: '전체 비우기',
+                                onPressed: _rows.isEmpty ? null : _clearAll,
+                                icon: const Icon(Icons.delete_sweep),
+                              ),
+                              IconButton(
+                                tooltip: '닫기',
+                                onPressed: () => Navigator.of(context).pop(),
+                                icon: const Icon(Icons.close),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ),
+
                   // 검색창
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                     child: TextField(
                       controller: _searchCtrl,
+                      textInputAction: TextInputAction.search,
                       decoration: InputDecoration(
                         hintText: '번호판/구역 검색…',
                         prefixIcon: const Icon(Icons.search),
@@ -151,37 +369,10 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
                     ),
                   ),
                   const Divider(height: 1),
-                  // 리스트
+
+                  // ──────────────── SQL-like 테이블 (Pinned Header) ────────────────
                   Expanded(
-                    child: _loading
-                        ? const Center(child: CircularProgressIndicator())
-                        : _rows.isEmpty
-                        ? const Center(child: Text('기록이 없습니다.'))
-                        : ListView.builder(
-                      controller: scrollCtrl,
-                      itemCount: _rows.length,
-                      itemBuilder: (context, i) {
-                        final r = _rows[i];
-                        return ListTile(
-                          dense: true,
-                          leading: CircleAvatar(child: Text((r.id ?? 0).toString())),
-                          title: Text(
-                            '${r.plateNumber} (${r.area})',
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                          ),
-                          subtitle: Text(
-                            r.createdAt != null ? r.createdAt.toString() : '',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: IconButton(
-                            tooltip: '삭제',
-                            icon: const Icon(Icons.delete_outline),
-                            onPressed: r.id == null ? null : () => _delete(r.id!),
-                          ),
-                        );
-                      },
-                    ),
+                    child: _buildTable(scrollCtrl),
                   ),
                 ],
               ),
@@ -190,5 +381,53 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
         },
       ),
     );
+  }
+}
+
+// ───────────────────────── SliverPinned Header Delegate ─────────────────────────
+class _HeaderDelegate extends SliverPersistentHeaderDelegate {
+  final double height;
+  final Widget child;
+
+  _HeaderDelegate({required this.height, required this.child});
+
+  @override
+  double get minExtent => height;
+
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    final showShadow = overlapsContent || shrinkOffset > 0;
+    return Material(
+      elevation: showShadow ? 1 : 0,
+      shadowColor: Colors.black26,
+      child: child,
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _HeaderDelegate oldDelegate) {
+    return oldDelegate.height != height || oldDelegate.child != child;
+  }
+}
+
+// ───────────────────────── helper widgets ─────────────────────────
+
+class ExpandedLoading extends StatelessWidget {
+  const ExpandedLoading({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return const Center(child: CircularProgressIndicator());
+  }
+}
+
+class ExpandedEmpty extends StatelessWidget {
+  final String message;
+  const ExpandedEmpty({super.key, required this.message});
+  @override
+  Widget build(BuildContext context) {
+    return Center(child: Text(message));
   }
 }
