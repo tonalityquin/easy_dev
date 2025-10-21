@@ -467,7 +467,7 @@ class _NinetyTwoPercentBottomSheetFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FractionallySizedBox(
-      heightFactor: 0.92, // ✅ 92% 높이
+      heightFactor: 1, // ✅ 92% 높이
       widthFactor: 1.0,
       child: SafeArea(
         top: true,

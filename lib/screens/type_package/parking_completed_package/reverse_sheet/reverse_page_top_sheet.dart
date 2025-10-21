@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 Future<T?> showReversePageTopSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
-  double maxHeightFactor = .92, // 시트 높이 비율
+  double maxHeightFactor = 1, // 시트 높이 비율
   bool barrierDismissible = true,
   Color? barrierColor,
   Duration duration = const Duration(milliseconds: 300),

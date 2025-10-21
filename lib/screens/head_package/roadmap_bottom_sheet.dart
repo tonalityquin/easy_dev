@@ -23,40 +23,6 @@ class RoadmapItem {
 const List<RoadmapItem> _roadmapData = [
   RoadmapItem(
     load: RoadmapLoad.light,
-    title: '로컬 모드',
-    notes: [
-      '비 동기화 무료 1인용 사용 모드 지원',
-    ],
-    status: RoadmapStatus.done,
-  ),
-  RoadmapItem(
-    load: RoadmapLoad.light,
-    title: 'FAQ 키워드 단어 페이지 별 삽입',
-    notes: [
-      '페이지 별로 FAQ 키워드 단어 삽입',
-      '사용자가 어려움 혹은 오류 발생 시 키워드를 검색해서 대처할 수 있도록',
-    ],
-    status: RoadmapStatus.done,
-  ),
-  RoadmapItem(
-    load: RoadmapLoad.heavy,
-    title: '업무 통계 접근성 완화 지원',
-    notes: [
-      '외부 프로그램으로 업무 통계 데이터 제공',
-    ],
-    status: RoadmapStatus.done,
-  ),
-  RoadmapItem(
-    load: RoadmapLoad.light,
-    title: '회사 노무 카드 개발',
-    notes: [
-      '서류 별 양식 시각적 확인'
-          '\n필요 형식 직관적 확인',
-    ],
-    status: RoadmapStatus.inProgress,
-  ),
-  RoadmapItem(
-    load: RoadmapLoad.light,
     title: '가이드북 생성 및 액션 카드 추가',
     notes: [
       '앱에서 캡처 등을 통해 특정 난이도 있는 행동들에 대한 가이드 북 삽입',

@@ -29,6 +29,9 @@ import '../services/latest_message_service.dart';
 import 'type_package/parking_completed_package/reverse_sheet/reverse_page_top_sheet.dart';
 import 'type_package/parking_completed_package/reverse_sheet/parking_completed_reverse_page.dart';
 
+// ⬇️ 추가: RoleType (허용/차단 판단용)
+import 'secondary_package/office_mode_package/user_management_package/sections/user_role_type_section.dart';
+
 /// Deep Blue 팔레트(서비스 카드와 동일 계열)
 class _Palette {
   static const base = Color(0xFF0D47A1); // primary
@@ -261,6 +264,39 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   static const double _vDistanceThresholdDown = 50.0;
   static const double _vVelocityThresholdDown = 700.0;
 
+  // ⬇️ 추가: Top Sheet 접근 허용 역할 세트 + 역할 얻기
+  static const Set<RoleType> _allowedRolesForReverseTopSheet = {
+    RoleType.dev,
+    RoleType.adminBillMonthly,
+    RoleType.adminBillMonthlyTablet,
+    RoleType.adminBill,
+    RoleType.adminBillTablet,
+    RoleType.adminCommon,
+    RoleType.adminCommonTablet,
+    RoleType.userLocationMonthly,
+    RoleType.userMonthly,
+    RoleType.userCommon,
+  };
+
+  RoleType? _getRoleType(BuildContext context) {
+    final us = context.read<UserState>();
+    // UserState에 roleType 혹은 role(String) 이 있을 수 있음 → 동적 접근
+    try {
+      final rt = (us as dynamic).roleType as RoleType?;
+      if (rt != null) return rt;
+    } catch (_) {}
+    try {
+      final r = (us as dynamic).role?.toString().trim();
+      if (r != null && r.isNotEmpty) {
+        return RoleType.values.firstWhere(
+              (e) => e.name == r,
+          orElse: () => RoleType.userCommon,
+        );
+      }
+    } catch (_) {}
+    return null;
+  }
+
   void _handleHorizontalDragEnd(BuildContext context, double velocity) {
     if (_dragDistance > _hDistanceThreshold && velocity > _hVelocityThreshold) {
       Navigator.of(context).push(_slidePage(const InputPlateScreen(), fromLeft: true));
@@ -276,6 +312,14 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     // iOS 제스처 충돌 방지용 아주 짧은 디바운스
     await Future<void>.delayed(const Duration(milliseconds: 10));
     if (!mounted) return;
+
+    // ✅ 역할 가드: 허용 목록 외(FieldCommon 등)는 차단
+    final role = _getRoleType(context);
+    final allowed = role != null && _allowedRolesForReverseTopSheet.contains(role);
+    if (!allowed) {
+      showFailedSnackbar(context, '권한이 없습니다. 관리자에게 문의하세요.');
+      return;
+    }
 
     await showReversePageTopSheet(
       context: context,

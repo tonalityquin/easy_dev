@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../../../states/location/location_state.dart';
 import '../../../repositories/location_repo_services/location_repository.dart';
-import '../../../utils/snackbar_helper.dart'; // ✅ 커스텀 스낵바 헬퍼 사용
+import '../../../utils/snackbar_helper.dart';
+import 'ui/parking_completed_table_sheet.dart'; // ✅ 커스텀 스낵바 헬퍼 사용
+
 
 /// Deep Blue 팔레트(서비스 카드와 동일 계열)
 class _Palette {
@@ -34,10 +36,10 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
 
   /// ▶ 단일 displayName만 갱신
   Future<void> _refreshOne(
-    LocationState state,
-    LocationRepository repo,
-    String displayName,
-  ) async {
+      LocationState state,
+      LocationRepository repo,
+      String displayName,
+      ) async {
     final now = DateTime.now();
     final last = _lastItemRefreshedAt[displayName];
     if (last != null && now.difference(last) < _itemCooldown) {
@@ -172,7 +174,35 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                 return ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    // 단일 주차 구역
+                    // ================================
+                    // ✅ 액션 바: "테이블 열기" 버튼 (신규)
+                    // ================================
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            '데이터 뷰어',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                        ),
+                        // 호환성을 위해 ElevatedButton.icon 사용
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => const ParkingCompletedTableSheet(),
+                            );
+                          },
+                          icon: const Icon(Icons.table_chart_outlined),
+                          label: const Text('테이블 열기'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // 단일 주차 구역ㄱ
                     const Text(
                       '단일 주차 구역',
                       style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),

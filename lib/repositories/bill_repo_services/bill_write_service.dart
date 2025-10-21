@@ -19,7 +19,7 @@ class BillWriteService {
 
     try {
       await docRef.set(data);
-      debugPrint("✅ Firestore 일반 정산 저장 성공: ${bill.id}");
+      debugPrint("✅ 일반 정산 저장 성공: ${bill.id}");
 
       /*final area = (data['area'] ?? bill.area ?? 'unknown') as String;
       await UsageReporter.instance.report(
@@ -29,7 +29,7 @@ class BillWriteService {
         source: 'BillWriteService.addNormalBill',
       );*/
     } catch (e, st) {
-      debugPrint("🔥 Firestore 일반 정산 저장 실패: $e");
+      debugPrint("🔥 일반 정산 저장 실패: $e");
       // --- 실패 시 Firestore 로거에만 error 레벨 기록 ---
       try {
         final payload = {
@@ -65,7 +65,7 @@ class BillWriteService {
 
     try {
       await docRef.set(data);
-      debugPrint("✅ Firestore 정기 정산 저장 성공: ${bill.id}");
+      debugPrint("✅ 정기 정산 저장 성공: ${bill.id}");
 
       /*final area = (data['area'] ?? bill.area ?? 'unknown') as String;
       await UsageReporter.instance.report(
@@ -75,7 +75,7 @@ class BillWriteService {
         source: 'BillWriteService.addRegularBill',
       );*/
     } catch (e, st) {
-      debugPrint("🔥 Firestore 정기 정산 저장 실패: $e");
+      debugPrint("🔥 정기 정산 저장 실패: $e");
       // --- 실패 시 Firestore 로거에만 error 레벨 기록 ---
       try {
         final payload = {

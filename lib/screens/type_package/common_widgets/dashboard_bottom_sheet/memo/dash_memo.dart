@@ -8,6 +8,7 @@
 // 변경 사항:
 // - ".txt로 내보내기" 버튼/기능 제거
 // - 이메일 전송(첨부)만 제공: 헤더에 "이메일" 버튼 추가
+// - 최소 색 적용: _base/_dark/_light 포인트만 사용
 
 import 'dart:convert';
 import 'dart:math' as math;
@@ -21,6 +22,11 @@ import 'package:googleapis/gmail/v1.dart' as gmail;
 import '../../../../../utils/app_navigator.dart';
 import '../../../../../utils/google_auth_session.dart';
 import '../../../../../utils/email_config.dart';
+
+// ── Brand palette (minimal use)
+const Color _base  = Color(0xFF0D47A1);
+const Color _dark  = Color(0xFF09367D);
+const Color _light = Color(0xFF5472D3);
 
 class DashMemo {
   DashMemo._();
@@ -208,7 +214,6 @@ class _DashMemoBubbleState extends State<_DashMemoBubble> with SingleTickerProvi
 
   Future<void> _onTap() async {
     HapticFeedback.selectionClick();
-    // 가벼운 회전 효과를 기다리지 않고 시작
     _spinCtrl.forward(from: 0).then((_) => _spinCtrl.reverse());
     await DashMemo.togglePanel();
   }
@@ -218,7 +223,6 @@ class _DashMemoBubbleState extends State<_DashMemoBubble> with SingleTickerProvi
     final media = MediaQuery.maybeOf(context);
     final screen = media?.size ?? Size.zero;
     final bottomInset = media?.padding.bottom ?? 0;
-    final cs = Theme.of(context).colorScheme;
 
     if (!_clampedOnce && screen != Size.zero) {
       _clampedOnce = true;
@@ -256,18 +260,15 @@ class _DashMemoBubbleState extends State<_DashMemoBubble> with SingleTickerProvi
                       width: _bubbleSize,
                       height: _bubbleSize,
                       decoration: BoxDecoration(
-                        color: cs.primary.withOpacity(0.5),
+                        color: _base.withOpacity(0.92), // brand
                         shape: BoxShape.circle,
-                        border: Border.all(color: cs.onSurface.withOpacity(.08)),
+                        border: Border.all(color: _light.withOpacity(.55)),
                         boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black26)],
                       ),
                       alignment: Alignment.center,
                       child: Transform.rotate(
                         angle: _spin.value * math.pi, // 0 → π (반바퀴)
-                        child: Icon(
-                          Icons.settings_rounded,
-                          color: Colors.white.withOpacity(0.95),
-                        ),
+                        child: Icon(Icons.settings_rounded, color: Colors.white.withOpacity(0.95)),
                       ),
                     );
                   },
@@ -344,7 +345,7 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
                       children: [
-                        Icon(Icons.sticky_note_2_rounded, color: cs.primary),
+                        const Icon(Icons.sticky_note_2_rounded, color: _base), // brand
                         const SizedBox(width: 8),
                         Text('메모', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
                         const Spacer(),
@@ -355,7 +356,11 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
                             children: [
                               Text(on ? 'On' : 'Off', style: textTheme.labelMedium?.copyWith(color: cs.outline)),
                               const SizedBox(width: 6),
-                              Switch(value: on, onChanged: (v) => DashMemo.enabled.value = v),
+                              Switch(
+                                value: on,
+                                onChanged: (v) => DashMemo.enabled.value = v,
+                                activeColor: _base, // subtle brand
+                              ),
                             ],
                           ),
                         ),
@@ -366,7 +371,13 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
                           onPressed: _sending ? null : _sendNotesByEmail,
                           icon: _sending
                               ? const SizedBox(
-                              width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(_base), // brand
+                            ),
+                          )
                               : const Icon(Icons.email_outlined),
                         ),
                         IconButton(
@@ -422,11 +433,13 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        // ⬇️ 색상만 HomeWorkButtonWidget 톤으로 변경 (배경: 흰색 / 전경: 검정)
+                        // 버튼 톤: 흰 배경 + 검정 전경 + brand outline만
                         FilledButton.icon(
                           style: FilledButton.styleFrom(
                             backgroundColor: Colors.white,
                             foregroundColor: Colors.black,
+                            side: const BorderSide(color: _light, width: 1.1), // brand outline
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                           onPressed: () => _submitNote(_inputCtrl.text),
                           icon: const Icon(Icons.send_rounded),
@@ -467,8 +480,8 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
                                 dense: false,
                                 leading: CircleAvatar(
                                   radius: 18,
-                                  backgroundColor: cs.primaryContainer,
-                                  child: Icon(Icons.notes_rounded, color: cs.onPrimaryContainer, size: 18),
+                                  backgroundColor: _light.withOpacity(.18), // brand tint
+                                  child: const Icon(Icons.notes_rounded, color: _dark, size: 18),
                                 ),
                                 title: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis),
                                 subtitle: time.isNotEmpty
@@ -594,8 +607,7 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
   // ---------- helpers ----------
 
   OutlineInputBorder _inputBorder({bool focused = false, ColorScheme? cs}) {
-    final color =
-    focused ? (cs ?? Theme.of(context).colorScheme).primary : Theme.of(context).dividerColor.withOpacity(.2);
+    final color = focused ? _base : Theme.of(context).dividerColor.withOpacity(.2); // brand on focus
     return OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
       borderSide: BorderSide(color: color, width: focused ? 1.4 : 1),

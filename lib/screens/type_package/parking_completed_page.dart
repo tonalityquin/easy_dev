@@ -329,7 +329,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
       } else if (code == 'unavailable') {
         showFailedSnackbar(context, '네트워크 상태가 불안정합니다. 잠시 후 다시 시도해 주세요.');
       } else {
-        showFailedSnackbar(context, '번호판 목록 표시 실패(Firestore): $code');
+        showFailedSnackbar(context, '번호판 목록 표시 실패 : $code');
       }
     } catch (e) {
       if (!mounted) return;

@@ -21,6 +21,11 @@ class UserStatementFormPage extends StatefulWidget {
   State<UserStatementFormPage> createState() => _UserStatementFormPageState();
 }
 
+/// ─────────────────────────────────────────────────────────────────────────
+/// 브랜드 팔레트(최소 사용)
+const Color _base  = Color(0xFF0D47A1);
+const Color _light = Color(0xFF5472D3);
+
 /// 앱 공통 버튼 스타일(참고: HomeBreakButtonWidget)
 class _AppButtonStyles {
   static const _radius = 8.0;
@@ -37,8 +42,9 @@ class _AppButtonStyles {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_radius)),
       elevation: 0,
     ).copyWith(
+      // ✨ 잉크 효과만 살짝 브랜드 톤
       overlayColor: MaterialStateProperty.resolveWith<Color?>(
-            (states) => states.contains(MaterialState.pressed) ? Colors.black12 : null,
+            (states) => states.contains(MaterialState.pressed) ? _light.withOpacity(.06) : null,
       ),
     );
   }
@@ -50,6 +56,10 @@ class _AppButtonStyles {
       side: const BorderSide(color: Colors.grey, width: 1.0),
       minimumSize: Size(0, minHeight), // ✅ 가로 무한 너비 방지
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(_radius)),
+    ).copyWith(
+      overlayColor: MaterialStateProperty.resolveWith<Color?>(
+            (states) => states.contains(MaterialState.pressed) ? _light.withOpacity(.06) : null,
+      ),
     );
   }
 
@@ -554,9 +564,10 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: Colors.grey),
       ),
+      // ✨ 포커스 테두리만 브랜드 컬러
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.black),
+        borderSide: const BorderSide(color: _base, width: 1.6),
       ),
       contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
     );
@@ -683,8 +694,7 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor:
-                  AlwaysStoppedAnimation<Color>(Colors.black),
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
                 ),
               )
                   : const Icon(Icons.send_outlined),
@@ -714,11 +724,11 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                     side: BorderSide(color: cs.outlineVariant),
                   ),
                   color: Colors.white,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
+                  child: const Padding(
+                    padding: EdgeInsets.all(12),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Icon(Icons.info_outline, size: 18),
                         SizedBox(width: 8),
                         Expanded(
@@ -977,7 +987,7 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                   ],
                 ),
 
-                // 리스트 끝부분에 여유를 둬서 스크롤 막힘/가림 방지
+                // 리스트 끝부분 여유
                 const SizedBox(height: 20),
               ],
             ),
@@ -1162,7 +1172,7 @@ class _SignatureFullScreenDialogState
                     const SizedBox(width: 8),
                     TextButton.icon(
                       onPressed: () =>
-                          setState(() => _signDateTime = DateTime.now()),
+                          setState(() => _signDateTime = DateTime.now() ),
                       icon: const Icon(Icons.schedule),
                       label: const Text('지금'),
                     ),

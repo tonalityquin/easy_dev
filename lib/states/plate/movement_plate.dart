@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import '../../repositories/plate_repo_services/plate_write_service.dart';
+import '../../screens/type_package/parking_completed_package/services/parking_completed_logger.dart';
 import '../user/user_state.dart';
 // import '../../utils/usage_reporter.dart';
 
@@ -28,6 +29,13 @@ class MovementPlate extends ChangeNotifier {
       toType: PlateType.parkingCompleted.firestoreValue,
       extraFields: {'location': location, 'area': area},
       forceOverride: forceOverride,
+    );
+
+    await ParkingCompletedLogger.instance.maybeLogCompleted(
+      plateNumber: plateNumber,
+      area: area,
+      oldStatus: kStatusEntryRequest,
+      newStatus: kStatusEntryDone,
     );
 
     /*await UsageReporter.instance.report(
@@ -112,6 +120,12 @@ class MovementPlate extends ChangeNotifier {
       forceOverride: forceOverride,
     );
 
+    await ParkingCompletedLogger.instance.maybeLogCompleted(
+      plateNumber: plateNumber,
+      area: area,
+      oldStatus: kStatusExitRequest,
+      newStatus: kStatusEntryDone,
+    );
     /*await UsageReporter.instance.report(
       area: area,
       action: 'write',

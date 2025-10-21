@@ -12,6 +12,10 @@ import '../../../../../../utils/snackbar_helper.dart';
 
 const _kBasePad = 16.0;
 
+// ── Brand palette (minimal use only)
+const Color _base  = Color(0xFF0D47A1);
+const Color _light = Color(0xFF5472D3);
+
 class HomeEndWorkReportContent extends StatefulWidget {
   final Future<void> Function(String reportType, String content) onReport;
   final int? initialVehicleInput; // 입차
@@ -176,11 +180,14 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                         ? const SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(_base),
+                      ),
                     )
                         : IconButton(
                       tooltip: '입차 수 재계산',
-                      icon: const Icon(Icons.refresh),
+                      icon: const Icon(Icons.refresh, color: _base),
                       onPressed: _refetchInput,
                     ),
                   ),
@@ -200,11 +207,14 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
                         ? const SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(_base),
+                      ),
                     )
                         : IconButton(
                       tooltip: '출차 수 재계산',
-                      icon: const Icon(Icons.refresh),
+                      icon: const Icon(Icons.refresh, color: _base),
                       onPressed: _refetchOutput,
                     ),
                   ),
@@ -215,13 +225,18 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
             SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: _base,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: _light.withOpacity(.5),
+                ),
                 icon: _submitting
                     ? const SizedBox(
                   width: 18,
                   height: 18,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: Colors.white,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
                 )
                     : const Icon(Icons.send),
@@ -267,6 +282,7 @@ class _LabeledNumberField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final divider = Theme.of(context).dividerColor.withOpacity(.2);
     return TextFormField(
       controller: controller,
       focusNode: focusNode,
@@ -278,10 +294,17 @@ class _LabeledNumberField extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         helperText: helper,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: divider),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: divider),
+        ),
         focusedBorder: const OutlineInputBorder(
           borderRadius: BorderRadius.all(Radius.circular(12)),
-          borderSide: BorderSide(width: 1.6),
+          borderSide: BorderSide(width: 1.6, color: _base), // brand on focus
         ),
         suffixIcon: suffix,
       ),
