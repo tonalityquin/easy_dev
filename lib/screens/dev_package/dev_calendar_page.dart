@@ -459,8 +459,6 @@ class _DevCalendarPageState extends State<DevCalendarPage> {
 }
 
 /// ===== “92% 전체 화면” 바텀시트 프레임 =====
-/// - showModalBottomSheet 의 builder에서 바로 사용.
-/// - 상/하 SafeArea, 둥근 모서리, 배경 투명 + 그림자 포함.
 class _NinetyTwoPercentBottomSheetFrame extends StatelessWidget {
   const _NinetyTwoPercentBottomSheetFrame({required this.child});
 
@@ -500,8 +498,6 @@ class _NinetyTwoPercentBottomSheetFrame extends StatelessWidget {
 }
 
 /// ===== 바텀시트용 “페이지” 스캐폴드 =====
-/// - AppBar 대체(핸들 + 타이틀 + 닫기 버튼)
-/// - body + 하단 FAB Row(중앙 부근 떠 있는 버튼들)
 class _SheetScaffold extends StatelessWidget {
   const _SheetScaffold({
     required this.title,
@@ -583,7 +579,7 @@ class _SheetScaffold extends StatelessWidget {
   }
 }
 
-// ===== 바텀시트용 보드 래퍼(상단 핸들/닫기 버튼 포함) =====
+// ===== 바텀시트용 보드 래퍼 =====
 class _BoardSheetScaffold extends StatelessWidget {
   const _BoardSheetScaffold({required this.child});
 

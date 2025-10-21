@@ -21,6 +21,9 @@ import 'head_package/company_calendar_page.dart'; // ⬅️ 바텀시트 헬퍼 
 // ▼ (추가) 회사 노무도 바텀시트로 열기 위한 import
 import 'head_package/labor_guide_page.dart'; // ⬅️ 바텀시트 헬퍼 사용
 
+// ✅ (신규) 본사 허브 퀵 액션 버블 ON/OFF 제어를 위해 import
+import 'head_package/hub_quick_actions.dart';
+
 class HeadStubPage extends StatelessWidget {
   const HeadStubPage({super.key});
 
@@ -118,7 +121,7 @@ class HeadStubPage extends StatelessWidget {
                       const statDark = Color(0xFF4A148C); // deep purple 900
                       const statLight = Color(0xFFCE93D8); // deep purple 200
 
-                      // HR(관리) — Blue
+                      // ✅ HR(관리) — Blue (누락됐던 상수 추가)
                       const hrBase = Color(0xFF1565C0); // blue 800
                       const hrDark = Color(0xFF0D47A1); // blue 900
                       const hrLight = Color(0xFF90CAF9); // blue 200
@@ -304,6 +307,7 @@ class _HeaderBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -339,6 +343,57 @@ class _HeaderBanner extends StatelessWidget {
                 fontWeight: FontWeight.w600,
               ),
             ),
+          ),
+
+          // 🔘 ON/OFF 토글 — 오른쪽에 고정 (HeadHubActions 버블)
+          ValueListenableBuilder<bool>(
+            valueListenable: HeadHubActions.enabled,
+            builder: (context, on, _) {
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: on ? _dark.withOpacity(.12) : cs.surfaceVariant,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: on ? _dark.withOpacity(.35) : cs.outlineVariant,
+                      ),
+                    ),
+                    child: Text(
+                      on ? 'Bubble ON' : 'Bubble OFF',
+                      style: text.labelMedium?.copyWith(
+                        color: on ? _dark : cs.outline,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: .2,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Switch.adaptive(
+                    value: on,
+                    onChanged: (v) async {
+                      HeadHubActions.setEnabled(v);
+                      if (v) {
+                        // 켜질 때 바로 부착 시도
+                        await HeadHubActions.mountIfNeeded();
+                      }
+                      HapticFeedback.selectionClick();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(v
+                              ? '본사 허브 버블이 켜졌습니다.'
+                              : '본사 허브 버블이 꺼졌습니다.'),
+                          behavior: SnackBarBehavior.floating,
+                          duration: const Duration(milliseconds: 900),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -377,6 +432,7 @@ class _ActionCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
+          // ✅ 반드시 이름 있는 인자 사용
           padding: const EdgeInsets.all(12),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,

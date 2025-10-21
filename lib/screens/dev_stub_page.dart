@@ -15,6 +15,9 @@ import 'dev_package/sqlite_explorer_bottom_sheet.dart';
 // ✅ 추가: DevCalendarPage 바텀시트 호출용 import
 import 'dev_package/dev_calendar_page.dart';
 
+// ✅ 추가: 개발용 플로팅 버블 on/off 토글을 위해 가져옴
+import 'dev_package/dev_quick_actions.dart';
+
 /// ====== 개발 전용 팔레트 (개발 카드와 동일 톤) ======
 /// 버튼/Badge 배경
 const kDevPrimary = Color(0xFF6A1B9A); // Deep Purple
@@ -196,7 +199,6 @@ class DevStubPage extends StatelessWidget {
                           tintColor: kDevTint.withOpacity(0.45),
                           titleColor: kDevDarkText,
                           onTap: () async {
-                            // ⬇️ openPanel → togglePanel로 교체 (호환성 수정)
                             await DevMemo.togglePanel();
                           },
                         ),
@@ -211,8 +213,6 @@ class DevStubPage extends StatelessWidget {
                           tintColor: calLight,
                           titleColor: calDark,
                           onTap: () {
-                            // 🔄 기존: Navigator.pushNamed(AppRoutes.devCalendar)
-                            // ⬇️ 변경: 바텀시트(92%)로 열기
                             DevCalendarPage.showAsBottomSheet(context);
                           },
                         ),
@@ -315,6 +315,7 @@ class _HeaderBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
 
     return Container(
       padding: const EdgeInsets.all(16),
@@ -344,6 +345,55 @@ class _HeaderBanner extends StatelessWidget {
                 fontWeight: FontWeight.w700,
               ),
             ),
+          ),
+
+          // 🔘 ON/OFF 토글 — 오른쪽에 고정
+          ValueListenableBuilder<bool>(
+            valueListenable: DevQuickActions.enabled,
+            builder: (context, on, _) {
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: on ? kDevPrimary.withOpacity(.12) : cs.surfaceVariant,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: on ? kDevPrimary.withOpacity(.35) : cs.outlineVariant,
+                      ),
+                    ),
+                    child: Text(
+                      on ? 'Bubble ON' : 'Bubble OFF',
+                      style: text.labelMedium?.copyWith(
+                        color: on ? kDevDarkText : cs.outline,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: .2,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Switch.adaptive(
+                    value: on,
+                    onChanged: (v) async {
+                      DevQuickActions.setEnabled(v);
+                      if (v) {
+                        // 켜질 때 바로 부착 시도
+                        await DevQuickActions.mountIfNeeded();
+                      }
+                      HapticFeedback.selectionClick();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(v ? '개발 버블이 켜졌습니다.' : '개발 버블이 꺼졌습니다.'),
+                          behavior: SnackBarBehavior.floating,
+                          duration: const Duration(milliseconds: 900),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),

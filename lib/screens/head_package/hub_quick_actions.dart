@@ -107,7 +107,6 @@ class HeadHubActions {
       _opening = false;
     }
   }
-  // ▲▲▲ 추가/개선 끝 ▲▲▲
 
   /// 초기화 1회
   static Future<void> init() async {
@@ -134,6 +133,10 @@ class HeadHubActions {
     }
     if (enabled.value) _showOverlay();
   }
+
+  /// 외부에서 스위치로 토글할 때 사용할 공개 API
+  static void setEnabled(bool value) => enabled.value = value;
+  static void toggle() => enabled.value = !enabled.value;
 
   static Offset _restorePos() {
     final dx = _prefs?.getDouble(_kBubbleXKey) ?? 12.0;

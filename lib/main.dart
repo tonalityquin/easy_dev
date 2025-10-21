@@ -7,7 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'routes.dart';
 import 'providers/providers.dart';
-import 'screens/dev_package/dev_memo.dart';
+// import 'screens/dev_package/dev_memo.dart'; // ⬅️ DevMemo 더 이상 사용 안 함
 import 'screens/head_package/head_memo.dart';
 import 'theme.dart';
 // import 'utils/init/dev_initializer.dart'; // 비상용 개발 지역 계정 임시 비활성화
@@ -35,11 +35,17 @@ import 'screens/head_package/hub_quick_actions.dart';
 // ✅ (신규) DashMemo 전역 오버레이 부착을 위해 추가
 import 'screens/type_package/common_widgets/dashboard_bottom_sheet/memo/dash_memo.dart';
 
+// ✅ (신규) 개발 허브 퀵 액션(DevQuickActions) 사용
+import 'screens/dev_package/dev_quick_actions.dart';
+
 const kIsWorkingPrefsKey = 'isWorking';
 
 /// ✅ GSI v7 “웹 애플리케이션” 클라이언트 ID (Android에선 serverClientId로 사용)
 const String kWebClientId =
     '470236709494-kgk29jdhi8ba25f7ujnqhpn8f22fhf25.apps.googleusercontent.com';
+
+/// 🔐 개발자 모드 잠금 해제 비밀번호(원하는 값으로 교체하세요)
+const String kDevUnlockPassword = 'DEV-MODE-2025!';
 
 String _ts() => DateTime.now().toIso8601String();
 
@@ -229,20 +235,21 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
     );
     debugPrint('[MAIN][${_ts()}] startService done');
 
-    // ✅ 플로팅/메모 초기화(상태 로드).
-    debugPrint('[MAIN][${_ts()}] DevMemo.init');
-    await DevMemo.init();
-
+    // ✅ (유지) HeadMemo 초기화
     debugPrint('[MAIN][${_ts()}] HeadMemo.init');
     await HeadMemo.init();
 
-    // ✅ (신규) DashMemo 전역 초기화 — 이후 mountIfNeeded로 부착
+    // ✅ DashMemo 전역 초기화 — 이후 mountIfNeeded로 부착
     debugPrint('[MAIN][${_ts()}] DashMemo.init');
     await DashMemo.init();
 
-    // ✅ (신규) 허브 퀵 액션 버블 전역 초기화
+    // ✅ 본사 허브 퀵 액션 버블 전역 초기화
     debugPrint('[MAIN][${_ts()}] HeadHubActions.init');
     await HeadHubActions.init();
+
+    // ✅ (신규) 개발 허브 퀵 액션(DevQuickActions) 초기화 (기본 OFF)
+    debugPrint('[MAIN][${_ts()}] DevQuickActions.init');
+    await DevQuickActions.init();
 
     debugPrint('[MAIN][${_ts()}] _initializeApp done');
   }
@@ -268,23 +275,142 @@ class MyApp extends StatelessWidget {
         navigatorKey: AppNavigator.key,
         scaffoldMessengerKey: AppNavigator.scaffoldMessengerKey,
 
-        // ✅ 첫 프레임 후 필요 시 오버레이 부착
+        // ✅ 첫 프레임 후 필요 시 오버레이 부착 + 숨김 제스처(비밀번호)로 DevQuickActions 켜기
         builder: (context, child) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             debugPrint('[MAIN][${_ts()}] postFrameCallback → mountIfNeeded');
 
-            // ⛔️ DevMemo 플로팅 버블 제거 → 자동 부착 없음 (필요 시 DevMemo.togglePanel()으로 수동 오픈)
+            // ⛔️ DevMemo 플로팅 버블 제거 → 자동 부착 없음
             // DevMemo: no mount call
 
             // HeadMemo: 버블 제거 → mountIfNeeded 호출 없음 (기존 주석 유지)
             // HeadMemo: no mount call
 
-            // ✅ (유지) 허브 퀵 액션 / DashMemo 오버레이는 기존대로 부착
+            // ✅ (유지) 허브 퀵 액션 / DashMemo / DevQuickActions 오버레이 부착 시도
             HeadHubActions.mountIfNeeded();
             DashMemo.mountIfNeeded();
+            DevQuickActions.mountIfNeeded();
           });
-          return child!;
+
+          // ⬇️ 숨김 제스처(우상단 48x48 영역 '트리플 탭') + 비밀번호로 DevQuickActions 활성화
+          return Stack(
+            children: [
+              child!,
+              const _DevUnlockHotspot(), // 🔐 개발자 모드 잠금 해제 핫스팟
+            ],
+          );
         },
+      ),
+    );
+  }
+}
+
+/// 🔐 우상단 작은 투명 핫스팟을 '트리플 탭'하면 비밀번호 입력 다이얼로그를 띄우고,
+///     올바르면 DevQuickActions 를 ON 합니다. (상태는 SharedPreferences에 저장)
+class _DevUnlockHotspot extends StatefulWidget {
+  const _DevUnlockHotspot();
+
+  @override
+  State<_DevUnlockHotspot> createState() => _DevUnlockHotspotState();
+}
+
+class _DevUnlockHotspotState extends State<_DevUnlockHotspot> {
+  int _tapCount = 0;
+  Timer? _resetTimer;
+
+  @override
+  void dispose() {
+    _resetTimer?.cancel();
+    super.dispose();
+  }
+
+  void _onTap() {
+    _tapCount++;
+    _resetTimer?.cancel();
+    _resetTimer = Timer(const Duration(milliseconds: 550), () {
+      _tapCount = 0;
+    });
+
+    if (_tapCount >= 3) {
+      _tapCount = 0;
+      _resetTimer?.cancel();
+      _askPassword(context);
+    }
+  }
+
+  Future<void> _askPassword(BuildContext ctx) async {
+    final controller = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: ctx,
+      barrierDismissible: true,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('개발자 모드 잠금 해제'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: '비밀번호',
+              hintText: '비밀번호를 입력하세요',
+            ),
+            onSubmitted: (_) => Navigator.of(context).pop(true),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('취소'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('확인'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (ok == true) {
+      final input = controller.text;
+      if (input == kDevUnlockPassword) {
+        DevQuickActions.setEnabled(true);
+        // 바로 부착 시도(다음 프레임에서 overlay가 들어오지만 안전하게 한 번 더 시도)
+        DevQuickActions.mountIfNeeded();
+
+        AppNavigator.messenger?.showSnackBar(
+          const SnackBar(
+            content: Text('개발 허브 퀵 액션이 활성화되었습니다.'),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        AppNavigator.messenger?.showSnackBar(
+          const SnackBar(
+            content: Text('비밀번호가 올바르지 않습니다.'),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 우상단 48x48 투명 터치 영역 (상태바/앱바 버튼과 충돌을 줄이기 위해 살짝 안쪽으로)
+    return Positioned(
+      top: 12,
+      right: 8,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _onTap,
+        child: const SizedBox(
+          width: 48,
+          height: 48,
+          // 디버깅 시 아래 박스를 잠시 켜면 위치 확인 쉬움:
+          // child: DecoratedBox(decoration: BoxDecoration(color: Colors.red.withOpacity(.1))),
+        ),
       ),
     );
   }

@@ -417,8 +417,7 @@ class _GoogleDocsDocBottomSheetState
                         IconButton(
                           tooltip: '닫기',
                           icon: const Icon(Icons.close_rounded),
-                          onPressed: () =>
-                              Navigator.of(context).maybePop(),
+                          onPressed: () => Navigator.of(context).maybePop(),
                         ),
                       ],
                     ),
@@ -506,8 +505,7 @@ class _GoogleDocsDocBottomSheetState
                                   ),
                                 ),
                                 OutlinedButton.icon(
-                                  icon:
-                                  const Icon(Icons.download_rounded),
+                                  icon: const Icon(Icons.download_rounded),
                                   label: const Text('불러오기'),
                                   onPressed: _busy ? null : _loadDocument,
                                 ),
@@ -537,8 +535,7 @@ class _GoogleDocsDocBottomSheetState
                   // 에디터
                   Expanded(
                     child: Padding(
-                      padding:
-                      const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                       child: Stack(
                         children: [
                           TextField(
@@ -568,8 +565,8 @@ class _GoogleDocsDocBottomSheetState
                                 child: const SizedBox(
                                   width: 24,
                                   height: 24,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2.2),
+                                  child:
+                                  CircularProgressIndicator(strokeWidth: 2.2),
                                 ),
                               ),
                             ),

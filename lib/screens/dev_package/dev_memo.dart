@@ -67,6 +67,9 @@ class DevMemo {
     );
   }
 
+  /// (호환용 별칭) 기존 코드에서 openPanel()을 호출해도 동작하도록 유지
+  static Future<void> openPanel() => togglePanel();
+
   // ----------------- 데이터 조작 -----------------
 
   static Future<void> add(String text) async {
@@ -344,17 +347,17 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
         ..writeln('MIME-Version: 1.0')
         ..writeln('To: $toCsv')
         ..writeln('Subject: $subject')
-        ..writeln('Content-Type: multipart/mixed; boundary="$boundary"')
+        ..writeln('Content-Type: multipart/mixed; boundary=\"$boundary\"')
         ..writeln()
         ..writeln('--$boundary')
-        ..writeln('Content-Type: text/plain; charset="utf-8"')
+        ..writeln('Content-Type: text/plain; charset=\"utf-8\"')
         ..writeln('Content-Transfer-Encoding: 7bit')
         ..writeln()
         ..writeln(bodyText)
         ..writeln()
         ..writeln('--$boundary')
-        ..writeln('Content-Type: text/plain; charset="utf-8"; name="$filename"')
-        ..writeln('Content-Disposition: attachment; filename="$filename"')
+        ..writeln('Content-Type: text/plain; charset=\"utf-8\"; name=\"$filename\"')
+        ..writeln('Content-Disposition: attachment; filename=\"$filename\"')
         ..writeln('Content-Transfer-Encoding: base64')
         ..writeln()
         ..writeln(attachmentB64)
