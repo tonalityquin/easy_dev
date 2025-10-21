@@ -91,8 +91,6 @@ class _DevMonthCalendarViewState extends State<DevMonthCalendarView> {
     return list;
   }
 
-  // ❌ 미사용 메서드 제거: _eventCountOnDay
-
   Future<void> _openDaySheet(BuildContext context, DateTime day) async {
     final events = _eventsOnDay(day);
     final fmtDay = DateFormat('yyyy-MM-dd (EEE)');
@@ -132,8 +130,8 @@ class _DevMonthCalendarViewState extends State<DevMonthCalendarView> {
                           child: Text(
                             fmtDay.format(day),
                             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                         IconButton(
@@ -148,40 +146,40 @@ class _DevMonthCalendarViewState extends State<DevMonthCalendarView> {
                     child: events.isEmpty
                         ? const Center(child: Text('이 날짜에 이벤트가 없습니다.'))
                         : ListView.separated(
-                            controller: controller,
-                            itemCount: events.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1),
-                            itemBuilder: (context, i) {
-                              final e = events[i];
-                              final isAllDay = (e.start?.date != null) && (e.start?.dateTime == null);
-                              String whenText;
-                              if (isAllDay) {
-                                whenText = '종일';
-                              } else {
-                                final st = e.start?.dateTime?.toLocal();
-                                final ed = e.end?.dateTime?.toLocal();
-                                if (st != null && ed != null) {
-                                  whenText = '${fmtTime.format(st)} ~ ${fmtTime.format(ed)}';
-                                } else if (st != null) {
-                                  whenText = fmtTime.format(st);
-                                } else {
-                                  whenText = '(시간 미정)';
-                                }
-                              }
-                              final done = widget.progressOf(e) == 100;
+                      controller: controller,
+                      itemCount: events.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (context, i) {
+                        final e = events[i];
+                        final isAllDay = (e.start?.date != null) && (e.start?.dateTime == null);
+                        String whenText;
+                        if (isAllDay) {
+                          whenText = '종일';
+                        } else {
+                          final st = e.start?.dateTime?.toLocal();
+                          final ed = e.end?.dateTime?.toLocal();
+                          if (st != null && ed != null) {
+                            whenText = '${fmtTime.format(st)} ~ ${fmtTime.format(ed)}';
+                          } else if (st != null) {
+                            whenText = fmtTime.format(st);
+                          } else {
+                            whenText = '(시간 미정)';
+                          }
+                        }
+                        final done = widget.progressOf(e) == 100;
 
-                              return ListTile(
-                                leading: done
-                                    ? const Icon(Icons.check_circle, size: 20)
-                                    : const Icon(Icons.radio_button_unchecked, size: 20),
-                                title: Text(
-                                  e.summary ?? '(제목 없음)',
-                                  style: done ? const TextStyle(decoration: TextDecoration.lineThrough) : null,
-                                ),
-                                subtitle: Text(whenText),
-                              );
-                            },
+                        return ListTile(
+                          leading: done
+                              ? const Icon(Icons.check_circle, size: 20)
+                              : const Icon(Icons.radio_button_unchecked, size: 20),
+                          title: Text(
+                            e.summary ?? '(제목 없음)',
+                            style: done ? const TextStyle(decoration: TextDecoration.lineThrough) : null,
                           ),
+                          subtitle: Text(whenText),
+                        );
+                      },
+                    ),
                   ),
                 ],
               ),
@@ -199,6 +197,7 @@ class _DevMonthCalendarViewState extends State<DevMonthCalendarView> {
     final isLight = Theme.of(context).brightness == Brightness.light;
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // ==== 월 헤더 ====
         Row(
@@ -236,8 +235,8 @@ class _DevMonthCalendarViewState extends State<DevMonthCalendarView> {
         const SizedBox(height: 4),
 
         // ==== 요일 헤더 ====
-        Row(
-          children: const [
+        const Row(
+          children: [
             _DowCell('일'),
             _DowCell('월'),
             _DowCell('화'),
@@ -250,110 +249,119 @@ class _DevMonthCalendarViewState extends State<DevMonthCalendarView> {
         const SizedBox(height: 4),
 
         // ==== 월 그리드 ====
-        AspectRatio(
-          aspectRatio: 7 / 6,
-          child: GridView.builder(
-            physics: const NeverScrollableScrollPhysics(),
-            padding: EdgeInsets.zero,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 7,
-            ),
-            itemCount: days.length,
-            itemBuilder: (context, i) {
-              final d = days[i];
-              final inMonth = d.month == _visibleMonth.month;
-              final isToday = _isSameDay(d, DateTime.now());
-              final isSelected = _selectedDay != null && _isSameDay(d, _selectedDay!);
+        // ⬇️ 수정 포인트: 가용 높이에 딱 맞춰 6줄 그리드가 들어가도록 변경
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, cons) {
+              const rows = 6;
+              final rowHeight = cons.maxHeight / rows;
 
-              // 해당 날짜의 이벤트 및 개수
-              final eventsOfDay = _eventsOnDay(d);
-              final cnt = eventsOfDay.length;
-
-              final bg = isSelected
-                  ? Theme.of(context).colorScheme.primary.withOpacity(isLight ? .12 : .22)
-                  : Colors.transparent;
-
-              final fg = inMonth
-                  ? (isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface)
-                  : Colors.grey;
-
-              return InkWell(
-                onTap: () {
-                  setState(() => _selectedDay = d);
-                  _openDaySheet(context, d);
-                },
-                child: Container(
-                  margin: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: bg,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Stack(
-                    children: [
-                      // 날짜 + 오늘 점 (좌측 상단)
-                      Positioned(
-                        top: 4,
-                        left: 6,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text('${d.day}', style: TextStyle(fontSize: 12, color: fg)),
-                            if (isToday)
-                              Padding(
-                                padding: const EdgeInsets.only(left: 4),
-                                child: Container(
-                                  width: 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.primary,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-
-                      // 진행도에 따른 dot 표시 (우측 하단)
-                      if (cnt > 0)
-                        Positioned(
-                          right: 6,
-                          bottom: 4,
-                          child: Row(
-                            children: [
-                              ...eventsOfDay.take(3).map((e) {
-                                final p = widget.progressOf(e);
-                                final color = (p == 100) ? Colors.red : Colors.black;
-                                return Padding(
-                                  padding: const EdgeInsets.only(left: 4),
-                                  child: Container(
-                                    width: 6,
-                                    height: 6,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: color,
-                                    ),
-                                  ),
-                                );
-                              }),
-                              if (cnt > 3)
-                                Padding(
-                                  padding: const EdgeInsets.only(left: 4),
-                                  child: Text(
-                                    '+${cnt - 3}',
-                                    style: TextStyle(
-                                      fontSize: 9,
-                                      height: 1.0,
-                                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
+              return GridView.builder(
+                physics: const NeverScrollableScrollPhysics(),
+                padding: EdgeInsets.zero,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 7,
+                  // 각 셀의 세로 높이를 남은 높이/6줄로 고정
+                  mainAxisExtent: rowHeight,
                 ),
+                itemCount: days.length,
+                itemBuilder: (context, i) {
+                  final d = days[i];
+                  final inMonth = d.month == _visibleMonth.month;
+                  final isToday = _isSameDay(d, DateTime.now());
+                  final isSelected = _selectedDay != null && _isSameDay(d, _selectedDay!);
+
+                  // 해당 날짜의 이벤트 및 개수
+                  final eventsOfDay = _eventsOnDay(d);
+                  final cnt = eventsOfDay.length;
+
+                  final bg = isSelected
+                      ? Theme.of(context).colorScheme.primary.withOpacity(isLight ? .12 : .22)
+                      : Colors.transparent;
+
+                  final fg = inMonth
+                      ? (isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface)
+                      : Colors.grey;
+
+                  return InkWell(
+                    onTap: () {
+                      setState(() => _selectedDay = d);
+                      _openDaySheet(context, d);
+                    },
+                    child: Container(
+                      margin: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: bg,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Stack(
+                        children: [
+                          // 날짜 + 오늘 점 (좌측 상단)
+                          Positioned(
+                            top: 4,
+                            left: 6,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text('${d.day}', style: TextStyle(fontSize: 12, color: fg)),
+                                if (isToday)
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 4),
+                                    child: Container(
+                                      width: 6,
+                                      height: 6,
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context).colorScheme.primary,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+
+                          // 진행도에 따른 dot 표시 (우측 하단)
+                          if (cnt > 0)
+                            Positioned(
+                              right: 6,
+                              bottom: 4,
+                              child: Row(
+                                children: [
+                                  ...eventsOfDay.take(3).map((e) {
+                                    final p = widget.progressOf(e);
+                                    final color = (p == 100) ? Colors.red : Colors.black;
+                                    return Padding(
+                                      padding: const EdgeInsets.only(left: 4),
+                                      child: Container(
+                                        width: 6,
+                                        height: 6,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: color,
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                  if (cnt > 3)
+                                    Padding(
+                                      padding: const EdgeInsets.only(left: 4),
+                                      child: Text(
+                                        '+${cnt - 3}',
+                                        style: TextStyle(
+                                          fontSize: 9,
+                                          height: 1.0,
+                                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               );
             },
           ),

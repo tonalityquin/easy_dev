@@ -27,7 +27,33 @@ class _CalColors {
 }
 
 class DevCalendarPage extends StatefulWidget {
-  const DevCalendarPage({super.key});
+  const DevCalendarPage({
+    super.key,
+    this.asBottomSheet = false,
+  });
+
+  /// true면 AppBar 없는 **전체 화면 바텀시트 UI**로 렌더링
+  final bool asBottomSheet;
+
+  /// 전체 화면 바텀시트(92%)로 열기
+  static Future<T?> showAsBottomSheet<T>(BuildContext context) {
+    return showModalBottomSheet<T>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.black54,
+      builder: (sheetCtx) {
+        final insets = MediaQuery.of(sheetCtx).viewInsets; // 키보드 대응
+        return Padding(
+          padding: EdgeInsets.only(bottom: insets.bottom),
+          child: const _NinetyTwoPercentBottomSheetFrame(
+            child: DevCalendarPage(asBottomSheet: true),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   State<DevCalendarPage> createState() => _DevCalendarPageState();
@@ -100,6 +126,7 @@ class _DevCalendarPageState extends State<DevCalendarPage> {
     final val = (progress == 100) ? 100 : 0;
     final base = (description ?? '').trimRight();
     if (_progressTag.hasMatch(base)) {
+      // ✅ 불필요한 ']' 제거하여 문법 오류 수정
       return base.replaceAllMapped(_progressTag, (_) => '[progress:$val]');
     }
     if (base.isEmpty) return '[progress:$val]';
@@ -110,100 +137,126 @@ class _DevCalendarPageState extends State<DevCalendarPage> {
   Widget build(BuildContext context) {
     final model = context.watch<DevCalendarModel>();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('개발 달력'),
-        centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
-        surfaceTintColor: Colors.white,
-        elevation: 0,
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
-        ),
-        actions: [
-          IconButton(
-            tooltip: '완료된 이벤트 보기',
-            icon: const Icon(Icons.done_all),
-            onPressed: () => openCompletedEventsSheet(
-              context: context,
-              allEvents: model.events,
-              onEdit: _openEditSheet,
+    // 공통 본문 (페이지/시트 모두 재사용)
+    final Widget pageBody = Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          const _InfoBanner(),
+          const SizedBox(height: 12),
+
+          _CalendarIdSection(
+            controller: _idCtrl,
+            locked: _idLocked,
+            loading: model.loading,
+            onToggleLock: () => setState(() => _idLocked = !_idLocked),
+            onClear: () => setState(() => _idCtrl.clear()),
+            onLoad: () async {
+              FocusScope.of(context).unfocus();
+              await context.read<DevCalendarModel>().load(newCalendarId: _idCtrl.text);
+              if (mounted && model.error == null && model.calendarId.isNotEmpty) {
+                _idCtrl.text = model.calendarId;
+                await _saveLastCalendarId(model.calendarId);
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+
+          if (model.loading) const LinearProgressIndicator(color: _CalColors.base),
+          if (model.error != null) ...[
+            const SizedBox(height: 8),
+            Text(model.error!, style: const TextStyle(color: Colors.redAccent)),
+          ],
+          const SizedBox(height: 8),
+
+          // 본문: 좌우 스와이프 (0: 캘린더, 1: 목록)
+          Expanded(
+            child: PageView(
+              controller: _pageController,
+              onPageChanged: (i) => setState(() => _viewIndex = i),
+              children: [
+                // 0) 캘린더
+                DevMonthCalendarView(
+                  allEvents: model.events,
+                  progressOf: (e) => _extractProgress(e.description),
+                  onEdit: _openEditSheet,
+                  onDelete: _confirmDelete,
+                  onToggleProgress: _toggleProgress,
+                  onMonthRequested: (monthStart, monthEnd) async {
+                    await context.read<DevCalendarModel>().loadRange(
+                      timeMin: monthStart,
+                      timeMax: monthEnd,
+                    );
+                  },
+                ),
+                // 1) 목록
+                DevEventList(
+                  events: model.events,
+                  onEdit: _openEditSheet,
+                  onDelete: _confirmDelete,
+                  onToggleProgress: _toggleProgress,
+                  progressOf: (e) => _extractProgress(e.description),
+                ),
+              ],
             ),
           ),
         ],
       ),
+    );
 
-      // ✅ 버튼 영역: 왼쪽 '보드' + 오른쪽 '새 이벤트' (두 버튼 디자인 통일)
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-      floatingActionButton: _buildFabRow(context),
-
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            const _InfoBanner(),
-            const SizedBox(height: 12),
-
-            _CalendarIdSection(
-              controller: _idCtrl,
-              locked: _idLocked,
-              loading: model.loading,
-              onToggleLock: () => setState(() => _idLocked = !_idLocked),
-              onClear: () => setState(() => _idCtrl.clear()),
-              onLoad: () async {
-                FocusScope.of(context).unfocus();
-                await context.read<DevCalendarModel>().load(newCalendarId: _idCtrl.text);
-                if (mounted && model.error == null && model.calendarId.isNotEmpty) {
-                  _idCtrl.text = model.calendarId;
-                  await _saveLastCalendarId(model.calendarId);
-                }
-              },
-            ),
-            const SizedBox(height: 12),
-
-            if (model.loading) const LinearProgressIndicator(color: _CalColors.base),
-            if (model.error != null) ...[
-              const SizedBox(height: 8),
-              Text(model.error!, style: const TextStyle(color: Colors.redAccent)),
-            ],
-            const SizedBox(height: 8),
-
-            // 본문: 좌우 스와이프 (0: 캘린더, 1: 목록)
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                onPageChanged: (i) => setState(() => _viewIndex = i),
-                children: [
-                  // 0) 캘린더
-                  DevMonthCalendarView(
-                    allEvents: model.events,
-                    progressOf: (e) => _extractProgress(e.description),
-                    onEdit: _openEditSheet,
-                    onDelete: _confirmDelete,
-                    onToggleProgress: _toggleProgress,
-                    onMonthRequested: (monthStart, monthEnd) async {
-                      await context.read<DevCalendarModel>().loadRange(
-                        timeMin: monthStart,
-                        timeMax: monthEnd,
-                      );
-                    },
-                  ),
-                  // 1) 목록
-                  DevEventList(
-                    events: model.events,
-                    onEdit: _openEditSheet,
-                    onDelete: _confirmDelete,
-                    onToggleProgress: _toggleProgress,
-                    progressOf: (e) => _extractProgress(e.description),
-                  ),
-                ],
+    // ✅ 모드 분기: 페이지 vs 바텀시트
+    if (!widget.asBottomSheet) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('개발 달력'),
+          centerTitle: true,
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black87,
+          surfaceTintColor: Colors.white,
+          elevation: 0,
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(1),
+            child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
+          ),
+          actions: [
+            IconButton(
+              tooltip: '완료된 이벤트 보기',
+              icon: const Icon(Icons.done_all),
+              onPressed: () => openCompletedEventsSheet(
+                context: context,
+                allEvents: model.events,
+                onEdit: _openEditSheet,
               ),
             ),
           ],
         ),
-      ),
+
+        // ✅ 버튼 영역: 왼쪽 '보드' + 오른쪽 '새 이벤트' (두 버튼 디자인 통일)
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+        floatingActionButton: _buildFabRow(context),
+
+        body: pageBody,
+      );
+    }
+
+    // ===== 바텀시트 모드 (92%) =====
+    return _SheetScaffold(
+      title: '개발 달력',
+      onClose: () => Navigator.of(context).maybePop(),
+      trailingActions: [
+        IconButton(
+          tooltip: '완료된 이벤트 보기',
+          icon: const Icon(Icons.done_all),
+          onPressed: () => openCompletedEventsSheet(
+            context: context,
+            allEvents: model.events,
+            onEdit: _openEditSheet,
+          ),
+        ),
+      ],
+      body: pageBody,
+      fab: _buildFabRow(context),
+      fabLift: _fabLift,
     );
   }
 
@@ -277,7 +330,7 @@ class _DevCalendarPageState extends State<DevCalendarPage> {
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) {
         return FractionallySizedBox(
-          heightFactor: 0.92,
+          heightFactor: 1, // ✅ 92% 높이
           child: _BoardSheetScaffold(
             child: DevBoardKanbanView(
               allEvents: model.events,
@@ -403,8 +456,131 @@ class _DevCalendarPageState extends State<DevCalendarPage> {
       colorId: e.colorId,
     );
   }
+}
 
-/// ✅ 드래그/메뉴 이동 시 날짜/진행도 보정
+/// ===== “92% 전체 화면” 바텀시트 프레임 =====
+/// - showModalBottomSheet 의 builder에서 바로 사용.
+/// - 상/하 SafeArea, 둥근 모서리, 배경 투명 + 그림자 포함.
+class _NinetyTwoPercentBottomSheetFrame extends StatelessWidget {
+  const _NinetyTwoPercentBottomSheetFrame({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return FractionallySizedBox(
+      heightFactor: 0.92, // ✅ 92% 높이
+      widthFactor: 1.0,
+      child: SafeArea(
+        top: true,
+        bottom: true,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          child: DecoratedBox(
+            decoration: const BoxDecoration(boxShadow: [
+              BoxShadow(
+                blurRadius: 24,
+                spreadRadius: 8,
+                color: Color(0x33000000),
+                offset: Offset(0, 8),
+              ),
+            ]),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Material(
+                color: Colors.white,
+                child: child,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// ===== 바텀시트용 “페이지” 스캐폴드 =====
+/// - AppBar 대체(핸들 + 타이틀 + 닫기 버튼)
+/// - body + 하단 FAB Row(중앙 부근 떠 있는 버튼들)
+class _SheetScaffold extends StatelessWidget {
+  const _SheetScaffold({
+    required this.title,
+    required this.onClose,
+    required this.body,
+    this.trailingActions,
+    this.fab,
+    this.fabLift = 24.0,
+  });
+
+  final String title;
+  final VoidCallback onClose;
+  final List<Widget>? trailingActions;
+  final Widget body;
+  final Widget? fab;
+  final double fabLift;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        // 본문
+        Column(
+          children: [
+            const SizedBox(height: 8),
+            // 상단 핸들
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 8),
+            // 헤더(타이틀/닫기)
+            ListTile(
+              dense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+              title: Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (trailingActions != null) ...trailingActions!,
+                  IconButton(
+                    tooltip: '닫기',
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: onClose,
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // 본문 스크롤
+            Expanded(child: body),
+            const SizedBox(height: 64), // FAB Row 공간 확보
+          ],
+        ),
+
+        // FAB Row (하단 중앙)
+        if (fab != null)
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: false,
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: Transform.translate(
+                  offset: Offset(0, -fabLift),
+                  child: fab!,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 // ===== 바텀시트용 보드 래퍼(상단 핸들/닫기 버튼 포함) =====
@@ -553,6 +729,7 @@ class _CalendarIdSection extends StatelessWidget {
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(color: _CalColors.base.withOpacity(.25)),
                 ),
+                // ✅ 임시 라인 삭제하고 올바른 focusedBorder만 유지
                 focusedBorder: const OutlineInputBorder(
                   borderRadius: BorderRadius.all(Radius.circular(12)),
                   borderSide: BorderSide(color: _CalColors.base, width: 1.2),

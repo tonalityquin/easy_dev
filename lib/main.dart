@@ -268,17 +268,19 @@ class MyApp extends StatelessWidget {
         navigatorKey: AppNavigator.key,
         scaffoldMessengerKey: AppNavigator.scaffoldMessengerKey,
 
-        // ✅ 첫 프레임 후, 필요한 플로팅이 켜져있다면 오버레이 장착
+        // ✅ 첫 프레임 후 필요 시 오버레이 부착
         builder: (context, child) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             debugPrint('[MAIN][${_ts()}] postFrameCallback → mountIfNeeded');
-            DevMemo.mountIfNeeded();
-            // HeadMemo: 버블 제거 → mountIfNeeded 호출 없음
 
-            // ✅ (신규) 허브 퀵 액션 버블 부착
+            // ⛔️ DevMemo 플로팅 버블 제거 → 자동 부착 없음 (필요 시 DevMemo.togglePanel()으로 수동 오픈)
+            // DevMemo: no mount call
+
+            // HeadMemo: 버블 제거 → mountIfNeeded 호출 없음 (기존 주석 유지)
+            // HeadMemo: no mount call
+
+            // ✅ (유지) 허브 퀵 액션 / DashMemo 오버레이는 기존대로 부착
             HeadHubActions.mountIfNeeded();
-
-            // ✅ (신규) DashMemo 전역 버블 부착: 다른 화면에서도 계속 떠 있도록
             DashMemo.mountIfNeeded();
           });
           return child!;

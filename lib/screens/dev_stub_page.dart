@@ -12,6 +12,9 @@ import 'dev_package/google_docs_bottom_sheet.dart';
 // ✅ 추가: SQLite 탐색기
 import 'dev_package/sqlite_explorer_bottom_sheet.dart';
 
+// ✅ 추가: DevCalendarPage 바텀시트 호출용 import
+import 'dev_package/dev_calendar_page.dart';
+
 /// ====== 개발 전용 팔레트 (개발 카드와 동일 톤) ======
 /// 버튼/Badge 배경
 const kDevPrimary = Color(0xFF6A1B9A); // Deep Purple
@@ -193,11 +196,12 @@ class DevStubPage extends StatelessWidget {
                           tintColor: kDevTint.withOpacity(0.45),
                           titleColor: kDevDarkText,
                           onTap: () async {
-                            await DevMemo.openPanel();
+                            // ⬇️ openPanel → togglePanel로 교체 (호환성 수정)
+                            await DevMemo.togglePanel();
                           },
                         ),
 
-                        // ✅ 개인 달력 (그린 팔레트)
+                        // ✅ 개인 달력 (그린 팔레트) — 바텀시트(92%)로 열기
                         _ActionCard(
                           icon: Icons.calendar_month_rounded,
                           title: '개인 달력',
@@ -207,8 +211,9 @@ class DevStubPage extends StatelessWidget {
                           tintColor: calLight,
                           titleColor: calDark,
                           onTap: () {
-                            Navigator.of(context)
-                                .pushNamed(AppRoutes.devCalendar);
+                            // 🔄 기존: Navigator.pushNamed(AppRoutes.devCalendar)
+                            // ⬇️ 변경: 바텀시트(92%)로 열기
+                            DevCalendarPage.showAsBottomSheet(context);
                           },
                         ),
 
