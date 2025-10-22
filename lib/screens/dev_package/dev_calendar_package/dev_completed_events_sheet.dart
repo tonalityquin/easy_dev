@@ -13,12 +13,12 @@ import 'package:easydev/utils/snackbar_helper.dart';
 
 /// 설명란에서 진행률(예: "진행률:100%")을 읽어 100%면 100, 아니면 0을 리턴
 int _extractProgress(String? description) {
-  if (description == null || description.isEmpty) return 0;
-  final m = RegExp(r'진행률\s*:\s*(\d{1,3})', caseSensitive: false)
+  if (description == null) return 0;
+  final m = RegExp(r'\[\s*progress\s*:\s*(0|100)\s*\]', caseSensitive: false)
       .firstMatch(description);
   if (m == null) return 0;
   final v = int.tryParse(m.group(1) ?? '0') ?? 0;
-  return v == 100 ? 100 : 0;
+  return v == 100 ? 100 : 0; // [progress:100]만 완료
 }
 
 /// Calendar API 인스턴스(공통 AuthClient 재사용)

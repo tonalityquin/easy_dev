@@ -190,8 +190,8 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
                           (context, i) {
                         final r = _rows[i];
                         final idStr = (r.id ?? 0).toString();
-                        final plate = r.plateNumber ?? '';
-                        final area = r.area ?? '';
+                        final plate = r.plateNumber;
+                        final area  = r.area;
                         final created = _fmtDate(r.createdAt);
                         final bg = (i % 2 == 0) ? Colors.grey.shade50 : Colors.white;
 
