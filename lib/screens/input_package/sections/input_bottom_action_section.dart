@@ -41,16 +41,23 @@ class _InputBottomActionSectionState extends State<InputBottomActionSection> {
       context: context,
       builder: (context) => InputCameraPreviewDialog(
         onImageCaptured: (image) {
-          setState(() {
-            widget.controller.capturedImages.add(image);
-          });
+          // ✅ 1) 컨트롤러 리스트에 추가
+          widget.controller.capturedImages.add(image);
+          // ✅ 2) 부모(메인 화면) 리빌드 → InputPhotoSection 즉시 갱신
+          widget.onStateRefresh();
+          // (선택) 3) 현재 섹션도 리빌드하여 로컬 UI 반영
+          if (mounted) setState(() {});
         },
       ),
     );
 
     await _cameraHelper.dispose();
     await Future.delayed(const Duration(milliseconds: 200));
+
+    // (선택) 이 섹션도 갱신
     if (mounted) setState(() {});
+    // ✅ 다이얼로그 종료 후에도 부모를 한 번 더 갱신해 썸네일 노출을 보장
+    widget.onStateRefresh();
   }
 
   void _selectParkingLocation() {
@@ -103,7 +110,7 @@ class _InputBottomActionSectionState extends State<InputBottomActionSection> {
           isLocationSelected: widget.controller.isLocationSelected,
           onPressed: () => widget.controller.submitPlateEntry(
             context,
-            widget.onStateRefresh, // ✅ bool 제거, 2개만 전달
+            widget.onStateRefresh, // ✅ 기존 구조 유지
           ),
         ),
       ],
