@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:async'; // ✅ 디바운스용
 import 'dart:ui' show FontFeature;
 import 'package:flutter/material.dart';
 
@@ -19,19 +20,29 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
   List<ParkingCompletedRecord> _rows = [];
   final _searchCtrl = TextEditingController();
 
+  // ✅ 디바운스 타이머
+  Timer? _debounce;
+  static const _debounceMs = 300;
+
   // 테이블 최소 너비(좁은 폰에선 가로 스크롤)
-  static const double _tableMinWidth = 720;
+  static const double _tableMinWidth = 640; // ID/Actions 제거로 살짝 줄임
   static const double _headerHeight = 44;
 
   @override
   void initState() {
     super.initState();
     _load();
-    _searchCtrl.addListener(() => _load());
+
+    // ✅ 입력마다 바로 _load() 호출 대신 디바운스
+    _searchCtrl.addListener(() {
+      _debounce?.cancel();
+      _debounce = Timer(const Duration(milliseconds: _debounceMs), _load);
+    });
   }
 
   @override
   void dispose() {
+    _debounce?.cancel(); // ✅ 누수 방지
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -46,13 +57,7 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
     });
   }
 
-  Future<void> _delete(int id) async {
-    await _repo.deleteById(id);
-    if (!mounted) return;
-    showSuccessSnackbar(context, '삭제되었습니다.');
-    _load();
-  }
-
+  /// 전체 삭제(정렬은 created_at ASC이므로 ID에 의존하지 않음)
   Future<void> _clearAll() async {
     final ok = await showDialog<bool>(
       context: context,
@@ -142,8 +147,15 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
     }
   }
 
-  String _fmtDate(dynamic v) {
-    return v?.toString() ?? '';
+  String _fmtDate(DateTime? v) {
+    if (v == null) return '';
+    // 보기 좋은 yyyy-MM-dd HH:mm
+    final y = v.year.toString().padLeft(4, '0');
+    final mo = v.month.toString().padLeft(2, '0');
+    final d = v.day.toString().padLeft(2, '0');
+    final h = v.hour.toString().padLeft(2, '0');
+    final mi = v.minute.toString().padLeft(2, '0');
+    return '$y-$mo-$d $h:$mi';
   }
 
   /// pinned header + 세로/가로 스크롤 테이블
@@ -174,11 +186,9 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
                       height: _headerHeight,
                       child: Row(
                         children: [
-                          _th('ID', width: 72, align: TextAlign.right),
                           _th('Plate Number', flex: 2),
                           _th('Area', flex: 2),
-                          _th('Created At', flex: 3),
-                          _th('Actions', width: 90, align: TextAlign.center),
+                          _th('Created At (오래된 순)', flex: 3),
                         ],
                       ),
                     ),
@@ -189,20 +199,13 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
                     delegate: SliverChildBuilderDelegate(
                           (context, i) {
                         final r = _rows[i];
-                        final idStr = (r.id ?? 0).toString();
                         final plate = r.plateNumber;
-                        final area  = r.area;
+                        final area = r.area;
                         final created = _fmtDate(r.createdAt);
                         final bg = (i % 2 == 0) ? Colors.grey.shade50 : Colors.white;
 
                         return Row(
                           children: [
-                            _td(
-                              Text(idStr, style: _monoStyle, textAlign: TextAlign.right),
-                              width: 72,
-                              align: TextAlign.right,
-                              bg: bg,
-                            ),
                             _td(
                               Text(
                                 plate,
@@ -220,18 +223,6 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
                             _td(
                               Text(created, style: _monoStyle, overflow: TextOverflow.ellipsis),
                               flex: 3,
-                              bg: bg,
-                            ),
-                            _td(
-                              Center(
-                                child: IconButton(
-                                  tooltip: '삭제',
-                                  icon: const Icon(Icons.delete_outline),
-                                  onPressed: r.id == null ? null : () => _delete(r.id!),
-                                ),
-                              ),
-                              width: 90,
-                              align: TextAlign.center,
                               bg: bg,
                             ),
                           ],

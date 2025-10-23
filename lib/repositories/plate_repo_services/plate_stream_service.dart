@@ -6,8 +6,8 @@ import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
 
-// ▼ 로컬 로깅 유틸 & 가드 & 상태(경로는 프로젝트 구조에 맞게 유지하세요)
-import '../../screens/type_package/parking_completed_package/services/local_transition_guard.dart';
+// ▼ 로컬 로깅만 사용하고, 가드는 제거(단일화 정책)
+// import '../../screens/type_package/parking_completed_package/services/local_transition_guard.dart';
 import '../../screens/type_package/parking_completed_package/services/parking_completed_logger.dart';
 import '../../screens/type_package/parking_completed_package/services/status_mapping.dart';
 // import '../../utils/usage_reporter.dart';
@@ -15,13 +15,15 @@ import '../../screens/type_package/parking_completed_package/services/status_map
 class PlateStreamService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // ===== modify 기반 캐시(보조), 초기 스냅샷 스킵 플래그, 짧은 디듀프 =====
+  // ===== modify 기반 캐시(보조), 초기 스냅샷 스킵 플래그 =====
   final Map<String, String> _lastTypeCache = <String, String>{}; // plateId -> lastType
   final Set<String> _initedQueryKeys = <String>{};               // 초기 스냅샷 스킵
-  final Map<String, DateTime> _recentLogged = <String, DateTime>{};
+
+  // ===== 단일 디듀프(로깅 단일화: plate|area 단일 키) =====
+  final Map<String, DateTime> _recentCompleted = <String, DateTime>{};
   final Duration _dedupeWindow = const Duration(seconds: 5);
 
-  // ===== removed(쿼리 탈락) 기반 감지를 위한 현재 존재 집합 & 안정화 지연 =====
+  // ===== removed(쿼리 탈락) 감지를 위한 현재 존재 집합 & 안정화 지연 =====
   final Set<String> _presentEntryReq   = <String>{}; // parking_requests 현재 포함
   final Set<String> _presentExitReq    = <String>{}; // departure_requests 현재 포함
   final Set<String> _presentExitUnpaid = <String>{}; // departure_completed(isLockedFee=false) 현재 포함
@@ -34,7 +36,7 @@ class PlateStreamService {
       String area, {
         bool descending = true,
         String? location,
-        bool countInitialSnapshot = false, // ✅ (3)
+        bool countInitialSnapshot = false, // 기존 카운트 플래그 (주석 유지)
       }) {
     final query = _buildPlateQuery(
       type: type,
@@ -43,13 +45,10 @@ class PlateStreamService {
       descending: descending,
     );
 
-    bool _didEmitOnce = false; // ✅ (3) 기존 카운트 플래그
+    bool _didEmitOnce = false;
     final initKey = 'type=${type.firestoreValue}|area=$area|loc=${location ?? ""}';
 
-    return query
-        .snapshots()
-    // Firestore 스트림 실패만 로깅 + 재전파
-        .handleError((e, st) {
+    return query.snapshots().handleError((e, st) {
       // ignore: unawaited_futures
       DebugFirestoreLogger().log({
         'op': 'plates.stream.currentArea',
@@ -71,7 +70,7 @@ class PlateStreamService {
 
       Error.throwWithStackTrace(e, st);
     }).map((snapshot) {
-      // ---------- (원 코드) 사용량 카운트 ----------
+      // ---------- 사용량 카운트(원 코드 유지) ----------
       if (!snapshot.metadata.hasPendingWrites) {
         final added = snapshot.docChanges.where((c) => c.type == DocumentChangeType.added).length;
         final modified = snapshot.docChanges.where((c) => c.type == DocumentChangeType.modified).length;
@@ -80,28 +79,17 @@ class PlateStreamService {
           if (!_didEmitOnce) {
             _didEmitOnce = true;
             if (countInitialSnapshot) {
-              // ignore: unawaited_futures
-              /*UsageReporter.instance.report(
-                area: area,
-                action: 'read',
-                n: n,
-                source: 'PlateStreamService.streamToCurrentArea.onData',
-              );*/
+              /*UsageReporter.instance.report(...);*/ // 생략
             }
           } else {
-            /*UsageReporter.instance.report(
-              area: area,
-              action: 'read',
-              n: n,
-              source: 'PlateStreamService.streamToCurrentArea.onData',
-            );*/
+            /*UsageReporter.instance.report(...);*/   // 생략
           }
         }
       }
 
       final isFirst = !_initedQueryKeys.contains(initKey);
 
-      // ---------- ✅ modify 기반 전이 감지(보조) + 존재 집합 갱신 ----------
+      // ---------- modify 기반 전이 감지 + 존재 집합 갱신 ----------
       if (!snapshot.metadata.hasPendingWrites) {
         if (isFirst) {
           // 초기 스냅샷: 캐시만 구축(added 전부) + 전이 로깅 스킵
@@ -122,7 +110,7 @@ class PlateStreamService {
             final id = c.doc.id;
             final data = c.doc.data();
 
-            // ===== 현재 존재 집합 갱신 + removed 처리(핵심) =====
+            // ===== 현재 존재 집합 갱신 + removed 처리 =====
             if (type == PlateType.parkingRequests) {
               if (c.type == DocumentChangeType.added || c.type == DocumentChangeType.modified) {
                 _presentEntryReq.add(id);
@@ -140,64 +128,41 @@ class PlateStreamService {
               }
             }
 
-            if (data == null) {
-              // removed의 경우 data가 null일 수 있으므로 뒤 캐시 갱신은 스킵
-              continue;
-            }
+            if (data == null) continue; // removed일 수 있음
 
             // ===== modify 기반 비교(보조) =====
             final newType = (data['type'] ?? '') as String;
             final prevType = _lastTypeCache[id];
 
             if (prevType == null) {
-              _lastTypeCache[id] = newType; // 새로 들어온 문서
+              _lastTypeCache[id] = newType; // 새 문서
             } else {
               if (c.type == DocumentChangeType.modified && prevType != newType) {
                 // plate 정보
                 final plateNumber = (data['plate_number'] ?? '') as String;
                 final areaStr     = (data['area'] ?? '') as String;
 
-                // 내가 방금 만든 건이면(즉시 로컬 기록됨) 스트림 로깅 스킵
-                final mine = LocalTransitionGuard.instance.hasRecentUserMark(
-                  plateNumber: plateNumber,
-                  area: areaStr,
-                );
-
                 // 전이 케이스: parking_requests|departure_requests → parking_completed
                 final toCompleted  = (newType == PlateType.parkingCompleted.firestoreValue);
                 final fromEntryReq = (prevType == PlateType.parkingRequests.firestoreValue);
                 final fromExitReq  = (prevType == PlateType.departureRequests.firestoreValue);
 
-                if (toCompleted && (fromEntryReq || fromExitReq) && !mine) {
-                  final key = '$plateNumber|$areaStr|$prevType->$newType';
-                  final now = DateTime.now();
-                  final last = _recentLogged[key];
-                  if (last == null || now.difference(last) >= _dedupeWindow) {
-                    _recentLogged[key] = now;
-                    final oldKo = fromEntryReq ? kStatusEntryRequest : kStatusExitRequest;
-                    const newKo = kStatusEntryDone;
-
-                    // Firestore 비용 증가 없음: 로컬(SQLite)만 기록
-                    // ignore: unawaited_futures
-                    ParkingCompletedLogger.instance.maybeLogCompleted(
-                      plateNumber: plateNumber,
-                      area: areaStr,
-                      oldStatus: oldKo,
-                      newStatus: newKo,
-                    );
-                  }
+                if (toCompleted && (fromEntryReq || fromExitReq)) {
+                  _logCompletedOnce(
+                    plateNumber,
+                    areaStr,
+                    oldKo: fromEntryReq ? kStatusEntryRequest : kStatusExitRequest,
+                  );
                 }
               }
-              // 마지막에 캐시 최신화
-              _lastTypeCache[id] = newType;
+              _lastTypeCache[id] = newType; // 캐시 최신화
             }
           }
         }
       }
 
-      // ---------- (원 코드) 결과 파싱 ----------
-      final results = snapshot.docs
-          .map((doc) {
+      // ---------- 결과 파싱 ----------
+      final results = snapshot.docs.map((doc) {
         try {
           return PlateModel.fromDocument(doc);
         } catch (e, st) {
@@ -217,9 +182,7 @@ class PlateStreamService {
           }, level: 'error');
           return null;
         }
-      })
-          .whereType<PlateModel>()
-          .toList();
+      }).whereType<PlateModel>().toList();
 
       return results;
     });
@@ -231,8 +194,10 @@ class PlateStreamService {
     String? location,
     bool descending = true,
   }) {
-    Query<Map<String, dynamic>> query =
-    _firestore.collection('plates').where('type', isEqualTo: type.firestoreValue).where('area', isEqualTo: area);
+    Query<Map<String, dynamic>> query = _firestore
+        .collection('plates')
+        .where('type', isEqualTo: type.firestoreValue)
+        .where('area', isEqualTo: area);
 
     if (type == PlateType.departureCompleted) {
       query = query.where('isLockedFee', isEqualTo: false);
@@ -243,15 +208,14 @@ class PlateStreamService {
     }
 
     query = query.orderBy('request_time', descending: descending);
-
     return query;
   }
 
-  // ✅ 출차완료(미정산) 스냅샷 스트림: 존재 집합 유지(전이 판정에 사용)
+  // 출차완료(미정산) 스트림: 존재 집합 유지(전이 판정에 사용)
   Stream<QuerySnapshot<Map<String, dynamic>>> departureUnpaidSnapshots({
     required String area,
     bool descending = true,
-    bool countInitialSnapshot = false, // ✅ (3)
+    bool countInitialSnapshot = false,
   }) {
     final query = _firestore
         .collection('plates')
@@ -260,7 +224,7 @@ class PlateStreamService {
         .where('isLockedFee', isEqualTo: false)
         .orderBy(PlateFields.requestTime, descending: descending);
 
-    bool _didEmitOnceDeparture = false; // ✅ (3)
+    bool _didEmitOnceDeparture = false;
 
     return query.snapshots().handleError((e, st) {
       // ignore: unawaited_futures
@@ -284,7 +248,6 @@ class PlateStreamService {
 
       Error.throwWithStackTrace(e, st);
     }).map((snapshot) {
-      // ✅ 서버 확정 스냅샷만 집계 (로컬 보류 스냅샷 제외)
       if (!snapshot.metadata.hasPendingWrites) {
         for (final c in snapshot.docChanges) {
           final plateId = c.doc.id;
@@ -302,20 +265,10 @@ class PlateStreamService {
           if (!_didEmitOnceDeparture) {
             _didEmitOnceDeparture = true;
             if (countInitialSnapshot) {
-              /*UsageReporter.instance.report(
-                area: area,
-                action: 'read',
-                n: n,
-                source: 'PlateStreamService.departureUnpaidSnapshots.onData',
-              );*/
+              /*UsageReporter.instance.report(...);*/ // 생략
             }
           } else {
-            /*UsageReporter.instance.report(
-              area: area,
-              action: 'read',
-              n: n,
-              source: 'PlateStreamService.departureUnpaidSnapshots.onData',
-            );*/
+            /*UsageReporter.instance.report(...);*/   // 생략
           }
         }
       }
@@ -332,15 +285,13 @@ class PlateStreamService {
     final plateNumber = parsed.item1;
     final area = parsed.item2;
 
-    // 내가 방금 만든 건이면(이미 로컬 기록) 스킵
-    if (LocalTransitionGuard.instance.hasRecentUserMark(plateNumber: plateNumber, area: area)) return;
-
+    // ✅ 단일화: 내 단말 가드 제거. 스트림에서만 기록.
     // 잠시 후에도 어느 집합에도 없으면 → 입차완료로 간주
     _scheduleCheck('$id|entry_removed', () async {
       if (!_presentExitReq.contains(id) &&
           !_presentExitUnpaid.contains(id) &&
           !_presentEntryReq.contains(id)) {
-        _logOnce(plateNumber, area, oldKo: kStatusEntryRequest, newKo: kStatusEntryDone);
+        _logCompletedOnce(plateNumber, area, oldKo: kStatusEntryRequest);
       }
     });
   }
@@ -352,8 +303,6 @@ class PlateStreamService {
     final plateNumber = parsed.item1;
     final area = parsed.item2;
 
-    if (LocalTransitionGuard.instance.hasRecentUserMark(plateNumber: plateNumber, area: area)) return;
-
     // 미정산 출차완료로 가지도 않고, 다시 요청 큐에도 없으면 → 입차완료(회귀) 간주
     _scheduleCheck('$id|exit_removed', () async {
       final wentToUnpaid   = _presentExitUnpaid.contains(id);
@@ -361,7 +310,7 @@ class PlateStreamService {
       final stillExitReq   = _presentExitReq.contains(id);
 
       if (!wentToUnpaid && !backToEntryReq && !stillExitReq) {
-        _logOnce(plateNumber, area, oldKo: kStatusExitRequest, newKo: kStatusEntryDone);
+        _logCompletedOnce(plateNumber, area, oldKo: kStatusExitRequest);
       }
     });
   }
@@ -377,7 +326,7 @@ class PlateStreamService {
     });
   }
 
-  // ✅ 여기! 반환타입을 레코드가 아니라 클래스 `_Pair`로.
+  // plateId 분해 유틸
   _Pair _parsePlateId(String plateId, Map<String, dynamic>? data) {
     // 데이터에 있으면 우선 사용
     if (data != null) {
@@ -393,25 +342,25 @@ class PlateStreamService {
     return _Pair(plateId, ''); // fallback
   }
 
-  Future<void> _logOnce(
+  // ✅ 단일 진입점: modify/removed 모두 여기로
+  void _logCompletedOnce(
       String plateNumber,
       String area, {
         required String oldKo,
-        required String newKo,
-      }) async {
-    final rkey = '$plateNumber|$area|$oldKo->$newKo';
+      }) {
+    final key = '$plateNumber|$area'; // 공통 디듀프 키
     final now = DateTime.now();
-    final last = _recentLogged[rkey];
+    final last = _recentCompleted[key];
     if (last != null && now.difference(last) < _dedupeWindow) return;
-    _recentLogged[rkey] = now;
+    _recentCompleted[key] = now;
 
-    // Firestore 비용 증가 없음: 로컬(SQLite)만 write
+    // Firestore 비용 증가 없음: 로컬(SQLite)만 기록
     // ignore: unawaited_futures
     ParkingCompletedLogger.instance.maybeLogCompleted(
       plateNumber: plateNumber,
       area: area,
       oldStatus: oldKo,
-      newStatus: newKo,
+      newStatus: kStatusEntryDone,
     );
   }
 }
