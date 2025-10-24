@@ -3,54 +3,54 @@
 // ※ intl 패키지가 필요합니다. pubspec.yaml에 추가하세요:
 // dependencies:
 //   intl: ^0.19.0
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
-import 'dart:convert'; // ⬅️ 이메일 첨부(base64) 생성
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData, HapticFeedback;
+import 'package:flutter/services.dart' show HapticFeedback, LogicalKeyboardKey;
+import 'package:flutter/widgets.dart' show LogicalKeySet, Intent; // ✅ [2] 명시 import
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// ⬇️ 전역 네비게이터/인증/메일 수신자 설정
 import '../../utils/app_navigator.dart';
 import '../../utils/google_auth_session.dart';
 import 'package:googleapis/gmail/v1.dart' as gmail;
+import 'package:googleapis/drive/v3.dart' as drive;
+
 import '../../utils/email_config.dart';
 
-/// DevMemo
-/// - ✅ 플로팅 버블(Overlay) 로직 제거
-/// - ✅ 바텀시트 메모 패널만 남김 (필요 시 DevMemo.togglePanel()로 열기)
-/// - ✅ "이메일 보내기" 버튼 추가: 메모를 .txt 첨부로 전송
+/// DevMemo (싱글 문서 모드)
 class DevMemo {
   DevMemo._();
 
-  /// ✅ MaterialApp.navigatorKey 로 연결
   static GlobalKey<NavigatorState> get navigatorKey => AppNavigator.key;
 
-  /// "YYYY-MM-DD HH:mm | 내용" 형태의 문자열 리스트
-  static final notes = ValueListenableNotifier<List<String>>(<String>[]);
-
   // ---- SharedPreferences Keys ----
-  static const _kNotesKey = 'dev_memo_notes_v1';
+  static const _kDocKey = 'dev_memo_doc_md_v1';
 
-  /// 노트 보관 상한 (옵션): 초과 시 오래된 항목을 잘라냅니다.
-  static const int kMaxNotes = 1000;
+  // Drive 캐시 키
+  static const _kDriveFolderId = 'dev_memo_drive_folder_id_v1';
+  static const _kDriveFileId = 'dev_memo_drive_file_id_v1';
+
+  // Drive 이름 상수
+  static const String kDriveFolderName = 'IdeaNote';        // ✅ 새 폴더명
+  static const String kDriveLegacyFolderName = 'DevMemo';   // ⬅️ 과거 폴더명(있으면 자동 개명)
+  static const String kDriveFileName = 'IdeaNote.md';       // ✅ 새 파일명
+  static const String kDriveLegacyFileName = 'DevMemo.md';  // ⬅️ 과거 파일명(있으면 자동 개명)
 
   static SharedPreferences? _prefs;
 
-  /// 앱 시작 시 1회 호출
   static Future<void> init() async {
     _prefs ??= await SharedPreferences.getInstance();
-    notes.value = _prefs!.getStringList(_kNotesKey) ?? const <String>[];
   }
 
-  /// Navigator 의 overlay.context 를 우선 사용 → MediaQuery/Theme 보장
   static BuildContext? _bestContext() {
     final state = navigatorKey.currentState;
     final overlayCtx = state?.overlay?.context;
     return overlayCtx ?? state?.context;
   }
 
-  /// (호출용) 메모 패널 열기
   static Future<void> togglePanel() async {
     final ctx = _bestContext();
     if (ctx == null) {
@@ -67,39 +67,9 @@ class DevMemo {
     );
   }
 
-  /// (호환용 별칭) 기존 코드에서 openPanel()을 호출해도 동작하도록 유지
   static Future<void> openPanel() => togglePanel();
-
-  // ----------------- 데이터 조작 -----------------
-
-  static Future<void> add(String text) async {
-    final now = DateTime.now();
-    final stamp = DateFormat('yyyy-MM-dd HH:mm').format(now);
-    final line = "$stamp | $text";
-
-    final list = List<String>.from(notes.value)..insert(0, line);
-    // 상한 적용
-    if (list.length > kMaxNotes) {
-      list.length = kMaxNotes; // 앞쪽(최신)만 남기고 뒤쪽(오래된) 커트
-    }
-    notes.value = list;
-    await _prefs?.setStringList(_kNotesKey, list);
-  }
-
-  static Future<void> removeAt(int index) async {
-    final list = List<String>.from(notes.value)..removeAt(index);
-    notes.value = list;
-    await _prefs?.setStringList(_kNotesKey, list);
-  }
-
-  static Future<void> removeLine(String line) async {
-    final list = List<String>.from(notes.value)..remove(line);
-    notes.value = list;
-    await _prefs?.setStringList(_kNotesKey, list);
-  }
 }
 
-/// 메모 바텀시트(풀높이 · 검색 · 입력 · 스와이프 삭제 · 이메일 전송)
 class _DevMemoSheet extends StatefulWidget {
   const _DevMemoSheet();
 
@@ -108,23 +78,44 @@ class _DevMemoSheet extends StatefulWidget {
 }
 
 class _DevMemoSheetState extends State<_DevMemoSheet> {
-  final TextEditingController _inputCtrl = TextEditingController();
-  final TextEditingController _searchCtrl = TextEditingController();
-  String _query = '';
-  bool _sending = false; // ⬅️ 이메일 전송 중 상태
+  final TextEditingController _docCtrl = TextEditingController();
+  final FocusNode _docFocus = FocusNode();
+  final ScrollController _scrollCtrl = ScrollController(); // ✅ 스크롤바 컨트롤러
+  bool _sending = false;
+
+  bool _driveBusy = false;
+  Timer? _saveDebounce;
 
   @override
   void initState() {
     super.initState();
-    _searchCtrl.addListener(() {
-      setState(() => _query = _searchCtrl.text.trim());
-    });
+    _loadInitial();
+    _docCtrl.addListener(_onDocChanged);
+  }
+
+  Future<void> _loadInitial() async {
+    final prefs = DevMemo._prefs ?? await SharedPreferences.getInstance();
+    final text = prefs.getString(DevMemo._kDocKey) ?? '';
+    _docCtrl.text = text;
+  }
+
+  void _onDocChanged() {
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(milliseconds: 400), _persistDoc);
+  }
+
+  Future<void> _persistDoc() async {
+    final prefs = DevMemo._prefs ?? await SharedPreferences.getInstance();
+    await prefs.setString(DevMemo._kDocKey, _docCtrl.text);
   }
 
   @override
   void dispose() {
-    _inputCtrl.dispose();
-    _searchCtrl.dispose();
+    _saveDebounce?.cancel();
+    _docCtrl.removeListener(_onDocChanged);
+    _docCtrl.dispose();
+    _docFocus.dispose();
+    _scrollCtrl.dispose(); // ✅ ScrollController 해제
     super.dispose();
   }
 
@@ -134,179 +125,220 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
     final textTheme = Theme.of(context).textTheme;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
+    final shortcuts = <ShortcutActivator, Intent>{
+      // 인라인 코드
+      LogicalKeySet(LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.backquote): const _MdIntent(_MdCmd.inlineCode),
+      LogicalKeySet(LogicalKeyboardKey.controlRight, LogicalKeyboardKey.backquote): const _MdIntent(_MdCmd.inlineCode),
+      LogicalKeySet(LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.backquote): const _MdIntent(_MdCmd.inlineCode),
+      LogicalKeySet(LogicalKeyboardKey.metaRight, LogicalKeyboardKey.backquote): const _MdIntent(_MdCmd.inlineCode),
+
+      // 체크박스
+      LogicalKeySet(LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.shiftLeft, LogicalKeyboardKey.keyC):
+      const _MdIntent(_MdCmd.checkbox),
+      LogicalKeySet(LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.shiftRight, LogicalKeyboardKey.keyC):
+      const _MdIntent(_MdCmd.checkbox),
+      LogicalKeySet(LogicalKeyboardKey.controlRight, LogicalKeyboardKey.shiftLeft, LogicalKeyboardKey.keyC):
+      const _MdIntent(_MdCmd.checkbox),
+      LogicalKeySet(LogicalKeyboardKey.controlRight, LogicalKeyboardKey.shiftRight, LogicalKeyboardKey.keyC):
+      const _MdIntent(_MdCmd.checkbox),
+      LogicalKeySet(LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.shiftLeft, LogicalKeyboardKey.keyC):
+      const _MdIntent(_MdCmd.checkbox),
+      LogicalKeySet(LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.shiftRight, LogicalKeyboardKey.keyC):
+      const _MdIntent(_MdCmd.checkbox),
+      LogicalKeySet(LogicalKeyboardKey.metaRight, LogicalKeyboardKey.shiftLeft, LogicalKeyboardKey.keyC):
+      const _MdIntent(_MdCmd.checkbox),
+      LogicalKeySet(LogicalKeyboardKey.metaRight, LogicalKeyboardKey.shiftRight, LogicalKeyboardKey.keyC):
+      const _MdIntent(_MdCmd.checkbox),
+
+      // 토글 블록
+      LogicalKeySet(LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.shiftLeft, LogicalKeyboardKey.keyT):
+      const _MdIntent(_MdCmd.toggleBlock),
+      LogicalKeySet(LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.shiftRight, LogicalKeyboardKey.keyT):
+      const _MdIntent(_MdCmd.toggleBlock),
+      LogicalKeySet(LogicalKeyboardKey.controlRight, LogicalKeyboardKey.shiftLeft, LogicalKeyboardKey.keyT):
+      const _MdIntent(_MdCmd.toggleBlock),
+      LogicalKeySet(LogicalKeyboardKey.controlRight, LogicalKeyboardKey.shiftRight, LogicalKeyboardKey.keyT):
+      const _MdIntent(_MdCmd.toggleBlock),
+      LogicalKeySet(LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.shiftLeft, LogicalKeyboardKey.keyT):
+      const _MdIntent(_MdCmd.toggleBlock),
+      LogicalKeySet(LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.shiftRight, LogicalKeyboardKey.keyT):
+      const _MdIntent(_MdCmd.toggleBlock),
+      LogicalKeySet(LogicalKeyboardKey.metaRight, LogicalKeyboardKey.shiftLeft, LogicalKeyboardKey.keyT):
+      const _MdIntent(_MdCmd.toggleBlock),
+      LogicalKeySet(LogicalKeyboardKey.metaRight, LogicalKeyboardKey.shiftRight, LogicalKeyboardKey.keyT):
+      const _MdIntent(_MdCmd.toggleBlock),
+
+      // 굵게/기울임
+      LogicalKeySet(LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.keyB): const _MdIntent(_MdCmd.bold),
+      LogicalKeySet(LogicalKeyboardKey.controlRight, LogicalKeyboardKey.keyB): const _MdIntent(_MdCmd.bold),
+      LogicalKeySet(LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.keyB): const _MdIntent(_MdCmd.bold),
+      LogicalKeySet(LogicalKeyboardKey.metaRight, LogicalKeyboardKey.keyB): const _MdIntent(_MdCmd.bold),
+
+      LogicalKeySet(LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.keyI): const _MdIntent(_MdCmd.italic),
+      LogicalKeySet(LogicalKeyboardKey.controlRight, LogicalKeyboardKey.keyI): const _MdIntent(_MdCmd.italic),
+      LogicalKeySet(LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.keyI): const _MdIntent(_MdCmd.italic),
+      LogicalKeySet(LogicalKeyboardKey.metaRight, LogicalKeyboardKey.keyI): const _MdIntent(_MdCmd.italic),
+    };
+
     return FractionallySizedBox(
-      heightFactor: 1.0, // ⬅️ 최상단까지
+      heightFactor: 1.0,
       child: ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         child: Material(
           color: Colors.white,
           child: SafeArea(
-            top: false, // 외부 showModalBottomSheet(useSafeArea:true)와 중복 방지
+            top: false,
             child: Padding(
               padding: EdgeInsets.only(bottom: bottomInset),
-              child: Column(
-                children: [
-                  const SizedBox(height: 10),
-                  _DragHandle(),
-                  const SizedBox(height: 12),
-
-                  // 헤더: 타이틀 · 이메일 · 닫기
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        Icon(Icons.sticky_note_2_rounded, color: cs.primary),
-                        const SizedBox(width: 8),
-                        Text('메모', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
-                        const Spacer(),
-                        // ⬇️ 이메일 전송 버튼 (.txt 첨부)
-                        IconButton(
-                          tooltip: _sending ? '전송 중...' : '이메일로 보내기',
-                          onPressed: _sending ? null : _sendNotesByEmail,
-                          icon: _sending
-                              ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                              : const Icon(Icons.email_outlined),
-                        ),
-                        IconButton(
-                          tooltip: '닫기',
-                          icon: const Icon(Icons.close_rounded),
-                          onPressed: () => Navigator.of(context).maybePop(),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // 검색 바
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                    child: TextField(
-                      controller: _searchCtrl,
-                      textInputAction: TextInputAction.search,
-                      decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.search_rounded),
-                        hintText: '메모 검색',
-                        filled: true,
-                        fillColor: cs.surfaceVariant.withOpacity(.5),
-                        border: _inputBorder(),
-                        enabledBorder: _inputBorder(),
-                        focusedBorder: _inputBorder(focused: true, cs: cs),
-                        isDense: true,
-                      ),
-                    ),
-                  ),
-
-                  // 입력 영역
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _inputCtrl,
-                            textInputAction: TextInputAction.done,
-                            minLines: 1,
-                            maxLines: 3,
-                            decoration: InputDecoration(
-                              hintText: '메모를 입력하세요',
-                              prefixIcon: const Icon(Icons.edit_note_rounded),
-                              filled: true,
-                              fillColor: cs.surfaceVariant.withOpacity(.5),
-                              border: _inputBorder(),
-                              enabledBorder: _inputBorder(),
-                              focusedBorder: _inputBorder(focused: true, cs: cs),
-                              isDense: true,
-                            ),
-                            onSubmitted: _submitNote,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        FilledButton.icon(
-                          onPressed: () => _submitNote(_inputCtrl.text),
-                          icon: const Icon(Icons.send_rounded),
-                          label: const Text('추가'),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // 리스트
-                  Expanded(
-                    child: ValueListenableBuilder<List<String>>(
-                      valueListenable: DevMemo.notes,
-                      builder: (_, list, __) {
-                        final filtered = _filtered(list, _query);
-                        if (filtered.isEmpty) {
-                          return _EmptyState(query: _query);
+              child: Shortcuts(
+                shortcuts: shortcuts,
+                child: Actions(
+                  actions: <Type, Action<Intent>>{
+                    _MdIntent: CallbackAction<_MdIntent>(
+                      onInvoke: (intent) {
+                        switch (intent.cmd) {
+                          case _MdCmd.inlineCode:
+                            _insertInlineCode();
+                            break;
+                          case _MdCmd.checkbox:
+                            _insertCheckbox();
+                            break;
+                          case _MdCmd.toggleBlock:
+                            _insertToggleBlock();
+                            break;
+                          case _MdCmd.bold:
+                            _wrapSelection('**', '**', '굵게');
+                            break;
+                          case _MdCmd.italic:
+                            _wrapSelection('*', '*', '기울임');
+                            break;
                         }
-                        return ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
-                          itemCount: filtered.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (context, i) {
-                            final line = filtered[i];
-                            final (time, text) = _parse(line);
-                            return Dismissible(
-                              key: ValueKey('${line}_$i'),
-                              direction: DismissDirection.endToStart,
-                              background: _SwipeDeleteBackground(
-                                color: cs.errorContainer,
-                                iconColor: cs.onErrorContainer,
-                              ),
-                              onDismissed: (_) async {
-                                await DevMemo.removeLine(line);
-                                HapticFeedback.selectionClick(); // 삭제 햅틱
-                              },
-                              child: ListTile(
-                                dense: false,
-                                leading: CircleAvatar(
-                                  radius: 18,
-                                  backgroundColor: cs.primaryContainer,
-                                  child: Icon(Icons.notes_rounded, color: cs.onPrimaryContainer, size: 18),
-                                ),
-                                title: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis),
-                                subtitle: time.isNotEmpty
-                                    ? Text(time, style: textTheme.bodySmall?.copyWith(color: cs.outline))
-                                    : null,
-                                trailing: Wrap(
-                                  spacing: 4,
-                                  children: [
-                                    IconButton(
-                                      tooltip: '복사',
-                                      icon: const Icon(Icons.copy_rounded),
-                                      onPressed: () {
-                                        HapticFeedback.selectionClick(); // 복사 햅틱
-                                        Clipboard.setData(ClipboardData(text: text));
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('메모를 복사했어요'),
-                                            behavior: SnackBarBehavior.floating,
-                                            duration: Duration(milliseconds: 900),
-                                          ),
-                                        );
-                                      },
-                                    ),
-                                    IconButton(
-                                      tooltip: '삭제',
-                                      icon: const Icon(Icons.delete_outline_rounded),
-                                      onPressed: () async {
-                                        await DevMemo.removeLine(line);
-                                        HapticFeedback.selectionClick(); // 삭제 햅틱
-                                      },
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        );
+                        return null;
                       },
                     ),
+                  },
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 10),
+                      const _DragHandle(),
+                      const SizedBox(height: 12),
+
+                      // 헤더
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Row(
+                          children: [
+                            Icon(Icons.sticky_note_2_rounded, color: cs.primary),
+                            const SizedBox(width: 8),
+                            Text('메모(마크다운)', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                            const Spacer(),
+
+                            // Drive 불러오기
+                            IconButton(
+                              tooltip: _driveBusy ? '불러오는 중...' : 'Drive에서 불러오기',
+                              onPressed: _driveBusy ? null : _driveLoad,
+                              icon: _driveBusy
+                                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                                  : const Icon(Icons.cloud_download_outlined),
+                            ),
+                            // Drive 저장
+                            IconButton(
+                              tooltip: _driveBusy ? '저장 중...' : 'Drive에 저장',
+                              onPressed: _driveBusy ? null : _driveSave,
+                              icon: _driveBusy
+                                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                                  : const Icon(Icons.cloud_upload_outlined),
+                            ),
+
+                            // 이메일 전송(.md 첨부)
+                            IconButton(
+                              tooltip: _sending ? '전송 중...' : '이메일로 보내기(.md)',
+                              onPressed: _sending ? null : _sendAsMarkdownByEmail,
+                              icon: _sending
+                                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                                  : const Icon(Icons.email_outlined),
+                            ),
+                            IconButton(
+                              tooltip: '닫기',
+                              onPressed: () => Navigator.of(context).maybePop(),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // MD 툴바
+                      _MdToolbar(
+                        onInlineCode: _insertInlineCode,
+                        onCheckbox: _insertCheckbox,
+                        onToggleBlock: _insertToggleBlock,
+                        onBold: () => _wrapSelection('**', '**', '굵게'),
+                        onItalic: () => _wrapSelection('*', '*', '기울임'),
+                        onH1: () => _toggleHeadingAcrossSelection('# '),
+                        onH2: () => _toggleHeadingAcrossSelection('## '),
+                        onBullet: () => _togglePrefixAcrossSelection('- '),
+                        onNumbered: () => _togglePrefixAcrossSelection('1. '),
+                        onQuote: () => _togglePrefixAcrossSelection('> '),
+                        onLink: () => _insertTemplate('[텍스트](https://example.com)'),
+                        onImage: () {}, // 제거됨
+                        onTable: () {}, // 제거됨
+                      ),
+
+                      // 에디터 (✅ Scrollbar + scrollController 연결)
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 6, 12, 12),
+                          child: Scrollbar(
+                            controller: _scrollCtrl,
+                            thumbVisibility: true,  // 항상 보이게
+                            trackVisibility: true,  // 트랙도 보이게(옵션)
+                            thickness: 6,           // 두께(옵션)
+                            radius: const Radius.circular(8),
+                            interactive: true,
+                            child: TextField(
+                              controller: _docCtrl,
+                              focusNode: _docFocus,
+                              scrollController: _scrollCtrl, // ✅ 연결
+                              keyboardType: TextInputType.multiline,
+                              textInputAction: TextInputAction.newline,
+                              maxLines: null,
+                              minLines: null,
+                              expands: true,
+                              // ✅ [5] 입력 왜곡 방지
+                              textCapitalization: TextCapitalization.none,
+                              smartDashesType: SmartDashesType.disabled,
+                              smartQuotesType: SmartQuotesType.disabled,
+                              style: const TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 14,
+                                height: 1.4,
+                              ),
+                              decoration: InputDecoration(
+                                hintText: '여기에 마크다운 문서를 작성하세요.\n예) # 제목\n- [ ] 작업 항목\n`인라인 코드`',
+                                filled: true,
+                                fillColor: cs.surfaceVariant.withOpacity(.3),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(color: Theme.of(context).dividerColor.withOpacity(.2)),
+                                ),
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(color: Theme.of(context).dividerColor.withOpacity(.2)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: BorderSide(color: cs.primary, width: 1.4),
+                                ),
+                                isDense: true,
+                                contentPadding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -315,12 +347,21 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
     );
   }
 
-  // ---------- 이메일 전송(.txt 첨부) ----------
+  void _prepareEdit() {
+    if (!_docFocus.hasFocus) {
+      _docFocus.requestFocus();
+    }
+    if (!_docCtrl.selection.isValid) {
+      final end = _docCtrl.text.length;
+      _docCtrl.selection = TextSelection.collapsed(offset: end);
+    }
+  }
 
-  Future<void> _sendNotesByEmail() async {
-    final notes = DevMemo.notes.value;
-    if (notes.isEmpty) {
-      _showSnack('보낼 메모가 없습니다.');
+  // ---------- 이메일 전송(.md 첨부) ----------
+  Future<void> _sendAsMarkdownByEmail() async {
+    final text = _docCtrl.text.trim();
+    if (text.isEmpty) {
+      _showSnack('보낼 내용이 없습니다.');
       return;
     }
 
@@ -334,45 +375,44 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
     try {
       final now = DateTime.now();
       final subject = 'DevMemo export (${DateFormat('yyyy-MM-dd').format(now)})';
-      final filename = 'dev_memo_${DateFormat('yyyyMMdd_HHmmss').format(now)}.txt';
-      final fileText = notes.join('\n'); // 최신순 문자열 리스트 → LF로 합치기
+      final filename = 'dev_memo_${DateFormat('yyyyMMdd_HHmmss').format(now)}.md';
+      final normalized = text.replaceAll('\r\n', '\n');
 
-      // MIME multipart 작성
-      final boundary = 'devmemo_${now.millisecondsSinceEpoch}';
-      final bodyText = '첨부된 텍스트 파일에 메모가 포함되어 있습니다.';
+      final boundary = 'devmemo_md_${now.millisecondsSinceEpoch}';
+      final bodyText = '첨부된 마크다운(.md) 파일에 문서가 포함되어 있습니다.';
       final toCsv = cfg.to;
 
-      final attachmentB64 = base64.encode(utf8.encode(fileText)); // 표준 base64
+      final attachmentB64 = base64.encode(utf8.encode(normalized));
+
       final mime = StringBuffer()
         ..writeln('MIME-Version: 1.0')
         ..writeln('To: $toCsv')
         ..writeln('Subject: $subject')
-        ..writeln('Content-Type: multipart/mixed; boundary=\"$boundary\"')
+        ..writeln('Content-Type: multipart/mixed; boundary="$boundary"')
         ..writeln()
         ..writeln('--$boundary')
-        ..writeln('Content-Type: text/plain; charset=\"utf-8\"')
+        ..writeln('Content-Type: text/plain; charset="utf-8"')
         ..writeln('Content-Transfer-Encoding: 7bit')
         ..writeln()
         ..writeln(bodyText)
         ..writeln()
         ..writeln('--$boundary')
-        ..writeln('Content-Type: text/plain; charset=\"utf-8\"; name=\"$filename\"')
-        ..writeln('Content-Disposition: attachment; filename=\"$filename\"')
+        ..writeln('Content-Type: text/markdown; charset="utf-8"; name="$filename"')
+        ..writeln('Content-Disposition: attachment; filename="$filename"')
         ..writeln('Content-Transfer-Encoding: base64')
         ..writeln()
         ..writeln(attachmentB64)
         ..writeln('--$boundary--');
 
-      // 전체 RAW를 base64url 인코딩
       final raw = base64Url.encode(utf8.encode(mime.toString()));
 
-      final client = await GoogleAuthSession.instance.client(); // googleapis_auth.AuthClient
+      final client = await GoogleAuthSession.instance.client();
       final api = gmail.GmailApi(client);
       final message = gmail.Message()..raw = raw;
 
       await api.users.messages.send(message, 'me');
 
-      _showSnack('이메일을 보냈습니다.');
+      _showSnack('이메일을 보냈습니다(.md 첨부).');
     } catch (e) {
       _showSnack('전송 실패: $e');
     } finally {
@@ -386,45 +426,457 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
     );
   }
 
-  // ---------- helpers ----------
+  // ---------- MD 편집 도우미 ----------
+  void _insertInlineCode() {
+    _prepareEdit();
+    _wrapSelection('`', '`', 'code');
+  }
 
-  OutlineInputBorder _inputBorder({bool focused = false, ColorScheme? cs}) {
-    final color = focused
-        ? (cs ?? Theme.of(context).colorScheme).primary
-        : Theme.of(context).dividerColor.withOpacity(.2);
-    return OutlineInputBorder(
-      borderRadius: BorderRadius.circular(12),
-      borderSide: BorderSide(color: color, width: focused ? 1.4 : 1),
+  void _insertCheckbox() {
+    _prepareEdit();
+    _togglePrefixAcrossSelection('- [ ] ');
+  }
+
+  void _insertToggleBlock() {
+    _prepareEdit();
+    const template = '''
+<details>
+<summary>제목</summary>
+
+내용
+
+</details>
+''';
+    _insertTemplate(template.trimRight() + '\n');
+  }
+
+  void _wrapSelection(String prefix, String suffix, String placeholder) {
+    _prepareEdit();
+
+    final sel = _docCtrl.selection;
+    final text = _docCtrl.text;
+
+    final start = sel.start;
+    final end = sel.end;
+    final hasSelection = !sel.isCollapsed;
+
+    final selected = hasSelection ? text.substring(start, end) : '';
+    final middle = selected.isEmpty ? placeholder : selected;
+
+    final replaced = '$prefix$middle$suffix';
+    _replaceRange(start, end, replaced,
+        newSelection: hasSelection
+            ? TextSelection(baseOffset: start, extentOffset: start + replaced.length)
+            : TextSelection.collapsed(offset: start + prefix.length + middle.length));
+  }
+
+  void _togglePrefixAcrossSelection(String prefix) {
+    _prepareEdit();
+
+    final text = _docCtrl.text;
+    final sel = _docCtrl.selection;
+
+    final startLine = _lineStartIndex(text, sel.start);
+    final endLine = _lineEndIndex(text, sel.end);
+
+    final block = text.substring(startLine, endLine);
+    final lines = block.split('\n');
+
+    final updatedLines = lines.map((l) {
+      final line = l;
+      if (line.startsWith(prefix)) {
+        return line.substring(prefix.length);
+      } else if (line.trim().isEmpty) {
+        return prefix;
+      } else {
+        return prefix + line;
+      }
+    }).toList();
+
+    final updated = updatedLines.join('\n');
+    _replaceRange(
+      startLine,
+      endLine,
+      updated,
+      newSelection: TextSelection.collapsed(offset: startLine + updated.length),
     );
   }
 
-  (String, String) _parse(String line) {
-    final split = line.indexOf('|');
-    if (split < 0) return ('', line.trim());
-    final time = line.substring(0, split).trim();
-    final text = line.substring(split + 1).trim();
-    return (time, text);
+  void _toggleHeadingAcrossSelection(String marker) {
+    _prepareEdit();
+
+    final text = _docCtrl.text;
+    final sel = _docCtrl.selection;
+
+    final startLine = _lineStartIndex(text, sel.start);
+    final endLine = _lineEndIndex(text, sel.end);
+
+    final block = text.substring(startLine, endLine);
+    final lines = block.split('\n');
+
+    final headingRegex = RegExp(r'^\s{0,3}#{1,6}\s+');
+
+    final updatedLines = lines.map((l) {
+      final stripped = l.replaceFirst(headingRegex, '');
+      if (l.startsWith(marker)) {
+        return stripped;
+      } else {
+        return '$marker${stripped.trimLeft()}';
+      }
+    }).toList();
+
+    final updated = updatedLines.join('\n');
+    _replaceRange(
+      startLine,
+      endLine,
+      updated,
+      newSelection: TextSelection.collapsed(offset: startLine + updated.length),
+    );
   }
 
-  List<String> _filtered(List<String> src, String q) {
-    if (q.isEmpty) return src;
-    final query = q.toLowerCase();
-    return src.where((e) => e.toLowerCase().contains(query)).toList();
+  void _insertTemplate(String snippet) {
+    _prepareEdit();
+    final sel = _docCtrl.selection;
+    _replaceRange(sel.start, sel.end, snippet,
+        newSelection: TextSelection.collapsed(offset: sel.start + snippet.length));
   }
 
-  void _submitNote(String raw) {
-    final t = raw.trim();
-    if (t.isEmpty) return;
-    DevMemo.add(t);
-    _inputCtrl.clear();
-    FocusScope.of(context).unfocus();
-    HapticFeedback.lightImpact();
+  void _replaceRange(int start, int end, String replacement, {TextSelection? newSelection}) {
+    final text = _docCtrl.text;
+    final newText = text.replaceRange(start, end, replacement);
+    _docCtrl.value = _docCtrl.value.copyWith(
+      text: newText,
+      selection: newSelection ?? TextSelection.collapsed(offset: start + replacement.length),
+      composing: TextRange.empty,
+    );
+    HapticFeedback.selectionClick();
+  }
+
+  int _lineStartIndex(String text, int index) {
+    if (index <= 0) return 0;
+    final i = text.lastIndexOf('\n', index - 1);
+    return (i == -1) ? 0 : i + 1;
+  }
+
+  int _lineEndIndex(String text, int index) {
+    if (index < 0) return text.length;
+    final i = text.indexOf('\n', index);
+    return (i == -1) ? text.length : i;
+  }
+
+  // ========== Google Drive 연동 (강화 + 폴더명 마이그레이션) ==========
+
+  Future<drive.DriveApi> _driveApi() async {
+    final client = await GoogleAuthSession.instance.client();
+    return drive.DriveApi(client);
+  }
+
+  Future<void> _clearDriveIdCache() async {
+    final prefs = DevMemo._prefs ?? await SharedPreferences.getInstance();
+    await prefs.remove(DevMemo._kDriveFolderId);
+    await prefs.remove(DevMemo._kDriveFileId);
+  }
+
+  Future<String?> _validateId(
+      drive.DriveApi api,
+      String? id, {
+        required bool expectFolder,
+      }) async {
+    if (id == null) return null;
+    try {
+      // ✅ [3] 타입 안전화: is-check 로 확정
+      final resp = await api.files.get(id, $fields: 'id,mimeType,trashed');
+      if (resp is! drive.File) return null;
+      final file = resp; // drive.File 확정
+
+      if (file.trashed == true) return null;
+      if (expectFolder && file.mimeType != 'application/vnd.google-apps.folder') return null;
+      if (!expectFolder && file.mimeType == 'application/vnd.google-apps.folder') return null;
+      return file.id;
+    } catch (_) {
+      // 404 등: 무효
+      return null;
+    }
+  }
+
+  Future<String> _ensureFolder(drive.DriveApi api, String? cachedId) async {
+    // 1) 캐시 유효성 검증
+    final validCached = await _validateId(api, cachedId, expectFolder: true);
+    if (validCached != null) return validCached;
+
+    // 2) 새 이름(IdeaNote)으로 검색 (최근 생성 1개)
+    final qNew =
+        "mimeType = 'application/vnd.google-apps.folder' and name = '${DevMemo.kDriveFolderName}' and trashed = false";
+    final resNew = await api.files.list(
+      q: qNew,
+      $fields: 'files(id,name,createdTime)',
+      spaces: 'drive',
+      orderBy: 'createdTime desc',
+    );
+    if (resNew.files != null && resNew.files!.isNotEmpty) {
+      return resNew.files!.first.id!;
+    }
+
+    // 3) 과거 이름(DevMemo) 검색 후 있으면 폴더를 IdeaNote로 개명
+    final qOld =
+        "mimeType = 'application/vnd.google-apps.folder' and name = '${DevMemo.kDriveLegacyFolderName}' and trashed = false";
+    final resOld = await api.files.list(
+      q: qOld,
+      $fields: 'files(id,name,createdTime)',
+      spaces: 'drive',
+      orderBy: 'createdTime desc',
+    );
+    if (resOld.files != null && resOld.files!.isNotEmpty) {
+      final legacyId = resOld.files!.first.id!;
+      final meta = drive.File()..name = DevMemo.kDriveFolderName;
+      final updated = await api.files.update(meta, legacyId);
+      return updated.id!;
+    }
+
+    // 4) 없으면 새로 생성
+    final meta = drive.File()
+      ..name = DevMemo.kDriveFolderName
+      ..mimeType = 'application/vnd.google-apps.folder';
+    final created = await api.files.create(meta);
+    return created.id!;
+  }
+
+  Future<String?> _findOrMigrateFileInFolder(drive.DriveApi api, String folderId) async {
+    // 1) IdeaNote.md 우선 검색
+    final q1 = "'$folderId' in parents and name = '${DevMemo.kDriveFileName}' and trashed = false";
+    final r1 = await api.files.list(q: q1, $fields: 'files(id,name,modifiedTime)', orderBy: 'modifiedTime desc');
+    if (r1.files != null && r1.files!.isNotEmpty) return r1.files!.first.id!;
+
+    // 2) 과거 DevMemo.md가 있으면 IdeaNote.md 로 개명 후 사용
+    final q2 = "'$folderId' in parents and name = '${DevMemo.kDriveLegacyFileName}' and trashed = false";
+    final r2 = await api.files.list(q: q2, $fields: 'files(id,name,modifiedTime)', orderBy: 'modifiedTime desc');
+    if (r2.files != null && r2.files!.isNotEmpty) {
+      final legacyId = r2.files!.first.id!;
+      final meta = drive.File()..name = DevMemo.kDriveFileName;
+      final updated = await api.files.update(meta, legacyId);
+      return updated.id!;
+    }
+
+    // 3) 없음
+    return null;
+  }
+
+  Future<Uint8List> _readAllBytes(Stream<List<int>> stream) async {
+    final chunks = <int>[];
+    await for (final chunk in stream) {
+      chunks.addAll(chunk);
+    }
+    return Uint8List.fromList(chunks);
+  }
+
+  // Drive: 불러오기
+  Future<void> _driveLoad({bool retry = true}) async { // ✅ [1] 1회 재시도 플래그
+    setState(() => _driveBusy = true);
+    try {
+      final prefs = DevMemo._prefs ?? await SharedPreferences.getInstance();
+      final api = await _driveApi();
+
+      // 캐시 유효성 검증
+      String? folderId = await _validateId(api, prefs.getString(DevMemo._kDriveFolderId), expectFolder: true);
+      String? fileId = await _validateId(api, prefs.getString(DevMemo._kDriveFileId), expectFolder: false);
+
+      // 폴더 보장(필요 시 DevMemo → IdeaNote로 개명)
+      folderId = await _ensureFolder(api, folderId);
+      await prefs.setString(DevMemo._kDriveFolderId, folderId);
+
+      // 파일 찾기/마이그레이션(DevMemo.md → IdeaNote.md)
+      fileId ??= await _findOrMigrateFileInFolder(api, folderId);
+      if (fileId == null) {
+        _showSnack('Drive에 저장된 문서를 찾지 못했습니다. 먼저 "Drive에 저장"을 눌러 생성하세요.');
+        return;
+      }
+
+      // 파일 내용 다운로드 (타입 안전화)
+      final dl = await api.files.get(
+        fileId,
+        downloadOptions: drive.DownloadOptions.fullMedia,
+      );
+      if (dl is! drive.Media) {
+        throw Exception('Unexpected download response');
+      }
+      final media = dl;
+
+      final bytes = await _readAllBytes(media.stream);
+      final text = utf8.decode(bytes);
+
+      _docCtrl.text = text;
+      _docCtrl.selection = TextSelection.collapsed(offset: _docCtrl.text.length);
+
+      await prefs.setString(DevMemo._kDriveFileId, fileId);
+
+      _showSnack('Drive에서 문서를 불러왔습니다.');
+    } catch (e) {
+      final msg = e.toString();
+      if (retry && (msg.contains('404') || msg.contains('notFound'))) {
+        await _clearDriveIdCache();
+        await _driveLoad(retry: false); // ✅ 1회만 재시도
+      } else {
+        _showSnack('Drive 불러오기 실패: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _driveBusy = false);
+    }
+  }
+
+  // Drive: 저장
+  Future<void> _driveSave({bool retry = true}) async { // ✅ [1] 1회 재시도 플래그
+    setState(() => _driveBusy = true);
+    try {
+      final prefs = DevMemo._prefs ?? await SharedPreferences.getInstance();
+      final api = await _driveApi();
+
+      // 캐시 유효성 검증
+      String? folderId = await _validateId(api, prefs.getString(DevMemo._kDriveFolderId), expectFolder: true);
+      String? fileId = await _validateId(api, prefs.getString(DevMemo._kDriveFileId), expectFolder: false);
+
+      // 폴더 보장(필요 시 DevMemo → IdeaNote로 개명)
+      folderId = await _ensureFolder(api, folderId);
+      await prefs.setString(DevMemo._kDriveFolderId, folderId);
+
+      final content = _docCtrl.text.replaceAll('\r\n', '\n');
+      final bytes = utf8.encode(content);
+      final media = drive.Media(Stream<List<int>>.fromIterable([bytes]), bytes.length);
+
+      const mime = 'text/markdown';
+
+      // 파일이 없다면 생성
+      if (fileId == null) {
+        // 혹시 폴더 안에 이미 존재하는지 다시 확인(동시성/캐시 초기화 대비)
+        fileId = await _findOrMigrateFileInFolder(api, folderId);
+        if (fileId == null) {
+          final meta = drive.File()
+            ..name = DevMemo.kDriveFileName
+            ..mimeType = mime
+            ..parents = [folderId];
+          final created = await api.files.create(meta, uploadMedia: media);
+          fileId = created.id!;
+          await prefs.setString(DevMemo._kDriveFileId, fileId);
+          _showSnack('Drive에 새 문서를 저장했습니다.');
+          return;
+        }
+      }
+
+      // 존재하면 업데이트
+      final meta = drive.File()..mimeType = mime;
+      await api.files.update(meta, fileId, uploadMedia: media);
+      await prefs.setString(DevMemo._kDriveFileId, fileId);
+      _showSnack('Drive 문서를 업데이트했습니다.');
+    } catch (e) {
+      final msg = e.toString();
+      if (retry && (msg.contains('404') || msg.contains('notFound') || msg.contains('File not found') || msg.contains('Parent'))) {
+        await _clearDriveIdCache();
+        await _driveSave(retry: false); // ✅ 1회만 재시도
+      } else {
+        _showSnack('Drive 저장 실패: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _driveBusy = false);
+    }
   }
 }
 
 // ---------- widgets ----------
 
+class _MdToolbar extends StatelessWidget {
+  final VoidCallback onInlineCode;
+  final VoidCallback onCheckbox;
+  final VoidCallback onToggleBlock;
+  final VoidCallback onBold;
+  final VoidCallback onItalic;
+  final VoidCallback onH1;
+  final VoidCallback onH2;
+  final VoidCallback onBullet;
+  final VoidCallback onNumbered;
+  final VoidCallback onQuote;
+  final VoidCallback onLink;
+  final VoidCallback onImage;
+  final VoidCallback onTable;
+
+  const _MdToolbar({
+    required this.onInlineCode,
+    required this.onCheckbox,
+    required this.onToggleBlock,
+    required this.onBold,
+    required this.onItalic,
+    required this.onH1,
+    required this.onH2,
+    required this.onBullet,
+    required this.onNumbered,
+    required this.onQuote,
+    required this.onLink,
+    required this.onImage,
+    required this.onTable,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+      child: Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: [
+          _ttIcon(context, Icons.code_rounded, '인라인 코드 (Ctrl/Cmd+`)', onInlineCode),
+          _ttIcon(context, Icons.check_box_outlined, '체크박스 (Ctrl/Cmd+Shift+C)', onCheckbox),
+          _ttIcon(context, Icons.expand_more_rounded, '토글 블록 (Ctrl/Cmd+Shift+T)', onToggleBlock),
+          _ttIcon(context, Icons.format_bold_rounded, '굵게 (Ctrl/Cmd+B)', onBold),
+          _ttIcon(context, Icons.format_italic_rounded, '기울임 (Ctrl/Cmd+I)', onItalic),
+          _chip(context, 'H1', onH1, cs.primary),
+          _chip(context, 'H2', onH2, cs.secondary),
+          _ttIcon(context, Icons.format_list_bulleted_rounded, '불릿 목록', onBullet),
+          _ttIcon(context, Icons.format_list_numbered_rounded, '번호 목록', onNumbered),
+          _ttIcon(context, Icons.format_quote_rounded, '인용문', onQuote),
+          _ttIcon(context, Icons.link_rounded, '링크', onLink),
+        ],
+      ),
+    );
+  }
+
+  Widget _ttIcon(BuildContext context, IconData icon, String tip, VoidCallback onTap) {
+    return Tooltip(
+      message: tip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Ink(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(.6),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, size: 18),
+        ),
+      ),
+    );
+  }
+
+  Widget _chip(BuildContext context, String label, VoidCallback onTap, Color bg) {
+    final on = Theme.of(context).colorScheme.onPrimary;
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Ink(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(label, style: TextStyle(fontWeight: FontWeight.w700, color: on)),
+      ),
+    );
+  }
+}
+
+/// ✅ 드래그 핸들(그립 바)
 class _DragHandle extends StatelessWidget {
+  const _DragHandle();
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -438,75 +890,10 @@ class _DragHandle extends StatelessWidget {
   }
 }
 
-class _SwipeDeleteBackground extends StatelessWidget {
-  final Color color;
-  final Color iconColor;
-  const _SwipeDeleteBackground({required this.color, required this.iconColor});
+// ---------- 키맵용 인텐트 ----------
+enum _MdCmd { inlineCode, checkbox, toggleBlock, bold, italic }
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      alignment: Alignment.centerRight,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      color: color,
-      child: Icon(Icons.delete_outline_rounded, color: iconColor),
-    );
-  }
-}
-
-/// 작은 제네릭 ValueNotifier(리스트 비교 시 setState 유발 보장용)
-class ValueListenableNotifier<T> extends ValueNotifier<T> {
-  ValueListenableNotifier(super.value);
-  @override
-  set value(T newValue) {
-    if (!identical(newValue, super.value)) {
-      super.value = newValue;
-    } else {
-      super.value = newValue;
-    }
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  final String query;
-  const _EmptyState({required this.query});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    final hasQuery = query.trim().isNotEmpty;
-
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              hasQuery ? Icons.search_off_rounded : Icons.event_note,
-              color: cs.outline,
-              size: 40,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              hasQuery ? '검색 결과가 없어요' : '아직 메모가 없습니다.',
-              style: textTheme.bodyMedium?.copyWith(color: cs.outline),
-              textAlign: TextAlign.center,
-            ),
-            if (hasQuery) ...[
-              const SizedBox(height: 4),
-              Text(
-                '"$query"',
-                style: textTheme.bodySmall?.copyWith(color: cs.outline),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
+class _MdIntent extends Intent {
+  final _MdCmd cmd;
+  const _MdIntent(this.cmd);
 }

@@ -63,8 +63,9 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
             await _setDevAuthorized(true);
             if (mounted) {
               Navigator.of(ctx).pop();
+              // 🔁 문구 수정: 오프라인 서비스는 인증 없이도 진입 가능하므로 문구에서 제외
               showSuccessSnackbar(
-                context, '개발자 인증 완료. 이제 개발/오프라인 서비스 카드를 눌러 진입할 수 있습니다.',
+                context, '개발자 인증 완료. 이제 개발 메뉴를 사용할 수 있습니다.',
               );
             }
           },
@@ -99,8 +100,10 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
 
     final List<List<Widget>> pages = [
       [ ServiceCard(enabled: serviceEnabled), TabletCard(enabled: tabletEnabled), ],
-      [ const HeadquarterCard(), const FaqCard(), ], // ← 변경: 항상 활성화 & 조건 제거
-      [ const CommunityCard(), if (_devAuthorized) const ParkingCard(), ],
+      [ const HeadquarterCard(), const FaqCard(), ],
+      // ✅ 변경: 개발자 인증 여부와 무관하게 오프라인 서비스 카드를 항상 표시
+      [ const CommunityCard(), const ParkingCard(), ],
+      // 개발자 메뉴는 기존과 동일 — 인증된 경우에만 표시
       if (_devAuthorized) [ DevCard(onTap: () =>
           Navigator.of(context).pushReplacementNamed(AppRoutes.devStub)), ],
     ];

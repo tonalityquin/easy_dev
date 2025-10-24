@@ -1,7 +1,7 @@
 // lib/utils/google_auth_session.dart
 //
 // Google 계정 인증을 앱 전역에서 "한 번"만 수행하고,
-// 이후 Calendar / Sheets / Docs / Gmail / GCS 등 모든 기능이 동일한 AuthClient를 재사용하는 세션.
+// 이후 Calendar / Sheets / Docs / Gmail / Drive / GCS 등 모든 기능이 동일한 AuthClient를 재사용하는 세션.
 // google_sign_in v7 API에 맞춰 작성.
 
 import 'dart:async';
@@ -10,11 +10,19 @@ import 'package:googleapis_auth/googleapis_auth.dart' as auth show AuthClient;
 import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
 
 class AppScopes {
+  // 기본 Google API 스코프들
   static const String calendarEvents = 'https://www.googleapis.com/auth/calendar.events';
   static const String spreadsheets   = 'https://www.googleapis.com/auth/spreadsheets';
   static const String documents      = 'https://www.googleapis.com/auth/documents';
+
   // Gmail 전송(민감 스코프) — 전체 mail.google.com(제한 스코프) 대신 최소 권한 사용
   static const String gmailSend      = 'https://www.googleapis.com/auth/gmail.send';
+
+  // ✅ Google Drive (앱이 만든 파일/폴더만 접근) — DevMemo.md 저장/불러오기용 권장
+  static const String driveFile      = 'https://www.googleapis.com/auth/drive.file';
+  // (참고) 모든 드라이브 파일 접근이 필요하다면 아래를 사용 (권고 X)
+  // static const String driveFull   = 'https://www.googleapis.com/auth/drive';
+
   // GCS 업로드까지 사용한다면 full_control 사용(환경에 따라 read_write로 낮춰도 됨)
   static const String gcsFullControl = 'https://www.googleapis.com/auth/devstorage.full_control';
   // static const String gcsReadWrite = 'https://www.googleapis.com/auth/devstorage.read_write';
@@ -23,8 +31,9 @@ class AppScopes {
     calendarEvents,
     spreadsheets,
     documents,
-    gmailSend,      // ✅ 추가: Gmail 전송 스코프
-    gcsFullControl, // 또는 gcsReadWrite
+    gmailSend,
+    driveFile,     // ✅ Drive 스코프 추가
+    gcsFullControl,
   }.toList();
 }
 
