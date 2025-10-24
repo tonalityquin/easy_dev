@@ -1,8 +1,14 @@
+import 'dart:convert'; // ⬅️ 이메일 RAW·첨부 생성용
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, HapticFeedback;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../utils/app_navigator.dart';
+// ✅ 수신자 이메일 저장/검증 유틸
+import '../../utils/email_config.dart';
+// ✅ Gmail 전송용
+import '../../utils/google_auth_session.dart';
+import 'package:googleapis/gmail/v1.dart' as gmail;
 
 /// EasyMemo
 /// - 전역 navigatorKey로 안전한 컨텍스트 확보 (showModalBottomSheet)
@@ -108,7 +114,7 @@ class HeadMemo {
   }
 }
 
-/// 메모 바텀시트(90% 높이 · 스위치 · 검색 · 입력 · 스와이프 삭제)
+/// 메모 바텀시트(90% 높이 · 스위치 · 이메일 전송 버튼 · 수신자 다이얼로그 · 검색 · 입력 · 스와이프 삭제)
 class _HeadMemoSheet extends StatefulWidget {
   const _HeadMemoSheet();
 
@@ -119,6 +125,15 @@ class _HeadMemoSheet extends StatefulWidget {
 class _HeadMemoSheetState extends State<_HeadMemoSheet> {
   final TextEditingController _inputCtrl = TextEditingController();
   final TextEditingController _searchCtrl = TextEditingController();
+
+  // ✅ 수신자(To) 다이얼로그용 컨트롤러/상태
+  final TextEditingController _mailToCtrl = TextEditingController();
+  bool _mailToValid = true;
+  bool _mailToLoading = true;
+
+  // ✅ 이메일 전송 상태
+  bool _sending = false;
+
   String _query = '';
 
   @override
@@ -127,12 +142,31 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
     _searchCtrl.addListener(() {
       setState(() => _query = _searchCtrl.text.trim());
     });
+
+    // ✅ EmailConfig 로드 → 다이얼로그 초기값 준비
+    () async {
+      final cfg = await EmailConfig.load();
+      final to = cfg.to;
+      setState(() {
+        _mailToCtrl.text = to;
+        _mailToValid = to.isEmpty || EmailConfig.isValidToList(to);
+        _mailToLoading = false;
+      });
+      _mailToCtrl.addListener(() {
+        final t = _mailToCtrl.text.trim();
+        final valid = t.isEmpty || EmailConfig.isValidToList(t);
+        if (valid != _mailToValid) {
+          setState(() => _mailToValid = valid);
+        }
+      });
+    }();
   }
 
   @override
   void dispose() {
     _inputCtrl.dispose();
     _searchCtrl.dispose();
+    _mailToCtrl.dispose();
     super.dispose();
   }
 
@@ -159,7 +193,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
                   _DragHandle(),
                   const SizedBox(height: 12),
 
-                  // 헤더: 타이틀 · 온/오프 · 닫기
+                  // 헤더: 타이틀 · 온/오프 · 이메일 전송 · 수신자 편집 · 닫기
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
@@ -168,6 +202,8 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
                         const SizedBox(width: 8),
                         Text('메모', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
                         const Spacer(),
+
+                        // On/Off 토글
                         ValueListenableBuilder<bool>(
                           valueListenable: HeadMemo.enabled,
                           builder: (_, on, __) => Row(
@@ -178,6 +214,27 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
                             ],
                           ),
                         ),
+
+                        const SizedBox(width: 8),
+
+                        // ✅ 이메일 전송(.txt 첨부)
+                        IconButton(
+                          tooltip: _sending ? '전송 중...' : '이메일로 보내기',
+                          onPressed: _sending ? null : _sendNotesByEmail,
+                          icon: _sending
+                              ? const SizedBox(
+                              width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.email_outlined),
+                        ),
+
+                        // ✅ 수신자(To) 편집 다이얼로그
+                        IconButton(
+                          tooltip: '수신자(To) 편집',
+                          onPressed: _mailToLoading ? null : _openRecipientDialog,
+                          icon: const Icon(Icons.alternate_email_rounded),
+                        ),
+
+                        // 닫기
                         IconButton(
                           tooltip: '닫기',
                           icon: const Icon(Icons.close_rounded),
@@ -287,10 +344,10 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
                                       onPressed: () {
                                         Clipboard.setData(ClipboardData(text: text));
                                         ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: const Text('메모를 복사했어요'),
+                                          const SnackBar(
+                                            content: Text('메모를 복사했어요'),
                                             behavior: SnackBarBehavior.floating,
-                                            duration: const Duration(milliseconds: 900),
+                                            duration: Duration(milliseconds: 900),
                                           ),
                                         );
                                       },
@@ -318,6 +375,133 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
     );
   }
 
+  // ---------- 이메일 전송(.txt 첨부) ----------
+
+  Future<void> _sendNotesByEmail() async {
+    final notes = HeadMemo.notes.value;
+    if (notes.isEmpty) {
+      _showSnack('보낼 메모가 없습니다.');
+      return;
+    }
+
+    // 수신자 확인
+    final cfg = await EmailConfig.load();
+    final toCsv = cfg.to.trim();
+    if (!EmailConfig.isValidToList(toCsv)) {
+      _showSnack('수신자(To) 설정이 필요합니다: 우측 @ 아이콘으로 이메일을 입력하세요.');
+      return;
+    }
+
+    setState(() => _sending = true);
+    try {
+      final now = DateTime.now();
+      final subject = 'HeadMemo export (${_fmtYMD(now)})';
+      final filename = 'head_memo_${_fmtCompact(now)}.txt';
+      final fileText = notes.join('\n'); // 최신순 문자열 리스트 → LF로 합치기
+
+      // MIME multipart 작성
+      final boundary = 'headmemo_${now.millisecondsSinceEpoch}';
+      final bodyText = '첨부된 텍스트 파일에 메모가 포함되어 있습니다.';
+
+      // 첨부는 표준 base64
+      final attachmentB64 = base64.encode(utf8.encode(fileText));
+
+      final mime = StringBuffer()
+        ..writeln('MIME-Version: 1.0')
+        ..writeln('To: $toCsv')
+        ..writeln('Subject: $subject')
+        ..writeln('Content-Type: multipart/mixed; boundary="$boundary"')
+        ..writeln()
+        ..writeln('--$boundary')
+        ..writeln('Content-Type: text/plain; charset="utf-8"')
+        ..writeln('Content-Transfer-Encoding: 7bit')
+        ..writeln()
+        ..writeln(bodyText)
+        ..writeln()
+        ..writeln('--$boundary')
+        ..writeln('Content-Type: text/plain; charset="utf-8"; name="$filename"')
+        ..writeln('Content-Disposition: attachment; filename="$filename"')
+        ..writeln('Content-Transfer-Encoding: base64')
+        ..writeln()
+        ..writeln(attachmentB64)
+        ..writeln('--$boundary--');
+
+      // 전체 RAW를 base64url 인코딩
+      final raw = base64Url.encode(utf8.encode(mime.toString()));
+
+      final client = await GoogleAuthSession.instance.client(); // googleapis_auth.AuthClient
+      final api = gmail.GmailApi(client);
+      final message = gmail.Message()..raw = raw;
+
+      await api.users.messages.send(message, 'me');
+
+      _showSnack('이메일을 보냈습니다.');
+    } catch (e) {
+      _showSnack('전송 실패: $e');
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  // ---------- 수신자 다이얼로그 ----------
+
+  Future<void> _openRecipientDialog() async {
+    final cs = Theme.of(context).colorScheme;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('수신자(To) 설정'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _mailToCtrl,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _saveMailTo(fromDialog: true),
+                decoration: InputDecoration(
+                  labelText: '수신자(To)',
+                  hintText: 'a@x.com, b@y.com',
+                  helperText: '쉼표(,)로 여러 명 입력',
+                  isDense: true,
+                  border: _emailBorder(),
+                  enabledBorder: _emailBorder(valid: _mailToValid, cs: cs),
+                  focusedBorder: _emailBorder(valid: _mailToValid, cs: cs, focused: true),
+                  errorText: _mailToValid ? null : '이메일 형식을 확인해 주세요',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton.icon(
+              icon: const Icon(Icons.restart_alt_rounded),
+              label: const Text('초기화'),
+              onPressed: () async {
+                await _clearMailTo();
+                // 다이얼로그 내에서도 에러 텍스트 갱신
+                (ctx as Element).markNeedsBuild();
+              },
+            ),
+            TextButton(
+              child: const Text('취소'),
+              onPressed: () => Navigator.of(ctx).pop(),
+            ),
+            FilledButton.icon(
+              icon: const Icon(Icons.save_alt_rounded),
+              label: const Text('저장'),
+              onPressed: () async {
+                final ok = await _saveMailTo(fromDialog: true);
+                if (ok && context.mounted) Navigator.of(ctx).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   // ---------- helpers ----------
 
   OutlineInputBorder _inputBorder({bool focused = false, ColorScheme? cs}) {
@@ -326,6 +510,18 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
         : Theme.of(context).dividerColor.withOpacity(.2);
     return OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: color, width: focused ? 1.4 : 1),
+    );
+  }
+
+  // ✅ 수신자 입력 전용 테두리(유효/무효 색상 반영)
+  OutlineInputBorder _emailBorder({bool focused = false, bool valid = true, ColorScheme? cs}) {
+    final scheme = cs ?? Theme.of(context).colorScheme;
+    final Color color = valid
+        ? (focused ? scheme.primary : scheme.outlineVariant)
+        : scheme.error;
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
       borderSide: BorderSide(color: color, width: focused ? 1.4 : 1),
     );
   }
@@ -352,6 +548,49 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
     FocusScope.of(context).unfocus();
     HapticFeedback.lightImpact();
   }
+
+  // ✅ 수신자 저장/초기화
+  Future<bool> _saveMailTo({bool fromDialog = false}) async {
+    final to = _mailToCtrl.text.trim();
+    if (to.isNotEmpty && !EmailConfig.isValidToList(to)) {
+      setState(() => _mailToValid = false);
+      if (fromDialog) {
+        // 다이얼로그 내 에러 텍스트 표시 위해 스낵은 생략 가능
+      } else {
+        _showSnack('수신자 이메일 형식을 확인해 주세요.');
+      }
+      return false;
+    }
+    await EmailConfig.save(EmailConfig(to: to));
+    setState(() => _mailToValid = true);
+    _showSnack('수신자 설정을 저장했습니다.');
+    return true;
+  }
+
+  Future<void> _clearMailTo() async {
+    await EmailConfig.clear();
+    setState(() {
+      _mailToCtrl.text = '';
+      _mailToValid = true;
+    });
+    _showSnack('수신자를 기본값(빈 값)으로 복원했습니다.');
+  }
+
+  void _showSnack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(milliseconds: 1200),
+      ),
+    );
+  }
+
+  // 날짜 포맷터(외부 intl 없이 동작)
+  String _fmt2(int n) => n.toString().padLeft(2, '0');
+  String _fmtYMD(DateTime d) => '${d.year}-${_fmt2(d.month)}-${_fmt2(d.day)}';
+  String _fmtCompact(DateTime d) =>
+      '${d.year}${_fmt2(d.month)}${_fmt2(d.day)}_${_fmt2(d.hour)}${_fmt2(d.minute)}${_fmt2(d.second)}';
 }
 
 // ---------- widgets ----------
