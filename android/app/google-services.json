@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "470236709494-q3nmm3bhb7mcrcfnflcck73sfpfv3ia4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.quintus.dev",
+            "certificate_hash": "96f67e73e6050e45bd672b331b5ed8f47967989f"
+          }
+        },
+        {
           "client_id": "470236709494-rsndjpgufvbv90tnbjjae0tsq53jucm5.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
