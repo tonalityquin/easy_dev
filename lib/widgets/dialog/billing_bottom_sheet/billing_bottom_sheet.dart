@@ -40,6 +40,7 @@ Future<BillResult?> showOnTapBillingBottomSheet({
   return showModalBottomSheet<BillResult>(
     context: context,
     isScrollControlled: true,
+    useSafeArea: true,
     backgroundColor: Colors.transparent,
     builder: (_) => BillingBottomSheet(
       entryTimeInSeconds: entryTimeInSeconds,
@@ -103,6 +104,13 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
   BillType get billType => billTypeFromString(widget.billingType);
   bool get isRegular => billType == BillType.fixed;
 
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _reasonController.dispose();
+    super.dispose();
+  }
+
   int _calculateBaseFee() {
     if (isRegular) return widget.regularAmount ?? 0;
     return calculateFee(
@@ -157,245 +165,281 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
   Widget build(BuildContext context) {
     final baseFee = _calculateBaseFee();
     final lockedFee = _getLockedFee();
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return SafeArea(
       child: Material(
         color: Colors.transparent,
-        child: DraggableScrollableSheet(
-          initialChildSize: 0.85,
-          minChildSize: 0.5,
-          maxChildSize: 0.95,
-          builder: (_, scrollController) {
-            return Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                border: Border.all(color: light.withOpacity(.35)),
-                boxShadow: [
-                  BoxShadow(
-                    color: base.withOpacity(.06),
-                    blurRadius: 20,
-                    offset: const Offset(0, -6),
-                  ),
-                ],
-              ),
-              child: ListView(
-                controller: scrollController,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: light.withOpacity(.35),
-                        borderRadius: BorderRadius.circular(2),
+        child: AnimatedPadding(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          padding: EdgeInsets.only(bottom: bottomInset),
+          child: DraggableScrollableSheet(
+            initialChildSize: 0.85,
+            minChildSize: 0.5,
+            maxChildSize: 0.95,
+            builder: (_, scrollController) {
+              return Container(
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  border: Border.all(color: light.withOpacity(.35)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: base.withOpacity(.06),
+                      blurRadius: 20,
+                      offset: const Offset(0, -6),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // ── 핸들바
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: light.withOpacity(.35),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
                       ),
                     ),
-                  ),
-                  Row(
-                    children: [
-                      Icon(Icons.receipt_long, color: base),
-                      const SizedBox(width: 8),
-                      Text(
-                        '정산 정보 확인',
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold).copyWith(color: dark),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(color: light.withOpacity(.35)),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: isRegular
-                            ? [
-                          Text('고정 주차 정보',
-                              style: const TextStyle(fontWeight: FontWeight.bold).copyWith(color: dark)),
+                    // ── 스크롤 본문
+                    Expanded(
+                      child: ListView(
+                        controller: scrollController,
+                        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.receipt_long, color: base),
+                              const SizedBox(width: 8),
+                              Text(
+                                '정산 정보 확인',
+                                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold).copyWith(color: dark),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          Card(
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(color: light.withOpacity(.35)),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: isRegular
+                                    ? [
+                                  Text('고정 주차 정보',
+                                      style: const TextStyle(fontWeight: FontWeight.bold).copyWith(color: dark)),
+                                  const SizedBox(height: 8),
+                                  _buildInfoRow('고정 유형', widget.billingType),
+                                  if (widget.regularAmount != null)
+                                    _buildInfoRow('고정 요금', '₩${formatCurrency.format(widget.regularAmount)}'),
+                                  if (widget.regularDurationHours != null)
+                                    _buildInfoRow('고정 시간', '${widget.regularDurationHours}시간'),
+                                  _buildInfoRow('입차 시간', _getFormattedEntryTime()),
+                                  _buildInfoRow('주차 시간', _getFormattedParkedTime()),
+                                ]
+                                    : [
+                                  Text('요금 기준',
+                                      style: const TextStyle(fontWeight: FontWeight.bold).copyWith(color: dark)),
+                                  const SizedBox(height: 8),
+                                  _buildInfoRow('입차 시간', _getFormattedEntryTime()),
+                                  _buildInfoRow('기본 시간', _formatMinutesToHourMinute(widget.basicStandard)),
+                                  _buildInfoRow('기본 금액', '₩${formatCurrency.format(widget.basicAmount)}'),
+                                  _buildInfoRow('추가 시간', _formatMinutesToHourMinute(widget.addStandard)),
+                                  _buildInfoRow('추가 금액', '₩${formatCurrency.format(widget.addAmount)}'),
+                                  _buildInfoRow('주차 시간', _getFormattedParkedTime()),
+                                  _buildInfoRow('요금 모드 적용 전 금액', '₩${formatCurrency.format(baseFee)}'),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          Text("지불 방법",
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700).copyWith(color: dark)),
                           const SizedBox(height: 8),
-                          _buildInfoRow('고정 유형', widget.billingType),
-                          if (widget.regularAmount != null)
-                            _buildInfoRow('고정 요금', '₩${formatCurrency.format(widget.regularAmount)}'),
-                          if (widget.regularDurationHours != null)
-                            _buildInfoRow('고정 시간', '${widget.regularDurationHours}시간'),
-                          _buildInfoRow('입차 시간', _getFormattedEntryTime()),
-                          _buildInfoRow('주차 시간', _getFormattedParkedTime()),
-                        ]
-                            : [
-                          Text('요금 기준',
-                              style: const TextStyle(fontWeight: FontWeight.bold).copyWith(color: dark)),
+                          Row(
+                            children: List.generate(paymentOptions.length, (index) {
+                              final selected = _selectedPaymentIndex == index;
+                              return Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                  child: ElevatedButton(
+                                    onPressed: () => setState(() => _selectedPaymentIndex = index),
+                                    style: ElevatedButton.styleFrom(
+                                      elevation: 0,
+                                      backgroundColor: selected ? base : Colors.white,
+                                      foregroundColor: selected ? fg : Colors.black87,
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                        side: BorderSide(color: selected ? base : light.withOpacity(.45)),
+                                      ),
+                                    ),
+                                    child: Text(paymentOptions[index],
+                                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                                  ),
+                                ),
+                              );
+                            }),
+                          ),
+
+                          const SizedBox(height: 24),
+                          Text("요금 모드",
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700).copyWith(color: dark)),
                           const SizedBox(height: 8),
-                          _buildInfoRow('입차 시간', _getFormattedEntryTime()),
-                          _buildInfoRow('기본 시간', _formatMinutesToHourMinute(widget.basicStandard)),
-                          _buildInfoRow('기본 금액', '₩${formatCurrency.format(widget.basicAmount)}'),
-                          _buildInfoRow('추가 시간', _formatMinutesToHourMinute(widget.addStandard)),
-                          _buildInfoRow('추가 금액', '₩${formatCurrency.format(widget.addAmount)}'),
-                          _buildInfoRow('주차 시간', _getFormattedParkedTime()),
-                          _buildInfoRow('요금 모드 적용 전 금액', '₩${formatCurrency.format(baseFee)}'),
+                          Row(
+                            children: List.generate(FeeMode.values.length, (index) {
+                              final selected = _feeMode == FeeMode.values[index];
+                              return Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                  child: ElevatedButton(
+                                    onPressed: () {
+                                      setState(() {
+                                        _feeMode = FeeMode.values[index];
+                                        _userAdjustment = 0;
+                                        _inputReason = null;
+                                        _amountController.clear();
+                                        _reasonController.clear();
+                                      });
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      elevation: 0,
+                                      backgroundColor: selected ? base : Colors.white,
+                                      foregroundColor: selected ? fg : Colors.black87,
+                                      padding: const EdgeInsets.symmetric(vertical: 14),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                        side: BorderSide(color: selected ? base : light.withOpacity(.45)),
+                                      ),
+                                    ),
+                                    child: Text(modeLabels[index],
+                                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                                  ),
+                                ),
+                              );
+                            }),
+                          ),
+
+                          if (_feeMode != FeeMode.normal) ...[
+                            const SizedBox(height: 16),
+                            TextField(
+                              controller: _amountController,
+                              keyboardType: TextInputType.number,
+                              textInputAction: TextInputAction.next,
+                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                              decoration: InputDecoration(
+                                labelText: _feeMode == FeeMode.plus ? '할증 금액 입력' : '할인 금액 입력',
+                                border: const OutlineInputBorder(),
+                                focusedBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(color: base, width: 1.6),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                suffixText: '₩',
+                              ),
+                              onChanged: (value) {
+                                setState(() {
+                                  _userAdjustment = int.tryParse(value) ?? 0;
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                            TextField(
+                              controller: _reasonController,
+                              textInputAction: TextInputAction.done,
+                              decoration: InputDecoration(
+                                labelText: '사유를 입력하세요',
+                                border: const OutlineInputBorder(),
+                                focusedBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(color: base, width: 1.6),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                prefixIcon: Icon(Icons.edit_note, color: dark),
+                              ),
+                              onChanged: (value) {
+                                setState(() {
+                                  _inputReason = value.trim();
+                                });
+                              },
+                            ),
+                          ],
+
+                          const SizedBox(height: 20),
+                          Text(
+                            '예상 정산 금액: ₩${formatCurrency.format(lockedFee)}',
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold).copyWith(color: dark),
+                          ),
+                          const SizedBox(height: 12),
+                          // 하단 버튼은 별도의 고정 영역에서 처리 (아래 SafeArea)
                         ],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
 
-                  Text("지불 방법", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700).copyWith(color: dark)),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: List.generate(paymentOptions.length, (index) {
-                      final selected = _selectedPaymentIndex == index;
-                      return Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: ElevatedButton(
-                            onPressed: () => setState(() => _selectedPaymentIndex = index),
-                            style: ElevatedButton.styleFrom(
-                              elevation: 0,
-                              backgroundColor: selected ? base : Colors.white,
-                              foregroundColor: selected ? fg : Colors.black87,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                side: BorderSide(color: selected ? base : light.withOpacity(.45)),
+                    // ── 하단 고정 버튼 영역 (키보드 높이에 맞춰 AnimatedPadding이 전체를 올림)
+                    SafeArea(
+                      top: false,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(0, 8, 0, 8),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            FilledButton(
+                              onPressed: _isSubmitEnabled
+                                  ? () {
+                                FocusScope.of(context).unfocus();
+                                Navigator.of(context).pop(
+                                  BillResult(
+                                    paymentMethod: _selectedPayment,
+                                    lockedFee: lockedFee,
+                                    feeMode: _feeMode,
+                                    adjustment: _userAdjustment,
+                                    reason: _feeMode == FeeMode.normal ? null : _inputReason,
+                                  ),
+                                );
+                              }
+                                  : null,
+                              style: FilledButton.styleFrom(
+                                backgroundColor: base,
+                                foregroundColor: fg,
+                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                               ),
+                              child: const Text('확인'),
                             ),
-                            child: Text(paymentOptions[index], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                          ),
-                        ),
-                      );
-                    }),
-                  ),
-
-                  const SizedBox(height: 24),
-                  Text("요금 모드", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700).copyWith(color: dark)),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: List.generate(FeeMode.values.length, (index) {
-                      final selected = _feeMode == FeeMode.values[index];
-                      return Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: ElevatedButton(
-                            onPressed: () {
-                              setState(() {
-                                _feeMode = FeeMode.values[index];
-                                _userAdjustment = 0;
-                                _inputReason = null;
-                                _amountController.clear();
-                                _reasonController.clear();
-                              });
-                            },
-                            style: ElevatedButton.styleFrom(
-                              elevation: 0,
-                              backgroundColor: selected ? base : Colors.white,
-                              foregroundColor: selected ? fg : Colors.black87,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                side: BorderSide(color: selected ? base : light.withOpacity(.45)),
+                            const SizedBox(width: 16),
+                            TextButton(
+                              onPressed: () {
+                                FocusScope.of(context).unfocus();
+                                Navigator.of(context).pop();
+                              },
+                              style: TextButton.styleFrom(
+                                foregroundColor: dark,
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                               ),
+                              child: const Text('취소'),
                             ),
-                            child: Text(modeLabels[index], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                          ),
+                          ],
                         ),
-                      );
-                    }),
-                  ),
-
-                  if (_feeMode != FeeMode.normal) ...[
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _amountController,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: InputDecoration(
-                        labelText: _feeMode == FeeMode.plus ? '할증 금액 입력' : '할인 금액 입력',
-                        border: const OutlineInputBorder(),
-                        focusedBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: base, width: 1.6),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        suffixText: '₩',
                       ),
-                      onChanged: (value) {
-                        setState(() {
-                          _userAdjustment = int.tryParse(value) ?? 0;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: _reasonController,
-                      decoration: InputDecoration(
-                        labelText: '사유를 입력하세요',
-                        border: const OutlineInputBorder(),
-                        focusedBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: base, width: 1.6),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        prefixIcon: Icon(Icons.edit_note, color: dark),
-                      ),
-                      onChanged: (value) {
-                        setState(() {
-                          _inputReason = value.trim();
-                        });
-                      },
                     ),
                   ],
-
-                  const SizedBox(height: 24),
-                  Text(
-                    '예상 정산 금액: ₩${formatCurrency.format(lockedFee)}',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold).copyWith(color: dark),
-                  ),
-                  const SizedBox(height: 32),
-
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      FilledButton(
-                        onPressed: _isSubmitEnabled
-                            ? () {
-                          Navigator.of(context).pop(
-                            BillResult(
-                              paymentMethod: _selectedPayment,
-                              lockedFee: lockedFee,
-                              feeMode: _feeMode,
-                              adjustment: _userAdjustment,
-                              reason: _feeMode == FeeMode.normal ? null : _inputReason,
-                            ),
-                          );
-                        }
-                            : null,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: base,
-                          foregroundColor: fg,
-                          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                        ),
-                        child: const Text('확인'),
-                      ),
-                      const SizedBox(width: 16),
-                      TextButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        style: TextButton.styleFrom(
-                          foregroundColor: dark,
-                        ),
-                        child: const Text('취소', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
+                ),
+              );
+            },
+          ),
         ),
       ),
     );

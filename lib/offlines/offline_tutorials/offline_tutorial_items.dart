@@ -4,8 +4,8 @@
 class TutorialVideoItem {
   final String title;
   final String description; // 사용자 표시용 설명 (assetPath는 노출하지 않음)
-  final String category;    // 섹션(카테고리) 구분
-  final String assetPath;   // 실제 영상 파일 경로 (UI에는 숨김)
+  final String category; // 섹션(카테고리) 구분
+  final String assetPath; // 실제 영상 파일 경로 (UI에는 숨김)
 
   const TutorialVideoItem({
     required this.title,
@@ -18,16 +18,18 @@ class TutorialVideoItem {
 /// 섹션(카테고리) 정렬 우선순위
 class TutorialCategories {
   static const request = '요청';
-  static const departure = '출차';
   static const parking = '주차';
-  static const completed = '완료';
+  static const moveToParkingCompleted = '입차 완료';
+  static const moveToDepartureRequest = '출차 요청';
+  static const moveToDepartureCompleted = '출차 완료';
   static const etc = '기타';
 
   static const ordered = <String>[
     request,
-    departure,
     parking,
-    completed,
+    moveToParkingCompleted,
+    moveToDepartureRequest,
+    moveToDepartureCompleted,
     etc,
   ];
 }
@@ -76,24 +78,28 @@ class TutorialVideos {
       category: TutorialCategories.parking,
       assetPath: "assets/tutorials/00completed.mp4",
     ),
-
-    // 출차 섹션
     TutorialVideoItem(
-      title: "00 · 변경 출차 요청",
-      description: "번호 검색, 출차 요청",
-      category: TutorialCategories.departure,
-      assetPath: "assets/tutorials/00departurerequest.mp4",
+      title: "01 · 입차 완료로 이동",
+      description: "번호 선택, 구역 선택",
+      category: TutorialCategories.moveToParkingCompleted,
+      assetPath: "assets/tutorials/0400moveToParkingCompleted.mp4",
     ),
     TutorialVideoItem(
-      title: "00 · 변경 출차 완료",
+      title: "01 · 출차 요청으로 이동",
+      description: "번호 검색, 출차 요청",
+      category: TutorialCategories.moveToDepartureRequest,
+      assetPath: "assets/tutorials/0401moveToDepartureRequest.mp4",
+    ),
+    TutorialVideoItem(
+      title: "01 · 출차 완료로 이동",
       description: "번호 선택, 출차 완료",
-      category: TutorialCategories.departure,
-      assetPath: "assets/tutorials/00departurecompleted.mp4",
+      category: TutorialCategories.moveToDepartureCompleted,
+      assetPath: "assets/tutorials/0402moveToDepartureCompleted.mp4",
     ),
 
     // 기타 섹션
     TutorialVideoItem(
-      title: "00 · 로그 보기",
+      title: "02 · 로그 보기",
       description: "번호 선택, 로그 선택",
       category: TutorialCategories.etc,
       assetPath: "assets/tutorials/00showlog.mp4",

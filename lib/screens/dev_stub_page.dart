@@ -192,8 +192,8 @@ class DevStubPage extends StatelessWidget {
                         // ✅ 메모: 카드 탭 → 메모 패널 열기
                         _ActionCard(
                           icon: Icons.sticky_note_2_rounded,
-                          title: '메모',
-                          subtitle: '플로팅 버블 · 어디서나 기록',
+                          title: 'MarkDown',
+                          subtitle: 'Obsidian',
                           bg: cs.primaryContainer,
                           fg: cs.onPrimaryContainer,
                           tintColor: kDevTint.withOpacity(0.45),
