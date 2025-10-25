@@ -81,6 +81,7 @@ dependencies:
 
   # PDF For Send Mail
   pdf: ^3.11.3
+  pdfx: ^2.9.2
 
 dev_dependencies:
   flutter_test:
@@ -104,6 +105,7 @@ flutter:
     - assets/tutorials/
     # ⬇⬇⬇ PDF 전용 폰트 자원(디렉터리 전체 포함)
     - assets/fonts/NotoSansKR/
+    - assets/00.basic.pdf
 
 # ↓↓↓ 최상위 레벨 설정 블록 (dev_dependencies 밖)
 flutter_launcher_icons:

@@ -1,6 +1,8 @@
 // lib/screens/head_stub_page.dart
+import 'dart:io'; // ⬅️ 파일 경로 열기 대비(에셋 사용 시에도 무해)
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:pdfx/pdfx.dart'; // ⬅️ PDF 뷰어
 
 import '../routes.dart';
 import 'head_package/head_memo.dart';
@@ -136,7 +138,6 @@ class HeadStubPage extends StatelessWidget {
                           tintColor: calLight,
                           titleColor: calDark,
                           onTap: () {
-                            // ⬇️ 라우트 푸시 → "전체 화면 바텀시트"로 오픈
                             CompanyCalendarPage.showAsBottomSheet(context);
                           },
                         ),
@@ -149,7 +150,6 @@ class HeadStubPage extends StatelessWidget {
                           tintColor: laborLight,
                           titleColor: laborDark,
                           onTap: () {
-                            // ⬇️ 라우트 푸시 → "전체 화면 바텀시트"로 오픈
                             LaborGuidePage.showAsBottomSheet(context);
                           },
                         ),
@@ -164,7 +164,6 @@ class HeadStubPage extends StatelessWidget {
                           tintColor: hrLight,
                           titleColor: hrDark,
                           onTap: () {
-                            // ✅ 페이지 push → 바텀시트 헬퍼 호출로 변경
                             hr_att.AttendanceCalendar.showAsBottomSheet(context);
                           },
                         ),
@@ -179,7 +178,6 @@ class HeadStubPage extends StatelessWidget {
                           tintColor: attLight,
                           titleColor: attDark,
                           onTap: () {
-                            // ⬇️ 페이지 push → 바텀시트 헬퍼로 변경
                             hr_break.BreakCalendar.showAsBottomSheet(context);
                           },
                         ),
@@ -214,6 +212,38 @@ class HeadStubPage extends StatelessWidget {
                           titleColor: calDark,
                           onTap: () async {
                             await HeadMemo.openPanel();
+                          },
+                        ),
+
+                        // ▼ (신규) 튜토리얼
+                        _ActionCard(
+                          icon: Icons.menu_book_rounded,
+                          title: '튜토리얼',
+                          subtitle: 'PDF 가이드 모음',
+                          bg: const Color(0xFF00695C),
+                          fg: Colors.white,
+                          tintColor: const Color(0xFF80CBC4),
+                          titleColor: const Color(0xFF004D40),
+                          onTap: () async {
+                            final selected = await showModalBottomSheet<TutorialItem>(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => TutorialPickerBottomSheet(
+                                items: const [
+                                  TutorialItem(
+                                    title: '00.basic',
+                                    assetPath: 'assets/00.basic.pdf', // ⬅️ 사용 중인 에셋 경로
+                                  ),
+                                  // 추후 확장: TutorialItem(title: '01.advanced', assetPath: 'assets/01.advanced.pdf'),
+                                ],
+                              ),
+                            );
+
+                            if (selected != null) {
+                              // 바텀시트 닫힌 뒤 푸시
+                              await TutorialPdfViewer.open(context, selected);
+                            }
                           },
                         ),
 
@@ -478,6 +508,182 @@ class _ActionCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// ─────────────────────────────────────────────────────────────────
+/// 튜토리얼: 아이템 / 바텀시트 / PDF 뷰어
+/// ─────────────────────────────────────────────────────────────────
+
+class TutorialItem {
+  final String title;
+  final String? assetPath; // 예: assets/00.basic.pdf
+  final String? filePath;  // 예: /storage/emulated/0/Download/00.basic.pdf
+
+  const TutorialItem({
+    required this.title,
+    this.assetPath,
+    this.filePath,
+  });
+}
+
+class TutorialPickerBottomSheet extends StatelessWidget {
+  final List<TutorialItem> items;
+  const TutorialPickerBottomSheet({super.key, required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return SafeArea(
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.5,
+        minChildSize: 0.35,
+        maxChildSize: 0.9,
+        builder: (_, controller) {
+          return Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              border: Border.all(color: cs.outlineVariant.withOpacity(.35)),
+              boxShadow: [
+                BoxShadow(
+                  color: cs.primary.withOpacity(.06),
+                  blurRadius: 20,
+                  offset: const Offset(0, -6),
+                ),
+              ],
+            ),
+            child: Column(
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: cs.outlineVariant.withOpacity(.6),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const ListTile(
+                  title: Text('튜토리얼', style: TextStyle(fontWeight: FontWeight.w800)),
+                  subtitle: Text('읽을 항목을 선택하세요'),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: ListView.separated(
+                    controller: controller,
+                    itemBuilder: (_, i) {
+                      final item = items[i];
+                      return ListTile(
+                        leading: const Icon(Icons.picture_as_pdf_rounded),
+                        title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                        subtitle: Text(
+                          item.assetPath != null ? '앱 에셋' : '로컬 파일',
+                          style: TextStyle(color: cs.outline),
+                        ),
+                        onTap: () => Navigator.of(context).pop(item),
+                      );
+                    },
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemCount: items.length,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class TutorialPdfViewer extends StatefulWidget {
+  final String title;
+  final PdfControllerPinch controller;
+
+  const TutorialPdfViewer({
+    super.key,
+    required this.title,
+    required this.controller,
+  });
+
+  /// 선택한 튜토리얼을 열기 위한 헬퍼
+  static Future<void> open(BuildContext context, TutorialItem item) async {
+    // ✅ pdfx(2.9.x) 규격에 맞게 Future<PdfDocument>를 준비
+    Future<PdfDocument> futureDoc;
+
+    if (item.assetPath != null) {
+      futureDoc = PdfDocument.openAsset(item.assetPath!);
+    } else if (item.filePath != null) {
+      // 파일 경로가 실제 존재하는지 간단 체크
+      if (!File(item.filePath!).existsSync()) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('PDF 파일을 찾을 수 없습니다.')),
+        );
+        return;
+      }
+      futureDoc = PdfDocument.openFile(item.filePath!);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('열 수 있는 PDF 경로가 없습니다.')),
+      );
+      return;
+    }
+
+    // ✅ Future<PdfDocument>를 그대로 주입
+    final controller = PdfControllerPinch(document: futureDoc);
+
+    // 전체 화면으로 푸시
+    // (iOS/Android 공통, 뒤로가기 시 컨트롤러/문서 자동 정리)
+    // ignore: use_build_context_synchronously
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => TutorialPdfViewer(title: item.title, controller: controller),
+        fullscreenDialog: true,
+      ),
+    );
+  }
+
+  @override
+  State<TutorialPdfViewer> createState() => _TutorialPdfViewerState();
+}
+
+class _TutorialPdfViewerState extends State<TutorialPdfViewer> {
+  @override
+  void dispose() {
+    // ✅ 메모리 정리
+    widget.controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.title),
+        actions: [
+          IconButton(
+            tooltip: '첫 페이지',
+            icon: const Icon(Icons.first_page_rounded),
+            // ✅ 위치 인자 사용 (이름있는 인자 ❌)
+            onPressed: () => widget.controller.jumpToPage(1),
+          ),
+        ],
+      ),
+      body: Container(
+        color: cs.surface,
+        child: PdfViewPinch(
+          controller: widget.controller,
+          onDocumentError: (e) {
+            ScaffoldMessenger.of(context)
+                .showSnackBar(SnackBar(content: Text('PDF 오류: $e')));
+          },
         ),
       ),
     );

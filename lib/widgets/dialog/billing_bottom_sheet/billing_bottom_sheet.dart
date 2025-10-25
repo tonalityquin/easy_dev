@@ -96,6 +96,12 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
   final TextEditingController _amountController = TextEditingController();
   final TextEditingController _reasonController = TextEditingController();
 
+  // ⬇️ 포커스/가시화용
+  final FocusNode _amountFocus = FocusNode();
+  final FocusNode _reasonFocus = FocusNode();
+  final GlobalKey _amountKey = GlobalKey();
+  final GlobalKey _reasonKey = GlobalKey();
+
   final formatCurrency = NumberFormat("#,###", "ko_KR");
   final formatDate = DateFormat("yyyy-MM-dd HH시 mm분");
 
@@ -105,10 +111,37 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
   bool get isRegular => billType == BillType.fixed;
 
   @override
+  void initState() {
+    super.initState();
+    // 포커스되면 해당 위젯을 가시영역으로 스크롤
+    _amountFocus.addListener(() {
+      if (_amountFocus.hasFocus) _ensureVisible(_amountKey.currentContext);
+    });
+    _reasonFocus.addListener(() {
+      if (_reasonFocus.hasFocus) _ensureVisible(_reasonKey.currentContext);
+    });
+  }
+
+  @override
   void dispose() {
     _amountController.dispose();
     _reasonController.dispose();
+    _amountFocus.dispose();
+    _reasonFocus.dispose();
     super.dispose();
+  }
+
+  void _ensureVisible(BuildContext? target) {
+    if (target == null) return;
+    // 프레임 이후에 스크롤 보장
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Scrollable.ensureVisible(
+        target,
+        alignment: 0.25, // 위쪽에 약간의 여유
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   int _calculateBaseFee() {
@@ -165,7 +198,12 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
   Widget build(BuildContext context) {
     final baseFee = _calculateBaseFee();
     final lockedFee = _getLockedFee();
+
+    // 키보드 높이
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    // 하단 버튼바 대략 높이(패딩 포함)
+    const bottomBarHeight = 64.0;
+    final listBottomSpacer = bottomInset + bottomBarHeight + 24.0;
 
     return SafeArea(
       child: Material(
@@ -313,6 +351,8 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
                                         _amountController.clear();
                                         _reasonController.clear();
                                       });
+                                      // 모드 변경 시 스크롤 위치 보정
+                                      _ensureVisible(_amountKey.currentContext);
                                     },
                                     style: ElevatedButton.styleFrom(
                                       elevation: 0,
@@ -334,44 +374,56 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
 
                           if (_feeMode != FeeMode.normal) ...[
                             const SizedBox(height: 16),
-                            TextField(
-                              controller: _amountController,
-                              keyboardType: TextInputType.number,
-                              textInputAction: TextInputAction.next,
-                              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                              decoration: InputDecoration(
-                                labelText: _feeMode == FeeMode.plus ? '할증 금액 입력' : '할인 금액 입력',
-                                border: const OutlineInputBorder(),
-                                focusedBorder: OutlineInputBorder(
-                                  borderSide: BorderSide(color: base, width: 1.6),
-                                  borderRadius: BorderRadius.circular(4),
+                            // 금액 입력
+                            Container(
+                              key: _amountKey,
+                              child: TextField(
+                                focusNode: _amountFocus,
+                                controller: _amountController,
+                                keyboardType: TextInputType.number,
+                                textInputAction: TextInputAction.next,
+                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                decoration: InputDecoration(
+                                  labelText: _feeMode == FeeMode.plus ? '할증 금액 입력' : '할인 금액 입력',
+                                  border: const OutlineInputBorder(),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(color: base, width: 1.6),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  suffixText: '₩',
                                 ),
-                                suffixText: '₩',
+                                onTap: () => _ensureVisible(_amountKey.currentContext),
+                                onChanged: (value) {
+                                  setState(() {
+                                    _userAdjustment = int.tryParse(value) ?? 0;
+                                  });
+                                },
                               ),
-                              onChanged: (value) {
-                                setState(() {
-                                  _userAdjustment = int.tryParse(value) ?? 0;
-                                });
-                              },
                             ),
                             const SizedBox(height: 16),
-                            TextField(
-                              controller: _reasonController,
-                              textInputAction: TextInputAction.done,
-                              decoration: InputDecoration(
-                                labelText: '사유를 입력하세요',
-                                border: const OutlineInputBorder(),
-                                focusedBorder: OutlineInputBorder(
-                                  borderSide: BorderSide(color: base, width: 1.6),
-                                  borderRadius: BorderRadius.circular(4),
+                            // 사유 입력
+                            Container(
+                              key: _reasonKey,
+                              child: TextField(
+                                focusNode: _reasonFocus,
+                                controller: _reasonController,
+                                textInputAction: TextInputAction.done,
+                                decoration: InputDecoration(
+                                  labelText: '사유를 입력하세요',
+                                  border: const OutlineInputBorder(),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderSide: BorderSide(color: base, width: 1.6),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  prefixIcon: Icon(Icons.edit_note, color: dark),
                                 ),
-                                prefixIcon: Icon(Icons.edit_note, color: dark),
+                                onTap: () => _ensureVisible(_reasonKey.currentContext),
+                                onChanged: (value) {
+                                  setState(() {
+                                    _inputReason = value.trim();
+                                  });
+                                },
                               ),
-                              onChanged: (value) {
-                                setState(() {
-                                  _inputReason = value.trim();
-                                });
-                              },
                             ),
                           ],
 
@@ -380,8 +432,9 @@ class _BillingBottomSheetState extends State<BillingBottomSheet> {
                             '예상 정산 금액: ₩${formatCurrency.format(lockedFee)}',
                             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold).copyWith(color: dark),
                           ),
-                          const SizedBox(height: 12),
-                          // 하단 버튼은 별도의 고정 영역에서 처리 (아래 SafeArea)
+
+                          // ⬇️ 스크롤 여유: 키보드 + 하단 버튼바를 고려해 확보
+                          SizedBox(height: listBottomSpacer),
                         ],
                       ),
                     ),
