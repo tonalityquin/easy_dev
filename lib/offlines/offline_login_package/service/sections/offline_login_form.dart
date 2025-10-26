@@ -1,27 +1,11 @@
-// lib/offlines/login_package/service/sections/offline_login_form.dart
-// ─────────────────────────────────────────────────────────────────────────────
 import 'package:flutter/material.dart';
 import '../../../../routes.dart'; // ✅ AppRoutes 사용 (경로는 현재 파일 위치 기준)
 import '../offline_login_controller.dart';
 
-/// Hubs 카드 팔레트를 Theme에 실어 전달하기 위한 확장.
-/// SelectorHubs에서 아래 확장을 Theme에 넣어주면 이 폼이 해당 값을 자동으로 사용합니다.
-/// 예)
-// Theme(
-//   data: theme.copyWith(
-//     extensions: <ThemeExtension<dynamic>>[
-//       const HubCardsPalette(
-//         offlinePrimary: Color(0xFFF4511E), // ← 오프라인 카드 base
-//         offlineTint: Color(0xFFFFAB91),    // ← 오프라인 카드 light
-//       ),
-//     ],
-//   ),
-//   child: ...
-// )
 @immutable
 class HubCardsPalette extends ThemeExtension<HubCardsPalette> {
-  final Color? offlinePrimary; // 오프라인 카드 메인
-  final Color? offlineTint;    // 오프라인 카드 틴트/보조
+  final Color? offlinePrimary;
+  final Color? offlineTint;
 
   const HubCardsPalette({this.offlinePrimary, this.offlineTint});
 
@@ -43,18 +27,14 @@ class HubCardsPalette extends ThemeExtension<HubCardsPalette> {
   }
 }
 
-/// 폼 내부에서 사용할 팔레트 리졸버.
-/// 1) Theme.extensions의 HubCardsPalette에서 색을 읽어오고
-/// 2) 없으면 오프라인 서비스 카드 팔레트(주황 계열)로 폴백합니다.
 class _OfflineCardPalette {
   final Color base;
   final Color tint;
 
   const _OfflineCardPalette({required this.base, required this.tint});
 
-  // ⬇️ ParkingCard 팔레트와 동일하게 폴백 색상 적용
-  static const Color _fallbackBase = Color(0xFFF4511E); // base (오프라인 카드)
-  static const Color _fallbackTint = Color(0xFFFFAB91); // light(tint) (오프라인 카드)
+  static const Color _fallbackBase = Color(0xFFF4511E);
+  static const Color _fallbackTint = Color(0xFFFFAB91);
 
   static _OfflineCardPalette of(BuildContext context) {
     final ext = Theme.of(context).extension<HubCardsPalette>();
@@ -80,11 +60,10 @@ class _OfflineLoginFormState extends State<OfflineLoginForm> {
   @override
   void initState() {
     super.initState();
-    _controller = widget.controller; // ✅ init은 상위(LoginScreen)에서만 수행
+    _controller = widget.controller;
   }
 
   void _handleLogin() {
-    // ✅ BuildContext와 setState를 둘 다 넘깁니다.
     _controller.login(context, setState);
   }
 
@@ -97,7 +76,7 @@ class _OfflineLoginFormState extends State<OfflineLoginForm> {
   @override
   Widget build(BuildContext context) {
     final baseTheme = Theme.of(context);
-    final pal = _OfflineCardPalette.of(context); // ⬅ 오프라인 카드 색 추출
+    final pal = _OfflineCardPalette.of(context);
 
     final themed = baseTheme.copyWith(
       colorScheme: baseTheme.colorScheme.copyWith(
@@ -126,7 +105,6 @@ class _OfflineLoginFormState extends State<OfflineLoginForm> {
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
-        // 라벨/힌트 기본은 테마 그대로 두고, 포커스/아이콘 색만 액센트
         focusedBorder: OutlineInputBorder(
           borderSide: BorderSide(color: pal.base, width: 1.6),
           borderRadius: BorderRadius.circular(10),
@@ -136,10 +114,10 @@ class _OfflineLoginFormState extends State<OfflineLoginForm> {
           borderRadius: BorderRadius.circular(10),
         ),
         prefixIconColor: MaterialStateColor.resolveWith(
-              (states) => states.contains(MaterialState.focused) ? pal.base : Colors.black54,
+          (states) => states.contains(MaterialState.focused) ? pal.base : Colors.black54,
         ),
         suffixIconColor: MaterialStateColor.resolveWith(
-              (states) => states.contains(MaterialState.focused) ? pal.base : Colors.black54,
+          (states) => states.contains(MaterialState.focused) ? pal.base : Colors.black54,
         ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       ),
@@ -154,7 +132,6 @@ class _OfflineLoginFormState extends State<OfflineLoginForm> {
       color: Colors.transparent,
       child: SafeArea(
         child: Theme(
-          // ✅ 오프라인 로그인 폼에만 카드 팔레트 적용
           data: themed,
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -172,21 +149,19 @@ class _OfflineLoginFormState extends State<OfflineLoginForm> {
 
                 const SizedBox(height: 12),
 
-                // 이름
                 TextField(
                   controller: _controller.nameController,
                   focusNode: _controller.nameFocus,
                   textInputAction: TextInputAction.next,
-                  onSubmitted: (_) =>
-                      FocusScope.of(context).requestFocus(_controller.phoneFocus),
+                  onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.phoneFocus),
                   decoration: _controller
                       .inputDecoration(
-                    label: "이름",
-                    icon: Icons.person,
-                  )
+                        label: "이름",
+                        icon: Icons.person,
+                      )
                       .copyWith(
-                    hintText: 'tester', // ⬅ 힌트 추가
-                  ),
+                        hintText: 'tester',
+                      ),
                 ),
                 const SizedBox(height: 16),
 
@@ -196,18 +171,16 @@ class _OfflineLoginFormState extends State<OfflineLoginForm> {
                   focusNode: _controller.phoneFocus,
                   keyboardType: TextInputType.phone,
                   textInputAction: TextInputAction.next,
-                  onChanged: (value) =>
-                      _controller.formatPhoneNumber(value, setState),
-                  onSubmitted: (_) => FocusScope.of(context)
-                      .requestFocus(_controller.passwordFocus),
+                  onChanged: (value) => _controller.formatPhoneNumber(value, setState),
+                  onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.passwordFocus),
                   decoration: _controller
                       .inputDecoration(
-                    label: "전화번호",
-                    icon: Icons.phone,
-                  )
+                        label: "전화번호",
+                        icon: Icons.phone,
+                      )
                       .copyWith(
-                    hintText: '01012345678', // ⬅ 힌트 추가
-                  ),
+                        hintText: '01012345678',
+                      ),
                 ),
                 const SizedBox(height: 16),
 
@@ -220,25 +193,21 @@ class _OfflineLoginFormState extends State<OfflineLoginForm> {
                   onSubmitted: (_) => _onLoginButtonPressed(),
                   decoration: _controller
                       .inputDecoration(
-                    label: "비밀번호(5자리 이상)",
-                    icon: Icons.lock,
-                    suffixIcon: IconButton(
-                      icon: Icon(_controller.obscurePassword
-                          ? Icons.visibility_off
-                          : Icons.visibility),
-                      onPressed: () =>
-                          setState(() => _controller.togglePassword()),
-                      tooltip: _controller.obscurePassword ? '표시' : '숨기기',
-                    ),
-                  )
+                        label: "비밀번호(5자리 이상)",
+                        icon: Icons.lock,
+                        suffixIcon: IconButton(
+                          icon: Icon(_controller.obscurePassword ? Icons.visibility_off : Icons.visibility),
+                          onPressed: () => setState(() => _controller.togglePassword()),
+                          tooltip: _controller.obscurePassword ? '표시' : '숨기기',
+                        ),
+                      )
                       .copyWith(
-                    hintText: '12345', // ⬅ 힌트 추가
-                  ),
+                        hintText: '12345',
+                      ),
                 ),
 
                 const SizedBox(height: 32),
 
-                // ▶ 팔레트 반영된 기본 ElevatedButtonTheme 사용
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
@@ -251,18 +220,15 @@ class _OfflineLoginFormState extends State<OfflineLoginForm> {
                         letterSpacing: 1.1,
                       ),
                     ),
-                    onPressed:
-                    _controller.isLoading ? null : _onLoginButtonPressed,
+                    onPressed: _controller.isLoading ? null : _onLoginButtonPressed,
                   ),
                 ),
 
                 const SizedBox(height: 1),
 
-                // ▼ 펠리컨: 탭하면 LoginSelectorPage로 복귀
                 Center(
                   child: InkWell(
-                    onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
-                        AppRoutes.selector, (route) => false),
+                    onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.selector, (route) => false),
                     borderRadius: BorderRadius.circular(8),
                     child: SizedBox(
                       height: 80,

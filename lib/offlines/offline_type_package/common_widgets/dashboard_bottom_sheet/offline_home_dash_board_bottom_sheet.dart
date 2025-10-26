@@ -1,17 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../../../../offline_logout_helper.dart';
+import '../../../utils/offline_logout_helper.dart';
 import 'widgets/home_user_info_card.dart';
 
-// ▼ SQLite / 세션 (경로는 프로젝트에 맞게 조정하세요)
-import '../../../sql/offline_auth_db.dart'; // ← 경로 조정
-import '../../../sql/offline_auth_service.dart'; // ← 경로 조정
+import '../../../sql/offline_auth_db.dart';
+import '../../../sql/offline_auth_service.dart';
 
-// ▼ 로그아웃 헬퍼 (경로는 프로젝트에 맞게 조정하세요)
-
-
-// ▼ 라우트 (경로/상수명은 프로젝트에 맞게 조정하세요)
-import '../../../../../../routes.dart'; // 예: AppRoutes.selector
+import '../../../../../../routes.dart';
 
 class OfflineHomeDashBoardBottomSheet extends StatefulWidget {
   const OfflineHomeDashBoardBottomSheet({super.key});
@@ -21,20 +16,13 @@ class OfflineHomeDashBoardBottomSheet extends StatefulWidget {
 }
 
 class _OfflineHomeDashBoardBottomSheetState extends State<OfflineHomeDashBoardBottomSheet> {
-  // true = 숨김(기본), false = 펼침
   bool _layerHidden = true;
 
-  // 퇴근 처리/로그아웃 중 중복 탭 방지
   bool _processingClockOut = false;
   bool _processingLogout = false;
 
-  // 숫자만 추출(전화번호 비교용)
   String _digits(String s) => s.replaceAll(RegExp(r'[^0-9]'), '');
 
-  /// 퇴근 처리: offline_accounts.isWorking = 0
-  /// - 세션 userId 또는 phone(숫자만 비교)로 타깃 행을 찾고
-  /// - 없으면 isSelected=1 행으로 폴백
-  /// - 성공 시 selector 페이지로 이동
   Future<void> _clockOut() async {
     if (_processingClockOut) return;
     setState(() => _processingClockOut = true);
@@ -44,7 +32,6 @@ class _OfflineHomeDashBoardBottomSheetState extends State<OfflineHomeDashBoardBo
       final db = await OfflineAuthDb.instance.database;
 
       final ok = await db.transaction<bool>((txn) async {
-        // 후보 탐색용 전체 행(필요 컬럼만)
         final all = await txn.query(
           OfflineAuthDb.tableAccounts,
           columns: const ['userId', 'phone', 'isSelected', 'isWorking'],
@@ -52,12 +39,10 @@ class _OfflineHomeDashBoardBottomSheetState extends State<OfflineHomeDashBoardBo
 
         String? targetUserId;
 
-        // 세션 정보
         final sessUid = (session?.userId ?? '').trim();
         final sessPhoneDigits = _digits(session?.phone ?? '');
         final sessUidDigits = _digits(sessUid);
 
-        // 1) userId 일치 → 2) phone 숫자 == userId 숫자 → 3) phone 숫자 == session.phone 숫자
         for (final r in all) {
           final uid = (r['userId'] as String?)?.trim() ?? '';
           final phone = (r['phone'] as String?) ?? '';
@@ -77,7 +62,6 @@ class _OfflineHomeDashBoardBottomSheetState extends State<OfflineHomeDashBoardBo
           }
         }
 
-        // 4) 후보 없으면 isSelected=1 행 사용
         if (targetUserId == null) {
           final sel = await txn.query(
             OfflineAuthDb.tableAccounts,
@@ -91,11 +75,9 @@ class _OfflineHomeDashBoardBottomSheetState extends State<OfflineHomeDashBoardBo
         }
 
         if (targetUserId == null || targetUserId.isEmpty) {
-          // 타깃 행 없음
           return false;
         }
 
-        // 퇴근: isWorking = 0
         final upd = await txn.update(
           OfflineAuthDb.tableAccounts,
           {'isWorking': 0},
@@ -109,15 +91,13 @@ class _OfflineHomeDashBoardBottomSheetState extends State<OfflineHomeDashBoardBo
       if (!mounted) return;
 
       if (ok) {
-        // (선택) 사용자 피드백
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('퇴근 처리 완료되었습니다.')),
         );
 
-        // ✅ selector 페이지로 이동 (스택 비우기)
         Navigator.of(context).pushNamedAndRemoveUntil(
-          AppRoutes.selector, // 프로젝트 라우트에 맞게 조정
-              (route) => false,
+          AppRoutes.selector,
+          (route) => false,
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -137,17 +117,13 @@ class _OfflineHomeDashBoardBottomSheetState extends State<OfflineHomeDashBoardBo
     }
   }
 
-  /// 오프라인 로그아웃: 세션 삭제 후 로그인/셀렉터 화면으로 이동(스택 제거)
   Future<void> _logout() async {
     if (_processingLogout) return;
     setState(() => _processingLogout = true);
     try {
       await OfflineLogoutHelper.logoutAndGoToLogin(
         context,
-        // 프로젝트의 로그인(or 셀렉터) 라우트 이름으로 조정하세요.
         loginRoute: AppRoutes.selector,
-        // 또는 loginBuilder를 사용하려면 아래처럼 전달:
-        // loginBuilder: (_) => const LoginScreen(),
       );
     } catch (e, st) {
       debugPrint('❌ logout 실패: $e\n$st');
@@ -193,8 +169,6 @@ class _OfflineHomeDashBoardBottomSheetState extends State<OfflineHomeDashBoardBo
                 const SizedBox(height: 16),
                 const HomeUserInfoCard(),
                 const SizedBox(height: 16),
-
-                // 레이어(토글) 버튼: 기본 true(숨김) → 누르면 false(펼침)
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
@@ -204,17 +178,13 @@ class _OfflineHomeDashBoardBottomSheetState extends State<OfflineHomeDashBoardBo
                     onPressed: () => setState(() => _layerHidden = !_layerHidden),
                   ),
                 ),
-
                 const SizedBox(height: 16),
-
-                // 숨김/펼침 영역
                 AnimatedCrossFade(
                   duration: const Duration(milliseconds: 200),
                   crossFadeState: _layerHidden ? CrossFadeState.showFirst : CrossFadeState.showSecond,
                   firstChild: const SizedBox.shrink(),
                   secondChild: Column(
                     children: [
-                      // 오프라인 퇴근하기
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
@@ -225,8 +195,6 @@ class _OfflineHomeDashBoardBottomSheetState extends State<OfflineHomeDashBoardBo
                         ),
                       ),
                       const SizedBox(height: 16),
-
-                      // ✅ 오프라인 로그아웃 (세션 삭제 + 로그인/셀렉터로 이동)
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
@@ -240,10 +208,7 @@ class _OfflineHomeDashBoardBottomSheetState extends State<OfflineHomeDashBoardBo
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 16),
-
-                // 접힘 상태일 때 하단 여백
                 if (_layerHidden) const SizedBox(height: 16),
               ],
             ),
@@ -255,7 +220,6 @@ class _OfflineHomeDashBoardBottomSheetState extends State<OfflineHomeDashBoardBo
 }
 
 ButtonStyle _layerToggleBtnStyle() {
-  // 토글 버튼도 공통 톤 유지(화이트 + 블랙)
   return ElevatedButton.styleFrom(
     backgroundColor: Colors.white,
     foregroundColor: Colors.black,
@@ -267,7 +231,6 @@ ButtonStyle _layerToggleBtnStyle() {
 }
 
 ButtonStyle _clockOutBtnStyle() {
-  // 눈에 띄도록 경고톤 보더만 살짝 진하게(실수 방지 목적)
   return ElevatedButton.styleFrom(
     backgroundColor: Colors.white,
     foregroundColor: Colors.black,
@@ -279,7 +242,6 @@ ButtonStyle _clockOutBtnStyle() {
 }
 
 ButtonStyle _logoutBtnStyle() {
-  // 로그아웃은 중립 톤(파란 회색 보더)
   return ElevatedButton.styleFrom(
     backgroundColor: Colors.white,
     foregroundColor: Colors.black,

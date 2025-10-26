@@ -1,7 +1,3 @@
-// Enhanced: 섹션/썸네일/길이표시 + 탭 시 미리보기(Chewie) + 전체화면 재생
-// - 타이틀→경로 매핑 제거, TutorialVideoItem.assetPath 직접 사용 (UI에는 노출하지 않음)
-// Location: lib/offlines/tutorial/offline_tutorial_bottom_sheet.dart
-
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
@@ -52,6 +48,7 @@ Future<void> offlineTutorialBottomSheet({
 class _TutorialList extends StatefulWidget {
   final BuildContext rootContext;
   final ScrollController scrollController;
+
   const _TutorialList({
     required this.rootContext,
     required this.scrollController,
@@ -62,7 +59,6 @@ class _TutorialList extends StatefulWidget {
 }
 
 class _TutorialListState extends State<_TutorialList> {
-  // 팔레트 (오프라인 서비스 카드와 동일 계열)
   static const base = Color(0xFFF4511E);
   static const dark = Color(0xFFD84315);
   static const light = Color(0xFFFFAB91);
@@ -85,7 +81,6 @@ class _TutorialListState extends State<_TutorialList> {
     super.dispose();
   }
 
-  // ---- 썸네일 생성/캐시 (assets -> temp file -> thumbnail)
   Future<Uint8List?> _thumbnailForAsset(String assetPath) {
     return _thumbFutures.putIfAbsent(assetPath, () async {
       try {
@@ -100,7 +95,6 @@ class _TutorialListState extends State<_TutorialList> {
           return await cached.readAsBytes();
         }
 
-        // asset -> temp mp4
         final data = await rootBundle.load(assetPath);
         final tmpMp4 = File('${thumbsDir.path}/$key.source.mp4');
         await tmpMp4.writeAsBytes(data.buffer.asUint8List());
@@ -109,7 +103,7 @@ class _TutorialListState extends State<_TutorialList> {
           video: tmpMp4.path,
           imageFormat: ImageFormat.JPEG,
           quality: 80,
-          timeMs: 500, // 0.5초 지점
+          timeMs: 500,
         );
         if (bytes != null) {
           await cached.writeAsBytes(bytes, flush: true);
@@ -121,7 +115,6 @@ class _TutorialListState extends State<_TutorialList> {
     });
   }
 
-  // ---- 길이(재생시간) 로드/캐시
   Future<Duration?> _loadDuration(int index, String assetPath) async {
     if (_durationCache.containsKey(index)) return _durationCache[index];
     VideoPlayerController? v;
@@ -138,27 +131,24 @@ class _TutorialListState extends State<_TutorialList> {
     }
   }
 
-  // ---- 미리보기 토글 (한 번에 하나만)
   Future<void> _togglePreview(int index, String assetPath) async {
     if (_expandedIndex == index) {
       _disposePreview(index);
       setState(() => _expandedIndex = null);
       return;
     }
-    // 기존 프리뷰 정리
     if (_expandedIndex != null) {
       _disposePreview(_expandedIndex!);
     }
-    // 새 프리뷰 세팅
     final v = VideoPlayerController.asset(assetPath);
     await v.initialize();
     await v.setLooping(true);
-    await v.setVolume(0); // 미리보기는 무음
+    await v.setVolume(0);
     final c = ChewieController(
       videoPlayerController: v,
       autoPlay: true,
       looping: true,
-      showControls: false, // 미리보기는 컨트롤 숨김
+      showControls: false,
       allowMuting: true,
       allowFullScreen: false,
     );
@@ -180,14 +170,13 @@ class _TutorialListState extends State<_TutorialList> {
     final m = d.inMinutes.remainder(60);
     final s = d.inSeconds.remainder(60);
     if (h > 0) {
-      return "${h.toString().padLeft(2,'0')}:${m.toString().padLeft(2,'0')}:${s.toString().padLeft(2,'0')}";
+      return "${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}";
     }
-    return "${m.toString().padLeft(2,'0')}:${s.toString().padLeft(2,'0')}";
+    return "${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}";
   }
 
   @override
   Widget build(BuildContext context) {
-    // 섹션 그룹핑
     final items = TutorialVideos.items;
     final Map<String, List<TutorialVideoItem>> grouped = {};
     for (final it in items) {
@@ -200,7 +189,6 @@ class _TutorialListState extends State<_TutorialList> {
         if (!TutorialCategories.ordered.contains(cat)) cat,
     ];
 
-    // 화면
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -217,7 +205,6 @@ class _TutorialListState extends State<_TutorialList> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
         children: [
-          // 그립바
           Container(
             width: 40,
             height: 4,
@@ -232,17 +219,13 @@ class _TutorialListState extends State<_TutorialList> {
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700).copyWith(color: dark),
           ),
           const SizedBox(height: 8),
-
-          // 리스트
           Expanded(
             child: ListView.builder(
               controller: widget.scrollController,
               itemCount: orderedSections.fold<int>(0, (sum, cat) => sum + 1 + (grouped[cat]?.length ?? 0)),
               itemBuilder: (context, i) {
-                // 플래튼 인덱스를 섹션/아이템으로 변환
                 int cursor = 0;
                 for (final cat in orderedSections) {
-                  // 섹션 헤더
                   if (i == cursor) {
                     return _sectionHeader(cat);
                   }
@@ -251,7 +234,7 @@ class _TutorialListState extends State<_TutorialList> {
                   final list = grouped[cat]!;
                   for (final item in list) {
                     if (i == cursor) {
-                      final itemIndex = TutorialVideos.items.indexOf(item); // 원본 인덱스
+                      final itemIndex = TutorialVideos.items.indexOf(item);
                       return _buildRow(itemIndex, item);
                     }
                     cursor++;
@@ -261,7 +244,6 @@ class _TutorialListState extends State<_TutorialList> {
               },
             ),
           ),
-
           const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
@@ -308,13 +290,12 @@ class _TutorialListState extends State<_TutorialList> {
 
   Widget _buildRow(int index, TutorialVideoItem item) {
     final isExpanded = _expandedIndex == index;
-    // 사용자에게는 assetPath를 노출하지 않음 (내부 사용만)
     final assetPath = item.assetPath;
 
     return Column(
       children: [
         InkWell(
-          onTap: () => _togglePreview(index, assetPath), // 탭 → 미리보기 토글
+          onTap: () => _togglePreview(index, assetPath),
           child: Padding(
             padding: const EdgeInsets.symmetric(vertical: 6.0),
             child: Row(
@@ -327,11 +308,11 @@ class _TutorialListState extends State<_TutorialList> {
                     final thumb = (bytes != null && bytes.isNotEmpty)
                         ? Image.memory(bytes, width: 96, height: 54, fit: BoxFit.cover)
                         : Container(
-                      width: 96,
-                      height: 54,
-                      color: base.withOpacity(.08),
-                      child: const Icon(CupertinoIcons.play_rectangle, size: 26, color: Colors.grey),
-                    );
+                            width: 96,
+                            height: 54,
+                            color: base.withOpacity(.08),
+                            child: const Icon(CupertinoIcons.play_rectangle, size: 26, color: Colors.grey),
+                          );
                     return ClipRRect(
                       borderRadius: BorderRadius.circular(8),
                       child: thumb,
@@ -340,7 +321,6 @@ class _TutorialListState extends State<_TutorialList> {
                 ),
                 const SizedBox(width: 12),
 
-                // 제목/설명/길이 (assetPath는 노출하지 않음)
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -381,12 +361,11 @@ class _TutorialListState extends State<_TutorialList> {
                 ),
 
                 const SizedBox(width: 8),
-                // 전체화면 버튼
                 IconButton(
                   tooltip: '전체 화면',
                   icon: const Icon(CupertinoIcons.play_circle, size: 24, color: Colors.grey),
                   onPressed: () {
-                    Navigator.of(context).pop(); // 시트 닫고
+                    Navigator.of(context).pop();
                     Navigator.of(widget.rootContext).push(
                       MaterialPageRoute(builder: (_) => OfflineVideoPlayerPage(item: item)),
                     );
@@ -396,16 +375,12 @@ class _TutorialListState extends State<_TutorialList> {
             ),
           ),
         ),
-
-        // 미리보기 영역 (Chewie, 무음/루프)
         AnimatedCrossFade(
           firstChild: const SizedBox.shrink(),
           secondChild: _buildPreviewPlayer(index),
           crossFadeState: isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
           duration: const Duration(milliseconds: 220),
         ),
-
-        // 구분선
         Divider(height: 12, color: light.withOpacity(.25)),
       ],
     );
@@ -414,7 +389,6 @@ class _TutorialListState extends State<_TutorialList> {
   Widget _buildPreviewPlayer(int index) {
     final c = _cCtrls[index];
     if (c == null) {
-      // 초기화 중일 수 있음
       return Container(
         height: 180,
         alignment: Alignment.center,

@@ -4,9 +4,8 @@ import '../../../utils/snackbar_helper.dart';
 import '../../../utils/sheets_config.dart';
 import 'package:easydev/routes.dart';
 
-import '../../offline_logout_helper.dart';
+import '../utils/offline_logout_helper.dart';
 
-// 섹션 위젯들
 import 'commute_inside_package/offline_commute_inside_controller.dart';
 import 'commute_inside_package/sections/offline_commute_inside_report_button_section.dart';
 import 'commute_inside_package/sections/offline_commute_inside_work_button_section.dart';
@@ -23,7 +22,6 @@ class OfflineCommuteInsideScreen extends StatefulWidget {
 class _OfflineCommuteInsideScreenState extends State<OfflineCommuteInsideScreen> {
   final controller = OfflineCommuteInsideController();
 
-  // ✅ 세션(메모리) 보관: 영구 저장 제거
   String? kakaoUrl;
   bool loadingUrl = true;
   bool _isLoading = false;
@@ -32,29 +30,24 @@ class _OfflineCommuteInsideScreenState extends State<OfflineCommuteInsideScreen>
   void initState() {
     super.initState();
 
-    // 컨트롤러 초기화(현재는 DB 기반이라 특이 작업 없음)
     controller.initialize(context);
 
-    // 최초 진입 시 1회: URL 로딩 + DB기반 자동 라우팅
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _loadCustomKakaoUrl(); // 세션 메모리 초기값만 세팅
       if (!mounted) return;
 
-      // ✅ UserState 없이 DB의 isWorking==1이면 자동 라우팅
       controller.redirectIfWorkingDb(context);
     });
   }
 
-  // ✅ 영구 저장 삭제: 초기값 세팅만 하고 로딩 종료
   Future<void> _loadCustomKakaoUrl() async {
     if (!mounted) return;
     setState(() {
-      kakaoUrl = null; // 초기값은 없음(세션 보관)
+      kakaoUrl = null;
       loadingUrl = false;
     });
   }
 
-  /// 공용: 전체 높이(최상단까지)로 올라오는 흰색 바텀시트를 띄우는 헬퍼
   Future<T?> _showFullHeightSheet<T>({
     required WidgetBuilder childBuilder,
   }) {
@@ -88,7 +81,6 @@ class _OfflineCommuteInsideScreenState extends State<OfflineCommuteInsideScreen>
     );
   }
 
-  // ✅ 영구 저장(SharedPreferences) → 세션(상태) 변경
   void _handleChangeUrl(BuildContext context) async {
     final urlTextCtrl = TextEditingController(text: kakaoUrl ?? '');
 
@@ -173,7 +165,6 @@ class _OfflineCommuteInsideScreenState extends State<OfflineCommuteInsideScreen>
   }
 
   Future<void> _handleLogout(BuildContext context) async {
-    // ✨ 오프라인 세션 삭제 후 오프라인 로그인으로 복귀
     await OfflineLogoutHelper.logoutAndGoToLogin(
       context,
       loginRoute: AppRoutes.offlineLogin,
@@ -182,7 +173,6 @@ class _OfflineCommuteInsideScreenState extends State<OfflineCommuteInsideScreen>
 
   @override
   Widget build(BuildContext context) {
-    // ✅ 이 화면에서만 뒤로가기로 앱 종료되지 않도록 차단
     return PopScope(
       canPop: false,
       child: Scaffold(
@@ -283,8 +273,6 @@ class _OfflineCommuteInsideScreenState extends State<OfflineCommuteInsideScreen>
                   icon: const Icon(Icons.more_vert),
                 ),
               ),
-
-              // ✅ 로딩 오버레이: UserState 제거 → _isLoading만 사용
               if (_isLoading)
                 Positioned.fill(
                   child: AbsorbPointer(

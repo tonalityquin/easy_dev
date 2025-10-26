@@ -1,4 +1,3 @@
-// lib/screens/selector_hubs_package/update_alert_bar.dart
 import 'package:flutter/material.dart';
 
 class UpdateAlertBar extends StatelessWidget {

@@ -1,11 +1,3 @@
-// lib/offlines/offline_type_package/offline_departure_completed_bottom_sheet.dart
-//
-// 리팩터링 요약
-// - Provider 의존 제거(OfflineFieldSelectedDateState/CalendarState 사용 안 함)
-// - division/area 는 SQLite(offline_auth_db/offline_auth_service)에서 로드
-// - 선택 날짜(selectedDate)는 호출부에서 주입 받아 내부 상태로 관리(+/- 버튼으로 변경)
-// - 날짜 바 위젯도 Provider 미사용 버전으로 교체 및 selectedDate 직접 전달
-
 import 'package:flutter/material.dart';
 
 // ▼ 탭/상단 위젯 (변경 없음)
@@ -23,17 +15,14 @@ class OfflineDepartureCompletedBottomSheet extends StatefulWidget {
     required this.selectedDate,
   });
 
-  /// 호출부에서 주입하는 선택 날짜(yyyy-MM-dd 기준)
   final DateTime selectedDate;
 
   @override
-  State<OfflineDepartureCompletedBottomSheet> createState() =>
-      _OfflineDepartureCompletedBottomSheetState();
+  State<OfflineDepartureCompletedBottomSheet> createState() => _OfflineDepartureCompletedBottomSheetState();
 }
 
-class _OfflineDepartureCompletedBottomSheetState
-    extends State<OfflineDepartureCompletedBottomSheet> {
-  late DateTime _date; // 내부 표시/쿼리용 날짜 상태
+class _OfflineDepartureCompletedBottomSheetState extends State<OfflineDepartureCompletedBottomSheet> {
+  late DateTime _date;
 
   @override
   void initState() {
@@ -49,7 +38,6 @@ class _OfflineDepartureCompletedBottomSheetState
     String division = '';
     String area = '';
 
-    // 1) 현재 사용자 우선
     if (uid.isNotEmpty) {
       final r1 = await db.query(
         OfflineAuthDb.tableAccounts,
@@ -65,7 +53,6 @@ class _OfflineDepartureCompletedBottomSheetState
       }
     }
 
-    // 2) 없으면 isSelected=1 폴백
     if (division.isEmpty || area.isEmpty) {
       final r2 = await db.query(
         OfflineAuthDb.tableAccounts,
@@ -88,11 +75,12 @@ class _OfflineDepartureCompletedBottomSheetState
   DateTime _stripDate(DateTime d) => DateTime(d.year, d.month, d.day);
 
   void _goPrevDay() => setState(() => _date = _stripDate(_date.subtract(const Duration(days: 1))));
+
   void _goNextDay() => setState(() => _date = _stripDate(_date.add(const Duration(days: 1))));
 
   @override
   Widget build(BuildContext context) {
-    const plateNumber = ''; // Settled 탭 라벨 용(실제 SQLite엔 불필요)
+    const plateNumber = '';
 
     return FutureBuilder<(String division, String area)>(
       future: _loadDivisionAndArea(),

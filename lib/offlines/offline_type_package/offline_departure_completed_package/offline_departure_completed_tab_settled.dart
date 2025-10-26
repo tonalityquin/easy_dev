@@ -2,16 +2,12 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
-// ▼ SQLite / 세션
 import '../../sql/offline_auth_db.dart';
 
 import 'widgets/offline_departure_completed_page_merge_log.dart';
 import 'widgets/offline_departure_completed_page_today_log.dart';
-import '../../../utils/snackbar_helper.dart'; // ✅ 커스텀 스낵바 헬퍼 추가
+import '../../../utils/snackbar_helper.dart';
 
-/// SQLite 전용: 정산(완료) 탭
-/// - 오늘 로그: 번호판 4자리로 offline_plates 조회 (status_type='departureCompleted')
-/// - 과거 로그: MergedLogSection 내부에서 처리(GCS/로컬 혼합 로직 그대로)
 class OfflineDepartureCompletedTabSettled extends StatefulWidget {
   const OfflineDepartureCompletedTabSettled({
     super.key,
@@ -31,7 +27,6 @@ class OfflineDepartureCompletedTabSettled extends StatefulWidget {
 }
 
 class _OfflineDepartureCompletedTabSettledState extends State<OfflineDepartureCompletedTabSettled> {
-  // ===== 아코디언 상태: 최대 1개만 열림 =====
   bool _openToday = true;
   bool _openMerged = false;
 
@@ -59,12 +54,10 @@ class _OfflineDepartureCompletedTabSettledState extends State<OfflineDepartureCo
     });
   }
 
-  // ===== 오늘 로그 검색 상태 (SQLite) =====
   final TextEditingController _fourDigitCtrl = TextEditingController();
   bool _isLoading = false;
   bool _hasSearched = false;
 
-  // SQLite에서 읽어온 원시 row들을 그대로 보관
   List<Map<String, Object?>> _resultsRows = [];
   int _selectedResultIndex = 0;
 
@@ -112,7 +105,6 @@ class _OfflineDepartureCompletedTabSettledState extends State<OfflineDepartureCo
 
     try {
       final db = await OfflineAuthDb.instance.database;
-      // status_type='departureCompleted' AND area=... AND plate_four_digit=...
       final rows = await db.query(
         OfflineAuthDb.tablePlates,
         columns: const [
@@ -134,7 +126,6 @@ class _OfflineDepartureCompletedTabSettledState extends State<OfflineDepartureCo
         limit: 50,
       );
 
-      // 첫 번째로 logs가 있는 항목을 기본 선택
       int initialIndex = 0;
       for (int i = 0; i < rows.length; i++) {
         final raw = rows[i]['logs'];
@@ -145,7 +136,9 @@ class _OfflineDepartureCompletedTabSettledState extends State<OfflineDepartureCo
               initialIndex = i;
               break;
             }
-          } catch (_) {/* ignore */}
+          } catch (_) {
+            /* ignore */
+          }
         }
       }
 
@@ -155,7 +148,6 @@ class _OfflineDepartureCompletedTabSettledState extends State<OfflineDepartureCo
         _hasSearched = true;
         _isLoading = false;
         _selectedResultIndex = rows.isEmpty ? 0 : initialIndex;
-        // 검색하면 자연스럽게 '오늘' 섹션 열기
         _openToday = true;
         _openMerged = false;
       });
@@ -184,7 +176,6 @@ class _OfflineDepartureCompletedTabSettledState extends State<OfflineDepartureCo
     super.dispose();
   }
 
-  // ===== 섹션 본문 위젯 빌더들 =====
   Widget _buildTodaySectionBody() {
     if (!_hasSearched) {
       return Center(
@@ -200,7 +191,6 @@ class _OfflineDepartureCompletedTabSettledState extends State<OfflineDepartureCo
       );
     }
 
-    // 다건 결과 칩
     final chips = _resultsRows.asMap().entries.map((entry) {
       final i = entry.key;
       final p = entry.value;
@@ -255,9 +245,8 @@ class _OfflineDepartureCompletedTabSettledState extends State<OfflineDepartureCo
   }
 
   Widget _buildMergedSectionBody() {
-    // MergedLogSection은 내부에서 날짜 선택/불러오기/검색을 모두 처리(GCS/로컬 로직 포함)
     return OfflineDepartureCompletedPageMergeLog(
-      mergedLogs: const <Map<String, dynamic>>[], // 시그니처 호환용, 내부 미사용
+      mergedLogs: const <Map<String, dynamic>>[],
       division: widget.division,
       area: widget.area,
     );
@@ -265,7 +254,6 @@ class _OfflineDepartureCompletedTabSettledState extends State<OfflineDepartureCo
 
   @override
   Widget build(BuildContext context) {
-    // 오늘 검색바 (오늘 섹션과 연동)
     final searchBar = SafeArea(
       top: false,
       child: Row(

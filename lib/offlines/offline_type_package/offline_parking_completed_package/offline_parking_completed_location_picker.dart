@@ -1,12 +1,3 @@
-// lib/screens/type_pages/offline_parking_completed_package/offline_parking_completed_location_picker.dart
-//
-// 리팩터링 요약
-// - Provider(LocationState) / Repository(LocationRepository) 제거
-// - SQLite(offline_auth_db / offline_auth_service)만 사용
-//   · 주차 구역: offline_locations (columns: area, location_name, type['single'|'composite'], parent, capacity)
-//   · 입차 수:   offline_plates   (status_type='parkingCompleted', area=?, GROUP BY location)
-// - 항목별 새로고침/쿨다운 유지(단일 항목만 카운트 재집계)
-//
 import 'package:flutter/material.dart';
 
 // ▼ SQLite / 세션
@@ -15,12 +6,10 @@ import '../../sql/offline_auth_service.dart';
 
 import '../../../utils/snackbar_helper.dart';
 
-/// Offline Service Palette (오프라인 카드와 동일 계열)
 class _Palette {
-  static const base = Color(0xFFF4511E); // primary (주황 계열)
+  static const base = Color(0xFFF4511E);
 }
 
-// status_type 키(PlateType 의존 제거)
 const String _kStatusParkingCompleted = 'parkingCompleted';
 
 class OfflineParkingCompletedLocationPicker extends StatefulWidget {
@@ -34,23 +23,18 @@ class OfflineParkingCompletedLocationPicker extends StatefulWidget {
   });
 
   @override
-  State<OfflineParkingCompletedLocationPicker> createState() =>
-      _OfflineParkingCompletedLocationPickerState();
+  State<OfflineParkingCompletedLocationPicker> createState() => _OfflineParkingCompletedLocationPickerState();
 }
 
-class _OfflineParkingCompletedLocationPickerState
-    extends State<OfflineParkingCompletedLocationPicker> {
+class _OfflineParkingCompletedLocationPickerState extends State<OfflineParkingCompletedLocationPicker> {
   String? selectedParent;
 
-  // 로딩/데이터
   bool _isLoading = true;
   String _area = '';
   List<_LocRow> _singles = [];
   List<_LocRow> _composites = [];
-  // location_name 기준 카운트
   final Map<String, int> _countsByLoc = {};
 
-  // ▶ 항목별 새로고침 상태/쿨다운
   final Set<String> _refreshingNames = {};
   final Map<String, DateTime> _lastItemRefreshedAt = {};
   final Duration _itemCooldown = const Duration(seconds: 20);
@@ -61,7 +45,6 @@ class _OfflineParkingCompletedLocationPickerState
     _loadAll();
   }
 
-  // 세션에서 area 로드 (없으면 isSelected=1 폴백)
   Future<String> _loadCurrentArea() async {
     final db = await OfflineAuthDb.instance.database;
     final session = await OfflineAuthService.instance.currentSession();
@@ -86,14 +69,10 @@ class _OfflineParkingCompletedLocationPickerState
     ))
         .firstOrNull;
 
-    final area = ((row?['currentArea'] as String?) ??
-        (row?['selectedArea'] as String?) ??
-        '')
-        .trim();
+    final area = ((row?['currentArea'] as String?) ?? (row?['selectedArea'] as String?) ?? '').trim();
     return area;
   }
 
-  // 모든 위치/카운트 로드
   Future<void> _loadAll() async {
     setState(() {
       _isLoading = true;
@@ -102,7 +81,6 @@ class _OfflineParkingCompletedLocationPickerState
       final db = await OfflineAuthDb.instance.database;
       final area = await _loadCurrentArea();
 
-      // 위치 로드
       final rows = await db.query(
         OfflineAuthDb.tableLocations,
         columns: const ['type', 'location_name', 'parent', 'capacity'],
@@ -127,7 +105,6 @@ class _OfflineParkingCompletedLocationPickerState
         }
       }
 
-      // 카운트 묶음 조회(GROUP BY location)
       _countsByLoc.clear();
       final cntRows = await db.rawQuery(
         '''
@@ -161,14 +138,12 @@ class _OfflineParkingCompletedLocationPickerState
     }
   }
 
-  // displayName → location_name 파싱
   String _locFromDisplayName(String displayName) {
     final idx = displayName.lastIndexOf(' - ');
     if (idx == -1) return displayName.trim();
     return displayName.substring(idx + 3).trim();
   }
 
-  /// ▶ 단일 displayName만 갱신 (쿨다운 포함)
   Future<void> _refreshOne(String displayName) async {
     final now = DateTime.now();
     final last = _lastItemRefreshedAt[displayName];
@@ -222,170 +197,159 @@ class _OfflineParkingCompletedLocationPickerState
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : Builder(
-          builder: (context) {
-            final locationsEmpty = _singles.isEmpty && _composites.isEmpty;
-            if (locationsEmpty) {
-              return const Center(child: Text('표시할 주차 구역이 없습니다.'));
-            }
+                builder: (context) {
+                  final locationsEmpty = _singles.isEmpty && _composites.isEmpty;
+                  if (locationsEmpty) {
+                    return const Center(child: Text('표시할 주차 구역이 없습니다.'));
+                  }
 
-            // ▶ 부모 선택 상태면 자식 리스트
-            if (selectedParent != null) {
-              final children =
-              _composites.where((loc) => (loc.parent ?? '') == selectedParent).toList();
+                  if (selectedParent != null) {
+                    final children = _composites.where((loc) => (loc.parent ?? '') == selectedParent).toList();
 
-              return Column(
-                children: [
-                  Expanded(
-                    child: ListView(
-                      padding: const EdgeInsets.all(16),
+                    return Column(
                       children: [
-                        const Divider(),
-                        ...children.map((loc) {
-                          final displayName = '${loc.parent} - ${loc.name}';
-                          final busy = _refreshingNames.contains(displayName);
-                          final plateCount = _countOfLoc(loc.name);
+                        Expanded(
+                          child: ListView(
+                            padding: const EdgeInsets.all(16),
+                            children: [
+                              const Divider(),
+                              ...children.map((loc) {
+                                final displayName = '${loc.parent} - ${loc.name}';
+                                final busy = _refreshingNames.contains(displayName);
+                                final plateCount = _countOfLoc(loc.name);
 
-                          return ListTile(
-                            key: ValueKey(displayName),
-                            leading: const Icon(
-                              Icons.subdirectory_arrow_right,
-                              color: _Palette.base,
-                            ),
-                            title: Text(displayName),
-                            subtitle: Text('입차 $plateCount / 공간 ${loc.capacity}'),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (busy)
-                                  const SizedBox(
-                                    width: 20,
-                                    height: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  )
-                                else
-                                  IconButton(
-                                    icon: const Icon(Icons.refresh),
-                                    tooltip: '이 항목만 새로고침',
-                                    onPressed: () => _refreshOne(displayName),
+                                return ListTile(
+                                  key: ValueKey(displayName),
+                                  leading: const Icon(
+                                    Icons.subdirectory_arrow_right,
+                                    color: _Palette.base,
                                   ),
-                                const Icon(Icons.chevron_right),
-                              ],
-                            ),
-                            onTap: () => widget.onLocationSelected(displayName),
-                          );
-                        }),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    child: InkWell(
-                      onTap: () => setState(() => selectedParent = null),
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(
-                            vertical: 16.0, horizontal: 16.0),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: const [
-                            Icon(Icons.arrow_back, color: Colors.black54),
-                            SizedBox(width: 8),
-                            Text('되돌아가기', style: TextStyle(fontSize: 16)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            }
-
-            // ▶ 루트(단일/부모 그룹 리스트)
-            final parentGroups =
-            _composites.map((loc) => loc.parent).whereType<String>().toSet().toList();
-
-            return ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                // 단일 주차 구역
-                const Text(
-                  '단일 주차 구역',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 8),
-                ..._singles.map((loc) {
-                  final displayName = loc.name; // single은 이름 그대로 표시/선택
-                  final busy = _refreshingNames.contains(displayName);
-                  final plateCount = _countOfLoc(loc.name);
-
-                  return ListTile(
-                    key: ValueKey(displayName),
-                    leading: const Icon(Icons.place, color: _Palette.base),
-                    title: Text(displayName),
-                    subtitle: Text('입차 $plateCount / 공간 ${loc.capacity}'),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (busy)
-                          const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        else
-                          IconButton(
-                            icon: const Icon(Icons.refresh),
-                            tooltip: '이 항목만 새로고침',
-                            onPressed: () => _refreshOne(displayName),
+                                  title: Text(displayName),
+                                  subtitle: Text('입차 $plateCount / 공간 ${loc.capacity}'),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (busy)
+                                        const SizedBox(
+                                          width: 20,
+                                          height: 20,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        )
+                                      else
+                                        IconButton(
+                                          icon: const Icon(Icons.refresh),
+                                          tooltip: '이 항목만 새로고침',
+                                          onPressed: () => _refreshOne(displayName),
+                                        ),
+                                      const Icon(Icons.chevron_right),
+                                    ],
+                                  ),
+                                  onTap: () => widget.onLocationSelected(displayName),
+                                );
+                              }),
+                            ],
                           ),
-                        const Icon(Icons.chevron_right),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          child: InkWell(
+                            onTap: () => setState(() => selectedParent = null),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[100],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: const [
+                                  Icon(Icons.arrow_back, color: Colors.black54),
+                                  SizedBox(width: 8),
+                                  Text('되돌아가기', style: TextStyle(fontSize: 16)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
-                    ),
-                    onTap: () => widget.onLocationSelected(displayName),
+                    );
+                  }
+
+                  final parentGroups = _composites.map((loc) => loc.parent).whereType<String>().toSet().toList();
+
+                  return ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      const Text(
+                        '단일 주차 구역',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      const SizedBox(height: 8),
+                      ..._singles.map((loc) {
+                        final displayName = loc.name; // single은 이름 그대로 표시/선택
+                        final busy = _refreshingNames.contains(displayName);
+                        final plateCount = _countOfLoc(loc.name);
+
+                        return ListTile(
+                          key: ValueKey(displayName),
+                          leading: const Icon(Icons.place, color: _Palette.base),
+                          title: Text(displayName),
+                          subtitle: Text('입차 $plateCount / 공간 ${loc.capacity}'),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (busy)
+                                const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              else
+                                IconButton(
+                                  icon: const Icon(Icons.refresh),
+                                  tooltip: '이 항목만 새로고침',
+                                  onPressed: () => _refreshOne(displayName),
+                                ),
+                              const Icon(Icons.chevron_right),
+                            ],
+                          ),
+                          onTap: () => widget.onLocationSelected(displayName),
+                        );
+                      }),
+                      const Divider(),
+                      const Text(
+                        '복합 주차 구역',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      const SizedBox(height: 8),
+                      ...parentGroups.map((parent) {
+                        final children = _composites.where((l) => l.parent == parent).toList();
+                        final totalCapacity = children.fold<int>(0, (sum, l) => sum + l.capacity);
+
+                        return ListTile(
+                          key: ValueKey('parent:$parent'),
+                          leading: const Icon(Icons.layers, color: _Palette.base),
+                          title: Text(parent),
+                          subtitle: Text('총 공간 $totalCapacity'),
+                          // ⛔️ 새로고침 버튼 없음 — 진입만 가능
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => setState(() => selectedParent = parent),
+                        );
+                      }),
+                      const SizedBox(height: 16),
+                    ],
                   );
-                }),
-
-                const Divider(),
-
-                // 복합 주차 구역 (부모) — 총 공간만 표시
-                const Text(
-                  '복합 주차 구역',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
-                const SizedBox(height: 8),
-                ...parentGroups.map((parent) {
-                  final children =
-                  _composites.where((l) => l.parent == parent).toList();
-                  final totalCapacity =
-                  children.fold<int>(0, (sum, l) => sum + l.capacity);
-
-                  return ListTile(
-                    key: ValueKey('parent:$parent'),
-                    leading: const Icon(Icons.layers, color: _Palette.base),
-                    title: Text(parent),
-                    subtitle: Text('총 공간 $totalCapacity'),
-                    // ⛔️ 새로고침 버튼 없음 — 진입만 가능
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => setState(() => selectedParent = parent),
-                  );
-                }),
-                const SizedBox(height: 16),
-              ],
-            );
-          },
-        ),
+                },
+              ),
       ),
     );
   }
 }
 
 class _LocRow {
-  final String type; // 'single' | 'composite'
-  final String name; // location_name
-  final String? parent; // composite일 때 상위 이름
+  final String type;
+  final String name;
+  final String? parent;
   final int capacity;
 
   _LocRow({

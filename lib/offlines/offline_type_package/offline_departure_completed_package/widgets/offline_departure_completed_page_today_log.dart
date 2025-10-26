@@ -19,12 +19,10 @@ class OfflineDepartureCompletedPageTodayLog extends StatefulWidget {
 class _OfflineDepartureCompletedPageTodayLogState extends State<OfflineDepartureCompletedPageTodayLog> {
   bool _expanded = false;
 
-  // ===== 공통 로직: 로그 정규화 =====
   List<Map<String, dynamic>> _normalizeLogs(List<dynamic> raw) {
     return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
   }
 
-  // ===== 공통 로직: 타임스탬프 파싱 =====
   DateTime? _parseTs(dynamic ts) {
     if (ts == null) return null;
 
@@ -32,9 +30,7 @@ class _OfflineDepartureCompletedPageTodayLogState extends State<OfflineDeparture
     if (ts is DateTime) return ts.toLocal();
 
     if (ts is int) {
-      // 밀리초로 보이는 큰 값 처리
       if (ts > 100000000000) return DateTime.fromMillisecondsSinceEpoch(ts).toLocal();
-      // 초 단위로 가정
       return DateTime.fromMillisecondsSinceEpoch(ts * 1000).toLocal();
     }
 
@@ -46,7 +42,6 @@ class _OfflineDepartureCompletedPageTodayLogState extends State<OfflineDeparture
     return null;
   }
 
-  // ===== 공통 로직: 타임스탬프 포맷(로컬) =====
   String _formatTs(dynamic ts) {
     final dt = _parseTs(ts);
     if (dt == null) return '--';
@@ -54,7 +49,6 @@ class _OfflineDepartureCompletedPageTodayLogState extends State<OfflineDeparture
     return '${dt.year}-${two(dt.month)}-${two(dt.day)} ${two(dt.hour)}:${two(dt.minute)}:${two(dt.second)}';
   }
 
-  // ===== 원화 포맷 (intl 없이 콤마만) =====
   int? _asInt(dynamic v) {
     if (v == null) return null;
     if (v is num) return v.toInt();
@@ -77,7 +71,6 @@ class _OfflineDepartureCompletedPageTodayLogState extends State<OfflineDeparture
     return '₩${_formatIntWithComma(n)}';
   }
 
-  // ===== 공통 로직: 액션에 따른 아이콘/색상 매핑 =====
   IconData _actionIcon(String action) {
     if (action.contains('사전 정산')) return Icons.receipt_long;
     if (action.contains('입차 완료')) return Icons.local_parking;
@@ -97,7 +90,6 @@ class _OfflineDepartureCompletedPageTodayLogState extends State<OfflineDeparture
 
   @override
   Widget build(BuildContext context) {
-    // 정규화 + "오래된순(오름차순)" 정렬
     final logs = _normalizeLogs(widget.logsRaw)
       ..sort((a, b) {
         final aT = _parseTs(a['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
@@ -108,12 +100,10 @@ class _OfflineDepartureCompletedPageTodayLogState extends State<OfflineDeparture
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 헤더: 번호판 영역(탭→펼치기/접기) + 사진 버튼
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
           child: Row(
             children: [
-              // 번호판 영역 전체를 탭 가능하게
               Expanded(
                 child: InkWell(
                   onTap: () => setState(() => _expanded = !_expanded),
@@ -142,7 +132,8 @@ class _OfflineDepartureCompletedPageTodayLogState extends State<OfflineDeparture
                     barrierDismissible: true,
                     barrierLabel: "사진 보기",
                     transitionDuration: const Duration(milliseconds: 300),
-                    pageBuilder: (_, __, ___) => OfflineDepartureCompletedPlateImageDialog(plateNumber: widget.plateNumber),
+                    pageBuilder: (_, __, ___) =>
+                        OfflineDepartureCompletedPlateImageDialog(plateNumber: widget.plateNumber),
                   );
                 },
                 style: ElevatedButton.styleFrom(
@@ -155,8 +146,6 @@ class _OfflineDepartureCompletedPageTodayLogState extends State<OfflineDeparture
           ),
         ),
         const Divider(height: 1),
-
-        // 본문 리스트: 번호판 영역을 눌러야 펼쳐짐
         Expanded(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),

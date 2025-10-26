@@ -73,8 +73,7 @@ class OfflineDepartureCompletedPlateImageDialog extends StatelessWidget {
                         child: Image.network(
                           url,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) =>
-                          const Icon(Icons.broken_image, color: Colors.red),
+                          errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.red),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -101,11 +100,11 @@ class OfflineDepartureCompletedPlateImageDialog extends StatelessWidget {
 }
 
 void modifyshowFullScreenImageViewer(
-    BuildContext context,
-    List<dynamic> images,
-    int initialIndex, {
-      bool isUrlList = false,
-    }) {
+  BuildContext context,
+  List<dynamic> images,
+  int initialIndex, {
+  bool isUrlList = false,
+}) {
   showDialog(
     context: context,
     useSafeArea: true,
@@ -137,31 +136,29 @@ void modifyshowFullScreenImageViewer(
                             maxScale: 4.0,
                             child: isUrlList
                                 ? Image.network(
-                              image,
-                              fit: BoxFit.contain,
-                              loadingBuilder: (context, child, progress) {
-                                if (progress == null) return child;
-                                return const Center(child: CircularProgressIndicator());
-                              },
-                              errorBuilder: (_, __, ___) =>
-                              const Icon(Icons.error, color: Colors.red),
-                            )
+                                    image,
+                                    fit: BoxFit.contain,
+                                    loadingBuilder: (context, child, progress) {
+                                      if (progress == null) return child;
+                                      return const Center(child: CircularProgressIndicator());
+                                    },
+                                    errorBuilder: (_, __, ___) => const Icon(Icons.error, color: Colors.red),
+                                  )
                                 : FutureBuilder<bool>(
-                              future: File(image.path).exists(),
-                              builder: (context, snapshot) {
-                                if (snapshot.connectionState != ConnectionState.done) {
-                                  return const Center(child: CircularProgressIndicator());
-                                }
-                                if (snapshot.hasError || !(snapshot.data ?? false)) {
-                                  return const Center(
-                                      child: Icon(Icons.broken_image, color: Colors.red));
-                                }
-                                return Image.file(
-                                  File(image.path),
-                                  fit: BoxFit.contain,
-                                );
-                              },
-                            ),
+                                    future: File(image.path).exists(),
+                                    builder: (context, snapshot) {
+                                      if (snapshot.connectionState != ConnectionState.done) {
+                                        return const Center(child: CircularProgressIndicator());
+                                      }
+                                      if (snapshot.hasError || !(snapshot.data ?? false)) {
+                                        return const Center(child: Icon(Icons.broken_image, color: Colors.red));
+                                      }
+                                      return Image.file(
+                                        File(image.path),
+                                        fit: BoxFit.contain,
+                                      );
+                                    },
+                                  ),
                           ),
                         ),
                       ),

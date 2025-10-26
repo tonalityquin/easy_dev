@@ -1,12 +1,3 @@
-// lib/screens/type_pages/offline_parking_completed_package/widgets/offline_parking_status_page.dart
-//
-// 리팩터링 요약
-// - Firestore/Provider(LocationState, AreaState) 제거
-// - SQLite(offline_auth_db/offline_auth_service)만 사용해 집계
-//   · 총 수용 대수: offline_locations.capacity 합계(area 기준)
-//   · 주차 완료 대수: offline_plates.status_type='parkingCompleted' AND area=?
-// - 화면 가시성일 때 1회 집계 + area 변경 감지 시 재집계
-//
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -25,35 +16,29 @@ class OfflineParkingStatusPage extends StatefulWidget {
 }
 
 class _OfflineParkingStatusPageState extends State<OfflineParkingStatusPage> {
-  // status_type 키 (PlateType 의존 제거)
   static const String _kStatusParkingCompleted = 'parkingCompleted';
 
-  // 집계값
-  int _occupiedCount = 0; // 영역 전체의 주차 완료 총합
-  int _totalCapacity = 0; // 영역 전체의 수용 가능 대수 합계
+  int _occupiedCount = 0;
+  int _totalCapacity = 0;
 
-  bool _isLoading = true; // 집계 로딩 상태
-  bool _hadError = false; // 에러 상태 플래그
+  bool _isLoading = true;
+  bool _hadError = false;
 
-  // 🔒 UI 표시 시점에만 1회 집계하도록 제어 + area 변경 시 재집계
   bool _didAggregateRun = false;
-  String? _lastArea; // Area 변경 감지용
+  String? _lastArea;
 
   @override
   void initState() {
     super.initState();
-    // 첫 프레임 이후에 라우트 가시성 확인 → 표시 중일 때만 집계
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRunAggregate());
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 라우트 바인딩이 늦게 잡히는 경우를 대비해 한 번 더 시도
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRunAggregate());
   }
 
-  // 현재 세션의 area 불러오기 (없으면 isSelected=1 계정의 currentArea/selectedArea 폴백)
   Future<String> _loadCurrentArea() async {
     final db = await OfflineAuthDb.instance.database;
     final session = await OfflineAuthService.instance.currentSession();
@@ -82,26 +67,19 @@ class _OfflineParkingStatusPageState extends State<OfflineParkingStatusPage> {
       if (r2.isNotEmpty) row = r2.first;
     }
 
-    final area = ((row?['currentArea'] as String?) ??
-        (row?['selectedArea'] as String?) ??
-        '')
-        .trim();
+    final area = ((row?['currentArea'] as String?) ?? (row?['selectedArea'] as String?) ?? '').trim();
     return area;
   }
 
-  // 집계 실행 필요 여부 확인 후 실행
   Future<void> _maybeRunAggregate() async {
     if (!mounted) return;
 
-    // 현재 라우트가 실제로 화면에 표시될 때만 실행
     final route = ModalRoute.of(context);
     final isVisible = route == null ? true : (route.isCurrent || route.isActive);
     if (!isVisible) return;
 
-    // 현재 area 로드
     final area = await _loadCurrentArea();
 
-    // 최초 1회 또는 area 변경 시에만 집계
     if (!_didAggregateRun || _lastArea == null || _lastArea != area) {
       _lastArea = area;
       _didAggregateRun = true;
@@ -120,7 +98,6 @@ class _OfflineParkingStatusPageState extends State<OfflineParkingStatusPage> {
     try {
       final db = await OfflineAuthDb.instance.database;
 
-      // 1) 총 수용대수(offline_locations.capacity 합계)
       final capRes = await db.rawQuery(
         '''
         SELECT COALESCE(SUM(capacity), 0) AS cap
@@ -131,7 +108,6 @@ class _OfflineParkingStatusPageState extends State<OfflineParkingStatusPage> {
       );
       final totalCap = ((capRes.isNotEmpty ? capRes.first['cap'] : 0) as int?) ?? 0;
 
-      // 2) 주차 완료 대수(offline_plates에서 status_type='parkingCompleted')
       final cntRes = await db.rawQuery(
         '''
         SELECT COUNT(*) AS c
@@ -163,11 +139,9 @@ class _OfflineParkingStatusPageState extends State<OfflineParkingStatusPage> {
 
   @override
   Widget build(BuildContext context) {
-    // 빌드 후에도 가시성/area 변화가 있으면 한 번 더 시도(이미 실행되었으면 내부에서 무시)
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRunAggregate());
 
-    final usageRatio =
-    _totalCapacity == 0 ? 0.0 : (_occupiedCount / _totalCapacity).clamp(0.0, 1.0);
+    final usageRatio = _totalCapacity == 0 ? 0.0 : (_occupiedCount / _totalCapacity).clamp(0.0, 1.0);
     final usagePercent = (usageRatio * 100).toStringAsFixed(1);
 
     return Scaffold(
@@ -198,7 +172,7 @@ class _OfflineParkingStatusPageState extends State<OfflineParkingStatusPage> {
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
                       onPressed: () {
-                        _didAggregateRun = false; // 다시 1회만 돌도록
+                        _didAggregateRun = false;
                         _maybeRunAggregate();
                       },
                       icon: const Icon(Icons.refresh),
@@ -238,17 +212,11 @@ class _OfflineParkingStatusPageState extends State<OfflineParkingStatusPage> {
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                   textAlign: TextAlign.center,
                 ),
-
                 const SizedBox(height: 24),
-
-                // ⬇️ 하단 자동 순환 카드: 한 화면에 한 장, 2초마다 전환
                 const _AutoCyclingReminderCards(),
-
                 const SizedBox(height: 12),
               ],
             ),
-
-          // 잠금 오버레이
           if (widget.isLocked)
             Positioned.fill(
               child: GestureDetector(
@@ -263,10 +231,6 @@ class _OfflineParkingStatusPageState extends State<OfflineParkingStatusPage> {
   }
 }
 
-/// 하단에 표시되는 자동 순환 카드 뷰
-/// - 한 번에 한 카드만 표시
-/// - [cycleInterval]마다 자동으로 다음 카드로 애니메이션
-/// - 마지막까지 읽으면 다시 첫 카드로 순환
 class _AutoCyclingReminderCards extends StatefulWidget {
   const _AutoCyclingReminderCards();
 
@@ -275,7 +239,6 @@ class _AutoCyclingReminderCards extends StatefulWidget {
 }
 
 class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
-  // ✔ 2초 주기로 전환
   static const Duration cycleInterval = Duration(seconds: 2);
   static const Duration animDuration = Duration(milliseconds: 400);
   static const Curve animCurve = Curves.easeInOut;
@@ -284,7 +247,6 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
   Timer? _timer;
   int _currentIndex = 0;
 
-  // 중앙 정렬 카드 컨텐츠 (업무 리마인더)
   static const List<_ReminderContent> _cards = [
     _ReminderContent(
       title: '사내 공지란',
@@ -333,32 +295,30 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
       duration: animDuration,
       curve: animCurve,
     );
-    setState(() {}); // 현재 인덱스 반영(인디케이터 등 확장 시 대비)
+    setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
-    // ListView 안에 들어가므로 높이를 고정해 주어야 함
     return SizedBox(
       height: 170,
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // 가운데 정렬로 한 카드씩만 보이게
           Align(
             alignment: Alignment.center,
             child: FractionallySizedBox(
               widthFactor: 0.98, // 좌우 여백 약간
               child: PageView.builder(
                 controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(), // 스와이프 대신 자동 전환
+                physics: const NeverScrollableScrollPhysics(),
                 onPageChanged: (i) => _currentIndex = i,
                 itemCount: _cards.length,
                 itemBuilder: (context, index) {
                   final c = _cards[index];
                   return Center(
                     child: Card(
-                      color: Colors.white, // 카드 배경 하얀색
+                      color: Colors.white,
                       elevation: 2,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -367,7 +327,7 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
                         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.center, // 중앙 정렬
+                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
@@ -386,7 +346,7 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
                             ),
                             const SizedBox(height: 12),
                             ...c.lines.map(
-                                  (t) => Padding(
+                              (t) => Padding(
                                 padding: const EdgeInsets.only(bottom: 6),
                                 child: Text(
                                   t,
@@ -404,8 +364,6 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
               ),
             ),
           ),
-
-          // (선택) 하단 점 인디케이터 - 중앙 정렬
           Positioned(
             bottom: 6,
             child: Row(
@@ -434,5 +392,6 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
 class _ReminderContent {
   final String title;
   final List<String> lines;
+
   const _ReminderContent({required this.title, required this.lines});
 }

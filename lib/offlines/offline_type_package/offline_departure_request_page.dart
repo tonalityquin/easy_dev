@@ -1,33 +1,20 @@
-// lib/screens/type_pages/offline_departure_request_page.dart
-//
-// 변경 요약 👇
-// - SQLite만 사용
-// - PlateType 의존 제거
-// - 출차 요청 목록/선택/출차 완료
-// - 안내 바텀시트는 로컬
-// - ✅ DB 변경 알림(OfflineDbNotifier) 구독/발행
-// - ✅ 출차 완료 TTS 반영 ("차량 뒷번호#### 출차 완료되었습니다.")
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-// ▼ SQLite / 세션
 import '../sql/offline_auth_db.dart';
 import '../sql/offline_auth_service.dart';
 
-// ▼ DB 변경 알림 (전역 Notifier)
 import '../sql/offline_db_notifier.dart';
 
 import '../../utils/snackbar_helper.dart';
 import '../offline_navigation/offline_top_navigation.dart';
 
-// 컨트롤 버튼
 import 'offline_departure_request_package/offline_departure_request_control_buttons.dart';
 
-// ✅ TTS
 import '../../offlines/tts/offline_tts.dart';
 
 const String _kStatusDepartureRequests = 'departureRequests';
-const String _kStatusDepartured       = 'departured';
+const String _kStatusDepartured = 'departured';
 
 class OfflineDepartureRequestPage extends StatefulWidget {
   const OfflineDepartureRequestPage({super.key});
@@ -160,7 +147,6 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
     }
   }
 
-  // ─────────── 출차 완료 + TTS ───────────
   Future<void> _handleDepartureCompleted() async {
     if (_isLocked) {
       showSelectedSnackbar(context, '화면이 잠금 상태입니다.');
@@ -171,7 +157,6 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
       final db = await OfflineAuthDb.instance.database;
       final (uid, uname) = await _loadSessionIdentity();
 
-      // fourDigit도 함께 조회 → "뒷번호####"
       final rows = await db.query(
         OfflineAuthDb.tablePlates,
         columns: const ['id', 'plate_number', 'plate_four_digit'],
@@ -190,8 +175,8 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
         return;
       }
 
-      final id   = rows.first['id'] as int;
-      final pn   = (rows.first['plate_number'] as String?)?.trim() ?? '';
+      final id = rows.first['id'] as int;
+      final pn = (rows.first['plate_number'] as String?)?.trim() ?? '';
       final four = (rows.first['plate_four_digit'] as String?)?.trim() ?? '';
 
       await db.update(
@@ -205,11 +190,10 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
         whereArgs: [id],
       );
 
-      // 변경 알림 + ✅ TTS (출차 완료)
       OfflineDbNotifier.instance.bump();
       await OfflineTts.instance.sayDepartureCompleted(
         plateNumber: pn.isNotEmpty ? pn : null,
-        fourDigit  : four.isNotEmpty ? four : null,
+        fourDigit: four.isNotEmpty ? four : null,
       );
 
       if (!mounted) return;
@@ -220,7 +204,6 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
       if (mounted) showFailedSnackbar(context, "출차 완료 중 오류 발생: $e");
     }
   }
-  // ──────────────────────────────────────
 
   Future<void> _togglePlateSelection(int id) async {
     final db = await OfflineAuthDb.instance.database;
@@ -292,7 +275,8 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
   }
 
   void _toggleSortIcon() => setState(() => _isSorted = !_isSorted);
-  void _toggleLock()     => setState(() => _isLocked = !_isLocked);
+
+  void _toggleLock() => setState(() => _isLocked = !_isLocked);
 
   String _buildBillingSummary({
     required int basicAmount,
@@ -405,9 +389,7 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
       final addStd = (r['add_standard'] as int?) ?? 0;
       final selected = ((r['is_selected'] as int?) ?? 0) != 0;
 
-      final title = (pn != null && pn.isNotEmpty)
-          ? pn
-          : (four.isNotEmpty ? '****-$four' : '미상');
+      final title = (pn != null && pn.isNotEmpty) ? pn : (four.isNotEmpty ? '****-$four' : '미상');
       final locationText = loc.isNotEmpty ? loc : '위치 미지정';
 
       final billingSummary = _buildBillingSummary(
@@ -416,9 +398,8 @@ class _OfflineDepartureRequestPageState extends State<OfflineDepartureRequestPag
         addAmount: addAmount,
         addStd: addStd,
       );
-      final billingText = billing.isEmpty
-          ? '정산 미지정'
-          : (billingSummary.isEmpty ? '정산 $billing' : '정산 $billing ($billingSummary)');
+      final billingText =
+          billing.isEmpty ? '정산 미지정' : (billingSummary.isEmpty ? '정산 $billing' : '정산 $billing ($billingSummary)');
 
       return InkWell(
         onTap: () async {

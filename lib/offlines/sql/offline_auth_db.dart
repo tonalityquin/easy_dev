@@ -1,6 +1,3 @@
-// ==============================
-// File: offline_auth_db.dart (v7 - plates/bills/locations + HQ 기본 시드)
-// ==============================
 import 'dart:async';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
@@ -9,43 +6,34 @@ class OfflineAuthDb {
   OfflineAuthDb._();
   static final OfflineAuthDb instance = OfflineAuthDb._();
 
-  // ───────────────── DB 메타 ─────────────────
   static const _dbName = 'offlines.db';
-  static const _dbVersion = 7; // v7: offline_bills, offline_locations 테이블 추가 (v6: offline_plates)
+  static const _dbVersion = 7;
 
-  // ───────────────── 테이블명 ─────────────────
   static const tableSessions  = 'offline_sessions';
   @Deprecated('Use tableSessions instead')
-  static const table          = tableSessions; // 구 코드 호환용
+  static const table          = tableSessions;
 
-  static const tableDivision  = 'division';                    // 마스터
-  static const tableArea      = 'area';                        // 마스터
-  static const tableAccounts  = 'offline_accounts';            // 계정 메타
-  static const tableAccAreas  = 'offline_account_areas';       // 계정-지역 배열(정렬)
-  static const tableAccDivs   = 'offline_account_divisions';   // 계정-디비전 배열(정렬)
+  static const tableDivision  = 'division';
+  static const tableArea      = 'area';
+  static const tableAccounts  = 'offline_accounts';
+  static const tableAccAreas  = 'offline_account_areas';
+  static const tableAccDivs   = 'offline_account_divisions';
 
-  // v6: 차량 번호 보관
   static const tablePlates    = 'offline_plates';
-  // v7: 과금정책 / 로케이션 보관
   static const tableBills     = 'offline_bills';
   static const tableLocations = 'offline_locations';
 
   Database? _db;
   Future<Database>? _openingFuture;
 
-  // ───────────────── 시드 타임스탬프(ms) ─────────────────
-  // 2025-05-08 23:02:37 (UTC+9)
   static const int _divCreatedAtMs  = 1746712957000;
-  // 2025-05-10 13:57:51 (UTC+9)
   static const int _seedCreatedAtMs = 1746853071000;
 
-  /// 항상 이 게터로 핸들을 받으세요.
   Future<Database> get database async {
     if (_db != null && _db!.isOpen) return _db!;
     return _open();
   }
 
-  /// 닫혀 있으면 재오픈.
   Future<void> reopenIfNeeded() async {
     if (_db == null || !_db!.isOpen) {
       await _open();
@@ -53,7 +41,6 @@ class OfflineAuthDb {
   }
 
   Future<Database> _open() async {
-    // 동시 오픈 방지: 열리고 있으면 그 Future 재사용
     final opening = _openingFuture;
     if (opening != null) return opening;
 
@@ -67,7 +54,6 @@ class OfflineAuthDb {
         path,
         version: _dbVersion,
         onCreate: (Database db, int version) async {
-          // ── 세션 ──
           await db.execute('''
             CREATE TABLE $tableSessions(
               id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,7 +66,6 @@ class OfflineAuthDb {
             )
           ''');
 
-          // ── 마스터: division / area ──
           await db.execute('''
             CREATE TABLE $tableDivision(
               id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -101,7 +86,6 @@ class OfflineAuthDb {
             )
           ''');
 
-          // ── 계정 메타 ──
           await db.execute('''
             CREATE TABLE $tableAccounts(
               id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -132,7 +116,6 @@ class OfflineAuthDb {
             )
           ''');
 
-          // ── per-account 배열: areas/divisions (정렬 보존) ──
           await db.execute('''
             CREATE TABLE $tableAccAreas(
               id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -155,7 +138,6 @@ class OfflineAuthDb {
             )
           ''');
 
-          // ── v6: 차량 번호 보관 ──
           await db.execute('''
             CREATE TABLE $tablePlates(
               id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -193,7 +175,6 @@ class OfflineAuthDb {
             ON $tablePlates(plate_number, area)
           ''');
 
-          // ── v7: 과금정책(bills) ──
           await db.execute('''
             CREATE TABLE $tableBills(
               id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -215,8 +196,6 @@ class OfflineAuthDb {
             ON $tableBills(area, type)
           ''');
 
-          // ── v7: 로케이션(locations) ──
-          // ※ UNIQUE에 표현식 금지 → parent를 NOT NULL DEFAULT ''로 두고 컬럼만 사용
           await db.execute('''
             CREATE TABLE $tableLocations(
               id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -238,7 +217,6 @@ class OfflineAuthDb {
             ON $tableLocations(area, location_name)
           ''');
 
-          // 기본 시드 투입 (idempotent)
           await _seedDefaults(db);
         },
         onUpgrade: (db, oldVersion, newVersion) async {
@@ -384,7 +362,6 @@ class OfflineAuthDb {
               ON $tableBills(area, type)
             ''');
 
-            // UNIQUE에 표현식 금지 → parent NOT NULL DEFAULT '' + 컬럼만 사용
             await db.execute('''
               CREATE TABLE IF NOT EXISTS $tableLocations(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -407,11 +384,9 @@ class OfflineAuthDb {
             ''');
           }
 
-          // 누락된 기본 시드 보정
           await _seedDefaults(db);
         },
         onOpen: (db) async {
-          // 혹시 누락된 시드 보정
           await _seedDefaults(db);
         },
       );
@@ -427,26 +402,13 @@ class OfflineAuthDb {
     }
   }
 
-  /// (선택) 테스트/리셋용
-  Future<void> close() async {
-    if (_db != null && _db!.isOpen) {
-      await _db!.close();
-    }
-    _db = null;
-  }
-
-  // ───────────────── 시드 주입(idempotent) ─────────────────
-  // 요구: HQ 지역의 location 3건 + bill 2건이 기본으로 존재
-  // 방법: INSERT OR IGNORE → 여러 번 호출돼도 최초에만 삽입, 이후 값 보존
   static Future<void> _seedDefaults(Database db) async {
     await db.transaction((txn) async {
-      // 1) division(dev)
       await txn.rawInsert(
         'INSERT OR IGNORE INTO $tableDivision(name, createdAt) VALUES(?, ?)',
         ['dev', _divCreatedAtMs],
       );
 
-      // 2) area(HQ 지역 / WorkingArea 지역) - division="dev"
       await txn.rawInsert(
         'INSERT OR IGNORE INTO $tableArea(name, englishName, division, isHeadquarter, createdAt) VALUES(?, ?, ?, ?, ?)',
         ['HQ 지역', 'HQ', 'dev', 1, _seedCreatedAtMs],
@@ -456,13 +418,11 @@ class OfflineAuthDb {
         ['WorkingArea 지역', 'WorkingArea', 'dev', 0, _seedCreatedAtMs],
       );
 
-      // 3) offline_accounts: tester 기본 계정(누락 시만 삽입)
       await txn.rawInsert(
         'INSERT OR IGNORE INTO $tableAccounts(userId, name, phone, pin, isSaved, createdAt) VALUES(?, ?, ?, ?, ?, ?)',
         ['tester', 'tester', '01012345678', '12345', 1, _seedCreatedAtMs],
       );
 
-      // v4/5 메타 기본값 보정 + v5 division/area 채우기
       await txn.rawUpdate(
         '''
         UPDATE $tableAccounts
@@ -484,7 +444,6 @@ class OfflineAuthDb {
         ''',
       );
 
-      // 4) per-account 배열: tester areas/divisions 정렬 시드
       await txn.rawInsert(
         'INSERT OR IGNORE INTO $tableAccAreas(userId, name, orderIndex) VALUES(?, ?, ?)',
         ['tester', 'HQ 지역', 0],
@@ -498,12 +457,6 @@ class OfflineAuthDb {
         ['tester', 'dev', 0],
       );
 
-      // ─────────────────────────────────────────────────────
-      // 5) HQ 지역 "기본 시드": locations 3 + bills 2
-      //    - INSERT OR IGNORE: 존재 시 덮어쓰지 않음 (기본 행 보장)
-      // ─────────────────────────────────────────────────────
-
-      // Locations (3) → HQ 지역
       await txn.rawInsert(
         '''
         INSERT OR IGNORE INTO $tableLocations
@@ -517,7 +470,7 @@ class OfflineAuthDb {
           '승강기',
           'single',
           14,
-          0, // is_selected=false
+          0,
           '2025년 10월 7일 오후 3시 21분 47초 UTC+9',
         ],
       );
@@ -558,7 +511,6 @@ class OfflineAuthDb {
         ],
       );
 
-      // Bills (2) → HQ 지역
       await txn.rawInsert(
         '''
         INSERT OR IGNORE INTO $tableBills

@@ -1,7 +1,3 @@
-// lib/offlines/login_package/offline_login_screen.dart
-// ─────────────────────────────────────────────────────────────────────────────
-// LoginScreen 과 동일한 빌드 구조(뒤로가기 차단 + Padding + Center + Scroll + Fade/Slide)
-
 import 'package:flutter/material.dart';
 import 'service/offline_login_controller.dart';
 import 'service/sections/offline_login_form.dart';
@@ -58,13 +54,11 @@ class _OfflineLoginScreenState extends State<OfflineLoginScreen>
 
     _loginAnimationController.forward();
 
-    // ★ 첫 프레임 이후 DB 워밍업 → 세션 체크
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await OfflineAuthDb.instance.reopenIfNeeded(); // ✅ 핫 리스타트/탐색기 영향 방지
+      await OfflineAuthDb.instance.reopenIfNeeded();
       final has = await OfflineAuthService.instance.hasSession();
       if (!mounted) return;
       if (has) {
-        // routes.dart에서 onLoginSucceeded 콜백이 '/offline_commute' 네비게이션
         widget.onLoginSucceeded?.call();
       }
     });

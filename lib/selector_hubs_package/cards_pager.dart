@@ -1,9 +1,9 @@
-// lib/screens/selector_hubs_package/cards_pager.dart
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class CardsPager extends StatefulWidget {
   final List<List<Widget>> pages;
+
   const CardsPager({super.key, required this.pages});
 
   @override
@@ -78,11 +78,9 @@ class _CardsPagerState extends State<CardsPager> {
               return Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  SizedBox(width: half, height: cardHeight,
-                      child: page.isNotEmpty ? page[0] : const SizedBox.shrink()),
+                  SizedBox(width: half, height: cardHeight, child: page.isNotEmpty ? page[0] : const SizedBox.shrink()),
                   const SizedBox(width: _gap),
-                  SizedBox(width: half, height: cardHeight,
-                      child: page.length > 1 ? page[1] : const SizedBox.shrink()),
+                  SizedBox(width: half, height: cardHeight, child: page.length > 1 ? page[1] : const SizedBox.shrink()),
                 ],
               );
             },

@@ -24,13 +24,12 @@ class OfflineSetDepartureCompletedDialog extends StatelessWidget {
             return Container(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
               decoration: const BoxDecoration(
-                color: Colors.white, // 요구사항: 흰색 배경 유지
+                color: Colors.white,
                 borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
               ),
               child: ListView(
                 controller: scrollController,
                 children: [
-                  // 상단 그립
                   Center(
                     child: Container(
                       width: 40,
@@ -42,8 +41,6 @@ class OfflineSetDepartureCompletedDialog extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // 타이틀
                   Row(
                     children: [
                       const Icon(Icons.check_circle_outline, color: Colors.redAccent, size: 28),
@@ -57,15 +54,11 @@ class OfflineSetDepartureCompletedDialog extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 12),
-
-                  // 설명
                   const Text(
                     '정말로 출차 완료 처리를 하시겠습니까?',
                     style: TextStyle(fontSize: 16),
                   ),
                   const SizedBox(height: 24),
-
-                  // 액션 버튼 (취소 / 확인)
                   Row(
                     children: [
                       Expanded(

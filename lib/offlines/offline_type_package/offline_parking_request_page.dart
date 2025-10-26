@@ -1,34 +1,17 @@
-// lib/screens/type_pages/parking_request_page.dart
-//
-// 변경 요약 👇
-// - Firestore/Provider 제거, SQLite(offline_auth_db/offline_auth_service)만 사용
-// - PlateType enum 의존 제거 → 상태 문자열을 파일 내부 상수로 정의해 사용
-// - '입차 완료' 처리 시 offline_locations.capacity 기준으로 초과 여부 판정
-// - 위치 바텀시트(OfflineParkingLocationBottomSheet)에서 선택 후 상태 전환
-// - 선택/뒤로가기/정렬 등은 전부 offline_plates 직접 질의로 구현
-// - 검색: 기존 CommonPlateSearchBottomSheet 대신 모달 바텀시트로 안내 텍스트만 표시
-// - ✅ 목록 아이템을 박스(UI)로 리팩터링하고, 번호 + 위치 + 정산 유형(요약) 함께 출력
-// - ✅ DB 변경 알림(OfflineDbNotifier) 구독/발행 추가 → 다른 화면 변경도 즉시 반영
-//
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-// ▼ SQLite / 세션
 import '../sql/offline_auth_db.dart';
 import '../sql/offline_auth_service.dart';
 
-// ▼ DB 변경 알림 (전역 Notifier)
 import '../sql/offline_db_notifier.dart';
 
 import '../../utils/snackbar_helper.dart';
 
-// 위치 선택 바텀시트
 import 'offline_parking_request_package/offline_parking_location_bottom_sheet.dart';
 
-// 상단 네비게이션
 import '../offline_navigation/offline_top_navigation.dart';
 
-// 하단 컨트롤 버튼
 import 'offline_parking_request_package/offline_parking_request_control_buttons.dart';
 
 const String _kStatusParkingCompleted = 'parkingCompleted';
@@ -310,8 +293,7 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
       await txn.update(
         OfflineAuthDb.tablePlates,
         {'is_selected': 0},
-        where:
-        "COALESCE(status_type,'') = ? AND (COALESCE(selected_by,'') = ? OR COALESCE(user_name,'') = ?)",
+        where: "COALESCE(status_type,'') = ? AND (COALESCE(selected_by,'') = ? OR COALESCE(user_name,'') = ?)",
         whereArgs: [_kStatusParkingRequests, uid, uname],
       );
 
@@ -482,9 +464,8 @@ class _OfflineParkingRequestPageState extends State<OfflineParkingRequestPage> {
         addAmount: addAmount,
         addStd: addStd,
       );
-      final billingText = billing.isEmpty
-          ? '정산 미지정'
-          : (billingSummary.isEmpty ? '정산 $billing' : '정산 $billing ($billingSummary)');
+      final billingText =
+          billing.isEmpty ? '정산 미지정' : (billingSummary.isEmpty ? '정산 $billing' : '정산 $billing ($billingSummary)');
 
       return InkWell(
         onTap: () async {

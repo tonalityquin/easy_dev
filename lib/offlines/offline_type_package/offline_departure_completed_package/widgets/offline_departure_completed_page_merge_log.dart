@@ -8,19 +8,15 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:googleapis/storage/v1.dart';
 import 'package:googleapis_auth/auth_io.dart';
 
-// ⬇️ 사진 다이얼로그(경로는 프로젝트 구조에 맞게 조정하세요)
 import 'offline_departure_completed_plate_image_dialog.dart';
 
-/// === GCS 설정 ===
 const String kBucketName = 'easydev-image';
 const String kServiceAccountPath = 'assets/keys/easydev-97fb6-e31d7e6b30f9.json';
 
-/// === 내부 레이아웃 상수 ===
 const double _kRowHeight = 56.0;
-const double _kTimeColWidth = 84.0; // HH:mm:ss 고정폭
-const double _kChevronWidth = 28.0; // 펼침 아이콘
+const double _kTimeColWidth = 84.0;
+const double _kChevronWidth = 28.0;
 
-/// === GCS 헬퍼 ===
 class _GcsHelper {
   Future<List<String>> listObjects(String prefix) async {
     final credentialsJson = await rootBundle.loadString(kServiceAccountPath);
@@ -53,9 +49,6 @@ class _GcsHelper {
   }
 }
 
-/// === 상단 컨트롤: 안 A) 날짜 범위 한 개 버튼 + 불러오기 ===
-/// - showDateRangePicker로 시작/종료를 한 번에 선택
-/// - 한 줄 고정(높이 44)
 class RangeControls extends StatelessWidget {
   const RangeControls({
     super.key,
@@ -91,10 +84,9 @@ class RangeControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 44, // ⬅️ 고정 높이로 버튼 늘어짐 방지
+      height: 44,
       child: Row(
         children: [
-          // 날짜 범위 버튼
           Expanded(
             flex: 5,
             child: OutlinedButton.icon(
@@ -107,17 +99,16 @@ class RangeControls extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          // 불러오기 버튼
           Expanded(
             flex: 3,
             child: FilledButton.icon(
               onPressed: loading ? null : onLoad,
               icon: loading
                   ? const SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-              )
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
                   : const Icon(Icons.download),
               label: const FittedBox(child: Text('불러오기', maxLines: 1)),
             ),
@@ -128,9 +119,8 @@ class RangeControls extends StatelessWidget {
   }
 }
 
-/// === 위젯 ===
 class OfflineDepartureCompletedPageMergeLog extends StatefulWidget {
-  final List<Map<String, dynamic>> mergedLogs; // 시그니처 호환용(내부 미사용)
+  final List<Map<String, dynamic>> mergedLogs;
   final String division;
   final String area;
 
@@ -146,23 +136,19 @@ class OfflineDepartureCompletedPageMergeLog extends StatefulWidget {
 }
 
 class _OfflineDepartureCompletedPageMergeLogState extends State<OfflineDepartureCompletedPageMergeLog> {
-  // 날짜 범위(기본: 최근 7일)
   DateTime _start = DateTime.now().subtract(const Duration(days: 6));
   DateTime _end = DateTime.now();
 
-  // 상태
   bool _loading = false;
   String? _error;
 
   final List<_DayBundle> _days = [];
   final Set<String> _expandedDocIds = {};
 
-  // 검색
   final _tailCtrl = TextEditingController();
   List<_SearchHit> _hits = [];
   _SearchHit? _selectedHit;
 
-  // 내부 페이지(0: 목록, 1: 검색)
   final PageController _pageController = PageController(initialPage: 0);
   int _currentPage = 0;
 
@@ -173,7 +159,6 @@ class _OfflineDepartureCompletedPageMergeLogState extends State<OfflineDeparture
     super.dispose();
   }
 
-  // ===== 유틸 =====
   String _two(int n) => n.toString().padLeft(2, '0');
 
   String _yyyymmdd(DateTime d) => '${d.year}-${_two(d.month)}-${_two(d.day)}';
@@ -232,7 +217,6 @@ class _OfflineDepartureCompletedPageMergeLogState extends State<OfflineDeparture
     return Colors.blueGrey;
   }
 
-  // ===== 사진 다이얼로그 열기 =====
   void _openPlateImageDialog(String plateNumber) {
     showGeneralDialog(
       context: context,
@@ -243,7 +227,6 @@ class _OfflineDepartureCompletedPageMergeLogState extends State<OfflineDeparture
     );
   }
 
-  // ===== GCS 로드 =====
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -281,9 +264,8 @@ class _OfflineDepartureCompletedPageMergeLogState extends State<OfflineDeparture
           final plate = (map['plateNumber'] ?? docId.split('_').first).toString();
 
           final logs =
-          ((map['logs'] as List?) ?? const []).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+              ((map['logs'] as List?) ?? const []).whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
 
-          // 로그는 오름차순(과거->최근)으로
           logs.sort((a, b) {
             final at = _parseTs(a['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
             final bt = _parseTs(b['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
@@ -293,12 +275,10 @@ class _OfflineDepartureCompletedPageMergeLogState extends State<OfflineDeparture
           docs.add(_DocBundle(docId: docId, plateNumber: plate, logs: logs));
         }
 
-        // 문서 정렬: 각 문서의 "마지막 로그 시간" 기준 **오름차순**
         docs.sort((a, b) {
           final at = a.logs.isNotEmpty ? _parseTs(a.logs.last['timestamp']) : null;
           final bt = b.logs.isNotEmpty ? _parseTs(b.logs.last['timestamp']) : null;
-          return (at ?? DateTime.fromMillisecondsSinceEpoch(0))
-              .compareTo(bt ?? DateTime.fromMillisecondsSinceEpoch(0));
+          return (at ?? DateTime.fromMillisecondsSinceEpoch(0)).compareTo(bt ?? DateTime.fromMillisecondsSinceEpoch(0));
         });
 
         _days.add(_DayBundle(dateStr: dateStr, docs: docs));
@@ -313,7 +293,6 @@ class _OfflineDepartureCompletedPageMergeLogState extends State<OfflineDeparture
     }
   }
 
-  // ===== 검색 =====
   Future<void> _search() async {
     final q = _tailCtrl.text.trim();
 
@@ -347,16 +326,14 @@ class _OfflineDepartureCompletedPageMergeLogState extends State<OfflineDeparture
     }
   }
 
-  // ===== UI =====
   @override
   Widget build(BuildContext context) {
     final hasData = !_loading && _days.isNotEmpty;
-    final mono = const TextStyle(fontFeatures: [FontFeature.tabularFigures()]); // 시간 숫자 정렬
+    final mono = const TextStyle(fontFeatures: [FontFeature.tabularFigures()]);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 상단 컨트롤: 한 줄 고정(안 A 적용)
         Row(
           children: [
             Expanded(
@@ -389,163 +366,144 @@ class _OfflineDepartureCompletedPageMergeLogState extends State<OfflineDeparture
             ),
           ],
         ),
-
         if (_error != null) ...[
           const SizedBox(height: 8),
           Text(_error!, style: const TextStyle(color: Colors.red)),
         ],
         const SizedBox(height: 8),
-
         Expanded(
           child: _loading
               ? const Center(child: CircularProgressIndicator())
               : !hasData
-              ? const Center(child: Text('기간을 설정하고 불러오기를 눌러주세요.'))
-              : PageView(
-            controller: _pageController,
-            onPageChanged: (i) {
-              setState(() => _currentPage = i);
-            },
-            children: [
-              // 페이지 0: 날짜/문서 목록 (시간 + 번호판만)
-              Scrollbar(
-                child: ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  itemCount: _days.length,
-                  itemBuilder: (_, i) {
-                    final day = _days[i];
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  ? const Center(child: Text('기간을 설정하고 불러오기를 눌러주세요.'))
+                  : PageView(
+                      controller: _pageController,
+                      onPageChanged: (i) {
+                        setState(() => _currentPage = i);
+                      },
                       children: [
-                        // 날짜 헤더 + 컬럼 헤더
-                        Container(
-                          color: Colors.grey.shade200,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(day.dateStr, style: const TextStyle(fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 8),
-                              // 컬럼 라벨 (시간 | 번호판)
-                              SizedBox(
-                                height: 24,
-                                child: Row(
-                                  children: const [
-                                    SizedBox(
-                                      width: _kTimeColWidth,
-                                      child: Text(
-                                        '시간',
-                                        style: TextStyle(fontSize: 12, color: Colors.black54),
-                                      ),
+                        Scrollbar(
+                          child: ListView.builder(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            itemCount: _days.length,
+                            itemBuilder: (_, i) {
+                              final day = _days[i];
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    color: Colors.grey.shade200,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(day.dateStr, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                        const SizedBox(height: 8),
+                                        SizedBox(
+                                          height: 24,
+                                          child: Row(
+                                            children: const [
+                                              SizedBox(
+                                                width: _kTimeColWidth,
+                                                child: Text(
+                                                  '시간',
+                                                  style: TextStyle(fontSize: 12, color: Colors.black54),
+                                                ),
+                                              ),
+                                              SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  '번호판',
+                                                  style: TextStyle(fontSize: 12, color: Colors.black54),
+                                                  textAlign: TextAlign.center,
+                                                ),
+                                              ),
+                                              SizedBox(width: _kChevronWidth),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        '번호판',
-                                        style: TextStyle(fontSize: 12, color: Colors.black54),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ),
-                                    SizedBox(width: _kChevronWidth),
-                                  ],
-                                ),
-                              ),
-                            ],
+                                  ),
+                                  ...day.docs.map((doc) {
+                                    final expanded = _expandedDocIds.contains(doc.docId);
+                                    final lastTs = doc.logs.isNotEmpty ? _parseTs(doc.logs.last['timestamp']) : null;
+
+                                    return Column(
+                                      children: [
+                                        InkWell(
+                                          onTap: () {
+                                            setState(() {
+                                              if (expanded) {
+                                                _expandedDocIds.remove(doc.docId);
+                                              } else {
+                                                _expandedDocIds.add(doc.docId);
+                                              }
+                                            });
+                                          },
+                                          child: Container(
+                                            height: _kRowHeight,
+                                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                                            decoration: const BoxDecoration(
+                                              border: Border(
+                                                bottom: BorderSide(color: Color(0xFFE0E0E0)),
+                                              ),
+                                            ),
+                                            child: Row(
+                                              crossAxisAlignment: CrossAxisAlignment.center,
+                                              children: [
+                                                SizedBox(
+                                                  width: _kTimeColWidth,
+                                                  child: Text(
+                                                    _fmtTime(lastTs),
+                                                    maxLines: 1,
+                                                    softWrap: false,
+                                                    overflow: TextOverflow.clip,
+                                                    textAlign: TextAlign.center,
+                                                    style: mono.copyWith(fontSize: 15),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: Text(
+                                                    doc.plateNumber.isNotEmpty ? doc.plateNumber : doc.docId,
+                                                    maxLines: 1,
+                                                    softWrap: false,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    textAlign: TextAlign.center,
+                                                    style: const TextStyle(fontSize: 16),
+                                                  ),
+                                                ),
+                                                SizedBox(
+                                                  width: _kChevronWidth,
+                                                  child: Icon(
+                                                    expanded ? Icons.expand_less : Icons.expand_more,
+                                                    size: 20,
+                                                    color: Colors.black54,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        if (expanded)
+                                          _buildLogsDetail(
+                                            doc.logs,
+                                            plateNumber: doc.plateNumber,
+                                            scrollable: false,
+                                          ),
+                                      ],
+                                    );
+                                  }),
+                                ],
+                              );
+                            },
                           ),
                         ),
-
-                        // 데이터 행들 (시간 + 번호판)
-                        ...day.docs.map((doc) {
-                          final expanded = _expandedDocIds.contains(doc.docId);
-                          final lastTs =
-                          doc.logs.isNotEmpty ? _parseTs(doc.logs.last['timestamp']) : null;
-
-                          return Column(
-                            children: [
-                              InkWell(
-                                onTap: () {
-                                  setState(() {
-                                    if (expanded) {
-                                      _expandedDocIds.remove(doc.docId);
-                                    } else {
-                                      _expandedDocIds.add(doc.docId);
-                                    }
-                                  });
-                                },
-                                child: Container(
-                                  height: _kRowHeight,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                                  decoration: const BoxDecoration(
-                                    border: Border(
-                                      bottom: BorderSide(color: Color(0xFFE0E0E0)),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.center,
-                                    children: [
-                                      // 시간(고정폭)
-                                      SizedBox(
-                                        width: _kTimeColWidth,
-                                        child: Text(
-                                          _fmtTime(lastTs),
-                                          maxLines: 1,
-                                          softWrap: false,
-                                          overflow: TextOverflow.clip,
-                                          textAlign: TextAlign.center,
-                                          style: mono.copyWith(fontSize: 15),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      // 번호판
-                                      Expanded(
-                                        child: Text(
-                                          doc.plateNumber.isNotEmpty
-                                              ? doc.plateNumber
-                                              : doc.docId,
-                                          maxLines: 1,
-                                          softWrap: false,
-                                          overflow: TextOverflow.ellipsis,
-                                          textAlign: TextAlign.center,
-                                          style: const TextStyle(fontSize: 16),
-                                        ),
-                                      ),
-                                      // 펼침 아이콘(상태 반영)
-                                      SizedBox(
-                                        width: _kChevronWidth,
-                                        child: Icon(
-                                          expanded ? Icons.expand_less : Icons.expand_more,
-                                          size: 20,
-                                          color: Colors.black54,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-
-                              // 펼침부: 로그 상세(중첩 스크롤 방지 위해 비스크롤)
-                              if (expanded)
-                                _buildLogsDetail(
-                                  doc.logs,
-                                  plateNumber: doc.plateNumber,
-                                  scrollable: false,
-                                ),
-                            ],
-                          );
-                        }),
+                        _buildSearchPage(),
                       ],
-                    );
-                  },
-                ),
-              ),
-
-              // 페이지 1: 검색
-              _buildSearchPage(),
-            ],
-          ),
+                    ),
         ),
-
-        // 페이지 인디케이터
         Padding(
           padding: const EdgeInsets.only(top: 6.0),
           child: Row(
@@ -561,12 +519,10 @@ class _OfflineDepartureCompletedPageMergeLogState extends State<OfflineDeparture
     );
   }
 
-  // ===== 검색 페이지 구성 =====
   Widget _buildSearchPage() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 검색 입력줄
         Row(
           children: [
             Expanded(
@@ -592,108 +548,97 @@ class _OfflineDepartureCompletedPageMergeLogState extends State<OfflineDeparture
           ],
         ),
         const SizedBox(height: 8),
-
-        // 결과/상세
         Expanded(
           child: _hits.isEmpty
               ? const Center(child: Text('검색 결과가 없습니다.'))
               : (_selectedHit == null
-          // 결과 리스트 화면
-              ? ListView.separated(
-            itemCount: _hits.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
-            itemBuilder: (_, i) {
-              final h = _hits[i];
-              final lastTs =
-              h.doc.logs.isNotEmpty ? _parseTs(h.doc.logs.last['timestamp']) : null;
-              return ListTile(
-                dense: true,
-                title: Text(h.doc.docId),
-                subtitle: Text('${h.dateStr} • ${h.doc.plateNumber}'),
-                trailing: Text(_fmtTime(lastTs), style: const TextStyle(fontSize: 12)),
-                onTap: () => setState(() => _selectedHit = h),
-              );
-            },
-          )
-          // 선택된 문서 상세 화면(전체 높이, 스크롤 가능, 해제 + 사진 버튼)
-              : Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                color: Colors.grey.shade100,
-                child: Row(
-                  children: [
-                    IconButton(
-                      tooltip: '선택 해제',
-                      onPressed: () => setState(() => _selectedHit = null),
-                      icon: const Icon(Icons.close),
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _selectedHit!.doc.docId,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${_selectedHit!.dateStr} • ${_selectedHit!.doc.plateNumber}',
-                            style: const TextStyle(fontSize: 12, color: Colors.black54),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // ⬇️ 사진 버튼: 선택된 번호판의 사진 보기
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        final plate = _selectedHit!.doc.plateNumber.isNotEmpty
-                            ? _selectedHit!.doc.plateNumber
-                            : _selectedHit!.doc.docId.split('_').first;
-                        _openPlateImageDialog(plate);
+                  ? ListView.separated(
+                      itemCount: _hits.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        final h = _hits[i];
+                        final lastTs = h.doc.logs.isNotEmpty ? _parseTs(h.doc.logs.last['timestamp']) : null;
+                        return ListTile(
+                          dense: true,
+                          title: Text(h.doc.docId),
+                          subtitle: Text('${h.dateStr} • ${h.doc.plateNumber}'),
+                          trailing: Text(_fmtTime(lastTs), style: const TextStyle(fontSize: 12)),
+                          onTap: () => setState(() => _selectedHit = h),
+                        );
                       },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey.shade100,
-                        foregroundColor: Colors.black87,
-                        padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      ),
-                      icon: const Icon(Icons.photo, size: 18),
-                      label: const Text('사진', style: TextStyle(fontSize: 13)),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 6),
-              // 전체 영역을 차지하면서 세로 스크롤 가능
-              Expanded(
-                child: _buildLogsDetail(
-                  _selectedHit!.doc.logs,
-                  plateNumber: _selectedHit!.doc.plateNumber,
-                  scrollable: true, // ⬅️ 스크롤 활성화
-                ),
-              ),
-            ],
-          )),
+                    )
+                  : Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          color: Colors.grey.shade100,
+                          child: Row(
+                            children: [
+                              IconButton(
+                                tooltip: '선택 해제',
+                                onPressed: () => setState(() => _selectedHit = null),
+                                icon: const Icon(Icons.close),
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _selectedHit!.doc.docId,
+                                      style: const TextStyle(fontWeight: FontWeight.w700),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${_selectedHit!.dateStr} • ${_selectedHit!.doc.plateNumber}',
+                                      style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton.icon(
+                                onPressed: () {
+                                  final plate = _selectedHit!.doc.plateNumber.isNotEmpty
+                                      ? _selectedHit!.doc.plateNumber
+                                      : _selectedHit!.doc.docId.split('_').first;
+                                  _openPlateImageDialog(plate);
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.grey.shade100,
+                                  foregroundColor: Colors.black87,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                ),
+                                icon: const Icon(Icons.photo, size: 18),
+                                label: const Text('사진', style: TextStyle(fontSize: 13)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Expanded(
+                          child: _buildLogsDetail(
+                            _selectedHit!.doc.logs,
+                            plateNumber: _selectedHit!.doc.plateNumber,
+                            scrollable: true,
+                          ),
+                        ),
+                      ],
+                    )),
         ),
       ],
     );
   }
 
-  /// 로그 상세 리스트
-  ///  - 일반 목록의 펼침부에서는 scrollable=false (중첩 스크롤 방지)
-  ///  - 검색 상세 화면에서는 scrollable=true (세로 스크롤 허용)
   Widget _buildLogsDetail(
-      List<Map<String, dynamic>> logs, {
-        required String plateNumber,
-        bool scrollable = false,
-      }) {
+    List<Map<String, dynamic>> logs, {
+    required String plateNumber,
+    bool scrollable = false,
+  }) {
     if (logs.isEmpty) {
       return const Padding(
         padding: EdgeInsets.all(12),
@@ -702,9 +647,7 @@ class _OfflineDepartureCompletedPageMergeLogState extends State<OfflineDeparture
     }
 
     final listView = ListView.separated(
-      // 스크롤 옵션 분기
-      physics:
-      scrollable ? const AlwaysScrollableScrollPhysics() : const NeverScrollableScrollPhysics(),
+      physics: scrollable ? const AlwaysScrollableScrollPhysics() : const NeverScrollableScrollPhysics(),
       shrinkWrap: !scrollable,
       itemCount: logs.length,
       separatorBuilder: (_, __) => const Divider(height: 1),
@@ -719,8 +662,7 @@ class _OfflineDepartureCompletedPageMergeLogState extends State<OfflineDeparture
 
         final feeNum = (e['lockedFee'] ?? e['lockedFeeAmount']);
         final fee = (feeNum is num) ? _fmtWon(feeNum) : null;
-        final pay =
-        (e['paymentMethod']?.toString().trim().isNotEmpty ?? false) ? e['paymentMethod'].toString() : null;
+        final pay = (e['paymentMethod']?.toString().trim().isNotEmpty ?? false) ? e['paymentMethod'].toString() : null;
         final reason = (e['reason']?.toString().trim().isNotEmpty ?? false) ? e['reason'].toString() : null;
 
         final color = _actionColor(action);
@@ -757,7 +699,6 @@ class _OfflineDepartureCompletedPageMergeLogState extends State<OfflineDeparture
   }
 }
 
-// ===== 내부 모델 =====
 class _DayBundle {
   final String dateStr;
   final List<_DocBundle> docs;
@@ -768,7 +709,8 @@ class _DayBundle {
 class _DocBundle {
   final String docId;
   final String plateNumber;
-  final List<Map<String, dynamic>> logs; // 시간 오름차순
+  final List<Map<String, dynamic>> logs;
+
   _DocBundle({required this.docId, required this.plateNumber, required this.logs});
 }
 

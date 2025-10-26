@@ -6,9 +6,6 @@ import 'package:flutter/material.dart';
 import '../../sql/offline_auth_db.dart';
 import '../../sql/offline_auth_service.dart';
 
-/// SQLite 전용: 하단 컨트롤
-/// - 선택된 departureCompleted 1건이 있으면 “상태 수정”(간단 액션 시트)
-/// - 아니면 “번호판 검색” 버튼(상위에서 처리)
 class OfflineDepartureCompletedControlButtons extends StatefulWidget {
   final bool isSearchMode;
   final VoidCallback onResetSearch;
@@ -178,36 +175,36 @@ class _OfflineDepartureCompletedControlButtonsState extends State<OfflineDepartu
           child: Center(
             child: isPlateSelected
                 ? TextButton.icon(
-              onPressed: _showStatusSheet,
-              icon: const Icon(Icons.settings, color: Colors.black87),
-              label: const Text(
-                '상태 수정',
-                style: TextStyle(
-                  color: Colors.black87,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              ),
-            )
+                    onPressed: _showStatusSheet,
+                    icon: const Icon(Icons.settings, color: Colors.black87),
+                    label: const Text(
+                      '상태 수정',
+                      style: TextStyle(
+                        color: Colors.black87,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    ),
+                  )
                 : TextButton.icon(
-              onPressed: widget.isSearchMode ? widget.onResetSearch : widget.onShowSearchDialog,
-              icon: Icon(
-                widget.isSearchMode ? Icons.cancel : Icons.search,
-                color: widget.isSearchMode ? Colors.orange[600] : Colors.grey[800],
-              ),
-              label: Text(
-                widget.isSearchMode ? '검색 초기화' : '번호판 검색',
-                style: TextStyle(
-                  color: widget.isSearchMode ? Colors.orange[600] : Colors.grey[800],
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              ),
-            ),
+                    onPressed: widget.isSearchMode ? widget.onResetSearch : widget.onShowSearchDialog,
+                    icon: Icon(
+                      widget.isSearchMode ? Icons.cancel : Icons.search,
+                      color: widget.isSearchMode ? Colors.orange[600] : Colors.grey[800],
+                    ),
+                    label: Text(
+                      widget.isSearchMode ? '검색 초기화' : '번호판 검색',
+                      style: TextStyle(
+                        color: widget.isSearchMode ? Colors.orange[600] : Colors.grey[800],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    ),
+                  ),
           ),
         ),
       ),

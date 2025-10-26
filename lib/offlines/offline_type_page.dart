@@ -1,7 +1,3 @@
-// lib/offlines/offline_type_page.dart
-// (원본에서 기능 유지 + ✅ TTS 추가)
-
-/// ignore_for_file: use_build_context_synchronously
 import 'dart:math';
 
 import 'package:flutter/gestures.dart';
@@ -17,14 +13,11 @@ import 'offline_states/page/offline_page_info.dart';
 import 'offline_type_package/common_widgets/dashboard_bottom_sheet/offline_home_dash_board_bottom_sheet.dart';
 import '../utils/snackbar_helper.dart';
 
-// ▼ SQLite / 세션
 import 'sql/offline_auth_db.dart';
 import 'sql/offline_auth_service.dart';
 
-// ▼ 출차요청 바텀시트(번호판만 크게)
 import 'tablet/offline_departure_bottom_sheet.dart';
 
-// ✅ TTS
 import 'tts/offline_tts.dart';
 
 class _Palette {

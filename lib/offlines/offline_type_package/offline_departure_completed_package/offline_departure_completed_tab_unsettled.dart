@@ -1,15 +1,10 @@
 import 'package:flutter/material.dart';
 
-// ▼ SQLite / 세션
 import '../../sql/offline_auth_db.dart';
 import '../../sql/offline_auth_service.dart';
 
 import '../../../utils/snackbar_helper.dart';
 
-/// SQLite 전용: 출차 완료(정산 무관) 탭
-/// - ✅ status_type='departured' 만 표시
-/// - ✅ 날짜 범위 필터는 request_time(TEXT) 대신 COALESCE(updated_at, created_at) (ms) 사용
-/// - 선택 토글/상태 시트 없이, 단순 목록 및 롱프레스 삭제 제공(필요 시 확장)
 class OfflineDepartureCompletedTabUnsettled extends StatefulWidget {
   const OfflineDepartureCompletedTabUnsettled({
     super.key,
@@ -21,16 +16,13 @@ class OfflineDepartureCompletedTabUnsettled extends StatefulWidget {
   final DateTime selectedDate;
 
   @override
-  State<OfflineDepartureCompletedTabUnsettled> createState() =>
-      _OfflineDepartureCompletedTabUnsettledState();
+  State<OfflineDepartureCompletedTabUnsettled> createState() => _OfflineDepartureCompletedTabUnsettledState();
 }
 
-class _OfflineDepartureCompletedTabUnsettledState
-    extends State<OfflineDepartureCompletedTabUnsettled> {
+class _OfflineDepartureCompletedTabUnsettledState extends State<OfflineDepartureCompletedTabUnsettled> {
   bool _openCalendar = true;
   bool _openUnsettled = false;
 
-  // 내부 간단 달력 대신 상단 안내만 보여주고, 날짜는 상위에서 내려받은 값 사용
   void _toggleCalendar() {
     setState(() {
       if (_openCalendar) {
@@ -60,17 +52,12 @@ class _OfflineDepartureCompletedTabUnsettledState
 
   static const String _kStatusDepartured = 'departured';
 
-  /// ✅ status_type='departured' 만
-  /// ✅ 날짜: COALESCE(updated_at, created_at) (ms) 로 필터링 (request_time TEXT 사용 안 함)
   Future<List<Map<String, Object?>>> _loadDeparturedRows() async {
     final db = await OfflineAuthDb.instance.database;
 
-    // 선택한 날짜의 00:00 ~ 23:59:59.999 범위(ms)
     final d = widget.selectedDate;
-    final from =
-        DateTime(d.year, d.month, d.day).millisecondsSinceEpoch;
-    final to = DateTime(d.year, d.month, d.day, 23, 59, 59, 999)
-        .millisecondsSinceEpoch;
+    final from = DateTime(d.year, d.month, d.day).millisecondsSinceEpoch;
+    final to = DateTime(d.year, d.month, d.day, 23, 59, 59, 999).millisecondsSinceEpoch;
 
     final rows = await db.query(
       OfflineAuthDb.tablePlates,
@@ -89,8 +76,7 @@ class _OfflineDepartureCompletedTabUnsettledState
         AND COALESCE(updated_at, created_at, 0) BETWEEN ? AND ?
       ''',
       whereArgs: [_kStatusDepartured, widget.area, from, to],
-      orderBy:
-      'COALESCE(updated_at, created_at) DESC',
+      orderBy: 'COALESCE(updated_at, created_at) DESC',
       limit: 300,
     );
 
@@ -104,7 +90,6 @@ class _OfflineDepartureCompletedTabUnsettledState
     final uname = (s?.name ?? '').trim();
 
     await db.transaction((txn) async {
-      // 현재 선택 상태
       final r = await txn.query(
         OfflineAuthDb.tablePlates,
         columns: const ['is_selected'],
@@ -112,19 +97,15 @@ class _OfflineDepartureCompletedTabUnsettledState
         whereArgs: [id],
         limit: 1,
       );
-      final curSel =
-      r.isNotEmpty ? ((r.first['is_selected'] as int?) ?? 0) : 0;
+      final curSel = r.isNotEmpty ? ((r.first['is_selected'] as int?) ?? 0) : 0;
 
-      // 같은 status 범위에서 나의 기존 선택 해제 (departured 범위)
       await txn.update(
         OfflineAuthDb.tablePlates,
         {'is_selected': 0},
-        where:
-        "COALESCE(status_type,'') = ? AND (COALESCE(selected_by,'') = ? OR COALESCE(user_name,'') = ?)",
+        where: "COALESCE(status_type,'') = ? AND (COALESCE(selected_by,'') = ? OR COALESCE(user_name,'') = ?)",
         whereArgs: [_kStatusDepartured, uid, uname],
       );
 
-      // 대상 토글
       await txn.update(
         OfflineAuthDb.tablePlates,
         {
@@ -172,9 +153,7 @@ class _OfflineDepartureCompletedTabUnsettledState
                   ),
                 ),
                 const SizedBox(height: 12),
-
                 _SectionHeaderTile(
-                  // ✅ 라벨: 출차 완료(정산 무관)
                   title: '출차 완료 (정산 무관)',
                   subtitle: '선택한 날짜 · 현재 지역 기준',
                   icon: Icons.list_alt,
@@ -182,93 +161,65 @@ class _OfflineDepartureCompletedTabUnsettledState
                   isOpen: _openUnsettled,
                   onTap: _toggleUnsettled,
                 ),
-
                 _CollapsibleCard(
                   isOpen: _openUnsettled,
                   child: (total == 0)
                       ? const _EmptyState(
-                    icon: Icons.inbox_outlined,
-                    title: '표시할 번호판이 없습니다',
-                    message: '달력을 바꾸거나 번호판 검색을 사용해 보세요.',
-                  )
+                          icon: Icons.inbox_outlined,
+                          title: '표시할 번호판이 없습니다',
+                          message: '달력을 바꾸거나 번호판 검색을 사용해 보세요.',
+                        )
                       : ListView.separated(
-                    padding: const EdgeInsets.all(12),
-                    shrinkWrap: true,
-                    physics:
-                    const NeverScrollableScrollPhysics(),
-                    itemBuilder: (_, i) {
-                      final r = rows[i];
-                      final id = r['id'] as int;
-                      final pn =
-                      (r['plate_number'] as String?)?.trim();
-                      final four =
-                          (r['plate_four_digit'] as String?)
-                              ?.trim() ??
-                              '';
-                      final loc =
-                          (r['location'] as String?)?.trim() ?? '';
-                      final selected =
-                          ((r['is_selected'] as int?) ?? 0) != 0;
+                          padding: const EdgeInsets.all(12),
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemBuilder: (_, i) {
+                            final r = rows[i];
+                            final id = r['id'] as int;
+                            final pn = (r['plate_number'] as String?)?.trim();
+                            final four = (r['plate_four_digit'] as String?)?.trim() ?? '';
+                            final loc = (r['location'] as String?)?.trim() ?? '';
+                            final selected = ((r['is_selected'] as int?) ?? 0) != 0;
 
-                      final title = (pn != null && pn.isNotEmpty)
-                          ? pn
-                          : (four.isNotEmpty
-                          ? '****-$four'
-                          : '미상');
+                            final title = (pn != null && pn.isNotEmpty) ? pn : (four.isNotEmpty ? '****-$four' : '미상');
 
-                      return ListTile(
-                        dense: true,
-                        leading: Icon(selected
-                            ? Icons.check_circle
-                            : Icons.circle_outlined),
-                        title: Text(title,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.w600)),
-                        subtitle:
-                        loc.isNotEmpty ? Text(loc) : null,
-                        onTap: () => _toggleSelect(id),
-                        onLongPress: () async {
-                          // 롱프레스: 간단 삭제
-                          final ok = await showDialog<bool>(
-                            context: context,
-                            builder: (_) => AlertDialog(
-                              title: const Text('삭제 확인'),
-                              content: Text(
-                                  '이 항목을 삭제할까요?\n\n$title'),
-                              actions: [
-                                TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(
-                                            context, false),
-                                    child: const Text('취소')),
-                                TextButton(
-                                    onPressed: () =>
-                                        Navigator.pop(
-                                            context, true),
-                                    child: const Text('삭제')),
-                              ],
-                            ),
-                          );
-                          if (ok == true) {
-                            final db = await OfflineAuthDb
-                                .instance.database;
-                            await db.delete(
-                              OfflineAuthDb.tablePlates,
-                              where: 'id = ?',
-                              whereArgs: [id],
+                            return ListTile(
+                              dense: true,
+                              leading: Icon(selected ? Icons.check_circle : Icons.circle_outlined),
+                              title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                              subtitle: loc.isNotEmpty ? Text(loc) : null,
+                              onTap: () => _toggleSelect(id),
+                              onLongPress: () async {
+                                final ok = await showDialog<bool>(
+                                  context: context,
+                                  builder: (_) => AlertDialog(
+                                    title: const Text('삭제 확인'),
+                                    content: Text('이 항목을 삭제할까요?\n\n$title'),
+                                    actions: [
+                                      TextButton(
+                                          onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
+                                      TextButton(
+                                          onPressed: () => Navigator.pop(context, true), child: const Text('삭제')),
+                                    ],
+                                  ),
+                                );
+                                if (ok == true) {
+                                  final db = await OfflineAuthDb.instance.database;
+                                  await db.delete(
+                                    OfflineAuthDb.tablePlates,
+                                    where: 'id = ?',
+                                    whereArgs: [id],
+                                  );
+                                  if (!mounted) return;
+                                  showSuccessSnackbar(context, '삭제되었습니다.');
+                                  setState(() {});
+                                }
+                              },
                             );
-                            if (!mounted) return;
-                            showSuccessSnackbar(
-                                context, '삭제되었습니다.');
-                            setState(() {});
-                          }
-                        },
-                      );
-                    },
-                    separatorBuilder: (_, __) =>
-                    const Divider(height: 1),
-                    itemCount: rows.length,
-                  ),
+                          },
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemCount: rows.length,
+                        ),
                 ),
               ],
             ),
@@ -323,17 +274,14 @@ class _SectionHeaderTile extends StatelessWidget {
                         title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700),
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            fontSize: 12, color: Colors.grey[600]),
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                       ),
                     ],
                   ),
@@ -369,8 +317,7 @@ class _CollapsibleCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: child,
       ),
-      crossFadeState:
-      isOpen ? CrossFadeState.showSecond : CrossFadeState.showFirst,
+      crossFadeState: isOpen ? CrossFadeState.showSecond : CrossFadeState.showFirst,
       duration: const Duration(milliseconds: 200),
     );
   }
@@ -378,31 +325,27 @@ class _CollapsibleCard extends StatelessWidget {
 
 class _CountBadge extends StatelessWidget {
   const _CountBadge({required this.count});
+
   final int count;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding:
-      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.06),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         '$count',
-        style: const TextStyle(
-            fontSize: 12, fontWeight: FontWeight.w700),
+        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
       ),
     );
   }
 }
 
 class _EmptyState extends StatelessWidget {
-  const _EmptyState(
-      {required this.icon,
-        required this.title,
-        required this.message});
+  const _EmptyState({required this.icon, required this.title, required this.message});
 
   final IconData icon;
   final String title;
@@ -412,22 +355,18 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding:
-        const EdgeInsets.fromLTRB(16, 32, 16, 32),
+        padding: const EdgeInsets.fromLTRB(16, 32, 16, 32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 36, color: Colors.grey[500]),
             const SizedBox(height: 10),
-            Text(title,
-                style: const TextStyle(
-                    fontSize: 15, fontWeight: FontWeight.w700)),
+            Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 12, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
             ),
           ],
         ),

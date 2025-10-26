@@ -1,49 +1,26 @@
-// lib/offlines/offline_type_package/offline_parking_completed_package/offline_parking_completed_control_buttons.dart
-//
-// 변경 요약 👇
-// - Firestore/Provider/Repository/PlateType/UserState/PlateState/DeletePlate 완전 제거
-// - SQLite만 사용하여 선택된 차량 조회/사전정산/정산취소/출차요청 준비/삭제 처리
-// - 로그는 offline_plates.logs(TEXT)에 JSON 배열 문자열로 축적
-// - '상태 수정' 탭은 간단 액션 시트(입차요청/삭제)로 대체
-// - 잠금/잠금 해제 아이콘에 AnimatedSwitcher 적용(부드러운 전환)
-//
-// 스키마 참고(offline_plates):
-// id INTEGER PK, plate_number TEXT, plate_four_digit TEXT, area TEXT, location TEXT,
-// basic_amount INTEGER, add_amount INTEGER, basic_standard INTEGER, add_standard INTEGER,
-// is_locked_fee INTEGER, locked_fee_amount INTEGER, locked_at_seconds INTEGER,
-// status_type TEXT, request_time TEXT, updated_at INTEGER, created_at INTEGER,
-// billing_type TEXT, regular_amount INTEGER, regular_duration_hours INTEGER,
-// selected_by TEXT, user_name TEXT, is_selected INTEGER, logs TEXT
-//
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
-// ▼ SQLite / 세션
 import '../../sql/offline_auth_db.dart';
 import '../../sql/offline_auth_service.dart';
 
 import '../../../utils/snackbar_helper.dart';
 
-// 기존 UI 구성요소 (그대로 사용)
 import '../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../offline_departure_completed_bottom_sheet.dart';
 
-// 상태시트는 간단 액션시트로 대체 → 기존 import 제거
 import 'widgets/offline_set_departure_request_dialog.dart';
 import '../../../widgets/dialog/plate_remove_dialog.dart';
 
-/// Deep Blue 팔레트(서비스 카드와 동일 계열) + 상태 색상
 class _Palette {
-  static const base = Color(0xFF0D47A1); // primary
-  static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
+  static const base = Color(0xFF0D47A1);
+  static const dark = Color(0xFF09367D);
 
-  // 상태 강조 색
-  static const danger = Color(0xFFD32F2F); // 출차 요청(붉은색)
-  static const success = Color(0xFF2E7D32); // 출차 완료(초록색)
+  static const danger = Color(0xFFD32F2F);
+  static const success = Color(0xFF2E7D32);
 }
 
-// PlateType 의존 제거: status_type 문자열 키 상수
 const String _kStatusParkingCompleted = 'parkingCompleted';
 
 class OfflineParkingCompletedControlButtons extends StatefulWidget {
@@ -57,7 +34,6 @@ class OfflineParkingCompletedControlButtons extends StatefulWidget {
   final VoidCallback resetParkingAreaFilter;
   final VoidCallback toggleSortIcon;
 
-  // 외부(상위)에서 구현한 콜백(오프라인 SQLite 버전에도 그대로 사용)
   final Function(BuildContext context, String plateNumber, String area) handleEntryParkingRequest;
   final Function(BuildContext context) handleDepartureRequested;
 
@@ -81,11 +57,9 @@ class OfflineParkingCompletedControlButtons extends StatefulWidget {
 }
 
 class _OfflineParkingCompletedControlButtonsState extends State<OfflineParkingCompletedControlButtons> {
-  // 현재 세션 아이덴티티
   String _uid = '';
   String _uname = '';
 
-  // 선택된 plate (간이 맵)
   Map<String, Object?>? _selectedPlate;
 
   @override
@@ -102,7 +76,6 @@ class _OfflineParkingCompletedControlButtonsState extends State<OfflineParkingCo
 
   int _nowMs() => DateTime.now().millisecondsSinceEpoch;
 
-  // 선택된 plate 1건 로드 (나의 선택)
   Future<void> _reloadSelectedPlate() async {
     final db = await OfflineAuthDb.instance.database;
     final rows = await db.query(
@@ -137,7 +110,7 @@ class _OfflineParkingCompletedControlButtonsState extends State<OfflineParkingCo
       limit: 1,
     );
 
-    if (!mounted) return; // ← setState after dispose 방지
+    if (!mounted) return;
     setState(() {
       _selectedPlate = rows.isNotEmpty ? rows.first : null;
     });
@@ -148,16 +121,15 @@ class _OfflineParkingCompletedControlButtonsState extends State<OfflineParkingCo
   bool _isLockedFee(Map<String, Object?> p) => ((p['is_locked_fee'] as int?) ?? 0) != 0;
 
   int _asInt(Object? v) => switch (v) {
-    int i => i,
-    num n => n.toInt(),
-    String s => int.tryParse(s) ?? 0,
-    _ => 0,
-  };
+        int i => i,
+        num n => n.toInt(),
+        String s => int.tryParse(s) ?? 0,
+        _ => 0,
+      };
 
   String _asStr(Object? v) => (v?.toString() ?? '').trim();
 
   int _entryTimeSecondsOf(Map<String, Object?> p) {
-    // request_time(TEXT) → seconds, 없으면 updated_at/created_at(ms)
     final rt = _asStr(p['request_time']);
     if (rt.isNotEmpty) {
       final dt = DateTime.tryParse(rt);
@@ -200,7 +172,6 @@ class _OfflineParkingCompletedControlButtonsState extends State<OfflineParkingCo
   }
 
   Future<void> _autoLockZeroFee(Map<String, Object?> p) async {
-    // 0원 규칙: basic==0 && add==0 이고 아직 잠금 아님 → 자동 잠금
     final id = _asInt(p['id']);
     final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
 
@@ -229,7 +200,6 @@ class _OfflineParkingCompletedControlButtonsState extends State<OfflineParkingCo
   }
 
   Future<void> _lockWithBilling(Map<String, Object?> p) async {
-    // 바텀시트로 금액/결제수단 입력받아 잠금
     final id = _asInt(p['id']);
     final entrySec = _entryTimeSecondsOf(p);
     final nowSec = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
@@ -280,7 +250,6 @@ class _OfflineParkingCompletedControlButtonsState extends State<OfflineParkingCo
   }
 
   Future<void> _unlockFee(Map<String, Object?> p) async {
-    // 잠금 해제(정산 취소)
     final id = _asInt(p['id']);
     final db = await OfflineAuthDb.instance.database;
 
@@ -325,7 +294,6 @@ class _OfflineParkingCompletedControlButtonsState extends State<OfflineParkingCo
     await _reloadSelectedPlate();
   }
 
-  // '상태 수정' 대체: 간단 액션 시트
   Future<void> _showSimpleStatusSheet(Map<String, Object?> p) async {
     final pn = _asStr(p['plate_number']);
     final area = _asStr(p['area']);
@@ -387,14 +355,12 @@ class _OfflineParkingCompletedControlButtonsState extends State<OfflineParkingCo
 
   @override
   Widget build(BuildContext context) {
-    // 팔레트 기반 컬러
     final Color selectedItemColor = _Palette.base;
     final Color unselectedItemColor = _Palette.dark.withOpacity(.55);
     final Color muted = _Palette.dark.withOpacity(.60);
 
     final bool isPlateSelected = _hasSelected;
 
-    // 공통 애니메이션 빌더 (잠금/해제/새로고침 등)
     Widget _animatedIcon(Widget child, String keyName) {
       return AnimatedSwitcher(
         duration: const Duration(milliseconds: 220),
@@ -414,74 +380,63 @@ class _OfflineParkingCompletedControlButtonsState extends State<OfflineParkingCo
       unselectedItemColor: unselectedItemColor,
       items: (widget.isLocationPickerMode || widget.isStatusMode)
           ? [
-        BottomNavigationBarItem(
-          // 🔒 잠금/해제 애니메이션(특수 모드)
-          icon: _animatedIcon(
-            widget.isLocked
-                ? const Icon(Icons.lock)
-                : const Icon(Icons.lock_open),
-            widget.isLocked ? 'locked-mode' : 'unlocked-mode',
-          ),
-          label: widget.isLocked ? '잠금' : '잠금 해제',
-        ),
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.move_down, color: _Palette.danger),
-          label: '출차 요청',
-        ),
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.directions_car, color: _Palette.success),
-          label: '출차 완료',
-        ),
-      ]
+              BottomNavigationBarItem(
+                icon: _animatedIcon(
+                  widget.isLocked ? const Icon(Icons.lock) : const Icon(Icons.lock_open),
+                  widget.isLocked ? 'locked-mode' : 'unlocked-mode',
+                ),
+                label: widget.isLocked ? '잠금' : '잠금 해제',
+              ),
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.move_down, color: _Palette.danger),
+                label: '출차 요청',
+              ),
+              const BottomNavigationBarItem(
+                icon: Icon(Icons.directions_car, color: _Palette.success),
+                label: '출차 완료',
+              ),
+            ]
           : [
-        BottomNavigationBarItem(
-          // ✅ 선택 상태의 잠금 bool에 따라 lock / lock_open 전환(애니메이션)
-          icon: _animatedIcon(
-            isPlateSelected
-                ? (_selectedPlate != null && _isLockedFee(_selectedPlate!)
-                ? const Icon(Icons.lock, color: Color(0x9909367D))
-                : const Icon(Icons.lock_open, color: Color(0x9909367D)))
-                : Icon(Icons.refresh, color: muted),
-            isPlateSelected
-                ? (_selectedPlate != null && _isLockedFee(_selectedPlate!)
-                ? 'lock-selected'
-                : 'unlock-selected')
-                : 'refresh',
-          ),
-          label: isPlateSelected
-              ? (_selectedPlate != null && _isLockedFee(_selectedPlate!)
-              ? '정산 취소'
-              : '사전 정산')
-              : '채팅하기',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(
-            isPlateSelected ? Icons.check_circle : Icons.search,
-            color: isPlateSelected ? _Palette.danger : muted,
-          ),
-          label: isPlateSelected ? '출차 요청' : '번호판 검색',
-        ),
-        BottomNavigationBarItem(
-          icon: Transform.scale(
-            scaleX: widget.isSorted ? -1 : 1,
-            child: Icon(
-              isPlateSelected ? Icons.settings : Icons.sort,
-              color: muted,
-            ),
-          ),
-          label: isPlateSelected ? '상태 수정' : (widget.isSorted ? '최신순' : '오래된 순'),
-        ),
-      ],
+              BottomNavigationBarItem(
+                icon: _animatedIcon(
+                  isPlateSelected
+                      ? (_selectedPlate != null && _isLockedFee(_selectedPlate!)
+                          ? const Icon(Icons.lock, color: Color(0x9909367D))
+                          : const Icon(Icons.lock_open, color: Color(0x9909367D)))
+                      : Icon(Icons.refresh, color: muted),
+                  isPlateSelected
+                      ? (_selectedPlate != null && _isLockedFee(_selectedPlate!) ? 'lock-selected' : 'unlock-selected')
+                      : 'refresh',
+                ),
+                label: isPlateSelected
+                    ? (_selectedPlate != null && _isLockedFee(_selectedPlate!) ? '정산 취소' : '사전 정산')
+                    : '채팅하기',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(
+                  isPlateSelected ? Icons.check_circle : Icons.search,
+                  color: isPlateSelected ? _Palette.danger : muted,
+                ),
+                label: isPlateSelected ? '출차 요청' : '번호판 검색',
+              ),
+              BottomNavigationBarItem(
+                icon: Transform.scale(
+                  scaleX: widget.isSorted ? -1 : 1,
+                  child: Icon(
+                    isPlateSelected ? Icons.settings : Icons.sort,
+                    color: muted,
+                  ),
+                ),
+                label: isPlateSelected ? '상태 수정' : (widget.isSorted ? '최신순' : '오래된 순'),
+              ),
+            ],
       onTap: (index) async {
-        // 상태/로케이션 선택 모드
         if (widget.isLocationPickerMode || widget.isStatusMode) {
           if (index == 0) {
             widget.onToggleLock();
           } else if (index == 1) {
-            // '출차 요청' 버튼 → 검색/다이얼로그(현행 유지)
             widget.showSearchDialog();
           } else if (index == 2) {
-            // 출차 완료 현황 시트(리팩터링된 바텀시트: selectedDate 필수)
             final now = DateTime.now();
             final selectedDate = DateTime(now.year, now.month, now.day);
             await showModalBottomSheet(
@@ -496,7 +451,6 @@ class _OfflineParkingCompletedControlButtonsState extends State<OfflineParkingCo
           return;
         }
 
-        // 일반 모드: 선택 안된 경우
         if (!widget.isParkingAreaMode || !isPlateSelected) {
           if (index == 0 || index == 1) {
             widget.showSearchDialog();
@@ -506,7 +460,6 @@ class _OfflineParkingCompletedControlButtonsState extends State<OfflineParkingCo
           return;
         }
 
-        // 선택된 차량 기준 실행
         final p = _selectedPlate!;
         final basicAmount = _asInt(p['basic_amount']);
         final addAmount = _asInt(p['add_amount']);
@@ -514,30 +467,25 @@ class _OfflineParkingCompletedControlButtonsState extends State<OfflineParkingCo
         final locked = _isLockedFee(p);
 
         if (index == 0) {
-          // === 사전 정산 / 정산 취소 ===
           final isZeroZero = (basicAmount == 0) && (addAmount == 0);
 
-          // 0원 + 이미 잠금 → 해제 금지
           if (isZeroZero && locked) {
             showFailedSnackbar(context, '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.');
             return;
           }
 
-          // 0원 + 아직 잠금 아님 → 자동 잠금
           if (isZeroZero && !locked) {
             await _autoLockZeroFee(p);
             await _reloadSelectedPlate();
             return;
           }
 
-          // 정산 타입 미지정
           if (!locked && billingType.isEmpty) {
             showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
             return;
           }
 
           if (locked) {
-            // 정산 취소 확인 다이얼로그 후 잠금 해제
             final ok = await showDialog<bool>(
               context: context,
               builder: (_) => AlertDialog(
@@ -554,12 +502,10 @@ class _OfflineParkingCompletedControlButtonsState extends State<OfflineParkingCo
               await _reloadSelectedPlate();
             }
           } else {
-            // 사전 정산 바텀시트
             await _lockWithBilling(p);
             await _reloadSelectedPlate();
           }
         } else if (index == 1) {
-          // 출차 요청(확정 동작은 상위 콜백에서 SQLite 처리)
           showDialog(
             context: context,
             builder: (context) => OfflineSetDepartureRequestBottomSheet(
@@ -567,7 +513,6 @@ class _OfflineParkingCompletedControlButtonsState extends State<OfflineParkingCo
             ),
           );
         } else if (index == 2) {
-          // 상태 수정 (간이 액션시트)
           await _showSimpleStatusSheet(p);
           await _reloadSelectedPlate();
         }

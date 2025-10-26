@@ -1,13 +1,3 @@
-// lib/screens/type_pages/offline_departure_request_package/departure_request_control_buttons.dart
-//
-// 리팩터링 요약
-// - ✅ Stateless + FutureBuilder<bool> 로 유지(선택 여부를 매 빌드마다 SQLite 재조회)
-// - ✅ 정산 로직(사전정산/잠금/해제) 전부 제거 → '정산 관리' 안내 풀스크린 바텀시트만 노출
-// - ✅ 불필요한 정산 관련 import 제거(billing_bottom_sheet, confirm_cancel_fee_dialog)
-// - ✅ 상태 시트의 '입차 요청으로 변경'은 parkingRequests, '입차 완료 처리'는 parkingCompleted 상수 사용
-// - ✅ 상태 시트에 '출차 완료 처리' 추가(departured 상수 사용)
-// - 액션 시점에는 필요한 최소 조회만 수행(상태 시트/삭제 등)
-//
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -20,7 +10,6 @@ import '../../sql/offline_auth_service.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/dialog/plate_remove_dialog.dart';
 
-/// Deep Blue 팔레트 + 상태 강조 색
 class _Palette {
   static const base = Color(0xFF0D47A1);
   static const dark = Color(0xFF09367D);
@@ -28,11 +17,10 @@ class _Palette {
   static const success = Color(0xFF2E7D32);
 }
 
-// 상태 문자열
 const String _kStatusDepartureRequests = 'departureRequests';
-const String _kStatusParkingRequests   = 'parkingRequests';
-const String _kStatusParkingCompleted  = 'parkingCompleted';
-const String _kStatusDepartured        = 'departured';
+const String _kStatusParkingRequests = 'parkingRequests';
+const String _kStatusParkingCompleted = 'parkingCompleted';
+const String _kStatusDepartured = 'departured';
 
 class OfflineDepartureRequestControlButtons extends StatelessWidget {
   final bool isSorted;
@@ -40,7 +28,7 @@ class OfflineDepartureRequestControlButtons extends StatelessWidget {
 
   final VoidCallback showSearchDialog;
   final VoidCallback toggleSortIcon;
-  final VoidCallback handleDepartureCompleted; // 메인 하단 중앙 버튼(출차) 액션은 페이지 콜백 유지
+  final VoidCallback handleDepartureCompleted;
   final VoidCallback toggleLock;
 
   const OfflineDepartureRequestControlButtons({
@@ -53,21 +41,19 @@ class OfflineDepartureRequestControlButtons extends StatelessWidget {
     required this.toggleLock,
   });
 
-  // ─────────────────────────────────────────────────────────────
-  // 공통 유틸
-  // ─────────────────────────────────────────────────────────────
   Future<(String uid, String uname)> _identity() async {
     final s = await OfflineAuthService.instance.currentSession();
     return ((s?.userId ?? '').trim(), (s?.name ?? '').trim());
   }
 
   String _asStr(Object? v) => (v?.toString() ?? '').trim();
+
   int _asInt(Object? v) => switch (v) {
-    int i => i,
-    num n => n.toInt(),
-    String s => int.tryParse(s) ?? 0,
-    _ => 0,
-  };
+        int i => i,
+        num n => n.toInt(),
+        String s => int.tryParse(s) ?? 0,
+        _ => 0,
+      };
 
   int _nowMs() => DateTime.now().millisecondsSinceEpoch;
 
@@ -108,7 +94,9 @@ class OfflineDepartureRequestControlButtons extends StatelessWidget {
       if (raw is String && raw.trim().isNotEmpty) {
         try {
           logs = jsonDecode(raw) as List<dynamic>;
-        } catch (_) {/* ignore */}
+        } catch (_) {
+          /* ignore */
+        }
       }
     }
     logs.add(log);
@@ -120,18 +108,15 @@ class OfflineDepartureRequestControlButtons extends StatelessWidget {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // '정산 관리' 안내 풀스크린 바텀시트(실제 정산 로직 없음)
-  // ─────────────────────────────────────────────────────────────
   Future<void> _showBillingInfoFullSheet(BuildContext context) async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      useSafeArea: true, // 상단 안전영역 반영
+      useSafeArea: true,
       backgroundColor: Colors.white,
       builder: (sheetContext) {
         return FractionallySizedBox(
-          heightFactor: 1, // 화면 전체 높이
+          heightFactor: 1,
           child: SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
@@ -157,13 +142,12 @@ class OfflineDepartureRequestControlButtons extends StatelessWidget {
                   const SizedBox(height: 8),
                   const Text(
                     '기본 정산, 할증, 할인을 적용할 수 있습니다.\n'
-                        '현재 버전에서는 정산 정보를 확인만 할 수 있습니다.',
+                    '현재 버전에서는 정산 정보를 확인만 할 수 있습니다.',
                     style: TextStyle(fontSize: 15),
                   ),
                   const SizedBox(height: 16),
                   const Divider(height: 1),
                   const SizedBox(height: 12),
-                  // 설명/추가 안내 섹션 필요 시 확장
                 ],
               ),
             ),
@@ -173,9 +157,6 @@ class OfflineDepartureRequestControlButtons extends StatelessWidget {
     );
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // 상태 전환: 입차요청/입차완료/출차완료
-  // ─────────────────────────────────────────────────────────────
   Future<void> _updateStatus({
     required BuildContext context,
     required int id,
@@ -214,14 +195,13 @@ class OfflineDepartureRequestControlButtons extends StatelessWidget {
       showSuccessSnackbar(
         context,
         '처리 완료'
-            '${plateNumberForToast != null && plateNumberForToast.trim().isNotEmpty ? ': $plateNumberForToast' : ''}',
+        '${plateNumberForToast != null && plateNumberForToast.trim().isNotEmpty ? ': $plateNumberForToast' : ''}',
       );
     } catch (e) {
       showFailedSnackbar(context, '상태 변경 실패: $e');
     }
   }
 
-  // 상태 시트(간단 액션)
   Future<void> _showQuickActionsSheet(BuildContext context) async {
     final selectedRow = await _getSelectedPlateRow();
     if (selectedRow == null) return;
@@ -238,7 +218,6 @@ class OfflineDepartureRequestControlButtons extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 안내 항목(비활성) - 필요 시 추가
             const ListTile(
               leading: Icon(Icons.receipt_long),
               title: Text('로그 확인'),
@@ -250,7 +229,6 @@ class OfflineDepartureRequestControlButtons extends StatelessWidget {
               enabled: false,
             ),
             const Divider(),
-            // 입차 요청으로 변경(parkingRequests)
             ListTile(
               leading: const Icon(Icons.playlist_add),
               title: const Text('입차 요청으로 변경'),
@@ -260,18 +238,16 @@ class OfflineDepartureRequestControlButtons extends StatelessWidget {
                   context: context,
                   id: id,
                   toStatus: _kStatusParkingRequests,
-                  locationOverride: '미지정', // 입차요청으로 되돌릴 때 위치 비움/미지정 처리
+                  locationOverride: '미지정',
                   plateNumberForToast: plateNumber,
                 );
               },
             ),
-            // 입차 완료 처리(parkingCompleted)
             ListTile(
               leading: const Icon(Icons.local_parking),
               title: const Text('입차 완료 처리'),
               onTap: () async {
                 Navigator.pop(context);
-                // 위치는 유지(없으면 빈 값 그대로)
                 await _updateStatus(
                   context: context,
                   id: id,
@@ -280,7 +256,6 @@ class OfflineDepartureRequestControlButtons extends StatelessWidget {
                 );
               },
             ),
-            // 출차 완료 처리(departured)
             ListTile(
               leading: const Icon(Icons.check_circle_outline),
               title: const Text('출차 완료 처리'),
@@ -294,7 +269,6 @@ class OfflineDepartureRequestControlButtons extends StatelessWidget {
                 );
               },
             ),
-            // 삭제
             ListTile(
               leading: const Icon(Icons.delete, color: Colors.red),
               title: const Text('삭제', style: TextStyle(color: Colors.red)),
@@ -396,12 +370,9 @@ class OfflineDepartureRequestControlButtons extends StatelessWidget {
               return;
             }
 
-            // 차량 선택됨
             if (index == 0) {
-              // ✅ 정산 로직 대신 안내 시트만 노출
               await _showBillingInfoFullSheet(context);
             } else if (index == 1) {
-              // 메인 하단 중앙 버튼은 기존처럼 "출차 완료" 콜백을 호출
               handleDepartureCompleted(); // 페이지에서 SQLite 전환 처리
             } else if (index == 2) {
               await _showQuickActionsSheet(context);

@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
 
-/// 업데이트 풀스크린 바텀 시트
-/// - 외부에서 entries를 주입할 수도 있고, 기본 목록(defaultEntries)도 제공합니다.
-/// - 날짜(date) 필드는 제거되어, 버전/하이라이트만 노출합니다.
 class UpdateBottomSheet extends StatelessWidget {
   const UpdateBottomSheet({super.key, this.entries});
 
   final List<UpdateEntry>? entries;
 
-  /// 예시 기본 데이터 (실서비스에선 서버/로컬에서 가져오세요)
   static final List<UpdateEntry> defaultEntries = [
+    UpdateEntry(
+      version: 'v1.0.0+10',
+      highlights: [
+        '구글 계정 인증 추가',
+        '오프라인 모드 튜토리얼 개선',
+        '본사 카드 내 1차 앱 사용 설명서 삽입',
+        '직원용 플로팅 버블 및 Gmail 발신 기능 개선',
+        '본사용 플로팅 버블 개선 및 본사 대표 Gmail로의 발신 기능 추가',
+        '첫 진입 12시 방향 아이콘 내 스프레드 시트 및 직원용 지정 담당자 Gmail 입력 기능 추가'
+      ],
+    ),
     UpdateEntry(
       version: 'v1.0.0+9',
       highlights: [
@@ -121,8 +128,7 @@ class UpdateBottomSheet extends StatelessWidget {
               child: ListView.separated(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                 itemCount: list.length,
-                separatorBuilder: (_, __) =>
-                    Divider(height: 24, color: cs.outlineVariant.withOpacity(.3)),
+                separatorBuilder: (_, __) => Divider(height: 24, color: cs.outlineVariant.withOpacity(.3)),
                 itemBuilder: (context, i) => _UpdateTile(entry: list[i]),
               ),
             ),
@@ -133,8 +139,6 @@ class UpdateBottomSheet extends StatelessWidget {
   }
 }
 
-/// 공개 모델 (필요 시 외부에서 entries 주입 가능)
-/// - date 필드는 제거되었습니다.
 class UpdateEntry {
   final String version;
   final List<String> highlights;
@@ -145,9 +149,9 @@ class UpdateEntry {
   });
 }
 
-/// 내부 표시용 타일 위젯 (private)
 class _UpdateTile extends StatelessWidget {
   const _UpdateTile({required this.entry});
+
   final UpdateEntry entry;
 
   @override
@@ -190,7 +194,7 @@ class _UpdateTile extends StatelessWidget {
 
             // Highlights
             ...entry.highlights.map(
-                  (h) => Padding(
+              (h) => Padding(
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,

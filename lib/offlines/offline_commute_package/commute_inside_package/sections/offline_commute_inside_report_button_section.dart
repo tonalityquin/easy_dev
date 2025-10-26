@@ -41,25 +41,25 @@ class OfflineCommuteInsideReportButtonSection extends StatelessWidget {
       onPressed: disabled
           ? null
           : () async {
-        if (kakaoUrl == null || kakaoUrl!.isEmpty) {
-          showFailedSnackbar(context, '카카오톡 URL이 없습니다.');
-          return;
-        }
+              if (kakaoUrl == null || kakaoUrl!.isEmpty) {
+                showFailedSnackbar(context, '카카오톡 URL이 없습니다.');
+                return;
+              }
 
-        final intent = AndroidIntent(
-          action: 'action_view',
-          data: kakaoUrl!,
-          package: 'com.android.chrome',
-        );
+              final intent = AndroidIntent(
+                action: 'action_view',
+                data: kakaoUrl!,
+                package: 'com.android.chrome',
+              );
 
-        try {
-          await intent.launch();
-        } catch (e) {
-          if (context.mounted) {
-            showFailedSnackbar(context, '크롬으로 열 수 없습니다: $e');
-          }
-        }
-      },
+              try {
+                await intent.launch();
+              } catch (e) {
+                if (context.mounted) {
+                  showFailedSnackbar(context, '크롬으로 열 수 없습니다: $e');
+                }
+              }
+            },
     );
   }
 }

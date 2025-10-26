@@ -3,12 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:easydev/offlines/sql/offline_auth_service.dart';
 import 'package:easydev/offlines/sql/offline_session_model.dart';
 
-/// Offline Service Palette (오프라인 카드와 동일 계열)
 class _Palette {
-  static const base = Color(0xFFF4511E); // primary (오프라인 카드 base)
-  static const dark = Color(0xFFD84315); // 강조 텍스트/아이콘
-  static const light = Color(0xFFFFAB91); // 톤 변형/보더(tint)
-  static const fg = Color(0xFFFFFFFF);   // 전경(아이콘/텍스트)
+  static const base = Color(0xFFF4511E);
+  static const dark = Color(0xFFD84315);
+  static const light = Color(0xFFFFAB91);
+  static const fg = Color(0xFFFFFFFF);
 }
 
 class OfflineCommuteInsideUserInfoCardSection extends StatelessWidget {
@@ -16,7 +15,6 @@ class OfflineCommuteInsideUserInfoCardSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     return FutureBuilder<OfflineSession?>(
       future: OfflineAuthService.instance.currentSession(),
       builder: (context, snap) {
@@ -47,7 +45,6 @@ class OfflineCommuteInsideUserInfoCardSection extends StatelessWidget {
           );
         }
 
-        // 세션 없음(로그인 전/세션 정리됨)
         if (!snap.hasData || snap.data == null) {
           return Card(
             elevation: 2,
@@ -76,10 +73,10 @@ class OfflineCommuteInsideUserInfoCardSection extends StatelessWidget {
         }
 
         final session = snap.data!;
-        final name = session.name;         // ex) Tester
-        final position = session.position; // ex) dev
-        final phone = session.phone;       // ex) 01012345678
-        final area = session.area;         // ex) HQ 지역 or WorkingArea 지역 등
+        final name = session.name;
+        final position = session.position;
+        final phone = session.phone;
+        final area = session.area;
 
         return InkWell(
           borderRadius: BorderRadius.circular(12),
@@ -127,7 +124,6 @@ class OfflineCommuteInsideUserInfoCardSection extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // 이름
                             Text(
                               name,
                               style: const TextStyle(
@@ -137,7 +133,6 @@ class OfflineCommuteInsideUserInfoCardSection extends StatelessWidget {
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
-                            // 직책/직무
                             Text(
                               position,
                               style: TextStyle(
@@ -156,10 +151,7 @@ class OfflineCommuteInsideUserInfoCardSection extends StatelessWidget {
                   const SizedBox(height: 16),
                   Divider(color: _Palette.light.withOpacity(.35), height: 1),
                   const SizedBox(height: 12),
-
-                  // 전화번호
                   _infoRow(Icons.phone, 'Tel.', formatPhoneNumber(phone)),
-                  // 근무 지역(세션의 area 반영)
                   _infoRow(Icons.location_on, 'Sector.', area),
                 ],
               ),

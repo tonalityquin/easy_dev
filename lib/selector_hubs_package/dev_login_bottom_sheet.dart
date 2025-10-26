@@ -1,4 +1,3 @@
-// lib/screens/selector_hubs_package/dev_login_bottom_sheet.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dev_auth.dart';
@@ -64,14 +63,16 @@ class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
                 const SizedBox(height: 16),
                 Center(
                   child: Container(
-                    width: 40, height: 4, margin: const EdgeInsets.only(bottom: 16),
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
-                      color: Colors.grey[300], borderRadius: BorderRadius.circular(2),
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
                 ),
-                const Text('개발자 로그인',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const Text('개발자 로그인', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16),
@@ -82,7 +83,6 @@ class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
                   ),
                 ),
                 const SizedBox(height: 12),
-
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
@@ -110,7 +110,8 @@ class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
                               color: cs.errorContainer,
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Text(_error!,
+                            child: Text(
+                              _error!,
                               style: TextStyle(
                                 color: cs.onErrorContainer,
                                 fontWeight: FontWeight.w600,
@@ -139,8 +140,7 @@ class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
                                   shape: const StadiumBorder(),
                                 ),
                                 icon: const Icon(Icons.login),
-                                label: const Text('로그인',
-                                    style: TextStyle(fontWeight: FontWeight.w700)),
+                                label: const Text('로그인', style: TextStyle(fontWeight: FontWeight.w700)),
                               ),
                             ),
                           ],

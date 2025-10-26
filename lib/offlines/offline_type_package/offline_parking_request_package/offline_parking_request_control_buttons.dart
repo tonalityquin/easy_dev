@@ -7,12 +7,11 @@ import '../../../utils/snackbar_helper.dart';
 import '../../sql/offline_auth_db.dart';
 import '../../sql/offline_auth_service.dart';
 
-/// Deep Blue 팔레트(서비스 카드와 동일 계열) + 대비 강조 색
 class _Palette {
-  static const base = Color(0xFF0D47A1); // primary (Deep Blue)
-  static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
-  static const success = Color(0xFF2E7D32); // 입차(완료)용 - Green 800
-  static const accent = Color(0xFFFF6D00); // 검색 액션용 - Orange 800
+  static const base = Color(0xFF0D47A1);
+  static const dark = Color(0xFF09367D);
+  static const success = Color(0xFF2E7D32);
+  static const accent = Color(0xFFFF6D00);
 }
 
 class OfflineParkingRequestControlButtons extends StatelessWidget {
@@ -33,9 +32,6 @@ class OfflineParkingRequestControlButtons extends StatelessWidget {
     required this.onToggleLock,
   });
 
-  // ─────────────────────────────────────────────────────────────
-  // 유틸: 현재 사용자 식별자
-  // ─────────────────────────────────────────────────────────────
   Future<(String uid, String uname)> _currentIdentity() async {
     final s = await OfflineAuthService.instance.currentSession();
     final uid = (s?.userId ?? '').trim();
@@ -43,9 +39,6 @@ class OfflineParkingRequestControlButtons extends StatelessWidget {
     return (uid, uname);
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // 유틸: 선택된 입차요청 1건 조회 (현재 사용자 범위)
-  // ─────────────────────────────────────────────────────────────
   Future<Map<String, Object?>?> _getSelectedPlateRow() async {
     final db = await OfflineAuthDb.instance.database;
     final (uid, uname) = await _currentIdentity();
@@ -89,15 +82,11 @@ class OfflineParkingRequestControlButtons extends StatelessWidget {
     return rows.first;
   }
 
-  // 현재 사용자 기준 선택 차량 존재 여부
   Future<bool> _hasSelectedPlate() async {
     final row = await _getSelectedPlateRow();
     return row != null && ((row['is_selected'] as int? ?? 0) != 0);
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // 상태 바텀시트 (입차 요청 취소)
-  // ─────────────────────────────────────────────────────────────
   Future<void> _showStatusBottomSheet(BuildContext context) async {
     final selected = await _getSelectedPlateRow();
     if (selected == null) {
@@ -136,8 +125,6 @@ class OfflineParkingRequestControlButtons extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-
-                // ⬇️ 추가된 항목 (동작 없음: 비활성화 표시)
                 const ListTile(
                   leading: Icon(Icons.receipt_long),
                   title: Text('로그 확인'),
@@ -146,11 +133,9 @@ class OfflineParkingRequestControlButtons extends StatelessWidget {
                 const ListTile(
                   leading: Icon(Icons.edit),
                   title: Text('정보 수정'),
-                  enabled: false, // 기능 없이 비활성화
+                  enabled: false,
                 ),
                 const Divider(),
-
-                // 기존: 입차 요청 취소
                 ListTile(
                   leading: const Icon(Icons.cancel),
                   title: const Text('입차 요청 취소'),
@@ -159,7 +144,6 @@ class OfflineParkingRequestControlButtons extends StatelessWidget {
                     await _cancelEntryRequestSqlite(context, selected);
                   },
                 ),
-
                 const SizedBox(height: 8),
                 TextButton(
                   onPressed: () => Navigator.of(ctx).pop(),
@@ -194,18 +178,11 @@ class OfflineParkingRequestControlButtons extends StatelessWidget {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // [NEW] 정산 안내 풀스크린 바텀시트
-  // 핸드폰 최상단까지 올라오는 형태 + 안내 문구 출력
-  // '정산 진행'을 누르면 기존 사전정산 로직(_handleBillingActionSqlite) 실행
-  // ─────────────────────────────────────────────────────────────
   Future<void> _showBillingInfoFullSheet(BuildContext context) async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      // ✅ 최상단까지
       useSafeArea: true,
-      // ✅ 노치/상단 안전영역 반영
       backgroundColor: Colors.white,
       builder: (sheetContext) {
         return FractionallySizedBox(
@@ -240,8 +217,6 @@ class OfflineParkingRequestControlButtons extends StatelessWidget {
                   const SizedBox(height: 16),
                   const Divider(height: 1),
                   const SizedBox(height: 12),
-                  // (하단 버튼 제거) - 필요시 설명/옵션 영역을 여기에 추가하세요.
-                  // Expanded(child: SingleChildScrollView(child: ...)),
                 ],
               ),
             ),
@@ -315,7 +290,6 @@ class OfflineParkingRequestControlButtons extends StatelessWidget {
             if (index == 0) {
               final hasSel = await _hasSelectedPlate();
               if (hasSel) {
-                // ✅ 변경: 바로 정산 로직 실행 대신, 최상단까지 올라오는 안내 바텀시트 먼저 노출
                 await _showBillingInfoFullSheet(context);
               } else {
                 onToggleLock();

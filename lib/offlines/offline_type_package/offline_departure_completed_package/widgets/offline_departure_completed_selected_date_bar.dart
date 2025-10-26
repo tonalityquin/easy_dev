@@ -1,10 +1,3 @@
-// lib/offlines/offline_type_package/offline_departure_completed_package/widgets/offline_departure_completed_selected_date_bar.dart
-//
-// 리팩터링 요약
-// - Provider(OfflineFieldCalendarState) 의존 제거
-// - 외부에서 selectedDate를 주입받아 표시만 담당
-// - onPrev/onNext 콜백으로 날짜 전환 트리거 가능(옵션)
-
 import 'package:flutter/material.dart';
 
 class OfflineDepartureCompletedSelectedDateBar extends StatelessWidget {
@@ -27,8 +20,7 @@ class OfflineDepartureCompletedSelectedDateBar extends StatelessWidget {
     return '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')} ($w)';
   }
 
-  bool _isSameYMD(DateTime a, DateTime b) =>
-      a.year == b.year && a.month == b.month && a.day == b.day;
+  bool _isSameYMD(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
 
   @override
   Widget build(BuildContext context) {
@@ -73,11 +65,11 @@ class OfflineDepartureCompletedSelectedDateBar extends StatelessWidget {
             SizedBox(
               height: 32,
               child: TextButton(
-                onPressed: isToday ? null : onNext == null && onPrev == null
+                onPressed: isToday
                     ? null
-                    : () {
-                  // 별도 today 핸들러가 필요하면 외부에서 onPrev/onNext 조합으로 구현
-                },
+                    : onNext == null && onPrev == null
+                        ? null
+                        : () {},
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   minimumSize: const Size(0, 32),

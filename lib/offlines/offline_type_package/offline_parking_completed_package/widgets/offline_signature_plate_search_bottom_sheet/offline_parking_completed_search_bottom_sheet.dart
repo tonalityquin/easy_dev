@@ -9,9 +9,8 @@ import 'widgets/offline_parking_completed_plate_number_display.dart';
 import 'widgets/offline_parking_completed_plate_search_header.dart';
 import 'widgets/offline_parking_completed_search_button.dart';
 
-// 상태 키 상수 (PlateType 의존 제거)
 const String _kStatusParkingCompleted = 'parkingCompleted';
-const String _kStatusParkingRequests  = 'parkingRequests';
+const String _kStatusParkingRequests = 'parkingRequests';
 
 class OfflineParkingCompletedSearchBottomSheet extends StatefulWidget {
   final void Function(String) onSearch;
@@ -39,7 +38,6 @@ class _OfflineParkingCompletedSearchBottomSheetState extends State<OfflineParkin
   late Animation<Offset> _slideAnimation;
   late Animation<double> _fadeAnimation;
 
-  // SQLite 결과용 최소 모델
   final List<_PlateRow> _results = [];
 
   @override
@@ -76,8 +74,6 @@ class _OfflineParkingCompletedSearchBottomSheetState extends State<OfflineParkin
     try {
       final db = await OfflineAuthDb.instance.database;
 
-      // plate_four_digit가 있으면 우선 매칭,
-      // 없을 경우 plate_number의 끝 4자리로도 매칭
       final rows = await db.rawQuery(
         '''
         SELECT id, plate_number, area, location, plate_four_digit,
@@ -101,12 +97,12 @@ class _OfflineParkingCompletedSearchBottomSheetState extends State<OfflineParkin
         _results
           ..clear()
           ..addAll(rows.map((r) => _PlateRow(
-            id: (r['id'] as int),
-            plateNumber: (r['plate_number'] as String?)?.trim() ?? '',
-            area: (r['area'] as String?)?.trim() ?? '',
-            location: (r['location'] as String?)?.trim() ?? '',
-            four: (r['plate_four_digit'] as String?)?.trim() ?? '',
-          )));
+                id: (r['id'] as int),
+                plateNumber: (r['plate_number'] as String?)?.trim() ?? '',
+                area: (r['area'] as String?)?.trim() ?? '',
+                location: (r['location'] as String?)?.trim() ?? '',
+                four: (r['plate_four_digit'] as String?)?.trim() ?? '',
+              )));
         _hasSearched = true;
         _isLoading = false;
       });
@@ -185,7 +181,6 @@ class _OfflineParkingCompletedSearchBottomSheetState extends State<OfflineParkin
                       const SizedBox(height: 24),
                       ParkingCompletedPlateNumberDisplay(controller: _controller, isValidPlate: isValidPlate),
                       const SizedBox(height: 24),
-
                       Builder(
                         builder: (_) {
                           final text = _controller.text;
@@ -210,7 +205,6 @@ class _OfflineParkingCompletedSearchBottomSheetState extends State<OfflineParkin
                             return const _EmptyState(text: '검색 결과가 없습니다.');
                           }
 
-                          // ✅ 결과 리스트를 이 파일에서 직접 렌더링 (PlateModel 의존 제거)
                           return ListView.separated(
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
@@ -235,7 +229,7 @@ class _OfflineParkingCompletedSearchBottomSheetState extends State<OfflineParkin
                                   WidgetsBinding.instance.addPostFrameCallback((_) {
                                     showOfflineParkingCompletedStatusBottomSheet(
                                       context: rootContext,
-                                      plateId: item.id, // ✅ plateId 전달
+                                      plateId: item.id,
                                       onRequestEntry: () async {
                                         await _goBackToParkingRequestById(item.id);
                                         await _refreshSearchResults();
@@ -254,7 +248,6 @@ class _OfflineParkingCompletedSearchBottomSheetState extends State<OfflineParkin
                           );
                         },
                       ),
-
                       Center(
                         child: TextButton(
                           onPressed: () => Navigator.pop(context),
@@ -262,7 +255,6 @@ class _OfflineParkingCompletedSearchBottomSheetState extends State<OfflineParkin
                         ),
                       ),
                       const SizedBox(height: 16),
-
                       ValueListenableBuilder<TextEditingValue>(
                         valueListenable: _controller,
                         builder: (context, value, child) {
@@ -272,14 +264,13 @@ class _OfflineParkingCompletedSearchBottomSheetState extends State<OfflineParkin
                             isLoading: _isLoading,
                             onPressed: valid
                                 ? () async {
-                              await _refreshSearchResults();
-                              widget.onSearch(value.text);
-                            }
+                                    await _refreshSearchResults();
+                                    widget.onSearch(value.text);
+                                  }
                                 : null,
                           );
                         },
                       ),
-
                       const SizedBox(height: 16),
                     ],
                   ),
@@ -291,18 +282,18 @@ class _OfflineParkingCompletedSearchBottomSheetState extends State<OfflineParkin
         bottomNavigationBar: _hasSearched
             ? const SizedBox.shrink()
             : AnimatedKeypad(
-          slideAnimation: _slideAnimation,
-          fadeAnimation: _fadeAnimation,
-          controller: _controller,
-          maxLength: 4,
-          enableDigitModeSwitch: false,
-          onComplete: () => setState(() {}),
-          onReset: () => setState(() {
-            _controller.clear();
-            _hasSearched = false;
-            _results.clear();
-          }),
-        ),
+                slideAnimation: _slideAnimation,
+                fadeAnimation: _fadeAnimation,
+                controller: _controller,
+                maxLength: 4,
+                enableDigitModeSwitch: false,
+                onComplete: () => setState(() {}),
+                onReset: () => setState(() {
+                  _controller.clear();
+                  _hasSearched = false;
+                  _results.clear();
+                }),
+              ),
       ),
     );
   }
@@ -310,6 +301,7 @@ class _OfflineParkingCompletedSearchBottomSheetState extends State<OfflineParkin
 
 class _EmptyState extends StatelessWidget {
   final String text;
+
   const _EmptyState({required this.text});
 
   @override
