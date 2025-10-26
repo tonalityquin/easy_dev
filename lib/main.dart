@@ -7,9 +7,11 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'routes.dart';
 import 'providers/providers.dart';
+
 // import 'screens/dev_package/dev_memo.dart'; // ⬅️ DevMemo 더 이상 사용 안 함
 import 'screens/head_package/head_memo.dart';
 import 'theme.dart';
+
 // import 'utils/init/dev_initializer.dart'; // 비상용 개발 지역 계정 임시 비활성화
 import 'utils/tts/foreground_task_handler.dart';
 import 'utils/app_navigator.dart';
@@ -68,8 +70,8 @@ void myForegroundCallback() {
 
 // ⬇️ 알림 초기화 중복 실행 방지 게이트
 class _Once {
-  static bool notificationsReady = false;            // 이미 한 번 끝났으면 true
-  static Completer<void>? notificationsInFlight;     // 동시에 들어오면 합류
+  static bool notificationsReady = false; // 이미 한 번 끝났으면 true
+  static Completer<void>? notificationsInFlight; // 동시에 들어오면 합류
 }
 
 void main() async {
@@ -170,6 +172,7 @@ Future<void> _initLocalNotifications() async {
 
 class AppBootstrapper extends StatefulWidget {
   const AppBootstrapper({super.key});
+
   @override
   State<AppBootstrapper> createState() => _AppBootstrapperState();
 }

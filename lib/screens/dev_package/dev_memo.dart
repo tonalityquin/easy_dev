@@ -29,15 +29,28 @@ class DevMemo {
   // ---- SharedPreferences Keys ----
   static const _kDocKey = 'dev_memo_doc_md_v1';
 
-  // Drive 캐시 키
+  // Drive 캐시 키 (레거시 단일 문서용 포함)
   static const _kDriveFolderId = 'dev_memo_drive_folder_id_v1';
   static const _kDriveFileId = 'dev_memo_drive_file_id_v1';
 
+  // ✅ 추가: 현재 선택 파일명 및 파일ID 맵 캐시 키
+  static const _kDriveSelectedFileName = 'dev_memo_drive_selected_file_v1';
+  static const _kDriveFileIdMap = 'dev_memo_drive_file_id_map_v1';
+
   // Drive 이름 상수
-  static const String kDriveFolderName = 'IdeaNote';        // ✅ 새 폴더명
+  static const String kDriveFolderName = '00.IdeaNote';        // ✅ 새 폴더명
   static const String kDriveLegacyFolderName = 'DevMemo';   // ⬅️ 과거 폴더명(있으면 자동 개명)
-  static const String kDriveFileName = 'IdeaNote.md';       // ✅ 새 파일명
+  static const String kDriveFileName = '00.IdeaNote.md';       // ✅ 새 파일명(디폴트)
   static const String kDriveLegacyFileName = 'DevMemo.md';  // ⬅️ 과거 파일명(있으면 자동 개명)
+
+  // ✅ 하드코딩 파일 후보(요청 반영)
+  static const List<String> kDriveCandidateNames = [
+    kDriveFileName,     // 'IdeaNote.md'
+    '00.TodoList.md',
+    '01.plan.md',
+    '02.background.md',
+    '03.character.md',
+  ];
 
   static SharedPreferences? _prefs;
 
@@ -86,6 +99,10 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
   bool _driveBusy = false;
   Timer? _saveDebounce;
 
+  // ✅ 현재 선택된 파일명(디폴트 IdeaNote.md) 및 파일ID 캐시 맵
+  String _currentFileName = DevMemo.kDriveFileName;
+  Map<String, String> _fileIdCache = {}; // filename -> fileId
+
   @override
   void initState() {
     super.initState();
@@ -97,6 +114,16 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
     final prefs = DevMemo._prefs ?? await SharedPreferences.getInstance();
     final text = prefs.getString(DevMemo._kDocKey) ?? '';
     _docCtrl.text = text;
+
+    // ✅ 현재 선택 파일명 & 파일ID 맵 복원
+    _currentFileName = prefs.getString(DevMemo._kDriveSelectedFileName) ?? DevMemo.kDriveFileName;
+    final mapJson = prefs.getString(DevMemo._kDriveFileIdMap);
+    if (mapJson != null) {
+      try {
+        final m = json.decode(mapJson) as Map<String, dynamic>;
+        _fileIdCache = m.map((k, v) => MapEntry(k, v as String));
+      } catch (_) {}
+    }
   }
 
   void _onDocChanged() {
@@ -107,6 +134,16 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
   Future<void> _persistDoc() async {
     final prefs = DevMemo._prefs ?? await SharedPreferences.getInstance();
     await prefs.setString(DevMemo._kDocKey, _docCtrl.text);
+  }
+
+  Future<void> _persistFileIdCache() async {
+    final prefs = DevMemo._prefs ?? await SharedPreferences.getInstance();
+    await prefs.setString(DevMemo._kDriveFileIdMap, json.encode(_fileIdCache));
+  }
+
+  Future<void> _persistSelectedFileName() async {
+    final prefs = DevMemo._prefs ?? await SharedPreferences.getInstance();
+    await prefs.setString(DevMemo._kDriveSelectedFileName, _currentFileName);
   }
 
   @override
@@ -230,10 +267,21 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
                           children: [
                             Icon(Icons.sticky_note_2_rounded, color: cs.primary),
                             const SizedBox(width: 8),
-                            Text('메모(마크다운)', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+                            // ✅ 현재 파일명 표시
+                            Text(
+                              _currentFileName,
+                              style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                            ),
                             const Spacer(),
 
-                            // Drive 불러오기
+                            // ✅ 파일 선택/변경 Dialog
+                            IconButton(
+                              tooltip: '파일 선택/변경(.md)',
+                              onPressed: _driveBusy ? null : _openChooseFileDialog,
+                              icon: const Icon(Icons.drive_file_rename_outline),
+                            ),
+
+                            // Drive 불러오기(현재 선택 파일)
                             IconButton(
                               tooltip: _driveBusy ? '불러오는 중...' : 'Drive에서 불러오기',
                               onPressed: _driveBusy ? null : _driveLoad,
@@ -241,7 +289,7 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
                                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                                   : const Icon(Icons.cloud_download_outlined),
                             ),
-                            // Drive 저장
+                            // Drive 저장(현재 선택 파일)
                             IconButton(
                               tooltip: _driveBusy ? '저장 중...' : 'Drive에 저장',
                               onPressed: _driveBusy ? null : _driveSave,
@@ -304,7 +352,7 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
                               maxLines: null,
                               minLines: null,
                               expands: true,
-                              // ✅ [5] 입력 왜곡 방지
+                              // ✅ 입력 왜곡 방지
                               textCapitalization: TextCapitalization.none,
                               smartDashesType: SmartDashesType.disabled,
                               smartQuotesType: SmartQuotesType.disabled,
@@ -574,7 +622,9 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
   Future<void> _clearDriveIdCache() async {
     final prefs = DevMemo._prefs ?? await SharedPreferences.getInstance();
     await prefs.remove(DevMemo._kDriveFolderId);
-    await prefs.remove(DevMemo._kDriveFileId);
+    await prefs.remove(DevMemo._kDriveFileId);    // 레거시 단일 문서 캐시
+    await prefs.remove(DevMemo._kDriveFileIdMap); // ✅ 추가된 맵 캐시 제거
+    await prefs.remove(DevMemo._kDriveSelectedFileName); // ✅ 선택 파일명 캐시 제거
   }
 
   Future<String?> _validateId(
@@ -584,10 +634,10 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
       }) async {
     if (id == null) return null;
     try {
-      // ✅ [3] 타입 안전화: is-check 로 확정
+      // ✅ 타입 안전화
       final resp = await api.files.get(id, $fields: 'id,mimeType,trashed');
       if (resp is! drive.File) return null;
-      final file = resp; // drive.File 확정
+      final file = resp;
 
       if (file.trashed == true) return null;
       if (expectFolder && file.mimeType != 'application/vnd.google-apps.folder') return null;
@@ -641,80 +691,168 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
     return created.id!;
   }
 
-  Future<String?> _findOrMigrateFileInFolder(drive.DriveApi api, String folderId) async {
-    // 1) IdeaNote.md 우선 검색
-    final q1 = "'$folderId' in parents and name = '${DevMemo.kDriveFileName}' and trashed = false";
-    final r1 = await api.files.list(q: q1, $fields: 'files(id,name,modifiedTime)', orderBy: 'modifiedTime desc');
-    if (r1.files != null && r1.files!.isNotEmpty) return r1.files!.first.id!;
+  Future<List<drive.File>> _listAllMarkdownInFolder(
+      drive.DriveApi api,
+      String folderId,
+      ) async {
+    final files = <drive.File>[];
+    String? pageToken;
+    final q = "'$folderId' in parents and trashed = false and name contains '.md'";
 
-    // 2) 과거 DevMemo.md가 있으면 IdeaNote.md 로 개명 후 사용
-    final q2 = "'$folderId' in parents and name = '${DevMemo.kDriveLegacyFileName}' and trashed = false";
-    final r2 = await api.files.list(q: q2, $fields: 'files(id,name,modifiedTime)', orderBy: 'modifiedTime desc');
-    if (r2.files != null && r2.files!.isNotEmpty) {
-      final legacyId = r2.files!.first.id!;
-      final meta = drive.File()..name = DevMemo.kDriveFileName;
-      final updated = await api.files.update(meta, legacyId);
-      return updated.id!;
-    }
+    do {
+      final resp = await api.files.list(
+        q: q,
+        $fields: 'nextPageToken, files(id,name,mimeType,modifiedTime)',
+        spaces: 'drive',
+        orderBy: 'modifiedTime desc',
+        pageToken: pageToken,
+      );
+      if (resp.files != null) files.addAll(resp.files!);
+      pageToken = resp.nextPageToken;
+    } while (pageToken?.isNotEmpty ?? false); // ✅ 불필요한 '!' 제거
 
-    // 3) 없음
-    return null;
+    return files;
   }
 
-  Future<Uint8List> _readAllBytes(Stream<List<int>> stream) async {
-    final chunks = <int>[];
-    await for (final chunk in stream) {
-      chunks.addAll(chunk);
-    }
-    return Uint8List.fromList(chunks);
+  // ========== 파일 선택/변경 Dialog ==========
+  Future<void> _openChooseFileDialog() async {
+    if (_driveBusy) return;
+    final ctx = context;
+    final api = await _driveApi();
+
+    // 폴더 보장
+    final prefs = DevMemo._prefs ?? await SharedPreferences.getInstance();
+    String? folderId = await _validateId(api, prefs.getString(DevMemo._kDriveFolderId), expectFolder: true);
+    folderId = await _ensureFolder(api, folderId);
+    await prefs.setString(DevMemo._kDriveFolderId, folderId);
+
+    // 폴더 내 .md + 하드코딩 후보 합치기
+    final driveFiles = await _listAllMarkdownInFolder(api, folderId);
+    final namesInDrive = driveFiles.map((f) => f.name ?? '').where((s) => s.isNotEmpty);
+    final nameSet = <String>{...DevMemo.kDriveCandidateNames, ...namesInDrive};
+
+    // 현재 파일명을 맨 앞으로, 나머지는 알파벳 정렬
+    final items = nameSet.toList();
+    items.sort((a, b) {
+      if (a == _currentFileName && b != _currentFileName) return -1;
+      if (b == _currentFileName && a != _currentFileName) return 1;
+      return a.toLowerCase().compareTo(b.toLowerCase());
+    });
+
+    String selected = _currentFileName;
+
+    await showDialog(
+      context: ctx,
+      builder: (dctx) {
+        return StatefulBuilder(
+          builder: (dctx, setStateDialog) {
+            return AlertDialog(
+              title: const Text('불러올 파일 선택(.md)'),
+              content: SizedBox(
+                width: 380,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: items.length,
+                  itemBuilder: (_, i) {
+                    final name = items[i];
+                    return RadioListTile<String>(
+                      title: Text(name),
+                      value: name,
+                      groupValue: selected,
+                      onChanged: (v) {
+                        if (v == null) return;
+                        setStateDialog(() => selected = v);
+                      },
+                    );
+                  },
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(dctx), child: const Text('취소')),
+                FilledButton(
+                  onPressed: () async {
+                    Navigator.pop(dctx);
+                    if (!mounted) return;
+                    setState(() => _currentFileName = selected);
+                    await _persistSelectedFileName();
+                    await _driveLoadSelected(selected);
+                  },
+                  child: const Text('열기'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
-  // Drive: 불러오기
-  Future<void> _driveLoad({bool retry = true}) async { // ✅ [1] 1회 재시도 플래그
+  // ========== 선택 파일 불러오기/저장 ==========
+  Future<void> _driveLoadSelected(String filename, {bool retry = true}) async {
     setState(() => _driveBusy = true);
     try {
       final prefs = DevMemo._prefs ?? await SharedPreferences.getInstance();
       final api = await _driveApi();
 
-      // 캐시 유효성 검증
+      // 폴더 ID 유효성 검증 + 보장(DevMemo → IdeaNote 로직 유지)
       String? folderId = await _validateId(api, prefs.getString(DevMemo._kDriveFolderId), expectFolder: true);
-      String? fileId = await _validateId(api, prefs.getString(DevMemo._kDriveFileId), expectFolder: false);
-
-      // 폴더 보장(필요 시 DevMemo → IdeaNote로 개명)
       folderId = await _ensureFolder(api, folderId);
       await prefs.setString(DevMemo._kDriveFolderId, folderId);
 
-      // 파일 찾기/마이그레이션(DevMemo.md → IdeaNote.md)
-      fileId ??= await _findOrMigrateFileInFolder(api, folderId);
+      // 파일 ID 캐시 확인 → 유효성 검증
+      String? fileId = _fileIdCache[filename];
+      fileId = await _validateId(api, fileId, expectFolder: false);
+
+      // 캐시가 무효면 폴더 내 같은 이름 검색
       if (fileId == null) {
-        _showSnack('Drive에 저장된 문서를 찾지 못했습니다. 먼저 "Drive에 저장"을 눌러 생성하세요.');
-        return;
+        final q = "'$folderId' in parents and name = '$filename' and trashed = false";
+        final r = await api.files.list(q: q, $fields: 'files(id,name,modifiedTime)');
+        if (r.files != null && r.files!.isNotEmpty) {
+          fileId = r.files!.first.id!;
+        } else {
+          // 디폴트 파일명일 때만 레거시(DevMemo.md → IdeaNote.md) 마이그레이션
+          if (filename == DevMemo.kDriveFileName) {
+            final qOld = "'$folderId' in parents and name = '${DevMemo.kDriveLegacyFileName}' and trashed = false";
+            final rOld = await api.files.list(q: qOld, $fields: 'files(id,name,modifiedTime)');
+            if (rOld.files != null && rOld.files!.isNotEmpty) {
+              final legacyId = rOld.files!.first.id!;
+              final meta = drive.File()..name = DevMemo.kDriveFileName;
+              final updated = await api.files.update(meta, legacyId);
+              fileId = updated.id!;
+            }
+          }
+        }
       }
 
-      // 파일 내용 다운로드 (타입 안전화)
-      final dl = await api.files.get(
-        fileId,
-        downloadOptions: drive.DownloadOptions.fullMedia,
-      );
-      if (dl is! drive.Media) {
-        throw Exception('Unexpected download response');
+      // 파일이 있으면 다운로드, 없으면 에디터 비우고 안내
+      if (fileId != null) {
+        final dl = await api.files.get(fileId, downloadOptions: drive.DownloadOptions.fullMedia);
+        if (dl is! drive.Media) throw Exception('Unexpected download response');
+        final bytes = await _readAllBytes(dl.stream);
+        final text = utf8.decode(bytes);
+
+        _docCtrl.text = text;
+        _docCtrl.selection = TextSelection.collapsed(offset: _docCtrl.text.length);
+
+        _fileIdCache[filename] = fileId; // 캐시에 반영
+        await _persistFileIdCache();
+
+        _showSnack('Drive에서 "$filename"을(를) 불러왔습니다.');
+      } else {
+        _docCtrl.clear();
+        _showSnack('"$filename" 문서를 찾지 못했습니다. 저장하면 새로 생성됩니다.');
       }
-      final media = dl;
 
-      final bytes = await _readAllBytes(media.stream);
-      final text = utf8.decode(bytes);
-
-      _docCtrl.text = text;
-      _docCtrl.selection = TextSelection.collapsed(offset: _docCtrl.text.length);
-
-      await prefs.setString(DevMemo._kDriveFileId, fileId);
-
-      _showSnack('Drive에서 문서를 불러왔습니다.');
+      // 현재 파일명 고정 및 저장
+      if (_currentFileName != filename) {
+        setState(() => _currentFileName = filename);
+        await _persistSelectedFileName();
+      }
     } catch (e) {
       final msg = e.toString();
       if (retry && (msg.contains('404') || msg.contains('notFound'))) {
         await _clearDriveIdCache();
-        await _driveLoad(retry: false); // ✅ 1회만 재시도
+        await _driveLoadSelected(filename, retry: false);
       } else {
         _showSnack('Drive 불러오기 실패: $e');
       }
@@ -723,40 +861,44 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
     }
   }
 
-  // Drive: 저장
-  Future<void> _driveSave({bool retry = true}) async { // ✅ [1] 1회 재시도 플래그
+  Future<void> _driveSaveSelected(String filename, {bool retry = true}) async {
     setState(() => _driveBusy = true);
     try {
       final prefs = DevMemo._prefs ?? await SharedPreferences.getInstance();
       final api = await _driveApi();
 
-      // 캐시 유효성 검증
+      // 폴더 보장
       String? folderId = await _validateId(api, prefs.getString(DevMemo._kDriveFolderId), expectFolder: true);
-      String? fileId = await _validateId(api, prefs.getString(DevMemo._kDriveFileId), expectFolder: false);
-
-      // 폴더 보장(필요 시 DevMemo → IdeaNote로 개명)
       folderId = await _ensureFolder(api, folderId);
       await prefs.setString(DevMemo._kDriveFolderId, folderId);
 
+      // 파일ID 캐시 확인
+      String? fileId = _fileIdCache[filename];
+      fileId = await _validateId(api, fileId, expectFolder: false);
+
+      // 본문 준비
       final content = _docCtrl.text.replaceAll('\r\n', '\n');
       final bytes = utf8.encode(content);
       final media = drive.Media(Stream<List<int>>.fromIterable([bytes]), bytes.length);
-
       const mime = 'text/markdown';
 
-      // 파일이 없다면 생성
       if (fileId == null) {
-        // 혹시 폴더 안에 이미 존재하는지 다시 확인(동시성/캐시 초기화 대비)
-        fileId = await _findOrMigrateFileInFolder(api, folderId);
-        if (fileId == null) {
+        // 같은 이름 있는지 재검색
+        final q = "'$folderId' in parents and name = '$filename' and trashed = false";
+        final r = await api.files.list(q: q, $fields: 'files(id,name,modifiedTime)', orderBy: 'modifiedTime desc');
+        if (r.files != null && r.files!.isNotEmpty) {
+          fileId = r.files!.first.id!;
+        } else {
+          // 없으면 새로 생성
           final meta = drive.File()
-            ..name = DevMemo.kDriveFileName
+            ..name = filename
             ..mimeType = mime
             ..parents = [folderId];
           final created = await api.files.create(meta, uploadMedia: media);
           fileId = created.id!;
-          await prefs.setString(DevMemo._kDriveFileId, fileId);
-          _showSnack('Drive에 새 문서를 저장했습니다.');
+          _fileIdCache[filename] = fileId;
+          await _persistFileIdCache();
+          _showSnack('Drive에 "$filename"을(를) 새로 저장했습니다.');
           return;
         }
       }
@@ -764,19 +906,33 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
       // 존재하면 업데이트
       final meta = drive.File()..mimeType = mime;
       await api.files.update(meta, fileId, uploadMedia: media);
-      await prefs.setString(DevMemo._kDriveFileId, fileId);
-      _showSnack('Drive 문서를 업데이트했습니다.');
+      _fileIdCache[filename] = fileId;
+      await _persistFileIdCache();
+      _showSnack('"$filename"을(를) 업데이트했습니다.');
     } catch (e) {
       final msg = e.toString();
       if (retry && (msg.contains('404') || msg.contains('notFound') || msg.contains('File not found') || msg.contains('Parent'))) {
         await _clearDriveIdCache();
-        await _driveSave(retry: false); // ✅ 1회만 재시도
+        await _driveSaveSelected(filename, retry: false);
       } else {
         _showSnack('Drive 저장 실패: $e');
       }
     } finally {
       if (mounted) setState(() => _driveBusy = false);
     }
+  }
+
+  // ---------- 기존 단일 API → 현재 선택 파일로 위임 ----------
+  Future<void> _driveLoad({bool retry = true}) => _driveLoadSelected(_currentFileName, retry: retry);
+  Future<void> _driveSave({bool retry = true}) => _driveSaveSelected(_currentFileName, retry: retry);
+
+  // ---------- 바이트 읽기 유틸 ----------
+  Future<Uint8List> _readAllBytes(Stream<List<int>> stream) async {
+    final chunks = <int>[];
+    await for (final chunk in stream) {
+      chunks.addAll(chunk);
+    }
+    return Uint8List.fromList(chunks);
   }
 }
 
