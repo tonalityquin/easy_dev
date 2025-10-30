@@ -1,11 +1,19 @@
-// lib/offlines/.../departure_completed_merged_log_section.dart
+// lib/screens/type_package/departure_completed_package/widgets/departure_completed_page_merge_log.dart
+//
+// 변경 사항 요약
+// - dart:io HttpClient → package:http 사용(웹 호환)
+// - division/area 미설정 가드 추가
+// - 날짜 범위 거꾸로 선택한 경우 swap
+// - inRange 비어있을 때 사용자에게 명확한 에러 텍스트 표시
+// - 사용하지 않는 foundation import 제거(경고 해소)
+
 import 'dart:convert';
-import 'dart:io';
 import 'dart:ui' show FontFeature;
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 import 'package:googleapis/storage/v1.dart' as gcs;
+import 'package:http/http.dart' as http;
 
 // 사진 다이얼로그(프로젝트 구조에 맞게 조정)
 import 'departure_completed_plate_image_dialog.dart';
@@ -54,22 +62,16 @@ class _GcsHelper {
 
   /// public URL로 JSON 로드(버킷이 공개라면 그대로 사용).
   /// 비공개 버킷이면 아래 주석의 objects.get(fullMedia) 방식으로 교체하세요.
+  /// (웹 호환을 위해 package:http 사용)
   Future<Map<String, dynamic>> loadJsonByObjectName(String objectName) async {
     final url = Uri.parse('https://storage.googleapis.com/$kBucketName/$objectName');
-    final httpClient = HttpClient();
-    try {
-      final req = await httpClient.getUrl(url);
-      final resp = await req.close();
-      if (resp.statusCode != 200) {
-        throw HttpException('GCS GET failed with ${resp.statusCode}');
-      }
-      final text = await resp.transform(utf8.decoder).join();
-      final decoded = jsonDecode(text);
-      if (decoded is Map<String, dynamic>) return decoded;
-      return <String, dynamic>{};
-    } finally {
-      httpClient.close(force: true);
+    final resp = await http.get(url);
+    if (resp.statusCode != 200) {
+      throw Exception('GCS GET failed with ${resp.statusCode}');
     }
+    final decoded = jsonDecode(utf8.decode(resp.bodyBytes));
+    if (decoded is Map<String, dynamic>) return decoded;
+    return <String, dynamic>{};
 
     /*
     // 🔒 비공개 버킷일 때는 아래처럼 OAuth 클라이언트로 직접 다운(캐스팅 주의)
@@ -290,15 +292,34 @@ class _MergedLogSectionState extends State<MergedLogSection> {
     });
 
     try {
+      // 1) 기본 가드: division/area 필수
+      final division = widget.division.trim();
+      final area = widget.area.trim();
+      if (division.isEmpty || area.isEmpty) {
+        throw StateError('지역/사업부가 설정되지 않았습니다. (division/area)');
+      }
+
+      // 2) 날짜 범위 유효화(swap)
+      final s = DateTime(_start.year, _start.month, _start.day);
+      final e = DateTime(_end.year, _end.month, _end.day);
+      final start = s.isAfter(e) ? e : s;
+      final end = s.isAfter(e) ? s : e;
+
       final gcsHelper = _GcsHelper();
-      final prefix = '${widget.division}/${widget.area}/logs/';
+      final prefix = '$division/$area/logs/';
       final names = await gcsHelper.listObjects(prefix);
 
+      // 3) endsWith("_ToDoLogs_YYYY-MM-DD.json") 매칭
       final wantedSuffix = <String>{};
-      for (DateTime d = _start; !d.isAfter(_end); d = d.add(const Duration(days: 1))) {
+      for (DateTime d = start; !d.isAfter(end); d = d.add(const Duration(days: 1))) {
         wantedSuffix.add('_ToDoLogs_${_yyyymmdd(d)}.json');
       }
-      final inRange = names.where((n) => wantedSuffix.any((suf) => n.endsWith(suf))).toList()..sort();
+      final inRange = names.where((n) => wantedSuffix.any((suf) => n.endsWith(suf))).toList()
+        ..sort();
+
+      if (inRange.isEmpty) {
+        throw StateError('해당 기간에 파일이 없습니다.\nprefix=$prefix\nrange=${_yyyymmdd(start)}~${_yyyymmdd(end)}');
+      }
 
       for (final objectName in inRange) {
         final m = RegExp(r'_ToDoLogs_(\d{4}-\d{2}-\d{2})\.json$').firstMatch(objectName);
@@ -402,9 +423,17 @@ class _MergedLogSectionState extends State<MergedLogSection> {
                 end: _end,
                 loading: _loading,
                 onRangePicked: (range) {
+                  // swap 방어 포함
+                  final s = DateTime(range.start.year, range.start.month, range.start.day);
+                  final e = DateTime(range.end.year, range.end.month, range.end.day);
                   setState(() {
-                    _start = DateTime(range.start.year, range.start.month, range.start.day);
-                    _end = DateTime(range.end.year, range.end.month, range.end.day);
+                    if (s.isAfter(e)) {
+                      _start = e;
+                      _end = s;
+                    } else {
+                      _start = s;
+                      _end = e;
+                    }
                   });
                 },
                 onLoad: _load,
@@ -693,8 +722,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.grey.shade100,
                         foregroundColor: Colors.black87,
-                        padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       ),
                       icon: const Icon(Icons.photo, size: 18),
                       label: const Text('사진', style: TextStyle(fontSize: 13)),
