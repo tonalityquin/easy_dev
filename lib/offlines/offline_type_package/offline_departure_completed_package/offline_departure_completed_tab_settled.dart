@@ -1,5 +1,4 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 
 import '../../sql/offline_auth_db.dart';
@@ -115,6 +114,8 @@ class _OfflineDepartureCompletedTabSettledState extends State<OfflineDepartureCo
           'logs', // JSON 문자열
           'request_time',
           'is_locked_fee',
+          'updated_at',
+          'created_at',
         ],
         where: '''
           COALESCE(status_type,'') = ?
@@ -176,6 +177,128 @@ class _OfflineDepartureCompletedTabSettledState extends State<OfflineDepartureCo
     super.dispose();
   }
 
+  // === Merged 섹션: 로더 구현 ===
+  Future<List<DayBundle>> _mergedLoader({
+    required String division,
+    required String area,
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    // 헬퍼들
+    String yyyymmdd(DateTime d) =>
+        '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+    DateTime? parseTs(dynamic ts) {
+      if (ts == null) return null;
+      if (ts is int) {
+        if (ts > 100000000000) return DateTime.fromMillisecondsSinceEpoch(ts);
+        return DateTime.fromMillisecondsSinceEpoch(ts * 1000);
+      }
+      if (ts is String) return DateTime.tryParse(ts);
+      return null;
+    }
+
+    bool isInRange(DateTime day, DateTime s, DateTime e) {
+      final dd = DateTime(day.year, day.month, day.day);
+      final ss = DateTime(s.year, s.month, s.day);
+      final ee = DateTime(e.year, e.month, e.day);
+      return !dd.isBefore(ss) && !dd.isAfter(ee);
+    }
+
+    final db = await OfflineAuthDb.instance.database;
+
+    // area, status_type 기준으로 우선 조회(날짜는 Dart에서 필터)
+    final rows = await db.query(
+      OfflineAuthDb.tablePlates,
+      columns: const [
+        'id',
+        'plate_number',
+        'area',
+        'logs',        // JSON 배열 문자열 (각 원소에 timestamp 존재 가정)
+        'request_time',// 보조 타임스탬프(없을 수 있음)
+        'updated_at',
+        'created_at',
+      ],
+      where: '''
+        COALESCE(status_type,'') = ?
+        AND LOWER(TRIM(area)) = LOWER(TRIM(?))
+      ''',
+      whereArgs: ['departureCompleted', area],
+      orderBy: 'COALESCE(updated_at, created_at) ASC',
+      // limit: 생략 (필요시 제한)
+    );
+
+    // ymd → docs
+    final Map<String, List<DocBundle>> dayMap = {};
+
+    for (final r in rows) {
+      final plate = (r['plate_number'] as String?) ?? '';
+      final idVal = r['id'];
+      final docId = (idVal == null) ? plate : idVal.toString();
+
+      // logs 파싱
+      final List<Map<String, dynamic>> logs = () {
+        final raw = r['logs'];
+        if (raw is String && raw.trim().isNotEmpty) {
+          try {
+            final j = jsonDecode(raw);
+            if (j is List) {
+              return j
+                  .whereType<Map>()
+                  .map((e) => Map<String, dynamic>.from(e))
+                  .toList();
+            }
+          } catch (_) {/* ignore */}
+        }
+        return <Map<String, dynamic>>[];
+      }();
+
+      // 시간 오름차순 정렬
+      logs.sort((a, b) {
+        final at = parseTs(a['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bt = parseTs(b['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return at.compareTo(bt);
+      });
+
+      // 기준 날짜: 마지막 로그의 날짜 → 없으면 request_time/updated_at/created_at 순으로 보조
+      DateTime? basis = logs.isNotEmpty ? parseTs(logs.last['timestamp']) : null;
+      basis ??= parseTs(r['request_time']);
+      basis ??= parseTs(r['updated_at']);
+      basis ??= parseTs(r['created_at']);
+
+      if (basis == null) continue; // 날짜 판단 불가 데이터 건너뜀
+      if (!isInRange(basis, start, end)) continue;
+
+      final ymd = yyyymmdd(basis);
+      final doc = DocBundle(docId: docId, plateNumber: plate, logs: logs);
+      dayMap.putIfAbsent(ymd, () => <DocBundle>[]).add(doc);
+    }
+
+    // 날짜별 문서 정렬(마지막 로그 시각 기준 오름차순)
+    final days = <DayBundle>[];
+    final keys = dayMap.keys.toList()..sort();
+    for (final ymd in keys) {
+      final docs = dayMap[ymd]!..sort((a, b) {
+        DateTime? parse(dynamic ts) {
+          if (ts == null) return null;
+          if (ts is int) {
+            if (ts > 100000000000) return DateTime.fromMillisecondsSinceEpoch(ts);
+            return DateTime.fromMillisecondsSinceEpoch(ts * 1000);
+          }
+          if (ts is String) return DateTime.tryParse(ts);
+          return null;
+        }
+        final at = a.logs.isNotEmpty ? parse(a.logs.last['timestamp']) : null;
+        final bt = b.logs.isNotEmpty ? parse(b.logs.last['timestamp']) : null;
+        return (at ?? DateTime.fromMillisecondsSinceEpoch(0))
+            .compareTo(bt ?? DateTime.fromMillisecondsSinceEpoch(0));
+      });
+      days.add(DayBundle(dateStr: ymd, docs: docs));
+    }
+
+    return days;
+  }
+
   Widget _buildTodaySectionBody() {
     if (!_hasSearched) {
       return Center(
@@ -208,8 +331,10 @@ class _OfflineDepartureCompletedTabSettledState extends State<OfflineDepartureCo
       );
     }).toList();
 
-    final safeIndex = _selectedResultIndex.clamp(0, _resultsRows.length - 1);
-    final row = _resultsRows[safeIndex];
+    final safeIndex = _resultsRows.isNotEmpty
+        ? _selectedResultIndex.clamp(0, _resultsRows.length - 1)
+        : 0;
+    final row = _resultsRows.isNotEmpty ? _resultsRows[safeIndex] : <String, Object?>{};
 
     final String plate = (row['plate_number'] as String?) ?? '';
     final List<dynamic> logsRaw = () {
@@ -246,9 +371,9 @@ class _OfflineDepartureCompletedTabSettledState extends State<OfflineDepartureCo
 
   Widget _buildMergedSectionBody() {
     return OfflineDepartureCompletedPageMergeLog(
-      mergedLogs: const <Map<String, dynamic>>[],
       division: widget.division,
       area: widget.area,
+      loader: _mergedLoader, // ✅ 필수 인자 주입
     );
   }
 
