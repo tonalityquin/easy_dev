@@ -20,7 +20,8 @@ class PlateCustomBoxStyles {
 }
 
 class PlateCustomBox extends StatelessWidget {
-  final String topLeftText;
+  final String topLeftText;        // 좌측 라벨(요구사항: '소속' 하드코딩 예정)
+  final String topCenterText;      // NEW: 가운데(기존 topLeftText 내용 이동)
   final String topRightUpText;
   final String topRightDownText;
   final String midLeftText;
@@ -36,6 +37,7 @@ class PlateCustomBox extends StatelessWidget {
   const PlateCustomBox({
     super.key,
     required this.topLeftText,
+    required this.topCenterText,    // NEW
     required this.topRightUpText,
     required this.topRightDownText,
     required this.midLeftText,
@@ -79,20 +81,44 @@ class PlateCustomBox extends StatelessWidget {
         ),
         child: Column(
           children: [
+            // ── 상단 줄: [좌: '소속'(2)] | [중: 기존 큰 텍스트(5)] | [우: 정산 타입/요금(3)]
             Expanded(
               flex: 2,
               child: Row(
                 children: [
+                  // 좌: '소속' 라벨
                   Expanded(
-                    flex: 7,
+                    flex: 3,
                     child: Center(
                       child: Text(
                         topLeftText,
                         style: PlateCustomBoxStyles.titleStyle,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        softWrap: false,
+                        textAlign: TextAlign.center,
                       ),
                     ),
                   ),
                   const VerticalDivider(width: 2.0, color: Colors.black),
+
+                  // 중: 기존 topLeftText에 들어가던 번호판/지역 텍스트
+                  Expanded(
+                    flex: 4,
+                    child: Center(
+                      child: Text(
+                        topCenterText,
+                        style: PlateCustomBoxStyles.titleStyle,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        softWrap: false,
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                  const VerticalDivider(width: 2.0, color: Colors.black),
+
+                  // 우: 정산 타입 / 요금 (두 줄)
                   Expanded(
                     flex: 3,
                     child: Column(
@@ -125,6 +151,7 @@ class PlateCustomBox extends StatelessWidget {
             ),
             const Divider(height: 1.0, color: Colors.black),
 
+            // ── 중단 줄 (기존 그대로)
             Expanded(
               flex: 2,
               child: Row(
@@ -158,6 +185,7 @@ class PlateCustomBox extends StatelessWidget {
             ),
             const Divider(height: 1.0, color: Colors.black),
 
+            // ── 하단 줄 (기존 그대로)
             Expanded(
               flex: 2,
               child: Row(
@@ -168,6 +196,9 @@ class PlateCustomBox extends StatelessWidget {
                       child: Text(
                         combinedBottomLeftText,
                         style: PlateCustomBoxStyles.miniTitleStyle,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        softWrap: false,
                       ),
                     ),
                   ),
