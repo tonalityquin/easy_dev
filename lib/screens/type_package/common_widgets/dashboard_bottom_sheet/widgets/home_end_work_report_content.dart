@@ -1,152 +1,94 @@
-// lib/screens/type_package/common_widgets/dashboard_bottom_sheet/widgets/home_end_work_report_content.dart
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../../states/area/area_state.dart';
-import '../../../../../../states/user/user_state.dart';
-import '../../../../../repositories/plate_repo_services/plate_count_service.dart';
 import '../../../../../../utils/snackbar_helper.dart';
-// import '../../../../../../utils/usage_reporter.dart';
+import '../../../../../repositories/plate_repo_services/plate_count_service.dart';
 
-const _kBasePad = 16.0;
-
-// ── Brand palette (minimal use only)
-const Color _base  = Color(0xFF0D47A1);
-const Color _light = Color(0xFF5472D3);
+typedef OnReport = Future<void> Function(String type, String content);
 
 class HomeEndWorkReportContent extends StatefulWidget {
-  final Future<void> Function(String reportType, String content) onReport;
-  final int? initialVehicleInput; // 입차
-  final int? initialVehicleOutput; // 출차
-  final ScrollController? externalScrollController;
-
   const HomeEndWorkReportContent({
     super.key,
+    required this.initialVehicleInput,
+    required this.initialVehicleOutput,
     required this.onReport,
-    this.initialVehicleInput,
-    this.initialVehicleOutput,
-    this.externalScrollController,
   });
 
+  final int initialVehicleInput;
+  final int initialVehicleOutput;
+  final OnReport onReport;
+
   @override
-  State<HomeEndWorkReportContent> createState() => _HomeEndWorkReportContentState();
+  State<HomeEndWorkReportContent> createState() =>
+      _HomeEndWorkReportContentState();
 }
 
 class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
+  late final TextEditingController _inputCtrl;
+  late final TextEditingController _outputCtrl;
   final _formKey = GlobalKey<FormState>();
-  final _inputCtrl = TextEditingController(); // 입차
-  final _outputCtrl = TextEditingController(); // 출차
-  final _inputFocus = FocusNode();
-  final _outputFocus = FocusNode();
-
   bool _submitting = false;
-  bool _reloadingInput = false;
-  bool _reloadingOutput = false;
 
   @override
   void initState() {
     super.initState();
-    if (widget.initialVehicleInput != null) {
-      _inputCtrl.text = widget.initialVehicleInput.toString();
-    }
-    if (widget.initialVehicleOutput != null) {
-      _outputCtrl.text = widget.initialVehicleOutput.toString();
-    }
+    _inputCtrl =
+        TextEditingController(text: widget.initialVehicleInput.toString());
+    _outputCtrl =
+        TextEditingController(text: widget.initialVehicleOutput.toString());
   }
 
   @override
   void dispose() {
     _inputCtrl.dispose();
     _outputCtrl.dispose();
-    _inputFocus.dispose();
-    _outputFocus.dispose();
     super.dispose();
-  }
-
-  String? _numberValidator(String? v) {
-    if (v == null || v.trim().isEmpty) return '값을 입력하세요';
-    final ok = RegExp(r'^\d+$').hasMatch(v.trim());
-    if (!ok) return '숫자만 입력 가능합니다';
-    return null;
   }
 
   Future<void> _refetchInput() async {
     final area = context.read<AreaState>().currentArea;
-    if (!mounted) return;
-    setState(() => _reloadingInput = true);
     try {
-      final v = await PlateCountService().getParkingCompletedCountAll(area);
-      if (!mounted) return;
-      _inputCtrl.text = v.toString();
-      if (!mounted) return;
+      final v = await PlateCountService()
+          .getParkingCompletedCountAll(area)
+          .timeout(const Duration(seconds: 10));
+      _inputCtrl.text = '$v';
       HapticFeedback.selectionClick();
     } catch (_) {
-      // no-op
-    } finally {
-      if (mounted) setState(() => _reloadingInput = false);
+      if (mounted) showFailedSnackbar(context, '입차 재집계 실패');
     }
   }
 
   Future<void> _refetchOutput() async {
     final area = context.read<AreaState>().currentArea;
-    if (!mounted) return;
-    setState(() => _reloadingOutput = true);
     try {
-      final v = await PlateCountService().getDepartureCompletedCountAll(area);
-      if (!mounted) return;
-      _outputCtrl.text = v.toString();
-      if (!mounted) return;
+      final v = await PlateCountService()
+          .getDepartureCompletedCountAll(area)
+          .timeout(const Duration(seconds: 10));
+      _outputCtrl.text = '$v';
       HapticFeedback.selectionClick();
     } catch (_) {
-      // no-op
-    } finally {
-      if (mounted) setState(() => _reloadingOutput = false);
+      if (mounted) showFailedSnackbar(context, '출차 재집계 실패');
     }
   }
 
   Future<void> _handleSubmit() async {
-    if (!mounted) return;
+    if (_submitting) return;
+    if (!_formKey.currentState!.validate()) {
+      showFailedSnackbar(context, '숫자만 입력해 주세요.');
+      return;
+    }
     setState(() => _submitting = true);
     try {
-      final user = Provider.of<UserState>(context, listen: false).user;
-      final division = user?.divisions.first;
-      final area = context.read<AreaState>().currentArea;
-
-      if (division == null || area.isEmpty) {
-        if (!mounted) return;
-        showFailedSnackbar(context, '지역/부서 정보가 없습니다.');
-        return;
-      }
-
-      final entry = int.tryParse(_inputCtrl.text.trim());
-      final exit = int.tryParse(_outputCtrl.text.trim());
-
-      if (entry == null || exit == null) {
-        if (!mounted) return;
-        showFailedSnackbar(context, '입차/출차 차량 수는 숫자만 입력 가능합니다.');
-        return;
-      }
-
-      // 상위 onReport에서 스냅샷 기반 처리
-      final reportMap = <String, dynamic>{
-        'vehicleInput': entry,
-        'vehicleOutput': exit,
+      final content = {
+        'vehicleInput': int.tryParse(_inputCtrl.text) ?? 0,
+        'vehicleOutput': int.tryParse(_outputCtrl.text) ?? 0,
       };
-
-      await widget.onReport('end', jsonEncode(reportMap));
-      if (!mounted) return;
-
-      await _refetchOutput();
-      if (!mounted) return;
-
-      HapticFeedback.mediumImpact();
-      if (!mounted) return;
-      showSuccessSnackbar(context, '업무 종료 보고를 제출했습니다.');
-    } catch (e) {
-      if (!mounted) return;
-      showFailedSnackbar(context, '보고 제출 실패: $e');
+      await widget.onReport('end', jsonEncode(content)); // JSON 문자열로 전달
+      HapticFeedback.lightImpact();
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -154,102 +96,169 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
 
   @override
   Widget build(BuildContext context) {
-    final bottomPad = MediaQuery.of(context).viewInsets.bottom + _kBasePad;
-    return SingleChildScrollView(
-      controller: widget.externalScrollController,
-      padding: EdgeInsets.fromLTRB(_kBasePad, 8, _kBasePad, bottomPad),
-      child: Form(
-        key: _formKey,
-        autovalidateMode: AutovalidateMode.onUserInteraction,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: _LabeledNumberField(
-                    label: '입차 차량 수',
-                    controller: _inputCtrl,
-                    focusNode: _inputFocus,
-                    textInputAction: TextInputAction.next,
-                    onFieldSubmitted: (_) =>
-                        FocusScope.of(context).requestFocus(_outputFocus),
-                    validator: _numberValidator,
-                    helper: '현재 지역의 parking_completed 전체 문서 기준 자동 집계',
-                    suffix: _reloadingInput
-                        ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(_base),
-                      ),
-                    )
-                        : IconButton(
-                      tooltip: '입차 수 재계산',
-                      icon: const Icon(Icons.refresh, color: _base),
-                      onPressed: _refetchInput,
-                    ),
-                  ),
+    final cs = Theme.of(context).colorScheme;
+    final area = context.watch<AreaState>().currentArea;
+
+    return SafeArea(
+      top: true,
+      bottom: false,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 4),
+            child: Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: cs.outlineVariant,
+                  borderRadius: BorderRadius.circular(999),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _LabeledNumberField(
-                    label: '출차 차량 수',
-                    controller: _outputCtrl,
-                    focusNode: _outputFocus,
-                    textInputAction: TextInputAction.done,
-                    onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
-                    validator: _numberValidator,
-                    helper:
-                    '현재 지역의 departure_completed & 잠금요금(true) 전체 문서 기준',
-                    suffix: _reloadingOutput
-                        ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(_base),
-                      ),
-                    )
-                        : IconButton(
-                      tooltip: '출차 수 재계산',
-                      icon: const Icon(Icons.refresh, color: _base),
-                      onPressed: _refetchOutput,
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  backgroundColor: _base,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: _light.withOpacity(.5),
+          ),
+          ListTile(
+            leading: const Icon(Icons.assignment_turned_in),
+            title: const Text(
+              '업무 종료 보고',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: Text('지역: $area'),
+            trailing: IconButton(
+              tooltip: '닫기',
+              icon: const Icon(Icons.close),
+              onPressed: () => widget.onReport('cancel', ''),
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24 + 72),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    _InfoCard(
+                      title: '집계 기준',
+                      lines: const [
+                        '• 입차: parking_completed 문서 전체(현재 지역)',
+                        '• 출차: departure_completed + 잠금요금(true) 문서 전체(현재 지역)',
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _SectionCard(
+                      title: '차량 수 입력',
+                      child: Column(
+                        children: [
+                          _numberField(
+                            context: context,
+                            controller: _inputCtrl,
+                            label: '입차 차량 수',
+                            helper: 'parking_completed 전체 문서 기준 자동 집계',
+                            onRefresh: _refetchInput,
+                          ),
+                          const SizedBox(height: 12),
+                          _numberField(
+                            context: context,
+                            controller: _outputCtrl,
+                            label: '출차 차량 수',
+                            helper:
+                            'departure_completed & 잠금요금(true) 전체 문서 기준',
+                            onRefresh: _refetchOutput,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                icon: _submitting
-                    ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                )
-                    : const Icon(Icons.send),
-                label: Text(_submitting ? '제출 중…' : '제출'),
-                onPressed: _submitting
-                    ? null
-                    : () async {
-                  if (!(_formKey.currentState?.validate() ?? false)) {
-                    HapticFeedback.lightImpact();
-                    return;
-                  }
-                  await _handleSubmit();
-                },
+              ),
+            ),
+          ),
+          _FooterBar(
+            onCancel: () => widget.onReport('cancel', ''),
+            onSubmit: _handleSubmit,
+            busy: _submitting,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _numberField({
+    required BuildContext context,
+    required TextEditingController controller,
+    required String label,
+    String? helper,
+    VoidCallback? onRefresh,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final suffix = onRefresh == null
+        ? null
+        : IconButton(
+      onPressed: onRefresh,
+      icon: const Icon(Icons.refresh),
+      tooltip: '재집계',
+    );
+    return TextFormField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: label,
+        helperText: helper,
+        suffixIcon: suffix,
+        isDense: true,
+        filled: true,
+        fillColor: cs.surfaceVariant.withOpacity(0.35),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: cs.primary),
+        ),
+      ),
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      keyboardType: TextInputType.number,
+      validator: (v) {
+        if (v == null || v.isEmpty) return '값을 입력해 주세요.';
+        if (int.tryParse(v) == null) return '정수만 입력 가능합니다.';
+        return null;
+      },
+    );
+  }
+}
+
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({required this.title, required this.lines});
+  final String title;
+  final List<String> lines;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.surfaceVariant.withOpacity(0.35),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: DefaultTextStyle(
+        style: Theme.of(context).textTheme.bodyMedium!,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: Theme.of(context)
+                  .textTheme
+                  .titleSmall!
+                  .copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 6),
+            ...lines.map(
+                  (e) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Text(e),
               ),
             ),
           ],
@@ -259,54 +268,103 @@ class _HomeEndWorkReportContentState extends State<HomeEndWorkReportContent> {
   }
 }
 
-class _LabeledNumberField extends StatelessWidget {
-  const _LabeledNumberField({
-    required this.label,
-    required this.controller,
-    required this.focusNode,
-    required this.textInputAction,
-    required this.onFieldSubmitted,
-    required this.validator,
-    required this.helper,
-    this.suffix,
-  });
-
-  final String label;
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final TextInputAction textInputAction;
-  final void Function(String) onFieldSubmitted;
-  final String? Function(String?) validator;
-  final String helper;
-  final Widget? suffix;
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({required this.title, required this.child});
+  final String title;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final divider = Theme.of(context).dividerColor.withOpacity(.2);
-    return TextFormField(
-      controller: controller,
-      focusNode: focusNode,
-      keyboardType: TextInputType.number,
-      textInputAction: textInputAction,
-      onFieldSubmitted: onFieldSubmitted,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      validator: validator,
-      decoration: InputDecoration(
-        labelText: label,
-        helperText: helper,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: divider),
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(Icons.directions_car, color: cs.primary),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall!
+                    .copyWith(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _FooterBar extends StatelessWidget {
+  const _FooterBar({
+    required this.onCancel,
+    required this.onSubmit,
+    required this.busy,
+  });
+
+  final VoidCallback onCancel;
+  final VoidCallback onSubmit;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          boxShadow: [
+            BoxShadow(
+              color: cs.shadow.withOpacity(0.08),
+              blurRadius: 12,
+              offset: const Offset(0, -6),
+            ),
+          ],
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
         ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: divider),
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: busy ? null : onCancel,
+                child: const Text('취소'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton(
+                onPressed: busy ? null : onSubmit,
+                child: busy
+                    ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                    : const Text('제출'),
+              ),
+            ),
+          ],
         ),
-        focusedBorder: const OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(12)),
-          borderSide: BorderSide(width: 1.6, color: _base), // brand on focus
-        ),
-        suffixIcon: suffix,
       ),
     );
   }

@@ -27,7 +27,15 @@ const List<RoadmapItem> _roadmapData = [
     notes: [
       '앱에서 캡처 등을 통해 특정 난이도 있는 행동들에 대한 가이드 북 삽입',
     ],
-    status: RoadmapStatus.inProgress,
+    status: RoadmapStatus.done,
+  ),
+  RoadmapItem(
+    load: RoadmapLoad.heavy,
+    title: '홈페이지 모드 지원',
+    notes: [
+      '홈페이지로 출차 요청 및 업무 보조 지원',
+    ],
+    status: RoadmapStatus.planned,
   ),
   RoadmapItem(
     load: RoadmapLoad.light,
@@ -35,14 +43,6 @@ const List<RoadmapItem> _roadmapData = [
     notes: [
       '지역 별 최근 출근 찍은 직원들 목록 나열'
           '\n지역 별 현재 근무 차량 수 표기',
-    ],
-    status: RoadmapStatus.planned,
-  ),
-  RoadmapItem(
-    load: RoadmapLoad.heavy,
-    title: '홈페이지 모드 지원',
-    notes: [
-      '홈페이지로 출차 요청 및 업무 보조 지원',
     ],
     status: RoadmapStatus.planned,
   ),

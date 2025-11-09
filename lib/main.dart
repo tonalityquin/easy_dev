@@ -56,17 +56,17 @@ String _ts() => DateTime.now().toIso8601String();
 final FlutterLocalNotificationsPlugin flnp = FlutterLocalNotificationsPlugin();
 
 @pragma('vm:entry-point')
-void notificationTapBackground(NotificationResponse resp) {
-  // TODO: 알림 탭 시 라우팅/처리가 필요하면 구현 (resp.payload 참조 가능)
-}
-// ───────────────────────────────────────────────────────────────
-
-@pragma('vm:entry-point')
 void myForegroundCallback() {
   // 포그라운드 태스크가 시작될 때 TaskHandler를 등록
   debugPrint('[MAIN][${_ts()}] myForegroundCallback → setTaskHandler(MyTaskHandler)');
   FlutterForegroundTask.setTaskHandler(MyTaskHandler());
 }
+
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse resp) {
+  // TODO: 알림 탭 시 라우팅/처리가 필요하면 구현 (resp.payload 참조 가능)
+}
+// ───────────────────────────────────────────────────────────────
 
 // ⬇️ 알림 초기화 중복 실행 방지 게이트
 class _Once {
