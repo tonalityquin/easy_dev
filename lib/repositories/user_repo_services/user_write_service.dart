@@ -2,7 +2,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:easydev/models/tablet_model.dart';
 import '../../models/user_model.dart';
-import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../screens/dev_package/debug_package/debug_database_logger.dart';
 import '../../utils/usage_reporter.dart';
 
 class UserWriteService {
@@ -37,7 +37,7 @@ class UserWriteService {
       );*/
     } on FirebaseException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'users.add',
           'collection': 'user_accounts',
           'docPath': docRef.path,
@@ -50,7 +50,7 @@ class UserWriteService {
       rethrow;
     } catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'users.add.unknown',
           'collection': 'user_accounts',
           'docPath': docRef.path,
@@ -77,7 +77,7 @@ class UserWriteService {
       );
     } on FirebaseException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'tablets.add',
           'collection': 'tablet_accounts',
           'docPath': docRef.path,
@@ -90,7 +90,7 @@ class UserWriteService {
       rethrow;
     } catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'tablets.add.unknown',
           'collection': 'tablet_accounts',
           'docPath': docRef.path,
@@ -118,7 +118,7 @@ class UserWriteService {
       );*/
     } on FirebaseException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'users.update',
           'collection': 'user_accounts',
           'docPath': docRef.path,
@@ -131,7 +131,7 @@ class UserWriteService {
       rethrow;
     } catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'users.update.unknown',
           'collection': 'user_accounts',
           'docPath': docRef.path,
@@ -158,7 +158,7 @@ class UserWriteService {
       );
     } on FirebaseException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'tablets.update',
           'collection': 'tablet_accounts',
           'docPath': docRef.path,
@@ -171,7 +171,7 @@ class UserWriteService {
       rethrow;
     } catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'tablets.update.unknown',
           'collection': 'tablet_accounts',
           'docPath': docRef.path,
@@ -199,7 +199,7 @@ class UserWriteService {
         buckets.update(area, (v) => v + 1, ifAbsent: () => 1);
       } on FirebaseException catch (e, st) {
         try {
-          await DebugFirestoreLogger().log({
+          await DebugDatabaseLogger().log({
             'op': 'users.delete',
             'collection': 'user_accounts',
             'docPath': docRef.path,
@@ -212,7 +212,7 @@ class UserWriteService {
         rethrow;
       } catch (e, st) {
         try {
-          await DebugFirestoreLogger().log({
+          await DebugDatabaseLogger().log({
             'op': 'users.delete.unknown',
             'collection': 'user_accounts',
             'docPath': docRef.path,
@@ -250,7 +250,7 @@ class UserWriteService {
         buckets.update(area, (v) => v + 1, ifAbsent: () => 1);
       } on FirebaseException catch (e, st) {
         try {
-          await DebugFirestoreLogger().log({
+          await DebugDatabaseLogger().log({
             'op': 'tablets.delete',
             'collection': 'tablet_accounts',
             'docPath': docRef.path,
@@ -263,7 +263,7 @@ class UserWriteService {
         rethrow;
       } catch (e, st) {
         try {
-          await DebugFirestoreLogger().log({
+          await DebugDatabaseLogger().log({
             'op': 'tablets.delete.unknown',
             'collection': 'tablet_accounts',
             'docPath': docRef.path,

@@ -1,6 +1,6 @@
 // lib/repositories/user_repo_services/user_status_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../screens/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class UserStatusService {
@@ -52,7 +52,7 @@ class UserStatusService {
           );*/
         } on FirebaseException catch (e2, st2) {
           try {
-            await DebugFirestoreLogger().log({
+            await DebugDatabaseLogger().log({
               'op': 'userStatus.$opName.upsert',
               'collectionPath': col.path,
               'docId': docId,
@@ -71,7 +71,7 @@ class UserStatusService {
         }
       } else {
         try {
-          await DebugFirestoreLogger().log({
+          await DebugDatabaseLogger().log({
             'op': 'userStatus.$opName.update',
             'collectionPath': col.path,
             'docId': docId,
@@ -86,7 +86,7 @@ class UserStatusService {
       }
     } catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'userStatus.$opName.unknown',
           'collectionPath': col.path,
           'docId': docId,

@@ -127,36 +127,34 @@ class CommuteInsideController {
     final area = userState.area;
     final name = userState.name;
 
-
     if (area.isEmpty || name.isEmpty) {
+      // 사용자 정보 자체가 잘못된 케이스도 스낵바로 알려주고 싶다면 이렇게:
+      showFailedSnackbar(
+        context,
+        '출근 기록 업로드 실패: 사용자 정보(area/name)가 비어 있습니다.\n'
+            '관리자에게 계정/근무지 설정을 확인해 달라고 요청해 주세요.',
+      );
       return;
     }
 
-
     final now = DateTime.now();
-    final nowTime = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final nowTime =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
-
-    final success = await CommuteInsideClockInLogUploader.uploadAttendanceJson(
+    // ⬇️ bool 이 아니라 SheetUploadResult 가 반환됨
+    final result = await CommuteInsideClockInLogUploader.uploadAttendanceJson(
       context: context,
       data: {
         'recordedTime': nowTime,
       },
     );
 
-
     if (!context.mounted) return;
 
-
-    if (success) {
-      /*await UsageReporter.instance.report(
-       area: area,
-       action: 'write',
-       n: 1,
-       source: 'CommuteInsideController._uploadAttendanceSilently',
-     );*/
-      showSuccessSnackbar(context, '출근 기록 업로드 완료');
-
+    if (result.success) {
+      // 🔔 업로더가 만들어준 구체 메시지를 그대로 사용해도 되고,
+      // 필요하면 여기서 덮어써도 됩니다.
+      showSuccessSnackbar(context, result.message);
 
       // ✅ 출근 상태를 로컬에 저장하고, 알림을 즉시 반영
       final prefs = await SharedPreferences.getInstance();
@@ -166,9 +164,11 @@ class CommuteInsideController {
         await EndtimeReminderService.instance.scheduleDailyOneHourBefore(end);
       }
     } else {
-      showFailedSnackbar(context, '출근 기록 업로드 실패');
+      // 실패 사유를 담은 메시지를 그대로 노출
+      showFailedSnackbar(context, result.message);
     }
   }
+
 
 
   void _showWorkError(BuildContext context) {

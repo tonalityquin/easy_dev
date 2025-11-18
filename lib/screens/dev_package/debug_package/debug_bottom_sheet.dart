@@ -1,11 +1,12 @@
 // File: lib/screens/stub_package/debug_bottom_sheet.dart
 //
 // - error 로그만 표시
-// - Firestore / Local 소스 필터 칩
 // - 검색(메시지/시간)
-// - 내보내기/복사/전체삭제(회전 포함)
+// - 로그 전송(Gmail 첨부) 후 자동 삭제
+// - 복사/전체삭제(회전 포함)
 // - 리스트 스크롤 성능 및 예외 처리
-// - 작은 화면에서도 안전하도록 타이틀/칩 영역 Row → Wrap 적용
+// - 헤더는 UpdateBottomSheet 스타일(아이콘 + 제목 + 닫기)
+// - 소스 선택 칩/액션 버튼은 2줄로 세로 배치 & 중앙 정렬
 //
 
 import 'dart:convert';
@@ -13,14 +14,20 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart';
+
+// 파일 내보내기 제거 → share_plus 사용 안 함
+// import 'package:share_plus/share_plus.dart';
+
+import 'package:googleapis/gmail/v1.dart' as gmail;
 
 import '../../../utils/snackbar_helper.dart';
-import 'debug_firestore_logger.dart';
-import 'debug_local_logger.dart';
-// ✅ snackbar_helper 경로는 프로젝트 구조에 맞게 조정하세요.
+import '../../../utils/google_auth_session.dart';
 
-enum _LogSource { firestore, local }
+import 'debug_api_logger.dart';
+import 'debug_database_logger.dart';
+import 'debug_local_logger.dart';
+
+enum _LogSource { database, local, api }
 
 class DebugBottomSheet extends StatefulWidget {
   const DebugBottomSheet({super.key});
@@ -41,8 +48,11 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
   bool _loading = true;
   bool _fullLoaded = false; // true면 회전 포함 전체 로드 완료
 
-  // 현재 소스
-  _LogSource _source = _LogSource.firestore;
+  // 이메일 전송 중 여부
+  bool _sendingEmail = false;
+
+  // 현재 소스 (UI 필터용)
+  _LogSource _source = _LogSource.database;
 
   final DateFormat _fmt = DateFormat('yyyy-MM-dd HH:mm:ss');
 
@@ -60,6 +70,7 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
   }
 
   // ------- 로딩 -------
+
   Future<void> _loadTail() async {
     setState(() {
       _loading = true;
@@ -98,6 +109,7 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
   }
 
   // ------- 필터 로직 -------
+
   void _applyFilter() {
     final key = _searchCtrl.text.trim().toLowerCase();
 
@@ -118,13 +130,14 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
   void _onSearchChanged(String _) => setState(_applyFilter);
 
   // ------- 기타 액션 -------
+
   Future<void> _refresh() async {
     if (_fullLoaded) {
       await _loadAll();
     } else {
       await _loadTail();
     }
-    if (mounted) {
+    if (mounted && _listCtrl.hasClients) {
       _listCtrl.jumpTo(0);
     }
   }
@@ -144,11 +157,9 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
       await _loadTail();
 
       if (!mounted) return;
-      // ✅ snackbar_helper 사용
       showSuccessSnackbar(context, '${_labelForSource()} 로그가 삭제되었습니다.');
     } catch (e) {
       if (!mounted) return;
-      // ✅ snackbar_helper 사용
       showFailedSnackbar(context, '삭제 실패: $e');
     } finally {
       if (mounted) {
@@ -161,53 +172,223 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
     final text = _filtered.reversed.map((e) => e.original ?? '').join('\n');
     await Clipboard.setData(ClipboardData(text: text));
     if (!mounted) return;
-    // ✅ snackbar_helper 사용
     showSuccessSnackbar(context, '클립보드에 복사되었습니다.');
   }
 
-  Future<void> _export() async {
-    final files = await _getLogger().getAllLogFilesExisting();
-    if (files.isEmpty) {
+  // 🚨 3개 소스(Database/Local/API) 에러 로그를 모아
+  // pelicangnc1@gmail.com 으로 .md 첨부 이메일 전송 후, 로그 자동 삭제
+  Future<void> _sendLogsByEmail() async {
+    if (_sendingEmail) return;
+
+    setState(() => _sendingEmail = true);
+
+    try {
+      // 1) 각 로거에서 전체(회전 포함) 라인 가져와서 error만 필터링
+      final dbErrors = await _loadErrorEntries(DebugDatabaseLogger());
+      final localErrors = await _loadErrorEntries(DebugLocalLogger());
+      final apiErrors = await _loadErrorEntries(DebugApiLogger());
+
+      final totalCount = dbErrors.length + localErrors.length + apiErrors.length;
+
+      if (totalCount == 0) {
+        if (!mounted) return;
+        showSelectedSnackbar(context, '보낼 에러 로그가 없습니다.');
+        return;
+      }
+
+      // 2) Markdown 본문 생성
+      final now = DateTime.now();
+      final subject = 'Pelican 디버그 에러 로그 (${_fmt.format(now)})';
+      final filename = 'pelican_logs_${DateFormat('yyyyMMdd_HHmmss').format(now)}.md';
+
+      final sb = StringBuffer()
+        ..writeln('# Pelican 디버그 에러 로그')
+        ..writeln()
+        ..writeln('- 생성 시각: ${_fmt.format(now)}')
+        ..writeln('- 총 에러 로그 수: $totalCount')
+        ..writeln();
+
+      void writeSection(String title, List<_LogEntry> list) {
+        sb
+          ..writeln('## $title')
+          ..writeln();
+        if (list.isEmpty) {
+          sb
+            ..writeln('_에러 로그가 없습니다._')
+            ..writeln();
+          return;
+        }
+        sb
+          ..writeln('- 로그 수: ${list.length}')
+          ..writeln()
+          ..writeln('```json');
+        for (final e in list) {
+          sb.writeln(e.original ?? e.message ?? '');
+        }
+        sb
+          ..writeln('```')
+          ..writeln();
+      }
+
+      writeSection('Database', dbErrors);
+      writeSection('Local', localErrors);
+      writeSection('API', apiErrors);
+
+      final attachmentText = sb.toString();
+      final attachmentB64 = base64.encode(utf8.encode(attachmentText));
+
+      // 3) MIME 메시지 구성 (본문 + 첨부)
+      final boundary = 'pelican_logs_${now.millisecondsSinceEpoch}';
+      const toAddress = 'pelicangnc1@gmail.com';
+      const bodyText = '첨부된 Markdown 파일(pelican 에러 로그)을 확인해 주세요.';
+
+      final mime = StringBuffer()
+        ..writeln('MIME-Version: 1.0')
+        ..writeln('To: $toAddress')
+        ..writeln('Subject: $subject')
+        ..writeln('Content-Type: multipart/mixed; boundary="$boundary"')
+        ..writeln()
+        ..writeln('--$boundary')
+        ..writeln('Content-Type: text/plain; charset="utf-8"')
+        ..writeln('Content-Transfer-Encoding: 7bit')
+        ..writeln()
+        ..writeln(bodyText)
+        ..writeln()
+        ..writeln('--$boundary')
+        ..writeln('Content-Type: text/markdown; charset="utf-8"; name="$filename"')
+        ..writeln('Content-Disposition: attachment; filename="$filename"')
+        ..writeln('Content-Transfer-Encoding: base64')
+        ..writeln()
+        ..writeln(attachmentB64)
+        ..writeln('--$boundary--');
+
+      final raw = base64Url.encode(utf8.encode(mime.toString()));
+
+      // 4) Gmail API로 전송
+      final client = await GoogleAuthSession.instance.client();
+      final api = gmail.GmailApi(client);
+      final message = gmail.Message()..raw = raw;
+
+      await api.users.messages.send(message, 'me');
+
+      // 5) 전송 성공 후, 세 소스(Database/Local/API) 로그 전체 삭제
+      try {
+        final dbLogger = DebugDatabaseLogger();
+        final localLogger = DebugLocalLogger();
+        final apiLogger = DebugApiLogger();
+
+        await dbLogger.init();
+        await dbLogger.clearLog();
+
+        await localLogger.init();
+        await localLogger.clearLog();
+
+        await apiLogger.init();
+        await apiLogger.clearLog();
+
+        // 메모리에 들고 있던 리스트도 비우고, 화면 갱신
+        _all.clear();
+        _filtered.clear();
+        if (mounted) {
+          setState(() {});
+        }
+      } catch (e) {
+        // 삭제 실패는 치명적이지 않으니 콘솔/로그 정도만
+        try {
+          await DebugApiLogger().log(
+            {
+              'tag': 'DebugBottomSheet._sendLogsByEmail',
+              'message': '이메일 전송 후 로그 삭제 실패',
+              'error': e.toString(),
+            },
+            level: 'error',
+            tags: const ['logs', 'cleanup'],
+          );
+        } catch (_) {}
+      }
+
       if (!mounted) return;
-      // ✅ snackbar_helper 사용
-      showSelectedSnackbar(context, '내보낼 ${_labelForSource()} 로그 파일이 없습니다.');
-      return;
+      showSuccessSnackbar(context, '디버그 로그를 이메일로 전송하고, 로그를 삭제했습니다.');
+    } catch (e) {
+      if (mounted) {
+        showFailedSnackbar(context, '로그 전송 실패: $e');
+      }
+      try {
+        await DebugApiLogger().log(
+          {
+            'tag': 'DebugBottomSheet._sendLogsByEmail',
+            'message': '디버그 로그 이메일 전송 실패',
+            'error': e.toString(),
+          },
+          level: 'error',
+          tags: const ['logs', 'email'],
+        );
+      } catch (_) {
+        // 로깅 자체 실패는 조용히 무시
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _sendingEmail = false);
+      }
     }
-    await Share.shareXFiles(
-      files.map((f) => XFile(f.path)).toList(),
-      text: '${_labelForSource()} 로그 묶음(회전 포함)',
-      subject: '${_labelForSource()} 로그',
-    );
+  }
+
+  // 특정 로거에서 전체 라인 읽고 error 레벨만 추출
+  Future<List<_LogEntry>> _loadErrorEntries(dynamic logger) async {
+    try {
+      final lines = await logger.readAllLinesCombined();
+      final result = <_LogEntry>[];
+      for (final line in lines) {
+        final entry = _parseLine(line);
+        if (entry != null && entry.level == 'error') {
+          result.add(entry);
+        }
+      }
+      return result;
+    } catch (_) {
+      return const <_LogEntry>[];
+    }
   }
 
   // ------- Helpers -------
+
   dynamic _getLogger() {
     switch (_source) {
       case _LogSource.local:
         return DebugLocalLogger();
-      case _LogSource.firestore:
-        return DebugFirestoreLogger();
+      case _LogSource.database:
+        return DebugDatabaseLogger();
+      case _LogSource.api:
+        return DebugApiLogger();
     }
   }
 
   String _labelForSource() {
-    return _source == _LogSource.local ? 'Local' : 'Firestore';
+    switch (_source) {
+      case _LogSource.local:
+        return 'Local';
+      case _LogSource.database:
+        return 'Database';
+      case _LogSource.api:
+        return 'API';
+    }
   }
 
   // ------- UI -------
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
 
     return SafeArea(
-      top: false,
+      top: true,
       child: ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
         child: Material(
           color: Colors.white,
           child: SizedBox(
-            height: MediaQuery.of(context).size.height * 0.92,
+            height: MediaQuery.of(context).size.height,
             child: Column(
               children: [
                 const SizedBox(height: 8),
@@ -221,94 +402,118 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                 ),
                 const SizedBox(height: 10),
 
-                // 타이틀 + 소스 선택 + 액션 (Wrap으로 오버플로우 방지)
+                // ───── UpdateBottomSheet 스타일 헤더 ─────
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Wrap(
-                    spacing: 12,
-                    runSpacing: 8,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    alignment: WrapAlignment.spaceBetween,
+                  child: Row(
                     children: [
-                      // 왼쪽: 아이콘 + 제목 (좁은 폭에서 말줄임)
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.bug_report_rounded, color: cs.primary),
-                          const SizedBox(width: 8),
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(maxWidth: 240),
-                            child: Text(
-                              '${_labelForSource()} 에러 로그',
-                              overflow: TextOverflow.ellipsis,
-                              style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-                            ),
-                          ),
-                        ],
+                      Icon(Icons.bug_report_rounded, color: cs.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        '디버그 로그',
+                        style: text.titleLarge?.copyWith(fontWeight: FontWeight.w800),
                       ),
-
-                      // 가운데: 소스 선택 칩(가로 스크롤 허용)
-                      SizedBox(
-                        height: 36,
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              ChoiceChip(
-                                label: const Text('Firestore'),
-                                selected: _source == _LogSource.firestore,
-                                onSelected: (_) => setState(() {
-                                  _source = _LogSource.firestore;
-                                  _loadTail();
-                                }),
-                              ),
-                              const SizedBox(width: 6),
-                              ChoiceChip(
-                                label: const Text('Local'),
-                                selected: _source == _LogSource.local,
-                                onSelected: (_) => setState(() {
-                                  _source = _LogSource.local;
-                                  _loadTail();
-                                }),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-
-                      // 오른쪽: 액션 버튼들
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Tooltip(
-                            message: _fullLoaded ? '최근만 보기(빠름)' : '전체 불러오기(회전 포함)',
-                            child: TextButton.icon(
-                              onPressed: _fullLoaded ? _loadTail : _loadAll,
-                              icon: Icon(_fullLoaded ? Icons.bolt : Icons.unfold_more),
-                              label: Text(_fullLoaded ? '최근만' : '전체'),
-                            ),
-                          ),
-                          IconButton(
-                            tooltip: '새로고침',
-                            onPressed: _refresh,
-                            icon: const Icon(Icons.refresh),
-                          ),
-                          IconButton(
-                            tooltip: '닫기',
-                            onPressed: () => Navigator.of(context).maybePop(),
-                            icon: const Icon(Icons.close_rounded),
-                          ),
-                        ],
+                      const Spacer(),
+                      IconButton(
+                        tooltip: '닫기',
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        icon: const Icon(Icons.close_rounded),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 8),
 
-                // 검색 + 액션
+                // ───── 칩 + 액션 버튼 (2줄 · 모두 중앙 정렬) ─────
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // 1줄차: 소스 선택 칩들
+                      Center(
+                        child: SizedBox(
+                          height: 36,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                ChoiceChip(
+                                  label: const Text('Database'),
+                                  selected: _source == _LogSource.database,
+                                  onSelected: (_) => setState(() {
+                                    _source = _LogSource.database;
+                                    _loadTail();
+                                  }),
+                                ),
+                                const SizedBox(width: 6),
+                                ChoiceChip(
+                                  label: const Text('Local'),
+                                  selected: _source == _LogSource.local,
+                                  onSelected: (_) => setState(() {
+                                    _source = _LogSource.local;
+                                    _loadTail();
+                                  }),
+                                ),
+                                const SizedBox(width: 6),
+                                ChoiceChip(
+                                  label: const Text('API'),
+                                  selected: _source == _LogSource.api,
+                                  onSelected: (_) => setState(() {
+                                    _source = _LogSource.api;
+                                    _loadTail();
+                                  }),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      // 2줄차: 액션 버튼들
+                      Center(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Tooltip(
+                              message: _fullLoaded ? '최근만 보기(빠름)' : '전체 불러오기(회전 포함)',
+                              child: TextButton.icon(
+                                onPressed: _fullLoaded ? _loadTail : _loadAll,
+                                icon: Icon(_fullLoaded ? Icons.bolt : Icons.unfold_more),
+                                label: Text(_fullLoaded ? '최근만' : '전체'),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: '새로고침',
+                              onPressed: _refresh,
+                              icon: const Icon(Icons.refresh),
+                            ),
+                            IconButton(
+                              tooltip: _sendingEmail ? '로그 전송 중...' : '로그 전송',
+                              onPressed: _sendingEmail ? null : _sendLogsByEmail,
+                              icon: _sendingEmail
+                                  ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                                  : const Icon(Icons.send_rounded, color: Colors.blueGrey),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+
+                const Divider(height: 1),
+
+                // 검색 + 복사/삭제
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Row(
                     children: [
                       Expanded(
@@ -336,11 +541,6 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                       ),
                       const SizedBox(width: 8),
                       IconButton(
-                        onPressed: _export,
-                        icon: const Icon(Icons.upload_file, color: Colors.blueGrey),
-                        tooltip: '파일 내보내기',
-                      ),
-                      IconButton(
                         onPressed: _copy,
                         icon: const Icon(Icons.copy, color: Colors.teal),
                         tooltip: '복사',
@@ -353,7 +553,6 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                     ],
                   ),
                 ),
-                const SizedBox(height: 8),
 
                 const Divider(height: 1),
 
@@ -380,6 +579,7 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
   }
 
   // -------- 파서 --------
+
   _LogEntry? _parseLine(String line) {
     if (line.trim().isEmpty) return null;
 
@@ -418,7 +618,10 @@ class _LogTile extends StatelessWidget {
   final _LogEntry entry;
   final DateFormat fmt;
 
-  const _LogTile({required this.entry, required this.fmt});
+  const _LogTile({
+    required this.entry,
+    required this.fmt,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -437,15 +640,33 @@ class _LogTile extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(d0, style: const TextStyle(fontSize: 11, color: Colors.grey, fontFamily: 'monospace')),
-              Text(d1, style: const TextStyle(fontSize: 11, color: Colors.grey, fontFamily: 'monospace')),
+              Text(
+                d0,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey,
+                  fontFamily: 'monospace',
+                ),
+              ),
+              Text(
+                d1,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey,
+                  fontFamily: 'monospace',
+                ),
+              ),
             ],
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               entry.message ?? '',
-              style: const TextStyle(fontSize: 14, color: Colors.redAccent, fontFamily: 'monospace'),
+              style: const TextStyle(
+                fontSize: 14,
+                color: Colors.redAccent,
+                fontFamily: 'monospace',
+              ),
             ),
           ),
         ],

@@ -2,7 +2,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../enums/plate_type.dart';
-import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../screens/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class _CacheItem<T> {
@@ -60,7 +60,7 @@ class PlateCountService {
       return count;
     } catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plates.count.parkingCompletedAll',
           'collection': 'plates',
           'filters': {
@@ -113,7 +113,7 @@ class PlateCountService {
       return v;
     } catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plates.count.departureCompletedAll',
           'collection': 'plates',
           'filters': {

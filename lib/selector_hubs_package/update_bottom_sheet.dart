@@ -7,6 +7,13 @@ class UpdateBottomSheet extends StatelessWidget {
 
   static final List<UpdateEntry> defaultEntries = [
     UpdateEntry(
+      version: 'v1.1.1',
+      highlights: [
+        'API 에러 로그 화면 추가',
+        '출, 퇴근 로직 삽입 보강 및 필수 필드 삽입 조건 완화',
+      ],
+    ),
+    UpdateEntry(
       version: 'v1.0.0+10',
       highlights: [
         '구글 계정 인증 추가',

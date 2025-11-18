@@ -9,7 +9,7 @@ import 'dart:developer' as dev;
 
 import '../../models/plate_log_model.dart';
 import '../../models/plate_model.dart';
-import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../screens/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class PlateWriteService {
@@ -64,7 +64,7 @@ class PlateWriteService {
       );*/
     } on TimeoutException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plates.write.addOrUpdate.timeout',
           'collection': 'plates',
           'docPath': docRef.path,
@@ -81,7 +81,7 @@ class PlateWriteService {
       rethrow;
     } on FirebaseException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plates.write.addOrUpdate',
           'collection': 'plates',
           'docPath': docRef.path,
@@ -98,7 +98,7 @@ class PlateWriteService {
       rethrow;
     } catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plates.write.addOrUpdate.unknown',
           'collection': 'plates',
           'docPath': docRef.path,
@@ -135,7 +135,7 @@ class PlateWriteService {
       );*/
     } on FirebaseException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plates.update.prefetch',
           'collection': 'plates',
           'docPath': docRef.path,
@@ -152,7 +152,7 @@ class PlateWriteService {
       rethrow;
     } on TimeoutException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plates.update.prefetch.timeout',
           'collection': 'plates',
           'docPath': docRef.path,
@@ -195,7 +195,7 @@ class PlateWriteService {
     } on FirebaseException catch (e, st) {
       debugPrint("🔥 문서 업데이트 실패: $e");
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plates.update',
           'collection': 'plates',
           'docPath': docRef.path,
@@ -218,7 +218,7 @@ class PlateWriteService {
     } catch (e, st) {
       debugPrint("🔥 문서 업데이트 실패: $e");
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plates.update.unknown',
           'collection': 'plates',
           'docPath': docRef.path,
@@ -269,7 +269,7 @@ class PlateWriteService {
       }
       dev.log("🔥 문서 삭제 실패: $e", name: "Firestore");
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plates.delete',
           'collection': 'plates',
           'docPath': docRef.path,
@@ -286,7 +286,7 @@ class PlateWriteService {
       rethrow;
     } catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plates.delete.unknown',
           'collection': 'plates',
           'docPath': docRef.path,
@@ -369,7 +369,7 @@ class PlateWriteService {
       );*/
     } on FirebaseException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plates.transition',
           'collection': 'plates',
           'docPath': docRef.path,
@@ -393,7 +393,7 @@ class PlateWriteService {
       rethrow;
     } catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plates.transition.unknown',
           'collection': 'plates',
           'docPath': docRef.path,
@@ -488,7 +488,7 @@ class PlateWriteService {
       );*/
     } on FirebaseException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plates.recordWhoClick.tx',
           'collection': 'plates',
           'docPath': docRef.path,
@@ -509,7 +509,7 @@ class PlateWriteService {
       rethrow;
     } catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plates.recordWhoClick.tx.unknown',
           'collection': 'plates',
           'docPath': docRef.path,

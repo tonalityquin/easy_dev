@@ -168,7 +168,7 @@ class DevStubPage extends StatelessWidget {
                         _ActionCard(
                           icon: Icons.bug_report_rounded,
                           title: '디버그',
-                          subtitle: 'Firestore Logs\nLocal Logs',
+                          subtitle: 'DB&API Logs\nLocal Logs',
                           bg: cs.errorContainer.withOpacity(.85),
                           fg: cs.onErrorContainer,
                           onTap: () {
@@ -176,15 +176,7 @@ class DevStubPage extends StatelessWidget {
                               context: context,
                               isScrollControlled: true,
                               backgroundColor: Colors.transparent,
-                              builder: (_) => const Material(
-                                borderRadius:
-                                BorderRadius.vertical(top: Radius.circular(16)),
-                                clipBehavior: Clip.antiAlias,
-                                child: SizedBox(
-                                  height: 560,
-                                  child: DebugBottomSheet(),
-                                ),
-                              ),
+                              builder: (_) => const DebugBottomSheet(),  // ✅ 깔끔하게 이 한 줄
                             );
                           },
                         ),

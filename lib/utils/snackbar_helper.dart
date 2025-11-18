@@ -6,7 +6,7 @@ void showCustomSnackbar({
   required Color backgroundColor,
   required IconData icon,
   Color iconColor = Colors.white,
-  Duration duration = const Duration(seconds: 2),
+  Duration duration = const Duration(seconds: 5),
   VoidCallback? onTap,
 }) {
   final overlay = Overlay.of(context, rootOverlay: true);

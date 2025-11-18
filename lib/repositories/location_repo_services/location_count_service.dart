@@ -1,5 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../screens/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class LocationCountService {
@@ -58,7 +58,7 @@ class LocationCountService {
     } on FirebaseException catch (e, st) {
       // Firestore 에러 로깅
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'action': 'getPlateCount',
           'query': {
             'collection': 'plates',
@@ -78,7 +78,7 @@ class LocationCountService {
       rethrow;
     } catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'action': 'getPlateCount',
           'query': {
             'collection': 'plates',
@@ -140,7 +140,7 @@ class LocationCountService {
       return result;
     } on FirebaseException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'action': 'getPlateCountsForLocations',
           'payload': {
             'names': locationNames.take(20).toList(),
@@ -159,7 +159,7 @@ class LocationCountService {
       rethrow;
     } catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'action': 'getPlateCountsForLocations',
           'payload': {
             'names': locationNames.take(20).toList(),

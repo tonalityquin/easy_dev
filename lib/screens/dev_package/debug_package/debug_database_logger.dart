@@ -1,4 +1,4 @@
-// File: lib/screens/stub_package/debug_local_logger.dart
+// File: lib/screens/stub_package/debug_database_logger.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -6,16 +6,16 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
-class DebugLocalLogger {
+class DebugDatabaseLogger {
   // ---- Singleton ----
-  static final DebugLocalLogger _instance = DebugLocalLogger._internal();
+  static final DebugDatabaseLogger _instance = DebugDatabaseLogger._internal();
 
-  factory DebugLocalLogger() => _instance;
+  factory DebugDatabaseLogger() => _instance;
 
-  DebugLocalLogger._internal();
+  DebugDatabaseLogger._internal();
 
   // ---- Config ----
-  static const String _baseName = 'local_log.txt';
+  static const String _baseName = 'database_log.txt';
   static const int _maxFileBytes = 2 * 1024 * 1024; // 2MB 넘으면 회전
   static const int _maxTailBytes = 1024 * 1024; // tail 읽기 1MB
   static const int _maxTailLines = 1500;
@@ -37,7 +37,7 @@ class DebugLocalLogger {
         await _logFile!.create(recursive: true);
       }
     } catch (e) {
-      debugPrint('❌ DebugLocalLogger init 실패: $e');
+      debugPrint('❌ DebugDatabaseLogger init 실패: $e');
     }
   }
 
@@ -100,8 +100,8 @@ class DebugLocalLogger {
       if (size < _maxFileBytes) return;
 
       final f0 = _logFile!;
-      final f1 = File('${_dir!.path}/local_log.1.txt');
-      final f2 = File('${_dir!.path}/local_log.2.txt');
+      final f1 = File('${_dir!.path}/database_log.1.txt');
+      final f2 = File('${_dir!.path}/database_log.2.txt');
 
       // 오래된 순서로 삭제/이동
       if (_rotateKeep >= 2) {
@@ -195,8 +195,8 @@ class DebugLocalLogger {
     if (_dir == null) return const [];
 
     final f0 = File('${_dir!.path}/$_baseName');
-    final f1 = File('${_dir!.path}/local_log.1.txt');
-    final f2 = File('${_dir!.path}/local_log.2.txt');
+    final f1 = File('${_dir!.path}/database_log.1.txt');
+    final f2 = File('${_dir!.path}/database_log.2.txt');
 
     final list = <File>[];
     if (orderedOldestFirst) {

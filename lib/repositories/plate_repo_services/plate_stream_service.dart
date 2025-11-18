@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
-import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../screens/dev_package/debug_package/debug_database_logger.dart';
 
 // ▼ 로컬 로깅만 사용하고, 가드는 제거(단일화 정책)
 // import '../../screens/type_package/parking_completed_package/services/local_transition_guard.dart';
@@ -50,7 +50,7 @@ class PlateStreamService {
 
     return query.snapshots().handleError((e, st) {
       // ignore: unawaited_futures
-      DebugFirestoreLogger().log({
+      DebugDatabaseLogger().log({
         'op': 'plates.stream.currentArea',
         'collection': 'plates',
         'filters': {
@@ -167,7 +167,7 @@ class PlateStreamService {
           return PlateModel.fromDocument(doc);
         } catch (e, st) {
           // ignore: unawaited_futures
-          DebugFirestoreLogger().log({
+          DebugDatabaseLogger().log({
             'op': 'plates.stream.parse',
             'collection': 'plates',
             'docPath': doc.reference.path,
@@ -228,7 +228,7 @@ class PlateStreamService {
 
     return query.snapshots().handleError((e, st) {
       // ignore: unawaited_futures
-      DebugFirestoreLogger().log({
+      DebugDatabaseLogger().log({
         'op': 'plates.stream.departureUnpaid',
         'collection': 'plates',
         'filters': {

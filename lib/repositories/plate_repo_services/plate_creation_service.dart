@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
-import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../screens/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class PlateCreationService {
@@ -92,7 +92,7 @@ class PlateCreationService {
         regularDurationHours = billData['regularDurationHours'];
       } catch (e, st) {
         try {
-          await DebugFirestoreLogger().log({
+          await DebugDatabaseLogger().log({
             'op': 'bill.read.forPlateCreation',
             'collection': 'bill',
             'docId': '${billingType}_$area',
@@ -236,9 +236,9 @@ class PlateCreationService {
         } else {
           // 신규 set: 로그 2건 포함
           // ✅ 생성 시에도 updatedAt을 서버 타임스탬프로 강제 주입
-          final _map = plateWithLog.toMap();
-          _map[PlateFields.updatedAt] = FieldValue.serverTimestamp();
-          tx.set(docRef, _map);
+          final map = plateWithLog.toMap();
+          map[PlateFields.updatedAt] = FieldValue.serverTimestamp();
+          tx.set(docRef, map);
           writes += 1; // plates set
         }
       });
@@ -261,7 +261,7 @@ class PlateCreationService {
       }
     } catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plate.create.transaction',
           'collection': 'plates',
           'docPath': docRef.path,
@@ -309,7 +309,7 @@ class PlateCreationService {
         );*/
       } on FirebaseException catch (e, st) {
         try {
-          await DebugFirestoreLogger().log({
+          await DebugDatabaseLogger().log({
             'op': 'plateStatus.upsert.set',
             'collection': 'plate_status',
             'docPath': statusDocRef.path,
@@ -326,7 +326,7 @@ class PlateCreationService {
         rethrow;
       } catch (e, st) {
         try {
-          await DebugFirestoreLogger().log({
+          await DebugDatabaseLogger().log({
             'op': 'plateStatus.upsert.unknown',
             'collection': 'plate_status',
             'docPath': statusDocRef.path,

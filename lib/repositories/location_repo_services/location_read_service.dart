@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart'; // kDebugMode, debugPrint
 import '../../models/location_model.dart';
-import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../screens/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class LocationReadService {
@@ -15,7 +15,7 @@ class LocationReadService {
       snapshot = await _firestore.collection('locations').where('area', isEqualTo: area).get();
     } catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'locations.read',
           'collection': 'locations',
           'query': {'area': area},
@@ -55,7 +55,7 @@ class LocationReadService {
         }
         // 동기 컨텍스트 → await 불가. 로깅 실패는 무시.
         // ignore: unawaited_futures
-        DebugFirestoreLogger().log({
+        DebugDatabaseLogger().log({
           'op': 'locations.parse',
           'docId': doc.id,
           'area': area,

@@ -2,7 +2,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../screens/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class PlateStatusService {
@@ -54,7 +54,7 @@ class PlateStatusService {
       await UsageReporter.instance.report(area: area, action: 'write', n: 1, source: 'PlateStatusService.setPlateStatus.tx');*/
     } on FirebaseException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plateStatus.set',
           'collection': 'plate_status',
           'docPath': ref.path,
@@ -75,7 +75,7 @@ class PlateStatusService {
       rethrow;
     } on TimeoutException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plateStatus.set.timeout',
           'collection': 'plate_status',
           'docPath': ref.path,
@@ -89,7 +89,7 @@ class PlateStatusService {
       rethrow;
     } catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plateStatus.set.unknown',
           'collection': 'plate_status',
           'docPath': ref.path,
@@ -160,7 +160,7 @@ class PlateStatusService {
       await UsageReporter.instance.report(area: area, action: 'write', n: 1, source: 'PlateStatusService.setMonthlyPlateStatus.tx');*/
     } on FirebaseException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plateStatus.setMonthly',
           'collection': 'plate_status',
           'docPath': ref.path,
@@ -185,7 +185,7 @@ class PlateStatusService {
       rethrow;
     } on TimeoutException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plateStatus.setMonthly.timeout',
           'collection': 'plate_status',
           'docPath': ref.path,
@@ -199,7 +199,7 @@ class PlateStatusService {
       rethrow;
     } catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plateStatus.setMonthly.unknown',
           'collection': 'plate_status',
           'docPath': ref.path,
@@ -221,7 +221,7 @@ class PlateStatusService {
       // await UsageReporter.instance.report(area: area, action: 'delete', n: 1, source: 'PlateStatusService.deletePlateStatus');
     } on FirebaseException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plateStatus.delete',
           'collection': 'plate_status',
           'docPath': ref.path,
@@ -235,7 +235,7 @@ class PlateStatusService {
       rethrow;
     } on TimeoutException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plateStatus.delete.timeout',
           'collection': 'plate_status',
           'docPath': ref.path,
@@ -249,7 +249,7 @@ class PlateStatusService {
       rethrow;
     } catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plateStatus.delete.unknown',
           'collection': 'plate_status',
           'docPath': ref.path,

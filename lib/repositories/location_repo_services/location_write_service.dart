@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/location_model.dart';
-import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../screens/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class LocationWriteService {
@@ -24,7 +24,7 @@ class LocationWriteService {
     } catch (e, st) {
       // 실패 시 Firestore 로깅만 (error 레벨)
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'locations.write.single',
           'docPath': docRef.path,
           'docId': location.id,
@@ -90,7 +90,7 @@ class LocationWriteService {
     } catch (e, st) {
       // 실패 시 Firestore 로깅만 (error 레벨)
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'locations.write.composite',
           'collection': 'locations',
           'parent': parent,
@@ -148,7 +148,7 @@ class LocationWriteService {
     } catch (e, st) {
       // 실패 시 Firestore 로깅만 (error 레벨)
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'locations.delete.batch',
           'collection': 'locations',
           'ids': {

@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
-import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../screens/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class PlateQueryService {
@@ -27,7 +27,7 @@ class PlateQueryService {
       return PlateModel.fromDocument(doc);
     } catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'plates.get',
           'collection': 'plates',
           'docId': documentId,
@@ -152,7 +152,7 @@ class PlateQueryService {
       return results;
     } catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': op,
           'collection': 'plates',
           'filters': filters,

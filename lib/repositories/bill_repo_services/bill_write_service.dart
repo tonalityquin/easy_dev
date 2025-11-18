@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/bill_model.dart';
 import '../../models/regular_bill_model.dart';
-import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../screens/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class BillWriteService {
@@ -50,7 +50,7 @@ class BillWriteService {
           'stack': st.toString(),
           'tags': ['bill', 'write', 'normal', 'error'],
         };
-        await DebugFirestoreLogger().log(payload, level: 'error');
+        await DebugDatabaseLogger().log(payload, level: 'error');
       } catch (_) {}
       rethrow;
     }
@@ -96,7 +96,7 @@ class BillWriteService {
           'stack': st.toString(),
           'tags': ['bill', 'write', 'regular', 'error'],
         };
-        await DebugFirestoreLogger().log(payload, level: 'error');
+        await DebugDatabaseLogger().log(payload, level: 'error');
       } catch (_) {}
       rethrow;
     }

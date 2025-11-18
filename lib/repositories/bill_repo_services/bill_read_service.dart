@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart'; // debugPrint, kDebugMode
 import '../../models/bill_model.dart';
 import '../../models/regular_bill_model.dart';
-import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../screens/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class BillReadService {
@@ -32,7 +32,7 @@ class BillReadService {
           'stack': st.toString(),
           'tags': ['bill', 'read', 'error'],
         };
-        await DebugFirestoreLogger().log(payload, level: 'error');
+        await DebugDatabaseLogger().log(payload, level: 'error');
       } catch (_) {}
       rethrow;
     }
@@ -63,7 +63,7 @@ class BillReadService {
         }
         // 동기 컨텍스트라 await 불가 → unawaited 처리
         // ignore: unawaited_futures
-        DebugFirestoreLogger().log({
+        DebugDatabaseLogger().log({
           'op': 'bill.parse',
           'docId': id,
           'model': model,

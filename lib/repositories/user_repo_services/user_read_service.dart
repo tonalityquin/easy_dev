@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/tablet_model.dart';
 import '../../models/user_model.dart';
-import '../../screens/dev_package/debug_package/debug_firestore_logger.dart';
+import '../../screens/dev_package/debug_package/debug_database_logger.dart';
 import '../../utils/usage_reporter.dart';
 
 class UserReadService {
@@ -96,7 +96,7 @@ class UserReadService {
       return UserModel.fromMap(doc.id, doc.data()!);
     } on FirebaseException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'users.getById',
           'collection': 'user_accounts',
           'docId': userId,
@@ -131,7 +131,7 @@ class UserReadService {
       }
     } on FirebaseException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'users.getByPhone',
           'collection': 'user_accounts',
           'filters': {'phone': phone},
@@ -171,7 +171,7 @@ class UserReadService {
       }
     } on FirebaseException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'users.getByHandle',
           'collection': 'user_accounts',
           'filters': {'handle': h},
@@ -211,7 +211,7 @@ class UserReadService {
       }
     } on FirebaseException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'tablets.getByHandleAndAreaName',
           'collection': 'tablet_accounts',
           'docId': docId,
@@ -250,7 +250,7 @@ class UserReadService {
       }
     } on FirebaseException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'tablets.getByHandle',
           'collection': 'tablet_accounts',
           'filters': {'handle': h},
@@ -322,7 +322,7 @@ class UserReadService {
       return users;
     } on FirebaseException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'users.refreshByArea',
           'collection': 'user_accounts',
           'filters': {'areas_contains': selectedArea},
@@ -357,7 +357,7 @@ class UserReadService {
       return users;
     } on FirebaseException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'tablets.refreshByArea',
           'collection': 'tablet_accounts',
           'filters': {'areas_contains': selectedArea},
@@ -411,7 +411,7 @@ class UserReadService {
       return name;
     } on FirebaseException catch (e, st) {
       try {
-        await DebugFirestoreLogger().log({
+        await DebugDatabaseLogger().log({
           'op': 'areas.getEnglishName',
           'collection': 'areas',
           'docId': '${division.trim()}-${area.trim()}',

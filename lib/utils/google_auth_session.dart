@@ -1,44 +1,37 @@
-// lib/utils/google_auth_session.dart
+// File: lib/xxx/google_auth_session.dart  (예시 경로)
 //
-// Google 계정 인증을 앱 전역에서 "한 번"만 수행하고,
-// 이후 Calendar / Sheets / Docs / Gmail / Drive / GCS 등 모든 기능이 동일한 AuthClient를 재사용하는 세션.
-// google_sign_in v7 API에 맞춰 작성.
-
+// ⚠️ 아래 import 경로는 현재 프로젝트 구조에 맞게 수정하세요.
 import 'dart:async';
+
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis_auth/googleapis_auth.dart' as auth show AuthClient;
 import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
 
+import '../screens/dev_package/debug_package/debug_api_logger.dart';
+
+// DebugApiLogger 경로는 실제 파일 위치에 맞게 조정
+
 class AppScopes {
-  // 기본 Google API 스코프들
   static const String calendarEvents = 'https://www.googleapis.com/auth/calendar.events';
-  static const String spreadsheets   = 'https://www.googleapis.com/auth/spreadsheets';
-  static const String documents      = 'https://www.googleapis.com/auth/documents';
-
-  // Gmail 전송(민감 스코프) — 전체 mail.google.com(제한 스코프) 대신 최소 권한 사용
-  static const String gmailSend      = 'https://www.googleapis.com/auth/gmail.send';
-
-  // ✅ Google Drive (앱이 만든 파일/폴더만 접근) — DevMemo.md 저장/불러오기용 권장
-  static const String driveFile      = 'https://www.googleapis.com/auth/drive.file';
-  // (참고) 모든 드라이브 파일 접근이 필요하다면 아래를 사용 (권고 X)
-  // static const String driveFull   = 'https://www.googleapis.com/auth/drive';
-
-  // GCS 업로드까지 사용한다면 full_control 사용(환경에 따라 read_write로 낮춰도 됨)
+  static const String spreadsheets = 'https://www.googleapis.com/auth/spreadsheets';
+  static const String documents = 'https://www.googleapis.com/auth/documents';
+  static const String gmailSend = 'https://www.googleapis.com/auth/gmail.send';
+  static const String driveFile = 'https://www.googleapis.com/auth/drive.file';
   static const String gcsFullControl = 'https://www.googleapis.com/auth/devstorage.full_control';
-  // static const String gcsReadWrite = 'https://www.googleapis.com/auth/devstorage.read_write';
 
   static List<String> all() => <String>{
-    calendarEvents,
-    spreadsheets,
-    documents,
-    gmailSend,
-    driveFile,     // ✅ Drive 스코프 추가
-    gcsFullControl,
-  }.toList();
+        calendarEvents,
+        spreadsheets,
+        documents,
+        gmailSend,
+        driveFile,
+        gcsFullControl,
+      }.toList();
 }
 
 class GoogleAuthSession {
   GoogleAuthSession._();
+
   static final GoogleAuthSession instance = GoogleAuthSession._();
 
   GoogleSignInAccount? _user;
@@ -47,96 +40,180 @@ class GoogleAuthSession {
   StreamSubscription<GoogleSignInAuthenticationEvent>? _authSub;
   bool _initialized = false;
 
-  /// 앱 시작 시 한 번 호출 (팝업 없이 조용한 복구만 수행)
   Future<void> init({
     String? serverClientId,
     List<String>? additionalScopes,
   }) async {
+    // 이미 초기화된 경우: 스코프만 merge
     if (_initialized) {
-      // 이미 초기화된 경우에도 새 스코프가 들어오면 머지
       final merged = {..._scopes, ...?additionalScopes};
       _scopes = merged.toList();
       return;
     }
+
+    // _scopes를 먼저 만들어 놓고, 그 이후 과정을 try/catch
+    _scopes = {...AppScopes.all(), ...?additionalScopes}.toList();
     _initialized = true;
 
-    _scopes = {...AppScopes.all(), ...?additionalScopes}.toList();
+    try {
+      final signIn = GoogleSignIn.instance;
+      await signIn.initialize(serverClientId: serverClientId);
 
-    final signIn = GoogleSignIn.instance;
-    await signIn.initialize(serverClientId: serverClientId);
+      _authSub?.cancel();
+      _authSub = signIn.authenticationEvents.listen((event) {
+        if (event is GoogleSignInAuthenticationEventSignIn) {
+          _user = event.user;
+        } else if (event is GoogleSignInAuthenticationEventSignOut) {
+          _user = null;
+          _client = null;
+        }
+      });
 
-    _authSub?.cancel();
-    _authSub = signIn.authenticationEvents.listen((event) {
-      if (event is GoogleSignInAuthenticationEventSignIn) {
-        _user = event.user;
-      } else if (event is GoogleSignInAuthenticationEventSignOut) {
-        _user = null;
-        _client = null;
-      }
-    });
-
-    // ❌ 여기서 authenticate()를 호출하지 않음 — 조용한 복구만
-    _user = await signIn.attemptLightweightAuthentication();
-
-    // 실제 API 사용 시 client()에서 한 번만 승인/생성
-    _client = null;
+      // 앱 실행 시 자동 로그인을 시도 (실패해도 예외는 안 던짐)
+      _user = await signIn.attemptLightweightAuthentication();
+      _client = null;
+    } catch (e, st) {
+      // 🔴 초기화/경량 인증에서 실패한 경우
+      await DebugApiLogger().log(
+        {
+          'tag': 'GoogleAuthSession.init',
+          'message': 'GoogleSignIn 초기화 또는 lightweight 인증 실패',
+          'error': e.toString(),
+          'stack': st.toString(),
+          'serverClientId': serverClientId ?? 'null',
+          'scopes': _scopes,
+        },
+        level: 'error',
+        tags: const ['auth', 'google'],
+      );
+      rethrow;
+    }
   }
 
-  /// 실제 API 사용 시 호출 — 최초 1회만 스코프 승인 프롬프트가 있을 수 있음
   Future<auth.AuthClient> client() async {
-    if (!_initialized) {
-      await init();
-    }
+    try {
+      // 아직 init 안 되어 있으면 기본 스코프로 init
+      if (!_initialized) {
+        await init();
+      }
 
-    // 앱 재시작 등으로 _user가 비었으면 조용히 복구 시도
-    if (_user == null) {
-      _user = await GoogleSignIn.instance.attemptLightweightAuthentication();
-    }
+      // 사용자 없으면 경량 인증 한 번 더 시도
+      _user ??= await GoogleSignIn.instance.attemptLightweightAuthentication();
 
-    if (_client != null) return _client!;
-
-    if (_user != null) {
-      await _ensureAuthorizedClient();
+      // 기존 클라이언트가 있으면 그대로 사용
       if (_client != null) return _client!;
-    }
 
-    // 최초 실행 등으로 세션이 전혀 없을 때만, 실제 사용 타이밍에 1회 authenticate 허용
-    if (GoogleSignIn.instance.supportsAuthenticate()) {
-      final user = await GoogleSignIn.instance.authenticate();
-      _user = user;
-      await _ensureAuthorizedClient();
-      if (_client != null) return _client!;
-    }
+      // 이미 로그인된 유저가 있으면 스코프 확인/부여
+      if (_user != null) {
+        await _ensureAuthorizedClient();
+        if (_client != null) return _client!;
+      }
 
-    throw StateError('AuthClient 생성 실패: 로그인/스코프 권한 확인 필요');
+      // authenticate() 지원하는 플랫폼이면 풀 로그인 시도
+      if (GoogleSignIn.instance.supportsAuthenticate()) {
+        final user = await GoogleSignIn.instance.authenticate();
+        _user = user;
+        await _ensureAuthorizedClient();
+        if (_client != null) return _client!;
+      }
+
+      // 여기까지 왔으면 더 이상 시도할 방법이 없음
+      throw StateError('AuthClient 생성 실패: 로그인/스코프 권한 확인 필요');
+    } catch (e, st) {
+      // 🔴 AuthClient 생성 실패 원인 로깅
+      await DebugApiLogger().log(
+        {
+          'tag': 'GoogleAuthSession.client',
+          'message': 'AuthClient 생성 실패',
+          'error': e.toString(),
+          'stack': st.toString(),
+          'userEmail': _user?.email ?? 'null',
+          'scopes': _scopes,
+        },
+        level: 'error',
+        tags: const ['auth', 'google'],
+      );
+      rethrow;
+    }
   }
 
-  /// 스코프가 바뀌었거나 토큰 갱신이 필요할 때 강제 재승인
   Future<void> refreshIfNeeded() async {
+    // 기존 클라이언트 버리고, 강제로 재인증/재발급
     _client = null;
-    await _ensureAuthorizedClient(forceAuthorize: true);
+    try {
+      await _ensureAuthorizedClient(forceAuthorize: true);
+    } catch (e, st) {
+      // 🔴 토큰 재발급/스코프 재부여 실패
+      await DebugApiLogger().log(
+        {
+          'tag': 'GoogleAuthSession.refreshIfNeeded',
+          'message': '토큰 강제 갱신 실패',
+          'error': e.toString(),
+          'stack': st.toString(),
+          'userEmail': _user?.email ?? 'null',
+          'scopes': _scopes,
+        },
+        level: 'error',
+        tags: const ['auth', 'google'],
+      );
+      rethrow;
+    }
   }
 
   Future<void> signOut() async {
-    await GoogleSignIn.instance.signOut();
-    _user = null;
-    _client = null;
+    try {
+      await GoogleSignIn.instance.signOut();
+      _user = null;
+      _client = null;
+    } catch (e, st) {
+      // signOut은 필수는 아니지만, 실패하면 참고용으로 남겨두면 좋음
+      await DebugApiLogger().log(
+        {
+          'tag': 'GoogleAuthSession.signOut',
+          'message': 'Google SignOut 실패',
+          'error': e.toString(),
+          'stack': st.toString(),
+          'userEmail': _user?.email ?? 'null',
+        },
+        level: 'error',
+        tags: const ['auth', 'google'],
+      );
+      rethrow;
+    }
   }
 
   GoogleSignInAccount? get currentUser => _user;
+
   List<String> get grantedScopes => List.unmodifiable(_scopes);
 
   Future<void> _ensureAuthorizedClient({bool forceAuthorize = false}) async {
     if (_user == null) return;
 
-    var authorization = forceAuthorize
-        ? null
-        : await _user!.authorizationClient.authorizationForScopes(_scopes);
+    try {
+      // 이미 권한이 있는지 우선 확인
+      var authorization = forceAuthorize ? null : await _user!.authorizationClient.authorizationForScopes(_scopes);
 
-    // 이미 승인됐다면 조용히 통과, 아니라면 "이번 한 번"만 프롬프트
-    authorization ??= await _user!.authorizationClient.authorizeScopes(_scopes);
+      // 없으면 새로 authorize
+      authorization ??= await _user!.authorizationClient.authorizeScopes(_scopes);
 
-    _client = authorization.authClient(scopes: _scopes);
+      _client = authorization.authClient(scopes: _scopes);
+    } catch (e, st) {
+      // 🔴 스코프 권한 부여/토큰 발급 실패
+      await DebugApiLogger().log(
+        {
+          'tag': 'GoogleAuthSession.ensureAuthorizedClient',
+          'message': '스코프 권한 부여 또는 토큰 발급 실패',
+          'error': e.toString(),
+          'stack': st.toString(),
+          'userEmail': _user?.email ?? 'null',
+          'scopes': _scopes,
+          'forceAuthorize': forceAuthorize,
+        },
+        level: 'error',
+        tags: const ['auth', 'google'],
+      );
+      rethrow;
+    }
   }
 
   void dispose() {
