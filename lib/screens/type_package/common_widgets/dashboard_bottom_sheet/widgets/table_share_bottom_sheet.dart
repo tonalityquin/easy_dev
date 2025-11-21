@@ -231,7 +231,7 @@ Future<void> tableShareBottomSheet(BuildContext context) async {
                         // 🔹 5초짜리 취소 가능 blocking dialog (분리된 파일의 함수 사용)
                         final proceed = await showCancelableBlockingDialog(
                           ctx,
-                          message: '5초 후에 가장 최근 공유 데이터를 가져옵니다.\n'
+                          message: '가장 최근 공유 데이터를 가져오고 있습니다.\n'
                               '가져오기를 원하지 않으면 [취소]를 눌러 주세요.',
                         );
 
