@@ -11,6 +11,14 @@ import '../../../../../../utils/blocking_dialog.dart';
 import 'end_work_report_service.dart';
 import 'home_end_work_report_controller.dart';
 
+/// Deep Blue 팔레트(대시보드/유저 카드와 톤 맞춤)
+class _Palette {
+  static const base  = Color(0xFF0D47A1); // primary
+  static const dark  = Color(0xFF09367D); // 강조 텍스트/아이콘
+  static const light = Color(0xFF5472D3); // 톤 변형/보더
+  static const fg    = Colors.white;      // 전경(아이콘/텍스트)
+}
+
 /// 대시보드에서 호출하는 진입점
 /// - Controller로 초기 집계 로드
 /// - 바텀시트 UI 오픈
@@ -210,18 +218,32 @@ class _EndWorkReportSheetState extends State<EndWorkReportSheet> {
               ),
             ),
           ),
-          ListTile(
-            leading: const Icon(Icons.assignment_turned_in),
-            title: const Text(
-              '업무 종료 보고',
-              style: TextStyle(fontWeight: FontWeight.w600),
-            ),
-            subtitle: Text('지역: $area'),
-            trailing: IconButton(
-              tooltip: '닫기',
-              icon: const Icon(Icons.close),
-              onPressed: () => Navigator.pop(context),
-            ),
+          Builder(
+            builder: (ctx) {
+              final t = Theme.of(ctx).textTheme;
+              return ListTile(
+                leading: const Icon(
+                  Icons.assignment_turned_in,
+                  color: _Palette.base,
+                ),
+                title: Text(
+                  '업무 종료 보고',
+                  style: t.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: _Palette.dark,
+                  ),
+                ),
+                subtitle: Text('지역: $area'),
+                trailing: IconButton(
+                  tooltip: '닫기',
+                  icon: const Icon(
+                    Icons.close,
+                    color: _Palette.dark,
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              );
+            },
           ),
           const Divider(height: 1),
           Expanded(
@@ -302,16 +324,19 @@ class _EndWorkReportSheetState extends State<EndWorkReportSheet> {
                               horizontal: 12,
                             ),
                             decoration: BoxDecoration(
-                              color: cs.primary.withOpacity(0.08),
+                              color: _Palette.base.withOpacity(0.08),
                               borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: _Palette.light.withOpacity(.6),
+                              ),
                             ),
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                Icon(
+                                const Icon(
                                   Icons.flag_rounded,
                                   size: 20,
-                                  color: cs.primary,
+                                  color: _Palette.base,
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
@@ -319,7 +344,7 @@ class _EndWorkReportSheetState extends State<EndWorkReportSheet> {
                                     '제출 시 저장 예상: 입차 $expectedInput대 / 출차 $expectedOutputTotal대',
                                     style: textTheme.titleSmall?.copyWith(
                                       fontWeight: FontWeight.w700,
-                                      color: cs.primary,
+                                      color: _Palette.dark,
                                     ),
                                   ),
                                 ),
@@ -365,7 +390,7 @@ class _EndWorkReportSheetState extends State<EndWorkReportSheet> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: cs.primary),
+          borderSide: const BorderSide(color: _Palette.base),
         ),
       ),
       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
@@ -437,8 +462,8 @@ class _InfoCard extends StatelessWidget {
                         margin: const EdgeInsets.only(top: 6),
                         width: 5,
                         height: 5,
-                        decoration: BoxDecoration(
-                          color: cs.primary,
+                        decoration: const BoxDecoration(
+                          color: _Palette.base,
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -503,20 +528,30 @@ class _SectionCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            children: [
-              Icon(Icons.directions_car, color: cs.primary),
-              const SizedBox(width: 8),
-              Text(
-                title,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleSmall!
-                    .copyWith(fontWeight: FontWeight.w600),
-              ),
+            children: const [
+              Icon(Icons.directions_car, color: _Palette.base),
+              SizedBox(width: 8),
+              // 제목은 Theme text로 스타일링
             ],
           ),
           const SizedBox(height: 12),
-          child,
+          // 제목 텍스트를 Row 밖에서 그리기 위해 Column으로 재구성
+          Builder(
+            builder: (ctx) {
+              final t = Theme.of(ctx).textTheme;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: t.titleSmall?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 12),
+                  child,
+                ],
+              );
+            },
+          ),
         ],
       ),
     );
@@ -557,6 +592,12 @@ class _FooterBar extends StatelessWidget {
             Expanded(
               child: OutlinedButton(
                 onPressed: busy ? null : onCancel,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _Palette.dark,
+                  side: BorderSide(
+                    color: _Palette.light.withOpacity(.8),
+                  ),
+                ),
                 child: const Text('취소'),
               ),
             ),
@@ -564,11 +605,18 @@ class _FooterBar extends StatelessWidget {
             Expanded(
               child: ElevatedButton(
                 onPressed: busy ? null : onSubmit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _Palette.base,
+                  foregroundColor: _Palette.fg,
+                ),
                 child: busy
                     ? const SizedBox(
                   height: 20,
                   width: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(_Palette.fg),
+                  ),
                 )
                     : const Text('제출'),
               ),

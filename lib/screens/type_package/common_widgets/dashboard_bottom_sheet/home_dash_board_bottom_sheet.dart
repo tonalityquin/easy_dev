@@ -9,15 +9,13 @@ import 'home_dash_board_controller.dart';
 import 'widgets/home_end_work_report_dialog.dart';
 import 'widgets/home_user_info_card.dart';
 import 'widgets/home_break_button_widget.dart';
-// HomeWorkButtonWidget는 이번 요구사항(퇴근하기 단일 버튼)에서 사용하지 않으므로 제거
-
 
 // ✅ 서류함 바텀시트 오픈 (같은 폴더)
 import 'document_box_sheet.dart';
 
 // ✅ 신규: 대시보드 전용 메모 + 플로팅 버블
 import 'memo/dash_memo.dart';
-
+import 'widgets/table_share_bottom_sheet.dart';
 class HomeDashBoardBottomSheet extends StatefulWidget {
   const HomeDashBoardBottomSheet({super.key});
 
@@ -147,7 +145,19 @@ class _HomeDashBoardBottomSheetState extends State<HomeDashBoardBottomSheet> {
                           HomeBreakButtonWidget(controller: controller),
                           const SizedBox(height: 16),
 
-                          // 2) 보고 작성 — ❗ fieldCommon 역할이면 숨김
+                          // 2) 인수인계 — ParkingCompleted 공유/가져오기 바텀시트 열기
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.swap_horiz),
+                              label: const Text('인수인계'),
+                              style: _handoverBtnStyle(),
+                              onPressed: () => tableShareBottomSheet(context),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // 3) 보고 작성 — ❗ fieldCommon 역할이면 숨김
                           if (!isFieldCommon) ...[
                             SizedBox(
                               width: double.infinity,
@@ -161,7 +171,7 @@ class _HomeDashBoardBottomSheetState extends State<HomeDashBoardBottomSheet> {
                             const SizedBox(height: 16),
                           ],
 
-                          // 3) 퇴근하기 (명시 버튼) — 근무 중/아님에 따라 내부에서 처리
+                          // 4) 퇴근하기 (명시 버튼) — 근무 중/아님에 따라 내부에서 처리
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
@@ -173,7 +183,7 @@ class _HomeDashBoardBottomSheetState extends State<HomeDashBoardBottomSheet> {
                           ),
                           const SizedBox(height: 16),
 
-                          // 4) 서류함 열기 — 사용자 전용 인벤토리(바텀시트) 열기
+                          // 5) 서류함 열기 — 사용자 전용 인벤토리(바텀시트) 열기
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
@@ -217,6 +227,18 @@ ButtonStyle _layerToggleBtnStyle() {
 
 ButtonStyle _memoBtnStyle() {
   // 메모 버튼도 동일 톤
+  return ElevatedButton.styleFrom(
+    backgroundColor: Colors.white,
+    foregroundColor: Colors.black,
+    minimumSize: const Size.fromHeight(55),
+    padding: EdgeInsets.zero,
+    side: const BorderSide(color: Colors.grey, width: 1.0),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+  );
+}
+
+ButtonStyle _handoverBtnStyle() {
+  // 인수인계 버튼 — 서류함/메모와 같은 톤
   return ElevatedButton.styleFrom(
     backgroundColor: Colors.white,
     foregroundColor: Colors.black,

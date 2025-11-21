@@ -1,6 +1,8 @@
+// lib/screens/commute_package/commute_inside_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:easydev/services/endtime_reminder_service.dart';
 
 import '../../../../states/user/user_state.dart';
 import '../../../utils/snackbar_helper.dart';
@@ -36,10 +38,36 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
       if (!mounted) return;
 
       final userState = context.read<UserState>();
+
+      // 1) 오늘 출근 여부 캐시 보장 (Firestore read는 UserState 내부에서 1일 1회)
+      await userState.ensureTodayClockInStatus();
+      if (!mounted) return;
+
+      // 2) isWorking=true인데 오늘 출근 로그가 없다면
+      //    → 어제(또는 그 이전)부터 이어진 잘못된 상태로 간주하고 자동 리셋
+      if (userState.isWorking && !userState.hasClockInToday) {
+        await _resetStaleWorkingState(userState);
+      }
+      if (!mounted) return;
+
+      // 3) 최종 상태 기준으로만 자동 라우팅
       if (userState.isWorking) {
         controller.redirectIfWorking(context, userState);
       }
     });
+  }
+
+  /// 🔹 "어제 출근만 하고 퇴근 안 누른 상태" 등을 오늘 앱 실행 시 자동으로 정리
+  Future<void> _resetStaleWorkingState(UserState userState) async {
+    // Firestore user_accounts.isWorking 토글(true → false)
+    await userState.isHeWorking();
+
+    // 로컬 SharedPreferences 의 isWorking 도 false 로 맞춤
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('isWorking', false);
+
+    // 남아 있을 수 있는 퇴근 알림도 취소
+    await EndtimeReminderService.instance.cancel();
   }
 
   Future<void> _loadCustomKakaoUrl() async {
@@ -194,7 +222,8 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
           fontSize: 11,
           color: Colors.black54,
           fontWeight: FontWeight.w600,
-        )).copyWith(
+        ))
+        .copyWith(
       color: Colors.black54,
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
@@ -262,7 +291,8 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
                             Center(
                               child: SizedBox(
                                 height: 80,
-                                child: Image.asset('assets/images/pelican.png'),
+                                child:
+                                Image.asset('assets/images/pelican.png'),
                               ),
                             ),
                           ],
@@ -302,7 +332,8 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
                           value: 'changeUrl',
                           child: Row(
                             children: [
-                              Icon(Icons.edit_location_alt, color: Colors.blueAccent),
+                              Icon(Icons.edit_location_alt,
+                                  color: Colors.blueAccent),
                               SizedBox(width: 8),
                               Text('경로 변경'),
                             ],

@@ -116,10 +116,10 @@ class PlateWriteService {
   }
 
   Future<void> updatePlate(
-      String documentId,
-      Map<String, dynamic> updatedFields, {
-        PlateLogModel? log,
-      }) async {
+    String documentId,
+    Map<String, dynamic> updatedFields, {
+    PlateLogModel? log,
+  }) async {
     final docRef = _firestore.collection('plates').doc(documentId);
 
     Map<String, dynamic>? current;
@@ -311,7 +311,7 @@ class PlateWriteService {
     required String actor, // 전환 수행자(userName)
     required String fromType, // 예: 'parking_requests'
     required String toType, // 예: 'parking_completed'
-    Map<String, dynamic> extraFields = const {}, // location/area 등
+    Map<String, dynamic>? extraFields, // location/area 등 (nullable로 변경)
     bool forceOverride = true, // false면 타인 선택 시 전환 거부
   }) async {
     final docRef = _firestore.collection('plates').doc(plateId);
@@ -322,7 +322,7 @@ class PlateWriteService {
         if (!snap.exists) {
           throw FirebaseException(plugin: 'cloud_firestore', code: 'not-found');
         }
-        final data = snap.data() ?? {};
+        final data = snap.data() ?? <String, dynamic>{};
         final currType = (data['type'] as String?) ?? '';
 
         if (currType != fromType) {
@@ -348,13 +348,16 @@ class PlateWriteService {
           'isSelected': false,
           'selectedBy': null,
           'updatedAt': FieldValue.serverTimestamp(), // ✅ 전환 시점 갱신
-          ...extraFields,
+
+          // 🔴 extraFields를 "같은 update 안에" 포함
+          if (extraFields != null) ...extraFields,
+
           'logs': FieldValue.arrayUnion([
             {
               'action': '$fromType → $toType',
               'performedBy': actor,
               'timestamp': DateTime.now().toIso8601String(),
-            }
+            },
           ]),
         };
 
@@ -362,11 +365,11 @@ class PlateWriteService {
       });
 
       /*await UsageReporter.instance.report(
-        area: (extraFields['area'] as String?) ?? '(unknown)',
-        action: 'write',
-        n: 1,
-        source: 'PlateWriteService.transitionPlateType.tx',
-      );*/
+      area: (extraFields?['area'] as String?) ?? '(unknown)',
+      action: 'write',
+      n: 1,
+      source: 'PlateWriteService.transitionPlateType.tx',
+    );*/
     } on FirebaseException catch (e, st) {
       try {
         await DebugDatabaseLogger().log({
@@ -378,7 +381,7 @@ class PlateWriteService {
             'from': fromType,
             'to': toType,
             'actor': actor,
-            'extraKeys': extraFields.keys.toList(),
+            'extraKeys': extraFields?.keys.toList() ?? const [],
             'forceOverride': forceOverride,
           },
           'error': {
@@ -402,8 +405,8 @@ class PlateWriteService {
             'from': fromType,
             'to': toType,
             'actor': actor,
-            'extraKeys': extraFields.keys.toList(),
-            'forceOverride': true,
+            'extraKeys': extraFields?.keys.toList() ?? const [],
+            'forceOverride': forceOverride,
           },
           'error': {
             'type': e.runtimeType.toString(),
@@ -419,11 +422,11 @@ class PlateWriteService {
 
   /// ✅ ‘주행’ 커밋 트랜잭션: 서버 상태(타입/선점자) 검증 + 원샷 업데이트
   Future<void> recordWhoPlateClick(
-      String id,
-      bool isSelected, {
-        String? selectedBy,
-        required String area,
-      }) async {
+    String id,
+    bool isSelected, {
+    String? selectedBy,
+    required String area,
+  }) async {
     final docRef = _firestore.collection('plates').doc(id);
 
     try {
@@ -531,9 +534,9 @@ class PlateWriteService {
   }
 
   Map<String, dynamic> _enforceZeroFeeLock(
-      Map<String, dynamic> data, {
-        Map<String, dynamic>? existing,
-      }) {
+    Map<String, dynamic> data, {
+    Map<String, dynamic>? existing,
+  }) {
     int effInt(String key) {
       if (data.containsKey(key)) return _toInt(data[key]);
       if (existing != null && existing.containsKey(key)) {
@@ -552,7 +555,7 @@ class PlateWriteService {
 
       data.putIfAbsent(
         PlateFields.lockedAtTimeInSeconds,
-            () => DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000,
+        () => DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000,
       );
       data.putIfAbsent(PlateFields.lockedFeeAmount, () => 0);
     }

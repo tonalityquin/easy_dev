@@ -1,12 +1,15 @@
+// lib/states/plate/movement_plate.dart
+
 import 'package:flutter/foundation.dart';
+
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import '../../repositories/plate_repo_services/plate_write_service.dart';
-// 로컬 로깅/가드 관련 import 제거
-// import '../../screens/type_package/parking_completed_package/services/local_transition_guard.dart';
-// import '../../screens/type_package/parking_completed_package/services/parking_completed_logger.dart';
-// import '../../screens/type_package/parking_completed_package/services/status_mapping.dart';
 import '../user/user_state.dart';
+
+// 🔹 입차/출차 로컬 SQLite 기록용
+import '../../screens/type_package/parking_completed_package/services/parking_completed_logger.dart';
+import '../../screens/type_package/parking_completed_package/services/status_mapping.dart';
 
 class MovementPlate extends ChangeNotifier {
   final PlateWriteService _write;
@@ -24,17 +27,26 @@ class MovementPlate extends ChangeNotifier {
     final actor = _user.name;
     final plateId = '${plateNumber}_$area';
 
+    // 1) Firestore 타입 전환 + location/area 업데이트
     await _write.transitionPlateType(
       plateId: plateId,
       actor: actor,
       fromType: PlateType.parkingRequests.firestoreValue,
       toType: PlateType.parkingCompleted.firestoreValue,
-      extraFields: {'location': location, 'area': area},
+      extraFields: {
+        'location': location,
+        'area': area,
+      },
       forceOverride: forceOverride,
     );
 
-    // ✅ 로깅은 PlateStreamService에서만 수행(단일화)
-    // (여기서 즉시 SQLite 기록/가드 마킹을 하지 않습니다)
+    // 2) 로컬 SQLite ParkingCompleted에 즉시 기록
+    await ParkingCompletedLogger.instance.maybeLogEntryCompleted(
+      plateNumber: plateNumber,
+      location: location,          // 주차 구역을 location 컬럼으로 저장
+      oldStatus: kStatusEntryRequest,
+      newStatus: kStatusEntryDone,
+    );
   }
 
   /// 출차 요청 (parking_completed → departure_requests)
@@ -52,12 +64,20 @@ class MovementPlate extends ChangeNotifier {
       actor: actor,
       fromType: PlateType.parkingCompleted.firestoreValue,
       toType: PlateType.departureRequests.firestoreValue,
-      extraFields: {'location': location, 'area': area},
+      extraFields: {
+        'location': location,
+        'area': area,
+      },
       forceOverride: forceOverride,
     );
+
+    // 출차 요청 자체는 로컬 ParkingCompleted에 별도 변동 없음
   }
 
   /// 출차 완료 (departure_requests → departure_completed)
+  ///
+  /// - Firestore 타입 전환
+  /// - 로컬 SQLite에서는 해당 차량의 가장 최근 미출차 기록을 "출차 완료"로 표시
   Future<void> setDepartureCompleted(
       PlateModel selectedPlate, {
         bool forceOverride = true,
@@ -76,9 +96,19 @@ class MovementPlate extends ChangeNotifier {
       },
       forceOverride: forceOverride,
     );
+
+    // ✅ 로컬 SQLite: 출차 완료 플래그 ON
+    await ParkingCompletedLogger.instance.markDepartureCompleted(
+      plateNumber: selectedPlate.plateNumber,
+      location: selectedPlate.location,
+    );
   }
 
   /// (옵션) 출차 요청 → 입차 완료 되돌리기
+  ///
+  /// - 이 경우는 "입차 완료 기록 추가"로 보고 싶다면
+  ///   아래에서 maybeLogEntryCompleted 를 호출하면 되고,
+  ///   아니면 호출하지 않으면 됨.
   Future<void> goBackToParkingCompleted(
       String plateNumber,
       String area,
@@ -93,11 +123,23 @@ class MovementPlate extends ChangeNotifier {
       actor: actor,
       fromType: PlateType.departureRequests.firestoreValue,
       toType: PlateType.parkingCompleted.firestoreValue,
-      extraFields: {'area': area, 'location': location},
+      extraFields: {
+        'area': area,
+        'location': location,
+      },
       forceOverride: forceOverride,
     );
 
-    // ✅ 로깅은 PlateStreamService에서만 수행(단일화)
+    // ⚠️ 필요 시만 주석 해제:
+    // 출차요청 → 입차완료 회귀를 "새 입차 완료"로 간주하고 싶으면 사용
+    /*
+    await ParkingCompletedLogger.instance.maybeLogEntryCompleted(
+      plateNumber: plateNumber,
+      location: location,
+      oldStatus: kStatusExitRequest,
+      newStatus: kStatusEntryDone,
+    );
+    */
   }
 
   /// (옵션) 임의 상태 → 입차 요청 되돌리기
@@ -116,8 +158,13 @@ class MovementPlate extends ChangeNotifier {
       actor: actor,
       fromType: fromType.firestoreValue,
       toType: PlateType.parkingRequests.firestoreValue,
-      extraFields: {'area': area, 'location': newLocation},
+      extraFields: {
+        'area': area,
+        'location': newLocation,
+      },
       forceOverride: forceOverride,
     );
+
+    // 입차 요청 상태로 되돌리는 건 로컬 ParkingCompleted 대상 아님
   }
 }

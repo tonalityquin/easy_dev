@@ -1,25 +1,29 @@
-import 'package:flutter/foundation.dart';
+// lib/screens/type_package/parking_completed_package/models/parking_completed_record.dart
 
-@immutable
 class ParkingCompletedRecord {
   final int? id;
   final String plateNumber; // 전체 번호판
-  final String area;        // 주차 구역
+  final String location;    // 주차 구역
   final DateTime? createdAt;
+
+  /// 출차 완료 여부 (로컬 전용 플래그)
+  final bool isDepartureCompleted;
 
   const ParkingCompletedRecord({
     this.id,
     required this.plateNumber,
-    required this.area,
+    required this.location,
     this.createdAt,
+    this.isDepartureCompleted = false,
   });
 
   Map<String, Object?> toMap() {
     return {
       'id': id,
       'plate_number': plateNumber,
-      'area': area,
+      'location': location,
       'created_at': createdAt?.millisecondsSinceEpoch,
+      'is_departure_completed': isDepartureCompleted ? 1 : 0,
     }..removeWhere((k, v) => v == null);
   }
 
@@ -27,10 +31,12 @@ class ParkingCompletedRecord {
     return ParkingCompletedRecord(
       id: map['id'] as int?,
       plateNumber: (map['plate_number'] ?? '') as String,
-      area: (map['area'] ?? '') as String,
+      location: (map['location'] ?? '') as String,
       createdAt: (map['created_at'] as int?) != null
           ? DateTime.fromMillisecondsSinceEpoch(map['created_at'] as int)
           : null,
+      isDepartureCompleted:
+      ((map['is_departure_completed'] as int?) ?? 0) == 1,
     );
   }
 }

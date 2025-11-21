@@ -6,11 +6,15 @@ import '../../../../states/user/user_state.dart';
 import 'chat_panel.dart';
 import '../../../../utils/snackbar_helper.dart';
 
-import '../../../../services/latest_message_service.dart'; // ★ 추가
+import '../../../../services/latest_message_service.dart'; // ★ 전역 latest 메시지 서비스
 
 /// Firestore 경로 참조 헬퍼: 최근 메시지 도큐먼트
 DocumentReference<Map<String, dynamic>> latestMessageRef(String roomId) =>
-    FirebaseFirestore.instance.collection('chats').doc(roomId).collection('state').doc('latest_message');
+    FirebaseFirestore.instance
+        .collection('chats')
+        .doc(roomId)
+        .collection('state')
+        .doc('latest_message');
 
 // ★ (중요) latestMessageStream(String roomId) 함수는 제거되었습니다.
 //   헤더/패널/오픈 버튼은 전역 LatestMessageService가 유일하게 snapshots()를 구독하고,
@@ -27,7 +31,8 @@ Widget _buildScreenTag(BuildContext context) {
         fontSize: 11,
         color: Colors.black54,
         fontWeight: FontWeight.w600,
-      )).copyWith(
+      ))
+      .copyWith(
     color: Colors.black54,
     fontWeight: FontWeight.w600,
     letterSpacing: 0.2,
@@ -71,6 +76,10 @@ void chatBottomSheet(BuildContext context) {
     backgroundColor: Colors.transparent,
     elevation: 0,
     barrierColor: Colors.black.withOpacity(0.25),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    clipBehavior: Clip.antiAlias,
     builder: (ctx) {
       final inset = MediaQuery.of(ctx).viewInsets.bottom; // 키보드 패딩
       final size = MediaQuery.of(ctx).size;
@@ -129,7 +138,8 @@ void chatBottomSheet(BuildContext context) {
                                 Row(
                                   children: [
                                     const SizedBox(width: 4),
-                                    const Icon(Icons.forum, size: 20, color: Colors.black87),
+                                    const Icon(Icons.forum,
+                                        size: 20, color: Colors.black87),
                                     const SizedBox(width: 8),
                                     const Expanded(
                                       child: Text(
@@ -145,7 +155,8 @@ void chatBottomSheet(BuildContext context) {
                                     IconButton(
                                       tooltip: '닫기',
                                       icon: const Icon(Icons.close),
-                                      onPressed: () => Navigator.of(ctx).pop(),
+                                      onPressed: () =>
+                                          Navigator.of(ctx).pop(),
                                     ),
                                   ],
                                 ),
@@ -153,12 +164,17 @@ void chatBottomSheet(BuildContext context) {
                             ),
                           ),
                           const SizedBox(height: 6),
-                          const Divider(height: 1, thickness: 1, color: Color(0xFFEAEAEA)),
+                          const Divider(
+                            height: 1,
+                            thickness: 1,
+                            color: Color(0xFFEAEAEA),
+                          ),
 
                           // ── 콘텐츠(가변 영역)
                           Expanded(
                             child: Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                              padding: const EdgeInsets.fromLTRB(
+                                  16, 12, 16, 16),
                               child: ChatPanel(roomId: roomId),
                             ),
                           ),
@@ -173,10 +189,6 @@ void chatBottomSheet(BuildContext context) {
         ),
       );
     },
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-    ),
-    clipBehavior: Clip.antiAlias,
   );
 }
 
@@ -204,17 +216,20 @@ class ChatOpenButton extends StatelessWidget {
       valueListenable: LatestMessageService.instance.latest,
       builder: (context, data, _) {
         final latestMsg = data.text;
-        final text = latestMsg.length > 20 ? '${latestMsg.substring(0, 20)}...' : latestMsg;
+        final text =
+        latestMsg.length > 20 ? '${latestMsg.substring(0, 20)}...' : latestMsg;
         final label = text.isEmpty ? '채팅 열기' : text;
 
         // 흰색 배경 + 라운드 + 테두리로 깔끔한 버튼
         return ElevatedButton(
+          // 버튼을 누르면 바로 채팅 바텀시트를 연다.
           onPressed: () => chatBottomSheet(context),
           style: ElevatedButton.styleFrom(
             elevation: 0,
             backgroundColor: Colors.white, // ✅ 버튼 배경도 흰색
             foregroundColor: Colors.black87,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(10),
               side: const BorderSide(color: Color(0xFFE0E0E0)),

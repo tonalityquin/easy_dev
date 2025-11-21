@@ -7,6 +7,10 @@ import '../../enums/plate_type.dart';
 import '../../screens/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
+// 🔹 ParkingCompleted 로컬 로깅용
+import '../../screens/type_package/parking_completed_package/services/parking_completed_logger.dart';
+import '../../screens/type_package/parking_completed_package/services/status_mapping.dart';
+
 class PlateCreationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -121,7 +125,8 @@ class PlateCreationService {
       addAmount = 0;
     }
 
-    final plateFourDigit = plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
+    final plateFourDigit =
+    plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
 
     // billingType이 없으면 요금 잠금 처리
     final effectiveIsLockedFee = isLockedFee || (billingType == null || billingType.trim().isEmpty);
@@ -172,6 +177,9 @@ class PlateCreationService {
 
     final docRef = _firestore.collection('plates').doc(documentId);
 
+    // 🔹 이 호출에서 "처음부터 입차 완료(parking_completed)로 생성"된 경우를 감지하기 위한 플래그
+    bool createdAsParkingCompleted = false;
+
     try {
       int writes = 0;
       int reads = 0;
@@ -196,12 +204,16 @@ class PlateCreationService {
             final List<Map<String, dynamic>> existingLogs = (() {
               final raw = data?['logs'];
               if (raw is List) {
-                return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+                return raw
+                    .whereType<Map>()
+                    .map((e) => Map<String, dynamic>.from(e))
+                    .toList();
               }
               return <Map<String, dynamic>>[];
             })();
 
-            final List<Map<String, dynamic>> newLogs = (plateWithLog.logs ?? []).map((e) => e.toMap()).toList();
+            final List<Map<String, dynamic>> newLogs =
+            (plateWithLog.logs ?? []).map((e) => e.toMap()).toList();
             final List<Map<String, dynamic>> mergedLogs = [...existingLogs, ...newLogs];
 
             final partial = <String, dynamic>{
@@ -210,10 +222,12 @@ class PlateCreationService {
               PlateFields.updatedAt: FieldValue.serverTimestamp(),
               if (base.location.isNotEmpty) PlateFields.location: base.location,
               if (endTime != null) PlateFields.endTime: endTime,
-              if (billingType != null && billingType.trim().isNotEmpty) PlateFields.billingType: billingType,
+              if (billingType != null && billingType.trim().isNotEmpty)
+                PlateFields.billingType: billingType,
               if (imageUrls != null) PlateFields.imageUrls: imageUrls,
               if (paymentMethod != null) PlateFields.paymentMethod: paymentMethod,
-              if (lockedAtTimeInSeconds != null) PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
+              if (lockedAtTimeInSeconds != null)
+                PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
               if (lockedFeeAmount != null) PlateFields.lockedFeeAmount: lockedFeeAmount,
               PlateFields.isLockedFee: effectiveIsLockedFee,
               PlateFields.logs: mergedLogs,
@@ -221,7 +235,8 @@ class PlateCreationService {
 
             final bool wasLocked = (data?['isLockedFee'] == true);
             if (wasLocked) {
-              final countersRef = _firestore.collection('plate_counters').doc('area_$area');
+              final countersRef =
+              _firestore.collection('plate_counters').doc('area_$area');
               tx.set(
                 countersRef,
                 {'departureCompletedEvents': FieldValue.increment(1)},
@@ -240,8 +255,28 @@ class PlateCreationService {
           map[PlateFields.updatedAt] = FieldValue.serverTimestamp();
           tx.set(docRef, map);
           writes += 1; // plates set
+
+          // 🔸 이 호출에서 "처음부터 parking_completed 로 생성"한 경우 플래그 세팅
+          if (plateType == PlateType.parkingCompleted) {
+            createdAsParkingCompleted = true;
+          }
         }
       });
+
+      // 🔹 트랜잭션이 정상적으로 끝난 뒤, 처음부터 parking_completed 로 만든 경우에만
+      //    로컬 SQLite(ParkingCompletedDb)에 한 번 기록
+      if (createdAsParkingCompleted) {
+        // Firestore 비용 없음: 로컬(SQLite)만 기록
+        // 기존 스트림 기반 로깅과 동일하게 old/new Status 텍스트 사용
+        // (입차 요청 → 입차 완료로 바로 간 것처럼 취급)
+        // ignore: unawaited_futures
+        ParkingCompletedLogger.instance.maybeLogCompleted(
+          plateNumber: plateNumber,
+          location: location.isNotEmpty ? location : '미지정',
+          oldStatus: kStatusEntryRequest,
+          newStatus: kStatusEntryDone,
+        );
+      }
 
       if (reads > 0) {
         /*await UsageReporter.instance.report(
@@ -289,7 +324,9 @@ class PlateCreationService {
     // ✅ plate_status upsert → updatedAt도 서버 타임스탬프로 (일관화)
     if (customStatus != null && customStatus.trim().isNotEmpty) {
       final statusDocRef = _firestore.collection('plate_status').doc(documentId);
-      final expireAt = Timestamp.fromDate(DateTime.now().add(const Duration(days: 1)));
+      final expireAt = Timestamp.fromDate(
+        DateTime.now().add(const Duration(days: 1)),
+      );
 
       final payload = <String, dynamic>{
         'customStatus': customStatus.trim(),

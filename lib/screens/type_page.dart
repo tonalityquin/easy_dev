@@ -22,15 +22,14 @@ import '../utils/snackbar_helper.dart';
 
 import '../utils/tts/tts_manager.dart';
 
-// ⬇️ 추가: 전역 최신 메시지 서비스(실시간 구독 + 캐시)
+// ⬇️ 전역 최신 메시지 서비스(실시간 구독 + 캐시)
 import '../services/latest_message_service.dart';
 
-// ⬇️ 추가: 역 바텀시트(Top Sheet)
-import 'type_package/parking_completed_package/reverse_sheet/reverse_page_top_sheet.dart';
-import 'type_package/parking_completed_package/reverse_sheet/parking_completed_reverse_page.dart';
-
-// ⬇️ 추가: RoleType (허용/차단 판단용)
+// ⬇️ RoleType (허용/차단 판단용)
 import 'secondary_package/office_mode_package/user_management_package/sections/user_role_type_section.dart';
+
+// ⬇️ ParkingCompleted 로컬 테이블 Top Sheet + 라이브 버튼 핸들러
+import 'type_package/parking_completed_package/ui/parking_completed_table_sheet.dart';
 
 /// Deep Blue 팔레트(서비스 카드와 동일 계열)
 class _Palette {
@@ -83,7 +82,8 @@ class _TypePageState extends State<TypePage> {
 
               final currentPage = pageState.pages[pageState.selectedIndex];
               final collection = currentPage.collectionKey;
-              final selectedPlate = plateState.getSelectedPlate(collection, userName);
+              final selectedPlate =
+              plateState.getSelectedPlate(collection, userName);
 
               if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
                 await plateState.togglePlateIsSelected(
@@ -125,7 +125,8 @@ class _TypePageState extends State<TypePage> {
 class _ChatDashboardBar extends StatelessWidget {
   const _ChatDashboardBar();
 
-  static Future<void> _replayLatestTts(BuildContext context, String area) async {
+  static Future<void> _replayLatestTts(
+      BuildContext context, String area) async {
     // ★ Firestore 접근 없음: 서비스가 저장해 둔 로컬 캐시만 사용 → READ 0
     final text = (await LatestMessageService.instance.readFromPrefs()).trim();
     if (text.isEmpty) {
@@ -160,9 +161,12 @@ class _ChatDashboardBar extends StatelessWidget {
                 backgroundColor: Colors.white,
                 foregroundColor: _Palette.dark.withOpacity(.35),
                 disabledBackgroundColor: Colors.white,
-                disabledForegroundColor: _Palette.dark.withOpacity(.35),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                disabledForegroundColor:
+                _Palette.dark.withOpacity(.35),
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 12, vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
               ),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -179,12 +183,16 @@ class _ChatDashboardBar extends StatelessWidget {
               builder: (context, latestData, _) {
                 final hasText = latestData.text.trim().isNotEmpty;
                 return ElevatedButton(
-                  onPressed: hasText ? () => _replayLatestTts(context, area) : null,
+                  onPressed: hasText
+                      ? () => _replayLatestTts(context, area)
+                      : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: _Palette.base,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8)),
                   ),
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -215,8 +223,10 @@ class _ChatDashboardBar extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: _Palette.base,
                 foregroundColor: _Palette.fg,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
                 elevation: 2,
                 shadowColor: _Palette.dark.withOpacity(.25),
               ),
@@ -249,10 +259,10 @@ class _RefreshableBodyState extends State<RefreshableBody> {
 
   // ── 세로 스와이프
   //   - 아래→위: 채팅 바텀시트
-  //   - 위→아래: 역 바텀시트(Top Sheet)
+  //   - 위→아래: ParkingCompleted 로컬 테이블 Top Sheet
   double _vDragDistance = 0.0;
   bool _chatOpening = false; // 중복 오픈 방지(채팅)
-  bool _topOpening = false; // 중복 오픈 방지(역 바텀시트)
+  bool _topOpening = false; // 중복 오픈 방지(테이블 시트)
 
   // 임계값
   static const double _hDistanceThreshold = 80.0;
@@ -264,8 +274,8 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   static const double _vDistanceThresholdDown = 50.0;
   static const double _vVelocityThresholdDown = 700.0;
 
-  // ⬇️ 추가: Top Sheet 접근 허용 역할 세트 + 역할 얻기
-  static const Set<RoleType> _allowedRolesForReverseTopSheet = {
+  // ⬇️ ParkingCompleted 테이블 Top Sheet 접근 허용 역할 세트
+  static const Set<RoleType> _allowedRolesForParkingTableTopSheet = {
     RoleType.dev,
     RoleType.adminBillMonthly,
     RoleType.adminBillMonthlyTablet,
@@ -298,59 +308,74 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   }
 
   void _handleHorizontalDragEnd(BuildContext context, double velocity) {
-    if (_dragDistance > _hDistanceThreshold && velocity > _hVelocityThreshold) {
-      Navigator.of(context).push(_slidePage(const InputPlateScreen(), fromLeft: true));
-    } else if (_dragDistance < -_hDistanceThreshold && velocity < -_hVelocityThreshold) {
-      Navigator.of(context).push(_slidePage(const SecondaryPage(), fromLeft: false));
+    if (_dragDistance > _hDistanceThreshold &&
+        velocity > _hVelocityThreshold) {
+      Navigator.of(context)
+          .push(_slidePage(const InputPlateScreen(), fromLeft: true));
+    } else if (_dragDistance < -_hDistanceThreshold &&
+        velocity < -_hVelocityThreshold) {
+      Navigator.of(context)
+          .push(_slidePage(const SecondaryPage(), fromLeft: false));
     } else {
-      debugPrint('⏸[H] 거리(${_dragDistance.toStringAsFixed(1)})/속도($velocity) 부족 → 무시');
+      debugPrint(
+          '⏸[H] 거리(${_dragDistance.toStringAsFixed(1)})/속도($velocity) 부족 → 무시');
     }
     _dragDistance = 0.0;
   }
 
-  Future<void> _openReverseTopSheet(BuildContext context) async {
+  /// ⬇️ 리팩터링: 위→아래 스와이프 시 열릴 ParkingCompleted 로컬 테이블 Top Sheet
+  Future<void> _openParkingCompletedTableSheet(BuildContext context) async {
     // iOS 제스처 충돌 방지용 아주 짧은 디바운스
     await Future<void>.delayed(const Duration(milliseconds: 10));
     if (!mounted) return;
 
     // ✅ 역할 가드: 허용 목록 외(FieldCommon 등)는 차단
     final role = _getRoleType(context);
-    final allowed = role != null && _allowedRolesForReverseTopSheet.contains(role);
+    final allowed = role != null &&
+        _allowedRolesForParkingTableTopSheet.contains(role);
     if (!allowed) {
       showFailedSnackbar(context, '권한이 없습니다. 관리자에게 문의하세요.');
       return;
     }
 
-    await showReversePageTopSheet(
-      context: context,
-      maxHeightFactor: 0.92,
-      builder: (_) => const ParkingCompletedReversePage(),
+    // ✅ 역 바텀시트(Top Sheet)로 테이블 열기 + 내부 라이브 버튼에서 다시 ReversePage 열기
+    await showParkingCompletedTableTopSheet(
+      context,
+      canShowLiveButton: allowed,
     );
   }
 
-  Future<void> _handleVerticalDragEnd(BuildContext context, DragEndDetails details) async {
+  Future<void> _handleVerticalDragEnd(
+      BuildContext context, DragEndDetails details) async {
     final vy = details.primaryVelocity ?? 0.0; // 위로 스와이프는 음수, 아래로는 양수
 
     // 위로 빠르게 스와이프 → 채팅 (둘 중 하나만 만족해도 트리거)
-    final firedUp = (_vDragDistance < -_vDistanceThresholdUp) || (vy < -_vVelocityThresholdUp);
-    // 아래로 빠르게 스와이프 → 역 바텀시트 (둘 중 하나만 만족해도 트리거)
-    final firedDown = (_vDragDistance > _vDistanceThresholdDown) || (vy > _vVelocityThresholdDown);
+    final firedUp =
+        (_vDragDistance < -_vDistanceThresholdUp) ||
+            (vy < -_vVelocityThresholdUp);
+    // 아래로 빠르게 스와이프 → ParkingCompleted 테이블 Top Sheet (둘 중 하나만 만족해도 트리거)
+    final firedDown =
+        (_vDragDistance > _vDistanceThresholdDown) ||
+            (vy > _vVelocityThresholdDown);
 
     if (firedUp && !_chatOpening) {
       _chatOpening = true;
-      debugPrint('✅[V-UP] 채팅 오픈: 거리=${_vDragDistance.toStringAsFixed(1)} / 속도=$vy '
-          '(need dist<-${_vDistanceThresholdUp} OR vy<-${_vVelocityThresholdUp})');
+      debugPrint(
+          '✅[V-UP] 채팅 오픈: 거리=${_vDragDistance.toStringAsFixed(1)} / 속도=$vy '
+              '(need dist<-${_vDistanceThresholdUp} OR vy<-${_vVelocityThresholdUp})');
       await Future<void>.delayed(const Duration(milliseconds: 10));
       if (mounted) chatBottomSheet(context);
       _chatOpening = false;
     } else if (firedDown && !_topOpening) {
       _topOpening = true;
-      debugPrint('✅[V-DOWN] 역 바텀시트 오픈: 거리=${_vDragDistance.toStringAsFixed(1)} / 속도=$vy '
-          '(need dist>${_vDistanceThresholdDown} OR vy>${_vVelocityThresholdDown})');
-      await _openReverseTopSheet(context);
+      debugPrint(
+          '✅[V-DOWN] ParkingCompleted 테이블 Top Sheet 오픈: 거리=${_vDragDistance.toStringAsFixed(1)} / 속도=$vy '
+              '(need dist>${_vDistanceThresholdDown} OR vy>${_vVelocityThresholdDown})');
+      await _openParkingCompletedTableSheet(context);
       _topOpening = false;
     } else {
-      debugPrint('⏸[V] 거리=${_vDragDistance.toStringAsFixed(1)}, 속도=$vy → 조건 미충족(무시)');
+      debugPrint(
+          '⏸[V] 거리=${_vDragDistance.toStringAsFixed(1)}, 속도=$vy → 조건 미충족(무시)');
     }
 
     _vDragDistance = 0.0; // reset
@@ -363,7 +388,8 @@ class _RefreshableBodyState extends State<RefreshableBody> {
       transitionsBuilder: (_, animation, __, child) {
         final begin = Offset(fromLeft ? -1.0 : 1.0, 0);
         final end = Offset.zero;
-        final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
+        final tween = Tween(begin: begin, end: end)
+            .chain(CurveTween(curve: Curves.easeInOut));
         return SlideTransition(position: animation.drive(tween), child: child);
       },
     );
@@ -376,18 +402,21 @@ class _RefreshableBodyState extends State<RefreshableBody> {
       dragStartBehavior: DragStartBehavior.down,
 
       // ── 가로 스와이프(좌/우 페이지 전환)
-      onHorizontalDragUpdate: (details) => _dragDistance += details.delta.dx,
+      onHorizontalDragUpdate: (details) =>
+      _dragDistance += details.delta.dx,
       onHorizontalDragEnd: (details) => _handleHorizontalDragEnd(
         context,
         details.primaryVelocity ?? 0,
       ),
 
-      // ── 세로 스와이프(아래→위: 채팅 / 위→아래: 역 바텀시트)
+      // ── 세로 스와이프(아래→위: 채팅 / 위→아래: ParkingCompleted 테이블 Top Sheet)
       onVerticalDragStart: (_) {
         _vDragDistance = 0.0; // 시작 시 리셋
       },
-      onVerticalDragUpdate: (details) => _vDragDistance += details.delta.dy, // 위로 음수, 아래로 양수
-      onVerticalDragEnd: (details) => _handleVerticalDragEnd(context, details),
+      onVerticalDragUpdate: (details) =>
+      _vDragDistance += details.delta.dy, // 위로 음수, 아래로 양수
+      onVerticalDragEnd: (details) =>
+          _handleVerticalDragEnd(context, details),
 
       child: Consumer<PageState>(
         builder: (context, state, child) {
@@ -403,7 +432,8 @@ class _RefreshableBodyState extends State<RefreshableBody> {
                       height: 28,
                       child: CircularProgressIndicator(
                         strokeWidth: 3,
-                        valueColor: AlwaysStoppedAnimation<Color>(_Palette.base),
+                        valueColor:
+                        AlwaysStoppedAnimation<Color>(_Palette.base),
                       ),
                     ),
                   ),
@@ -421,7 +451,10 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     } else {
       return IndexedStack(
         index: index - 1,
-        children: defaultPages.sublist(1).map((pageInfo) => pageInfo.builder(context)).toList(),
+        children: defaultPages
+            .sublist(1)
+            .map((pageInfo) => pageInfo.builder(context))
+            .toList(),
       );
     }
   }
@@ -435,23 +468,13 @@ class PageBottomNavigation extends StatefulWidget {
 }
 
 class _PageBottomNavigationState extends State<PageBottomNavigation> {
-  // 🔁 리팩터링: 단발 카운트 Future 캐시 제거
-  // String? _area;
-  // final Map<PlateType, Future<int>> _countFutures = {};
-  // void _ensureFuturesForCurrentAreaAndPages() { ... }
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 🔁 리팩터링: 더 이상 준비할 Future가 없으므로 호출 제거
-    // _ensureFuturesForCurrentAreaAndPages();
   }
 
   @override
   Widget build(BuildContext context) {
-    // 🔁 리팩터링: Future 준비 로직 제거
-    // _ensureFuturesForCurrentAreaAndPages();
-
     // 팔레트 기반 선택/비선택 색
     final selectedColor = _Palette.base;
     final unselectedColor = _Palette.dark.withOpacity(.55);
@@ -517,9 +540,15 @@ class _PageBottomNavigationState extends State<PageBottomNavigation> {
                     final bool isOut = pageInfo.title == '출차 요청';
                     Color countColor;
                     if (isIn || isOut) {
-                      countColor = isSelected ? selectedColor : (isIn ? Colors.redAccent : Colors.indigoAccent);
+                      countColor = isSelected
+                          ? selectedColor
+                          : (isIn
+                          ? Colors.redAccent
+                          : Colors.indigoAccent);
                     } else {
-                      countColor = isSelected ? selectedColor : _Palette.dark.withOpacity(.75);
+                      countColor = isSelected
+                          ? selectedColor
+                          : _Palette.dark.withOpacity(.75);
                     }
 
                     return Column(

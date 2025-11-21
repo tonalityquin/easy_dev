@@ -15,13 +15,14 @@ import '../../../../../states/area/area_state.dart';
 import '../../../../../states/user/user_state.dart';
 import '../../../dev_package/debug_package/debug_database_logger.dart';
 
-// ✅ DB 전용 로거 (스텁)
-
 class CommuteInsideClockInLogUploader {
   static const String _status = '출근';
 
   // ─────────────────────────────────────────
   // 출근 기록 저장 (Firestore 전용)
+  //
+  // ❗ 중복 체크는 상위 레이어(UserState.hasClockInToday 등)에서 이미 수행하고,
+  //    이 업로더는 "주어진 요청을 있는 그대로 기록"하는 역할만 담당합니다.
   // ─────────────────────────────────────────
   static Future<SheetUploadResult> uploadAttendanceJson({
     required BuildContext context,
@@ -78,21 +79,11 @@ class CommuteInsideClockInLogUploader {
 
       final repo = CommuteLogRepository();
 
-      // 2) ✅ 오늘 이미 출근 로그가 있는지 확인
-      final alreadyExists = await repo.hasLogForDate(
-        status: _status,
-        userId: userId,
-        dateStr: dateStr,
-      );
+      // 🔁 (이전 코드)
+      // 2) 오늘 이미 출근 로그가 있는지 확인 → hasLogForDate(...)
+      //    ➜ 이 책임은 이제 UserState/Controller에서 담당하므로 제거
 
-      if (alreadyExists) {
-        const msg = '이미 오늘 출근 기록이 있어, 새로 저장되지 않았습니다.';
-        debugPrint('⚠️ $msg');
-        // 중복은 의도된 제어 흐름이므로 에러 로그는 남기지 않음
-        return const SheetUploadResult(success: false, message: msg);
-      }
-
-      // 3) ✅ Firestore commute_user_logs 에 기록
+      // 2) ✅ Firestore commute_user_logs 에 기록
       await repo.addLog(
         status: _status,
         userId: userId,
