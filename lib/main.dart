@@ -1,4 +1,4 @@
-import 'dart:async'; // ⬅️ 권한 초기화 중복 방지용 Completer
+import 'dart:async'; // ⬅️ 권한 초기화 중복 방지용 Completer / unawaited
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
@@ -83,25 +83,44 @@ void main() async {
 
   // (요청에 따라 ForegroundTask.init 제거)
 
-  // 🔔 로컬 알림 초기화 (게이트 적용)
-  await _initLocalNotifications();
+  // ✅ 먼저 Flutter UI를 띄운다.
+  debugPrint('[MAIN][${_ts()}] runApp(AppBootstrapper)');
+  runApp(const AppBootstrapper());
+
+  // ✅ 그 다음에 비동기로 알림/리마인더 초기화를 수행 (UI를 막지 않도록)
+  // unawaited 는 dart:async 에서 제공 (결과는 기다리지 않음)
+  unawaited(_postBootstrap());
+}
+
+/// runApp 이후에 천천히 수행해도 되는 초기화들
+Future<void> _postBootstrap() async {
+  try {
+    // 🔔 로컬 알림/타임존 초기화 (게이트 적용)
+    await _initLocalNotifications();
+  } catch (e, st) {
+    debugPrint('[MAIN][${_ts()}] _initLocalNotifications error: $e');
+    debugPrint(st.toString());
+    // 여기서 에러 나도 앱 전체를 죽이지 않고, "알림 기능만 실패"로 유지
+  }
 
   // 🔔 서비스에 플러그인 주입 (알림 예약/취소에 사용)
   EndtimeReminderService.instance.attachPlugin(flnp);
 
   // 🔔 앱 시작 시 보강: prefs의 endTime & isWorking 기준으로 예약/취소 정합화
-  final prefs = await SharedPreferences.getInstance();
-  final savedEnd = prefs.getString('endTime');
-  final isWorking = prefs.getBool(kIsWorkingPrefsKey) ?? false;
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    final savedEnd = prefs.getString('endTime');
+    final isWorking = prefs.getBool(kIsWorkingPrefsKey) ?? false;
 
-  if (isWorking && savedEnd != null && savedEnd.isNotEmpty) {
-    await EndtimeReminderService.instance.scheduleDailyOneHourBefore(savedEnd);
-  } else {
-    await EndtimeReminderService.instance.cancel();
+    if (isWorking && savedEnd != null && savedEnd.isNotEmpty) {
+      await EndtimeReminderService.instance.scheduleDailyOneHourBefore(savedEnd);
+    } else {
+      await EndtimeReminderService.instance.cancel();
+    }
+  } catch (e, st) {
+    debugPrint('[MAIN][${_ts()}] EndtimeReminderService init error: $e');
+    debugPrint(st.toString());
   }
-
-  debugPrint('[MAIN][${_ts()}] runApp(AppBootstrapper)');
-  runApp(const AppBootstrapper());
 }
 
 // 🔔 로컬 알림/타임존 초기화 + 권한/채널 생성 (중복 호출 안전)
@@ -163,8 +182,12 @@ Future<void> _initLocalNotifications() async {
     _Once.notificationsReady = true;
     c.complete();
   } catch (e, st) {
-    if (!c.isCompleted) c.completeError(e, st);
-    rethrow;
+    // 🔴 여기서 예외가 나도 더 이상 rethrow 하지 않고, 로그만 남긴다.
+    if (!c.isCompleted) {
+      c.completeError(e, st);
+    }
+    debugPrint('[MAIN][${_ts()}] _initLocalNotifications exception: $e');
+    debugPrint(st.toString());
   } finally {
     _Once.notificationsInFlight = null; // 다음 호출은 ready 플래그로 즉시 반환
   }
@@ -272,7 +295,8 @@ class MyApp extends StatelessWidget {
         theme: appTheme,
         initialRoute: AppRoutes.selector,
         routes: appRoutes,
-        onUnknownRoute: (_) => MaterialPageRoute(builder: (_) => const NotFoundPage()),
+        onUnknownRoute: (_) =>
+            MaterialPageRoute(builder: (_) => const NotFoundPage()),
 
         // ✅ 앱 전역 네비게이터 키(시트 컨텍스트 안정성)
         navigatorKey: AppNavigator.key,

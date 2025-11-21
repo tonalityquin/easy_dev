@@ -158,7 +158,7 @@ class _GDocBubbleState extends State<_GDocBubble> {
 
 /// 중앙 세션에서 AuthClient를 받아 Docs API 생성
 Future<gdocs.DocsApi> _getDocsApi() async {
-  final client = await GoogleAuthSession.instance.client();
+  final client = await GoogleAuthSession.instance.safeClient();
   return gdocs.DocsApi(client);
 }
 

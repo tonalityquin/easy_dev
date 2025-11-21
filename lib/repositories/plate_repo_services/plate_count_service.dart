@@ -34,7 +34,10 @@ class PlateCountService {
     _cache[key] = _CacheItem<int>(value, DateTime.now());
   }
 
-  Future<int> getParkingCompletedCountAll(String area) async {
+  // ─────────────────────────────
+  // ✅ 입차 전체 집계 (parking_completed, area 필터)
+  // ─────────────────────────────
+  Future<int> getParkingCompletedAggCount(String area) async {
     final cacheKey = 'park_all_$area';
     final cached = _getCached(cacheKey);
     if (cached != null) return cached;
@@ -45,7 +48,8 @@ class PlateCountService {
         .where('area', isEqualTo: area);
 
     try {
-      final agg = await baseQuery.count().get().timeout(const Duration(seconds: 10));
+      final agg =
+      await baseQuery.count().get().timeout(const Duration(seconds: 10));
       final int count = agg.count ?? 0;
 
       /*await UsageReporter.instance.reportSampled(
@@ -81,8 +85,14 @@ class PlateCountService {
     }
   }
 
-  Future<int> getDepartureCompletedCountAll(String area) async {
-    final cacheKey = 'dep_all_$area';
+  // ─────────────────────────────
+  // ✅ 출차 aggregation 전용
+  //    - plates 컬렉션만 집계
+  //    - type = departure_completed
+  //    - isLockedFee = true
+  // ─────────────────────────────
+  Future<int> getDepartureCompletedAggCount(String area) async {
+    final cacheKey = 'dep_agg_$area';
     final cached = _getCached(cacheKey);
     if (cached != null) return cached;
 
@@ -93,28 +103,24 @@ class PlateCountService {
         .where('isLockedFee', isEqualTo: true);
 
     try {
-      final agg = await baseQuery.count().get().timeout(const Duration(seconds: 10));
+      final agg =
+      await baseQuery.count().get().timeout(const Duration(seconds: 10));
       final int docCount = agg.count ?? 0;
-
-      // 🔹 보정치(재생성 이벤트 카운터) 1회 읽기 → 총 2회 READ
-      final extraSnap = await _firestore.collection('plate_counters').doc('area_$area').get();
-      final int extras = (extraSnap.data()?['departureCompletedEvents'] as int?) ?? 0;
 
       /*await UsageReporter.instance.reportSampled(
         area: area,
         action: 'read',
-        n: 2,
-        source: 'PlateCountService.getDepartureCompletedCountAll',
+        n: 1,
+        source: 'PlateCountService.getDepartureCompletedAggCount',
         sampleRate: 0.2,
       );*/
 
-      final v = docCount + extras;
-      _setCached(cacheKey, v);
-      return v;
+      _setCached(cacheKey, docCount);
+      return docCount;
     } catch (e, st) {
       try {
         await DebugDatabaseLogger().log({
-          'op': 'plates.count.departureCompletedAll',
+          'op': 'plates.count.departureCompletedAgg',
           'collection': 'plates',
           'filters': {
             'type': PlateType.departureCompleted.firestoreValue,
@@ -128,7 +134,58 @@ class PlateCountService {
             'message': e.toString(),
           },
           'stack': st.toString(),
-          'tags': ['plates', 'count', 'departureCompletedAll', 'error'],
+          'tags': ['plates', 'count', 'departureCompletedAgg', 'error'],
+        }, level: 'error');
+      } catch (_) {}
+      rethrow;
+    }
+  }
+
+  // ─────────────────────────────
+  // ✅ 출차 보정치 전용
+  //    - plate_counters/area_<area>.departureCompletedEvents
+  // ─────────────────────────────
+  Future<int> getDepartureCompletedExtraCount(String area) async {
+    final cacheKey = 'dep_extra_$area';
+    final cached = _getCached(cacheKey);
+    if (cached != null) return cached;
+
+    try {
+      final extraSnap = await _firestore
+          .collection('plate_counters')
+          .doc('area_$area')
+          .get();
+
+      final int extras =
+          (extraSnap.data()?['departureCompletedEvents'] as int?) ?? 0;
+
+      /*await UsageReporter.instance.reportSampled(
+        area: area,
+        action: 'read',
+        n: 1,
+        source: 'PlateCountService.getDepartureCompletedExtraCount',
+        sampleRate: 0.2,
+      );*/
+
+      _setCached(cacheKey, extras);
+      return extras;
+    } catch (e, st) {
+      try {
+        await DebugDatabaseLogger().log({
+          'op': 'plates.count.departureCompletedExtra',
+          'collection': 'plate_counters',
+          'filters': {
+            'docId': 'area_$area',
+            'field': 'departureCompletedEvents',
+          },
+          'meta': {'timeoutSec': 10},
+          'error': {
+            'type': e.runtimeType.toString(),
+            if (e is FirebaseException) 'code': e.code,
+            'message': e.toString(),
+          },
+          'stack': st.toString(),
+          'tags': ['plates', 'count', 'departureCompletedExtra', 'error'],
         }, level: 'error');
       } catch (_) {}
       rethrow;

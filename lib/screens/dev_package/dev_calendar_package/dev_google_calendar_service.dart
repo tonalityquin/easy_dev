@@ -19,7 +19,7 @@ class DevGoogleCalendarService {
 
   Future<void> _ensureApi() async {
     if (_api != null) return;
-    _client = await GoogleAuthSession.instance.client();
+    _client = await GoogleAuthSession.instance.safeClient();
     _api = gcal.CalendarApi(_client!);
   }
 

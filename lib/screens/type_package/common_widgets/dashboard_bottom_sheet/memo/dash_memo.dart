@@ -584,7 +584,7 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
       // 전체 RAW를 base64url 인코딩
       final raw = base64Url.encode(utf8.encode(mime.toString()));
 
-      final client = await GoogleAuthSession.instance.client(); // googleapis_auth.AuthClient
+      final client = await GoogleAuthSession.instance.safeClient(); // googleapis_auth.AuthClient
       final api = gmail.GmailApi(client);
       final message = gmail.Message()..raw = raw;
 

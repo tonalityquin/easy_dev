@@ -6,10 +6,11 @@ import '../../../../../../states/user/user_state.dart';
 import '../../../../../../states/secondary/secondary_info.dart'; // 🔎 RoleType 사용
 
 import 'home_dash_board_controller.dart';
+import 'widgets/home_end_work_report_dialog.dart';
 import 'widgets/home_user_info_card.dart';
 import 'widgets/home_break_button_widget.dart';
 // HomeWorkButtonWidget는 이번 요구사항(퇴근하기 단일 버튼)에서 사용하지 않으므로 제거
-import 'widgets/home_show_report_dialog.dart';
+
 
 // ✅ 서류함 바텀시트 오픈 (같은 폴더)
 import 'document_box_sheet.dart';

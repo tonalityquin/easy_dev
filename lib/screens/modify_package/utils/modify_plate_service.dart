@@ -192,7 +192,7 @@ class ModifyPlateService {
   // GCS 목록 조회 (중앙 세션 사용)
   // ─────────────────────────────────────────
   static Future<gcs.StorageApi> _storage() async {
-    final client = await GoogleAuthSession.instance.client();
+    final client = await GoogleAuthSession.instance.safeClient();
     return gcs.StorageApi(client);
   }
 

@@ -272,7 +272,7 @@ class HeadquarterCard extends StatelessWidget {
         onPressed: () async {
           try {
             // 1) 필요 시 이 시점에 계정 인증/선택(최초 1회만 동의창)
-            await GoogleAuthSession.instance.client();
+            await GoogleAuthSession.instance.safeClient();
 
             // 2) 현재 Google 계정 이메일 확인
             final email = GoogleAuthSession.instance.currentUser?.email.toLowerCase() ?? '';

@@ -49,7 +49,7 @@ class GoogleSheetsHelper {
   // 중앙 세션 기반 Sheets API 획득 (모든 메서드가 이것만 사용)
   // ───────────────────────────────────────────────────────────────────────────
   static Future<SheetsApi> _sheetsApi() async {
-    final client = await GoogleAuthSession.instance.client();
+    final client = await GoogleAuthSession.instance.safeClient();
     return SheetsApi(client);
   }
 

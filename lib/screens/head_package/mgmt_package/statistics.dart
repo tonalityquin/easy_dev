@@ -23,7 +23,7 @@ const String _kBucketName = 'easydev-image';
 class _GcsHelper {
   Future<List<gcs.Object>> listObjects(String prefix) async {
     // 중앙 세션에서 AuthClient 획득 → StorageApi 생성
-    final client = await GoogleAuthSession.instance.client();
+    final client = await GoogleAuthSession.instance.safeClient();
     final storage = gcs.StorageApi(client);
 
     // 페이지네이션 안전 처리

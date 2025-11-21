@@ -13,7 +13,7 @@ enum TimesheetTab { attendance, breakTime }
 // Sheets API 핸들러 (중앙 세션 재사용)
 // ────────────────────────────────────────────────────────────
 Future<sheets.SheetsApi> _sheetsApi() async {
-  final client = await GoogleAuthSession.instance.client();
+  final client = await GoogleAuthSession.instance.safeClient();
   return sheets.SheetsApi(client);
 }
 

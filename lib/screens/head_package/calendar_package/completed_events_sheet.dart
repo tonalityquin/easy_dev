@@ -414,7 +414,7 @@ Future<void> _saveCompletedEventsToGoogleSheet(
   if (!ok) return;
 
   try {
-    final client = await GoogleAuthSession.instance.client();
+    final client = await GoogleAuthSession.instance.safeClient();
     final sheetsApi = sheets.SheetsApi(client);
 
     final fmt = DateFormat('yyyy-MM-dd');
@@ -527,7 +527,7 @@ Future<void> _deleteCompletedEventsFromGoogleCalendar(
   if (!ok) return;
 
   try {
-    final client = await GoogleAuthSession.instance.client();
+    final client = await GoogleAuthSession.instance.safeClient();
     final api = gcal.CalendarApi(client);
 
     int success = 0;

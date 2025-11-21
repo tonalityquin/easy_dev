@@ -23,7 +23,7 @@ int _extractProgress(String? description) {
 
 /// Calendar API 인스턴스(공통 AuthClient 재사용)
 Future<gcal.CalendarApi> _calendarApi() async {
-  final auth.AuthClient client = await GoogleAuthSession.instance.client();
+  final auth.AuthClient client = await GoogleAuthSession.instance.safeClient();
   return gcal.CalendarApi(client);
 }
 

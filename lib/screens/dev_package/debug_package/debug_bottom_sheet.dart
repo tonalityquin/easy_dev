@@ -265,7 +265,7 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
       final raw = base64Url.encode(utf8.encode(mime.toString()));
 
       // 4) Gmail API로 전송
-      final client = await GoogleAuthSession.instance.client();
+      final client = await GoogleAuthSession.instance.safeClient();
       final api = gmail.GmailApi(client);
       final message = gmail.Message()..raw = raw;
 

@@ -13,7 +13,7 @@ class GoogleAuthV7 {
   static Future<http.Client> authedClient(List<String> _ignoredScopes) async {
     // 🔁 새 스코프가 추가된 경우 강제 재승인 시도(최초 1회만 프롬프트)
     await GoogleAuthSession.instance.refreshIfNeeded();
-    return await GoogleAuthSession.instance.client();
+    return await GoogleAuthSession.instance.safeClient();
   }
 
   static Future<void> signOut() async {

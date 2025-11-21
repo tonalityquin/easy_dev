@@ -454,7 +454,7 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
 
       final raw = base64Url.encode(utf8.encode(mime.toString()));
 
-      final client = await GoogleAuthSession.instance.client();
+      final client = await GoogleAuthSession.instance.safeClient();
       final api = gmail.GmailApi(client);
       final message = gmail.Message()..raw = raw;
 
@@ -615,7 +615,7 @@ class _DevMemoSheetState extends State<_DevMemoSheet> {
   // ========== Google Drive 연동 (강화 + 폴더명 마이그레이션) ==========
 
   Future<drive.DriveApi> _driveApi() async {
-    final client = await GoogleAuthSession.instance.client();
+    final client = await GoogleAuthSession.instance.safeClient();
     return drive.DriveApi(client);
   }
 
