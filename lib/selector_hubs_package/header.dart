@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
-import '../../utils/snackbar_helper.dart';
+import 'headers/work_floating_bubble_manager.dart';
 
+import '../../utils/snackbar_helper.dart';
 import '../../utils/api/email_config.dart';
 import '../../utils/api/sheets_config.dart';
 
@@ -17,9 +18,72 @@ class Header extends StatefulWidget {
 
 class _HeaderState extends State<Header> {
   bool _expanded = false;
+  bool _bubbleEnabled = false;
 
   void _toggleExpanded() {
     setState(() => _expanded = !_expanded);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _bubbleEnabled = WorkFloatingBubbleManager.instance.isShowing;
+  }
+
+  Future<void> _onToggleBubble(BuildContext context) async {
+    final manager = WorkFloatingBubbleManager.instance;
+
+    if (_bubbleEnabled) {
+      await manager.hide();
+      if (!mounted) return;
+      setState(() {
+        _bubbleEnabled = false;
+      });
+      showSelectedSnackbar(context, '플로팅 버블을 끕니다.');
+    } else {
+      final ok = await manager.show(context);
+      if (!mounted) return;
+      if (ok) {
+        setState(() {
+          _bubbleEnabled = true;
+        });
+        showSuccessSnackbar(
+          context,
+          '플로팅 버블이 켜졌습니다.\n앱 화면 위에 근무 아이콘이 표시됩니다.',
+        );
+      } else {
+        showFailedSnackbar(
+          context,
+          '플로팅 버블을 표시할 수 없습니다.\n(Overlay를 사용할 수 없는 환경입니다.)',
+        );
+      }
+    }
+  }
+
+  Widget _buildFloatingBubbleToggle(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isOn = _bubbleEnabled;
+
+    final label = isOn ? '플로팅 버블 끄기' : '플로팅 버블 켜기';
+
+    return OutlinedButton.icon(
+      onPressed: () => _onToggleBubble(context),
+      icon: Icon(
+        Icons.bubble_chart,
+        size: 20,
+        color: isOn ? colorScheme.primary : theme.iconTheme.color,
+      ),
+      label: Text(label),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 40),
+        foregroundColor:
+        isOn ? colorScheme.primary : theme.textTheme.bodyMedium?.color,
+        side: BorderSide(
+          color: isOn ? colorScheme.primary : theme.dividerColor,
+        ),
+      ),
+    );
   }
 
   @override
@@ -44,6 +108,8 @@ class _HeaderState extends State<Header> {
           style: text.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
           textAlign: TextAlign.center,
         ),
+        const SizedBox(height: 12),
+        _buildFloatingBubbleToggle(context),
       ],
     );
   }
@@ -172,25 +238,37 @@ class _TopRow extends StatelessWidget {
                                       tooltip: '복사',
                                       onPressed: hasText
                                           ? () async {
-                                              await Clipboard.setData(ClipboardData(text: value.text));
-                                              if (!ctx.mounted) return;
-                                              showSuccessSnackbar(context, '현재 입력값을 복사했습니다.');
-                                            }
+                                        await Clipboard.setData(
+                                          ClipboardData(
+                                            text: value.text,
+                                          ),
+                                        );
+                                        if (!ctx.mounted) return;
+                                        showSuccessSnackbar(
+                                            context, '현재 입력값을 복사했습니다.');
+                                      }
                                           : null,
-                                      icon: const Icon(Icons.copy_rounded, color: Colors.black87),
+                                      icon: const Icon(
+                                        Icons.copy_rounded,
+                                        color: Colors.black87,
+                                      ),
                                     ),
                                     IconButton(
                                       tooltip: '초기화',
                                       onPressed: hasText
                                           ? () async {
-                                              await onClear();
-                                              controller.text = '';
-                                              setSheetState(() {});
-                                              if (!ctx.mounted) return;
-                                              showSelectedSnackbar(context, 'ID를 초기화했습니다.');
-                                            }
+                                        await onClear();
+                                        controller.text = '';
+                                        setSheetState(() {});
+                                        if (!ctx.mounted) return;
+                                        showSelectedSnackbar(
+                                            context, 'ID를 초기화했습니다.');
+                                      }
                                           : null,
-                                      icon: const Icon(Icons.delete_outline_rounded, color: Colors.black87),
+                                      icon: const Icon(
+                                        Icons.delete_outline_rounded,
+                                        color: Colors.black87,
+                                      ),
                                     ),
                                   ],
                                 );
@@ -220,9 +298,12 @@ class _TopRow extends StatelessWidget {
                                 onPressed: () async {
                                   final raw = controller.text.trim();
                                   if (raw.isEmpty) return;
-                                  await Clipboard.setData(ClipboardData(text: raw));
+                                  await Clipboard.setData(
+                                    ClipboardData(text: raw),
+                                  );
                                   if (!ctx.mounted) return;
-                                  showSuccessSnackbar(context, '입력값을 복사했습니다.');
+                                  showSuccessSnackbar(
+                                      context, '입력값을 복사했습니다.');
                                 },
                                 label: const Text('입력값 복사'),
                               ),
@@ -234,7 +315,8 @@ class _TopRow extends StatelessWidget {
                                 onPressed: () async {
                                   final raw = controller.text.trim();
                                   if (raw.isEmpty) return;
-                                  final id = SheetsConfig.extractSpreadsheetId(raw);
+                                  final id =
+                                  SheetsConfig.extractSpreadsheetId(raw);
                                   await onSave(id);
                                   if (!ctx.mounted) return;
                                   showSuccessSnackbar(context, '저장되었습니다.');
@@ -276,7 +358,11 @@ class _TopRow extends StatelessWidget {
                                 color: Colors.black.withOpacity(.06),
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: const Icon(Icons.mail_outline, size: 20, color: Colors.black87),
+                              child: const Icon(
+                                Icons.mail_outline,
+                                size: 20,
+                                color: Colors.black87,
+                              ),
                             ),
                             const SizedBox(width: 10),
                             const Expanded(
@@ -295,9 +381,13 @@ class _TopRow extends StatelessWidget {
                                 final cfg = await EmailConfig.load();
                                 mailToCtrl.text = cfg.to;
                                 if (!ctx.mounted) return;
-                                showSelectedSnackbar(context, '수신자를 기본값(빈 값)으로 복원했습니다.');
+                                showSelectedSnackbar(context,
+                                    '수신자를 기본값(빈 값)으로 복원했습니다.');
                               },
-                              icon: const Icon(Icons.restore, color: Colors.black87),
+                              icon: const Icon(
+                                Icons.restore,
+                                color: Colors.black87,
+                              ),
                             ),
                           ],
                         ),
@@ -309,8 +399,10 @@ class _TopRow extends StatelessWidget {
                           decoration: const InputDecoration(
                             labelText: '수신자(To)',
                             border: OutlineInputBorder(),
-                            prefixIcon: Icon(Icons.person_add_alt_1_outlined),
-                            helperText: '쉼표로 여러 명 입력 가능 (예: a@x.com, b@y.com)',
+                            prefixIcon:
+                            Icon(Icons.person_add_alt_1_outlined),
+                            helperText:
+                            '쉼표로 여러 명 입력 가능 (예: a@x.com, b@y.com)',
                           ),
                           onSubmitted: (_) => FocusScope.of(ctx).unfocus(),
                         ),
@@ -319,17 +411,22 @@ class _TopRow extends StatelessWidget {
                           children: [
                             Expanded(
                               child: OutlinedButton.icon(
-                                icon: const Icon(Icons.check_circle_outline),
+                                icon: const Icon(
+                                    Icons.check_circle_outline),
                                 onPressed: () async {
                                   final to = mailToCtrl.text.trim();
                                   if (!EmailConfig.isValidToList(to)) {
                                     if (!ctx.mounted) return;
-                                    showFailedSnackbar(context, '수신자 이메일 형식을 확인해 주세요.');
+                                    showFailedSnackbar(context,
+                                        '수신자 이메일 형식을 확인해 주세요.');
                                     return;
                                   }
-                                  await EmailConfig.save(EmailConfig(to: to));
+                                  await EmailConfig.save(
+                                    EmailConfig(to: to),
+                                  );
                                   if (!ctx.mounted) return;
-                                  showSuccessSnackbar(context, '수신자 설정을 저장했습니다.');
+                                  showSuccessSnackbar(
+                                      context, '수신자 설정을 저장했습니다.');
                                 },
                                 label: const Text('저장'),
                               ),
@@ -337,12 +434,16 @@ class _TopRow extends StatelessWidget {
                             const SizedBox(width: 8),
                             Expanded(
                               child: OutlinedButton.icon(
-                                icon: const Icon(Icons.copy_all_outlined),
+                                icon:
+                                const Icon(Icons.copy_all_outlined),
                                 onPressed: () async {
                                   final raw = 'To: ${mailToCtrl.text}';
-                                  await Clipboard.setData(ClipboardData(text: raw));
+                                  await Clipboard.setData(
+                                    ClipboardData(text: raw),
+                                  );
                                   if (!ctx.mounted) return;
-                                  showSuccessSnackbar(context, '현재 수신자 설정을 복사했습니다.');
+                                  showSuccessSnackbar(
+                                      context, '현재 수신자 설정을 복사했습니다.');
                                 },
                                 label: const Text('설정 복사'),
                               ),
@@ -352,7 +453,10 @@ class _TopRow extends StatelessWidget {
                         const SizedBox(height: 6),
                         const Text(
                           '※ 저장되는 항목은 수신자(To)뿐입니다. 메일 제목·본문은 경위서 화면에서 작성합니다.',
-                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.black54,
+                          ),
                         ),
                       ],
                     ),
@@ -388,12 +492,16 @@ class _TopRow extends StatelessWidget {
                             IconButton(
                               tooltip: '닫기',
                               onPressed: () => Navigator.pop(ctx),
-                              icon: const Icon(Icons.close_rounded),
+                              icon:
+                              const Icon(Icons.close_rounded),
                             ),
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Divider(height: 1, color: Colors.black.withOpacity(.08)),
+                        Divider(
+                          height: 1,
+                          color: Colors.black.withOpacity(.08),
+                        ),
                         const SizedBox(height: 16),
 
                         // 업로드용 Google Sheets
@@ -403,7 +511,8 @@ class _TopRow extends StatelessWidget {
                           controller: commuteCtrl,
                           onSave: (id) async {
                             await SheetsConfig.setCommuteSheetId(id);
-                            final cur = await SheetsConfig.getCommuteSheetId();
+                            final cur =
+                            await SheetsConfig.getCommuteSheetId();
                             commuteCtrl.text = cur ?? '';
                           },
                           onClear: () async {
@@ -418,7 +527,8 @@ class _TopRow extends StatelessWidget {
                           controller: endReportCtrl,
                           onSave: (id) async {
                             await SheetsConfig.setEndReportSheetId(id);
-                            final cur = await SheetsConfig.getEndReportSheetId();
+                            final cur =
+                            await SheetsConfig.getEndReportSheetId();
                             endReportCtrl.text = cur ?? '';
                           },
                           onClear: () async {
@@ -510,10 +620,10 @@ class _AnimatedSide extends StatelessWidget {
         },
         child: show
             ? Container(
-                key: const ValueKey('side-on'),
-                alignment: Alignment.center,
-                child: child,
-              )
+          key: const ValueKey('side-on'),
+          alignment: Alignment.center,
+          child: child,
+        )
             : const SizedBox.shrink(key: ValueKey('side-off')),
       ),
     );
@@ -538,7 +648,8 @@ class HeaderBadge extends StatelessWidget {
       duration: const Duration(milliseconds: 600),
       tween: Tween(begin: .92, end: 1),
       curve: Curves.easeOutBack,
-      builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
+      builder: (context, scale, child) =>
+          Transform.scale(scale: scale, child: child),
       child: SizedBox(
         width: size,
         height: size,
@@ -566,7 +677,8 @@ class _HeaderBadgeInner extends StatefulWidget {
   State<_HeaderBadgeInner> createState() => _HeaderBadgeInnerState();
 }
 
-class _HeaderBadgeInnerState extends State<_HeaderBadgeInner> with SingleTickerProviderStateMixin {
+class _HeaderBadgeInnerState extends State<_HeaderBadgeInner>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _rotCtrl;
 
   @override
