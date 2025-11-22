@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../states/location/location_state.dart';
 import '../../../repositories/location_repo_services/location_repository.dart';
 import '../../../utils/snackbar_helper.dart';
-import 'ui/parking_completed_table_sheet.dart'; // ✅ 커스텀 스낵바 헬퍼 사용
+import 'table_package/ui/parking_completed_table_sheet.dart'; // ✅ 커스텀 스낵바 헬퍼 사용
 
 /// Deep Blue 팔레트(서비스 카드와 동일 계열)
 class _Palette {

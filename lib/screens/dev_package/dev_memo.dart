@@ -18,7 +18,7 @@ import '../../utils/google_auth_session.dart';
 import 'package:googleapis/gmail/v1.dart' as gmail;
 import 'package:googleapis/drive/v3.dart' as drive;
 
-import '../../utils/email_config.dart';
+import '../../utils/api/email_config.dart';
 
 /// DevMemo (싱글 문서 모드)
 class DevMemo {

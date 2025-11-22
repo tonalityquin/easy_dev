@@ -9,7 +9,7 @@ import '../../../../states/location/location_state.dart';
 import '../../../../states/area/area_state.dart';
 
 // ⬇️ 추가: DashMemo 메모를 읽어오기 위해 import
-import '../../../type_package/common_widgets/dashboard_bottom_sheet/memo/dash_memo.dart';
+import '../../type_package/common_widgets/dashboard_bottom_sheet/memo/dash_memo.dart';
 // import '../../../../utils/usage_reporter.dart';;
 
 class ParkingStatusPage extends StatefulWidget {
@@ -143,12 +143,10 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
               }
 
               // capacity 합계는 로컬 state로 계산 (요청: 유지)
-              final totalCapacity =
-              locationState.locations.fold<int>(0, (sum, l) => sum + l.capacity);
+              final totalCapacity = locationState.locations.fold<int>(0, (sum, l) => sum + l.capacity);
               final occupiedCount = _occupiedCount;
 
-              final double usageRatio =
-              totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
+              final double usageRatio = totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
               final String usagePercent = (usageRatio * 100).toStringAsFixed(1);
 
               if (_hadError) {
@@ -363,7 +361,8 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
               widthFactor: 0.98, // 좌우 여백 약간
               child: PageView.builder(
                 controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(), // 스와이프 대신 자동 전환
+                physics: const NeverScrollableScrollPhysics(),
+                // 스와이프 대신 자동 전환
                 onPageChanged: (i) => _currentIndex = i,
                 itemCount: _cards.length,
                 itemBuilder: (context, index) {
@@ -398,7 +397,7 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
                             ),
                             const SizedBox(height: 12),
                             ...c.lines.map(
-                                  (t) => Padding(
+                              (t) => Padding(
                                 padding: const EdgeInsets.only(bottom: 6),
                                 child: Text(
                                   t,
@@ -446,6 +445,7 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
 class _ReminderContent {
   final String title;
   final List<String> lines;
+
   const _ReminderContent({required this.title, required this.lines});
 }
 

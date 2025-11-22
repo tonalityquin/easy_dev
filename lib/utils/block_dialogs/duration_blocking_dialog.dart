@@ -13,7 +13,7 @@ class _Palette {
 /// 5초 동안 유지되는 취소 가능 blocking dialog
 /// - [duration] 동안 카운트다운 후 자동으로 true 반환
 /// - '취소' 버튼 누르면 false 반환
-Future<bool> showCancelableBlockingDialog(
+Future<bool> showDurationBlockingDialog(
   BuildContext context, {
   required String message,
   Duration duration = const Duration(seconds: 5),

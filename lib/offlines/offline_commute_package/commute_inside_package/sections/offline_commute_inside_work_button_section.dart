@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../utils/blocking_dialog.dart';
+import '../../../../utils/block_dialogs/blocking_dialog.dart';
 import '../offline_commute_inside_controller.dart'; // CommuteDestination enum 사용
 import '../../../../routes.dart';
 

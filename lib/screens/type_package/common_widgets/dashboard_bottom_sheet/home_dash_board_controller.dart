@@ -12,7 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:easydev/services/endtime_reminder_service.dart';
 
 // ⬇️ SheetUploadResult import (경로는 snackbar_helper 와 동일 depth)
-import '../../../../../../utils/sheet_upload_result.dart';
+import '../../../../../../utils/api/sheet_upload_result.dart';
 
 const kIsWorkingPrefsKey = 'isWorking';
 

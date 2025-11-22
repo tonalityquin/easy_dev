@@ -11,6 +11,9 @@ class UpdateBottomSheet extends StatelessWidget {
       highlights: [
         'API 에러 로그 화면 추가',
         '출, 퇴근 로직 삽입 보강 및 필수 필드 삽입 조건 완화',
+        '업무 종료 보고 로직 개선',
+        '자동 퇴근 로직 추가',
+        '테이블 시스템 개편',
       ],
     ),
     UpdateEntry(

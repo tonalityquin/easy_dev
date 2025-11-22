@@ -8,7 +8,7 @@ import 'area_management_package/user_account_tab.dart';
 import 'area_management_package/status_mapping_helper.dart';
 
 // ✅ UsageReporter 계측
-import '../../../utils/usage_reporter.dart';
+import '../../../utils/usage/usage_reporter.dart';
 
 class AreaManagement extends StatefulWidget {
   const AreaManagement({super.key});

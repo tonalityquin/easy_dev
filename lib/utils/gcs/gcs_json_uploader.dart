@@ -6,8 +6,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:googleapis/storage/v1.dart' as gcs;
 
-import 'google_auth_session.dart';
-import '../screens/dev_package/debug_package/debug_api_logger.dart';
+import '../google_auth_session.dart';
+import '../../screens/dev_package/debug_package/debug_api_logger.dart';
 
 /// GCS(easydev-image 버킷)에서 번호판 로그 JSON을 조회하는 유틸.
 ///

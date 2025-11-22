@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../utils/snackbar_helper.dart';
-import '../../../utils/sheets_config.dart';
+import '../../../utils/api/sheets_config.dart';
 import 'package:easydev/routes.dart';
 
 import '../utils/offline_logout_helper.dart';

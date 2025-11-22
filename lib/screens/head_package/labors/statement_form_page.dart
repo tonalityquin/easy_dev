@@ -14,7 +14,7 @@ import 'package:googleapis/gmail/v1.dart' as gmail;
 // ✅ v7 호환 레이어(전역 세션에서 AuthClient 재사용)
 import '../../../utils/google_auth_v7.dart';
 // ✅ 수신자(To)만 저장소에서 로드
-import '../../../utils/email_config.dart';
+import '../../../utils/api/email_config.dart';
 
 class StatementFormPage extends StatefulWidget {
   const StatementFormPage({super.key});

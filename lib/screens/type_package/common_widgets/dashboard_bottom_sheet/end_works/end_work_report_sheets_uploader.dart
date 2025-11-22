@@ -5,12 +5,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:googleapis/sheets/v4.dart';
 
-import 'sheets_config.dart';
-// ✅ 전역 OAuth 세션만 사용 (초기화는 main.dart에서 1회 수행)
-import 'google_auth_session.dart';
-
-// 🔎 API 실패 시 분석용 로그 기록
-import '../screens/dev_package/debug_package/debug_api_logger.dart';
+import '../../../../../utils/api/sheets_config.dart';
+import '../../../../../utils/google_auth_session.dart';
+import '../../../../dev_package/debug_package/debug_api_logger.dart';
 
 /// 업무 종료 보고를 "업무종료보고" 시트 탭에 한 줄씩 적재하는 유틸
 ///
@@ -68,8 +65,7 @@ class EndWorkReportSheetsUploader {
         // 1) 스프레드시트 ID 확인
         spreadsheetId = await SheetsConfig.getEndReportSheetId();
         if (spreadsheetId == null || spreadsheetId!.isEmpty) {
-          const msg =
-              '업무 종료 보고 업로드 실패: 업무종료보고 시트 ID(end_report_sheet_id)가 설정되지 않았습니다.\n'
+          const msg = '업무 종료 보고 업로드 실패: 업무종료보고 시트 ID(end_report_sheet_id)가 설정되지 않았습니다.\n'
               '관리자에게 업무종료보고 스프레드시트 ID를 설정해 달라고 요청해 주세요.';
           debugPrint('❌ [EndWorkReport] $msg');
 
@@ -103,9 +99,7 @@ class EndWorkReportSheetsUploader {
         // ⚠️ 기존 코드에서는 reportJson['totalLockedFee']만 보던 상태였으나,
         // 실제로는 metrics.snapshot_totalLockedFee에 들어 있으므로 우선 그 값을 사용.
         final metrics = (reportJson['metrics'] ?? {}) as Map;
-        totalLockedFee =
-        (reportJson['totalLockedFee'] ?? metrics['snapshot_totalLockedFee'] ?? 0)
-        as num;
+        totalLockedFee = (reportJson['totalLockedFee'] ?? metrics['snapshot_totalLockedFee'] ?? 0) as num;
 
         // 3) 중앙 OAuth 세션에서 AuthClient 획득
         final authClient = await GoogleAuthSession.instance.safeClient();
@@ -137,7 +131,7 @@ class EndWorkReportSheetsUploader {
 
         debugPrint(
           '✅ [EndWorkReport] 스프레드시트 append 성공 -> sheet="$sheetName", '
-              'area="$area", division="$division", uploadedBy="$uploadedBy"',
+          'area="$area", division="$division", uploadedBy="$uploadedBy"',
         );
 
         return true;
@@ -181,8 +175,7 @@ class EndWorkReportSheetsUploader {
     } catch (e) {
       // invalid_token 계열이면 토큰 강제 갱신 후 한 번 더 시도
       if (GoogleAuthSession.isInvalidTokenError(e)) {
-        debugPrint(
-            '⚠️ [EndWorkReport] invalid_token 감지 -> 토큰 강제 갱신 후 재시도 시도 중...');
+        debugPrint('⚠️ [EndWorkReport] invalid_token 감지 -> 토큰 강제 갱신 후 재시도 시도 중...');
 
         try {
           await GoogleAuthSession.instance.refreshIfNeeded();
@@ -216,8 +209,7 @@ class EndWorkReportSheetsUploader {
 
       // invalid_token 이외의 예외는 여기까지 올라온 시점에서는 이미 로깅이 되어 있으므로
       // 별도 처리 없이 false만 반환
-      debugPrint(
-          '❌ [EndWorkReport] 스프레드시트 업로드 중 알 수 없는 오류가 발생했습니다. ($e)');
+      debugPrint('❌ [EndWorkReport] 스프레드시트 업로드 중 알 수 없는 오류가 발생했습니다. ($e)');
       return false;
     }
   }
@@ -228,13 +220,12 @@ class EndWorkReportSheetsUploader {
 
   /// 탭 존재 확인 후 없으면 생성
   static Future<void> _ensureSheetExists(
-      SheetsApi api,
-      String spreadsheetId,
-      String sheetName,
-      ) async {
+    SheetsApi api,
+    String spreadsheetId,
+    String sheetName,
+  ) async {
     final meta = await api.spreadsheets.get(spreadsheetId);
-    final exists =
-    (meta.sheets ?? const <Sheet>[]).any((s) => s.properties?.title == sheetName);
+    final exists = (meta.sheets ?? const <Sheet>[]).any((s) => s.properties?.title == sheetName);
 
     if (exists) return;
 
@@ -255,17 +246,16 @@ class EndWorkReportSheetsUploader {
 
   /// A1에 헤더가 없으면 생성 (A1:G1)
   static Future<void> _ensureHeader(
-      SheetsApi api,
-      String spreadsheetId,
-      String sheetName,
-      ) async {
+    SheetsApi api,
+    String spreadsheetId,
+    String sheetName,
+  ) async {
     final res = await api.spreadsheets.values.get(
       spreadsheetId,
       '$sheetName!A1:G1',
     );
 
-    final hasHeader =
-    (res.values != null && res.values!.isNotEmpty && res.values!.first.isNotEmpty);
+    final hasHeader = (res.values != null && res.values!.isNotEmpty && res.values!.first.isNotEmpty);
     if (hasHeader) return;
 
     await api.spreadsheets.values.update(

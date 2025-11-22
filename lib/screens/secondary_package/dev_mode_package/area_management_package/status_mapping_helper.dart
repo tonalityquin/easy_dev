@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 // 🔧 전역 리미트 설정값(최소/최대/기본값, prefsKey)을 단일 소스로 관리
 import '../../../../utils/plate_limit/plate_limit_config.dart';
 // ✅ UsageReporter 계측
-import '../../../../utils/usage_reporter.dart';
+import '../../../../utils/usage/usage_reporter.dart';
 
 class StatusMappingHelper extends StatefulWidget {
   const StatusMappingHelper({super.key});

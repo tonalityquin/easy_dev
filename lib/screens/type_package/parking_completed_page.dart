@@ -48,7 +48,7 @@ import '../../widgets/container/plate_container.dart';
 
 import 'parking_completed_package/parking_completed_control_buttons.dart';
 import 'parking_completed_package/parking_completed_location_picker.dart';
-import 'parking_completed_package/widgets/parking_status_page.dart';
+import 'parking_completed_package/parking_status_page.dart';
 
 enum ParkingViewMode { status, locationPicker, plateList }
 

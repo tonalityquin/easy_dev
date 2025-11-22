@@ -12,9 +12,7 @@ import 'package:easydev/repositories/commute_log_repository.dart';
 import '../../../../../states/area/area_state.dart';
 import '../../../../../states/user/user_state.dart';
 
-// ✅ 결과 타입
-import 'package:easydev/utils/sheet_upload_result.dart';
-
+import '../../../../../utils/api/sheet_upload_result.dart';
 import '../../../../dev_package/debug_package/debug_database_logger.dart';
 
 // ✅ DB 전용 로거

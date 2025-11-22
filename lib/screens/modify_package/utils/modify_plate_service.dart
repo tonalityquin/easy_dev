@@ -15,7 +15,7 @@ import '../../../models/plate_model.dart';
 import '../../../repositories/plate_repo_services/plate_repository.dart';
 import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';
-import '../../../utils/gcs_image_uploader.dart';
+import '../../../utils/gcs/gcs_image_uploader.dart';
 import '../../../enums/plate_type.dart';
 import '../../../models/plate_log_model.dart';
 

@@ -1,9 +1,9 @@
 // lib/repositories/user_repo_services/user_write_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:easydev/models/tablet_model.dart';
+import '../../models/tablet_model.dart';
 import '../../models/user_model.dart';
 import '../../screens/dev_package/debug_package/debug_database_logger.dart';
-import '../../utils/usage_reporter.dart';
+import '../../utils/usage/usage_reporter.dart';
 
 class UserWriteService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

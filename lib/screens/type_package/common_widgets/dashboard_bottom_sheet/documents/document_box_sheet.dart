@@ -1,17 +1,11 @@
-// lib/screens/type_package/common_widgets/dashboard_bottom_sheet/document_box_sheet.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../../states/user/user_state.dart';
 import 'document_inventory_repository.dart';
-
-// ✅ 경위서 화면 (동일 코드 사본을 같은 폴더에 둠)
 import 'user_statement_form_page.dart';
-import 'widgets/document_item.dart';
+import 'document_item.dart';
 
-/// 현재 화면 위에 띄우는 바텀시트 오픈 함수
-/// - useRootNavigator: false → 같은 트리의 Provider/Stream 공유(지역 스트림 끊김 방지)
-/// - isScrollControlled: true → DraggableScrollableSheet 높이 제어
 Future<void> openDocumentBox(BuildContext context) async {
   await showModalBottomSheet<void>(
     context: context,
@@ -53,8 +47,6 @@ class _DocumentBoxSheet extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-
-              // 헤더
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 child: Row(
@@ -64,8 +56,8 @@ class _DocumentBoxSheet extends StatelessWidget {
                     Text(
                       '내 서류함',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                            fontWeight: FontWeight.w700,
+                          ),
                     ),
                     const Spacer(),
                     IconButton(
@@ -77,8 +69,6 @@ class _DocumentBoxSheet extends StatelessWidget {
                 ),
               ),
               const Divider(height: 1),
-
-              // 목록(사용자 전용 인벤토리)
               Expanded(
                 child: StreamBuilder<List<DocumentItem>>(
                   stream: repo.streamForUser(userState),
@@ -112,7 +102,6 @@ class _DocumentBoxSheet extends StatelessWidget {
                           onTap: () {
                             switch (item.type) {
                               case DocumentType.statementForm:
-                              // ✅ 같은 Navigator 트리에서 풀스크린 페이지 push → 스트림 유지
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
                                     builder: (_) => const UserStatementFormPage(),
@@ -120,9 +109,7 @@ class _DocumentBoxSheet extends StatelessWidget {
                                   ),
                                 );
                                 break;
-
                               case DocumentType.generic:
-                              // 아직 미구현 문서 유형
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(content: Text('아직 미구현 문서 유형입니다.')),
                                 );
@@ -164,9 +151,9 @@ class _EmptyState extends StatelessWidget {
             Text(
               '표시할 서류가 없어요',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: Colors.black87,
-                fontWeight: FontWeight.w600,
-              ),
+                    color: Colors.black87,
+                    fontWeight: FontWeight.w600,
+                  ),
             ),
             const SizedBox(height: 6),
             Text(

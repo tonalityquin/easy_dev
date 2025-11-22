@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 
-import 'package:easydev/utils/usage_reporter.dart';
+import '../../../utils/usage/usage_reporter.dart';
+
 
 String _formatAnyDate(dynamic v) {
   if (v == null) return '시간 정보 없음';

@@ -1,4 +1,4 @@
-import '../widgets/dialog/billing_bottom_sheet/fee_calculator.dart';
+import '../../widgets/dialog/billing_bottom_sheet/fee_calculator.dart';
 
 double calculateParkingFee({
   required int entryTimeInSeconds,

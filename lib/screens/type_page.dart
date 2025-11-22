@@ -29,7 +29,7 @@ import '../services/latest_message_service.dart';
 import 'secondary_package/office_mode_package/user_management_package/sections/user_role_type_section.dart';
 
 // ⬇️ ParkingCompleted 로컬 테이블 Top Sheet + 라이브 버튼 핸들러
-import 'type_package/parking_completed_package/ui/parking_completed_table_sheet.dart';
+import 'type_package/parking_completed_package/table_package/ui/parking_completed_table_sheet.dart';
 
 /// Deep Blue 팔레트(서비스 카드와 동일 계열)
 class _Palette {

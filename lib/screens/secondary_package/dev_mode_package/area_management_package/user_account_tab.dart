@@ -4,7 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../utils/snackbar_helper.dart';
 // ✅ UsageReporter 계측
-import '../../../../utils/usage_reporter.dart';
+import '../../../../utils/usage/usage_reporter.dart';
 
 class UserAccountsTab extends StatefulWidget {
   final String? selectedDivision;

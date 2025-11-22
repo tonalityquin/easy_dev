@@ -1,16 +1,14 @@
-// lib/screens/type_package/common_widgets/dashboard_bottom_sheet/hq_dash_board_page.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../../states/user/user_state.dart';
 
-import '../../../../utils/logout_helper.dart';
+import '../../../../utils/init/logout_helper.dart';
 import 'home_dash_board_controller.dart';
 import 'widgets/home_user_info_card.dart';
 import 'widgets/home_break_button_widget.dart';
 
-// ✅ 서류함 바텀시트 오픈 (같은 폴더)
-import 'document_box_sheet.dart';
+import 'documents/document_box_sheet.dart';
 
 class HqDashBoardPage extends StatefulWidget {
   const HqDashBoardPage({super.key});
@@ -20,7 +18,6 @@ class HqDashBoardPage extends StatefulWidget {
 }
 
 class _HqDashBoardPageState extends State<HqDashBoardPage> {
-  // true = 숨김(기본), false = 펼침
   bool _layerHidden = true;
 
   @override
@@ -38,8 +35,6 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
               children: [
                 const HomeUserInfoCard(),
                 const SizedBox(height: 16),
-
-                // 레이어(토글) 버튼: 기본 true(숨김) → 누르면 false(펼침)
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
@@ -49,10 +44,7 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
                     onPressed: () => setState(() => _layerHidden = !_layerHidden),
                   ),
                 ),
-
                 const SizedBox(height: 16),
-
-                // 숨김/펼침 영역
                 AnimatedCrossFade(
                   duration: const Duration(milliseconds: 200),
                   crossFadeState:
@@ -61,11 +53,8 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
                   secondChild: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // 1) 휴게 사용 확인
                       HomeBreakButtonWidget(controller: controller),
                       const SizedBox(height: 16),
-
-                      // 2) 퇴근하기 (명시 버튼) — 근무 중/아님에 따라 내부에서 처리
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
@@ -77,8 +66,6 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
                         ),
                       ),
                       const SizedBox(height: 16),
-
-                      // 2.5) 로그아웃
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
@@ -89,8 +76,6 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
                         ),
                       ),
                       const SizedBox(height: 16),
-
-                      // 3) 서류함 열기 — 사용자 전용 인벤토리(바텀시트) 열기
                       SizedBox(
                         width: double.infinity,
                         child: ElevatedButton.icon(
@@ -103,8 +88,6 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
                     ],
                   ),
                 ),
-
-                // 접힘 상태일 때 하단 여백
                 if (_layerHidden) const SizedBox(height: 16),
                 const SizedBox(height: 32),
               ],
@@ -117,7 +100,6 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
 }
 
 ButtonStyle _layerToggleBtnStyle() {
-  // 토글 버튼도 공통 톤 유지(화이트 + 블랙)
   return ElevatedButton.styleFrom(
     backgroundColor: Colors.white,
     foregroundColor: Colors.black,
@@ -129,7 +111,6 @@ ButtonStyle _layerToggleBtnStyle() {
 }
 
 ButtonStyle _clockOutBtnStyle() {
-  // 눈에 띄도록 경고톤 보더만 살짝 진하게(실수 방지 목적)
   return ElevatedButton.styleFrom(
     backgroundColor: Colors.white,
     foregroundColor: Colors.black,
@@ -141,7 +122,6 @@ ButtonStyle _clockOutBtnStyle() {
 }
 
 ButtonStyle _logoutBtnStyle() {
-  // 로그아웃은 중립 톤(회색 보더) 유지
   return ElevatedButton.styleFrom(
     backgroundColor: Colors.white,
     foregroundColor: Colors.black,

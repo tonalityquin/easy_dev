@@ -11,7 +11,7 @@ import 'package:googleapis/storage/v1.dart' as gcs;
 // ✅ 중앙 OAuth 세션만 사용 (최초 1회 로그인 후 재사용)
 import '../../../utils/google_auth_session.dart';
 
-import '../../../utils/gcs_image_uploader.dart';
+import '../../../utils/gcs/gcs_image_uploader.dart';
 import '../../../states/plate/input_plate.dart';
 import '../../../states/area/area_state.dart';
 import '../../../states/user/user_state.dart';

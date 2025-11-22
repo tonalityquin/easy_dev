@@ -5,11 +5,21 @@ import 'package:flutter/foundation.dart';
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
 import '../../screens/dev_package/debug_package/debug_database_logger.dart';
+import '../../screens/type_package/parking_completed_package/table_package/services/parking_completed_logger.dart';
+import '../../screens/type_package/parking_completed_package/table_package/services/status_mapping.dart';
 // import '../../utils/usage_reporter.dart';
 
 // 🔹 ParkingCompleted 로컬 로깅용
-import '../../screens/type_package/parking_completed_package/services/parking_completed_logger.dart';
-import '../../screens/type_package/parking_completed_package/services/status_mapping.dart';
+
+/// 🔹 중복 번호판 전용 도메인 예외
+class DuplicatePlateException implements Exception {
+  final String message;
+
+  DuplicatePlateException(this.message);
+
+  @override
+  String toString() => message;
+}
 
 class PlateCreationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -129,7 +139,8 @@ class PlateCreationService {
     plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
 
     // billingType이 없으면 요금 잠금 처리
-    final effectiveIsLockedFee = isLockedFee || (billingType == null || billingType.trim().isEmpty);
+    final effectiveIsLockedFee =
+        isLockedFee || (billingType == null || billingType.trim().isEmpty);
 
     final base = PlateModel(
       id: documentId,
@@ -167,7 +178,8 @@ class PlateCreationService {
       from: '',
       to: base.location,
     );
-    final entryLabel = (plateType == PlateType.parkingRequests) ? '입차 요청' : plateType.label;
+    final entryLabel =
+    (plateType == PlateType.parkingRequests) ? '입차 요청' : plateType.label;
     plateWithLog = plateWithLog.addLog(
       action: entryLabel,
       performedBy: userName,
@@ -197,8 +209,10 @@ class PlateCreationService {
           );
 
           if (!_isAllowedDuplicate(existingType)) {
-            debugPrint("🚨 중복된 번호판 등록 시도: $plateNumber (${existingType.name})");
-            throw Exception("이미 등록된 번호판입니다: $plateNumber");
+            debugPrint(
+                "🚨 중복된 번호판 등록 시도: $plateNumber (${existingType.name})");
+            // 🔹 여기서 더 이상 일반 Exception이 아닌 도메인 예외를 던짐
+            throw DuplicatePlateException("이미 등록된 번호판입니다: $plateNumber");
           } else {
             // 기존 logs 보존 + 신규 로그 append
             final List<Map<String, dynamic>> existingLogs = (() {
@@ -214,7 +228,10 @@ class PlateCreationService {
 
             final List<Map<String, dynamic>> newLogs =
             (plateWithLog.logs ?? []).map((e) => e.toMap()).toList();
-            final List<Map<String, dynamic>> mergedLogs = [...existingLogs, ...newLogs];
+            final List<Map<String, dynamic>> mergedLogs = [
+              ...existingLogs,
+              ...newLogs
+            ];
 
             final partial = <String, dynamic>{
               PlateFields.type: plateType.firestoreValue,
@@ -228,7 +245,8 @@ class PlateCreationService {
               if (paymentMethod != null) PlateFields.paymentMethod: paymentMethod,
               if (lockedAtTimeInSeconds != null)
                 PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
-              if (lockedFeeAmount != null) PlateFields.lockedFeeAmount: lockedFeeAmount,
+              if (lockedFeeAmount != null)
+                PlateFields.lockedFeeAmount: lockedFeeAmount,
               PlateFields.isLockedFee: effectiveIsLockedFee,
               PlateFields.logs: mergedLogs,
             };
@@ -294,6 +312,9 @@ class PlateCreationService {
           source: 'PlateCreationService.addPlate.tx',
         );*/
       }
+    } on DuplicatePlateException {
+      // 🔸 중복 번호판은 도메인 예외이므로 DebugDatabaseLogger에 기록하지 않음
+      rethrow;
     } catch (e, st) {
       try {
         await DebugDatabaseLogger().log({
@@ -323,7 +344,8 @@ class PlateCreationService {
 
     // ✅ plate_status upsert → updatedAt도 서버 타임스탬프로 (일관화)
     if (customStatus != null && customStatus.trim().isNotEmpty) {
-      final statusDocRef = _firestore.collection('plate_status').doc(documentId);
+      final statusDocRef =
+      _firestore.collection('plate_status').doc(documentId);
       final expireAt = Timestamp.fromDate(
         DateTime.now().add(const Duration(days: 1)),
       );

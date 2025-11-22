@@ -10,6 +10,8 @@ class AppNavigator {
   static final scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
   static NavigatorState? get nav => key.currentState;
+
   static BuildContext? get context => nav?.context;
+
   static ScaffoldMessengerState? get messenger => scaffoldMessengerKey.currentState;
 }

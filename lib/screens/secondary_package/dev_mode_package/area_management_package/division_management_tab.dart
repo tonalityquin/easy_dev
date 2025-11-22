@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../utils/snackbar_helper.dart';
 // ✅ UsageReporter 계측
-import '../../../../utils/usage_reporter.dart';
+import '../../../../utils/usage/usage_reporter.dart';
 
 class DivisionManagementTab extends StatefulWidget {
   final List<String> divisionList;

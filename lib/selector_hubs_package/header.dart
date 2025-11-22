@@ -5,8 +5,8 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../utils/snackbar_helper.dart';
 
-import '../../utils/email_config.dart';
-import '../../utils/sheets_config.dart';
+import '../../utils/api/email_config.dart';
+import '../../utils/api/sheets_config.dart';
 
 class Header extends StatefulWidget {
   const Header({super.key});

@@ -22,7 +22,7 @@ import 'widgets/input_bottom_navigation.dart';
 
 import 'live_ocr_page.dart';
 
-import '../../utils/usage_reporter.dart';
+import '../../utils/usage/usage_reporter.dart';
 
 /// 도크에서 어떤 칸을 편집 중인지 구분
 enum _DockField { front, mid, back }

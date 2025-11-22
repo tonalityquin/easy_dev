@@ -5,14 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-// ✅ Firestore commute_user_logs 저장용 레포지토리
-import 'package:easydev/repositories/commute_log_repository.dart';
-
-// ✅ 결과 타입 (이름은 sheet_upload_result지만, 이제 Firestore 저장 결과로 사용)
-import 'package:easydev/utils/sheet_upload_result.dart';
-
 import '../../../../../states/area/area_state.dart';
 import '../../../../../states/user/user_state.dart';
+import '../../../../repositories/commute_log_repository.dart';
+import '../../../../utils/api/sheet_upload_result.dart';
 import '../../../dev_package/debug_package/debug_database_logger.dart';
 
 class CommuteInsideClockInLogUploader {

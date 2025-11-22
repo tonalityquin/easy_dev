@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../utils/app_navigator.dart';
 // ✅ 수신자 이메일 저장/검증 유틸
-import '../../utils/email_config.dart';
+import '../../utils/api/email_config.dart';
 // ✅ Gmail 전송용
 import '../../utils/google_auth_session.dart';
 import 'package:googleapis/gmail/v1.dart' as gmail;

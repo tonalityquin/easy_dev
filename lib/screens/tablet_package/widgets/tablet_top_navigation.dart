@@ -10,7 +10,7 @@ import '../states/tablet_pad_mode_state.dart';
 // ⬇️ TTS 사용자 필터
 import '../../../utils/tts/tts_user_filters.dart';
 // ⬇️ 로그아웃 공통 헬퍼
-import '../../../utils/logout_helper.dart';
+import '../../../utils/init/logout_helper.dart';
 
 // ✅ 앱 isolate/Chat/Plate TTS 동기화
 import '../../../utils/tts/chat_tts_listener_service.dart';

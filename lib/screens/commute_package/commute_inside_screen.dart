@@ -2,12 +2,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:easydev/services/endtime_reminder_service.dart';
 
 import '../../../../states/user/user_state.dart';
 import '../../../utils/snackbar_helper.dart';
-import '../../../utils/sheets_config.dart';
-import '../../../utils/logout_helper.dart';
+import '../../../utils/api/sheets_config.dart';
+import '../../../utils/init/logout_helper.dart';
+import '../../services/endtime_reminder_service.dart';
 import 'commute_inside_package/commute_inside_controller.dart';
 import 'commute_inside_package/sections/commute_inside_report_button_section.dart';
 import 'commute_inside_package/sections/commute_inside_work_button_section.dart';

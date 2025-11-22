@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../../../states/user/user_state.dart';
-import '../../../../../utils/blocking_dialog.dart';
+import '../../../../../utils/block_dialogs/blocking_dialog.dart';
 import '../home_dash_board_controller.dart';
 
 class HomeWorkButtonWidget extends StatefulWidget {

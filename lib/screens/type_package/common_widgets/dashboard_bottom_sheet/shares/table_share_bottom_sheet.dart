@@ -3,12 +3,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../states/user/user_state.dart';
+import '../../../../../utils/block_dialogs/duration_blocking_dialog.dart';
 import '../../../../../utils/snackbar_helper.dart';
-import '../../../parking_completed_package/repositories/parking_completed_repository.dart';
-import '../../../parking_completed_package/models/parking_completed_record.dart';
 
-// 🔹 새로 분리한 다이얼로그 헬퍼 import (같은 폴더 기준)
-import 'table_share_blocking_dialog.dart';
+import '../../../parking_completed_package/table_package/models/parking_completed_record.dart';
+import '../../../parking_completed_package/table_package/repositories/parking_completed_repository.dart';
 
 /// Deep Blue 팔레트(서비스 카드 계열과 통일)
 class _Palette {
@@ -169,7 +168,7 @@ Future<void> tableShareBottomSheet(BuildContext context) async {
                         }
 
                         // 🔹 5초짜리 취소 가능 blocking dialog (분리된 파일의 함수 사용)
-                        final proceed = await showCancelableBlockingDialog(
+                        final proceed = await showDurationBlockingDialog(
                           ctx,
                           message: '5초 후에 입차 완료 현황을 공유합니다.\n'
                               '공유를 원하지 않으면 [취소]를 눌러 주세요.',
@@ -229,7 +228,7 @@ Future<void> tableShareBottomSheet(BuildContext context) async {
                         }
 
                         // 🔹 5초짜리 취소 가능 blocking dialog (분리된 파일의 함수 사용)
-                        final proceed = await showCancelableBlockingDialog(
+                        final proceed = await showDurationBlockingDialog(
                           ctx,
                           message: '가장 최근 공유 데이터를 가져오고 있습니다.\n'
                               '가져오기를 원하지 않으면 [취소]를 눌러 주세요.',

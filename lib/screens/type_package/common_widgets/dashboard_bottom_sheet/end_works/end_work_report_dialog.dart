@@ -1,5 +1,3 @@
-// lib/screens/type_package/common_widgets/dashboard_bottom_sheet/home_end_work_report_dialog.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -7,22 +5,19 @@ import 'package:provider/provider.dart';
 import '../../../../../../states/area/area_state.dart';
 import '../../../../../../states/user/user_state.dart';
 import '../../../../../../utils/snackbar_helper.dart';
-import '../../../../../../utils/blocking_dialog.dart';
+import '../../../../../../utils/block_dialogs/blocking_dialog.dart';
+import '../../../../../utils/block_dialogs/duration_blocking_dialog.dart';
 import 'end_work_report_service.dart';
-import 'home_end_work_report_controller.dart';
+import 'end_work_report_controller.dart';
 
-/// Deep Blue 팔레트(대시보드/유저 카드와 톤 맞춤)
 class _Palette {
-  static const base  = Color(0xFF0D47A1); // primary
-  static const dark  = Color(0xFF09367D); // 강조 텍스트/아이콘
-  static const light = Color(0xFF5472D3); // 톤 변형/보더
-  static const fg    = Colors.white;      // 전경(아이콘/텍스트)
+  static const base = Color(0xFF0D47A1);
+  static const dark = Color(0xFF09367D);
+  static const light = Color(0xFF5472D3);
+  static const fg = Colors.white;
 }
 
-/// 대시보드에서 호출하는 진입점
-/// - Controller로 초기 집계 로드
-/// - 바텀시트 UI 오픈
-Future<void> showHomeReportDialog(BuildContext context) async {
+Future<void> showEndReportDialog(BuildContext context) async {
   final areaState = context.read<AreaState>();
   final userState = context.read<UserState>();
 
@@ -30,8 +25,7 @@ Future<void> showHomeReportDialog(BuildContext context) async {
   final division = areaState.currentDivision;
   final userName = userState.name;
 
-  // 컨트롤러 준비 + 초기 집계 로드
-  final controller = HomeEndWorkReportController();
+  final controller = EndWorkReportController();
   await controller.loadInitialCounts(area);
 
   await showModalBottomSheet(
@@ -94,7 +88,7 @@ class _EndWorkReportSheetState extends State<EndWorkReportSheet> {
   @override
   void initState() {
     super.initState();
-    final controller = context.read<HomeEndWorkReportController>();
+    final controller = context.read<EndWorkReportController>();
     _inputCtrl = TextEditingController(text: controller.vehicleInput.toString());
     _outputCtrl = TextEditingController(text: controller.vehicleOutput.toString());
     _extraCtrl = TextEditingController(text: controller.departureExtra.toString());
@@ -115,22 +109,35 @@ class _EndWorkReportSheetState extends State<EndWorkReportSheet> {
       return;
     }
 
+    // ✅ 1단계: 15초 동안 취소 가능 다이얼로그 (자동 진행 or 취소 여부 확인)
+    final proceed = await showDurationBlockingDialog(
+      context,
+      message: '업무 종료 보고를 서버에 전송합니다.\n'
+          '약 15초 가량 소요되며, 취소하려면 아래 [취소] 버튼을 눌러 주세요.\n'
+          '중간에 화면을 이탈하지 마세요.',
+      duration: const Duration(seconds: 15),
+    );
+
+    if (!proceed) {
+      if (mounted) {
+        showFailedSnackbar(context, '업무 종료 보고가 취소되었습니다.');
+      }
+      return;
+    }
+
+    // ✅ 2단계: 실제 전송 시작 - 기존 runWithBlockingDialog로 처리 중 다이얼로그 표시
     setState(() => _submitting = true);
 
-    final controller = context.read<HomeEndWorkReportController>();
+    final controller = context.read<EndWorkReportController>();
     final service = EndWorkReportService();
 
     try {
-      // 🔹 항상 TextField 기준으로 파싱
       final vehicleInput = int.tryParse(_inputCtrl.text.trim()) ?? 0;
       final vehicleOutputAgg = int.tryParse(_outputCtrl.text.trim()) ?? 0;
-      final departureExtra =
-          int.tryParse(_extraCtrl.text.trim()) ?? controller.departureExtra;
+      final departureExtra = int.tryParse(_extraCtrl.text.trim()) ?? controller.departureExtra;
 
-      // 최종 출차 수 = agg + 보정치
       final vehicleOutputTotal = vehicleOutputAgg + departureExtra;
 
-      // 컨트롤러 상태 동기화 (내부 상태용)
       controller.setVehicleCounts(
         input: vehicleInput,
         output: vehicleOutputAgg,
@@ -146,13 +153,12 @@ class _EndWorkReportSheetState extends State<EndWorkReportSheet> {
             area: widget.area,
             userName: widget.userName,
             vehicleInputCount: vehicleInput,
-            // 🔹 서비스에는 "최종 출차 수(agg + 보정치)"를 전달
             vehicleOutputManual: vehicleOutputTotal,
           );
 
           if (!mounted) return;
 
-          Navigator.pop(context); // 바텀시트 닫기
+          Navigator.pop(context);
 
           final lines = <String>[
             '업무 종료 보고 완료',
@@ -189,22 +195,19 @@ class _EndWorkReportSheetState extends State<EndWorkReportSheet> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final area = widget.area;
-    final controller = context.watch<HomeEndWorkReportController>();
+    final controller = context.watch<EndWorkReportController>();
     final textTheme = Theme.of(context).textTheme;
 
-    // 🔹 "제출 시 실제로 저장될 값"도 TextField 기준으로 계산
-    final expectedInput = int.tryParse(_inputCtrl.text.trim()) ?? 0; // 입차 예상 저장값
-    final expectedOutputAgg = int.tryParse(_outputCtrl.text.trim()) ?? 0; // 출차 agg 필드 값
-    final expectedExtra = int.tryParse(_extraCtrl.text.trim()) ?? 0; // 보정치 필드 값
-    final expectedOutputTotal =
-        expectedOutputAgg + expectedExtra; // 최종 출차(agg+보정치) 예상 저장값
+    final expectedInput = int.tryParse(_inputCtrl.text.trim()) ?? 0;
+    final expectedOutputAgg = int.tryParse(_outputCtrl.text.trim()) ?? 0;
+    final expectedExtra = int.tryParse(_extraCtrl.text.trim()) ?? 0;
+    final expectedOutputTotal = expectedOutputAgg + expectedExtra;
 
     return SafeArea(
       top: true,
       bottom: false,
       child: Column(
         children: [
-          // 상단 그립바
           Padding(
             padding: const EdgeInsets.only(top: 8, bottom: 4),
             child: Center(
@@ -267,45 +270,30 @@ class _EndWorkReportSheetState extends State<EndWorkReportSheet> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // 입차
                           _numberField(
                             context: context,
                             controller: _inputCtrl,
                             label: '입차 차량 수',
                             helper: '집계값이 자동으로 출력됩니다.',
-                            onChanged: context
-                                .read<HomeEndWorkReportController>()
-                                .setVehicleInputFromText,
+                            onChanged: context.read<EndWorkReportController>().setVehicleInputFromText,
                           ),
                           const SizedBox(height: 12),
-
-                          // 출차 agg (plates 기준)
                           _numberField(
                             context: context,
                             controller: _outputCtrl,
                             label: '출차 차량 수',
                             helper: '집계값이 자동으로 출력됩니다.',
-                            onChanged: context
-                                .read<HomeEndWorkReportController>()
-                                .setVehicleOutputFromText,
+                            onChanged: context.read<EndWorkReportController>().setVehicleOutputFromText,
                           ),
-
                           const SizedBox(height: 12),
-
-                          // 🔹 출차 보정치 (수정 가능한 필드)
                           _numberField(
                             context: context,
                             controller: _extraCtrl,
                             label: '중복 입차 차량 수',
                             helper: '집계값이 자동으로 출력됩니다.',
-                            onChanged: context
-                                .read<HomeEndWorkReportController>()
-                                .setDepartureExtraFromText,
+                            onChanged: context.read<EndWorkReportController>().setDepartureExtraFromText,
                           ),
-
                           const SizedBox(height: 8),
-
-                          // 🔹 출차 합계(agg + 보정치) 표시 (컨트롤러 상태 기준)
                           Text(
                             '출차 합계(출차 차량 수 + 중복 입차 차량 수): ${controller.departureTotal}대',
                             style: textTheme.bodySmall?.copyWith(
@@ -313,10 +301,7 @@ class _EndWorkReportSheetState extends State<EndWorkReportSheet> {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-
                           const SizedBox(height: 8),
-
-                          // 🔹 제출 시 실제로 저장될 값(입차/출차) 미리보기 — TextField 기준 (하이라이트)
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.symmetric(
@@ -436,8 +421,7 @@ class _InfoCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             ...lines.map(
-                  (raw) {
-                // '• 입차: 설명...' 형태를 라벨/설명으로 분리해 깔끔하게 표시
+              (raw) {
                 String line = raw.trim();
                 if (line.startsWith('•')) {
                   line = line.substring(1).trimLeft();
@@ -457,7 +441,6 @@ class _InfoCard extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 커스텀 불릿
                       Container(
                         margin: const EdgeInsets.only(top: 6),
                         width: 5,
@@ -472,7 +455,6 @@ class _InfoCard extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // 라벨(입차 / 출차 / 중복 입차)
                             Text(
                               label,
                               style: textTheme.bodyMedium!.copyWith(
@@ -531,11 +513,9 @@ class _SectionCard extends StatelessWidget {
             children: const [
               Icon(Icons.directions_car, color: _Palette.base),
               SizedBox(width: 8),
-              // 제목은 Theme text로 스타일링
             ],
           ),
           const SizedBox(height: 12),
-          // 제목 텍스트를 Row 밖에서 그리기 위해 Column으로 재구성
           Builder(
             builder: (ctx) {
               final t = Theme.of(ctx).textTheme;
@@ -611,13 +591,13 @@ class _FooterBar extends StatelessWidget {
                 ),
                 child: busy
                     ? const SizedBox(
-                  height: 20,
-                  width: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(_Palette.fg),
-                  ),
-                )
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(_Palette.fg),
+                        ),
+                      )
                     : const Text('제출'),
               ),
             ),

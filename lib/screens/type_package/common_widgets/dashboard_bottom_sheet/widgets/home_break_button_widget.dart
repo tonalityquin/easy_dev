@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../../../../utils/blocking_dialog.dart';
+import '../../../../../utils/block_dialogs/blocking_dialog.dart';
 import '../home_dash_board_controller.dart';
 
 class HomeBreakButtonWidget extends StatefulWidget {

@@ -1,7 +1,7 @@
 // lib/screens/secondary_package/office_mode_package/monthly_management_package/monthly_bottom_navigation.dart
 import 'package:flutter/material.dart';
 
-import '../../../../../utils/app_colors.dart';
+import '../../../../../utils/init/app_colors.dart';
 
 /// 서비스 로그인 카드(Deep Blue 팔레트)와 톤을 맞춘 보조 팔레트
 class _SvcColors {

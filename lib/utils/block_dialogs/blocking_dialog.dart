@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'app_navigator.dart'; // ✅ 전역 navigatorKey 사용
+import '../app_navigator.dart'; // ✅ 전역 navigatorKey 사용
 
 Future<T> runWithBlockingDialog<T>({
   required BuildContext context,
