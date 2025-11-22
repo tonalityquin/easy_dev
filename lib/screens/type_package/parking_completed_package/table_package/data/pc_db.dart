@@ -6,6 +6,7 @@ import 'package:sqflite/sqflite.dart';
 
 class ParkingCompletedDb {
   ParkingCompletedDb._();
+
   static final ParkingCompletedDb instance = ParkingCompletedDb._();
 
   static const dbName = 'parking_completed.db';
@@ -22,6 +23,7 @@ class ParkingCompletedDb {
   static const colIsDepartureCompleted = 'is_departure_completed';
 
   Database? _db;
+
   Future<Database> get database async => _db ??= await _open();
 
   Future<Database> _open() async {

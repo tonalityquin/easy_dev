@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../routes.dart';
-import '../../utils/google_auth_session.dart';
 
 class CardBody extends StatefulWidget {
   const CardBody({
@@ -57,17 +58,25 @@ class _CardBodyState extends State<CardBody> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          LeadingIcon(bg: widget.bg, icon: widget.icon, iconColor: widget.iconColor),
+          LeadingIcon(
+            bg: widget.bg,
+            icon: widget.icon,
+            iconColor: widget.iconColor,
+          ),
           const SizedBox(height: 12),
           widget.titleWidget,
           const SizedBox(height: 12),
           Tooltip(
-            message: widget.enabled ? '이동' : (widget.disabledHint ?? '현재 저장된 모드에서만 선택할 수 있어요'),
+            message: widget.enabled
+                ? '이동'
+                : (widget.disabledHint ?? '현재 저장된 모드에서만 선택할 수 있어요'),
             child: IconButton.filled(
               onPressed: widget.enabled ? _animateThenNavigate : null,
               style: IconButton.styleFrom(
-                backgroundColor: widget.buttonBg ?? Theme.of(context).colorScheme.primary,
-                foregroundColor: widget.buttonFg ?? Theme.of(context).colorScheme.onPrimary,
+                backgroundColor:
+                widget.buttonBg ?? Theme.of(context).colorScheme.primary,
+                foregroundColor:
+                widget.buttonFg ?? Theme.of(context).colorScheme.onPrimary,
               ),
               icon: const Icon(Icons.arrow_forward_rounded),
             ),
@@ -92,7 +101,12 @@ class _CardBodyState extends State<CardBody> {
 }
 
 class LeadingIcon extends StatelessWidget {
-  const LeadingIcon({super.key, required this.bg, required this.icon, required this.iconColor});
+  const LeadingIcon({
+    super.key,
+    required this.bg,
+    required this.icon,
+    required this.iconColor,
+  });
 
   final Color bg;
   final IconData icon;
@@ -121,8 +135,13 @@ class ServiceCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = Text('서비스 로그인',
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark));
+    final title = Text(
+      '서비스 로그인',
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+        color: _dark,
+      ),
+    );
 
     return Card(
       color: Colors.white,
@@ -136,7 +155,8 @@ class ServiceCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: _base,
         buttonFg: Colors.white,
-        onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.serviceLogin),
+        onPressed: () =>
+            Navigator.of(context).pushReplacementNamed(AppRoutes.serviceLogin),
         enabled: enabled,
         disabledHint: '저장된 모드가 service일 때만 선택할 수 있어요',
       ),
@@ -155,8 +175,13 @@ class TabletCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = Text('태블릿 로그인',
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark));
+    final title = Text(
+      '태블릿 로그인',
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+        color: _dark,
+      ),
+    );
 
     return Card(
       color: Colors.white,
@@ -170,7 +195,8 @@ class TabletCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: _base,
         buttonFg: Colors.white,
-        onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.tabletLogin),
+        onPressed: () =>
+            Navigator.of(context).pushReplacementNamed(AppRoutes.tabletLogin),
         enabled: enabled,
         disabledHint: '저장된 모드가 tablet일 때만 선택할 수 있어요',
       ),
@@ -187,8 +213,13 @@ class CommunityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = Text('커뮤니티',
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark));
+    final title = Text(
+      '커뮤니티',
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+        color: _dark,
+      ),
+    );
 
     return Card(
       color: Colors.white,
@@ -202,7 +233,8 @@ class CommunityCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: _base,
         buttonFg: Colors.white,
-        onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.communityStub),
+        onPressed: () =>
+            Navigator.of(context).pushReplacementNamed(AppRoutes.communityStub),
       ),
     );
   }
@@ -217,8 +249,13 @@ class FaqCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = Text('FAQ / 문의',
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark));
+    final title = Text(
+      'FAQ / 문의',
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+        color: _dark,
+      ),
+    );
 
     return Card(
       color: Colors.white,
@@ -232,7 +269,8 @@ class FaqCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: _base,
         buttonFg: Colors.white,
-        onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.faq),
+        onPressed: () =>
+            Navigator.of(context).pushReplacementNamed(AppRoutes.faq),
       ),
     );
   }
@@ -245,17 +283,45 @@ class HeadquarterCard extends StatelessWidget {
   static const Color _dark = Color(0xFF1565C0);
   static const Color _light = Color(0xFF64B5F6);
 
-  static const Set<String> _allowedEmails = {
-    'belivus02@gmail.com',
-    'belivus150119@gmail.com',
-    'surge1868@gmail.com',
-    'gyoshinc@gmail.com',
-  };
+  Future<void> _handleTap(BuildContext context) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final mode = prefs.getString('mode') ?? '';
+      final division = prefs.getString('division') ?? '';
+      final selectedArea = prefs.getString('selectedArea') ?? '';
+
+      final allowed = mode == 'service' &&
+          division.isNotEmpty &&
+          selectedArea.isNotEmpty &&
+          division == selectedArea;
+
+      if (allowed) {
+        Navigator.of(context).pushReplacementNamed(AppRoutes.headStub);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('본사 접근 권한이 없는 계정입니다. 관리자에게 문의하세요.'),
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('본사 접근 여부 확인 중 오류가 발생했습니다: $e'),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final title =
-        Text('본사', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark));
+    final title = Text(
+      '본사',
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+        color: _dark,
+      ),
+    );
 
     return Card(
       color: Colors.white,
@@ -269,28 +335,7 @@ class HeadquarterCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: _base,
         buttonFg: Colors.white,
-        onPressed: () async {
-          try {
-            // 1) 필요 시 이 시점에 계정 인증/선택(최초 1회만 동의창)
-            await GoogleAuthSession.instance.safeClient();
-
-            // 2) 현재 Google 계정 이메일 확인
-            final email = GoogleAuthSession.instance.currentUser?.email.toLowerCase() ?? '';
-
-            // 3) 화이트리스트 검사
-            if (_allowedEmails.contains(email)) {
-              Navigator.of(context).pushReplacementNamed(AppRoutes.headStub);
-            } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('본사 접근 권한이 없는 계정입니다. 관리자에게 문의하세요.')),
-              );
-            }
-          } catch (e) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Google 인증에 실패했습니다: $e')),
-            );
-          }
-        },
+        onPressed: () => _handleTap(context),
       ),
     );
   }
@@ -307,8 +352,13 @@ class DevCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title =
-        Text('개발', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark));
+    final title = Text(
+      '개발',
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+        color: _dark,
+      ),
+    );
 
     return Card(
       color: Colors.white,
@@ -337,8 +387,13 @@ class ParkingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = Text('오프라인 서비스',
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _dark));
+    final title = Text(
+      '오프라인 서비스',
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+        color: _dark,
+      ),
+    );
 
     return Card(
       color: Colors.white,
@@ -352,7 +407,8 @@ class ParkingCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: _base,
         buttonFg: Colors.white,
-        onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.offlineLogin),
+        onPressed: () => Navigator.of(context)
+            .pushReplacementNamed(AppRoutes.offlineLogin),
       ),
     );
   }

@@ -71,8 +71,7 @@ class EndWorkReportResult {
 class EndWorkReportService {
   final FirebaseFirestore _firestore;
 
-  EndWorkReportService({FirebaseFirestore? firestore})
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+  EndWorkReportService({FirebaseFirestore? firestore}) : _firestore = firestore ?? FirebaseFirestore.instance;
 
   Future<EndWorkReportResult> submitEndReport({
     required String division,
@@ -86,6 +85,7 @@ class EndWorkReportService {
       name: 'EndWorkReportService',
     );
 
+    // 1. plates 스냅샷 조회
     QuerySnapshot<Map<String, dynamic>> platesSnap;
     try {
       dev.log('[END] query plates...', name: 'EndWorkReportService');
@@ -107,12 +107,12 @@ class EndWorkReportService {
 
     final int snapshotLockedVehicleCount = platesSnap.docs.length;
 
+    // 2. 잠금 요금 합계 계산
     num snapshotTotalLockedFee = 0;
     try {
       for (final d in platesSnap.docs) {
         final data = d.data();
-        num? fee =
-        (data['lockedFeeAmount'] is num) ? data['lockedFeeAmount'] as num : null;
+        num? fee = (data['lockedFeeAmount'] is num) ? data['lockedFeeAmount'] as num : null;
 
         if (fee == null) {
           final logs = data['logs'];
@@ -137,6 +137,7 @@ class EndWorkReportService {
       throw Exception('요금 합계 계산 실패: $e');
     }
 
+    // 3. 공통 리포트 로그 구성
     final now = DateTime.now();
     final dateStr = DateFormat('yyyy-MM-dd').format(now);
 
@@ -155,6 +156,7 @@ class EndWorkReportService {
       'uploadedBy': userName,
     };
 
+    // 4. GCS - report 업로드
     String? reportUrl;
     bool gcsReportUploadOk = true;
     try {
@@ -182,6 +184,7 @@ class EndWorkReportService {
       );
     }
 
+    // 5. GCS - logs 업로드
     String? logsUrl;
     bool gcsLogsUploadOk = true;
     try {
@@ -221,30 +224,44 @@ class EndWorkReportService {
       );
     }
 
+    // 6. Firestore - end_work_reports 저장 (+ 날짜별 history 누적)
     bool firestoreSaveOk = true;
     try {
-      dev.log('[END] save report to Firestore (per-area doc)...',
-          name: 'EndWorkReportService');
+      dev.log('[END] save report to Firestore (per-area doc)...', name: 'EndWorkReportService');
 
-      final docRef =
-      _firestore.collection('end_work_reports').doc('area_$area');
+      final docRef = _firestore.collection('end_work_reports').doc('area_$area');
 
-      final reportEntry = <String, dynamic>{
+      // reports.2025-11-22 같은 경로
+      final reportBasePath = 'reports.$dateStr';
+
+      // 6-1) 기존 필드 구조 유지 (마지막 보고 요약용)
+      final Map<String, dynamic> payload = {
+        'division': division,
+        'area': area,
+        '$reportBasePath.date': dateStr,
+        '$reportBasePath.vehicleCount': reportLog['vehicleCount'],
+        '$reportBasePath.metrics': reportLog['metrics'],
+        '$reportBasePath.createdAt': reportLog['createdAt'],
+        '$reportBasePath.uploadedBy': reportLog['uploadedBy'],
+        if (reportUrl != null) '$reportBasePath.reportUrl': reportUrl,
+        if (logsUrl != null) '$reportBasePath.logsUrl': logsUrl,
+      };
+
+      // 6-2) 같은 날짜 내 history 배열에 쌓을 엔트리
+      final historyEntry = <String, dynamic>{
         'date': dateStr,
+        'createdAt': reportLog['createdAt'],
+        'uploadedBy': userName,
         'vehicleCount': reportLog['vehicleCount'],
         'metrics': reportLog['metrics'],
-        'createdAt': reportLog['createdAt'],
-        'uploadedBy': reportLog['uploadedBy'],
         if (reportUrl != null) 'reportUrl': reportUrl,
         if (logsUrl != null) 'logsUrl': logsUrl,
       };
 
+      payload['$reportBasePath.history'] = FieldValue.arrayUnion(<Map<String, dynamic>>[historyEntry]);
+
       await docRef.set(
-        {
-          'division': division,
-          'area': area,
-          'reports.$dateStr': reportEntry,
-        },
+        payload,
         SetOptions(merge: true),
       );
     } catch (e, st) {
@@ -257,10 +274,10 @@ class EndWorkReportService {
       );
     }
 
+    // 7. plates / plate_counters cleanup
     bool cleanupOk = true;
     try {
-      dev.log('[END] cleanup plates & plate_counters...',
-          name: 'EndWorkReportService');
+      dev.log('[END] cleanup plates & plate_counters...', name: 'EndWorkReportService');
 
       final batch = _firestore.batch();
 
@@ -268,11 +285,10 @@ class EndWorkReportService {
         batch.delete(d.reference);
       }
 
-      final countersRef =
-      _firestore.collection('plate_counters').doc('area_$area');
+      final countersRef = _firestore.collection('plate_counters').doc('area_$area');
       batch.set(
         countersRef,
-        {
+        <String, dynamic>{
           'departureCompletedEvents': 0,
         },
         SetOptions(merge: true),

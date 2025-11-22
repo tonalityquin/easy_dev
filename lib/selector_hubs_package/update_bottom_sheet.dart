@@ -14,6 +14,7 @@ class UpdateBottomSheet extends StatelessWidget {
         '업무 종료 보고 로직 개선',
         '자동 퇴근 로직 추가',
         '테이블 시스템 개편',
+        '지역 별 주의사항 카드 영역 개선',
       ],
     ),
     UpdateEntry(

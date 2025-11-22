@@ -18,7 +18,7 @@ class _Palette {
 }
 
 /// ParkingCompleted 테이블을 Firestore로 "한 번에 공유"하는 헬퍼
-/// - parkingCompletedShares/{roomId}/exports/latest 에
+/// - parking_completed_shares/{roomId}/exports/latest 에
 ///   records 배열로 한 문서에 몽땅 넣어서 1 write로 업로드
 Future<void> _shareParkingTableOnce({
   required String roomId,
@@ -28,7 +28,7 @@ Future<void> _shareParkingTableOnce({
   final firestore = FirebaseFirestore.instance;
 
   final exportsCol =
-  firestore.collection('parkingCompletedShares').doc(roomId).collection('exports');
+  firestore.collection('parking_completed_shares').doc(roomId).collection('exports');
 
   // 🔹 이 room은 항상 latest 하나만 유지
   final exportRef = exportsCol.doc('latest');
@@ -58,7 +58,7 @@ Future<void> _importLatestShare({
     final firestore = FirebaseFirestore.instance;
 
     final exportsCol =
-    firestore.collection('parkingCompletedShares').doc(roomId).collection('exports');
+    firestore.collection('parking_completed_shares').doc(roomId).collection('exports');
 
     // 🔹 더 이상 orderBy/limit 불필요, latest 문서만 사용
     final docSnap = await exportsCol.doc('latest').get();

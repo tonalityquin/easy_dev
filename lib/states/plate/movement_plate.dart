@@ -130,17 +130,6 @@ class MovementPlate extends ChangeNotifier {
       },
       forceOverride: forceOverride,
     );
-
-    // ⚠️ 필요 시만 주석 해제:
-    // 출차요청 → 입차완료 회귀를 "새 입차 완료"로 간주하고 싶으면 사용
-    /*
-    await ParkingCompletedLogger.instance.maybeLogEntryCompleted(
-      plateNumber: plateNumber,
-      location: location,
-      oldStatus: kStatusExitRequest,
-      newStatus: kStatusEntryDone,
-    );
-    */
   }
 
   /// (옵션) 임의 상태 → 입차 요청 되돌리기
