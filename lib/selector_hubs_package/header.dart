@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
-import 'headers/work_floating_bubble_manager.dart';
-
 import '../../utils/snackbar_helper.dart';
 import '../../utils/api/email_config.dart';
 import '../../utils/api/sheets_config.dart';
@@ -18,77 +16,16 @@ class Header extends StatefulWidget {
 
 class _HeaderState extends State<Header> {
   bool _expanded = false;
-  bool _bubbleEnabled = false;
 
   void _toggleExpanded() {
     setState(() => _expanded = !_expanded);
   }
 
   @override
-  void initState() {
-    super.initState();
-    _bubbleEnabled = WorkFloatingBubbleManager.instance.isShowing;
-  }
-
-  Future<void> _onToggleBubble(BuildContext context) async {
-    final manager = WorkFloatingBubbleManager.instance;
-
-    if (_bubbleEnabled) {
-      await manager.hide();
-      if (!mounted) return;
-      setState(() {
-        _bubbleEnabled = false;
-      });
-      showSelectedSnackbar(context, '플로팅 버블을 끕니다.');
-    } else {
-      final ok = await manager.show(context);
-      if (!mounted) return;
-      if (ok) {
-        setState(() {
-          _bubbleEnabled = true;
-        });
-        showSuccessSnackbar(
-          context,
-          '플로팅 버블이 켜졌습니다.\n앱 화면 위에 근무 아이콘이 표시됩니다.',
-        );
-      } else {
-        showFailedSnackbar(
-          context,
-          '플로팅 버블을 표시할 수 없습니다.\n(Overlay를 사용할 수 없는 환경입니다.)',
-        );
-      }
-    }
-  }
-
-  Widget _buildFloatingBubbleToggle(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final isOn = _bubbleEnabled;
-
-    final label = isOn ? '플로팅 버블 끄기' : '플로팅 버블 켜기';
-
-    return OutlinedButton.icon(
-      onPressed: () => _onToggleBubble(context),
-      icon: Icon(
-        Icons.bubble_chart,
-        size: 20,
-        color: isOn ? colorScheme.primary : theme.iconTheme.color,
-      ),
-      label: Text(label),
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size(0, 40),
-        foregroundColor:
-        isOn ? colorScheme.primary : theme.textTheme.bodyMedium?.color,
-        side: BorderSide(
-          color: isOn ? colorScheme.primary : theme.dividerColor,
-        ),
-      ),
-    );
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
+    final text = Theme
+        .of(context)
+        .textTheme;
 
     return Column(
       children: [
@@ -105,11 +42,12 @@ class _HeaderState extends State<Header> {
         const SizedBox(height: 6),
         Text(
           '화살표 버튼을 누르면 해당 페이지로 진입합니다.',
-          style: text.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
+          style: text.bodyMedium?.copyWith(color: Theme
+              .of(context)
+              .hintColor),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 12),
-        _buildFloatingBubbleToggle(context),
       ],
     );
   }
@@ -230,7 +168,9 @@ class _TopRow extends StatelessWidget {
                             ValueListenableBuilder<TextEditingValue>(
                               valueListenable: controller,
                               builder: (ctx2, value, _) {
-                                final hasText = value.text.trim().isNotEmpty;
+                                final hasText = value.text
+                                    .trim()
+                                    .isNotEmpty;
                                 return Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -470,7 +410,10 @@ class _TopRow extends StatelessWidget {
                       left: 16,
                       right: 16,
                       top: 16,
-                      bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+                      bottom: MediaQuery
+                          .of(ctx)
+                          .viewInsets
+                          .bottom + 24,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
