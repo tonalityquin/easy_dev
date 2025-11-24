@@ -1,3 +1,4 @@
+// lib/routes.dart
 import 'package:easydev/offlines/offline_type_page.dart';
 import 'package:flutter/material.dart';
 
@@ -29,6 +30,9 @@ class AppRoutes {
   static const serviceLogin = '/service_login';
   static const tabletLogin = '/tablet_login';
 
+  // ✅ 새로 추가된 simple 로그인 라우트
+  static const simpleLogin = '/simple_login';
+
   // ✅ 오프라인 전용
   static const offlineLogin = '/offline_login';
   static const offlineCommute = '/offline_commute';
@@ -59,13 +63,16 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.selector: (context) => const SelectorHubsPage(),
 
   // 서비스/태블릿 로그인(온라인용 기존 화면: 유지)
-  AppRoutes.serviceLogin: (context) => const LoginScreen(),
+  AppRoutes.serviceLogin: (context) => const LoginScreen(),                 // mode 기본값 = 'service'
   AppRoutes.tabletLogin: (context) => const LoginScreen(mode: 'tablet'),
+
+  // ✅ simple(출퇴근용) 로그인 – simple 모드로 LoginScreen 사용
+  AppRoutes.simpleLogin: (context) => const LoginScreen(mode: 'simple'),
 
   // ✅ 오프라인 로그인 → 성공 시 오프라인 출퇴근으로 이동
   AppRoutes.offlineLogin: (context) => OfflineLoginScreen(
-    onLoginSucceeded: () =>
-        Navigator.of(context).pushReplacementNamed(AppRoutes.offlineCommute),
+    onLoginSucceeded: () => Navigator.of(context)
+        .pushReplacementNamed(AppRoutes.offlineCommute),
   ),
 
   // 출퇴근(온라인/오프라인)

@@ -1,3 +1,4 @@
+// lib/selector_hubs_package/cards.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -155,10 +156,55 @@ class ServiceCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: _base,
         buttonFg: Colors.white,
-        onPressed: () =>
-            Navigator.of(context).pushReplacementNamed(AppRoutes.serviceLogin),
+        onPressed: () => Navigator.of(context)
+            .pushReplacementNamed(AppRoutes.serviceLogin),
         enabled: enabled,
         disabledHint: '저장된 모드가 service일 때만 선택할 수 있어요',
+      ),
+    );
+  }
+}
+
+class SimpleLoginCard extends StatelessWidget {
+  const SimpleLoginCard({super.key, this.enabled = true});
+
+  final bool enabled;
+
+  static const Color _base = Color(0xFF00897B);
+  static const Color _dark = Color(0xFF00695C);
+  static const Color _light = Color(0xFF80CBC4);
+
+  @override
+  Widget build(BuildContext context) {
+    final title = Text(
+      '약식 로그인',
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+        color: _dark,
+      ),
+    );
+
+    return Card(
+      color: Colors.white,
+      elevation: 1,
+      clipBehavior: Clip.antiAlias,
+      surfaceTintColor: _light,
+      child: CardBody(
+        icon: Icons.access_time_filled_rounded,
+        bg: _base,
+        iconColor: Colors.white,
+        titleWidget: title,
+        buttonBg: _base,
+        buttonFg: Colors.white,
+        onPressed: () => Navigator.of(context).pushReplacementNamed(
+          AppRoutes.simpleLogin,
+          arguments: {
+            // 로그인 후에는 출퇴근 화면으로 이동하도록 명시
+            'redirectAfterLogin': AppRoutes.commute,
+            'requiredMode': 'simple',
+          },
+        ),
+        enabled: enabled,
       ),
     );
   }
@@ -195,8 +241,8 @@ class TabletCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: _base,
         buttonFg: Colors.white,
-        onPressed: () =>
-            Navigator.of(context).pushReplacementNamed(AppRoutes.tabletLogin),
+        onPressed: () => Navigator.of(context)
+            .pushReplacementNamed(AppRoutes.tabletLogin),
         enabled: enabled,
         disabledHint: '저장된 모드가 tablet일 때만 선택할 수 있어요',
       ),
@@ -233,8 +279,8 @@ class CommunityCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: _base,
         buttonFg: Colors.white,
-        onPressed: () =>
-            Navigator.of(context).pushReplacementNamed(AppRoutes.communityStub),
+        onPressed: () => Navigator.of(context)
+            .pushReplacementNamed(AppRoutes.communityStub),
       ),
     );
   }

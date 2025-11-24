@@ -1,4 +1,4 @@
-// lib/screens/login/login_screen.dart (예시 경로)
+// lib/screens/login_package/login_screen.dart
 // ─────────────────────────────────────────────────────────────────────────────
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -6,8 +6,13 @@ import 'package:provider/provider.dart';
 import '../../routes.dart'; // 기본 redirect(AppRoutes.commute) 사용
 import '../../states/user/user_state.dart'; // 로그인/selectedArea 확인
 
+// service
 import 'service/service_login_controller.dart';
 import 'service/sections/service_login_form.dart';
+
+// simple
+import 'simple/simple_login_controller.dart';
+import 'simple/sections/simple_login_form.dart';
 
 // tablet
 import 'tablet/tablet_login_controller.dart';
@@ -16,7 +21,7 @@ import 'tablet/sections/tablet_login_form.dart';
 // ✅ outside (향후 확장 대비)
 
 class LoginScreen extends StatefulWidget {
-  // ✅ mode: 'service' | 'tablet'
+  // ✅ mode: 'service' | 'tablet' | 'simple'
   const LoginScreen({super.key, this.mode = 'service'});
 
   final String mode;
@@ -25,9 +30,11 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   // 필요한 것만 생성/폐기
-  ServiceLoginController? _loginController;
+  ServiceLoginController? _serviceLoginController;
+  SimpleLoginController? _simpleLoginController;
   TabletLoginController? _tabletController;
 
   late final AnimationController _loginAnimationController;
@@ -36,8 +43,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
 
   // ▼ 라우트 인자
   String? _redirectAfterLogin; // 로그인 성공 후 목적지
-  String? _requiredMode;       // 모드 강제(옵션)
-  bool _didInitAuto = false;   // 자동 로그인 게이트 1회 실행 보장
+  String? _requiredMode; // 모드 강제(옵션)
+  bool _didInitAuto = false; // 자동 로그인 게이트 1회 실행 보장
 
   @override
   void initState() {
@@ -51,8 +58,15 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         if (!mounted) return;
         _tabletController!.initState();
       });
+    } else if (widget.mode == 'simple') {
+      _simpleLoginController = SimpleLoginController(
+        context,
+        // 성공 시 내비게이션은 화면에서 처리(redirectAfterLogin 반영)
+        onLoginSucceeded: _navigateAfterLogin,
+      );
     } else {
-      _loginController = ServiceLoginController(
+      // 기본은 service
+      _serviceLoginController = ServiceLoginController(
         context,
         // 성공 시 내비게이션은 화면에서 처리(redirectAfterLogin 반영)
         onLoginSucceeded: _navigateAfterLogin,
@@ -98,7 +112,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     }
 
     // ▼ 자동 로그인 게이트: 라우트 인자를 먼저 확보한 뒤 1회만 실행
-    if (!_didInitAuto && widget.mode == 'service' && _loginController != null) {
+    //   - service / simple 모두 자동 로그인 적용 (tablet만 제외)
+    if (!_didInitAuto && widget.mode != 'tablet') {
       _didInitAuto = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
@@ -106,7 +121,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
         final alreadyLoggedIn = context.read<UserState>().isLoggedIn;
         if (!alreadyLoggedIn) {
           // 컨트롤러 내부의 자동 로그인 체크(성공 시 onLoginSucceeded 콜백 호출)
-          _loginController!.initState();
+          if (widget.mode == 'simple') {
+            _simpleLoginController?.initState();
+          } else {
+            _serviceLoginController?.initState();
+          }
         }
       });
     }
@@ -121,7 +140,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   void _navigateAfterLogin() {
     // ✅ 본사 진입은 'selectedArea == belivus' 일 때만 허용 (하드코딩)
     if (_isHeadTarget()) {
-      final selectedArea = context.read<UserState>().user?.selectedArea?.trim() ?? '';
+      final selectedArea =
+          context.read<UserState>().user?.selectedArea?.trim() ?? '';
       if (selectedArea != 'belivus') {
         // 접근 차단: 허브로 복귀
         if (!mounted) return;
@@ -139,6 +159,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     // (선택) requiredMode 강제 – 모드가 다르면 접근 차단/안내
+    // simple도 독립 모드로 그대로 비교
     if (_requiredMode != null && _requiredMode != widget.mode) {
       // ✅ 이 화면에서만 뒤로가기 pop을 막아 앱 종료 방지
       return PopScope(
@@ -152,10 +173,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                 children: [
                   const Icon(Icons.lock_outline, size: 40),
                   const SizedBox(height: 12),
-                  Text('접근 가능한 모드가 아닙니다. (요청: ${_requiredMode!}, 현재: ${widget.mode})'),
+                  Text(
+                    '접근 가능한 모드가 아닙니다. '
+                        '(요청: ${_requiredMode!}, 현재: ${widget.mode})',
+                  ),
                   const SizedBox(height: 12),
                   FilledButton(
-                    onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.selector),
+                    onPressed: () => Navigator.of(context)
+                        .pushReplacementNamed(AppRoutes.selector),
                     child: const Text('허브로 돌아가기'),
                   ),
                 ],
@@ -167,9 +192,14 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     }
 
     // ✅ 모드별 폼 선택
-    final Widget loginForm = (widget.mode == 'tablet')
-        ? TabletLoginForm(controller: _tabletController!)
-        : ServiceLoginForm(controller: _loginController!);
+    final Widget loginForm;
+    if (widget.mode == 'tablet') {
+      loginForm = TabletLoginForm(controller: _tabletController!);
+    } else if (widget.mode == 'simple') {
+      loginForm = SimpleLoginForm(controller: _simpleLoginController!);
+    } else {
+      loginForm = ServiceLoginForm(controller: _serviceLoginController!);
+    }
 
     // ✅ 이 화면에서만 뒤로가기 pop을 막아 앱 종료 방지 (스낵바 없음)
     return PopScope(
@@ -200,9 +230,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     // initState의 분기와 정확히 ‘대칭’ 맞추기
     if (widget.mode == 'tablet') {
       _tabletController?.dispose();
+    } else if (widget.mode == 'simple') {
+      _simpleLoginController?.dispose();
     } else {
       // 기본은 'service' 모드이므로 else에서 서비스 컨트롤러 정리
-      _loginController?.dispose();
+      _serviceLoginController?.dispose();
     }
 
     super.dispose();
