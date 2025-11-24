@@ -1,18 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../states/user/user_state.dart';
-import '../../../../utils/block_dialogs/blocking_dialog.dart';
-import '../simple_inside_controller.dart';
-import '../../../../routes.dart';
 
 class SimpleInsideWorkButtonSection extends StatelessWidget {
-  final SimpleInsideController controller;
-  final ValueChanged<bool> onLoadingChanged;
-
   const SimpleInsideWorkButtonSection({
     super.key,
-    required this.controller,
-    required this.onLoadingChanged,
   });
 
   @override
@@ -37,44 +29,72 @@ class SimpleInsideWorkButtonSection extends StatelessWidget {
         minimumSize: const Size.fromHeight(55),
         padding: EdgeInsets.zero,
         side: const BorderSide(color: Colors.grey, width: 1.0),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
       ),
+      // 🔹 isWorking 이면 기존처럼 비활성화
       onPressed: isWorking
-          ? null // 이미 출근 상태일 경우 버튼 비활성화
-          : () async {
-        onLoadingChanged(true);
-        try {
-          // ✅ 모달 안에서는 '목적지 결정'만 하고, 라우팅은 모달 종료 후에 실행
-          final dest = await runWithBlockingDialog<SimpleDestination>(
-            context: context,
-            message: '출근 처리 중입니다...',
-            task: () async {
-              return controller.handleWorkStatusAndDecide(
-                context,
-                context.read<UserState>(),
-              );
-            },
-          );
-
-          if (!context.mounted) return;
-
-          // ✅ 모달이 닫힌 뒤 실제 라우팅
-          switch (dest) {
-            case SimpleDestination.headquarter:
-              Navigator.pushReplacementNamed(context, AppRoutes.headquarterPage);
-              break;
-            case SimpleDestination.type:
-              Navigator.pushReplacementNamed(context, AppRoutes.typePage);
-              break;
-            case SimpleDestination.none:
-              break;
-          }
-        } finally {
-          if (context.mounted) {
-            onLoadingChanged(false);
-          }
-        }
-      },
+          ? null
+          : () => _showFullScreenBottomSheet(context),
     );
   }
+}
+
+void _showFullScreenBottomSheet(BuildContext context) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    builder: (sheetCtx) {
+      final height = MediaQuery.of(sheetCtx).size.height;
+
+      return SafeArea(
+        child: SizedBox(
+          height: height, // 🔹 기기 전체 높이 사용
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 상단 헤더 + 닫기 버튼
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        '출근하기 바텀 시트',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(sheetCtx).pop(),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // 임의의 텍스트 영역
+                const Expanded(
+                  child: SingleChildScrollView(
+                    child: Text(
+                      '여기는 출근하기 버튼용 임의의 텍스트 영역입니다.\n\n'
+                          '• 더미 텍스트 A: 출근 시 안내 문구\n'
+                          '• 더미 텍스트 B: 근무 수칙 또는 공지\n'
+                          '• 더미 텍스트 C: 기타 설명 텍스트\n\n'
+                          '나중에 이 영역을 실제 출근 처리 UI(시간 표시, 메모 입력, '
+                          '확인 버튼 등)로 교체해서 사용할 수 있습니다.',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
 }

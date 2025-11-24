@@ -165,4 +165,3 @@ class SimpleInsideUserInfoCardSection extends StatelessWidget {
     return phone;
   }
 }
-ㅁ

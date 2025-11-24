@@ -4,8 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../states/user/user_state.dart';
-import '../../../utils/snackbar_helper.dart';
-import '../../../utils/api/sheets_config.dart';
 import '../../../utils/init/logout_helper.dart';
 import '../../services/endtime_reminder_service.dart';
 import 'simple_inside_package/simple_inside_controller.dart';
@@ -23,9 +21,6 @@ class SimpleInsideScreen extends StatefulWidget {
 
 class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
   final controller = SimpleInsideController();
-  String? kakaoUrl;
-  bool loadingUrl = true;
-  bool _isLoading = false;
 
   @override
   void initState() {
@@ -34,9 +29,6 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
 
     // OPTION A: 자동 라우팅은 최초 진입 시 1회만 수행
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _loadCustomKakaoUrl();
-      if (!mounted) return;
-
       final userState = context.read<UserState>();
 
       // 1) 오늘 출근 여부 캐시 보장 (Firestore read는 UserState 내부에서 1일 1회)
@@ -50,10 +42,8 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
       }
       if (!mounted) return;
 
-      // 3) 최종 상태 기준으로만 자동 라우팅
-      if (userState.isWorking) {
-        controller.redirectIfWorking(context, userState);
-      }
+      // 3) (기존) 근무 중이면 자동 라우팅 로직은 제거됨
+      //    현재는 단순히 상태만 정리하고, 추가 라우팅은 수행하지 않음.
     });
   }
 
@@ -68,141 +58,6 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
 
     // 남아 있을 수 있는 퇴근 알림도 취소
     await EndtimeReminderService.instance.cancel();
-  }
-
-  Future<void> _loadCustomKakaoUrl() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedUrl = prefs.getString('custom_kakao_url');
-
-    if (!mounted) return;
-    setState(() {
-      kakaoUrl = (savedUrl != null && savedUrl.isNotEmpty) ? savedUrl : null;
-      loadingUrl = false;
-    });
-  }
-
-  /// 공용: 전체 높이(최상단까지)로 올라오는 흰색 바텀시트를 띄우는 헬퍼
-  Future<T?> _showFullHeightSheet<T>({
-    required WidgetBuilder childBuilder,
-  }) {
-    return showModalBottomSheet<T>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.white,
-      builder: (sheetCtx) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 1.0, // 최상단까지
-          minChildSize: 0.25,
-          maxChildSize: 1.0,
-          builder: (ctx, scrollController) {
-            return SingleChildScrollView(
-              controller: scrollController,
-              child: Padding(
-                padding: EdgeInsets.only(
-                  left: 20,
-                  right: 20,
-                  top: 20,
-                  // 키보드가 올라올 때 안전하게 하단 패딩 확보
-                  bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-                ),
-                child: childBuilder(ctx),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _handleChangeUrl(BuildContext context) async {
-    final prefs = await SharedPreferences.getInstance();
-    final urlTextCtrl = TextEditingController(
-      text: prefs.getString('custom_kakao_url') ?? '',
-    );
-
-    await _showFullHeightSheet<void>(
-      childBuilder: (_) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text(
-            '출근 보고용 URL을 입력하세요.',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: urlTextCtrl,
-            decoration: const InputDecoration(
-              labelText: '카카오톡 오픈채팅 URL',
-              border: OutlineInputBorder(),
-            ),
-            keyboardType: TextInputType.url,
-            textInputAction: TextInputAction.done,
-          ),
-          const SizedBox(height: 12),
-          ElevatedButton(
-            onPressed: () async {
-              final url = urlTextCtrl.text.trim();
-              await prefs.setString('custom_kakao_url', url);
-
-              if (!mounted) return;
-              setState(() {
-                kakaoUrl = url.isNotEmpty ? url : null;
-              });
-
-              Navigator.pop(context);
-              showSuccessSnackbar(context, 'URL이 저장되었습니다.');
-            },
-            child: const Text('저장'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _handleSetCommuteSheetId(BuildContext context) async {
-    final current = await SheetsConfig.getCommuteSheetId();
-    final textCtrl = TextEditingController(text: current ?? '');
-
-    await _showFullHeightSheet<void>(
-      childBuilder: (_) => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            '출근/퇴근/휴게 스프레드시트 ID 입력',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: textCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Google Sheets ID 또는 전체 URL',
-              helperText: 'URL 전체를 붙여넣어도 ID만 추출됩니다.',
-              border: OutlineInputBorder(),
-            ),
-            keyboardType: TextInputType.url,
-            textInputAction: TextInputAction.done,
-          ),
-          const SizedBox(height: 12),
-          ElevatedButton(
-            onPressed: () async {
-              final raw = textCtrl.text.trim();
-              if (raw.isEmpty) return;
-
-              final id = SheetsConfig.extractSpreadsheetId(raw);
-              await SheetsConfig.setCommuteSheetId(id);
-
-              if (!mounted) return;
-              Navigator.pop(context);
-              showSuccessSnackbar(context, '출근 시트 ID가 저장되었습니다.');
-            },
-            child: const Text('저장'),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _handleLogout(BuildContext context) async {
@@ -249,7 +104,7 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
       child: Scaffold(
         body: Consumer<UserState>(
           builder: (context, userState, _) {
-            // 자동 라우팅은 initState의 addPostFrameCallback에서 1회 수행
+            // 자동 라우팅은 initState의 addPostFrameCallback에서 1회 수행(현재는 제거됨)
 
             return SafeArea(
               child: Stack(
@@ -268,22 +123,14 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
                             const SizedBox(height: 6),
                             Row(
                               children: [
-                                Expanded(
-                                  child: SimpleInsideReportButtonSection(
-                                    loadingUrl: loadingUrl,
-                                    kakaoUrl: kakaoUrl,
-                                  ),
+                                // 🔹 출근 보고 버튼: URL/로직 제거 후, 단순 바텀 시트
+                                const Expanded(
+                                  child: SimpleInsideReportButtonSection(),
                                 ),
                                 const SizedBox(width: 12),
-                                Expanded(
-                                  child: SimpleInsideWorkButtonSection(
-                                    controller: controller,
-                                    onLoadingChanged: (value) {
-                                      setState(() {
-                                        _isLoading = value;
-                                      });
-                                    },
-                                  ),
+                                // 🔹 출근하기 버튼: 기존 로직 제거 후, 단순 바텀 시트
+                                const Expanded(
+                                  child: SimpleInsideWorkButtonSection(),
                                 ),
                               ],
                             ),
@@ -309,12 +156,6 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
                           case 'logout':
                             _handleLogout(context);
                             break;
-                          case 'changeUrl':
-                            _handleChangeUrl(context);
-                            break;
-                          case 'setCommuteSheet':
-                            _handleSetCommuteSheetId(context);
-                            break;
                         }
                       },
                       itemBuilder: (context) => const [
@@ -328,43 +169,11 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
                             ],
                           ),
                         ),
-                        PopupMenuItem(
-                          value: 'changeUrl',
-                          child: Row(
-                            children: [
-                              Icon(Icons.edit_location_alt,
-                                  color: Colors.blueAccent),
-                              SizedBox(width: 8),
-                              Text('경로 변경'),
-                            ],
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: 'setCommuteSheet',
-                          child: Row(
-                            children: [
-                              Icon(Icons.assignment_add, color: Colors.green),
-                              SizedBox(width: 8),
-                              Text('출근 시트 삽입'),
-                            ],
-                          ),
-                        ),
                       ],
                       icon: const Icon(Icons.more_vert),
                     ),
                   ),
-                  if (_isLoading || userState.isWorking)
-                    Positioned.fill(
-                      child: AbsorbPointer(
-                        absorbing: true,
-                        child: Container(
-                          color: Colors.black.withOpacity(0.2),
-                          child: const Center(
-                            child: CircularProgressIndicator(),
-                          ),
-                        ),
-                      ),
-                    ),
+                  // 🔹 기존의 출근 시트 관련 오버레이/로딩은 이미 제거된 상태
                 ],
               ),
             );
