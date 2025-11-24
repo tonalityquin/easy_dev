@@ -199,8 +199,8 @@ class SimpleLoginCard extends StatelessWidget {
         onPressed: () => Navigator.of(context).pushReplacementNamed(
           AppRoutes.simpleLogin,
           arguments: {
-            // 로그인 후에는 출퇴근 화면으로 이동하도록 명시
-            'redirectAfterLogin': AppRoutes.commute,
+            // ✅ 약식 로그인 후에는 약식 출퇴근 화면으로 이동
+            'redirectAfterLogin': AppRoutes.simpleCommute,
             'requiredMode': 'simple',
           },
         ),

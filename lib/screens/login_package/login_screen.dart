@@ -137,6 +137,22 @@ class _LoginScreenState extends State<LoginScreen>
         _redirectAfterLogin == AppRoutes.headquarterPage;
   }
 
+  /// ✅ 모드별 기본 라우트 결정
+  /// - service  → /commute
+  /// - simple   → /simple_commute
+  /// - tablet   → 일단 /commute 유지(정책에 따라 변경 가능)
+  String _defaultRouteForMode() {
+    switch (widget.mode) {
+      case 'simple':
+        return AppRoutes.simpleCommute;
+      case 'tablet':
+        return AppRoutes.commute;
+      case 'service':
+      default:
+        return AppRoutes.commute;
+    }
+  }
+
   void _navigateAfterLogin() {
     // ✅ 본사 진입은 'selectedArea == belivus' 일 때만 허용 (하드코딩)
     if (_isHeadTarget()) {
@@ -150,8 +166,10 @@ class _LoginScreenState extends State<LoginScreen>
       }
     }
 
-    // 기본값은 예전과 동일하게 /commute
-    final route = _redirectAfterLogin ?? AppRoutes.commute;
+    // ✅ 모드에 따른 기본값 + 인자로 들어온 redirectAfterLogin 우선
+    final defaultRoute = _defaultRouteForMode();
+    final route = _redirectAfterLogin ?? defaultRoute;
+
     if (!mounted) return;
     Navigator.of(context).pushReplacementNamed(route);
   }

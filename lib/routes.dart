@@ -20,6 +20,7 @@ import 'screens/commute_package/commute_inside_screen.dart';
 import 'screens/dev_package/dev_calendar_page.dart';
 import 'screens/head_package/company_calendar_page.dart';
 import 'screens/head_package/labor_guide_page.dart';
+import 'screens/simple_package/simple_inside_screen.dart';
 import 'selector_hubs_page.dart';
 
 // ▼ 신규 페이지 import
@@ -37,6 +38,7 @@ class AppRoutes {
   static const offlineLogin = '/offline_login';
   static const offlineCommute = '/offline_commute';
   static const commute = '/commute';
+  static const simpleCommute = '/simple_commute';
 
   static const headquarterPage = '/headquarter_page';
   static const typePage = '/type_page';
@@ -63,20 +65,18 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.selector: (context) => const SelectorHubsPage(),
 
   // 서비스/태블릿 로그인(온라인용 기존 화면: 유지)
-  AppRoutes.serviceLogin: (context) => const LoginScreen(),                 // mode 기본값 = 'service'
+  AppRoutes.serviceLogin: (context) => const LoginScreen(), // mode 기본값 = 'service'
   AppRoutes.tabletLogin: (context) => const LoginScreen(mode: 'tablet'),
-
-  // ✅ simple(출퇴근용) 로그인 – simple 모드로 LoginScreen 사용
   AppRoutes.simpleLogin: (context) => const LoginScreen(mode: 'simple'),
 
   // ✅ 오프라인 로그인 → 성공 시 오프라인 출퇴근으로 이동
   AppRoutes.offlineLogin: (context) => OfflineLoginScreen(
-    onLoginSucceeded: () => Navigator.of(context)
-        .pushReplacementNamed(AppRoutes.offlineCommute),
-  ),
+        onLoginSucceeded: () => Navigator.of(context).pushReplacementNamed(AppRoutes.offlineCommute),
+      ),
 
-  // 출퇴근(온라인/오프라인)
+  // 출퇴근(온라인/약식/오프라인)
   AppRoutes.commute: (context) => const CommuteInsideScreen(),
+  AppRoutes.simpleCommute: (context) => const SimpleInsideScreen(),
   AppRoutes.offlineCommute: (context) => const OfflineCommuteInsideScreen(),
 
   // 기타 페이지들
@@ -97,8 +97,6 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.laborGuide: (context) => const LaborGuidePage(),
 
   // 신규 타임시트 페이지
-  AppRoutes.attendanceSheet: (context) =>
-  const TimesheetPage(initialTab: TimesheetTab.attendance),
-  AppRoutes.breakSheet: (context) =>
-  const TimesheetPage(initialTab: TimesheetTab.breakTime),
+  AppRoutes.attendanceSheet: (context) => const TimesheetPage(initialTab: TimesheetTab.attendance),
+  AppRoutes.breakSheet: (context) => const TimesheetPage(initialTab: TimesheetTab.breakTime),
 };
