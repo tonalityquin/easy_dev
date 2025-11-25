@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+
 import '../../utils/snackbar_helper.dart';
 import '../../utils/api/email_config.dart';
 import '../../utils/api/sheets_config.dart';
@@ -23,9 +25,7 @@ class _HeaderState extends State<Header> {
 
   @override
   Widget build(BuildContext context) {
-    final text = Theme
-        .of(context)
-        .textTheme;
+    final text = Theme.of(context).textTheme;
 
     return Column(
       children: [
@@ -42,9 +42,7 @@ class _HeaderState extends State<Header> {
         const SizedBox(height: 6),
         Text(
           '화살표 버튼을 누르면 해당 페이지로 진입합니다.',
-          style: text.bodyMedium?.copyWith(color: Theme
-              .of(context)
-              .hintColor),
+          style: text.bodyMedium?.copyWith(color: Theme.of(context).hintColor),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 12),
@@ -97,7 +95,7 @@ class _TopRow extends StatelessWidget {
     }
   }
 
-  // “설정” 바텀시트 — Google Sheets + Gmail(수신자만)
+  // “설정” 바텀시트 — Google Sheets + Gmail(수신자만) + QuickOverlay 오버레이 권한
   Future<void> _openSheetsLinkSheet(BuildContext context) async {
     // 현재 저장된 값 선조회
     final commuteCurrent = await SheetsConfig.getCommuteSheetId();
@@ -168,9 +166,7 @@ class _TopRow extends StatelessWidget {
                             ValueListenableBuilder<TextEditingValue>(
                               valueListenable: controller,
                               builder: (ctx2, value, _) {
-                                final hasText = value.text
-                                    .trim()
-                                    .isNotEmpty;
+                                final hasText = value.text.trim().isNotEmpty;
                                 return Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -276,6 +272,160 @@ class _TopRow extends StatelessWidget {
                   );
                 }
 
+                // ✅ QuickOverlayHome 사용을 위한 오버레이 권한 섹션
+                Widget buildOverlayPermissionSection() {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.black.withOpacity(.08)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(.06),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.bubble_chart_outlined,
+                                size: 20,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Text(
+                                '플로팅 버블(QuickOverlay) 권한',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          '다른 앱 위에 플로팅 버블(QuickOverlayHome)을 띄우기 위해서는 '
+                              '안드로이드 “다른 앱 위에 표시” 권한이 필요합니다.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                icon: const Icon(Icons.info_outline),
+                                onPressed: () async {
+                                  if (!Platform.isAndroid) {
+                                    if (!ctx.mounted) return;
+                                    showFailedSnackbar(
+                                      context,
+                                      '안드로이드에서만 지원되는 기능입니다.',
+                                    );
+                                    return;
+                                  }
+                                  try {
+                                    final granted =
+                                    await FlutterOverlayWindow.isPermissionGranted();
+                                    if (!ctx.mounted) return;
+                                    if (granted) {
+                                      showSelectedSnackbar(
+                                        context,
+                                        '이미 “다른 앱 위에 표시” 권한이 허용되어 있습니다.',
+                                      );
+                                    } else {
+                                      showFailedSnackbar(
+                                        context,
+                                        '현재 “다른 앱 위에 표시” 권한이 허용되지 않았습니다.',
+                                      );
+                                    }
+                                  } catch (e) {
+                                    if (!ctx.mounted) return;
+                                    showFailedSnackbar(
+                                      context,
+                                      '권한 상태를 확인하는 중 오류가 발생했습니다: $e',
+                                    );
+                                  }
+                                },
+                                label: const Text('현재 상태 확인'),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                icon: const Icon(Icons.open_in_new_rounded),
+                                onPressed: () async {
+                                  if (!Platform.isAndroid) {
+                                    if (!ctx.mounted) return;
+                                    showFailedSnackbar(
+                                      context,
+                                      '안드로이드에서만 지원되는 기능입니다.',
+                                    );
+                                    return;
+                                  }
+                                  try {
+                                    final already =
+                                    await FlutterOverlayWindow.isPermissionGranted();
+                                    if (already) {
+                                      if (!ctx.mounted) return;
+                                      showSelectedSnackbar(
+                                        context,
+                                        '이미 권한이 허용되어 있습니다.\n설정 앱에서 언제든지 변경할 수 있습니다.',
+                                      );
+                                      return;
+                                    }
+
+                                    // 🔑 flutter_overlay_window 의 requestPermission:
+                                    //    권한이 없으면 시스템 설정 화면을 열어줌
+                                    final result =
+                                    await FlutterOverlayWindow.requestPermission();
+
+                                    if (!ctx.mounted) return;
+                                    if (result == true) {
+                                      showSuccessSnackbar(
+                                        context,
+                                        '권한이 허용되었습니다. 플로팅 버블을 사용할 수 있습니다.',
+                                      );
+                                    } else {
+                                      showFailedSnackbar(
+                                        context,
+                                        '권한을 허용하지 않았습니다.\n필요 시 “설정 > 다른 앱 위에 표시”에서 직접 허용해 주세요.',
+                                      );
+                                    }
+                                  } catch (e) {
+                                    if (!ctx.mounted) return;
+                                    showFailedSnackbar(
+                                      context,
+                                      '권한 설정 화면을 여는 중 오류가 발생했습니다: $e',
+                                    );
+                                  }
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.black,
+                                  foregroundColor: Colors.white,
+                                ),
+                                label: const Text('권한 설정 열기'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
                 // Gmail 수신자 섹션(To 만)
                 Widget buildGmailSection() {
                   return Container(
@@ -321,8 +471,10 @@ class _TopRow extends StatelessWidget {
                                 final cfg = await EmailConfig.load();
                                 mailToCtrl.text = cfg.to;
                                 if (!ctx.mounted) return;
-                                showSelectedSnackbar(context,
-                                    '수신자를 기본값(빈 값)으로 복원했습니다.');
+                                showSelectedSnackbar(
+                                  context,
+                                  '수신자를 기본값(빈 값)으로 복원했습니다.',
+                                );
                               },
                               icon: const Icon(
                                 Icons.restore,
@@ -357,8 +509,10 @@ class _TopRow extends StatelessWidget {
                                   final to = mailToCtrl.text.trim();
                                   if (!EmailConfig.isValidToList(to)) {
                                     if (!ctx.mounted) return;
-                                    showFailedSnackbar(context,
-                                        '수신자 이메일 형식을 확인해 주세요.');
+                                    showFailedSnackbar(
+                                      context,
+                                      '수신자 이메일 형식을 확인해 주세요.',
+                                    );
                                     return;
                                   }
                                   await EmailConfig.save(
@@ -366,7 +520,9 @@ class _TopRow extends StatelessWidget {
                                   );
                                   if (!ctx.mounted) return;
                                   showSuccessSnackbar(
-                                      context, '수신자 설정을 저장했습니다.');
+                                    context,
+                                    '수신자 설정을 저장했습니다.',
+                                  );
                                 },
                                 label: const Text('저장'),
                               ),
@@ -383,7 +539,9 @@ class _TopRow extends StatelessWidget {
                                   );
                                   if (!ctx.mounted) return;
                                   showSuccessSnackbar(
-                                      context, '현재 수신자 설정을 복사했습니다.');
+                                    context,
+                                    '현재 수신자 설정을 복사했습니다.',
+                                  );
                                 },
                                 label: const Text('설정 복사'),
                               ),
@@ -410,10 +568,7 @@ class _TopRow extends StatelessWidget {
                       left: 16,
                       right: 16,
                       top: 16,
-                      bottom: MediaQuery
-                          .of(ctx)
-                          .viewInsets
-                          .bottom + 24,
+                      bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -446,6 +601,9 @@ class _TopRow extends StatelessWidget {
                           color: Colors.black.withOpacity(.08),
                         ),
                         const SizedBox(height: 16),
+
+                        // ✅ 플로팅 버블(QuickOverlay) 권한 섹션
+                        buildOverlayPermissionSection(),
 
                         // 업로드용 Google Sheets
                         buildSheetSection(

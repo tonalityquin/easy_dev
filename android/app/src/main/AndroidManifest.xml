@@ -38,8 +38,16 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
-    <!-- 카메라 하드웨어 기능 선언(필수 단말만 설치 가능하게 할 경우 required=true) -->
-    <uses-feature android:name="android.hardware.camera.any" android:required="true" />
+    <!-- ✅ 카메라 하드웨어 기능 선언(필수 단말만 설치 가능하게 할 경우 required=true) -->
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="true" />
+
+    <!-- ✅ 오버레이(다른 앱 위에 표시) 권한 -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- ✅ Android 14+ 특수 포그라운드 서비스 유형(오버레이용) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
         android:name="${applicationName}"
@@ -78,6 +86,16 @@
              android:foregroundServiceType="dataSync|mediaPlayback|location"
              + 매니페스트 상단에 FOREGROUND_SERVICE_LOCATION 권한 추가 필요 -->
 
+        <!-- ✅ flutter_overlay_window 오버레이 서비스 선언 -->
+        <service
+            android:name="flutter.overlay.window.flutter_overlay_window.OverlayService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="easyvalet_quick_overlay" />
+        </service>
+
         <!-- Flutter 엔진 등록 -->
         <meta-data
             android:name="flutterEmbedding"
@@ -101,7 +119,7 @@
 
     <!-- 외부 앱/인텐트 조회 허용 (필요 대상만 제한적으로 명시) -->
     <queries>
-       <!-- 다른 앱의 텍스트 처리(PROCESS_TEXT) 인텐트 조회 허용 -->
+        <!-- 다른 앱의 텍스트 처리(PROCESS_TEXT) 인텐트 조회 허용 -->
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT" />
             <data android:mimeType="text/plain" />

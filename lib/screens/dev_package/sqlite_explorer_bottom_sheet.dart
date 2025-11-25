@@ -5,11 +5,13 @@ import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
 /// 개발용 SQLite 탐색 바텀시트.
+///
 /// - DB 파일 스캔 시 사이드카 파일(-journal/-wal/-shm) 제외
 /// - 확장자 화이트리스트(.db/.sqlite/.sqlite3/.db3)만 허용
 /// - SQLite 헤더 검증으로 진짜 DB만 노출
 /// - readOnly: true 로 열어 DB 생성/변조 방지
 /// - 시스템 테이블(android_metadata, sqlite_*) 숨김
+/// - time_record / work_time_record 같은 근무 기록 DB도 같이 조회 가능
 class SQLiteExplorerBottomSheet extends StatefulWidget {
   const SQLiteExplorerBottomSheet({super.key});
 
@@ -27,10 +29,10 @@ class SQLiteExplorerBottomSheet extends StatefulWidget {
 
     return showModalBottomSheet<T>(
       context: context,
-      useRootNavigator: true,            // ⬅️ 루트 네비게이터에 붙여 중첩 시트 제약 회피
+      useRootNavigator: true, // ⬅️ 루트 네비게이터에 붙여 중첩 시트 제약 회피
       isScrollControlled: true,
-      useSafeArea: false,                // ⬅️ 상단 세이프에어리어 제거(최상단까지)
-      showDragHandle: false,             // 상단 여백 유발 방지
+      useSafeArea: false, // ⬅️ 상단 세이프에어리어 제거(최상단까지)
+      showDragHandle: false, // 상단 여백 유발 방지
       backgroundColor: Colors.transparent, // 배경/모양은 내부에서 처리
       // 전역 테마 제약보다 강한 '타이트' 제약으로 전체 높이 강제
       constraints: BoxConstraints(
@@ -44,9 +46,9 @@ class SQLiteExplorerBottomSheet extends StatefulWidget {
         final base = Theme.of(context);
         final local = base.copyWith(
           bottomSheetTheme: const BottomSheetThemeData(
-            constraints: BoxConstraints(),        // 전역 constraints 캡 제거
-            backgroundColor: Colors.transparent,  // 배경은 우리가 처리
-            shape: RoundedRectangleBorder(),      // 모양도 내부에서 처리
+            constraints: BoxConstraints(), // 전역 constraints 캡 제거
+            backgroundColor: Colors.transparent, // 배경은 우리가 처리
+            shape: RoundedRectangleBorder(), // 모양도 내부에서 처리
             elevation: 0,
             showDragHandle: false,
           ),
@@ -63,7 +65,8 @@ class SQLiteExplorerBottomSheet extends StatefulWidget {
   }
 
   @override
-  State<SQLiteExplorerBottomSheet> createState() => _SQLiteExplorerBottomSheetState();
+  State<SQLiteExplorerBottomSheet> createState() =>
+      _SQLiteExplorerBottomSheetState();
 }
 
 /// 모달의 외곽 배경/라운딩/클리핑을 책임지는 쉘
@@ -99,12 +102,13 @@ class _FullHeightSheetShell extends StatelessWidget {
   }
 }
 
-class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
+class _SQLiteExplorerBottomSheetState
+    extends State<SQLiteExplorerBottomSheet> {
   late Future<_DbScanResult> _scanFuture;
 
   // 네비게이션 스택(시트 내부)
   String? _selectedDbPath; // null이면 DB 목록, 있으면 해당 DB의 테이블 목록
-  String? _selectedTable;  // null이면 테이블 목록, 있으면 해당 테이블의 로우 미리보기
+  String? _selectedTable; // null이면 테이블 목록, 있으면 해당 테이블의 로우 미리보기
 
   @override
   void initState() {
@@ -115,7 +119,8 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
   // ───────────────────────── 파일 스캔/검증 헬퍼 ─────────────────────────
 
   // 확장자 화이트리스트
-  static final RegExp _dbExtPattern = RegExp(r'\.(db|sqlite|sqlite3|db3)$', caseSensitive: false);
+  static final RegExp _dbExtPattern =
+  RegExp(r'\.(db|sqlite|sqlite3|db3)$', caseSensitive: false);
 
   // 사이드카 파일(-journal/-wal/-shm) 여부
   bool _isSidecar(String nameLower) {
@@ -138,8 +143,22 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
         if (len < 16) return false;
         final Uint8List bytes = await raf.read(16);
         const magic = <int>[
-          0x53, 0x51, 0x4C, 0x69, 0x74, 0x65, 0x20, 0x66,
-          0x6F, 0x72, 0x6D, 0x61, 0x74, 0x20, 0x33, 0x00, // 'SQLite format 3\0'
+          0x53,
+          0x51,
+          0x4C,
+          0x69,
+          0x74,
+          0x65,
+          0x20,
+          0x66,
+          0x6F,
+          0x72,
+          0x6D,
+          0x61,
+          0x74,
+          0x20,
+          0x33,
+          0x00, // 'SQLite format 3\0'
         ];
         if (bytes.length < magic.length) return false;
         for (var i = 0; i < magic.length; i++) {
@@ -178,7 +197,13 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
       if (!await _isSQLiteFile(e.path)) continue;
 
       final size = await e.length();
-      dbFiles.add(_DbFile(path: e.path, name: p.basename(e.path), size: size));
+      dbFiles.add(
+        _DbFile(
+          path: e.path,
+          name: p.basename(e.path),
+          size: size,
+        ),
+      );
     }
 
     // 기본 정렬: 이름
@@ -225,18 +250,26 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
         try {
           final colRows = await db.rawQuery("PRAGMA table_info('$name')");
           for (final r in colRows) {
-            cols.add(_ColumnMeta(
-              cid: (r['cid'] as int?) ?? 0,
-              name: (r['name'] as String?) ?? '',
-              type: (r['type'] as String?) ?? '',
-              notnull: ((r['notnull'] as int?) ?? 0) == 1,
-              dflt: r['dflt_value']?.toString(),
-              pk: ((r['pk'] as int?) ?? 0) == 1,
-            ));
+            cols.add(
+              _ColumnMeta(
+                cid: (r['cid'] as int?) ?? 0,
+                name: (r['name'] as String?) ?? '',
+                type: (r['type'] as String?) ?? '',
+                notnull: ((r['notnull'] as int?) ?? 0) == 1,
+                dflt: r['dflt_value']?.toString(),
+                pk: ((r['pk'] as int?) ?? 0) == 1,
+              ),
+            );
           }
         } catch (_) {}
 
-        metas.add(_TableMeta(name: name, rowCount: count, columns: cols));
+        metas.add(
+          _TableMeta(
+            name: name,
+            rowCount: count,
+            columns: cols,
+          ),
+        );
       }
       return metas;
     } finally {
@@ -275,10 +308,19 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('DB 삭제'),
-        content: Text('정말로 "$fileName" 파일을 삭제할까요?\n연결된 -wal/-shm/-journal 파일도 함께 제거됩니다.'),
+        content: Text(
+          '정말로 "$fileName" 파일을 삭제할까요?\n'
+              '연결된 -wal/-shm/-journal 파일도 함께 제거됩니다.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
-          FilledButton.tonal(onPressed: () => Navigator.pop(ctx, true), child: const Text('삭제')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('삭제'),
+          ),
         ],
       ),
     );
@@ -304,7 +346,10 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
 
   void _showSnack(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
+      SnackBar(
+        content: Text(msg),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
@@ -318,26 +363,28 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
 
     try {
       // 1) sqflite helper
-      try { await deleteDatabase(dbPath); } catch (_) {}
+      try {
+        await deleteDatabase(dbPath);
+      } catch (_) {}
 
       // 2) 사이드카/저널 등 추가 정리
       final dir = Directory(dirPath);
       if (await dir.exists()) {
         final entities = await dir.list().toList();
-        final regJournalChain = RegExp('^${RegExp.escape(baseLower)}(?:-journal)+\$'); // -journal, -journal-journal ...
+        final regJournalChain =
+        RegExp('^${RegExp.escape(baseLower)}(?:-journal)+\$'); // -journal, -journal-journal ...
         for (final ent in entities) {
           if (ent is! File) continue;
           final nameLower = p.basename(ent.path).toLowerCase();
-          final bool isTarget =
-              nameLower == baseLower ||
-                  nameLower == '$baseLower-wal' ||
-                  nameLower == '$baseLower-shm' ||
-                  regJournalChain.hasMatch(nameLower);
+          final bool isTarget = nameLower == baseLower ||
+              nameLower == '$baseLower-wal' ||
+              nameLower == '$baseLower-shm' ||
+              regJournalChain.hasMatch(nameLower);
 
           if (isTarget) {
             try {
               await ent.delete();
-            } catch (e) {
+            } catch (_) {
               // 계속 시도는 하되 마지막에 메시지
             }
           }
@@ -347,12 +394,21 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
       // 3) 최종 확인
       final baseExists = await File(dbPath).exists();
       if (baseExists) {
-        return _DeleteResult(errorMessage: '파일이 사용 중일 수 있습니다(다른 핸들이 열려 있음). 앱을 재실행 후 다시 시도하세요.');
+        return const _DeleteResult(
+          errorMessage:
+          '파일이 사용 중일 수 있습니다(다른 핸들이 열려 있음). 앱을 재실행 후 다시 시도하세요.',
+        );
       }
       return const _DeleteResult();
     } catch (e) {
       return _DeleteResult(errorMessage: e.toString());
     }
+  }
+
+  // time_record / work_time_record 같은 근무 기록 DB 식별자
+  bool _isWorkTimeDbName(String name) {
+    final lower = name.toLowerCase();
+    return lower.contains('time_record') || lower.contains('work_time');
   }
 
   @override
@@ -373,7 +429,11 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
             Container(
               decoration: BoxDecoration(
                 color: cs.surface,
-                border: Border(bottom: BorderSide(color: Colors.black.withOpacity(.08))),
+                border: Border(
+                  bottom: BorderSide(
+                    color: Colors.black.withOpacity(.08),
+                  ),
+                ),
               ),
               padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
               child: Row(
@@ -399,8 +459,12 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
                     child: Text(
                       _selectedDbPath == null
                           ? 'SQLite 탐색기'
-                          : (_selectedTable == null ? '테이블 목록' : '미리보기: $_selectedTable'),
-                      style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                          : (_selectedTable == null
+                          ? '테이블 목록'
+                          : '미리보기: $_selectedTable'),
+                      style: text.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
 
@@ -443,27 +507,70 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
                   if (_selectedDbPath == null) {
                     // DB 파일 목록
                     if (scan.files.isEmpty) {
+                      // ⬇️ 오프라인 로그인 언급 제거, time_record DB 안내로 변경
                       return _info(
                         '발견된 SQLite DB 파일이 없습니다.\n'
-                            '오프라인 로그인 후 offlines.db가 생성됩니다.',
+                            '앱을 어느 정도 사용하면 근무 기록용 DB(예: work_time_record.db)가 '
+                            '자동으로 생성되며, 이 화면에서 바로 내용을 조회할 수 있습니다.',
                       );
                     }
                     return ListView.separated(
-                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 12,
+                        horizontal: 12,
+                      ),
                       itemCount: scan.files.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (context, i) {
                         final f = scan.files[i];
+                        final isWorkDb = _isWorkTimeDbName(f.name);
                         return Card(
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(color: Colors.black.withOpacity(.08)),
+                            side: BorderSide(
+                              color: Colors.black.withOpacity(.08),
+                            ),
                           ),
                           child: ListTile(
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 10,
+                            ),
                             leading: const Icon(Icons.storage),
-                            title: Text(f.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                            title: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    f.name,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                if (isWorkDb) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color:
+                                      cs.primaryContainer.withOpacity(0.7),
+                                      borderRadius: BorderRadius.circular(99),
+                                    ),
+                                    child: Text(
+                                      '근무 기록 DB',
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: cs.onPrimaryContainer,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
                             subtitle: Text(
                               '${_fmtSize(f.size)}\n${f.path}',
                               maxLines: 2,
@@ -488,19 +595,28 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
                                     break;
                                 }
                               },
-                              itemBuilder: (ctx) => [
-                                const PopupMenuItem(value: 'open', child: ListTile(
-                                  leading: Icon(Icons.folder_open),
-                                  title: Text('열기'),
-                                )),
-                                const PopupMenuItem(value: 'delete', child: ListTile(
-                                  leading: Icon(Icons.delete_outline),
-                                  title: Text('삭제'),
-                                )),
-                                const PopupMenuItem(value: 'refresh', child: ListTile(
-                                  leading: Icon(Icons.refresh),
-                                  title: Text('새로고침'),
-                                )),
+                              itemBuilder: (ctx) => const [
+                                PopupMenuItem(
+                                  value: 'open',
+                                  child: ListTile(
+                                    leading: Icon(Icons.folder_open),
+                                    title: Text('열기'),
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: ListTile(
+                                    leading: Icon(Icons.delete_outline),
+                                    title: Text('삭제'),
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'refresh',
+                                  child: ListTile(
+                                    leading: Icon(Icons.refresh),
+                                    title: Text('새로고침'),
+                                  ),
+                                ),
                               ],
                             ),
                             onTap: () {
@@ -524,33 +640,49 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
                           if (tsnap.hasError) {
                             return _error('테이블 로드 실패: ${tsnap.error}');
                           }
-                          return const Center(child: CircularProgressIndicator());
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
                         }
                         final tables = tsnap.data!;
                         if (tables.isEmpty) {
                           return _info('테이블이 없습니다.');
                         }
                         return ListView.separated(
-                          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 12,
+                            horizontal: 12,
+                          ),
                           itemCount: tables.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 8),
+                          separatorBuilder: (_, __) =>
+                          const SizedBox(height: 8),
                           itemBuilder: (context, i) {
                             final t = tables[i];
                             return Card(
                               elevation: 0,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                side: BorderSide(color: Colors.black.withOpacity(.08)),
+                                side: BorderSide(
+                                  color: Colors.black.withOpacity(.08),
+                                ),
                               ),
                               child: ExpansionTile(
-                                tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+                                tilePadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                ),
                                 title: Text(
                                   t.name,
-                                  style: const TextStyle(fontWeight: FontWeight.w700),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
-                                subtitle: Text('rows: ${t.rowCount} • cols: ${t.columns.length}'),
-                                childrenPadding:
-                                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                subtitle: Text(
+                                  'rows: ${t.rowCount} • cols: ${t.columns.length}',
+                                ),
+                                childrenPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
                                 children: [
                                   // 컬럼 정보
                                   SingleChildScrollView(
@@ -570,8 +702,14 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
                                             DataCell(Text('${c.cid}')),
                                             DataCell(Text(c.name)),
                                             DataCell(Text(c.type)),
-                                            DataCell(Text(c.notnull ? 'Y' : '')),
-                                            DataCell(Text(c.pk ? 'Y' : '')),
+                                            DataCell(
+                                              Text(
+                                                c.notnull ? 'Y' : '',
+                                              ),
+                                            ),
+                                            DataCell(
+                                              Text(c.pk ? 'Y' : ''),
+                                            ),
                                           ],
                                         ),
                                       )
@@ -583,7 +721,9 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
                                     alignment: Alignment.centerRight,
                                     child: FilledButton.icon(
                                       onPressed: () {
-                                        setState(() => _selectedTable = t.name);
+                                        setState(
+                                              () => _selectedTable = t.name,
+                                        );
                                       },
                                       icon: const Icon(Icons.table_rows),
                                       label: const Text('상위 100행 미리보기'),
@@ -600,13 +740,19 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
                   } else {
                     // 테이블 미리보기
                     return FutureBuilder<List<Map<String, Object?>>>(
-                      future: _loadPreviewRows(_selectedDbPath!, _selectedTable!, limit: 100),
+                      future: _loadPreviewRows(
+                        _selectedDbPath!,
+                        _selectedTable!,
+                        limit: 100,
+                      ),
                       builder: (context, rsnap) {
                         if (!rsnap.hasData) {
                           if (rsnap.hasError) {
                             return _error('행 로드 실패: ${rsnap.error}');
                           }
-                          return const Center(child: CircularProgressIndicator());
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
                         }
                         final rows = rsnap.data!;
                         if (rows.isEmpty) {
@@ -618,7 +764,8 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
                         const double cellWidth = 160.0;
                         const double horizontalPaddingPerRow = 16.0; // 8 + 8
                         final double totalWidth =
-                            columns.length * cellWidth + horizontalPaddingPerRow;
+                            columns.length * cellWidth +
+                                horizontalPaddingPerRow;
 
                         return Padding(
                           padding: const EdgeInsets.all(12),
@@ -627,7 +774,9 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
                             children: [
                               Text(
                                 '$_selectedTable (상위 ${rows.length}행)',
-                                style: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                                style: text.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                               const SizedBox(height: 8),
                               Expanded(
@@ -639,14 +788,19 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
                                       width: totalWidth,
                                       child: ListView.builder(
                                         itemCount: rows.length + 1, // 헤더 + 데이터
-                                        shrinkWrap: true, // ✅ 내부 스크롤 레이아웃 안정화
-                                        physics: const ClampingScrollPhysics(),
+                                        shrinkWrap:
+                                        true, // ✅ 내부 스크롤 레이아웃 안정화
+                                        physics:
+                                        const ClampingScrollPhysics(),
                                         itemBuilder: (context, index) {
                                           if (index == 0) {
                                             // 헤더
                                             return Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                  horizontal: 8, vertical: 10),
+                                              padding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 10,
+                                              ),
                                               color: Colors.grey.shade200,
                                               child: Row(
                                                 children: columns
@@ -655,11 +809,14 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
                                                     width: cellWidth,
                                                     child: Text(
                                                       c,
-                                                      style: const TextStyle(
-                                                        fontWeight: FontWeight.w700,
+                                                      style:
+                                                      const TextStyle(
+                                                        fontWeight:
+                                                        FontWeight.w700,
                                                       ),
                                                       maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
+                                                      overflow: TextOverflow
+                                                          .ellipsis,
                                                     ),
                                                   ),
                                                 )
@@ -669,12 +826,16 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
                                           }
                                           final row = rows[index - 1];
                                           return Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 8, vertical: 8),
+                                            padding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 8,
+                                            ),
                                             decoration: BoxDecoration(
                                               border: Border(
                                                 bottom: BorderSide(
-                                                  color: Colors.black.withOpacity(.06),
+                                                  color: Colors.black
+                                                      .withOpacity(.06),
                                                 ),
                                               ),
                                             ),
@@ -686,7 +847,8 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
                                                   child: Text(
                                                     '${row[c]}',
                                                     maxLines: 3,
-                                                    overflow: TextOverflow.ellipsis,
+                                                    overflow: TextOverflow
+                                                        .ellipsis,
                                                   ),
                                                 ),
                                               )
@@ -717,7 +879,10 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
   Widget _info(String msg) => Center(
     child: Padding(
       padding: const EdgeInsets.all(24),
-      child: Text(msg, textAlign: TextAlign.center),
+      child: Text(
+        msg,
+        textAlign: TextAlign.center,
+      ),
     ),
   );
 
@@ -727,7 +892,10 @@ class _SQLiteExplorerBottomSheetState extends State<SQLiteExplorerBottomSheet> {
       child: Text(
         msg,
         textAlign: TextAlign.center,
-        style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w600),
+        style: const TextStyle(
+          color: Colors.red,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     ),
   );
@@ -754,14 +922,22 @@ class _DbFile {
   final String path;
   final String name;
   final int size;
-  _DbFile({required this.path, required this.name, required this.size});
+  _DbFile({
+    required this.path,
+    required this.name,
+    required this.size,
+  });
 }
 
 class _TableMeta {
   final String name;
   final int rowCount;
   final List<_ColumnMeta> columns;
-  _TableMeta({required this.name, required this.rowCount, required this.columns});
+  _TableMeta({
+    required this.name,
+    required this.rowCount,
+    required this.columns,
+  });
 }
 
 class _ColumnMeta {

@@ -15,6 +15,8 @@ class UpdateBottomSheet extends StatelessWidget {
         '자동 퇴근 로직 추가',
         '테이블 시스템 개편',
         '지역 별 주의사항 카드 영역 개선',
+        '업무 중 앱 최소화 시 플로팅 버블 기능 추가',
+        '약식 로그인 모드 추가',
       ],
     ),
     UpdateEntry(

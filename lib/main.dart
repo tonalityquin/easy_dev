@@ -1,9 +1,11 @@
+// lib/main.dart
 import 'dart:async'; // ⬅️ 권한 초기화 중복 방지용 Completer / unawaited
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_overlay_window/flutter_overlay_window.dart'; // ✅ 오버레이 플러그인
 
 import 'routes.dart';
 import 'providers/providers.dart';
@@ -26,7 +28,8 @@ import 'services/endtime_reminder_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // ⬇️ 플랫폼 분기(웹/안드/IOS)에서 사용
-import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 
 // ✅ (신규) OAuth를 앱 최초 1회만 수행하여 전역 재사용
 import 'utils/google_auth_session.dart';
@@ -40,6 +43,12 @@ import 'screens/type_package/common_widgets/dashboard_bottom_sheet/memo/dash_mem
 // ✅ (신규) 개발 허브 퀵 액션(DevQuickActions) 사용
 import 'screens/dev_package/dev_quick_actions.dart';
 
+// ✅ (신규) 오버레이 UI(App) 위젯
+import 'utils/quick_overlay_main.dart';
+
+// ✅ (신규) 장기 근무기록 저장/분석용 트래커
+import 'time_record/app_usage_tracker.dart';
+
 const kIsWorkingPrefsKey = 'isWorking';
 
 /// ✅ GSI v7 “웹 애플리케이션” 클라이언트 ID (Android에선 serverClientId로 사용)
@@ -48,6 +57,12 @@ const String kWebClientId =
 
 /// 🔐 개발자 모드 잠금 해제 비밀번호(원하는 값으로 교체하세요)
 const String kDevUnlockPassword = 'DEV-MODE-2025!';
+
+/// 🔲 오버레이 윈도우 실제 크기(px 단위)
+///  - QuickOverlayHome 의 UI는 이 크기 안에서만 배치됨
+///  - “어두운 배경색”은 now QuickOverlayHome 안 AnimatedContainer 에서 상태별로 처리
+const int kOverlayWindowWidthPx = 550;
+const int kOverlayWindowHeightPx = 200;
 
 String _ts() => DateTime.now().toIso8601String();
 
@@ -58,7 +73,8 @@ final FlutterLocalNotificationsPlugin flnp = FlutterLocalNotificationsPlugin();
 @pragma('vm:entry-point')
 void myForegroundCallback() {
   // 포그라운드 태스크가 시작될 때 TaskHandler를 등록
-  debugPrint('[MAIN][${_ts()}] myForegroundCallback → setTaskHandler(MyTaskHandler)');
+  debugPrint(
+      '[MAIN][${_ts()}] myForegroundCallback → setTaskHandler(MyTaskHandler)');
   FlutterForegroundTask.setTaskHandler(MyTaskHandler());
 }
 
@@ -66,8 +82,73 @@ void myForegroundCallback() {
 void notificationTapBackground(NotificationResponse resp) {
   // TODO: 알림 탭 시 라우팅/처리가 필요하면 구현 (resp.payload 참조 가능)
 }
-// ───────────────────────────────────────────────────────────────
 
+// ───────────────────────────────────────────────────────────────
+// ✅ flutter_overlay_window 가 호출하는 “오버레이 전용 엔트리포인트”
+//    (Android 서비스에서 별도의 Flutter 엔진을 띄울 때 사용)
+@pragma('vm:entry-point')
+void overlayMain() {
+  debugPrint('[OVERLAY][${_ts()}] overlayMain() 시작');
+  WidgetsFlutterBinding.ensureInitialized();
+  runApp(const QuickOverlayApp());
+}
+
+// ───────────────────────────────────────────────────────────────
+// ✅ Android 오버레이(다른 앱 위 플로팅 패널) 관련 유틸 함수
+
+/// SYSTEM_ALERT_WINDOW 권한 확인 + 필요 시 설정 화면으로 이동
+Future<bool> ensureOverlayPermission(BuildContext context) async {
+  final isGranted = await FlutterOverlayWindow.isPermissionGranted();
+  if (isGranted) return true;
+
+  final granted = await FlutterOverlayWindow.requestPermission();
+  final result = granted ?? false;
+
+  if (!result && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('다른 앱 위에 표시 권한이 필요합니다.')),
+    );
+  }
+
+  return result;
+}
+
+/// 앱 어디서든 `openQuickOverlay(context)` 를 호출하면
+/// overlayMain → QuickOverlayApp 이 뜨게 됩니다.
+Future<void> openQuickOverlay(BuildContext context) async {
+  if (!await ensureOverlayPermission(context)) return;
+
+  // 이미 떠 있으면 다시 띄우지 않고 상태만 갱신
+  if (await FlutterOverlayWindow.isActive()) {
+    await FlutterOverlayWindow.shareData('__collapse__');
+    return;
+  }
+
+  await FlutterOverlayWindow.showOverlay(
+    enableDrag: true, // 👉 윈도우 자체 드래그
+    overlayTitle: 'Easy Valet 오버레이',
+    overlayContent: '퀵 패널 실행 중',
+    flag: OverlayFlag.defaultFlag,
+    alignment: OverlayAlignment.centerRight,
+    positionGravity: PositionGravity.auto,
+
+    // 🔺 실제 네이티브 윈도우(터치 영역)의 크기
+    height: kOverlayWindowHeightPx,
+    width: kOverlayWindowWidthPx,
+  );
+
+  // 오버레이에 초기 상태 전달(접힌 상태로 시작)
+  await FlutterOverlayWindow.shareData('__collapse__');
+}
+
+/// 떠 있는 오버레이를 닫고 싶을 때 사용
+Future<void> closeQuickOverlay() async {
+  if (await FlutterOverlayWindow.isActive()) {
+    await FlutterOverlayWindow.closeOverlay();
+  }
+}
+
+// ───────────────────────────────────────────────────────────────
 // ⬇️ 알림 초기화 중복 실행 방지 게이트
 class _Once {
   static bool notificationsReady = false; // 이미 한 번 끝났으면 true
@@ -81,14 +162,11 @@ void main() async {
   debugPrint('[MAIN][${_ts()}] initCommunicationPort');
   FlutterForegroundTask.initCommunicationPort();
 
-  // (요청에 따라 ForegroundTask.init 제거)
-
   // ✅ 먼저 Flutter UI를 띄운다.
   debugPrint('[MAIN][${_ts()}] runApp(AppBootstrapper)');
   runApp(const AppBootstrapper());
 
   // ✅ 그 다음에 비동기로 알림/리마인더 초기화를 수행 (UI를 막지 않도록)
-  // unawaited 는 dart:async 에서 제공 (결과는 기다리지 않음)
   unawaited(_postBootstrap());
 }
 
@@ -100,7 +178,6 @@ Future<void> _postBootstrap() async {
   } catch (e, st) {
     debugPrint('[MAIN][${_ts()}] _initLocalNotifications error: $e');
     debugPrint(st.toString());
-    // 여기서 에러 나도 앱 전체를 죽이지 않고, "알림 기능만 실패"로 유지
   }
 
   // 🔔 서비스에 플러그인 주입 (알림 예약/취소에 사용)
@@ -113,7 +190,8 @@ Future<void> _postBootstrap() async {
     final isWorking = prefs.getBool(kIsWorkingPrefsKey) ?? false;
 
     if (isWorking && savedEnd != null && savedEnd.isNotEmpty) {
-      await EndtimeReminderService.instance.scheduleDailyOneHourBefore(savedEnd);
+      await EndtimeReminderService.instance
+          .scheduleDailyOneHourBefore(savedEnd);
     } else {
       await EndtimeReminderService.instance.cancel();
     }
@@ -152,15 +230,15 @@ Future<void> _initLocalNotifications() async {
       onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
     );
 
-    // ─── 플랫폼별 권한 요청/채널 생성: 교차 플랫폼 API 호출 금지 ───
+    // ─── 플랫폼별 권한 요청/채널 생성 ───
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
       final androidImpl =
-      flnp.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+      flnp.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
 
       // 이미 허용 상태면 요청 생략
       final enabled = await androidImpl?.areNotificationsEnabled();
       if (enabled == false) {
-        // Android 13+ 에서만 실제 요청이 발생 (API 내부에서 분기 처리됨)
         await androidImpl?.requestNotificationsPermission();
       }
 
@@ -174,22 +252,25 @@ Future<void> _initLocalNotifications() async {
       await androidImpl?.createNotificationChannel(channel);
     } else if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
       final iosImpl =
-      flnp.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
-      // 이미 허용되어 있으면 내부적으로 no-op
-      await iosImpl?.requestPermissions(alert: true, badge: true, sound: true);
+      flnp.resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin>();
+      await iosImpl?.requestPermissions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
     }
 
     _Once.notificationsReady = true;
     c.complete();
   } catch (e, st) {
-    // 🔴 여기서 예외가 나도 더 이상 rethrow 하지 않고, 로그만 남긴다.
     if (!c.isCompleted) {
       c.completeError(e, st);
     }
     debugPrint('[MAIN][${_ts()}] _initLocalNotifications exception: $e');
     debugPrint(st.toString());
   } finally {
-    _Once.notificationsInFlight = null; // 다음 호출은 ready 플래그로 즉시 반환
+    _Once.notificationsInFlight = null;
   }
 }
 
@@ -237,7 +318,6 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
       await GoogleAuthSession.instance.init(serverClientId: kWebClientId);
       debugPrint('[MAIN][${_ts()}] GoogleAuthSession.init done');
     } catch (e) {
-      // 초기 인증 실패하더라도 앱은 실행되며, 이후 기능에서 재시도 가능
       debugPrint('[MAIN][${_ts()}] GoogleAuthSession.init failed: $e');
     }
 
@@ -250,14 +330,16 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
     }
 
     final batteryOpt = await Permission.ignoreBatteryOptimizations.request();
-    debugPrint('[MAIN][${_ts()}] Permission.ignoreBatteryOptimizations → $batteryOpt');
+    debugPrint(
+        '[MAIN][${_ts()}] Permission.ignoreBatteryOptimizations → $batteryOpt');
 
     // ✅ 포그라운드 서비스 시작
-    debugPrint('[MAIN][${_ts()}] startService(callback: myForegroundCallback)');
+    debugPrint(
+        '[MAIN][${_ts()}] startService(callback: myForegroundCallback)');
     await FlutterForegroundTask.startService(
       notificationTitle: '이 서비스 알림 탭은 main에서 메시지 발신 중',
       notificationText: '포그라운드에서 대기 중',
-      callback: myForegroundCallback, // ✅ 추가 핵심
+      callback: myForegroundCallback,
     );
     debugPrint('[MAIN][${_ts()}] startService done');
 
@@ -281,8 +363,103 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
   }
 }
 
-class MyApp extends StatelessWidget {
+// ───────────────────────────────────────────────────────────────
+// ⬇️ 여기부터: 앱 라이프사이클에 따라 플로팅 버블 자동 ON/OFF
+//     + AppUsageTracker 를 통해 장기 근무기록 DB에 저장
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
+    // 앱이 처음 켜졌다고 가정하고 한 번 초기 상태 기록
+    AppUsageTracker.instance.onStateChange(AppLifecycleState.resumed);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    debugPrint('[LIFECYCLE][${_ts()}] $state');
+
+    // ✅ 포그라운드/백그라운드 시간 기록 (DB에 interval 저장)
+    AppUsageTracker.instance.onStateChange(state);
+
+    switch (state) {
+      case AppLifecycleState.resumed:
+      // 앱이 다시 앞으로 나왔을 때 → 플로팅 버블 자동 종료
+        _stopOverlayFromLifecycle();
+        break;
+
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+      // 홈 버튼 / 앱 전환 등으로 백그라운드로 갈 때 → 플로팅 버블 자동 시작
+        _startOverlayFromLifecycle();
+        break;
+    }
+  }
+
+  Future<void> _startOverlayFromLifecycle() async {
+    try {
+      final granted = await FlutterOverlayWindow.isPermissionGranted();
+      if (!granted) {
+        debugPrint(
+            '[OVERLAY][${_ts()}] permission not granted → skip auto start');
+        return;
+      }
+
+      if (await FlutterOverlayWindow.isActive()) {
+        await FlutterOverlayWindow.shareData('__collapse__');
+        return;
+      }
+
+      await FlutterOverlayWindow.showOverlay(
+        enableDrag: true, // 👉 윈도우 전체 드래그
+        overlayTitle: 'Easy Valet',
+        overlayContent: 'Simple 모드 플로팅',
+        flag: OverlayFlag.defaultFlag,
+        alignment: OverlayAlignment.centerRight,
+        positionGravity: PositionGravity.auto,
+
+        // 🔺 실제 네이티브 윈도우 크기 (UI는 이 안에서만 그림)
+        height: kOverlayWindowHeightPx,
+        width: kOverlayWindowWidthPx,
+      );
+
+      await FlutterOverlayWindow.shareData('__collapse__');
+
+      debugPrint('[OVERLAY][${_ts()}] auto start overlay from lifecycle');
+    } catch (e, st) {
+      debugPrint('[OVERLAY][${_ts()}] auto start error: $e');
+      debugPrint(st.toString());
+    }
+  }
+
+  Future<void> _stopOverlayFromLifecycle() async {
+    try {
+      if (await FlutterOverlayWindow.isActive()) {
+        await FlutterOverlayWindow.closeOverlay();
+        debugPrint('[OVERLAY][${_ts()}] auto stop overlay from lifecycle');
+      }
+    } catch (e, st) {
+      debugPrint('[OVERLAY][${_ts()}] auto stop error: $e');
+      debugPrint(st.toString());
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -307,19 +484,12 @@ class MyApp extends StatelessWidget {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             debugPrint('[MAIN][${_ts()}] postFrameCallback → mountIfNeeded');
 
-            // ⛔️ DevMemo 플로팅 버블 제거 → 자동 부착 없음
-            // DevMemo: no mount call
-
-            // HeadMemo: 버블 제거 → mountIfNeeded 호출 없음 (기존 주석 유지)
-            // HeadMemo: no mount call
-
-            // ✅ (유지) 허브 퀵 액션 / DashMemo / DevQuickActions 오버레이 부착 시도
+            // DevMemo / HeadMemo 는 자동 부착 X
             HeadHubActions.mountIfNeeded();
             DashMemo.mountIfNeeded();
             DevQuickActions.mountIfNeeded();
           });
 
-          // ⬇️ 숨김 제스처(우상단 48x48 영역 '트리플 탭') + 비밀번호로 DevQuickActions 활성화
           return Stack(
             children: [
               child!,
@@ -401,7 +571,6 @@ class _DevUnlockHotspotState extends State<_DevUnlockHotspot> {
       final input = controller.text;
       if (input == kDevUnlockPassword) {
         DevQuickActions.setEnabled(true);
-        // 바로 부착 시도(다음 프레임에서 overlay가 들어오지만 안전하게 한 번 더 시도)
         DevQuickActions.mountIfNeeded();
 
         AppNavigator.messenger?.showSnackBar(
@@ -425,7 +594,6 @@ class _DevUnlockHotspotState extends State<_DevUnlockHotspot> {
 
   @override
   Widget build(BuildContext context) {
-    // 우상단 48x48 투명 터치 영역 (상태바/앱바 버튼과 충돌을 줄이기 위해 살짝 안쪽으로)
     return Positioned(
       top: 12,
       right: 8,
@@ -435,8 +603,6 @@ class _DevUnlockHotspotState extends State<_DevUnlockHotspot> {
         child: const SizedBox(
           width: 48,
           height: 48,
-          // 디버깅 시 아래 박스를 잠시 켜면 위치 확인 쉬움:
-          // child: DecoratedBox(decoration: BoxDecoration(color: Colors.red.withOpacity(.1))),
         ),
       ),
     );

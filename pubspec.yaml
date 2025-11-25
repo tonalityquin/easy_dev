@@ -2,7 +2,7 @@ name: easydev
 description: "backend+frontend prototype project"
 publish_to: 'none'
 
-version: 1.1.1+121
+version: 1.1.1+123
 
 environment:
   sdk: ">=3.5.4 <4.0.0"
@@ -40,6 +40,7 @@ dependencies:
   google_sign_in: ^7.2.0
   extension_google_sign_in_as_googleapis_auth: ^3.0.0
   mime: ^2.0.0
+
   # Excel 관련 추가
   excel: ^4.0.6
 
@@ -82,6 +83,9 @@ dependencies:
   # PDF For Send Mail
   pdf: ^3.11.3
   pdfx: ^2.9.2
+
+  # ✅ 다른 앱 위에 플로팅 오버레이 표시용
+  flutter_overlay_window: ^0.5.0
 
 dev_dependencies:
   flutter_test:

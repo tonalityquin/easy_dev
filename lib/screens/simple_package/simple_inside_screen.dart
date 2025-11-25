@@ -138,8 +138,7 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
                             Center(
                               child: SizedBox(
                                 height: 80,
-                                child:
-                                Image.asset('assets/images/pelican.png'),
+                                child: Image.asset('assets/images/pelican.png'),
                               ),
                             ),
                           ],
@@ -147,6 +146,8 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
                       ),
                     ),
                   ),
+
+                  // 우측 상단 메뉴(로그아웃만 남김)
                   Positioned(
                     top: 16,
                     right: 16,
@@ -173,7 +174,6 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
                       icon: const Icon(Icons.more_vert),
                     ),
                   ),
-                  // 🔹 기존의 출근 시트 관련 오버레이/로딩은 이미 제거된 상태
                 ],
               ),
             );
