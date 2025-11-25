@@ -2,7 +2,7 @@ name: easydev
 description: "backend+frontend prototype project"
 publish_to: 'none'
 
-version: 1.1.1+120
+version: 1.1.1+121
 
 environment:
   sdk: ">=3.5.4 <4.0.0"

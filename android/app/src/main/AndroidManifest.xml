@@ -101,25 +101,7 @@
 
     <!-- 외부 앱/인텐트 조회 허용 (필요 대상만 제한적으로 명시) -->
     <queries>
-        <!-- 특정 외부 앱 실행 허용(예: 마이발렛 Biz) -->
-        <package android:name="com.myvalet.b2b.android" />
-
-        <!-- Gmail 패키지 조회 허용(공유/메일 전송 등) -->
-        <package android:name="com.google.android.gm" />
-
-        <!-- 메일앱으로 보내기(mailto:) 인텐트 조회 허용 -->
-        <intent>
-            <action android:name="android.intent.action.SENDTO" />
-            <data android:scheme="mailto" />
-        </intent>
-
-        <!-- 외부 브라우저(https) 인텐트 조회 허용 -->
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="https" />
-        </intent>
-
-        <!-- 다른 앱의 텍스트 처리(PROCESS_TEXT) 인텐트 조회 허용 -->
+       <!-- 다른 앱의 텍스트 처리(PROCESS_TEXT) 인텐트 조회 허용 -->
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT" />
             <data android:mimeType="text/plain" />
