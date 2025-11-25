@@ -1,29 +1,24 @@
+// lib/screens/simple_package/simple_inside_package/sections/simple_inside_report_button_section.dart
 import 'package:flutter/material.dart';
-import 'package:android_intent_plus/android_intent.dart';
-import '../../../../utils/snackbar_helper.dart';
+
+// 같은 디렉토리에 둘 헬퍼 파일 import
+import '../widgets/commute_inside_report_bottom_sheet.dart';
 
 class CommuteInsideReportButtonSection extends StatelessWidget {
-  final bool loadingUrl;
-  final String? kakaoUrl;
   final bool isDisabled;
 
   const CommuteInsideReportButtonSection({
     super.key,
-    required this.loadingUrl,
-    required this.kakaoUrl,
     this.isDisabled = false,
   });
 
   @override
   Widget build(BuildContext context) {
-
-    final disabled = loadingUrl || isDisabled;
-
     return ElevatedButton.icon(
       icon: const Icon(Icons.report),
-      label: Text(
-        loadingUrl ? '로딩 중...' : '출근 보고',
-        style: const TextStyle(
+      label: const Text(
+        '업무 보고',
+        style: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.bold,
           letterSpacing: 1.1,
@@ -39,30 +34,7 @@ class CommuteInsideReportButtonSection extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
         ),
       ),
-      onPressed: disabled
-          ? null
-          : () async {
-
-        if (kakaoUrl == null || kakaoUrl!.isEmpty) {
-          showFailedSnackbar(context, '카카오톡 URL이 없습니다.');
-          return;
-        }
-
-        final intent = AndroidIntent(
-          action: 'action_view',
-          data: kakaoUrl!,
-          package: 'com.android.chrome',
-        );
-
-        try {
-          await intent.launch();
-        } catch (e) {
-          if (context.mounted) {
-            // 🔁 기본 SnackBar → 커스텀 스낵바
-            showFailedSnackbar(context, '크롬으로 열 수 없습니다: $e');
-          }
-        }
-      },
+      onPressed: isDisabled ? null : () => showCommuteInsideReportFullScreenBottomSheet(context),
     );
   }
 }

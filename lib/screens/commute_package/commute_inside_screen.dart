@@ -4,8 +4,6 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../states/user/user_state.dart';
-import '../../../utils/snackbar_helper.dart';
-import '../../../utils/api/sheets_config.dart';
 import '../../../utils/init/logout_helper.dart';
 import '../../services/endtime_reminder_service.dart';
 import 'commute_inside_package/commute_inside_controller.dart';
@@ -81,130 +79,6 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
     });
   }
 
-  /// 공용: 전체 높이(최상단까지)로 올라오는 흰색 바텀시트를 띄우는 헬퍼
-  Future<T?> _showFullHeightSheet<T>({
-    required WidgetBuilder childBuilder,
-  }) {
-    return showModalBottomSheet<T>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.white,
-      builder: (sheetCtx) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 1.0, // 최상단까지
-          minChildSize: 0.25,
-          maxChildSize: 1.0,
-          builder: (ctx, scrollController) {
-            return SingleChildScrollView(
-              controller: scrollController,
-              child: Padding(
-                padding: EdgeInsets.only(
-                  left: 20,
-                  right: 20,
-                  top: 20,
-                  // 키보드가 올라올 때 안전하게 하단 패딩 확보
-                  bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-                ),
-                child: childBuilder(ctx),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _handleChangeUrl(BuildContext context) async {
-    final prefs = await SharedPreferences.getInstance();
-    final urlTextCtrl = TextEditingController(
-      text: prefs.getString('custom_kakao_url') ?? '',
-    );
-
-    await _showFullHeightSheet<void>(
-      childBuilder: (_) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Text(
-            '출근 보고용 URL을 입력하세요.',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: urlTextCtrl,
-            decoration: const InputDecoration(
-              labelText: '카카오톡 오픈채팅 URL',
-              border: OutlineInputBorder(),
-            ),
-            keyboardType: TextInputType.url,
-            textInputAction: TextInputAction.done,
-          ),
-          const SizedBox(height: 12),
-          ElevatedButton(
-            onPressed: () async {
-              final url = urlTextCtrl.text.trim();
-              await prefs.setString('custom_kakao_url', url);
-
-              if (!mounted) return;
-              setState(() {
-                kakaoUrl = url.isNotEmpty ? url : null;
-              });
-
-              Navigator.pop(context);
-              showSuccessSnackbar(context, 'URL이 저장되었습니다.');
-            },
-            child: const Text('저장'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _handleSetCommuteSheetId(BuildContext context) async {
-    final current = await SheetsConfig.getCommuteSheetId();
-    final textCtrl = TextEditingController(text: current ?? '');
-
-    await _showFullHeightSheet<void>(
-      childBuilder: (_) => Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            '출근/퇴근/휴게 스프레드시트 ID 입력',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: textCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Google Sheets ID 또는 전체 URL',
-              helperText: 'URL 전체를 붙여넣어도 ID만 추출됩니다.',
-              border: OutlineInputBorder(),
-            ),
-            keyboardType: TextInputType.url,
-            textInputAction: TextInputAction.done,
-          ),
-          const SizedBox(height: 12),
-          ElevatedButton(
-            onPressed: () async {
-              final raw = textCtrl.text.trim();
-              if (raw.isEmpty) return;
-
-              final id = SheetsConfig.extractSpreadsheetId(raw);
-              await SheetsConfig.setCommuteSheetId(id);
-
-              if (!mounted) return;
-              Navigator.pop(context);
-              showSuccessSnackbar(context, '출근 시트 ID가 저장되었습니다.');
-            },
-            child: const Text('저장'),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _handleLogout(BuildContext context) async {
     // 앱 종료 대신 공통 정책: 허브(Selector)로 이동 + prefs('mode') 초기화
     await LogoutHelper.logoutAndGoToLogin(
@@ -269,10 +143,7 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
                             Row(
                               children: [
                                 Expanded(
-                                  child: CommuteInsideReportButtonSection(
-                                    loadingUrl: loadingUrl,
-                                    kakaoUrl: kakaoUrl,
-                                  ),
+                                  child: CommuteInsideReportButtonSection(),
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
@@ -305,16 +176,8 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
                     right: 16,
                     child: PopupMenuButton<String>(
                       onSelected: (value) {
-                        switch (value) {
-                          case 'logout':
-                            _handleLogout(context);
-                            break;
-                          case 'changeUrl':
-                            _handleChangeUrl(context);
-                            break;
-                          case 'setCommuteSheet':
-                            _handleSetCommuteSheetId(context);
-                            break;
+                        if (value == 'logout') {
+                          _handleLogout(context);
                         }
                       },
                       itemBuilder: (context) => const [
@@ -325,27 +188,6 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
                               Icon(Icons.logout, color: Colors.redAccent),
                               SizedBox(width: 8),
                               Text('로그아웃'),
-                            ],
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: 'changeUrl',
-                          child: Row(
-                            children: [
-                              Icon(Icons.edit_location_alt,
-                                  color: Colors.blueAccent),
-                              SizedBox(width: 8),
-                              Text('경로 변경'),
-                            ],
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: 'setCommuteSheet',
-                          child: Row(
-                            children: [
-                              Icon(Icons.assignment_add, color: Colors.green),
-                              SizedBox(width: 8),
-                              Text('출근 시트 삽입'),
                             ],
                           ),
                         ),
