@@ -79,9 +79,9 @@ class AreaState with ChangeNotifier {
 
   /// Firestore 문서 데이터(Map)에서 division/capabilities 파싱 후 상태 반영
   void _applyDocDataToState(
-    Map<String, dynamic>? data, {
-    required String areaName,
-  }) {
+      Map<String, dynamic>? data, {
+        required String areaName,
+      }) {
     final divisionRaw = data?['division'] as String?;
     final capsRaw = data?['capabilities'];
 
@@ -115,6 +115,37 @@ class AreaState with ChangeNotifier {
     if (_availableAreas.contains(trimmed) && hasCaps) return true;
 
     return false;
+  }
+
+  /// ✅ Firestore를 타지 않는 local-only currentArea 설정용 헬퍼
+  ///    - 약식 로그인 local-only 경로에서 사용
+  void setAreaLocalOnly(String area, {String? division}) {
+    final trimmed = area.trim();
+    if (trimmed.isEmpty) {
+      debugPrint('⚠️ setAreaLocalOnly: 빈 area 입력 → 스킵');
+      return;
+    }
+
+    _currentArea = trimmed;
+
+    if (division != null && division.trim().isNotEmpty) {
+      _currentDivision = division.trim();
+    } else if (_currentDivision.trim().isEmpty) {
+      _currentDivision = 'default';
+    }
+
+    _availableAreas
+      ..clear()
+      ..add(trimmed);
+
+    // 기존에 capabilities 캐시가 있다면 유지, 없으면 빈 CapSet으로 초기화
+    _areaCaps.putIfAbsent(trimmed, () => <Capability>{});
+
+    notifyListeners();
+    _notifyForegroundWithArea();
+    debugPrint(
+      'ℹ️ setAreaLocalOnly: $_currentArea / $_currentDivision (no Firestore)',
+    );
   }
 
   Future<void> loadAreasForDivision(String userDivision) async {
@@ -185,7 +216,7 @@ class AreaState with ChangeNotifier {
         notifyListeners();
         debugPrint(
           '✅ 사용자 지역 초기화 완료 → $_currentArea / $_currentDivision'
-          ' / caps: ${Cap.human(capabilitiesOfCurrentArea)}',
+              ' / caps: ${Cap.human(capabilitiesOfCurrentArea)}',
         );
 
         // ✅ FG에도 반드시 통지

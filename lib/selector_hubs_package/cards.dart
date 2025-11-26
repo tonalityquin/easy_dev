@@ -156,8 +156,8 @@ class ServiceCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: _base,
         buttonFg: Colors.white,
-        onPressed: () => Navigator.of(context)
-            .pushReplacementNamed(AppRoutes.serviceLogin),
+        onPressed: () =>
+            Navigator.of(context).pushReplacementNamed(AppRoutes.serviceLogin),
         enabled: enabled,
         disabledHint: '저장된 모드가 service일 때만 선택할 수 있어요',
       ),
@@ -241,8 +241,8 @@ class TabletCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: _base,
         buttonFg: Colors.white,
-        onPressed: () => Navigator.of(context)
-            .pushReplacementNamed(AppRoutes.tabletLogin),
+        onPressed: () =>
+            Navigator.of(context).pushReplacementNamed(AppRoutes.tabletLogin),
         enabled: enabled,
         disabledHint: '저장된 모드가 tablet일 때만 선택할 수 있어요',
       ),

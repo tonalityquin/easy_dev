@@ -6,11 +6,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../utils/init/logout_helper.dart';
 import '../../services/endtime_reminder_service.dart';
+
 import 'simple_inside_package/simple_inside_controller.dart';
 import 'simple_inside_package/sections/simple_inside_report_button_section.dart';
 import 'simple_inside_package/sections/simple_inside_work_button_section.dart';
 import 'simple_inside_package/sections/simple_inside_user_info_card_section.dart';
 import 'simple_inside_package/sections/simple_inside_header_widget_section.dart';
+import 'simple_inside_package/sections/simple_inside_clock_out_button_section.dart';
+import 'simple_inside_package/sections/simple_inside_document_box_button_section.dart';
 
 class SimpleInsideScreen extends StatefulWidget {
   const SimpleInsideScreen({super.key});
@@ -121,19 +124,35 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
                             const SimpleInsideHeaderWidgetSection(),
                             const SimpleInsideUserInfoCardSection(),
                             const SizedBox(height: 6),
+
+                            // 1줄차: 업무 보고 / 출근하기
                             Row(
-                              children: [
-                                // 🔹 출근 보고 버튼: URL/로직 제거 후, 단순 바텀 시트
-                                const Expanded(
+                              children: const [
+                                Expanded(
                                   child: SimpleInsideReportButtonSection(),
                                 ),
-                                const SizedBox(width: 12),
-                                // 🔹 출근하기 버튼: 기존 로직 제거 후, 단순 바텀 시트
-                                const Expanded(
+                                SizedBox(width: 12),
+                                Expanded(
                                   child: SimpleInsideWorkButtonSection(),
                                 ),
                               ],
                             ),
+
+                            const SizedBox(height: 12),
+
+                            // 2줄차: 퇴근하기 / 서류함 열기
+                            Row(
+                              children: const [
+                                Expanded(
+                                  child: SimpleInsideClockOutButtonSection(),
+                                ),
+                                SizedBox(width: 12),
+                                Expanded(
+                                  child: SimpleInsideDocumentBoxButtonSection(),
+                                ),
+                              ],
+                            ),
+
                             const SizedBox(height: 1),
                             Center(
                               child: SizedBox(
@@ -147,7 +166,7 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
                     ),
                   ),
 
-                  // 우측 상단 메뉴(로그아웃만 남김)
+                  // 우측 상단 메뉴(로그아웃만)
                   Positioned(
                     top: 16,
                     right: 16,

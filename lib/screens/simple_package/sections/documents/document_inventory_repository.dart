@@ -17,35 +17,9 @@ class DocumentInventoryRepository {
   List<DocumentItem> _buildInitialItems() {
     final now = DateTime.now();
 
+    // 🔹 여기서 실제로 사용할 문서만 노출합니다.
+    //  - 업무 시작/퇴근/업무 종료/인수인계 양식은 제거
     return <DocumentItem>[
-      DocumentItem(
-        id: 'template-work-start-report',
-        title: '업무 시작 보고 양식',
-        subtitle: '업무 시작 시 보고 내용 정리',
-        updatedAt: now,
-        type: DocumentType.workStartReportForm,
-      ),
-      DocumentItem(
-        id: 'template-work-end-report',
-        title: '퇴근 보고 양식',
-        subtitle: '퇴근 시 보고 내용 정리',
-        updatedAt: now,
-        type: DocumentType.workEndReportForm,
-      ),
-      DocumentItem(
-        id: 'template-end-work-report',
-        title: '업무 종료 보고서',
-        subtitle: '차량 집계 및 서버 보고',
-        updatedAt: now,
-        type: DocumentType.workEndReportForm,
-      ),
-      DocumentItem(
-        id: 'template-handover',
-        title: '업무 인수인계 양식',
-        subtitle: '업무 인수 · 인계 시 사용',
-        updatedAt: now,
-        type: DocumentType.handoverForm,
-      ),
       DocumentItem(
         id: 'template-statement',
         title: '경위서 양식',

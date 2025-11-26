@@ -115,7 +115,8 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
     final List<List<Widget>> pages = [
       [
         ServiceCard(enabled: serviceEnabled),
-        if (_devAuthorized) SimpleLoginCard(enabled: serviceEnabled),
+        // ✅ 변경: 개발자 모드 여부와 관계없이 약식 로그인 카드를 항상 표시
+        SimpleLoginCard(enabled: serviceEnabled),
       ],
       [
         TabletCard(enabled: tabletEnabled),
@@ -125,7 +126,7 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
         const FaqCard(),
         const CommunityCard(),
       ],
-      // ✅ 변경: 개발자 인증 여부와 무관하게 오프라인 서비스 카드를 항상 표시
+      // ✅ 오프라인 서비스 카드는 개발자 인증 여부와 무관하게 항상 표시
       [
         const ParkingCard(),
       ],
@@ -133,7 +134,8 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
       if (_devAuthorized)
         [
           DevCard(
-            onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.devStub),
+            onTap: () =>
+                Navigator.of(context).pushReplacementNamed(AppRoutes.devStub),
           ),
         ],
     ];
@@ -163,13 +165,15 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
           title: Text(
             'Pelican Hubs',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.2,
-                  color: Theme.of(context).colorScheme.onSurface,
-                ),
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
-          iconTheme: IconThemeData(color: Theme.of(context).colorScheme.onSurface),
-          actionsIconTheme: IconThemeData(color: Theme.of(context).colorScheme.onSurface),
+          iconTheme:
+          IconThemeData(color: Theme.of(context).colorScheme.onSurface),
+          actionsIconTheme:
+          IconThemeData(color: Theme.of(context).colorScheme.onSurface),
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1),
             child: Container(height: 1, color: Colors.black.withOpacity(0.06)),

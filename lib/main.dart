@@ -49,6 +49,9 @@ import 'utils/quick_overlay_main.dart';
 // ✅ (신규) 장기 근무기록 저장/분석용 트래커
 import 'time_record/app_usage_tracker.dart';
 
+// ✅ 명시적 앱 종료 플래그
+import 'utils/app_exit_flag.dart';
+
 const kIsWorkingPrefsKey = 'isWorking';
 
 /// ✅ GSI v7 “웹 애플리케이션” 클라이언트 ID (Android에선 serverClientId로 사용)
@@ -397,6 +400,18 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // ✅ 포그라운드/백그라운드 시간 기록 (DB에 interval 저장)
     AppUsageTracker.instance.onStateChange(state);
 
+    // 🔐 1) 헤더에서 "앱 종료" 버튼을 눌러 명시적 종료 중일 때
+    if (AppExitFlag.isExiting) {
+      // 이 플로우에서는 자동 오버레이 ON/OFF를 하지 않는다.
+      if (state == AppLifecycleState.detached) {
+        // 앱 엔진이 완전히 떨어지기 직전 마지막 정리
+        unawaited(closeQuickOverlay());
+        AppExitFlag.reset(); // 종료 플로우 끝, 플래그 리셋
+      }
+      return; // ✅ 여기서 종료 → inactive/paused/hidden 에서 오버레이 안 켜짐
+    }
+
+    // 🔓 2) 일반 라이프사이클(홈 버튼, 앱 전환 등)에서는 기존 동작 유지
     switch (state) {
       case AppLifecycleState.resumed:
       // 앱이 다시 앞으로 나왔을 때 → 플로팅 버블 자동 종료
@@ -405,10 +420,14 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
-      case AppLifecycleState.detached:
       case AppLifecycleState.hidden:
       // 홈 버튼 / 앱 전환 등으로 백그라운드로 갈 때 → 플로팅 버블 자동 시작
         _startOverlayFromLifecycle();
+        break;
+
+      case AppLifecycleState.detached:
+      // 일반적인 detach(시스템 종료 등)에서도 혹시 남아 있던 오버레이 정리
+        unawaited(closeQuickOverlay());
         break;
     }
   }

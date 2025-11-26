@@ -8,6 +8,7 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import '../../utils/snackbar_helper.dart';
 import '../../utils/api/email_config.dart';
 import '../../utils/api/sheets_config.dart';
+import '../../utils/app_exit_flag.dart'; // ⬅️ 추가
 
 class Header extends StatefulWidget {
   const Header({super.key});
@@ -63,8 +64,22 @@ class _TopRow extends StatelessWidget {
 
   // 앱 종료 처리
   Future<void> _exitApp(BuildContext context) async {
+    // ✅ 명시적 종료 플로우 시작 플래그 ON
+    AppExitFlag.beginExit();
+
     try {
+      // 안드로이드일 때만 플로팅 오버레이 및 포그라운드 서비스 정리
       if (Platform.isAndroid) {
+        // 1) 떠 있는 플로팅 버블(overlayMain → QuickOverlayApp)이 있다면 먼저 닫기
+        try {
+          if (await FlutterOverlayWindow.isActive()) {
+            await FlutterOverlayWindow.closeOverlay();
+          }
+        } catch (_) {
+          // 오버레이가 없거나 플러그인에서 오류가 나도 치명적이지 않으니 무시
+        }
+
+        // 2) 포그라운드 서비스 중지
         bool running = false;
         try {
           running = await FlutterForegroundTask.isRunningService;
@@ -74,7 +89,8 @@ class _TopRow extends StatelessWidget {
             final stopped = await FlutterForegroundTask.stopService();
             if (stopped != true) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('포그라운드 중지 실패(플러그인 반환값 false)')),
+                const SnackBar(
+                    content: Text('포그라운드 중지 실패(플러그인 반환값 false)')),
               );
             }
           } catch (e) {
@@ -84,11 +100,17 @@ class _TopRow extends StatelessWidget {
           }
           await Future.delayed(const Duration(milliseconds: 150));
         }
+
+        // 3) 실제 앱 종료 (SystemNavigator.pop)
         await SystemNavigator.pop();
       } else {
+        // iOS / 기타 플랫폼
         await SystemNavigator.pop();
       }
     } catch (e) {
+      // ✅ 종료 시도 중 예외가 발생하면 플래그를 원복해서
+      //    이후 라이프사이클에서 다시 정상 동작하도록 함
+      AppExitFlag.reset();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('앱 종료 실패: $e')),
       );
@@ -150,7 +172,8 @@ class _TopRow extends StatelessWidget {
                                 color: Colors.black.withOpacity(.06),
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: Icon(icon, size: 20, color: Colors.black87),
+                              child:
+                              Icon(icon, size: 20, color: Colors.black87),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
@@ -180,8 +203,8 @@ class _TopRow extends StatelessWidget {
                                           ),
                                         );
                                         if (!ctx.mounted) return;
-                                        showSuccessSnackbar(
-                                            context, '현재 입력값을 복사했습니다.');
+                                        showSuccessSnackbar(context,
+                                            '현재 입력값을 복사했습니다.');
                                       }
                                           : null,
                                       icon: const Icon(
@@ -197,8 +220,8 @@ class _TopRow extends StatelessWidget {
                                         controller.text = '';
                                         setSheetState(() {});
                                         if (!ctx.mounted) return;
-                                        showSelectedSnackbar(
-                                            context, 'ID를 초기화했습니다.');
+                                        showSelectedSnackbar(context,
+                                            'ID를 초기화했습니다.');
                                       }
                                           : null,
                                       icon: const Icon(
@@ -338,7 +361,8 @@ class _TopRow extends StatelessWidget {
                                   }
                                   try {
                                     final granted =
-                                    await FlutterOverlayWindow.isPermissionGranted();
+                                    await FlutterOverlayWindow
+                                        .isPermissionGranted();
                                     if (!ctx.mounted) return;
                                     if (granted) {
                                       showSelectedSnackbar(
@@ -377,7 +401,8 @@ class _TopRow extends StatelessWidget {
                                   }
                                   try {
                                     final already =
-                                    await FlutterOverlayWindow.isPermissionGranted();
+                                    await FlutterOverlayWindow
+                                        .isPermissionGranted();
                                     if (already) {
                                       if (!ctx.mounted) return;
                                       showSelectedSnackbar(
@@ -390,7 +415,8 @@ class _TopRow extends StatelessWidget {
                                     // 🔑 flutter_overlay_window 의 requestPermission:
                                     //    권한이 없으면 시스템 설정 화면을 열어줌
                                     final result =
-                                    await FlutterOverlayWindow.requestPermission();
+                                    await FlutterOverlayWindow
+                                        .requestPermission();
 
                                     if (!ctx.mounted) return;
                                     if (result == true) {
@@ -503,8 +529,8 @@ class _TopRow extends StatelessWidget {
                           children: [
                             Expanded(
                               child: OutlinedButton.icon(
-                                icon: const Icon(
-                                    Icons.check_circle_outline),
+                                icon:
+                                const Icon(Icons.check_circle_outline),
                                 onPressed: () async {
                                   final to = mailToCtrl.text.trim();
                                   if (!EmailConfig.isValidToList(to)) {
@@ -530,8 +556,7 @@ class _TopRow extends StatelessWidget {
                             const SizedBox(width: 8),
                             Expanded(
                               child: OutlinedButton.icon(
-                                icon:
-                                const Icon(Icons.copy_all_outlined),
+                                icon: const Icon(Icons.copy_all_outlined),
                                 onPressed: () async {
                                   final raw = 'To: ${mailToCtrl.text}';
                                   await Clipboard.setData(
@@ -590,8 +615,7 @@ class _TopRow extends StatelessWidget {
                             IconButton(
                               tooltip: '닫기',
                               onPressed: () => Navigator.pop(ctx),
-                              icon:
-                              const Icon(Icons.close_rounded),
+                              icon: const Icon(Icons.close_rounded),
                             ),
                           ],
                         ),

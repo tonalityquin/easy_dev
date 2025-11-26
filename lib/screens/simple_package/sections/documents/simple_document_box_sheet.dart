@@ -1,16 +1,13 @@
+// lib/screens/simple_package/sections/documents/simple_document_box_sheet.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../../states/user/user_state.dart';
 import '../backup/backup_form_page.dart';
-import '../end_works/end_work_report_dialog.dart';
-import '../work_start_report/sections/dashboard_end_report_form_page.dart';
-import '../work_start_report/sections/dashboard_start_report_form_page.dart';
 import 'document_inventory_repository.dart';
 import 'user_statement_form_page.dart';
 import 'document_item.dart';
-import '../shares/parking_handover_share_page.dart';
-import '../resignation/resignation_form_page.dart'; // ✅ 사직서 페이지 import 추가
+import '../resignation/resignation_form_page.dart';
 
 Future<void> openDocumentBox(BuildContext context) async {
   await showModalBottomSheet<void>(
@@ -77,13 +74,15 @@ class _DocumentBoxSheet extends StatelessWidget {
                               child: StreamBuilder<List<DocumentItem>>(
                                 stream: repo.streamForUser(userState),
                                 builder: (context, snapshot) {
-                                  if (snapshot.connectionState == ConnectionState.waiting) {
+                                  if (snapshot.connectionState ==
+                                      ConnectionState.waiting) {
                                     return const Center(
                                       child: CircularProgressIndicator(),
                                     );
                                   }
 
-                                  final items = snapshot.data ?? const <DocumentItem>[];
+                                  final items =
+                                      snapshot.data ?? const <DocumentItem>[];
 
                                   if (items.isEmpty) {
                                     return const _EmptyState();
@@ -102,69 +101,76 @@ class _DocumentBoxSheet extends StatelessWidget {
                                         onTap: () {
                                           switch (item.type) {
                                             case DocumentType.statementForm:
+                                            // ✅ 경위서 작성 화면으로 이동
                                               Navigator.of(context).push(
                                                 MaterialPageRoute(
-                                                  builder: (_) => const UserStatementFormPage(),
+                                                  builder: (_) =>
+                                                  const UserStatementFormPage(),
                                                   fullscreenDialog: true,
                                                 ),
                                               );
                                               break;
 
                                             case DocumentType.handoverForm:
-                                              Navigator.of(context).push(
-                                                MaterialPageRoute(
-                                                  builder: (_) => const ParkingHandoverSharePage(),
-                                                  fullscreenDialog: true,
+                                            // ✅ (안씀) 인수인계: Simple 모드에선 안내만
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    '인수인계 양식은 현재 Simple 모드에서 사용하지 않습니다.',
+                                                  ),
                                                 ),
                                               );
                                               break;
 
                                             case DocumentType.workEndReportForm:
-                                            // 동일 type 안에서 id 로 역할 분리
-                                              if (item.id == 'template-end-work-report') {
-                                                // ✅ 업무 종료 보고서 → 기존 집계/서버 보고 시트
-                                                showEndReportDialog(context);
-                                              } else if (item.id == 'template-work-end-report') {
-                                                // ✅ 퇴근 보고 양식 → 새로 만든 업무 종료/퇴근 보고 화면
-                                                Navigator.of(context).push(
-                                                  MaterialPageRoute(
-                                                    builder: (_) => const DashboardEndReportFormPage(),
-                                                    fullscreenDialog: true,
+                                            // ✅ (안씀) 퇴근/업무 종료: Simple 모드에선 안내만
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    '업무 종료/퇴근 보고 양식은 현재 Simple 모드에서 사용하지 않습니다.',
                                                   ),
-                                                );
-                                              }
-                                              // 그 외 id는 현재 아무 동작 없음
+                                                ),
+                                              );
                                               break;
 
                                             case DocumentType.workStartReportForm:
-                                            // ✅ 업무 시작 보고 양식 → 새로 만든 화면으로 이동
-                                              Navigator.of(context).push(
-                                                MaterialPageRoute(
-                                                  builder: (_) => const DashboardStartReportFormPage(),
-                                                  fullscreenDialog: true,
+                                            // ✅ (안씀) 업무 시작 보고: Simple 모드에선 안내만
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    '업무 시작 보고 양식은 현재 Simple 모드에서 사용하지 않습니다.',
+                                                  ),
                                                 ),
                                               );
                                               break;
 
                                             case DocumentType.generic:
                                             // ✅ generic 문서 중 연차(결근) 지원 신청서 연결
-                                              if (item.id == 'template-annual-leave-application') {
+                                              if (item.id ==
+                                                  'template-annual-leave-application') {
                                                 Navigator.of(context).push(
                                                   MaterialPageRoute(
-                                                    builder: (_) => const BackupFormPage(),
+                                                    builder: (_) =>
+                                                    const BackupFormPage(),
                                                     fullscreenDialog: true,
                                                   ),
                                                 );
                                               }
                                               // ✅ generic 문서 중 사직서 연결
-                                              else if (item.id == 'template-resignation-letter') {
+                                              else if (item.id ==
+                                                  'template-resignation-letter') {
                                                 Navigator.of(context).push(
                                                   MaterialPageRoute(
-                                                    builder: (_) => const ResignationFormPage(),
+                                                    builder: (_) =>
+                                                    const ResignationFormPage(),
                                                     fullscreenDialog: true,
                                                   ),
                                                 );
                                               }
+                                              // 그 외 generic 문서는 현재 동작 없음
                                               break;
                                           }
                                         },
@@ -291,7 +297,8 @@ class _SheetHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '보고서와 인수인계, 경위서 양식을 모아두었어요.',
+                  // 🔧 인수인계 문구 제거
+                  '경위서와 신청/사직서 양식을 모아두었어요.',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: textTheme.bodySmall?.copyWith(
@@ -416,7 +423,8 @@ class _DocumentListItem extends StatelessWidget {
                                   ),
                                   decoration: BoxDecoration(
                                     color: accentColor.withOpacity(0.14),
-                                    borderRadius: BorderRadius.circular(999),
+                                    borderRadius:
+                                    BorderRadius.circular(999),
                                   ),
                                   child: Text(
                                     typeLabel,
@@ -523,7 +531,8 @@ String _buildSubtitle(DocumentItem item) {
 
 String _formatDateTime(DateTime dt) {
   String two(int n) => n.toString().padLeft(2, '0');
-  return '${dt.year}-${two(dt.month)}-${two(dt.day)} ${two(dt.hour)}:${two(dt.minute)}';
+  return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
+      '${two(dt.hour)}:${two(dt.minute)}';
 }
 
 /// 기본 type 기준 색상

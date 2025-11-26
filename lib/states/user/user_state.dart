@@ -1,6 +1,7 @@
 // lib/states/user/user_state.dart
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
@@ -43,6 +44,8 @@ class UserState extends ChangeNotifier {
 
   // ===== [추가] SharedPreferences 선택 삭제/유지 정책 =====
   // 사용자(세션/신원) 관련 키만 삭제합니다.
+  static const String _prefsKeyCachedUser = 'cachedUserJson';
+
   static const Set<String> _userSensitiveKeys = <String>{
     'phone',
     'handle',
@@ -52,6 +55,7 @@ class UserState extends ChangeNotifier {
     'startTime',
     'endTime',
     'fixedHolidays',
+    _prefsKeyCachedUser,
   };
 
   UserModel? get user => _user;
@@ -262,6 +266,27 @@ class UserState extends ChangeNotifier {
     await _repository.updateUsersCache(area, _userList);
 
     await saveCardToUserPhone(updatedUser);
+  }
+
+  /// ✅ Firestore를 전혀 호출하지 않고 로그인 유저만 교체하는 로컬 전용 진입점
+  /// - 약식 로그인(local-only) 재로그인 등에 사용
+  Future<void> updateLoginUserLocalOnly(UserModel updatedUser) async {
+    _isTablet = false;
+    _user = updatedUser;
+
+    // 로그인 시 메모리 캐시 리셋 (자동 로그인과 동일한 정책 유지)
+    _hasClockInToday = false;
+    _hasClockInTodayForDate = null;
+
+    notifyListeners();
+
+    // SharedPreferences에는 저장(→ 이후 local-only 자동 로그인 가능)
+    await saveCardToUserPhone(updatedUser);
+
+    // ⚠ Firestore 비용을 줄이기 위해
+    //   - _repository.updateUser(...)
+    //   - _repository.updateUsersCache(...)
+    //   는 호출하지 않습니다.
   }
 
   Future<void> updateLoginTablet(UserModel updatedUserAsTablet) async {
@@ -483,6 +508,15 @@ class UserState extends ChangeNotifier {
     await prefs.setString('endTime', _timeToString(user.endTime) ?? '');
     await prefs.setStringList('fixedHolidays', user.fixedHolidays);
     await prefs.setString('position', user.position ?? '');
+
+    // ✅ 전체 UserModel 스냅샷을 JSON으로 로컬 캐시 (local-only 자동 로그인을 위해)
+    try {
+      final map = user.toMap();
+      final json = jsonEncode(map);
+      await prefs.setString(_prefsKeyCachedUser, json);
+    } catch (e, st) {
+      debugPrint('saveCardToUserPhone cachedUserJson 저장 실패: $e\n$st');
+    }
   }
 
   Future<void> _saveTabletPrefsFromUser(UserModel asUser) async {
@@ -507,6 +541,65 @@ class UserState extends ChangeNotifier {
   }
 
   // ========== 자동 로그인 ==========
+
+  /// ✅ Firestore를 전혀 호출하지 않는 로컬 전용 자동 로그인
+  /// - 최초 로그인에서 Firestore로 받아온 UserModel 스냅샷(JSON)을 재사용
+  /// - 약식 로그인(simple) 모드에서 호출하도록 설계
+  Future<void> loadUserToLogInLocalOnly() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final phone = prefs.getString('phone')?.trim();
+      final selectedArea = prefs.getString('selectedArea')?.trim();
+      final division = prefs.getString('division')?.trim();
+      final role = prefs.getString('role')?.trim();
+      final startTimeStr = prefs.getString('startTime');
+      final endTimeStr = prefs.getString('endTime');
+      final fixedHolidays = prefs.getStringList('fixedHolidays') ?? [];
+      final position = prefs.getString('position');
+      final cachedJson = prefs.getString(_prefsKeyCachedUser);
+
+      if (phone == null || selectedArea == null || cachedJson == null) {
+        // 캐시가 없으면 아무 것도 하지 않고 반환
+        return;
+      }
+
+      final userId = "$phone-$selectedArea";
+      final decoded = jsonDecode(cachedJson) as Map<String, dynamic>;
+      var userData = UserModel.fromMap(userId, decoded);
+
+      _isTablet = false;
+      final trimmedArea = selectedArea.trim();
+
+      // SharedPreferences에 보관된 값으로 오버라이드
+      userData = userData.copyWith(
+        currentArea: trimmedArea,
+        role: role ?? userData.role,
+        position: position ?? userData.position,
+        startTime: _stringToTimeOfDay(startTimeStr),
+        endTime: _stringToTimeOfDay(endTimeStr),
+        fixedHolidays:
+        fixedHolidays.isNotEmpty ? fixedHolidays : userData.fixedHolidays,
+        divisions: division != null ? [division] : userData.divisions,
+        isSaved: true,
+      );
+
+      // 로그인 시 메모리 캐시 리셋
+      _hasClockInToday = false;
+      _hasClockInTodayForDate = null;
+
+      _user = userData;
+      notifyListeners();
+
+      // ✅ Firestore를 사용하지 않고 현재 지역만 메모리에 반영
+      _areaState.setAreaLocalOnly(trimmedArea, division: division);
+
+      // ✅ Plate/Chat TTS 시작 (동일하게 area 기반)
+      PlateTtsListenerService.start(trimmedArea);
+      ChatTtsListenerService.start(trimmedArea);
+    } catch (e, st) {
+      debugPrint("loadUserToLogInLocalOnly, 오류: $e\n$st");
+    }
+  }
 
   Future<void> loadUserToLogIn() async {
     try {
