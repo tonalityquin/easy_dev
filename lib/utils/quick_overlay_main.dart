@@ -32,8 +32,7 @@ class QuickOverlayHome extends StatefulWidget {
   State<QuickOverlayHome> createState() => _QuickOverlayHomeState();
 }
 
-class _QuickOverlayHomeState extends State<QuickOverlayHome>
-    with SingleTickerProviderStateMixin {
+class _QuickOverlayHomeState extends State<QuickOverlayHome> with TickerProviderStateMixin {
   String _status = '대기 중';
   bool _expanded = false;
   StreamSubscription<dynamic>? _sub;
@@ -49,6 +48,11 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
   late final AnimationController _breathController;
   late final Animation<double> _breathScale;
 
+  // ───────────────────── 넛지(살짝 흔들기) 애니메이션 ─────────────────────
+  late final AnimationController _nudgeController;
+  late final Animation<Offset> _nudgeOffset;
+  Timer? _nudgeTimer;
+
   @override
   void initState() {
     super.initState();
@@ -60,6 +64,7 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
       });
     });
 
+    // 숨쉬기(Scale) 애니메이션
     _breathController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1600),
@@ -71,6 +76,34 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
         curve: Curves.easeInOut,
       ),
     );
+
+    // 넛지(살짝 오른쪽으로 툭 치는) 애니메이션
+    _nudgeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    );
+
+    _nudgeOffset = Tween<Offset>(
+      begin: Offset.zero,
+      end: const Offset(0.08, 0), // X축으로 8% 정도 이동
+    )
+        .chain(
+          CurveTween(curve: Curves.easeInOut),
+        )
+        .animate(_nudgeController);
+
+    // 1초마다 한 번씩, 접혀 있을 때만 넛지 동작
+    _nudgeTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!_expanded && mounted && !_nudgeController.isAnimating) {
+        _nudgeController.forward(from: 0.0).then((_) {
+          if (mounted) {
+            _nudgeController.reverse();
+          }
+        }).catchError((_) {
+          // dispose 중 등 애니메이션 도중 에러는 무시
+        });
+      }
+    });
 
     // 메인 ↔ 오버레이 데이터 수신
     _sub = FlutterOverlayWindow.overlayListener.listen((event) {
@@ -94,7 +127,9 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
   void dispose() {
     _sub?.cancel();
     _tickTimer?.cancel();
+    _nudgeTimer?.cancel();
     _breathController.dispose();
+    _nudgeController.dispose();
     super.dispose();
   }
 
@@ -119,52 +154,55 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
 
   // 🔹 접힌 상태: 동그란 버블 + 타이머
   Widget _buildCollapsedBubble(BuildContext context) {
-    return ScaleTransition(
-      scale: _breathScale,
-      child: Container(
-        key: const ValueKey('collapsed'),
-        width: kBubbleSize,
-        height: kBubbleSize,
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [
-              Color(0xFF4F46E5), // indigo
-              Color(0xFF06B6D4), // cyan
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF0D47A1).withOpacity(0.45),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
+    return SlideTransition(
+      position: _nudgeOffset, // ← 넛지(좌우 살짝 이동)
+      child: ScaleTransition(
+        scale: _breathScale, // ← 숨쉬기(살짝 커졌다 작아졌다)
+        child: Container(
+          key: const ValueKey('collapsed'),
+          width: kBubbleSize,
+          height: kBubbleSize,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [
+                Color(0xFF4F46E5), // indigo
+                Color(0xFF06B6D4), // cyan
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-          ],
-        ),
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.menu_rounded,
-                color: Colors.white,
-                size: 22,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0D47A1).withOpacity(0.45),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
               ),
-              const SizedBox(height: 2),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: Text(
-                  _formatElapsed(_elapsed),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
+            ],
+          ),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(
+                  Icons.menu_rounded,
+                  color: Colors.white,
+                  size: 22,
+                ),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    _formatElapsed(_elapsed),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -355,12 +393,9 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
               },
               child: AnimatedContainer(
                 duration: _switchDuration,
-                padding:
-                _expanded ? const EdgeInsets.all(6) : EdgeInsets.zero,
+                padding: _expanded ? const EdgeInsets.all(6) : EdgeInsets.zero,
                 decoration: BoxDecoration(
-                  color: _expanded
-                      ? kOverlayBackgroundColor.withOpacity(0.3)
-                      : Colors.transparent,
+                  color: _expanded ? kOverlayBackgroundColor.withOpacity(0.3) : Colors.transparent,
                   borderRadius: BorderRadius.circular(32),
                 ),
                 child: AnimatedSwitcher(
@@ -384,9 +419,7 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                       ),
                     );
                   },
-                  child: _expanded
-                      ? _buildExpandedPanel(context)
-                      : _buildCollapsedBubble(context),
+                  child: _expanded ? _buildExpandedPanel(context) : _buildCollapsedBubble(context),
                 ),
               ),
             ),
