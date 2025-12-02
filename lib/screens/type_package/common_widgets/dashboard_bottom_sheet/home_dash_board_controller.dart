@@ -16,6 +16,10 @@ import '../../../../../../utils/api/sheet_upload_result.dart';
 
 const kIsWorkingPrefsKey = 'isWorking';
 
+/// 🔹 오늘 휴게 버튼을 눌렀는지 확인하기 위한 날짜 저장 키
+///    예: '2025-11-29' 같은 문자열이 들어감
+const kLastBreakDatePrefsKey = 'last_break_date';
+
 class HomeDashBoardController {
   Future<void> handleWorkStatus(UserState userState, BuildContext context) async {
     // ✅ 현재 근무 중인 상태에서 "퇴근하기" 버튼을 누른 경우
@@ -113,6 +117,16 @@ class HomeDashBoardController {
 
       if (result.success) {
         showSuccessSnackbar(context, result.message);
+
+        // 🔹 여기서 오늘 날짜를 SharedPreferences 에 저장
+        //
+        //  - 저장 방식: 'YYYY-MM-DD' 문자열
+        //  - 키: kLastBreakDatePrefsKey ('last_break_date')
+        //  - 오버레이에서는 이 값을 꺼내서 "오늘 날짜와 같은지" 비교해서
+        //    오늘 휴게를 눌렀는지 판단하면 됨.
+        final prefs = await SharedPreferences.getInstance();
+        final String todayStr = _formatDate(DateTime.now());
+        await prefs.setString(kLastBreakDatePrefsKey, todayStr);
       } else {
         showFailedSnackbar(context, result.message);
       }
@@ -121,5 +135,13 @@ class HomeDashBoardController {
         showFailedSnackbar(context, '휴게 기록 중 오류 발생: $e');
       }
     }
+  }
+
+  /// 'YYYY-MM-DD' 형식으로 날짜 문자열 생성
+  String _formatDate(DateTime dt) {
+    final y = dt.year.toString().padLeft(4, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final d = dt.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
   }
 }

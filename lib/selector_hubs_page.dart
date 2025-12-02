@@ -24,7 +24,7 @@ class SelectorHubsPage extends StatefulWidget {
 }
 
 class _SelectorHubsPageState extends State<SelectorHubsPage> {
-  String? _savedMode; // 'service' | 'tablet' | null
+  String? _savedMode; // 'service' | 'tablet' | 'simple' | null
   bool _devAuthorized = false;
 
   @override
@@ -109,13 +109,16 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final serviceEnabled = _savedMode == null || _savedMode == 'service';
+    // 🔹 simple 모드는 service 계열과 동일하게 취급
+    final isServiceLike =
+        _savedMode == null || _savedMode == 'service' || _savedMode == 'simple';
+    final serviceEnabled = isServiceLike;
     final tabletEnabled = _savedMode == null || _savedMode == 'tablet';
 
     final List<List<Widget>> pages = [
       [
         ServiceCard(enabled: serviceEnabled),
-        // ✅ 변경: 개발자 모드 여부와 관계없이 약식 로그인 카드를 항상 표시
+        // ✅ 개발자 모드 여부와 관계없이 약식 로그인 카드를 항상 표시
         SimpleLoginCard(enabled: serviceEnabled),
       ],
       [
@@ -176,7 +179,10 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
           IconThemeData(color: Theme.of(context).colorScheme.onSurface),
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1),
-            child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
+            child: Container(
+              height: 1,
+              color: Colors.black.withOpacity(0.06),
+            ),
           ),
         ),
         body: SafeArea(

@@ -2,13 +2,16 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // ✅ 추가
 
 import '../../utils/snackbar_helper.dart';
 import '../../utils/api/email_config.dart';
 import '../../utils/api/sheets_config.dart';
 import '../../utils/app_exit_flag.dart'; // ⬅️ 추가
+
+// ⬅️ 신규: 오버레이 모드 설정
+import '../../utils/overlay_mode_config.dart';
 
 class Header extends StatefulWidget {
   const Header({super.key});
@@ -89,8 +92,7 @@ class _TopRow extends StatelessWidget {
             final stopped = await FlutterForegroundTask.stopService();
             if (stopped != true) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text('포그라운드 중지 실패(플러그인 반환값 false)')),
+                const SnackBar(content: Text('포그라운드 중지 실패(플러그인 반환값 false)')),
               );
             }
           } catch (e) {
@@ -129,6 +131,29 @@ class _TopRow extends StatelessWidget {
     // Gmail 수신자 로드 (To 만)
     final emailCfg = await EmailConfig.load();
     final mailToCtrl = TextEditingController(text: emailCfg.to);
+
+    // 현재 오버레이 모드 로드
+    OverlayMode currentOverlayMode = await OverlayModeConfig.getMode();
+
+    // ✅ SharedPreferences 로드 (오버레이 기본 모드 + HQ 여부 판별용)
+    final prefs = await SharedPreferences.getInstance();
+
+    // ✅ 오버레이 형태 기본값: 상단 50% 포그라운드
+    //    - overlay_mode_initialized_v2 플래그가 없는 경우 한 번만 topHalf로 강제 세팅
+    final initialized = prefs.getBool('overlay_mode_initialized_v2') ?? false;
+    if (!initialized) {
+      currentOverlayMode = OverlayMode.topHalf;
+      await OverlayModeConfig.setMode(OverlayMode.topHalf);
+      await prefs.setBool('overlay_mode_initialized_v2', true);
+    }
+
+    // ✅ HQ 여부: division / selectedArea 기반
+    //   - 둘 다 비어 있지 않고
+    //   - 둘의 값이 서로 같을 때만 오버레이 형태 선택 카드 노출
+    final division = prefs.getString('division') ?? '';
+    final selectedArea = prefs.getString('selectedArea') ?? '';
+    final bool overlayModeCardEnabled =
+        division.isNotEmpty && selectedArea.isNotEmpty && division == selectedArea;
 
     await showModalBottomSheet(
       context: context,
@@ -172,8 +197,7 @@ class _TopRow extends StatelessWidget {
                                 color: Colors.black.withOpacity(.06),
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child:
-                              Icon(icon, size: 20, color: Colors.black87),
+                              child: Icon(icon, size: 20, color: Colors.black87),
                             ),
                             const SizedBox(width: 10),
                             Expanded(
@@ -203,8 +227,8 @@ class _TopRow extends StatelessWidget {
                                           ),
                                         );
                                         if (!ctx.mounted) return;
-                                        showSuccessSnackbar(context,
-                                            '현재 입력값을 복사했습니다.');
+                                        showSuccessSnackbar(
+                                            context, '현재 입력값을 복사했습니다.');
                                       }
                                           : null,
                                       icon: const Icon(
@@ -220,8 +244,8 @@ class _TopRow extends StatelessWidget {
                                         controller.text = '';
                                         setSheetState(() {});
                                         if (!ctx.mounted) return;
-                                        showSelectedSnackbar(context,
-                                            'ID를 초기화했습니다.');
+                                        showSelectedSnackbar(
+                                            context, 'ID를 초기화했습니다.');
                                       }
                                           : null,
                                       icon: const Icon(
@@ -261,8 +285,7 @@ class _TopRow extends StatelessWidget {
                                     ClipboardData(text: raw),
                                   );
                                   if (!ctx.mounted) return;
-                                  showSuccessSnackbar(
-                                      context, '입력값을 복사했습니다.');
+                                  showSuccessSnackbar(context, '입력값을 복사했습니다.');
                                 },
                                 label: const Text('입력값 복사'),
                               ),
@@ -337,7 +360,7 @@ class _TopRow extends StatelessWidget {
                         ),
                         const SizedBox(height: 10),
                         const Text(
-                          '다른 앱 위에 플로팅 버블(QuickOverlayHome)을 띄우기 위해서는 '
+                          '다른 앱 위에 플로팅 버블 또는 상단 포그라운드 패널(QuickOverlayHome)을 띄우기 위해서는 '
                               '안드로이드 “다른 앱 위에 표시” 권한이 필요합니다.',
                           style: TextStyle(
                             fontSize: 13,
@@ -360,8 +383,7 @@ class _TopRow extends StatelessWidget {
                                     return;
                                   }
                                   try {
-                                    final granted =
-                                    await FlutterOverlayWindow
+                                    final granted = await FlutterOverlayWindow
                                         .isPermissionGranted();
                                     if (!ctx.mounted) return;
                                     if (granted) {
@@ -389,7 +411,8 @@ class _TopRow extends StatelessWidget {
                             const SizedBox(width: 8),
                             Expanded(
                               child: ElevatedButton.icon(
-                                icon: const Icon(Icons.open_in_new_rounded),
+                                icon:
+                                const Icon(Icons.open_in_new_rounded),
                                 onPressed: () async {
                                   if (!Platform.isAndroid) {
                                     if (!ctx.mounted) return;
@@ -422,7 +445,7 @@ class _TopRow extends StatelessWidget {
                                     if (result == true) {
                                       showSuccessSnackbar(
                                         context,
-                                        '권한이 허용되었습니다. 플로팅 버블을 사용할 수 있습니다.',
+                                        '권한이 허용되었습니다. 오버레이를 사용할 수 있습니다.',
                                       );
                                     } else {
                                       showFailedSnackbar(
@@ -446,6 +469,139 @@ class _TopRow extends StatelessWidget {
                               ),
                             ),
                           ],
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                // ✅ 오버레이 형태 선택 섹션 (버블 / 상단 50%)
+                Widget buildOverlayModeSection() {
+                  String labelFor(OverlayMode mode) {
+                    switch (mode) {
+                      case OverlayMode.topHalf:
+                        return '상단 50% 포그라운드';
+                      case OverlayMode.bubble:
+                        return '플로팅 버블';
+                    }
+                  }
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.black.withOpacity(.08)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(.06),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.view_sidebar_outlined,
+                                size: 20,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Text(
+                                '오버레이 형태 선택',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          '앱이 백그라운드로 이동했을 때 사용할 오버레이 형태를 선택합니다.\n'
+                              '하나만 선택되며, 선택된 모드만 실행/종료 조건을 공유합니다.',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.black87,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            ChoiceChip(
+                              label: const Text('플로팅 버블'),
+                              selected:
+                              currentOverlayMode == OverlayMode.bubble,
+                              onSelected: (selected) async {
+                                if (!selected) return;
+                                currentOverlayMode = OverlayMode.bubble;
+                                setSheetState(() {});
+                                await OverlayModeConfig
+                                    .setMode(OverlayMode.bubble);
+
+                                // 이미 떠 있는 오버레이가 있으면 모드 갱신
+                                try {
+                                  if (await FlutterOverlayWindow.isActive()) {
+                                    await FlutterOverlayWindow
+                                        .shareData('__mode:bubble__');
+                                    await FlutterOverlayWindow
+                                        .shareData('__collapse__');
+                                  }
+                                } catch (_) {}
+
+                                if (!ctx.mounted) return;
+                                showSuccessSnackbar(
+                                  context,
+                                  '플로팅 버블 모드가 선택되었습니다.',
+                                );
+                              },
+                            ),
+                            ChoiceChip(
+                              label: const Text('상단 50% 포그라운드'),
+                              selected:
+                              currentOverlayMode == OverlayMode.topHalf,
+                              onSelected: (selected) async {
+                                if (!selected) return;
+                                currentOverlayMode = OverlayMode.topHalf;
+                                setSheetState(() {});
+                                await OverlayModeConfig
+                                    .setMode(OverlayMode.topHalf);
+
+                                try {
+                                  if (await FlutterOverlayWindow.isActive()) {
+                                    await FlutterOverlayWindow
+                                        .shareData('__mode:topHalf__');
+                                    await FlutterOverlayWindow
+                                        .shareData('__collapse__');
+                                  }
+                                } catch (_) {}
+
+                                if (!ctx.mounted) return;
+                                showSuccessSnackbar(
+                                  context,
+                                  '상단 50% 포그라운드 모드가 선택되었습니다.',
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '현재 선택: ${labelFor(currentOverlayMode)}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.black54,
+                          ),
                         ),
                       ],
                     ),
@@ -529,8 +685,7 @@ class _TopRow extends StatelessWidget {
                           children: [
                             Expanded(
                               child: OutlinedButton.icon(
-                                icon:
-                                const Icon(Icons.check_circle_outline),
+                                icon: const Icon(Icons.check_circle_outline),
                                 onPressed: () async {
                                   final to = mailToCtrl.text.trim();
                                   if (!EmailConfig.isValidToList(to)) {
@@ -556,7 +711,8 @@ class _TopRow extends StatelessWidget {
                             const SizedBox(width: 8),
                             Expanded(
                               child: OutlinedButton.icon(
-                                icon: const Icon(Icons.copy_all_outlined),
+                                icon:
+                                const Icon(Icons.copy_all_outlined),
                                 onPressed: () async {
                                   final raw = 'To: ${mailToCtrl.text}';
                                   await Clipboard.setData(
@@ -626,8 +782,12 @@ class _TopRow extends StatelessWidget {
                         ),
                         const SizedBox(height: 16),
 
-                        // ✅ 플로팅 버블(QuickOverlay) 권한 섹션
+                        // ✅ 플로팅 버블/포그라운드 오버레이 권한 섹션 (누구나)
                         buildOverlayPermissionSection(),
+
+                        // ✅ 오버레이 모드 선택 섹션 (본사 계정에서만 노출)
+                        if (overlayModeCardEnabled)
+                          buildOverlayModeSection(),
 
                         // 업로드용 Google Sheets
                         buildSheetSection(
@@ -647,7 +807,8 @@ class _TopRow extends StatelessWidget {
 
                         // 업무 종료 보고용 Google Sheets
                         buildSheetSection(
-                          icon: Icons.assignment_turned_in_outlined,
+                          icon:
+                          Icons.assignment_turned_in_outlined,
                           title: '업무 종료 보고용 Google Sheets',
                           controller: endReportCtrl,
                           onSave: (id) async {

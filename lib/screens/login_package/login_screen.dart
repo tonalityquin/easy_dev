@@ -30,8 +30,7 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStateMixin {
   // 필요한 것만 생성/폐기
   ServiceLoginController? _serviceLoginController;
   SimpleLoginController? _simpleLoginController;
@@ -133,8 +132,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   bool _isHeadTarget() {
     // 본사 목적지들에 대한 하드코딩된 식별
-    return _redirectAfterLogin == AppRoutes.headStub ||
-        _redirectAfterLogin == AppRoutes.headquarterPage;
+    return _redirectAfterLogin == AppRoutes.headStub || _redirectAfterLogin == AppRoutes.headquarterPage;
   }
 
   /// ✅ 모드별 기본 라우트 결정
@@ -156,8 +154,7 @@ class _LoginScreenState extends State<LoginScreen>
   void _navigateAfterLogin() {
     // ✅ 본사 진입은 'selectedArea == belivus' 일 때만 허용 (하드코딩)
     if (_isHeadTarget()) {
-      final selectedArea =
-          context.read<UserState>().user?.selectedArea?.trim() ?? '';
+      final selectedArea = context.read<UserState>().user?.selectedArea?.trim() ?? '';
       if (selectedArea != 'belivus') {
         // 접근 차단: 허브로 복귀
         if (!mounted) return;
@@ -193,12 +190,11 @@ class _LoginScreenState extends State<LoginScreen>
                   const SizedBox(height: 12),
                   Text(
                     '접근 가능한 모드가 아닙니다. '
-                        '(요청: ${_requiredMode!}, 현재: ${widget.mode})',
+                    '(요청: ${_requiredMode!}, 현재: ${widget.mode})',
                   ),
                   const SizedBox(height: 12),
                   FilledButton(
-                    onPressed: () => Navigator.of(context)
-                        .pushReplacementNamed(AppRoutes.selector),
+                    onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.selector),
                     child: const Text('허브로 돌아가기'),
                   ),
                 ],

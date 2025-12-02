@@ -1,4 +1,4 @@
-// lib/screens/selector_hubs_package/dev_auth.dart
+// lib/selector_hubs_package/dev_auth.dart
 import 'dart:convert'; // base64, utf8
 import 'package:crypto/crypto.dart'; // sha256
 import 'package:shared_preferences/shared_preferences.dart';
@@ -7,10 +7,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 // dev_hash_once.dart 로 생성한 값으로 교체 가능
 const _DEV_SALT_B64 = 'nWPSmnV2ktkgirphVlVCqw==';
-const _DEV_HASH_HEX = '78f0a759b1da2b6570935e8a2b22e7ccde1d30ba91d688672726fcb40cd67677';
+const _DEV_HASH_HEX =
+    '78f0a759b1da2b6570935e8a2b22e7ccde1d30ba91d688672726fcb40cd67677';
 
 // SharedPreferences 키
-const prefsKeyMode = 'mode'; // 'service' | 'tablet'
+const prefsKeyMode = 'mode'; // 'service' | 'tablet' | 'simple'
 const _prefsKeyDevAuth = 'dev_auth';
 const _prefsKeyDevAuthUntil = 'dev_auth_until';
 const Duration devTtl = Duration(days: 7);
@@ -18,7 +19,11 @@ const Duration devTtl = Duration(days: 7);
 class DevPrefs {
   final String? savedMode;
   final bool devAuthorized;
-  const DevPrefs({required this.savedMode, required this.devAuthorized});
+
+  const DevPrefs({
+    required this.savedMode,
+    required this.devAuthorized,
+  });
 }
 
 class DevAuth {
@@ -44,13 +49,15 @@ class DevAuth {
     final untilMs = prefs.getInt(_prefsKeyDevAuthUntil);
 
     if (dev) {
-      final alive = untilMs != null && DateTime.now().millisecondsSinceEpoch < untilMs;
+      final alive = untilMs != null &&
+          DateTime.now().millisecondsSinceEpoch < untilMs;
       if (!alive) {
         await prefs.remove(_prefsKeyDevAuth);
         await prefs.remove(_prefsKeyDevAuthUntil);
         dev = false;
       }
     }
+
     return DevPrefs(savedMode: savedMode, devAuthorized: dev);
   }
 
@@ -58,8 +65,10 @@ class DevAuth {
     final prefs = await SharedPreferences.getInstance();
     if (value) {
       await prefs.setBool(_prefsKeyDevAuth, true);
-      await prefs.setInt(_prefsKeyDevAuthUntil,
-          DateTime.now().add(devTtl).millisecondsSinceEpoch);
+      await prefs.setInt(
+        _prefsKeyDevAuthUntil,
+        DateTime.now().add(devTtl).millisecondsSinceEpoch,
+      );
     } else {
       await prefs.remove(_prefsKeyDevAuth);
       await prefs.remove(_prefsKeyDevAuthUntil);
