@@ -21,6 +21,12 @@ const double kTopOverlayDesignHeight = 520.0;
 /// 오늘 휴게 버튼 사용 여부를 'YYYY-MM-DD' 형태의 문자열로 저장
 const String kLastBreakDatePrefsKey = 'last_break_date';
 
+/// 🔹 "휴게 이후 상단 50% 포그라운드 모드를 자동 해제한 마지막 날짜"
+///    - 값 형식은 'YYYY-MM-DD'
+///    - last_break_date 와 같으면: "이번 휴게에 대한 해제 기회는 이미 사용함"
+const String kLastTopHalfResetByBreakDateKey =
+    'last_tophalf_reset_by_break';
+
 /// 오버레이에서 사용할 UI 모드
 /// - bubble  : 기존 플로팅 버블 + 글라스 패널
 /// - topHalf : 상단 고정 포그라운드 UI (컨셉상 '상단 패널' 모드)
@@ -177,9 +183,8 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
     final division = prefs.getString('division') ?? '';
     final selectedArea = prefs.getString('selectedArea') ?? '';
 
-    final enabled = division.isNotEmpty &&
-        selectedArea.isNotEmpty &&
-        division == selectedArea;
+    final enabled =
+        division.isNotEmpty && selectedArea.isNotEmpty && division == selectedArea;
 
     if (!mounted) return;
     setState(() {
@@ -231,34 +236,26 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
 
   /// 패널 상태/타이머 초기화 + SharedPreferences 기준 모드 전환
   ///
-  /// - SharedPreferences 에서 'last_break_date' 값을 읽는다.
-  /// - 오늘 날짜와 저장된 날짜가 다르다면(= 오늘 휴게 버튼을 누르지 않았다면):
-  ///     상단(포그라운드) 모드에서 → 버블 모드로 전환 + 상태/타이머 초기화
-  /// - 오늘 이미 눌렀다면: 안내 다이얼로그로 이유를 알려줌
+  /// 동작 규칙
+  /// 1) 오늘 휴게 기록 없음  -> 상단 해제 X, "먼저 휴게 사용" 안내
+  /// 2) 오늘 휴게 기록 있음 + 이번 휴게 기준 해제권 이미 사용 -> 안내만
+  /// 3) 오늘 휴게 기록 있음 + 해제권 아직 미사용 + 현재 topHalf 모드일 때
+  ///    -> topHalf → bubble 1회 전환 + 상태/타이머 초기화 + 해제권 사용 기록
   void _resetPanel() async {
     final prefs = await SharedPreferences.getInstance();
 
     // 메인 앱에서 휴게 버튼 성공 시 저장한 'YYYY-MM-DD' 문자열
     final String? lastBreakDate = prefs.getString(kLastBreakDatePrefsKey);
+    final String? lastTopHalfResetByBreakDate =
+    prefs.getString(kLastTopHalfResetByBreakDateKey);
+
     final String todayStr = _formatDate(DateTime.now());
 
     final bool hasRestPressedToday = (lastBreakDate == todayStr);
 
-    // 오늘 휴게 버튼을 안 눌렀고, 현재 상단 모드일 때만 동작
-    if (!hasRestPressedToday && _uiMode == OverlayUIMode.topHalf) {
-      setState(() {
-        _status = '대기 중';
-        _overlayStartedAt = DateTime.now();
-        _elapsed = Duration.zero;
-
-        // 상단 50% 포그라운드 → 플로팅 버블 모드로 전환
-        _uiMode = OverlayUIMode.bubble;
-      });
-      return;
-    }
-
-    // 🔹 이미 오늘 휴게를 눌렀다면 → 왜 변화가 없는지 간단히 알려주기
-    if (hasRestPressedToday && mounted) {
+    // 1) 오늘 휴게 기록이 없는 경우: 상단 자동 해제 X, 안내만
+    if (!hasRestPressedToday) {
+      if (!mounted) return;
       await showDialog<void>(
         context: context,
         builder: (ctx) {
@@ -267,39 +264,17 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(18),
             ),
-            titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-            contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-            actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-            title: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1D4ED8).withOpacity(0.08),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.free_breakfast_rounded,
-                    size: 20,
-                    color: Color(0xFF1D4ED8),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Text(
-                    '오늘 휴게 사용 완료',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF111827),
-                    ),
-                  ),
-                ),
-              ],
+            title: const Text(
+              '휴게 기록이 없습니다',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF111827),
+              ),
             ),
             content: const Text(
-              '오늘은 이미 휴게 사용이 기록되어 있어\n'
-                  '추가로 확인할 휴게 내역이 없습니다.',
+              '오늘은 아직 "휴게 사용 확인"이 기록되지 않았습니다.\n'
+                  '메인 앱에서 먼저 휴게 사용을 기록해 주세요.',
               style: TextStyle(
                 fontSize: 13,
                 height: 1.4,
@@ -325,7 +300,87 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
           );
         },
       );
+      return;
     }
+
+    // 2) 오늘 휴게는 했는데, 이번 휴게 기준으로 상단 해제를 이미 한 번 쓴 경우
+    final bool alreadyResetOnceForToday =
+    (lastTopHalfResetByBreakDate == lastBreakDate);
+
+    if (alreadyResetOnceForToday) {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) {
+          return AlertDialog(
+            backgroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+            title: const Text(
+              '오늘 상단 패널 해제 완료',
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF111827),
+              ),
+            ),
+            content: const Text(
+              '오늘 휴게 이후 상단 50% 포그라운드 모드는\n'
+                  '이미 한 번 해제되었습니다.\n\n'
+                  '추가로 상단 모드를 변경하려면\n'
+                  '메인 앱에서 직접 설정해 주세요.',
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.4,
+                color: Color(0xFF4B5563),
+              ),
+            ),
+            actions: [
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF111827),
+                    textStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  child: const Text('확인'),
+                ),
+              ),
+            ],
+          );
+        },
+      );
+      return;
+    }
+
+    // 3) 오늘 휴게를 했고, 아직 그 휴게 기준으로 해제권을 안 썼고,
+    //    현재 모드가 topHalf 일 때만 → 1회 자동 해제 허용
+    if (_uiMode == OverlayUIMode.topHalf) {
+      setState(() {
+        _status = '대기 중';
+        _overlayStartedAt = DateTime.now();
+        _elapsed = Duration.zero;
+
+        // 상단 50% 포그라운드 → 플로팅 버블 모드로 전환
+        _uiMode = OverlayUIMode.bubble;
+      });
+
+      // 이번 휴게 기준의 해제 기회를 사용했다고 기록
+      if (lastBreakDate != null && lastBreakDate.isNotEmpty) {
+        await prefs.setString(
+          kLastTopHalfResetByBreakDateKey,
+          lastBreakDate,
+        );
+      }
+      return;
+    }
+
+    // 4) 이미 bubble 상태인데 누르는 경우 등 → 추가 동작 없음
   }
 
   String _formatElapsed(Duration d) {
@@ -418,7 +473,8 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(32),
               gradient: LinearGradient(
@@ -464,7 +520,8 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                 Flexible(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment:
+                    CrossAxisAlignment.start,
                     children: [
                       Text(
                         '근무 중 · ${_formatElapsed(_elapsed)}',
@@ -479,7 +536,8 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                       const SizedBox(height: 2),
                       AnimatedSwitcher(
                         duration: _switchDuration,
-                        transitionBuilder: (child, animation) {
+                        transitionBuilder:
+                            (child, animation) {
                           final curved = CurvedAnimation(
                             parent: animation,
                             curve: Curves.easeOutCubic,
@@ -500,7 +558,8 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                           _status,
                           key: ValueKey(_status),
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.78),
+                            color: Colors.white
+                                .withOpacity(0.78),
                             fontSize: 11,
                             height: 1.2,
                           ),
@@ -529,7 +588,8 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF22C55E).withOpacity(0.55),
+                        color: const Color(0xFF22C55E)
+                            .withOpacity(0.55),
                         blurRadius: 12,
                         offset: const Offset(0, 6),
                       ),
@@ -580,20 +640,23 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   mainAxisSize: MainAxisSize.max,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment:
+                  CrossAxisAlignment.start,
                   children: [
                     // ───── 상단 헤더: 안내 문구 + 경과 시간 뱃지 ─────
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
+                      crossAxisAlignment:
+                      CrossAxisAlignment.center,
                       children: [
                         Expanded(
                           child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment:
+                            CrossAxisAlignment.start,
                             children: [
                               const Text(
                                 '앱이 아직 실행 중입니다.',
                                 style: TextStyle(
-                                  color: Color(0xFF111827), // 거의 검정에 가까운 딥그레이
+                                  color: Color(0xFF111827),
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -602,7 +665,7 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                               Text.rich(
                                 TextSpan(
                                   style: const TextStyle(
-                                    color: Color(0xFF4B5563), // 기본 회색 계열
+                                    color: Color(0xFF4B5563),
                                     fontSize: 11,
                                   ),
                                   children: const [
@@ -612,8 +675,10 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                                     TextSpan(
                                       text: '퇴근',
                                       style: TextStyle(
-                                        fontWeight: FontWeight.w700, // 굵게
-                                        color: Color(0xFFDC2626), // 🔴 붉은색 강조
+                                        fontWeight:
+                                        FontWeight.w700,
+                                        color:
+                                        Color(0xFFDC2626),
                                       ),
                                     ),
                                     TextSpan(
@@ -622,20 +687,23 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                                   ],
                                 ),
                                 maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                                overflow:
+                                TextOverflow.ellipsis,
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(
+                          padding:
+                          const EdgeInsets.symmetric(
                             horizontal: 10,
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF1D4ED8), // 파란색 뱃지
-                            borderRadius: BorderRadius.circular(999),
+                            color: const Color(0xFF1D4ED8),
+                            borderRadius:
+                            BorderRadius.circular(999),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -667,21 +735,24 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        color: const Color(0xFFF9FAFB), // 아주 옅은 회색 배경
+                        borderRadius:
+                        BorderRadius.circular(16),
+                        color: const Color(0xFFF9FAFB),
                         border: Border.all(
-                          color: const Color(0xFFE5E7EB), // 연한 테두리
+                          color: const Color(0xFFE5E7EB),
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.04),
+                            color: Colors.black
+                                .withOpacity(0.04),
                             blurRadius: 12,
                             offset: const Offset(0, 6),
                           ),
                         ],
                       ),
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                        crossAxisAlignment:
+                        CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: const [
@@ -715,17 +786,20 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                           const SizedBox(height: 4),
                           _buildChecklistItem(
                             icon: Icons.check_circle_outline,
-                            label: '오늘 하루 휴게시간 버튼은 눌렀는지',
+                            label:
+                            '오늘 하루 휴게시간 버튼은 눌렀는지',
                           ),
                           const SizedBox(height: 4),
                           _buildChecklistItem(
                             icon: Icons.check_circle_outline,
-                            label: '퇴근하기 전, 유니폼 및 근무지 정리는 했는지',
+                            label:
+                            '퇴근하기 전, 유니폼 및 근무지 정리는 했는지',
                           ),
                           const SizedBox(height: 4),
                           _buildChecklistItem(
                             icon: Icons.check_circle_outline,
-                            label: '입차 완료 테이블은 "비우기"를 했는지',
+                            label:
+                            '입차 완료 테이블은 "비우기"를 했는지',
                           ),
 
                           const SizedBox(height: 8),
@@ -748,12 +822,14 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                           const SizedBox(height: 4),
                           _buildChecklistItem(
                             icon: Icons.check_circle_outline,
-                            label: '오픈조는 퇴근조에게 업무 인수 인계를 했는지',
+                            label:
+                            '오픈조는 퇴근조에게 업무 인수 인계를 했는지',
                           ),
                           const SizedBox(height: 4),
                           _buildChecklistItem(
                             icon: Icons.check_circle_outline,
-                            label: '오픈조는 오늘 하루 업무 시작에 대해 보고 했는지',
+                            label:
+                            '오픈조는 오늘 하루 업무 시작에 대해 보고 했는지',
                           ),
                           const SizedBox(height: 8),
                           const Divider(
@@ -773,12 +849,14 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                           const SizedBox(height: 4),
                           _buildChecklistItem(
                             icon: Icons.check_circle_outline,
-                            label: '퇴근조는 오늘 하루 업무 결과에 대해 보고 했는지',
+                            label:
+                            '퇴근조는 오늘 하루 업무 결과에 대해 보고 했는지',
                           ),
                           const SizedBox(height: 4),
                           _buildChecklistItem(
                             icon: Icons.check_circle_outline,
-                            label: '퇴근조는 오늘 하루 업무 종료에 대한 마감을 했는지',
+                            label:
+                            '퇴근조는 오늘 하루 업무 종료에 대한 마감을 했는지',
                           ),
 
                           // 🔸 체크리스트 강조 문구 (메인 앱 이동 유도)
@@ -788,7 +866,7 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                                 '아래의 "앱으로 돌아가기" 버튼을 눌러\n'
                                 '지금 바로 처리해 주세요.',
                             style: TextStyle(
-                              color: Color(0xFFF97316), // 주황 계열 강조 색
+                              color: Color(0xFFF97316),
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
                               height: 1.3,
@@ -807,14 +885,21 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                         Expanded(
                           child: ElevatedButton.icon(
                             onPressed: _launchMainApp,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF111827), // 진한 색상
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
+                            style:
+                            ElevatedButton.styleFrom(
+                              backgroundColor:
+                              const Color(0xFF111827),
+                              foregroundColor:
+                              Colors.white,
+                              padding:
+                              const EdgeInsets.symmetric(
                                 vertical: 10,
                               ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(999),
+                              shape:
+                              RoundedRectangleBorder(
+                                borderRadius:
+                                BorderRadius.circular(
+                                    999),
                               ),
                             ),
                             icon: const Icon(
@@ -825,7 +910,8 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                               '앱으로 돌아가기',
                               style: TextStyle(
                                 fontSize: 13,
-                                fontWeight: FontWeight.w600,
+                                fontWeight:
+                                FontWeight.w600,
                               ),
                             ),
                           ),
@@ -835,16 +921,22 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                         Expanded(
                           child: OutlinedButton.icon(
                             onPressed: _resetPanel,
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF111827),
+                            style:
+                            OutlinedButton.styleFrom(
+                              foregroundColor:
+                              const Color(0xFF111827),
                               side: const BorderSide(
                                 color: Color(0xFF9CA3AF),
                               ),
-                              padding: const EdgeInsets.symmetric(
+                              padding:
+                              const EdgeInsets.symmetric(
                                 vertical: 10,
                               ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(999),
+                              shape:
+                              RoundedRectangleBorder(
+                                borderRadius:
+                                BorderRadius.circular(
+                                    999),
                               ),
                             ),
                             icon: const Icon(
@@ -855,7 +947,8 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                               '휴게 중입니다',
                               style: TextStyle(
                                 fontSize: 13,
-                                fontWeight: FontWeight.w600,
+                                fontWeight:
+                                FontWeight.w600,
                               ),
                             ),
                           ),
@@ -930,22 +1023,30 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
               },
               child: AnimatedContainer(
                 duration: _switchDuration,
-                padding: _expanded ? const EdgeInsets.all(6) : EdgeInsets.zero,
+                padding: _expanded
+                    ? const EdgeInsets.all(6)
+                    : EdgeInsets.zero,
                 decoration: BoxDecoration(
                   color: _expanded
-                      ? kOverlayBackgroundColor.withOpacity(0.3)
+                      ? kOverlayBackgroundColor
+                      .withOpacity(0.3)
                       : Colors.transparent,
-                  borderRadius: BorderRadius.circular(32),
+                  borderRadius:
+                  BorderRadius.circular(32),
                 ),
                 child: AnimatedSwitcher(
                   duration: _switchDuration,
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  transitionBuilder: (child, animation) {
+                  switchInCurve:
+                  Curves.easeOutCubic,
+                  switchOutCurve:
+                  Curves.easeInCubic,
+                  transitionBuilder:
+                      (child, animation) {
                     final curved = CurvedAnimation(
                       parent: animation,
                       curve: Curves.easeOutCubic,
-                      reverseCurve: Curves.easeInCubic,
+                      reverseCurve:
+                      Curves.easeInCubic,
                     );
                     return FadeTransition(
                       opacity: curved,
@@ -960,7 +1061,8 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                   },
                   child: _expanded
                       ? _buildExpandedPanel(context)
-                      : _buildCollapsedBubble(context),
+                      : _buildCollapsedBubble(
+                      context),
                 ),
               ),
             ),
