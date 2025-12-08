@@ -2,7 +2,10 @@
 
 import 'package:flutter/material.dart';
 
-/// 팀원 모드용 "서류 양식" 버튼 섹션
+import 'widgets/simple_payment_document_sheet.dart';
+
+
+/// 팀원 모드용 "결재 서류" 버튼 섹션
 class SimpleInsideDocumentFormButtonSection extends StatelessWidget {
   const SimpleInsideDocumentFormButtonSection({
     super.key,
@@ -14,9 +17,10 @@ class SimpleInsideDocumentFormButtonSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ElevatedButton.icon(
-      icon: const Icon(Icons.description_outlined),
+      // 결제/영수증 느낌의 아이콘
+      icon: const Icon(Icons.receipt_long),
       label: const Text(
-        '서류 양식',
+        '결재 서류',
         style: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.bold,
@@ -33,16 +37,9 @@ class SimpleInsideDocumentFormButtonSection extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
         ),
       ),
-      onPressed: isDisabled
-          ? null
-          : () {
-        // TODO: 실제 서류 양식 기능(예: 템플릿 선택 바텀시트, AppRoutes.attendanceSheet 이동 등)으로 교체
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('서류 양식 기능은 아직 연결되지 않았습니다.'),
-          ),
-        );
-      },
+      // ✅ 이제 실제로 결재 서류 선택 바텀시트를 연다
+      onPressed:
+      isDisabled ? null : () => openSimplePaymentDocumentSheet(context),
     );
   }
 }

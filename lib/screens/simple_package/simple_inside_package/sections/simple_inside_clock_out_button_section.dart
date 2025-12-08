@@ -1,12 +1,12 @@
 // lib/screens/simple_package/simple_inside_package/sections/simple_inside_clock_out_button_section.dart
 import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
-
-// AppExitFlag 는 lib/utils 아래에 있다고 가정
-import '../../../../../../utils/app_exit_flag.dart';
+import 'package:easydev/time_record/simple_mode/simple_mode_attendance_repository.dart';
+import 'package:easydev/utils/app_exit_flag.dart';
 
 class SimpleInsideClockOutButtonSection extends StatelessWidget {
   final bool isDisabled;
@@ -16,8 +16,15 @@ class SimpleInsideClockOutButtonSection extends StatelessWidget {
     this.isDisabled = false,
   });
 
-  /// ✅ 헤더의 _exitApp 과 동일한 종료 플로우
+  /// ✅ 헤더의 _exitApp 과 동일한 종료 플로우 + 퇴근 시간 로그 기록
   Future<void> _exitApp(BuildContext context) async {
+    // ✅ 먼저 퇴근 시간 로그를 SQLite에 기록
+    final now = DateTime.now();
+    await SimpleModeAttendanceRepository.instance.insertEvent(
+      dateTime: now,
+      type: SimpleModeAttendanceType.workOut,
+    );
+
     // 명시적 종료 플로우 시작 플래그 ON
     AppExitFlag.beginExit();
 
@@ -97,7 +104,7 @@ class SimpleInsideClockOutButtonSection extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
         ),
       ),
-      // 🔥 여기서 헤더와 동일한 앱 종료 플로우 실행
+      // 🔥 여기서 헤더와 동일한 앱 종료 플로우 실행 + 퇴근 로그
       onPressed: isDisabled ? null : () => _exitApp(context),
     );
   }

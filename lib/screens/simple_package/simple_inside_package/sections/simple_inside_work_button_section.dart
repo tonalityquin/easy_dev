@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:easydev/time_record/simple_mode/simple_mode_attendance_repository.dart';
 
-// 전체 화면 바텀 시트를 띄우는 헬퍼 함수 import
-import '../widgets/simple_inside_work_bottom_sheet.dart';
+import 'widgets/simple_punch_card_feedback.dart';
+
 
 class SimpleInsideWorkButtonSection extends StatelessWidget {
   /// 필요하다면 보고 버튼처럼 비활성화 플래그도 쓸 수 있게 확장
@@ -36,9 +37,24 @@ class SimpleInsideWorkButtonSection extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
         ),
       ),
-      // 여기서 직접 헬퍼 함수 호출 (Report 버튼과 동일 패턴)
-      onPressed:
-      isDisabled ? null : () => showSimpleInsideWorkFullScreenBottomSheet(context),
+      onPressed: isDisabled
+          ? null
+          : () async {
+        final now = DateTime.now();
+
+        // 1) SQLite에 출근 기록 저장
+        await SimpleModeAttendanceRepository.instance.insertEvent(
+          dateTime: now,
+          type: SimpleModeAttendanceType.workIn,
+        );
+
+        // 2) 타임카드 펀칭 연출
+        await showPunchCardFeedback(
+          context,
+          type: SimpleModeAttendanceType.workIn,
+          dateTime: now,
+        );
+      },
     );
   }
 }

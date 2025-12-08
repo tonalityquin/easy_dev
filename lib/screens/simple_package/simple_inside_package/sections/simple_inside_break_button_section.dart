@@ -1,6 +1,5 @@
-// lib/screens/simple_package/simple_inside_package/sections/simple_inside_break_button_section.dart
-
 import 'package:flutter/material.dart';
+import 'package:easydev/time_record/simple_mode/simple_mode_attendance_repository.dart';
 
 /// 팀원 모드용 "휴게 시간" 버튼 섹션
 class SimpleInsideBreakButtonSection extends StatelessWidget {
@@ -35,11 +34,19 @@ class SimpleInsideBreakButtonSection extends StatelessWidget {
       ),
       onPressed: isDisabled
           ? null
-          : () {
-        // TODO: 실제 휴게 시간 기능(예: AppRoutes.breakSheet 이동 또는 전용 바텀시트)으로 교체
+          : () async {
+        final now = DateTime.now();
+
+        // ✅ 휴게 시간 버튼 누른 시각을 SQLite에 기록
+        await SimpleModeAttendanceRepository.instance.insertEvent(
+          dateTime: now,
+          type: SimpleModeAttendanceType.breakTime,
+        );
+
+        // 간단 피드백
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('휴게 시간 기능은 아직 연결되지 않았습니다.'),
+            content: Text('휴게 시간이 기록되었습니다.'),
           ),
         );
       },

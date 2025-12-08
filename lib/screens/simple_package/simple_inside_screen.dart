@@ -14,12 +14,14 @@ import 'simple_inside_package/sections/simple_inside_user_info_card_section.dart
 import 'simple_inside_package/sections/simple_inside_header_widget_section.dart';
 import 'simple_inside_package/sections/simple_inside_clock_out_button_section.dart';
 import 'simple_inside_package/sections/simple_inside_document_box_button_section.dart';
-import 'simple_inside_package/sections/simple_inside_break_button_section.dart';
 import 'simple_inside_package/sections/simple_inside_document_form_button_section.dart';
+import 'simple_inside_package/sections/simple_inside_punch_recorder_section.dart';
 
 /// 약식 출퇴근 화면 모드:
 /// - common: 기존 약식 화면(업무 보고 / 출근하기 / 퇴근하기 / 서류함 열기)
-/// - team  : 팀원 전용(출근하기 / 휴게 시간 / 퇴근하기 / 서류 양식)
+/// - team  : 필드 유저 전용
+///   · 출퇴근/휴게 기록은 "출퇴근 기록기 카드"에서 펀칭으로만 입력
+///   · 하단 버튼에는 결제 서류 버튼만 노출
 enum SimpleInsideMode {
   common,
   team,
@@ -144,7 +146,7 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
     debugPrint('[SimpleInsideScreen] resolved role="$role"');
 
     if (role == 'fieldCommon') {
-      // 팀원 모드: 출근/휴게/퇴근/서류 양식
+      // 필드 유저(팀원) 모드
       return SimpleInsideMode.team;
     }
 
@@ -176,7 +178,15 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
                         child: Column(
                           children: [
                             const SimpleInsideHeaderWidgetSection(),
-                            const SimpleInsideUserInfoCardSection(),
+
+                            // 🔥 공통/팀원 모드에 따라 다른 카드 사용
+                            if (mode == SimpleInsideMode.team)
+                            // 필드 유저: 출퇴근 기록기 카드로만 펀칭
+                              const SimpleInsidePunchRecorderSection()
+                            else
+                            // 일반 모드: 근무자 정보 카드 유지
+                              const SimpleInsideUserInfoCardSection(),
+
                             const SizedBox(height: 6),
 
                             // 모드별 버튼 레이아웃 분기
@@ -275,9 +285,9 @@ class _CommonModeButtonGrid extends StatelessWidget {
   }
 }
 
-/// 팀원(team) 모드 버튼 그리드
-/// - 1행: 출근하기 / 휴게 시간
-/// - 2행: 퇴근하기 / 서류 양식
+/// 팀원(team / fieldCommon) 모드 버튼 그리드
+/// - 출근/휴게/퇴근은 상단 "출퇴근 기록기" 카드에서만 펀칭
+/// - 하단에는 결제 서류 버튼만 유지
 class _TeamModeButtonGrid extends StatelessWidget {
   const _TeamModeButtonGrid();
 
@@ -287,22 +297,6 @@ class _TeamModeButtonGrid extends StatelessWidget {
       children: const [
         Row(
           children: [
-            Expanded(
-              child: SimpleInsideWorkButtonSection(),
-            ),
-            SizedBox(width: 12),
-            Expanded(
-              child: SimpleInsideBreakButtonSection(),
-            ),
-          ],
-        ),
-        SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: SimpleInsideClockOutButtonSection(),
-            ),
-            SizedBox(width: 12),
             Expanded(
               child: SimpleInsideDocumentFormButtonSection(),
             ),
