@@ -1,4 +1,5 @@
 // lib/screens/simple_package/simple_inside_screen.dart
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,7 +7,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../utils/init/logout_helper.dart';
 import '../../services/endtime_reminder_service.dart';
-
 import 'simple_inside_package/simple_inside_controller.dart';
 import 'simple_inside_package/sections/simple_inside_report_button_section.dart';
 import 'simple_inside_package/sections/simple_inside_work_button_section.dart';
@@ -14,9 +14,27 @@ import 'simple_inside_package/sections/simple_inside_user_info_card_section.dart
 import 'simple_inside_package/sections/simple_inside_header_widget_section.dart';
 import 'simple_inside_package/sections/simple_inside_clock_out_button_section.dart';
 import 'simple_inside_package/sections/simple_inside_document_box_button_section.dart';
+import 'simple_inside_package/sections/simple_inside_break_button_section.dart';
+import 'simple_inside_package/sections/simple_inside_document_form_button_section.dart';
+
+/// 약식 출퇴근 화면 모드:
+/// - common: 기존 약식 화면(업무 보고 / 출근하기 / 퇴근하기 / 서류함 열기)
+/// - team  : 팀원 전용(출근하기 / 휴게 시간 / 퇴근하기 / 서류 양식)
+enum SimpleInsideMode {
+  common,
+  team,
+}
 
 class SimpleInsideScreen extends StatefulWidget {
-  const SimpleInsideScreen({super.key});
+  const SimpleInsideScreen({
+    super.key,
+    this.mode, // 외부에서 명시적으로 넘기지 않으면 null
+  });
+
+  /// 화면 모드
+  /// - null 이면 UserState.user.role 기반으로 자동 결정
+  /// - 값이 있으면 외부 지정 모드를 그대로 사용
+  final SimpleInsideMode? mode;
 
   @override
   State<SimpleInsideScreen> createState() => _SimpleInsideScreenState();
@@ -50,7 +68,7 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
     });
   }
 
-  /// 🔹 "어제 출근만 하고 퇴근 안 누른 상태" 등을 오늘 앱 실행 시 자동으로 정리
+  /// "어제 출근만 하고 퇴근 안 누른 상태" 등을 오늘 앱 실행 시 자동으로 정리
   Future<void> _resetStaleWorkingState(UserState userState) async {
     // Firestore user_accounts.isWorking 토글(true → false)
     await userState.isHeWorking();
@@ -72,7 +90,7 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
     );
   }
 
-  // ⬇️ 좌측 상단(11시) 고정 라벨: 'simple screen'
+  // 좌측 상단(11시) 고정 라벨: 'simple screen'
   Widget _buildScreenTag(BuildContext context) {
     final base = Theme.of(context).textTheme.labelSmall;
     final style = (base ??
@@ -99,15 +117,51 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
     );
   }
 
+  /// 실제 사용할 모드를 결정하는 헬퍼
+  /// 1) widget.mode 가 지정되어 있으면 그대로 사용
+  /// 2) null 이면 UserState.user.role 기반으로 자동 결정
+  SimpleInsideMode _resolveMode(UserState userState) {
+    // 1) 외부에서 명시적으로 모드가 들어온 경우
+    if (widget.mode != null) {
+      return widget.mode!;
+    }
+
+    // 2) role 기반 자동 모드 결정
+    //    - userState.user 가 null 일 수도 있다는 전제하에 안전하게 처리
+    String role = '';
+
+    final user = userState.user; // UserModel? 라고 가정
+    if (user != null) {
+      // user.role 이 String 또는 String? 일 수 있으므로 한 번 더 방어적으로 처리
+      final dynamic rawRole = user.role;
+      if (rawRole is String) {
+        role = rawRole.trim();
+      } else if (rawRole != null) {
+        role = rawRole.toString().trim();
+      }
+    }
+
+    debugPrint('[SimpleInsideScreen] resolved role="$role"');
+
+    if (role == 'fieldCommon') {
+      // 팀원 모드: 출근/휴게/퇴근/서류 양식
+      return SimpleInsideMode.team;
+    }
+
+    // 그 외는 common 모드
+    return SimpleInsideMode.common;
+  }
+
   @override
   Widget build(BuildContext context) {
-    // ✅ 이 화면에서만 뒤로가기로 앱 종료되지 않도록 차단 (스낵바 안내 없음)
+    // 이 화면에서만 뒤로가기로 앱 종료되지 않도록 차단 (스낵바 안내 없음)
     return PopScope(
       canPop: false,
       child: Scaffold(
         body: Consumer<UserState>(
           builder: (context, userState, _) {
-            // 자동 라우팅은 initState의 addPostFrameCallback에서 1회 수행(현재는 제거됨)
+            // 여기서 UserState 기준으로 모드 결정
+            final mode = _resolveMode(userState);
 
             return SafeArea(
               child: Stack(
@@ -125,39 +179,19 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
                             const SimpleInsideUserInfoCardSection(),
                             const SizedBox(height: 6),
 
-                            // 1줄차: 업무 보고 / 출근하기
-                            Row(
-                              children: const [
-                                Expanded(
-                                  child: SimpleInsideReportButtonSection(),
-                                ),
-                                SizedBox(width: 12),
-                                Expanded(
-                                  child: SimpleInsideWorkButtonSection(),
-                                ),
-                              ],
-                            ),
-
-                            const SizedBox(height: 12),
-
-                            // 2줄차: 퇴근하기 / 서류함 열기
-                            Row(
-                              children: const [
-                                Expanded(
-                                  child: SimpleInsideClockOutButtonSection(),
-                                ),
-                                SizedBox(width: 12),
-                                Expanded(
-                                  child: SimpleInsideDocumentBoxButtonSection(),
-                                ),
-                              ],
-                            ),
+                            // 모드별 버튼 레이아웃 분기
+                            if (mode == SimpleInsideMode.common)
+                              const _CommonModeButtonGrid()
+                            else
+                              const _TeamModeButtonGrid(),
 
                             const SizedBox(height: 1),
                             Center(
                               child: SizedBox(
                                 height: 80,
-                                child: Image.asset('assets/images/pelican.png'),
+                                child: Image.asset(
+                                  'assets/images/pelican.png',
+                                ),
                               ),
                             ),
                           ],
@@ -199,6 +233,82 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
           },
         ),
       ),
+    );
+  }
+}
+
+/// 공통(common) 모드 버튼 그리드
+/// - 1행: 업무 보고 / 출근하기
+/// - 2행: 퇴근하기 / 서류함 열기
+class _CommonModeButtonGrid extends StatelessWidget {
+  const _CommonModeButtonGrid();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: const [
+        Row(
+          children: [
+            Expanded(
+              child: SimpleInsideReportButtonSection(),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: SimpleInsideWorkButtonSection(),
+            ),
+          ],
+        ),
+        SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: SimpleInsideClockOutButtonSection(),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: SimpleInsideDocumentBoxButtonSection(),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// 팀원(team) 모드 버튼 그리드
+/// - 1행: 출근하기 / 휴게 시간
+/// - 2행: 퇴근하기 / 서류 양식
+class _TeamModeButtonGrid extends StatelessWidget {
+  const _TeamModeButtonGrid();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: const [
+        Row(
+          children: [
+            Expanded(
+              child: SimpleInsideWorkButtonSection(),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: SimpleInsideBreakButtonSection(),
+            ),
+          ],
+        ),
+        SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: SimpleInsideClockOutButtonSection(),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: SimpleInsideDocumentFormButtonSection(),
+            ),
+          ],
+        ),
+      ],
     );
   }
 }
