@@ -109,17 +109,44 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
 
   @override
   Widget build(BuildContext context) {
-    // 🔹 simple 모드는 service 계열과 동일하게 취급
-    final isServiceLike =
-        _savedMode == null || _savedMode == 'service' || _savedMode == 'simple';
-    final serviceEnabled = isServiceLike;
-    final tabletEnabled = _savedMode == null || _savedMode == 'tablet';
+    // 🔹 모드별 허브 카드 활성화 규칙
+    // - null        : 서비스/약식/태블릿 모두 선택 가능
+    // - 'service'   : 서비스만 활성, 약식/태블릿 비활성
+    // - 'simple'    : 약식만 활성, 서비스/태블릿 비활성
+    // - 'tablet'    : 태블릿만 활성
+    final bool serviceEnabled;
+    final bool simpleEnabled;
+    final bool tabletEnabled;
+
+    if (_savedMode == null) {
+      serviceEnabled = true;
+      simpleEnabled = true;
+      tabletEnabled = true;
+    } else if (_savedMode == 'service') {
+      serviceEnabled = true;
+      simpleEnabled = false;
+      tabletEnabled = false;
+    } else if (_savedMode == 'simple') {
+      serviceEnabled = false;
+      simpleEnabled = true;
+      tabletEnabled = false;
+    } else if (_savedMode == 'tablet') {
+      serviceEnabled = false;
+      simpleEnabled = false;
+      tabletEnabled = true;
+    } else {
+      // 예기치 못한 값이 들어온 경우: 방어적으로 모두 허용
+      serviceEnabled = true;
+      simpleEnabled = true;
+      tabletEnabled = true;
+    }
 
     final List<List<Widget>> pages = [
       [
         ServiceCard(enabled: serviceEnabled),
-        // ✅ 개발자 모드 여부와 관계없이 약식 로그인 카드를 항상 표시
-        SimpleLoginCard(enabled: serviceEnabled),
+        // ✅ 개발자 모드 여부와 관계없이 약식 로그인 카드는 항상 "표시"하되,
+        //    활성/비활성은 simpleEnabled 에 의해 제어
+        SimpleLoginCard(enabled: simpleEnabled),
       ],
       [
         TabletCard(enabled: tabletEnabled),
