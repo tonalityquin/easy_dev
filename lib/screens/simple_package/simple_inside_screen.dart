@@ -8,14 +8,14 @@ import '../../../../states/user/user_state.dart';
 import '../../../utils/init/logout_helper.dart';
 import '../../services/endtime_reminder_service.dart';
 import 'simple_inside_package/simple_inside_controller.dart';
-import 'simple_inside_package/sections/simple_inside_report_button_section.dart';
-import 'simple_inside_package/sections/simple_inside_work_button_section.dart';
-import 'simple_inside_package/sections/simple_inside_user_info_card_section.dart';
-import 'simple_inside_package/sections/simple_inside_header_widget_section.dart';
-import 'simple_inside_package/sections/simple_inside_clock_out_button_section.dart';
-import 'simple_inside_package/sections/simple_inside_document_box_button_section.dart';
-import 'simple_inside_package/sections/simple_inside_document_form_button_section.dart';
-import 'simple_inside_package/sections/simple_inside_punch_recorder_section.dart';
+import 'simple_inside_package/widgets/sections/simple_inside_report_button_section.dart';
+import 'simple_inside_package/widgets/sections/simple_inside_work_button_section.dart';
+import 'simple_inside_package/widgets/sections/simple_inside_user_info_card_section.dart';
+import 'simple_inside_package/widgets/sections/simple_inside_header_widget_section.dart';
+import 'simple_inside_package/widgets/sections/simple_inside_clock_out_button_section.dart';
+import 'simple_inside_package/widgets/sections/simple_inside_document_box_button_section.dart';
+import 'simple_inside_package/widgets/sections/simple_inside_document_form_button_section.dart';
+import 'simple_inside_package/widgets/sections/simple_inside_punch_recorder_section.dart';
 
 /// 약식 출퇴근 화면 모드:
 /// - common: 기존 약식 화면(업무 보고 / 출근하기 / 퇴근하기 / 서류함 열기)
@@ -165,6 +165,24 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
             // 여기서 UserState 기준으로 모드 결정
             final mode = _resolveMode(userState);
 
+            // ✅ 유저 메타 정보 추출
+            final user = userState.user;
+            if (user == null) {
+              // 로그인 정보가 아직 안 올라온 경우 등 방어
+              return const Center(
+                child: CircularProgressIndicator(),
+              );
+            }
+
+            // 필드명은 실제 UserModel 정의에 맞게 사용
+            final String userId = user.id;      // 예: "01090351868-belivus"
+            final String userName = user.name;  // 예: "조성오"
+
+            // 🔹 현재 UserModel 에 area / division 이 없으므로
+            //    Firestore 보조 로그용으로만 빈 문자열을 전달
+            const String area = '';
+            const String division = '';
+
             return SafeArea(
               child: Stack(
                 children: [
@@ -182,7 +200,12 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
                             // 🔥 공통/팀원 모드에 따라 다른 카드 사용
                             if (mode == SimpleInsideMode.team)
                             // 필드 유저: 출퇴근 기록기 카드로만 펀칭
-                              const SimpleInsidePunchRecorderSection()
+                              SimpleInsidePunchRecorderSection(
+                                userId: userId,
+                                userName: userName,
+                                area: area,
+                                division: division,
+                              )
                             else
                             // 일반 모드: 근무자 정보 카드 유지
                               const SimpleInsideUserInfoCardSection(),

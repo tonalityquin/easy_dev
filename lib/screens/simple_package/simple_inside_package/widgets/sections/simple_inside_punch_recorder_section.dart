@@ -15,41 +15,89 @@ class _Palette {
 
 /// 약식 모드용 출퇴근 기록기 카드
 /// - 출근 / 휴게 / 퇴근 3개 펀칭
-/// - 오늘 날짜 기준
-/// - 헤더에 yyyy.MM 표시 → 달이 바뀌면 자동으로 새 카드처럼 보임
+/// - 기본은 오늘 날짜 기준이지만, 사용자가 날짜를 선택/수정할 수 있음
+/// - 헤더에 yyyy.MM · MM.dd 표시 → 날짜를 바꿔 과거 기록 수정 가능
+/// - 펀칭 시 SQLite + Firestore(commute_user_logs)에 동시에 기록
 class SimpleInsidePunchRecorderSection extends StatefulWidget {
-  const SimpleInsidePunchRecorderSection({super.key});
+  const SimpleInsidePunchRecorderSection({
+    super.key,
+    required this.userId,
+    required this.userName,
+    required this.area,
+    required this.division,
+  });
+
+  /// Firestore commute_user_logs 문서 구성에 필요한 메타 정보
+  final String userId;
+  final String userName;
+  final String area;
+  final String division;
 
   @override
-  State<SimpleInsidePunchRecorderSection> createState() => _SimpleInsidePunchRecorderSectionState();
+  State<SimpleInsidePunchRecorderSection> createState() =>
+      _SimpleInsidePunchRecorderSectionState();
 }
 
-class _SimpleInsidePunchRecorderSectionState extends State<SimpleInsidePunchRecorderSection> {
+class _SimpleInsidePunchRecorderSectionState
+    extends State<SimpleInsidePunchRecorderSection> {
+  // ✅ 선택된 기준 날짜 (기본: 오늘)
+  late DateTime _selectedDate;
+
   String? _workInTime; // 예: 09:01 (DB용, 화면에는 노출하지 않음)
   String? _breakTime; // 예: 12:30
   String? _workOutTime; // 예: 18:05
   bool _loading = true;
 
   bool get _hasWorkIn => _workInTime != null && _workInTime!.isNotEmpty;
-
   bool get _hasBreak => _breakTime != null && _breakTime!.isNotEmpty;
-  
+
   @override
   void initState() {
     super.initState();
-    _loadToday();
+    _selectedDate = DateTime.now();
+    _loadForDate(_selectedDate);
   }
 
-  Future<void> _loadToday() async {
-    final now = DateTime.now();
-    final events = await SimpleModeAttendanceRepository.instance.getEventsForDate(now);
+  /// ✅ 특정 날짜의 출근/휴게/퇴근 기록을 로드
+  Future<void> _loadForDate(DateTime date) async {
+    setState(() {
+      _loading = true;
+    });
+
+    final events =
+    await SimpleModeAttendanceRepository.instance.getEventsForDate(date);
 
     setState(() {
+      _selectedDate = date; // 최신 선택 날짜 동기화
       _workInTime = events[SimpleModeAttendanceType.workIn];
       _breakTime = events[SimpleModeAttendanceType.breakTime];
       _workOutTime = events[SimpleModeAttendanceType.workOut];
       _loading = false;
     });
+  }
+
+  /// 날짜 선택 다이얼로그
+  Future<void> _pickDate() async {
+    final init = _selectedDate;
+    // 필요에 따라 first/lastDate 범위는 조정 가능
+    final first = DateTime(init.year - 1, 1, 1);
+    final last = DateTime(init.year + 1, 12, 31);
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: init,
+      firstDate: first,
+      lastDate: last,
+      builder: (context, child) {
+        // 필요 시 테마 커스터마이징
+        return child ?? const SizedBox.shrink();
+      },
+    );
+
+    if (picked == null) return;
+
+    // 새 날짜 기준으로 DB 조회
+    await _loadForDate(picked);
   }
 
   void _showGuardSnack(String message) {
@@ -70,39 +118,59 @@ class _SimpleInsidePunchRecorderSectionState extends State<SimpleInsidePunchReco
     }
 
     // ✅ 순서 제약 2: 퇴근 펀칭은 출근+휴게 펀칭 후에만 가능
-    if (type == SimpleModeAttendanceType.workOut && (!_hasWorkIn || !_hasBreak)) {
+    if (type == SimpleModeAttendanceType.workOut &&
+        (!_hasWorkIn || !_hasBreak)) {
       _showGuardSnack('출근과 휴게시간을 모두 펀칭한 뒤 퇴근을 펀칭할 수 있습니다.');
       return;
     }
 
     final now = DateTime.now();
 
-    // 1) DB에 펀칭 기록 저장 (하루에 한 번씩만, 마지막 기록 유지)
-    await SimpleModeAttendanceRepository.instance.insertEvent(
-      dateTime: now,
+    // ✅ "선택한 날짜" + "현재 시각"을 합쳐서 저장
+    //
+    // - 날짜 부분: _selectedDate (사용자가 고른 날짜)
+    // - 시간 부분: 버튼을 실제로 누른 현재 시각(now)
+    final targetDateTime = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+      now.hour,
+      now.minute,
+      now.second,
+      now.millisecond,
+      now.microsecond,
+    );
+
+    // 1) DB + Firestore에 펀칭 기록 저장
+    await SimpleModeAttendanceRepository.instance.insertEventAndUpload(
+      dateTime: targetDateTime,
       type: type,
+      userId: widget.userId,
+      userName: widget.userName,
+      area: widget.area,
+      division: widget.division,
     );
 
     // 2) 시각적/촉각 피드백 (출퇴근기록카드 바텀시트)
     await showPunchCardFeedback(
       context,
       type: type,
-      dateTime: now,
+      dateTime: targetDateTime,
     );
 
-    // 3) 오늘 카드 갱신
-    await _loadToday();
+    // 3) 현재 선택된 날짜의 카드 갱신
+    await _loadForDate(_selectedDate);
   }
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final monthStr = DateFormat('yyyy.MM').format(now); // 2025.12
-    final dateStr = DateFormat('MM.dd').format(now); // 12.08
+    // ✅ 화면 표시도 "선택된 날짜" 기준
+    final monthStr = DateFormat('yyyy.MM').format(_selectedDate); // 예: 2025.12
+    final dateStr = DateFormat('MM.dd').format(_selectedDate); // 예: 12.08
 
     final textTheme = Theme.of(context).textTheme;
 
-    // 🔒 슬롯별 활성화 여부 계산
+    // 🔒 슬롯별 활성화 여부 계산 (선택된 날짜의 데이터 기준)
     final bool canPunchWorkIn = true; // 출근은 언제든지 가능
     final bool canPunchBreak = _hasWorkIn; // 휴게는 출근 이후 가능
     final bool canPunchWorkOut = _hasWorkIn && _hasBreak; // 퇴근은 출근+휴게 이후 가능
@@ -138,19 +206,42 @@ class _SimpleInsidePunchRecorderSectionState extends State<SimpleInsidePunchReco
                   ),
                 ),
                 const Spacer(),
-                Text(
-                  monthStr,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: _Palette.dark.withOpacity(.7),
-                    fontWeight: FontWeight.w500,
+                // ✅ 선택 날짜/월 표시 + 날짜 변경 버튼
+                InkWell(
+                  borderRadius: BorderRadius.circular(999),
+                  onTap: _pickDate,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.calendar_today_rounded,
+                          size: 14,
+                          color: _Palette.dark.withOpacity(.8),
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$monthStr · $dateStr',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: _Palette.dark.withOpacity(.7),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 4),
             Text(
-              '오늘(${dateStr}) 출근 · 휴게 · 퇴근을 순서대로 펀칭하세요.',
+              // ✅ "오늘" → "선택한 날짜"로 문구 변경
+              '선택한 날짜($dateStr) 기준으로 출근 · 휴게 · 퇴근을 순서대로 펀칭하세요.',
               style: TextStyle(
                 fontSize: 11,
                 color: _Palette.dark.withOpacity(.6),
@@ -192,7 +283,8 @@ class _SimpleInsidePunchRecorderSectionState extends State<SimpleInsidePunchReco
                             type: SimpleModeAttendanceType.workIn,
                             time: _workInTime,
                             enabled: canPunchWorkIn,
-                            onTap: () => _punch(SimpleModeAttendanceType.workIn),
+                            onTap: () =>
+                                _punch(SimpleModeAttendanceType.workIn),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -202,7 +294,8 @@ class _SimpleInsidePunchRecorderSectionState extends State<SimpleInsidePunchReco
                             type: SimpleModeAttendanceType.breakTime,
                             time: _breakTime,
                             enabled: canPunchBreak,
-                            onTap: () => _punch(SimpleModeAttendanceType.breakTime),
+                            onTap: () =>
+                                _punch(SimpleModeAttendanceType.breakTime),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -212,7 +305,8 @@ class _SimpleInsidePunchRecorderSectionState extends State<SimpleInsidePunchReco
                             type: SimpleModeAttendanceType.workOut,
                             time: _workOutTime,
                             enabled: canPunchWorkOut,
-                            onTap: () => _punch(SimpleModeAttendanceType.workOut),
+                            onTap: () =>
+                                _punch(SimpleModeAttendanceType.workOut),
                           ),
                         ),
                       ],
@@ -222,7 +316,7 @@ class _SimpleInsidePunchRecorderSectionState extends State<SimpleInsidePunchReco
                   Align(
                     alignment: Alignment.centerRight,
                     child: Text(
-                      '월이 바뀌면 자동으로 새 카드에서 펀칭이 시작됩니다.',
+                      '날짜를 선택해 과거 기록도 수정/재펀칭할 수 있습니다.',
                       style: textTheme.labelSmall?.copyWith(
                         color: _Palette.dark.withOpacity(.55),
                       ),
@@ -282,7 +376,9 @@ class _PunchSlot extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final bool punched = time != null && time!.isNotEmpty;
 
-    final borderColor = punched ? _accent.withOpacity(0.9) : _Palette.light.withOpacity(enabled ? .7 : .35);
+    final borderColor = punched
+        ? _accent.withOpacity(0.9)
+        : _Palette.light.withOpacity(enabled ? .7 : .35);
 
     final bgColor = punched ? _accent.withOpacity(0.07) : Colors.white;
 
@@ -305,7 +401,9 @@ class _PunchSlot extends StatelessWidget {
               Icon(
                 _icon,
                 size: 14,
-                color: enabled ? _accent.withOpacity(0.9) : _Palette.dark.withOpacity(0.3),
+                color: enabled
+                    ? _accent.withOpacity(0.9)
+                    : _Palette.dark.withOpacity(0.3),
               ),
               const SizedBox(width: 4),
               Text(
@@ -313,7 +411,9 @@ class _PunchSlot extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: enabled ? _accent.withOpacity(0.9) : _Palette.dark.withOpacity(0.3),
+                  color: enabled
+                      ? _accent.withOpacity(0.9)
+                      : _Palette.dark.withOpacity(0.3),
                 ),
               ),
             ],
@@ -321,9 +421,13 @@ class _PunchSlot extends StatelessWidget {
           const SizedBox(height: 6),
           // 하단: 펀칭 여부 시각적 표시 (체크 아이콘 + 텍스트)
           Icon(
-            punched ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
+            punched
+                ? Icons.check_circle_rounded
+                : Icons.radio_button_unchecked,
             size: 18,
-            color: punched ? _accent.withOpacity(0.95) : _Palette.light.withOpacity(enabled ? .9 : .4),
+            color: punched
+                ? _accent.withOpacity(0.95)
+                : _Palette.light.withOpacity(enabled ? .9 : .4),
           ),
           const SizedBox(height: 2),
           Text(
@@ -331,7 +435,8 @@ class _PunchSlot extends StatelessWidget {
             style: textTheme.labelSmall?.copyWith(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: punched ? const Color(0xFF2E2720) : const Color(0xFF8C8680),
+              color:
+              punched ? const Color(0xFF2E2720) : const Color(0xFF8C8680),
             ),
           ),
         ],

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'sections/simple_inside_report_form_page.dart';
+import '../sections/simple_inside_report_form_page.dart';
 
 void showSimpleInsideReportFullScreenBottomSheet(BuildContext context) {
   showModalBottomSheet(

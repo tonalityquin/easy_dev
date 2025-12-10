@@ -9,9 +9,10 @@ import 'package:sqflite/sqflite.dart';
 /// - DB 파일 스캔 시 사이드카 파일(-journal/-wal/-shm) 제외
 /// - 확장자 화이트리스트(.db/.sqlite/.sqlite3/.db3)만 허용
 /// - SQLite 헤더 검증으로 진짜 DB만 노출
-/// - readOnly: true 로 열어 DB 생성/변조 방지
+/// - 기본 조회는 readOnly: true 로 열어 DB 생성/변조 방지
 /// - 시스템 테이블(android_metadata, sqlite_*) 숨김
 /// - time_record / work_time_record 같은 근무 기록 DB도 같이 조회 가능
+/// - ✅ 각 테이블에서 행 삽입/수정/삭제(PK 기준) 가능
 class SQLiteExplorerBottomSheet extends StatefulWidget {
   const SQLiteExplorerBottomSheet({super.key});
 
@@ -109,6 +110,7 @@ class _SQLiteExplorerBottomSheetState
   // 네비게이션 스택(시트 내부)
   String? _selectedDbPath; // null이면 DB 목록, 있으면 해당 DB의 테이블 목록
   String? _selectedTable; // null이면 테이블 목록, 있으면 해당 테이블의 로우 미리보기
+  _TableMeta? _selectedTableMeta; // ✅ 선택된 테이블의 메타데이터(PK 포함)
 
   @override
   void initState() {
@@ -338,6 +340,7 @@ class _SQLiteExplorerBottomSheetState
         setState(() {
           _selectedDbPath = null;
           _selectedTable = null;
+          _selectedTableMeta = null;
         });
       }
       await _refreshScan();
@@ -371,8 +374,8 @@ class _SQLiteExplorerBottomSheetState
       final dir = Directory(dirPath);
       if (await dir.exists()) {
         final entities = await dir.list().toList();
-        final regJournalChain =
-        RegExp('^${RegExp.escape(baseLower)}(?:-journal)+\$'); // -journal, -journal-journal ...
+        final regJournalChain = RegExp(
+            '^${RegExp.escape(baseLower)}(?:-journal)+\$'); // -journal, -journal-journal ...
         for (final ent in entities) {
           if (ent is! File) continue;
           final nameLower = p.basename(ent.path).toLowerCase();
@@ -411,6 +414,325 @@ class _SQLiteExplorerBottomSheetState
     return lower.contains('time_record') || lower.contains('work_time');
   }
 
+  // ───────────────────────── 행 삽입/수정/삭제 헬퍼 ─────────────────────────
+
+  /// 사용자가 입력한 문자열을 SQLite에 넣기 적당한 타입으로 변환
+  /// - "null" (대소문자 무시) → null
+  /// - "true"/"false" → bool
+  /// - 정수/실수 문자열 → int/double
+  /// - 그 외 → 그대로 String
+  Object? _parseValue(String input) {
+    final v = input.trim();
+    if (v.isEmpty) return ''; // 빈 입력은 빈 문자열로 취급(삽입 시에는 아예 건너뜀)
+
+    final lower = v.toLowerCase();
+    if (lower == 'null') return null;
+    if (lower == 'true') return true;
+    if (lower == 'false') return false;
+
+    final asInt = int.tryParse(v);
+    if (asInt != null) return asInt;
+
+    final asDouble = double.tryParse(v);
+    if (asDouble != null) return asDouble;
+
+    return v;
+  }
+
+  /// 현재 선택된 테이블에 새 행 삽입
+  Future<void> _insertRow() async {
+    final dbPath = _selectedDbPath;
+    final table = _selectedTable;
+    final meta = _selectedTableMeta;
+    if (dbPath == null || table == null || meta == null) {
+      _showSnack('테이블 정보를 찾을 수 없습니다. 다시 시도해 주세요.');
+      return;
+    }
+
+    final controllers = <String, TextEditingController>{};
+    for (final col in meta.columns) {
+      controllers[col.name] = TextEditingController();
+    }
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('새 행 추가\n$table'),
+        content: SizedBox(
+          width: 480,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: meta.columns
+                  .map(
+                    (c) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: TextField(
+                    controller: controllers[c.name],
+                    decoration: InputDecoration(
+                      labelText:
+                      '${c.name} (${c.type.isEmpty ? 'TEXT' : c.type}${c.pk ? ', PK' : ''})',
+                      helperText: c.pk
+                          ? 'PK가 AUTOINCREMENT인 경우 비워두면 자동 생성됩니다.'
+                          : null,
+                    ),
+                  ),
+                ),
+              )
+                  .toList(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('추가'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) {
+      for (final c in controllers.values) {
+        c.dispose();
+      }
+    } else {
+      final values = <String, Object?>{};
+      for (final col in meta.columns) {
+        final text = controllers[col.name]!.text.trim();
+        if (text.isEmpty) continue; // 비어 있으면 default/NULL 에 맡김
+        values[col.name] = _parseValue(text);
+      }
+      for (final c in controllers.values) {
+        c.dispose();
+      }
+
+      try {
+        final db = await openDatabase(
+          dbPath,
+          readOnly: false,
+          singleInstance: false,
+        );
+        try {
+          await db.insert(table, values);
+          _showSnack('새 행이 추가되었습니다.');
+          setState(() {}); // 미리보기 재로딩
+        } finally {
+          await db.close();
+        }
+      } catch (e) {
+        _showSnack('삽입 실패: $e');
+      }
+    }
+  }
+
+  /// 현재 선택된 테이블의 특정 행 수정
+  ///
+  /// - PK가 있는 테이블만 지원
+  /// - WHERE 절은 "PK1 = ? AND PK2 = ?" 형태로 생성 (조건 값은 원본 row 기준)
+  Future<void> _editRow(Map<String, Object?> row) async {
+    final dbPath = _selectedDbPath;
+    final table = _selectedTable;
+    final meta = _selectedTableMeta;
+    if (dbPath == null || table == null || meta == null) {
+      _showSnack('편집 컨텍스트를 찾을 수 없습니다. 다시 시도해 주세요.');
+      return;
+    }
+
+    final pkCols = meta.columns.where((c) => c.pk).toList();
+    if (pkCols.isEmpty) {
+      _showSnack('PK가 없는 테이블은 편집을 지원하지 않습니다.');
+      return;
+    }
+
+    final controllers = <String, TextEditingController>{};
+    for (final col in meta.columns) {
+      controllers[col.name] = TextEditingController(
+        text: row[col.name]?.toString() ?? '',
+      );
+    }
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('행 편집\n$table'),
+        content: SizedBox(
+          width: 480,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: meta.columns
+                  .map(
+                    (c) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: TextField(
+                    controller: controllers[c.name],
+                    decoration: InputDecoration(
+                      labelText:
+                      '${c.name} (${c.type.isEmpty ? 'TEXT' : c.type}${c.pk ? ', PK' : ''})',
+                    ),
+                  ),
+                ),
+              )
+                  .toList(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('저장'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) {
+      for (final c in controllers.values) {
+        c.dispose();
+      }
+      return;
+    }
+
+    final newValues = <String, Object?>{};
+    for (final col in meta.columns) {
+      final text = controllers[col.name]!.text;
+      newValues[col.name] = _parseValue(text);
+    }
+    for (final c in controllers.values) {
+      c.dispose();
+    }
+
+    final where = pkCols.map((c) => '"${c.name}" = ?').join(' AND ');
+    final whereArgs = pkCols.map((c) => row[c.name]).toList();
+
+    try {
+      final db = await openDatabase(
+        dbPath,
+        readOnly: false,
+        singleInstance: false,
+      );
+      try {
+        final updated = await db.update(
+          table,
+          newValues,
+          where: where,
+          whereArgs: whereArgs,
+        );
+        if (updated == 0) {
+          _showSnack('업데이트할 행을 찾지 못했습니다.');
+        } else {
+          _showSnack('행이 업데이트되었습니다.');
+          setState(() {}); // 미리보기 재로딩
+        }
+      } finally {
+        await db.close();
+      }
+    } catch (e) {
+      _showSnack('업데이트 실패: $e');
+    }
+  }
+
+  /// 특정 행 삭제 확인 다이얼로그 → 확인 시 실제 삭제
+  Future<void> _confirmDeleteRow(Map<String, Object?> row) async {
+    final meta = _selectedTableMeta;
+    final table = _selectedTable;
+    if (meta == null || table == null) {
+      _showSnack('삭제 컨텍스트를 찾을 수 없습니다.');
+      return;
+    }
+
+    final pkCols = meta.columns.where((c) => c.pk).toList();
+    String detail;
+    if (pkCols.isEmpty) {
+      detail =
+      '이 테이블에는 PK가 정의되어 있지 않습니다.\n' '정말 이 행을 삭제할까요?';
+    } else {
+      final pkText = pkCols
+          .map((c) => '${c.name} = ${row[c.name]}')
+          .join(', ');
+      detail = '다음 조건의 행을 삭제합니다.\n$pkText';
+    }
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('행 삭제\n$table'),
+        content: Text(detail),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true) {
+      await _deleteRow(row);
+    }
+  }
+
+  /// 현재 선택된 테이블의 특정 행 삭제
+  ///
+  /// - PK가 있는 테이블만 지원
+  /// - WHERE 절은 "PK1 = ? AND PK2 = ?" 형태로 생성 (값은 원본 row 기준)
+  Future<void> _deleteRow(Map<String, Object?> row) async {
+    final dbPath = _selectedDbPath;
+    final table = _selectedTable;
+    final meta = _selectedTableMeta;
+    if (dbPath == null || table == null || meta == null) {
+      _showSnack('삭제 컨텍스트를 찾을 수 없습니다. 다시 시도해 주세요.');
+      return;
+    }
+
+    final pkCols = meta.columns.where((c) => c.pk).toList();
+    if (pkCols.isEmpty) {
+      _showSnack('PK가 없는 테이블은 행 삭제를 지원하지 않습니다.');
+      return;
+    }
+
+    final where = pkCols.map((c) => '"${c.name}" = ?').join(' AND ');
+    final whereArgs = pkCols.map((c) => row[c.name]).toList();
+
+    try {
+      final db = await openDatabase(
+        dbPath,
+        readOnly: false,
+        singleInstance: false,
+      );
+      try {
+        final deleted = await db.delete(
+          table,
+          where: where,
+          whereArgs: whereArgs,
+        );
+        if (deleted == 0) {
+          _showSnack('삭제할 행을 찾지 못했습니다.');
+        } else {
+          _showSnack('행이 삭제되었습니다.');
+          setState(() {}); // 미리보기 재로딩
+        }
+      } finally {
+        await db.close();
+      }
+    } catch (e) {
+      _showSnack('삭제 실패: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -446,8 +768,11 @@ class _SQLiteExplorerBottomSheetState
                         setState(() {
                           if (_selectedTable != null) {
                             _selectedTable = null;
+                            _selectedTableMeta = null;
                           } else {
                             _selectedDbPath = null;
+                            _selectedTable = null;
+                            _selectedTableMeta = null;
                           }
                         });
                       },
@@ -585,6 +910,7 @@ class _SQLiteExplorerBottomSheetState
                                     setState(() {
                                       _selectedDbPath = f.path;
                                       _selectedTable = null;
+                                      _selectedTableMeta = null;
                                     });
                                     break;
                                   case 'delete':
@@ -623,6 +949,7 @@ class _SQLiteExplorerBottomSheetState
                               setState(() {
                                 _selectedDbPath = f.path;
                                 _selectedTable = null;
+                                _selectedTableMeta = null;
                               });
                             },
                           ),
@@ -721,11 +1048,13 @@ class _SQLiteExplorerBottomSheetState
                                     alignment: Alignment.centerRight,
                                     child: FilledButton.icon(
                                       onPressed: () {
-                                        setState(
-                                              () => _selectedTable = t.name,
-                                        );
+                                        setState(() {
+                                          _selectedTable = t.name;
+                                          _selectedTableMeta = t;
+                                        });
                                       },
-                                      icon: const Icon(Icons.table_rows),
+                                      icon:
+                                      const Icon(Icons.table_rows_rounded),
                                       label: const Text('상위 100행 미리보기'),
                                     ),
                                   ),
@@ -755,10 +1084,54 @@ class _SQLiteExplorerBottomSheetState
                           );
                         }
                         final rows = rsnap.data!;
+                        final meta = _selectedTableMeta;
+
                         if (rows.isEmpty) {
-                          return _info('표시할 행이 없습니다.');
+                          final cols = meta?.columns
+                              .map((c) => c.name)
+                              .toList(growable: false) ??
+                              const <String>[];
+                          return Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        '$_selectedTable (행 없음)',
+                                        style: text.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    if (cols.isNotEmpty)
+                                      FilledButton.icon(
+                                        onPressed: _insertRow,
+                                        icon: const Icon(Icons.add_rounded),
+                                        label: const Text('새 행 추가'),
+                                      ),
+                                  ],
+                                ),
+                                const SizedBox(height: 16),
+                                _info(
+                                  '표시할 행이 없습니다.\n'
+                                      '우측 상단의 "새 행 추가" 버튼으로 데이터를 추가해 보세요.',
+                                ),
+                              ],
+                            ),
+                          );
                         }
-                        final columns = rows.first.keys.toList();
+
+                        final columns = meta != null
+                            ? meta.columns
+                            .map((c) => c.name)
+                            .where(
+                              (name) => rows.first.containsKey(name),
+                        )
+                            .toList(growable: false)
+                            : rows.first.keys.toList(growable: false);
 
                         // ✅ 패딩(좌우 8px씩)까지 고려한 총 폭 계산으로 overflow 방지
                         const double cellWidth = 160.0;
@@ -772,11 +1145,22 @@ class _SQLiteExplorerBottomSheetState
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              Text(
-                                '$_selectedTable (상위 ${rows.length}행)',
-                                style: text.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      '$_selectedTable (상위 ${rows.length}행, 탭하면 편집 / 길게 누르면 삭제)',
+                                      style: text.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                  FilledButton.icon(
+                                    onPressed: _insertRow,
+                                    icon: const Icon(Icons.add_rounded),
+                                    label: const Text('새 행 추가'),
+                                  ),
+                                ],
                               ),
                               const SizedBox(height: 8),
                               Expanded(
@@ -787,7 +1171,8 @@ class _SQLiteExplorerBottomSheetState
                                     child: SizedBox(
                                       width: totalWidth,
                                       child: ListView.builder(
-                                        itemCount: rows.length + 1, // 헤더 + 데이터
+                                        itemCount:
+                                        rows.length + 1, // 헤더 + 데이터
                                         shrinkWrap:
                                         true, // ✅ 내부 스크롤 레이아웃 안정화
                                         physics:
@@ -825,34 +1210,39 @@ class _SQLiteExplorerBottomSheetState
                                             );
                                           }
                                           final row = rows[index - 1];
-                                          return Container(
-                                            padding:
-                                            const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 8,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              border: Border(
-                                                bottom: BorderSide(
-                                                  color: Colors.black
-                                                      .withOpacity(.06),
-                                                ),
+                                          return InkWell(
+                                            onTap: () => _editRow(row),
+                                            onLongPress: () =>
+                                                _confirmDeleteRow(row),
+                                            child: Container(
+                                              padding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 8,
                                               ),
-                                            ),
-                                            child: Row(
-                                              children: columns
-                                                  .map(
-                                                    (c) => SizedBox(
-                                                  width: cellWidth,
-                                                  child: Text(
-                                                    '${row[c]}',
-                                                    maxLines: 3,
-                                                    overflow: TextOverflow
-                                                        .ellipsis,
+                                              decoration: BoxDecoration(
+                                                border: Border(
+                                                  bottom: BorderSide(
+                                                    color: Colors.black
+                                                        .withOpacity(.06),
                                                   ),
                                                 ),
-                                              )
-                                                  .toList(),
+                                              ),
+                                              child: Row(
+                                                children: columns
+                                                    .map(
+                                                      (c) => SizedBox(
+                                                    width: cellWidth,
+                                                    child: Text(
+                                                      '${row[c]}',
+                                                      maxLines: 3,
+                                                      overflow: TextOverflow
+                                                          .ellipsis,
+                                                    ),
+                                                  ),
+                                                )
+                                                    .toList(),
+                                              ),
                                             ),
                                           );
                                         },

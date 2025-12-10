@@ -2,24 +2,28 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart' show ValueNotifier;
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 // 프로젝트 내부 상태/유틸
-import '../../../../enums/plate_type.dart';
 import '../../../../states/area/area_state.dart';
 import '../../../../states/location/location_state.dart';
 import '../../../../utils/snackbar_helper.dart';
 
-/// 역 바텀시트(Top Sheet) 콘텐츠
-/// - 기본: 주차 구역(location) **무관**(현재 지역만)
+// SQLite 기반 리포지토리
+import '../table_package/repositories/parking_completed_repository.dart';
+import '../table_package/models/parking_completed_record.dart';
+
+/// 역 바텀시트(Top Sheet) 콘텐츠 (SQLite 기반)
+/// - 로컬 SQLite 테이블의 parking_completed_records를 created_at 오름차순(오래된 순)으로 조회
+/// - 기본: 주차 구역(location) **무관**
 /// - 옵션: **특정 주차 구역 제외**
-/// - parking_completed만, request_time 오름차순(오래된 순) 5개씩 페이지네이션
-/// - 전역 캐시(정적)로 시트 닫았다가 다시 열어도 READ 0으로 복원
-/// - 캐시 키: <area>|ALL  또는  <area>|EX|leaf1,leaf2,...
+/// - 한 번에 5개씩 페이지네이션(추가 데이터는 메모리에서 페이징)
+/// - Firestore 및 원격 DB READ 비용 제어 로직(전역 캐시/쿨다운)은 제거
+/// - 단, '업무 마감 동의', '작업 완료' 로컬 표시, 구역 제외 필터,
+///   필터/완료 상태 SharedPreferences 저장은 그대로 유지
 class ParkingCompletedReversePage extends StatefulWidget {
   const ParkingCompletedReversePage({super.key});
 
@@ -35,26 +39,24 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
   static const Color _light = Color(0xFF5472D3);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 전역(앱 세션 내) 캐시
-  static final Map<String, _CacheEntry> _globalCacheByKey = {};
-  static final Map<String, int> _totalReadsByKey = {}; // 누적 Read
-  static final Map<String, int> _pageLoadsByKey = {}; // 페이지 로드 횟수
-
-  static int _readsOf(String key) => _totalReadsByKey[key] ?? 0;
-  static int _loadsOf(String key) => _pageLoadsByKey[key] ?? 0;
-  static void _incReads(String key, int n) => _totalReadsByKey[key] = _readsOf(key) + n;
-  static void _incLoads(String key) => _pageLoadsByKey[key] = _loadsOf(key) + 1;
-
-  // ─────────────────────────────────────────────────────────────────────────────
   // 상태
   static const int _pageSize = 5;
-  static const Duration _kRefreshCooldown = Duration(hours: 12); // 12시간 쿨다운
+
+  final ParkingCompletedRepository _repository = ParkingCompletedRepository();
 
   bool _loading = false;
   bool _loadingMore = false;
 
-  final List<QueryDocumentSnapshot<Map<String, dynamic>>> _docs = [];
-  QueryDocumentSnapshot<Map<String, dynamic>>? _lastDoc;
+  /// 전체 결과 (필터 적용 후, SQLite에서 한 번에 읽어온 리스트)
+  final List<ParkingCompletedRecord> _allRows = <ParkingCompletedRecord>[];
+
+  /// 화면에 현재 표시 중인 행들(페이지네이션 대상)
+  final List<ParkingCompletedRecord> _rows = <ParkingCompletedRecord>[];
+
+  /// 다음에 읽어올 인덱스 (메모리 상에서 페이징)
+  int _nextIndex = 0;
+
+  /// 아직 더 로드할 데이터가 있는지 여부
   bool _hasMore = false;
 
   // 권한 동의(업무 마감 목적 확인) 후에만 데이터를 로드한다
@@ -65,18 +67,14 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
 
   // 필터 상태(※ 제외만 지원)
   final Set<String> _selectedDisplayNames = <String>{}; // 제외할 표시명 세트(다중 선택)
-  // Firestore whereNotIn 제한(최대 10)
+  // Firestore whereNotIn 제한(최대 10)과 맞추기 위해 동일 제한 유지
   static const int _kWhereNotInLimit = 10;
 
-  // ── '작업 완료' 로컬 상태 (문서 id 기준)
+  // ── '작업 완료' 로컬 상태 (문서 id 기준 → SQLite 전용 key 기준)
   final Set<String> _doneIds = <String>{};
   final Set<String> _overlayOpenIds = <String>{};
   static const Color _doneBg = Color(0xFFE8F5E9); // 연한 초록(완료 표시 유지)
   String get _donePrefsKey => 'rev_top_done_ids_${_areaAtOpen}';
-
-  // ── 새로고침 쿨다운(UI는 지역 단위로 표기/적용)
-  Duration _refreshRemain = Duration.zero;
-  Timer? _cooldownTimer;
 
   // ─────────────────────────────────────────────────────────────────────────────
   void _setLoading(bool v) => setState(() => _loading = v);
@@ -99,8 +97,12 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
     required String? parent,
     required String? type,
   }) {
-    if ((type ?? '').trim() == 'composite' && (parent ?? '').trim().isNotEmpty) {
-      return '${parent!.trim()} - ${name.trim()}';
+    // parent/type 이 실제로는 non-null일 수도 있기 때문에, 로컬 nullable 변수에 담아서 사용
+    final String? rawType = type;
+    final String? rawParent = parent;
+
+    if ((rawType ?? '').trim() == 'composite' && (rawParent ?? '').trim().isNotEmpty) {
+      return '${rawParent!.trim()} - ${name.trim()}';
     }
     return name.trim();
   }
@@ -114,15 +116,36 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
     return set.length;
   }
 
-  // 캐시 키
-  String _cacheKeyFor({Set<String>? displayNames}) {
-    final names = displayNames ?? _selectedDisplayNames;
-    if (names.isEmpty) return '${_areaAtOpen}|ALL';
-    final sortedLeaves = names.map(_extractLeaf).toList()..sort();
-    return '${_areaAtOpen}|EX|${sortedLeaves.join(',')}';
+  // ParkingCompletedRecord → 로컬 key (완료 여부 저장용)
+  String _keyOfRecord(ParkingCompletedRecord record) {
+    // createdAt 이 nullable일 수 있으므로 null-safe 처리
+    final DateTime? createdAt = record.createdAt;
+    final int millis = createdAt?.millisecondsSinceEpoch ?? 0;
+
+    // location 도 nullable 가능성이 있으므로, 로컬 nullable → non-null 변환
+    final String? rawLocation = record.location;
+    final String safeLocation = rawLocation ?? '';
+
+    // plate + location + createdAt 조합으로 로컬 고유 키 구성
+    return '${record.plateNumber}|$safeLocation|$millis';
   }
 
-  String _cacheKey() => _cacheKeyFor();
+  // 현재 필터 기준으로 레코드 필터링
+  List<ParkingCompletedRecord> _filterRecordsByExcludedLocations(
+      List<ParkingCompletedRecord> all,
+      Set<String> excludedDisplayNames,
+      ) {
+    if (excludedDisplayNames.isEmpty) return all;
+
+    final excludedLeaves = excludedDisplayNames.map(_extractLeaf).toSet();
+
+    return all.where((r) {
+      final String? rawLocation = r.location;
+      final String loc = (rawLocation ?? '').trim();
+      if (loc.isEmpty) return !excludedLeaves.contains(''); // 빈 문자열은 일반적으로 제외 대상 아님
+      return !excludedLeaves.contains(loc);
+    }).toList();
+  }
 
   // ─────────────────────────────────────────────────────────────────────────────
   // SharedPreferences (필터/완료 상태 저장/복원)
@@ -166,53 +189,6 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
     debugPrint('[REV-TOP][DONE] saved ${_doneIds.length} items for area=$_areaAtOpen');
   }
 
-  // ── 새로고침 스로틀링(지역 단위)
-  String get _refreshAreaPrefsKey => 'rev_top_last_refresh_area_${_areaAtOpen}';
-
-  Future<Duration> _remainingRefreshCooldownArea() async {
-    final prefs = await SharedPreferences.getInstance();
-    final lastMs = prefs.getInt(_refreshAreaPrefsKey);
-    if (lastMs == null) return Duration.zero;
-    final last = DateTime.fromMillisecondsSinceEpoch(lastMs);
-    final now = DateTime.now();
-    final remain = _kRefreshCooldown - now.difference(last);
-    return remain.isNegative ? Duration.zero : remain;
-  }
-
-  Future<void> _markRefreshedNowArea() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_refreshAreaPrefsKey, DateTime.now().millisecondsSinceEpoch);
-  }
-
-  Future<void> _updateRefreshCooldownLabel() async {
-    final remain = await _remainingRefreshCooldownArea(); // 지역 단위
-    if (!mounted) return;
-    setState(() => _refreshRemain = remain);
-
-    _cooldownTimer?.cancel();
-    if (remain > Duration.zero) {
-      _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (t) async {
-        final r = await _remainingRefreshCooldownArea();
-        if (!mounted) {
-          t.cancel();
-          return;
-        }
-        setState(() => _refreshRemain = r);
-        if (r == Duration.zero) t.cancel();
-      });
-    }
-  }
-
-  String _formatRemain(Duration d) {
-    final totalSeconds = d.inSeconds;
-    final h = totalSeconds ~/ 3600;
-    final m = (totalSeconds % 3600) ~/ 60;
-    final s = totalSeconds % 60;
-    if (h > 0) return '${h}시간 ${m}분';
-    if (m > 0) return '${m}분 ${s}초';
-    return '${s}초';
-  }
-
   // ─────────────────────────────────────────────────────────────────────────────
   void _toggleOverlay(String id, {bool? open}) {
     setState(() {
@@ -251,105 +227,12 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 캐시 하이드레이션(READ 0)
-  void _applyCache(String key) {
-    final hit = _globalCacheByKey[key];
-    if (hit == null) return;
-    setState(() {
-      _docs
-        ..clear()
-        ..addAll(hit.docs);
-      _lastDoc = hit.last;
-      _hasMore = hit.hasMore;
-    });
-    debugPrint('[REV-TOP] [CACHE] APPLY → READ 0 | key=$key | '
-        'totalReads=${_readsOf(key)}, pageLoads=${_loadsOf(key)}, '
-        'docs=${_docs.length}, hasMore=$_hasMore');
-  }
-
-  // ALL 캐시로부터 현재 필터 결과의 1페이지를 파생(READ 0)
-  bool _applyDerivedFromAllCache() {
-    final allKey = '${_areaAtOpen}|ALL';
-    final allCache = _globalCacheByKey[allKey];
-    if (allCache == null) return false;
-
-    final leaves = _selectedDisplayNames.map(_extractLeaf).toSet();
-    bool matches(Map<String, dynamic> data) {
-      final loc = (data['location'] ?? '').toString();
-      if (leaves.isEmpty) return true; // ALL
-      // 제외만 지원
-      return !leaves.contains(loc);
-    }
-
-    final filtered = allCache.docs.where((d) => matches(d.data())).toList();
-
-    // 파생 1페이지
-    final page = filtered.take(_pageSize).toList();
-    final hasMoreFromAll = allCache.hasMore || filtered.length > _pageSize; // 더 있을 가능성
-
-    setState(() {
-      _docs
-        ..clear()
-        ..addAll(page);
-      _lastDoc = page.isNotEmpty ? page.last : null;
-      _hasMore = hasMoreFromAll;
-    });
-
-    // 파생된 결과도 캐시에 저장(READ 0)
-    final derivedKey = _cacheKey();
-    _globalCacheByKey[derivedKey] = _CacheEntry(
-      docs: List.of(_docs),
-      last: _lastDoc,
-      hasMore: _hasMore,
-    );
-
-    debugPrint('[REV-TOP] [CACHE] DERIVE from ALL → READ 0 | from=$allKey → to=$derivedKey | '
-        'docs=${_docs.length}, hasMore=$_hasMore');
-    return true;
-  }
-
-  // 필터 전환: 캐시→파생→쿨다운 시 네트워크 차단→쿨다운 끝나면 허용
-  Future<void> _switchFilterWithSet({required Set<String> displayNames}) async {
-    _selectedDisplayNames
-      ..clear()
-      ..addAll(displayNames.where((e) => e.trim().isNotEmpty));
-    await _saveFilter();
-
-    await _updateRefreshCooldownLabel(); // 지역 단위 라벨 갱신
-
-    final newKey = _cacheKey();
-
-    if (_globalCacheByKey.containsKey(newKey)) {
-      _applyCache(newKey); // READ 0
-      return;
-    }
-
-    if (_applyDerivedFromAllCache()) {
-      return;
-    }
-
-    final remain = await _remainingRefreshCooldownArea();
-    if (remain > Duration.zero) {
-      showFailedSnackbar(context, '쿨다운 중에는 새로운 제외 설정으로 서버 조회가 제한됩니다. 남은 시간: ${_formatRemain(remain)}');
-      debugPrint('[REV-TOP] [THROTTLE] filter-switch blocked (area) | remain=${remain.inMinutes}m');
-      return;
-    }
-
-    setState(() {
-      _docs.clear();
-      _lastDoc = null;
-      _hasMore = false;
-    });
-    await _loadFirstPage();
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // 질의
+  // SQLite 질의 + 메모리 기반 페이지네이션
 
   Future<void> _loadFirstPage() async {
+    final effectiveCount = _effectiveLocationCount();
     final area = _areaAtOpen;
-    final key = _cacheKey();
-    debugPrint('[REV-TOP] loadFirstPage() | key=$key');
+    debugPrint('[REV-TOP] loadFirstPage() | area=$area');
 
     if (area.isEmpty) {
       showFailedSnackbar(context, '지역이 선택되지 않았습니다.');
@@ -357,58 +240,31 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
     }
 
     // 최소 1개 제외(실제 구역이 2개 이상일 때)
-    final effectiveCount = _effectiveLocationCount();
     if (effectiveCount >= 2 && _selectedDisplayNames.isEmpty) {
       showFailedSnackbar(context, '확인하지 않을 주차 구역을 최소 1개 선택해 주세요.');
       return;
     }
 
-    final hit = _globalCacheByKey[key];
-    if (hit != null) {
-      _applyCache(key);
-      return;
-    }
-
     try {
       _setLoading(true);
-      debugPrint('[REV-TOP] [QUERY] first page START | key=$key | limit=$_pageSize');
+      debugPrint('[REV-TOP] [QUERY] first page from SQLite START | limit≈500');
 
-      final leaves = _selectedDisplayNames.map(_extractLeaf).toList();
+      // 기존 테이블 시트와 동일하게 최대 500개 정도만 읽고, 메모리에서 필터/페이징
+      final all = await _repository.listAll(limit: 500);
 
-      Query<Map<String, dynamic>> q = FirebaseFirestore.instance
-          .collection('plates')
-          .where('type', isEqualTo: PlateType.parkingCompleted.firestoreValue)
-          .where('area', isEqualTo: area);
-
-      if (effectiveCount >= 2 && leaves.isNotEmpty) {
-        if (leaves.length <= _kWhereNotInLimit) {
-          q = q.where('location', whereNotIn: leaves);
-        } else {
-          showFailedSnackbar(context, '제외 모드는 최대 $_kWhereNotInLimit개까지 선택할 수 있습니다.');
-          return;
-        }
-      }
-
-      q = q.orderBy('request_time', descending: false).limit(_pageSize);
-
-      final snap = await q.get();
-      final docs = snap.docs;
+      final filtered = _filterRecordsByExcludedLocations(all, _selectedDisplayNames);
 
       setState(() {
-        _docs
+        _allRows
           ..clear()
-          ..addAll(docs);
-        _lastDoc = docs.isNotEmpty ? docs.last : null;
-        _hasMore = docs.length >= _pageSize;
+          ..addAll(filtered);
+        _rows.clear();
+        _nextIndex = 0;
       });
 
-      _incReads(key, docs.length);
-      _incLoads(key);
-      _saveCache(key);
+      _appendNextPage();
 
-      debugPrint('[REV-TOP] [COST] READ +${docs.length} (first) | key=$key | '
-          'totalReads=${_readsOf(key)}, pageLoads=${_loadsOf(key)}, '
-          'docsInCache=${_docs.length}, hasMore=$_hasMore');
+      debugPrint('[REV-TOP] [QUERY] first page DONE | total=${_allRows.length}, page=${_rows.length}, hasMore=$_hasMore');
     } catch (e) {
       showFailedSnackbar(context, '불러오기 실패: $e');
       debugPrint('[REV-TOP] [ERROR] first: $e');
@@ -417,51 +273,30 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
     }
   }
 
+  void _appendNextPage() {
+    if (_nextIndex >= _allRows.length) {
+      setState(() => _hasMore = false);
+      return;
+    }
+
+    final next = _allRows.skip(_nextIndex).take(_pageSize).toList();
+
+    setState(() {
+      _rows.addAll(next);
+      _nextIndex += next.length;
+      _hasMore = _nextIndex < _allRows.length;
+    });
+
+    debugPrint('[REV-TOP] [PAGE] append page | appended=${next.length}, '
+        'shown=${_rows.length}, total=${_allRows.length}, hasMore=$_hasMore');
+  }
+
   Future<void> _loadMore() async {
-    final area = _areaAtOpen;
-    final key = _cacheKey();
-    if (area.isEmpty || !_hasMore || _lastDoc == null) return;
+    if (_loadingMore || !_hasMore) return;
 
     try {
       _setLoadingMore(true);
-
-      final leaves = _selectedDisplayNames.map(_extractLeaf).toList();
-      final effectiveCount = _effectiveLocationCount();
-
-      Query<Map<String, dynamic>> q = FirebaseFirestore.instance
-          .collection('plates')
-          .where('type', isEqualTo: PlateType.parkingCompleted.firestoreValue)
-          .where('area', isEqualTo: area);
-
-      if (effectiveCount >= 2 && leaves.isNotEmpty) {
-        q = q.where('location', whereNotIn: leaves);
-      }
-
-      final lastTs = _lastDoc!.data()['request_time'];
-      if (lastTs == null) {
-        debugPrint('[REV-TOP] [WARN] lastDoc.request_time == null → 더보기 중단');
-        _setLoadingMore(false);
-        return;
-      }
-
-      q = q.orderBy('request_time', descending: false).startAfter([lastTs]).limit(_pageSize);
-
-      final snap = await q.get();
-      final docs = snap.docs;
-
-      setState(() {
-        _docs.addAll(docs);
-        _lastDoc = docs.isNotEmpty ? docs.last : _lastDoc;
-        _hasMore = docs.length >= _pageSize;
-      });
-
-      _incReads(key, docs.length);
-      _incLoads(key);
-      _saveCache(key);
-
-      debugPrint('[REV-TOP] [COST] READ +${docs.length} (more) | key=$key | '
-          'totalReads=${_readsOf(key)}, pageLoads=${_loadsOf(key)}, '
-          'docsInCache=${_docs.length}, hasMore=$_hasMore');
+      _appendNextPage();
     } catch (e) {
       showFailedSnackbar(context, '더보기 실패: $e');
       debugPrint('[REV-TOP] [ERROR] more: $e');
@@ -470,49 +305,45 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
     }
   }
 
-  void _saveCache(String key) {
-    _globalCacheByKey[key] = _CacheEntry(
-      docs: List.of(_docs),
-      last: _lastDoc,
-      hasMore: _hasMore,
-    );
-  }
-
-  // 현재 지역의 쿨다운을 적용하여 캐시만 비우고 처음부터
+  // 새로고침: SQLite 기준으로 단순 재조회
   Future<void> _refreshForce() async {
-    final remain = await _remainingRefreshCooldownArea(); // 지역 단위 검사
-    if (remain > Duration.zero) {
-      final msg = '새로고침은 12시간에 1회만 가능합니다. 남은 시간: ${_formatRemain(remain)}';
-      showFailedSnackbar(context, msg);
-      debugPrint('[REV-TOP] [THROTTLE] refresh denied (area) | remain=${remain.inMinutes}m');
-      await _updateRefreshCooldownLabel();
-      return;
-    }
-
-    await _markRefreshedNowArea();
-    await _updateRefreshCooldownLabel();
-
-    final key = _cacheKey();
-    debugPrint('[REV-TOP] [CACHE] CLEAR by user | key=$key | '
-        'prevTotalReads=${_readsOf(key)}, prevPageLoads=${_loadsOf(key)}');
-
-    _globalCacheByKey.remove(key);
-    setState(() {
-      _docs.clear();
-      _lastDoc = null;
-      _hasMore = false;
-    });
+    HapticFeedback.lightImpact();
+    debugPrint('[REV-TOP] [REFRESH] force reload from SQLite');
     await _loadFirstPage();
   }
 
-  // 시간 포맷
-  String _formatTime(dynamic ts) {
-    if (ts is Timestamp) {
-      final dt = ts.toDate();
-      return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
-          '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-    }
-    return '-';
+  // 시간 포맷 (SQLite DateTime 기준)
+  String _formatTime(DateTime? dt) {
+    if (dt == null) return '-';
+    final y = dt.year.toString().padLeft(4, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final d = dt.day.toString().padLeft(2, '0');
+    final h = dt.hour.toString().padLeft(2, '0');
+    final mm = dt.minute.toString().padLeft(2, '0');
+    return '$y-$m-$d $h:$mm';
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // 필터 전환
+
+  Future<void> _switchFilterWithSet({required Set<String> displayNames}) async {
+    _selectedDisplayNames
+      ..clear()
+      ..addAll(displayNames.where((e) => e.trim().isNotEmpty));
+    await _saveFilter();
+
+    debugPrint('[REV-TOP] [FILTER] switched | excluded=${_selectedDisplayNames.join(", ")}');
+
+    // Firestore 조회 쿨다운/전역 캐시는 제거하고,
+    // 단순히 SQLite에서 다시 조회하도록 변경
+    setState(() {
+      _rows.clear();
+      _allRows.clear();
+      _nextIndex = 0;
+      _hasMore = false;
+    });
+
+    await _loadFirstPage();
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -525,16 +356,12 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
     scheduleMicrotask(() async {
       await _loadSavedFilter();
       await _loadDoneForArea();
-      await _updateRefreshCooldownLabel(); // 초기 라벨/상태 계산(지역 단위)
     });
   }
 
   @override
   void dispose() {
-    _cooldownTimer?.cancel();
-    final key = _cacheKey();
-    debugPrint('[REV-TOP] dispose | key=$key | '
-        'totalReads=${_readsOf(key)}, pageLoads=${_loadsOf(key)}');
+    debugPrint('[REV-TOP] dispose | area=$_areaAtOpen');
     super.dispose();
   }
 
@@ -552,12 +379,13 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
     // 표시명 목록
     final List<String> displayNames = [
       '전체(구역 무관)',
-      ...locations.map((l) => _displayOf(name: l.locationName, parent: l.parent, type: l.type)).toSet().toList()
+      ...locations
+          .map((l) => _displayOf(name: l.locationName, parent: l.parent, type: l.type))
+          .toSet()
+          .toList()
         ..sort((a, b) => a.compareTo(b)),
     ];
     final effectiveCount = displayNames.length - 1; // '전체' 제외
-
-    final bool inCooldown = _refreshRemain > Duration.zero;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -603,9 +431,9 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
                 ),
               ),
               const SizedBox(width: 8),
-              Tooltip(
+              const Tooltip(
                 message: '제외 목록은 다른 화면의 수동 새로고침으로 캐시에 저장된 구역 기준입니다.',
-                child: const Icon(Icons.info_outline, size: 20),
+                child: Icon(Icons.info_outline, size: 20),
               ),
             ],
           ),
@@ -616,21 +444,21 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
           child: Row(
             children: [
-              // 새로고침/업무 종료
+              // 새로고침
               Expanded(
                 child: ElevatedButton.icon(
                   style: _whiteBorderButtonStyle(context),
-                  onPressed: (_loading || !_acknowledged || inCooldown)
+                  onPressed: (_loading || !_acknowledged)
                       ? null
                       : () async {
-                    HapticFeedback.lightImpact();
                     await _refreshForce();
                   },
                   icon: const Icon(Icons.refresh),
-                  label: Text(inCooldown ? '업무 종료' : '새로고침'),
+                  label: const Text('새로고침'),
                 ),
               ),
               const SizedBox(width: 8),
+              // 더보기
               Expanded(
                 child: ElevatedButton.icon(
                   style: _whiteBorderButtonStyle(context),
@@ -706,7 +534,7 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
         ),
 
         // 하단(첫 진입에 아무것도 없을 때 불러오기 버튼)
-        if (_docs.isEmpty)
+        if (_rows.isEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             child: SizedBox(
@@ -733,7 +561,7 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
               ),
             ),
           ),
-        if (_docs.isNotEmpty)
+        if (_rows.isNotEmpty)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
             child: SizedBox(
@@ -785,7 +613,8 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
           if (query.isEmpty) {
             listNotifier.value = List<String>.from(displayNames);
           } else {
-            listNotifier.value = displayNames.where((e) => e.toLowerCase().contains(query.toLowerCase())).toList();
+            listNotifier.value =
+                displayNames.where((e) => e.toLowerCase().contains(query.toLowerCase())).toList();
           }
         }
 
@@ -844,7 +673,8 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text('확인하지 않을 주차 구역 선택', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      child: Text('확인하지 않을 주차 구역 선택',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -910,7 +740,8 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
                           controller.clear();
                           applyFilter('');
                           if (effectiveCount >= 2) {
-                            final firstReal = displayNames.firstWhere((e) => e != '전체(구역 무관)', orElse: () => '');
+                            final firstReal =
+                            displayNames.firstWhere((e) => e != '전체(구역 무관)', orElse: () => '');
                             selectedN.value = firstReal.isEmpty ? <String>{} : <String>{firstReal};
                           } else {
                             selectedN.value = <String>{};
@@ -938,7 +769,9 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
                               Navigator.of(ctx).pop(_FilterResult(selected: resolved));
                             },
                             icon: const Icon(Icons.check),
-                            label: Text('적용 (${s.isEmpty ? (effectiveCount >= 2 ? "최소 1개" : "제외 없음") : "${s.length}개"})'),
+                            label: Text(
+                              '적용 (${s.isEmpty ? (effectiveCount >= 2 ? "최소 1개" : "제외 없음") : "${s.length}개"})',
+                            ),
                             style: _whiteBorderButtonStyle(context),
                           );
                         },
@@ -975,7 +808,7 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
   }
 
   Widget _buildList(ThemeData theme) {
-    if (_loading && _docs.isEmpty) {
+    if (_loading && _rows.isEmpty) {
       return const Center(
         child: SizedBox(
           width: 28,
@@ -988,7 +821,7 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
       );
     }
 
-    if (_docs.isEmpty) {
+    if (_rows.isEmpty) {
       return const Center(
         child: Text(
           '표시할 데이터가 없습니다.\n[불러오기(5개)]를 눌러 가장 오래된 항목부터 가져옵니다.',
@@ -999,17 +832,19 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
 
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
-      itemCount: _docs.length,
+      itemCount: _rows.length,
       separatorBuilder: (_, __) => const SizedBox(height: 8),
       itemBuilder: (_, i) {
-        final snap = _docs[i];
-        final id = snap.id;
-        final data = snap.data();
-        final plate = (data['plate_number'] ?? '').toString();
-        final time = _formatTime(data['request_time']);
-        final car = (data['car_model'] ?? '').toString();
-        final color = (data['color'] ?? '').toString();
-        final location = (data['location'] ?? '').toString();
+        final rec = _rows[i];
+        final String id = _keyOfRecord(rec);
+
+        final String plate = rec.plateNumber;
+
+        final String? rawLocation = rec.location;
+        final String location = rawLocation ?? '';
+
+        final DateTime? createdAt = rec.createdAt;
+        final String time = _formatTime(createdAt);
 
         final bool isDone = _doneIds.contains(id);
         final bool overlayOpen = _overlayOpenIds.contains(id);
@@ -1054,8 +889,6 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
                           const SizedBox(height: 2),
                           Text(
                             [
-                              if (car.isNotEmpty) car,
-                              if (color.isNotEmpty) color,
                               if (location.isNotEmpty) 'loc:$location',
                             ].join(' • '),
                             style: theme.textTheme.bodySmall,
@@ -1125,17 +958,4 @@ class _ParkingCompletedReversePageState extends State<ParkingCompletedReversePag
 class _FilterResult {
   final Set<String> selected;
   _FilterResult({required this.selected});
-}
-
-// 캐시 엔트리(전역)
-class _CacheEntry {
-  final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs;
-  final QueryDocumentSnapshot<Map<String, dynamic>>? last;
-  final bool hasMore;
-
-  _CacheEntry({
-    required this.docs,
-    required this.last,
-    required this.hasMore,
-  });
 }

@@ -17,12 +17,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/app_navigator.dart';
 import 'dev_memo.dart';
 
-// ⬇️ DevCalendarPage(92%) 바텀시트 사용
+// DevCalendarPage(92%) 바텀시트 사용
 import 'dev_calendar_page.dart';
-import 'github_code_browser_bottom_sheet.dart';
-import 'github_markdown_bottom_sheet.dart';
 import 'google_docs_bottom_sheet.dart';
-// ⬇️ NEW: Markdown 시트를 도크에서 직접 띄우기 위해 추가(상위 폴더로 올라가 stub_package 경로 import)
+
+// NEW: 로컬 SharedPreferences / SQLite 탐색 바텀시트 사용
+import 'local_prefs_bottom_sheet.dart';
+import 'sqlite_explorer_bottom_sheet.dart';
 
 class DevQuickActions {
   DevQuickActions._();
@@ -173,33 +174,21 @@ class DevQuickActions {
 
   // ── 액션: 시트 헬퍼들 ─────────────────────────────────────
 
-  // ‘코드’ 아이콘 → GitHub Code Browser 시트
-  static Future<dynamic> showGithubCodeBrowserSheet(BuildContext ctx) {
+  // ‘로컬 Prefs’ 아이콘 → SharedPreferences 뷰어 바텀시트
+  static Future<dynamic> showLocalPrefsSheet(BuildContext ctx) {
     return showModalBottomSheet(
       context: ctx,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const GithubCodeBrowserBottomSheet(
-        owner: 'tonalityquin',
-        repo: 'easy_dev',
-        defaultBranch: 'main',
-      ),
+      builder: (_) => const LocalPrefsBottomSheet(),
     );
   }
 
-  // NEW: ‘Markdown’ 아이콘 → GitHub Markdown 시트
-  static Future<dynamic> showGithubMarkdownSheet(BuildContext ctx) {
-    return showModalBottomSheet(
-      context: ctx,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const GithubMarkdownBottomSheet(
-        owner: 'tonalityquin',
-        repo: 'easy_dev',
-        defaultBranch: 'main',
-        initialPath: '', // repo root
-      ),
-    );
+  // ‘SQLite 탐색기’ 아이콘 → SQLiteExplorer 풀스크린 시트
+  static Future<dynamic> showSQLiteExplorerSheet(BuildContext ctx) {
+    // SQLiteExplorerBottomSheet.showFullScreen 내부에서
+    // useRootNavigator / SafeArea / constraints 등을 처리
+    return SQLiteExplorerBottomSheet.showFullScreen(ctx);
   }
 
   // ‘개인 달력’ 아이콘 → DevCalendarPage(92%) 시트
@@ -231,7 +220,8 @@ class _DevBubble extends StatefulWidget {
   State<_DevBubble> createState() => _DevBubbleState();
 }
 
-class _DevBubbleState extends State<_DevBubble> with SingleTickerProviderStateMixin {
+class _DevBubbleState extends State<_DevBubble>
+    with SingleTickerProviderStateMixin {
   // 디자인 토큰
   static const double _bubbleSize = 56;
   static const double _iconSize = 22;
@@ -254,9 +244,13 @@ class _DevBubbleState extends State<_DevBubble> with SingleTickerProviderStateMi
   void initState() {
     super.initState();
     _pos = widget.initialPos;
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 240));
-    _t = CurvedAnimation(parent: _ctrl, curve: const _DevSpringCurve(), reverseCurve: Curves.easeInCubic)
-      ..addListener(() => setState(() {}));
+    _ctrl =
+        AnimationController(vsync: this, duration: const Duration(milliseconds: 240));
+    _t = CurvedAnimation(
+      parent: _ctrl,
+      curve: const _DevSpringCurve(),
+      reverseCurve: Curves.easeInCubic,
+    )..addListener(() => setState(() {}));
   }
 
   @override
@@ -284,24 +278,24 @@ class _DevBubbleState extends State<_DevBubble> with SingleTickerProviderStateMi
     // ▶︎ 도크 액션 정의(이 길이로 레이아웃 폭 자동 계산)
     final actions = <_DevDockAction>[
       _DevDockAction(
-        icon: Icons.code_rounded,
-        label: '코드',
+        icon: Icons.tune_rounded,
+        label: '로컬 Prefs',
         color: const Color(0xFF1E88E5),
         onTap: () async {
           await _ctrl.reverse();
           await DevQuickActions.openSheetExclusively(
-                (ctx) => DevQuickActions.showGithubCodeBrowserSheet(ctx),
+                (ctx) => DevQuickActions.showLocalPrefsSheet(ctx),
           );
         },
       ),
       _DevDockAction(
-        icon: Icons.article_rounded,
-        label: 'Markdown',
+        icon: Icons.storage_rounded,
+        label: 'SQLite',
         color: Colors.indigo,
         onTap: () async {
           await _ctrl.reverse();
           await DevQuickActions.openSheetExclusively(
-                (ctx) => DevQuickActions.showGithubMarkdownSheet(ctx),
+                (ctx) => DevQuickActions.showSQLiteExplorerSheet(ctx),
           );
         },
       ),
@@ -346,7 +340,8 @@ class _DevBubbleState extends State<_DevBubble> with SingleTickerProviderStateMi
 
     // 아이콘 개수 동적 계산
     final count = actions.length;
-    final minInnerWidth = count * _chip + (count - 1) * _gapMin;
+    final minInnerWidth =
+        count * _chip + (count - 1) * _gapMin;
     final neededAtMin = _dockHPad * 2 + minInnerWidth;
 
     final preferRight = rightSpace >= leftSpace;
@@ -354,13 +349,16 @@ class _DevBubbleState extends State<_DevBubble> with SingleTickerProviderStateMi
     final canLeft = leftSpace >= neededAtMin;
     final useRight = canRight || (!canLeft && preferRight);
 
-    final avail = (useRight ? rightSpace : leftSpace).clamp(0.0, double.infinity);
+    final avail =
+    (useRight ? rightSpace : leftSpace).clamp(0.0, double.infinity);
     final gap = _calcGap(avail: avail, count: count);
-    final innerWidth = (count * _chip + (count - 1) * gap).ceilToDouble();
+    final innerWidth =
+    (count * _chip + (count - 1) * gap).ceilToDouble();
     final dockWidth = (_dockHPad * 2 + innerWidth).ceilToDouble();
     final dockHeight = (_dockVPad * 2 + _chip).ceilToDouble();
 
-    final dockLeft = useRight ? (_pos.dx + _bubbleSize + _edgePad) : (_pos.dx - dockWidth - _edgePad);
+    final dockLeft =
+    useRight ? (_pos.dx + _bubbleSize + _edgePad) : (_pos.dx - dockWidth - _edgePad);
     final dockTop = _pos.dy + (_bubbleSize - dockHeight) / 2;
 
     return Stack(
@@ -386,7 +384,8 @@ class _DevBubbleState extends State<_DevBubble> with SingleTickerProviderStateMi
             ignoring: !_expanded,
             child: Transform.scale(
               scale: 0.96 + 0.04 * _t.value,
-              alignment: useRight ? Alignment.centerLeft : Alignment.centerRight,
+              alignment:
+              useRight ? Alignment.centerLeft : Alignment.centerRight,
               child: Opacity(
                 opacity: _t.value,
                 child: _DevGlassDock(
@@ -414,16 +413,24 @@ class _DevBubbleState extends State<_DevBubble> with SingleTickerProviderStateMi
           child: GestureDetector(
             onPanUpdate: (d) {
               setState(() {
-                final next = Offset(_pos.dx + d.delta.dx, _pos.dy + d.delta.dy);
+                final next =
+                Offset(_pos.dx + d.delta.dx, _pos.dy + d.delta.dy);
                 _pos = _clampToScreen(next, screen, bottomInset);
               });
             },
             onPanEnd: (_) async {
-              final snapX = (_pos.dx + _bubbleSize / 2) < screen.width / 2 ? 8.0 : screen.width - _bubbleSize - 8.0;
+              final snapX =
+              (_pos.dx + _bubbleSize / 2) < screen.width / 2
+                  ? 8.0
+                  : screen.width - _bubbleSize - 8.0;
               setState(() => _pos = Offset(snapX, _pos.dy));
               await widget.onPosSave(_pos);
             },
-            child: _DevGlassBubble(size: _bubbleSize, progress: _t.value, onTap: _toggleMenu),
+            child: _DevGlassBubble(
+              size: _bubbleSize,
+              progress: _t.value,
+              onTap: _toggleMenu,
+            ),
           ),
         ),
       ],
@@ -431,21 +438,27 @@ class _DevBubbleState extends State<_DevBubble> with SingleTickerProviderStateMi
   }
 
   double _calcGap({required double avail, required int count}) {
-    final minWidth =
-        _DevBubbleState._dockHPad * 2 + count * _DevBubbleState._chip + (count - 1) * _DevBubbleState._gapMin;
+    final minWidth = _DevBubbleState._dockHPad * 2 +
+        count * _DevBubbleState._chip +
+        (count - 1) * _DevBubbleState._gapMin;
     if (avail <= minWidth) return _DevBubbleState._gapMin;
 
-    final maxWidth =
-        _DevBubbleState._dockHPad * 2 + count * _DevBubbleState._chip + (count - 1) * _DevBubbleState._gapMax;
+    final maxWidth = _DevBubbleState._dockHPad * 2 +
+        count * _DevBubbleState._chip +
+        (count - 1) * _DevBubbleState._gapMax;
     if (avail >= maxWidth) return _DevBubbleState._gapMax;
 
     final t = (avail - minWidth) / (maxWidth - minWidth);
-    return _DevBubbleState._gapMin + (_DevBubbleState._gapMax - _DevBubbleState._gapMin) * t.clamp(0, 1);
+    return _DevBubbleState._gapMin +
+        (_DevBubbleState._gapMax - _DevBubbleState._gapMin) * t.clamp(0, 1);
   }
 
   Offset _clampToScreen(Offset raw, Size screen, double bottomInset) {
-    final maxX = (screen.width - _DevBubbleState._bubbleSize).clamp(0.0, double.infinity);
-    final maxY = (screen.height - _DevBubbleState._bubbleSize - bottomInset).clamp(0.0, double.infinity);
+    final maxX =
+    (screen.width - _DevBubbleState._bubbleSize).clamp(0.0, double.infinity);
+    final maxY =
+    (screen.height - _DevBubbleState._bubbleSize - bottomInset)
+        .clamp(0.0, double.infinity);
     final dx = raw.dx.clamp(0.0, maxX);
     final dy = raw.dy.clamp(0.0, maxY);
     return Offset(dx, dy);
@@ -457,7 +470,11 @@ class _DevGlassBubble extends StatelessWidget {
   final double progress; // 0~1
   final VoidCallback onTap;
 
-  const _DevGlassBubble({required this.size, required this.progress, required this.onTap});
+  const _DevGlassBubble({
+    required this.size,
+    required this.progress,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -483,8 +500,15 @@ class _DevGlassBubble extends StatelessWidget {
                 center: Alignment.topLeft,
                 radius: 1.2,
               ),
-              border: Border.all(color: Colors.white.withOpacity(0.35), width: 1),
-              boxShadow: const [BoxShadow(blurRadius: 18, color: Colors.black26, offset: Offset(0, 6))],
+              border:
+              Border.all(color: Colors.white.withOpacity(0.35), width: 1),
+              boxShadow: const [
+                BoxShadow(
+                  blurRadius: 18,
+                  color: Colors.black26,
+                  offset: Offset(0, 6),
+                ),
+              ],
             ),
             child: Stack(
               fit: StackFit.expand,
@@ -494,14 +518,20 @@ class _DevGlassBubble extends StatelessWidget {
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white.withOpacity(0.15), width: 1),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.15),
+                        width: 1,
+                      ),
                     ),
                   ),
                 ),
                 Center(
                   child: Transform.rotate(
                     angle: progress * math.pi,
-                    child: Icon(Icons.developer_mode_rounded, color: cs.onSurface.withOpacity(0.9)),
+                    child: Icon(
+                      Icons.developer_mode_rounded,
+                      color: cs.onSurface.withOpacity(0.9),
+                    ),
                   ),
                 ),
               ],
@@ -544,8 +574,15 @@ class _DevGlassDock extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(radius),
             color: cs.surface.withOpacity(0.60),
-            border: Border.all(color: Colors.white.withOpacity(0.35), width: 1),
-            boxShadow: const [BoxShadow(blurRadius: 16, color: Colors.black26, offset: Offset(0, 8))],
+            border:
+            Border.all(color: Colors.white.withOpacity(0.35), width: 1),
+            boxShadow: const [
+              BoxShadow(
+                blurRadius: 16,
+                color: Colors.black26,
+                offset: Offset(0, 8),
+              ),
+            ],
           ),
           child: child,
         ),
@@ -643,8 +680,17 @@ class _DevDockIconButton extends StatelessWidget {
               decoration: BoxDecoration(
                 color: bg,
                 shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withOpacity(0.25), width: 1),
-                boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black26, offset: Offset(0, 4))],
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.25),
+                  width: 1,
+                ),
+                boxShadow: const [
+                  BoxShadow(
+                    blurRadius: 10,
+                    color: Colors.black26,
+                    offset: Offset(0, 4),
+                  ),
+                ],
               ),
               alignment: Alignment.center,
               child: Icon(icon, color: Colors.white, size: iconSize),

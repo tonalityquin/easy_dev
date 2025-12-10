@@ -1,13 +1,13 @@
-// lib/screens/simple_package/simple_inside_package/sections/simple_inside_report_button_section.dart
+// lib/screens/simple_package/simple_inside_package/sections/simple_inside_document_box_button_section.dart
 import 'package:flutter/material.dart';
 
-// 같은 디렉토리에 둘 헬퍼 파일 import
-import '../widgets/simple_inside_report_bottom_sheet.dart';
+// Simple 모드 문서철 바텀시트 열기 함수
+import '../../../sections/documents/simple_document_box_sheet.dart';
 
-class SimpleInsideReportButtonSection extends StatelessWidget {
+class SimpleInsideDocumentBoxButtonSection extends StatelessWidget {
   final bool isDisabled;
 
-  const SimpleInsideReportButtonSection({
+  const SimpleInsideDocumentBoxButtonSection({
     super.key,
     this.isDisabled = false,
   });
@@ -15,9 +15,9 @@ class SimpleInsideReportButtonSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ElevatedButton.icon(
-      icon: const Icon(Icons.report),
+      icon: const Icon(Icons.folder_open),
       label: const Text(
-        '업무 보고',
+        '서류함 열기',
         style: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.bold,
@@ -34,7 +34,8 @@ class SimpleInsideReportButtonSection extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
         ),
       ),
-      onPressed: isDisabled ? null : () => showSimpleInsideReportFullScreenBottomSheet(context),
+      // ✅ 이제 실제로 문서철 바텀시트를 연다
+      onPressed: isDisabled ? null : () => openDocumentBox(context),
     );
   }
 }

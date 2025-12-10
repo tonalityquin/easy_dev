@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../states/user/user_state.dart';
+import '../../../../../states/user/user_state.dart';
 
 /// Teal Palette (Simple 전용)
 class _Palette {

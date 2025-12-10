@@ -1,16 +1,20 @@
 // lib/time_record/simple_mode/simple_mode_attendance_repository.dart
 import 'package:intl/intl.dart';
+import 'package:sqflite/sqflite.dart'; // ✅ ConflictAlgorithm 사용
 
 import 'simple_mode_db.dart';
+// ✅ Firestore 연동용 레포지토리 (경로는 실제 프로젝트 구조에 맞게 조정)
+import 'package:easydev/repositories/commute_log_repository.dart';
 
 /// 약식 모드 출근/퇴근/휴게 버튼 로그 타입
 enum SimpleModeAttendanceType {
-  workIn,   // 출근
-  workOut,  // 퇴근
+  workIn, // 출근
+  workOut, // 퇴근
   breakTime // 휴게 버튼
 }
 
 extension SimpleModeAttendanceTypeX on SimpleModeAttendanceType {
+  /// SQLite에 저장되는 코드 값
   String get code {
     switch (this) {
       case SimpleModeAttendanceType.workIn:
@@ -19,6 +23,18 @@ extension SimpleModeAttendanceTypeX on SimpleModeAttendanceType {
         return 'work_out';
       case SimpleModeAttendanceType.breakTime:
         return 'break';
+    }
+  }
+
+  /// Firestore에 사용하는 상태 라벨 (CommuteLogRepository.status 용)
+  String get statusLabel {
+    switch (this) {
+      case SimpleModeAttendanceType.workIn:
+        return '출근';
+      case SimpleModeAttendanceType.workOut:
+        return '퇴근';
+      case SimpleModeAttendanceType.breakTime:
+        return '휴게';
     }
   }
 }
@@ -37,10 +53,16 @@ SimpleModeAttendanceType? simpleModeAttendanceTypeFromCode(String code) {
 }
 
 class SimpleModeAttendanceRepository {
-  SimpleModeAttendanceRepository._();
+  SimpleModeAttendanceRepository._({
+    CommuteLogRepository? commuteLogRepository,
+  }) : _commuteLogRepository =
+      commuteLogRepository ?? CommuteLogRepository();
 
   static final SimpleModeAttendanceRepository instance =
   SimpleModeAttendanceRepository._();
+
+  /// Firestore 로그용 레포지토리
+  final CommuteLogRepository _commuteLogRepository;
 
   // 예: 2025-12-08
   final DateFormat _dateFormatter = DateFormat('yyyy-MM-dd');
@@ -48,10 +70,13 @@ class SimpleModeAttendanceRepository {
   // 예: 09:00 (항상 두 자리 시각)
   final DateFormat _timeFormatter = DateFormat('HH:mm');
 
-  /// 버튼을 누른 시각을 그대로 한 줄 INSERT
+  /// 버튼을 누른 시각을 그대로 한 줄 INSERT (로컬 SQLite 전용)
   ///
-  /// - 같은 날짜/타입 조합은 항상 **마지막으로 누른 기록만 남도록**
-  ///   기존 row를 모두 삭제한 뒤 새 row를 INSERT 한다.
+  /// - v2 스키마: (date, type) 가 PRIMARY KEY 이므로
+  ///   같은 (date, type) 은 항상 마지막 값만 남도록
+  ///   INSERT OR REPLACE (ConflictAlgorithm.replace) 사용.
+  ///
+  /// ⚠️ Firestore에는 아무 것도 쓰지 않는 순수 로컬 메서드입니다.
   Future<void> insertEvent({
     required DateTime dateTime,
     required SimpleModeAttendanceType type,
@@ -66,28 +91,20 @@ class SimpleModeAttendanceRepository {
 
     final typeCode = type.code;
 
-    await db.transaction((txn) async {
-      // 1) 같은 날짜 + 같은 타입의 기존 로그 모두 삭제
-      await txn.delete(
-        'simple_mode_attendance',
-        where: 'date = ? AND type = ?',
-        whereArgs: <Object?>[date, typeCode],
-      );
-
-      // 2) 새 로그 1건만 INSERT
-      await txn.insert(
-        'simple_mode_attendance',
-        <String, Object?>{
-          'date': date,
-          'type': typeCode,
-          'time': time,
-          'created_at': dateTime.toIso8601String(),
-        },
-      );
-    });
+    await db.insert(
+      'simple_mode_attendance',
+      <String, Object?>{
+        'date': date,
+        'type': typeCode,
+        'time': time,
+        'created_at': dateTime.toIso8601String(),
+      },
+      // ✅ (date, type) PRIMARY KEY 충돌 시 기존 row를 덮어씀
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
-  /// 특정 날짜의 출근/휴게/퇴근 기록을 한 번에 조회
+  /// 특정 날짜의 출근/휴게/퇴근 기록을 한 번에 조회 (로컬 SQLite)
   ///
   /// 반환: { SimpleModeAttendanceType.workIn: '09:12', ... } 형식
   Future<Map<SimpleModeAttendanceType, String>> getEventsForDate(
@@ -117,5 +134,132 @@ class SimpleModeAttendanceRepository {
     }
 
     return result;
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // ✅ SQLite + Firestore를 동시에 업데이트하는 브리지 메서드
+  // ─────────────────────────────────────────────────────────────
+
+  /// 약식 모드 펀칭 1회에 대해:
+  ///  1) 로컬 SQLite(simple_mode_attendance)에 저장
+  ///  2) Firestore(commute_user_logs)에 동일한 시각으로 로그 적재
+  ///
+  /// - Firestore 쪽은 CommuteLogRepository를 사용
+  /// - 이미 해당 날짜/상태에 로그가 있으면 Firestore에는 다시 쓰지 않음
+  ///
+  /// 사용 예:
+  ///   await SimpleModeAttendanceRepository.instance.insertEventAndUpload(
+  ///     dateTime: now,
+  ///     type: SimpleModeAttendanceType.workIn,
+  ///     userId: userId,
+  ///     userName: userName,
+  ///     area: area,
+  ///     division: division,
+  ///   );
+  Future<void> insertEventAndUpload({
+    required DateTime dateTime,
+    required SimpleModeAttendanceType type,
+    required String userId,
+    required String userName,
+    required String area,
+    required String division,
+  }) async {
+    // 1) 항상 먼저 로컬 SQLite에 기록 (오프라인에서도 동작)
+    await insertEvent(dateTime: dateTime, type: type);
+
+    // 2) Firestore 에 쓸 공통 포맷
+    final dateStr = _dateFormatter.format(dateTime); // "2025-12-09"
+    final recordedTime = _timeFormatter.format(dateTime); // "09:30"
+    final statusLabel = type.statusLabel; // "출근"/"휴게"/"퇴근"
+
+    // 3) 해당 날짜에 이미 로그 있는지 확인
+    final alreadyExists = await _commuteLogRepository.hasLogForDate(
+      status: statusLabel,
+      userId: userId,
+      dateStr: dateStr,
+    );
+
+    if (alreadyExists) {
+      // 이미 Firestore에 존재하면 추가 업로드는 생략
+      return;
+    }
+
+    // 4) Firestore에 업로드
+    //    (CommuteLogRepository 내부에서 예외는 swallow + DebugDatabaseLogger 기록)
+    await _commuteLogRepository.addLog(
+      status: statusLabel,
+      userId: userId,
+      userName: userName,
+      area: area,
+      division: division,
+      dateStr: dateStr,
+      recordedTime: recordedTime,
+      dateTime: dateTime,
+    );
+  }
+
+  /// (선택) 특정 날짜의 약식 모드 로컬 데이터를
+  /// Firestore로 재동기화하는 유틸리티 메서드.
+  ///
+  /// - 오프라인 상태에서 쌓인 SQLite 로그를
+  ///   나중에 한 번에 Firestore에 반영하는 용도로 사용 가능.
+  ///
+  /// 사용 예:
+  ///   await SimpleModeAttendanceRepository.instance.syncDateToRemote(
+  ///     date: DateTime(2025, 12, 9),
+  ///     userId: userId,
+  ///     userName: userName,
+  ///     area: area,
+  ///     division: division,
+  ///   );
+  Future<void> syncDateToRemote({
+    required DateTime date,
+    required String userId,
+    required String userName,
+    required String area,
+    required String division,
+  }) async {
+    final localEvents = await getEventsForDate(date);
+    if (localEvents.isEmpty) return;
+
+    for (final entry in localEvents.entries) {
+      final type = entry.key;
+      final timeStr = entry.value; // "HH:mm"
+
+      final dateStr = _dateFormatter.format(date);
+      final statusLabel = type.statusLabel;
+
+      final alreadyExists = await _commuteLogRepository.hasLogForDate(
+        status: statusLabel,
+        userId: userId,
+        dateStr: dateStr,
+      );
+      if (alreadyExists) {
+        continue;
+      }
+
+      // timeStr 을 DateTime 의 시/분으로 합성해서 dateTime 생성 (초는 0으로 가정)
+      final parts = timeStr.split(':');
+      final hour = int.tryParse(parts.elementAt(0)) ?? 0;
+      final minute = int.tryParse(parts.elementAt(1)) ?? 0;
+      final dateTime = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        hour,
+        minute,
+      );
+
+      await _commuteLogRepository.addLog(
+        status: statusLabel,
+        userId: userId,
+        userName: userName,
+        area: area,
+        division: division,
+        dateStr: dateStr,
+        recordedTime: timeStr,
+        dateTime: dateTime,
+      );
+    }
   }
 }
