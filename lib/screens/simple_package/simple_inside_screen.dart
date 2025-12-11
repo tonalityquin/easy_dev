@@ -8,11 +8,10 @@ import '../../../../states/user/user_state.dart';
 import '../../../utils/init/logout_helper.dart';
 import '../../services/endtime_reminder_service.dart';
 import 'sections/simple_inside_header_widget_section.dart';
+import 'sections/widgets/simple_inside_punch_recorder_section.dart';
 import 'simple_inside_controller.dart';
 import 'sections/common_mode/simple_inside_document_box_button_section.dart';
 import 'sections/common_mode/simple_inside_report_button_section.dart';
-import 'sections/team_mode/simple_inside_document_form_button_section.dart';
-import 'sections/team_mode/simple_inside_punch_recorder_section.dart';
 
 /// 약식 출퇴근 화면 모드:
 /// - common: 일반 약식 화면
@@ -303,7 +302,7 @@ class _TeamModeButtonGrid extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: SimpleInsideDocumentFormButtonSection(),
+              child: SimpleInsideDocumentBoxButtonSection(),
             ),
           ],
         ),

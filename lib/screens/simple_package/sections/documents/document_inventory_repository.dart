@@ -1,4 +1,3 @@
-// lib/screens/type_package/common_widgets/dashboard_bottom_sheet/document_inventory_repository.dart
 import 'dart:async';
 
 import '../../../../../../states/user/user_state.dart';
@@ -18,7 +17,13 @@ class DocumentInventoryRepository {
 
     // 🔹 여기서 실제로 사용할 문서만 노출합니다.
     //  - 업무 시작/퇴근/업무 종료/인수인계 양식은 제거
+    //  - 경위서 / 출퇴근 기록 / 휴게시간 기록 / 연차(결근) 신청서만 유지
+    //
+    //  ⚠️ 라우팅 레벨에서 각 id(template-*)에 따라
+    //     적절한 페이지(UserStatementFormPage(kind: ...))로
+    //     분기해 주어야 합니다.
     return <DocumentItem>[
+      // 1) 경위서
       DocumentItem(
         id: 'template-statement',
         title: '경위서 양식',
@@ -26,6 +31,28 @@ class DocumentInventoryRepository {
         updatedAt: now,
         type: DocumentType.statementForm,
       ),
+
+      // 2) 출퇴근 기록 제출
+      DocumentItem(
+        id: 'template-commute-record',
+        title: '출퇴근 기록 제출',
+        subtitle: '지각 · 조퇴 · 결근 등 출퇴근 관련 사유 보고',
+        updatedAt: now,
+        // 기존 경위서와 동일한 statementForm 타입을 사용하고,
+        // id로 세부 종류를 구분합니다.
+        type: DocumentType.statementForm,
+      ),
+
+      // 3) 휴게시간 기록 제출
+      DocumentItem(
+        id: 'template-resttime-record',
+        title: '휴게시간 기록 제출',
+        subtitle: '휴게시간 미사용 · 지연 · 초과 사용 등 휴게시간 관련 보고',
+        updatedAt: now,
+        type: DocumentType.statementForm,
+      ),
+
+      // 4) 연차(결근) 지원 신청서
       DocumentItem(
         id: 'template-annual-leave-application',
         title: '연차(결근) 지원 신청서',

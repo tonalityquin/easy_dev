@@ -1,13 +1,26 @@
-// lib/screens/simple_package/sections/documents/simple_document_box_sheet.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
 
+// 상태
 import '../../../../../../states/user/user_state.dart';
+import '../../../../../../states/area/area_state.dart';
+
+// 문서/양식 화면
 import '../backup/backup_form_page.dart';
+import '../dialog/simple_duration_blocking_dialog.dart';
 import 'document_inventory_repository.dart';
-import 'user_statement_form_page.dart';
 import 'document_item.dart';
+import 'user_statement_form_page.dart';
 import '../resignation/resignation_form_page.dart';
+
+// SQLite DB
+import 'package:easydev/time_record/simple_mode/simple_mode_db.dart';
+
+// Firestore 출퇴근 로그 레포지토리 & 디버그 로거
+import 'package:easydev/repositories/commute_log_repository.dart';
+import 'package:easydev/screens/dev_package/debug_package/debug_database_logger.dart';
 
 Future<void> openDocumentBox(BuildContext context) async {
   await showModalBottomSheet<void>(
@@ -74,15 +87,13 @@ class _DocumentBoxSheet extends StatelessWidget {
                               child: StreamBuilder<List<DocumentItem>>(
                                 stream: repo.streamForUser(userState),
                                 builder: (context, snapshot) {
-                                  if (snapshot.connectionState ==
-                                      ConnectionState.waiting) {
+                                  if (snapshot.connectionState == ConnectionState.waiting) {
                                     return const Center(
                                       child: CircularProgressIndicator(),
                                     );
                                   }
 
-                                  final items =
-                                      snapshot.data ?? const <DocumentItem>[];
+                                  final items = snapshot.data ?? const <DocumentItem>[];
 
                                   if (items.isEmpty) {
                                     return const _EmptyState();
@@ -98,23 +109,54 @@ class _DocumentBoxSheet extends StatelessWidget {
                                       final item = items[index];
                                       return _DocumentListItem(
                                         item: item,
-                                        onTap: () {
+                                        onTap: () async {
                                           switch (item.type) {
                                             case DocumentType.statementForm:
-                                            // ✅ 경위서 작성 화면으로 이동
-                                              Navigator.of(context).push(
-                                                MaterialPageRoute(
-                                                  builder: (_) =>
-                                                  const UserStatementFormPage(),
-                                                  fullscreenDialog: true,
-                                                ),
-                                              );
+                                              // ✅ statementForm 안에서 id 기준으로 분기
+                                              if (item.id == 'template-commute-record') {
+                                                // 출퇴근 기록 제출:
+                                                // 1) 5초 카운트다운 dialog 표시
+                                                // 2) 사용자가 취소하지 않으면 SQLite → Firestore 업로드
+                                                final proceed = await showSimpleDurationBlockingDialog(
+                                                  context,
+                                                  message: '단말기에 저장된 출퇴근 기록을\n서버에 제출합니다.\n\n'
+                                                      '제출을 원치 않으면 아래 [취소] 버튼을 눌러 주세요.',
+                                                  duration: const Duration(seconds: 5),
+                                                );
+                                                if (!proceed) return;
+
+                                                await _submitCommuteRecordsFromSqlite(
+                                                  context,
+                                                );
+                                              } else if (item.id == 'template-resttime-record') {
+                                                // 휴게시간 기록 제출:
+                                                // 1) 5초 카운트다운 dialog 표시
+                                                // 2) 사용자가 취소하지 않으면 SQLite → Firestore 업로드
+                                                final proceed = await showSimpleDurationBlockingDialog(
+                                                  context,
+                                                  message: '단말기에 저장된 휴게시간 기록을\n서버에 제출합니다.\n\n'
+                                                      '제출을 원치 않으면 아래 [취소] 버튼을 눌러 주세요.',
+                                                  duration: const Duration(seconds: 5),
+                                                );
+                                                if (!proceed) return;
+
+                                                await _submitRestTimeRecordsFromSqlite(
+                                                  context,
+                                                );
+                                              } else {
+                                                // 그 외(경위서 양식 등)는 기존처럼 경위서 작성 화면
+                                                Navigator.of(context).push(
+                                                  MaterialPageRoute(
+                                                    builder: (_) => const UserStatementFormPage(),
+                                                    fullscreenDialog: true,
+                                                  ),
+                                                );
+                                              }
                                               break;
 
                                             case DocumentType.handoverForm:
-                                            // ✅ (안씀) 인수인계: Simple 모드에선 안내만
-                                              ScaffoldMessenger.of(context)
-                                                  .showSnackBar(
+                                              // ✅ (안씀) 인수인계: Simple 모드에선 안내만
+                                              ScaffoldMessenger.of(context).showSnackBar(
                                                 const SnackBar(
                                                   content: Text(
                                                     '인수인계 양식은 현재 Simple 모드에서 사용하지 않습니다.',
@@ -124,9 +166,8 @@ class _DocumentBoxSheet extends StatelessWidget {
                                               break;
 
                                             case DocumentType.workEndReportForm:
-                                            // ✅ (안씀) 퇴근/업무 종료: Simple 모드에선 안내만
-                                              ScaffoldMessenger.of(context)
-                                                  .showSnackBar(
+                                              // ✅ (안씀) 퇴근/업무 종료: Simple 모드에선 안내만
+                                              ScaffoldMessenger.of(context).showSnackBar(
                                                 const SnackBar(
                                                   content: Text(
                                                     '업무 종료/퇴근 보고 양식은 현재 Simple 모드에서 사용하지 않습니다.',
@@ -136,9 +177,8 @@ class _DocumentBoxSheet extends StatelessWidget {
                                               break;
 
                                             case DocumentType.workStartReportForm:
-                                            // ✅ (안씀) 업무 시작 보고: Simple 모드에선 안내만
-                                              ScaffoldMessenger.of(context)
-                                                  .showSnackBar(
+                                              // ✅ (안씀) 업무 시작 보고: Simple 모드에선 안내만
+                                              ScaffoldMessenger.of(context).showSnackBar(
                                                 const SnackBar(
                                                   content: Text(
                                                     '업무 시작 보고 양식은 현재 Simple 모드에서 사용하지 않습니다.',
@@ -148,24 +188,20 @@ class _DocumentBoxSheet extends StatelessWidget {
                                               break;
 
                                             case DocumentType.generic:
-                                            // ✅ generic 문서 중 연차(결근) 지원 신청서 연결
-                                              if (item.id ==
-                                                  'template-annual-leave-application') {
+                                              // ✅ generic 문서 중 연차(결근) 지원 신청서 연결
+                                              if (item.id == 'template-annual-leave-application') {
                                                 Navigator.of(context).push(
                                                   MaterialPageRoute(
-                                                    builder: (_) =>
-                                                    const BackupFormPage(),
+                                                    builder: (_) => const BackupFormPage(),
                                                     fullscreenDialog: true,
                                                   ),
                                                 );
                                               }
                                               // ✅ generic 문서 중 사직서 연결
-                                              else if (item.id ==
-                                                  'template-resignation-letter') {
+                                              else if (item.id == 'template-resignation-letter') {
                                                 Navigator.of(context).push(
                                                   MaterialPageRoute(
-                                                    builder: (_) =>
-                                                    const ResignationFormPage(),
+                                                    builder: (_) => const ResignationFormPage(),
                                                     fullscreenDialog: true,
                                                   ),
                                                 );
@@ -233,7 +269,7 @@ class _BinderSpine extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: List.generate(
           5,
-              (index) => Padding(
+          (index) => Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Container(
               width: 10,
@@ -297,8 +333,8 @@ class _SheetHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  // 🔧 인수인계 문구 제거
-                  '경위서와 신청/사직서 양식을 모아두었어요.',
+                  // ⚙️ 경위서 + 출퇴근/휴게 기록 + 신청/사직서까지 포함하도록 문구 조정
+                  '경위서, 출퇴근·휴게 기록, 신청/사직서 양식을 한 곳에 모았어요.',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: textTheme.bodySmall?.copyWith(
@@ -337,7 +373,7 @@ class _DocumentListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final accentColor = _accentColorForItem(item); // ← item 기준 색상
     final typeLabel = _typeLabelForItem(item); // ← item 기준 라벨
-    final iconData = _iconForType(item.type);
+    final iconData = _iconForItem(item); // ← item 기준 아이콘
     final textTheme = Theme.of(context).textTheme;
 
     return Padding(
@@ -423,8 +459,7 @@ class _DocumentListItem extends StatelessWidget {
                                   ),
                                   decoration: BoxDecoration(
                                     color: accentColor.withOpacity(0.14),
-                                    borderRadius:
-                                    BorderRadius.circular(999),
+                                    borderRadius: BorderRadius.circular(999),
                                   ),
                                   child: Text(
                                     typeLabel,
@@ -517,6 +552,334 @@ class _EmptyState extends StatelessWidget {
 }
 
 /// ─────────────────────────
+/// SQLite → Firestore 동기화용 모델/함수
+/// ─────────────────────────
+
+/// SQLite에서 읽어 온 출근/퇴근/휴게 1건
+class LocalCommuteRecord {
+  /// Firestore 상태 라벨: "출근" / "퇴근" / "휴게"
+  final String status;
+
+  /// 실제 이벤트 시각 (date + time 기준)
+  final DateTime dateTime;
+
+  LocalCommuteRecord({
+    required this.status,
+    required this.dateTime,
+  });
+}
+
+/// SQLite(simple_work_attendance / simple_break_attendance)에서
+/// 출근/퇴근/휴게 데이터를 전부 읽어 오는 함수.
+///
+/// [statuses] 는 Firestore 상태 라벨 기준:
+///   - ["출근", "퇴근"]
+///   - ["휴게"]
+Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
+  required BuildContext context,
+  required List<String> statuses,
+  required String userId, // 현재 스키마상 userId 컬럼은 없으므로 필터에는 사용하지 않음
+}) async {
+  final db = await SimpleModeDb.instance.database;
+  final result = <LocalCommuteRecord>[];
+
+  final dateTimeParser = DateFormat('yyyy-MM-dd HH:mm');
+
+  // 1) 출근/퇴근 (simple_work_attendance)
+  final needWorkIn = statuses.contains('출근');
+  final needWorkOut = statuses.contains('퇴근');
+
+  if (needWorkIn || needWorkOut) {
+    final workRows = await db.query(
+      'simple_work_attendance',
+      columns: ['date', 'type', 'time'],
+      orderBy: 'date ASC, created_at ASC',
+    );
+
+    for (final row in workRows) {
+      final typeCode = row['type'] as String;
+      final dateStr = row['date'] as String; // yyyy-MM-dd
+      final timeStr = row['time'] as String; // HH:mm
+
+      String? statusLabel;
+      if (typeCode == 'work_in' && needWorkIn) {
+        statusLabel = '출근';
+      } else if (typeCode == 'work_out' && needWorkOut) {
+        statusLabel = '퇴근';
+      } else {
+        continue;
+      }
+
+      try {
+        final dt = dateTimeParser.parse('$dateStr $timeStr');
+        result.add(LocalCommuteRecord(status: statusLabel, dateTime: dt));
+      } catch (_) {
+        // 파싱 실패는 무시
+        continue;
+      }
+    }
+  }
+
+  // 2) 휴게 (simple_break_attendance, type = "start")
+  final needBreak = statuses.contains('휴게');
+  if (needBreak) {
+    final breakRows = await db.query(
+      'simple_break_attendance',
+      columns: ['date', 'time'],
+      orderBy: 'date ASC, created_at ASC',
+    );
+
+    for (final row in breakRows) {
+      final dateStr = row['date'] as String;
+      final timeStr = row['time'] as String;
+
+      try {
+        final dt = dateTimeParser.parse('$dateStr $timeStr');
+        result.add(LocalCommuteRecord(status: '휴게', dateTime: dt));
+      } catch (_) {
+        continue;
+      }
+    }
+  }
+
+  return result;
+}
+
+/// 출퇴근 기록 제출:
+/// - SQLite(simple_work_attendance)에 있는 출근/퇴근 전체 →
+///   Firestore(commute_user_logs)의 "출근"/"퇴근" 로그로 업로드
+Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
+  final messenger = ScaffoldMessenger.of(context);
+
+  // 사용자/근무지 정보
+  final userState = context.read<UserState>();
+  final areaState = context.read<AreaState>();
+
+  final userId = (userState.user?.id ?? '').trim();
+  final userName = userState.name.trim();
+  final area = (userState.user?.selectedArea ?? '').trim();
+  final division = areaState.currentDivision.trim();
+
+  if (userId.isEmpty || userName.isEmpty || area.isEmpty || division.isEmpty) {
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text(
+          '출퇴근 기록 제출 실패: 사용자/근무지 정보가 비어 있습니다.\n'
+          '관리자에게 계정 및 근무지 설정을 확인해 달라고 요청해 주세요.',
+        ),
+      ),
+    );
+    return;
+  }
+
+  try {
+    // 1) SQLite에서 출근/퇴근 전체 로딩
+    final records = await _loadLocalCommuteRecordsFromSqlite(
+      context: context,
+      statuses: const ['출근', '퇴근'],
+      userId: userId,
+    );
+
+    if (records.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('제출할 출퇴근 기록이 없습니다.'),
+        ),
+      );
+      return;
+    }
+
+    final repo = CommuteLogRepository();
+    final dateFormatter = DateFormat('yyyy-MM-dd');
+    final timeFormatter = DateFormat('HH:mm');
+
+    var successCount = 0;
+    var skippedCount = 0;
+
+    // 2) Firestore commute_user_logs 에 업로드
+    for (final record in records) {
+      final status = record.status; // "출근" 또는 "퇴근"
+      final eventDateTime = record.dateTime;
+
+      final dateStr = dateFormatter.format(eventDateTime);
+      final recordedTime = timeFormatter.format(eventDateTime);
+
+      final alreadyExists = await repo.hasLogForDate(
+        status: status,
+        userId: userId,
+        dateStr: dateStr,
+      );
+
+      if (alreadyExists) {
+        skippedCount++;
+        continue;
+      }
+
+      await repo.addLog(
+        status: status,
+        userId: userId,
+        userName: userName,
+        area: area,
+        division: division,
+        dateStr: dateStr,
+        recordedTime: recordedTime,
+        dateTime: eventDateTime,
+      );
+
+      successCount++;
+    }
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          '출퇴근 기록 제출 완료: $successCount건 업로드, '
+          '중복 $skippedCount건은 건너뛰었습니다.',
+        ),
+      ),
+    );
+  } catch (e, st) {
+    debugPrint('❌ 출퇴근 기록 제출 중 오류: $e');
+
+    try {
+      await DebugDatabaseLogger().log(
+        {
+          'tag': 'SimpleDocumentBoxSheet._submitCommuteRecordsFromSqlite',
+          'message': '출퇴근 기록 Firestore 동기화 중 예외 발생',
+          'error': e.toString(),
+          'stack': st.toString(),
+        },
+        level: 'error',
+        tags: const ['database', 'firestore', 'commute', 'migration'],
+      );
+    } catch (_) {}
+
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text(
+          '출퇴근 기록 제출 중 오류가 발생했습니다.\n'
+          '네트워크 또는 Firebase 설정을 확인해 주세요.',
+        ),
+      ),
+    );
+  }
+}
+
+/// 휴게시간 기록 제출:
+/// - SQLite(simple_break_attendance)에 있는 휴게 로그 전체 →
+///   Firestore(commute_user_logs)의 "휴게" 로그로 업로드
+Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
+  final messenger = ScaffoldMessenger.of(context);
+
+  final userState = context.read<UserState>();
+  final areaState = context.read<AreaState>();
+
+  final userId = (userState.user?.id ?? '').trim();
+  final userName = userState.name.trim();
+  final area = (userState.user?.selectedArea ?? '').trim();
+  final division = areaState.currentDivision.trim();
+
+  if (userId.isEmpty || userName.isEmpty || area.isEmpty || division.isEmpty) {
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text(
+          '휴게시간 기록 제출 실패: 사용자/근무지 정보가 비어 있습니다.\n'
+          '관리자에게 계정 및 근무지 설정을 확인해 달라고 요청해 주세요.',
+        ),
+      ),
+    );
+    return;
+  }
+
+  try {
+    // 1) SQLite에서 휴게 로그 전체 로딩
+    final records = await _loadLocalCommuteRecordsFromSqlite(
+      context: context,
+      statuses: const ['휴게'],
+      userId: userId,
+    );
+
+    if (records.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('제출할 휴게시간 기록이 없습니다.'),
+        ),
+      );
+      return;
+    }
+
+    final repo = CommuteLogRepository();
+    final dateFormatter = DateFormat('yyyy-MM-dd');
+    final timeFormatter = DateFormat('HH:mm');
+
+    var successCount = 0;
+    var skippedCount = 0;
+
+    for (final record in records) {
+      final eventDateTime = record.dateTime;
+      final dateStr = dateFormatter.format(eventDateTime);
+      final recordedTime = timeFormatter.format(eventDateTime);
+
+      final alreadyExists = await repo.hasLogForDate(
+        status: '휴게',
+        userId: userId,
+        dateStr: dateStr,
+      );
+
+      if (alreadyExists) {
+        skippedCount++;
+        continue;
+      }
+
+      await repo.addLog(
+        status: '휴게',
+        userId: userId,
+        userName: userName,
+        area: area,
+        division: division,
+        dateStr: dateStr,
+        recordedTime: recordedTime,
+        dateTime: eventDateTime,
+      );
+
+      successCount++;
+    }
+
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          '휴게시간 기록 제출 완료: $successCount건 업로드, '
+          '중복 $skippedCount건은 건너뛰었습니다.',
+        ),
+      ),
+    );
+  } catch (e, st) {
+    debugPrint('❌ 휴게시간 기록 제출 중 오류: $e');
+
+    try {
+      await DebugDatabaseLogger().log(
+        {
+          'tag': 'SimpleDocumentBoxSheet._submitRestTimeRecordsFromSqlite',
+          'message': '휴게시간 기록 Firestore 동기화 중 예외 발생',
+          'error': e.toString(),
+          'stack': st.toString(),
+        },
+        level: 'error',
+        tags: const ['database', 'firestore', 'break', 'migration'],
+      );
+    } catch (_) {}
+
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text(
+          '휴게시간 기록 제출 중 오류가 발생했습니다.\n'
+          '네트워크 또는 Firebase 설정을 확인해 주세요.',
+        ),
+      ),
+    );
+  }
+}
+
+/// ─────────────────────────
 /// 디자인/텍스트 헬퍼 함수 모음
 /// ─────────────────────────
 
@@ -538,21 +901,37 @@ String _formatDateTime(DateTime dt) {
 /// 기본 type 기준 색상
 Color _accentColorForType(DocumentType type) {
   switch (type) {
-    case DocumentType.workStartReportForm:
-      return const Color(0xFF4F9A94); // 청록
-    case DocumentType.workEndReportForm:
-      return const Color(0xFFEF6C53); // 기본 오렌지/레드
-    case DocumentType.handoverForm:
-      return const Color(0xFF8D6E63); // 브라운
     case DocumentType.statementForm:
-      return const Color(0xFF5C6BC0); // 블루
+      return const Color(0xFF5C6BC0); // 기본 블루 (경위서 계열)
     case DocumentType.generic:
+      return const Color(0xFF757575);
+    default:
+      // 이 문서철에서 직접 쓰지 않는 타입(workStartReportForm 등)은 공통 회색으로 처리
       return const Color(0xFF757575);
   }
 }
 
-/// type + id 기준으로 색상 세분화 (퇴근 vs 업무 종료)
+/// type + id 기준으로 색상 세분화
+///
+/// - 경위서 / 출퇴근 기록 / 휴게시간 기록을 시각적으로 구분
+/// - 퇴근 vs 업무 종료 보고도 기존 로직 유지
 Color _accentColorForItem(DocumentItem item) {
+  // 1) statementForm 계열 세분화
+  if (item.type == DocumentType.statementForm) {
+    switch (item.id) {
+      case 'template-statement':
+        // 경위서: 기본 블루톤 유지
+        return const Color(0xFF5C6BC0);
+      case 'template-commute-record':
+        // 출퇴근 기록: 통근/이동 느낌의 청록 계열
+        return const Color(0xFF26A69A);
+      case 'template-resttime-record':
+        // 휴게시간 기록: 휴식/커피 느낌의 따뜻한 오렌지 계열
+        return const Color(0xFFFFB74D);
+    }
+  }
+
+  // 2) 퇴근 vs 업무 종료 세분화 (다른 곳에서 사용할 수도 있으므로 로직 유지)
   if (item.type == DocumentType.workEndReportForm) {
     if (item.id == 'template-work-end-report') {
       // 퇴근 보고 양식: 기존 오렌지톤
@@ -563,26 +942,49 @@ Color _accentColorForItem(DocumentItem item) {
       return const Color(0xFFD84315);
     }
   }
+
+  // 3) 그 외는 type 기본색
   return _accentColorForType(item.type);
 }
 
+/// type 기준 기본 아이콘
 IconData _iconForType(DocumentType type) {
   switch (type) {
-    case DocumentType.workStartReportForm:
-      return Icons.wb_sunny_outlined;
-    case DocumentType.workEndReportForm:
-      return Icons.nights_stay_outlined;
-    case DocumentType.handoverForm:
-      return Icons.swap_horiz;
     case DocumentType.statementForm:
       return Icons.description_outlined;
     case DocumentType.generic:
       return Icons.insert_drive_file_outlined;
+    default:
+      // 사용 빈도 낮은 타입들은 공통 문서 아이콘으로 fallback
+      return Icons.insert_drive_file_outlined;
   }
+}
+
+/// type + id 기준으로 아이콘 세분화
+///
+/// - 출퇴근 기록: 시계 아이콘
+/// - 휴게시간 기록: 커피/휴식 아이콘
+IconData _iconForItem(DocumentItem item) {
+  if (item.type == DocumentType.statementForm) {
+    switch (item.id) {
+      case 'template-commute-record':
+        // 출퇴근 기록: 시간/근태 느낌
+        return Icons.access_time;
+      case 'template-resttime-record':
+        // 휴게시간 기록: 커피/휴식 느낌
+        return Icons.coffee_outlined;
+      case 'template-statement':
+      default:
+        return Icons.description_outlined;
+    }
+  }
+
+  return _iconForType(item.type);
 }
 
 /// type + id 기준으로 라벨을 세분화
 String _typeLabelForItem(DocumentItem item) {
+  // 1) 퇴근 vs 업무 종료 (혹시 다른 곳에서 재사용될 수 있으므로 유지)
   if (item.type == DocumentType.workEndReportForm) {
     if (item.id == 'template-work-end-report') {
       return '퇴근 보고';
@@ -591,21 +993,37 @@ String _typeLabelForItem(DocumentItem item) {
       return '업무 종료 보고';
     }
   }
+
+  // 2) 경위서 계열(경위서 / 출퇴근 기록 / 휴게시간 기록)
+  if (item.type == DocumentType.statementForm) {
+    switch (item.id) {
+      case 'template-statement':
+        return '경위서';
+      case 'template-commute-record':
+        return '출퇴근 기록';
+      case 'template-resttime-record':
+        return '휴게시간 기록';
+    }
+  }
+
+  // 3) 그 외는 type 기본 라벨
   return _typeLabelForType(item.type);
 }
 
+/// type 기준 기본 라벨
+///
+/// - simple 모드 문서철에서 실제로 사용하는 것은
+///   statementForm(경위서 계열), generic(연차/사직 등) 위주라
+///   나머지 enum 값들은 공통 fallback 으로 처리
 String _typeLabelForType(DocumentType type) {
   switch (type) {
-    case DocumentType.workStartReportForm:
-      return '업무 시작 보고';
-    case DocumentType.workEndReportForm:
-    // 기본값(위에서 id별로 override 가능)
-      return '퇴근/업무 종료';
-    case DocumentType.handoverForm:
-      return '업무 인수인계';
     case DocumentType.statementForm:
       return '경위서';
     case DocumentType.generic:
+      return '기타 문서';
+    default:
+      // workStartReportForm / workEndReportForm / handoverForm 등
+      // 이 문서철에서는 직접 사용하지 않으므로 공통 라벨로 fallback
       return '기타 문서';
   }
 }

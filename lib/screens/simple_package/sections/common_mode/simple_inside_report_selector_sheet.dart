@@ -1,8 +1,8 @@
-// lib/screens/simple_package/sections3/widgets/simple_inside_report_selector_sheet.dart
 import 'package:flutter/material.dart';
 
-import '../../sections3/widgets/simple_inside_report_bottom_sheet.dart';
-import '../../sections3/widgets/simple_inside_work_bottom_sheet.dart';
+import '../widgets/simple_inside_report_bottom_sheet.dart';
+import '../widgets/simple_inside_work_bottom_sheet.dart';
+
 
 
 /// 내부에서만 사용하는 선택 결과 enum
