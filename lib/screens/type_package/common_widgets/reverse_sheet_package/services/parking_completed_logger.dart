@@ -1,5 +1,5 @@
-import '../../table_package/models/parking_completed_record.dart';
-import '../../table_package/repositories/parking_completed_repository.dart';
+import '../models/parking_completed_record.dart';
+import '../repositories/parking_completed_repository.dart';
 import 'status_mapping.dart';
 
 class ParkingCompletedLogger {

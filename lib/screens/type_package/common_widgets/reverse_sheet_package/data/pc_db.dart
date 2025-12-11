@@ -1,5 +1,3 @@
-// lib/screens/type_package/parking_completed_package/data/pc_db.dart
-
 import 'dart:async';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';

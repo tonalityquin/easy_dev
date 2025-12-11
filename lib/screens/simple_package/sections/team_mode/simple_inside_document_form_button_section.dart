@@ -1,23 +1,26 @@
-// lib/screens/simple_package/simple_inside_package/sections/simple_inside_document_box_button_section.dart
+// lib/screens/simple_package/simple_inside_package/sections/simple_inside_document_form_button_section.dart
+
 import 'package:flutter/material.dart';
 
-// Simple 모드 문서철 바텀시트 열기 함수
-import '../../../sections/documents/simple_document_box_sheet.dart';
+import '../widgets/simple_payment_document_sheet.dart';
 
-class SimpleInsideDocumentBoxButtonSection extends StatelessWidget {
-  final bool isDisabled;
 
-  const SimpleInsideDocumentBoxButtonSection({
+/// 팀원 모드용 "결재 서류" 버튼 섹션
+class SimpleInsideDocumentFormButtonSection extends StatelessWidget {
+  const SimpleInsideDocumentFormButtonSection({
     super.key,
     this.isDisabled = false,
   });
 
+  final bool isDisabled;
+
   @override
   Widget build(BuildContext context) {
     return ElevatedButton.icon(
-      icon: const Icon(Icons.folder_open),
+      // 결제/영수증 느낌의 아이콘
+      icon: const Icon(Icons.receipt_long),
       label: const Text(
-        '서류함 열기',
+        '결재 서류',
         style: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.bold,
@@ -34,8 +37,9 @@ class SimpleInsideDocumentBoxButtonSection extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
         ),
       ),
-      // ✅ 이제 실제로 문서철 바텀시트를 연다
-      onPressed: isDisabled ? null : () => openDocumentBox(context),
+      // ✅ 이제 실제로 결재 서류 선택 바텀시트를 연다
+      onPressed:
+      isDisabled ? null : () => openSimplePaymentDocumentSheet(context),
     );
   }
 }

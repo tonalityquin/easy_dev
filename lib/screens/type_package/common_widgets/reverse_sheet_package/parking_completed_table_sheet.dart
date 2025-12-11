@@ -1,61 +1,46 @@
 // lib/screens/type_package/parking_completed_package/ui/parking_completed_table_sheet.dart
-import 'dart:math' as math;
 import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
-import '../../../../../utils/snackbar_helper.dart';
+import '../../../../../../utils/snackbar_helper.dart';
+import 'models/parking_completed_record.dart';
+import 'repositories/parking_completed_repository.dart';
+import 'ui/reverse_page_top_sheet.dart';
 
-import '../../reverse_sheet/reverse_page_top_sheet.dart';
-import '../../reverse_sheet/parking_completed_reverse_page.dart';
-import '../models/parking_completed_record.dart';
-import '../repositories/parking_completed_repository.dart';
+
+
+/// 👉 역 Top Sheet로 "Parking Completed 로컬 테이블" 열기 헬퍼
+///
+/// 기존에는 ReversePage(Live 모드)로 전환하기 위한 콜백을 받았지만,
+/// 이제는 단순 테이블 뷰만 열도록 API를 단순화했다.
+Future<void> showParkingCompletedTableTopSheet(BuildContext context) async {
+  await showReversePageTopSheet(
+    context: context,
+    maxHeightFactor: 0.95,
+    builder: (_) => const ParkingCompletedTableSheet(),
+  );
+}
+
+/// 로컬 SQLite `parking_completed_records` 테이블 뷰(SQL-like)
+///
+/// - 번호판/주차 구역 텍스트 검색
+/// - createdAt 기준 정렬(오래된 순 / 최신 순 토글)
+/// - 출차 완료(isDepartureCompleted) 숨김 토글
+/// - 전체 삭제
+class ParkingCompletedTableSheet extends StatefulWidget {
+  const ParkingCompletedTableSheet({super.key});
+
+  @override
+  State<ParkingCompletedTableSheet> createState() => _ParkingCompletedTableSheetState();
+}
 
 /// Deep Blue 팔레트(서비스 전반에서 사용하는 컬러와 동일 계열)
 class _Palette {
   static const base = Color(0xFF0D47A1); // primary
   static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
   static const light = Color(0xFF5472D3); // 톤 변형/보더
-}
-
-/// 👉 역 바텀시트(Top Sheet)로 "Parking Completed 로컬 테이블" 열기 헬퍼
-Future<void> showParkingCompletedTableTopSheet(
-  BuildContext context, {
-  required bool canShowLiveButton,
-}) async {
-  await showReversePageTopSheet(
-    context: context,
-    maxHeightFactor: 0.95,
-    builder: (_) => ParkingCompletedTableSheet(
-      canShowLiveButton: canShowLiveButton,
-      onLivePressed: () async {
-        // ※ 현재는 라이브 버튼이 UI 상에 노출되지 않으므로 호출되지 않음
-        Navigator.of(context, rootNavigator: true).pop();
-
-        await showReversePageTopSheet(
-          context: context,
-          maxHeightFactor: 0.95,
-          builder: (_) => const ParkingCompletedReversePage(),
-        );
-      },
-    ),
-  );
-}
-
-class ParkingCompletedTableSheet extends StatefulWidget {
-  const ParkingCompletedTableSheet({
-    super.key,
-    this.canShowLiveButton = true,
-    this.onLivePressed,
-  });
-
-  /// 라이브 버튼 노출 여부 (현재는 UI에서 사용하지 않음)
-  final bool canShowLiveButton;
-
-  /// 라이브 버튼 눌렀을 때 콜백 (현재는 UI에서 사용하지 않음)
-  final VoidCallback? onLivePressed;
-
-  @override
-  State<ParkingCompletedTableSheet> createState() => _ParkingCompletedTableSheetState();
 }
 
 class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet> {
@@ -70,21 +55,21 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
 
   final TextEditingController _searchCtrl = TextEditingController();
 
-  // ✅ 디바운스 타이머
+  // 디바운스 타이머
   Timer? _debounce;
   static const int _debounceMs = 300;
 
-  // ✅ 세로 스크롤 컨트롤러(Top Sheet에서 직접 사용)
+  // 세로 스크롤 컨트롤러(Top Sheet에서 직접 사용)
   final ScrollController _scrollCtrl = ScrollController();
 
   // 테이블 최소 너비(좁은 폰에선 가로 스크롤)
   static const double _tableMinWidth = 720; // 출차 완료 컬럼 추가로 약간 확장
   static const double _headerHeight = 44;
 
-  // ✅ 정렬 상태: true = 오래된 순(ASC), false = 최신 순(DESC)
+  // 정렬 상태: true = 오래된 순(ASC), false = 최신 순(DESC)
   bool _sortOldFirst = true;
 
-  // ✅ 출차 완료 숨김 필터: true면 isDepartureCompleted == true 행을 숨김
+  // 출차 완료 숨김 필터: true면 isDepartureCompleted == true 행을 숨김
   bool _hideDepartureCompleted = false;
 
   @override
@@ -92,7 +77,7 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
     super.initState();
     _load();
 
-    // ✅ 입력마다 바로 _load() 호출 대신 디바운스
+    // 입력마다 바로 _load() 호출 대신 디바운스
     _searchCtrl.addListener(() {
       _debounce?.cancel();
       _debounce = Timer(const Duration(milliseconds: _debounceMs), _load);
@@ -101,7 +86,7 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
 
   @override
   void dispose() {
-    _debounce?.cancel(); // ✅ 누수 방지
+    _debounce?.cancel();
     _searchCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
@@ -113,7 +98,7 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
     if (!mounted) return;
     setState(() {
       _allRows = List.of(rows);
-      _applyFilterAndSort(); // ✅ 현재 필터/정렬 상태에 맞춰 적용
+      _applyFilterAndSort(); // 현재 필터/정렬 상태에 맞춰 적용
       _loading = false;
     });
   }
@@ -195,36 +180,36 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
 
   // ────────────────── UI Helpers (SQL-like cells) ──────────────────
   TextStyle get _headStyle => Theme.of(context).textTheme.labelMedium!.copyWith(
-        fontWeight: FontWeight.w700,
-        letterSpacing: .2,
-        color: _Palette.dark,
-      );
+    fontWeight: FontWeight.w700,
+    letterSpacing: .2,
+    color: _Palette.dark,
+  );
 
   TextStyle get _cellStyle => Theme.of(context).textTheme.bodyMedium!.copyWith(
-        height: 1.25,
-        color: _Palette.dark.withOpacity(.9),
-      );
+    height: 1.25,
+    color: _Palette.dark.withOpacity(.9),
+  );
 
   TextStyle get _monoStyle => _cellStyle.copyWith(
-        fontFeatures: const [FontFeature.tabularFigures()], // 자리 고정 숫자
-        fontFamilyFallback: const ['monospace'],
-      );
+    fontFeatures: const [FontFeature.tabularFigures()], // 자리 고정 숫자
+    fontFamilyFallback: const ['monospace'],
+  );
 
   Widget _th(
-    String label, {
-    double? width,
-    int flex = 0,
-    TextAlign align = TextAlign.left,
-    bool sortable = false,
-    bool sortAsc = true,
-    VoidCallback? onTap,
-  }) {
+      String label, {
+        double? width,
+        int flex = 0,
+        TextAlign align = TextAlign.left,
+        bool sortable = false,
+        bool sortAsc = true,
+        VoidCallback? onTap,
+      }) {
     final sortIcon = sortable
         ? Icon(
-            sortAsc ? Icons.arrow_upward : Icons.arrow_downward,
-            size: 14,
-            color: _Palette.dark.withOpacity(.8),
-          )
+      sortAsc ? Icons.arrow_upward : Icons.arrow_downward,
+      size: 14,
+      color: _Palette.dark.withOpacity(.8),
+    )
         : null;
 
     final labelRow = Row(
@@ -276,13 +261,13 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
   }
 
   Widget _td(
-    Widget child, {
-    double? width,
-    int flex = 0,
-    TextAlign align = TextAlign.left,
-    Color? bg,
-    bool showRightBorder = false,
-  }) {
+      Widget child, {
+        double? width,
+        int flex = 0,
+        TextAlign align = TextAlign.left,
+        Color? bg,
+        bool showRightBorder = false,
+      }) {
     final cell = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       alignment: _alignTo(align),
@@ -295,9 +280,9 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
           ),
           right: showRightBorder
               ? BorderSide(
-                  color: _Palette.light.withOpacity(.25),
-                  width: .7,
-                )
+            color: _Palette.light.withOpacity(.25),
+            width: .7,
+          )
               : BorderSide.none,
         ),
       ),
@@ -364,14 +349,14 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
                             _th('Plate Number', flex: 2),
                             _th('Location', flex: 2),
                             _th(
-                              'Entry Time', // ✅ 컬럼명 영어
+                              'Entry Time', // 컬럼명 영어
                               flex: 3,
                               sortable: true,
                               sortAsc: _sortOldFirst,
                               onTap: _toggleSortByCreatedAt,
                             ),
                             _th(
-                              'Departure', // ✅ 컬럼명 영어
+                              'Departure',
                               width: 110,
                               align: TextAlign.center,
                             ),
@@ -383,7 +368,7 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
                     // ── 바디 (행 리스트) ───────────────────────────────
                     SliverList(
                       delegate: SliverChildBuilderDelegate(
-                        (context, i) {
+                            (context, i) {
                           final r = _rows[i];
                           final plate = r.plateNumber;
                           final location = r.location;
@@ -391,7 +376,7 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
                           final departed = r.isDepartureCompleted;
                           final isEven = i.isEven;
 
-                          // ✅ 출차 완료면 연한 초록색 배경, 아니면 기존 번갈아 색
+                          // 출차 완료면 연한 초록색 배경, 아니면 기존 번갈아 색
                           Color rowBg;
                           if (departed) {
                             rowBg = Colors.green.withOpacity(.06);
@@ -564,7 +549,7 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
                           ),
                         ),
                       const Spacer(),
-                      // ✅ 출차 완료 숨김 토글 버튼
+                      // 출차 완료 숨김 토글 버튼
                       IconButton(
                         tooltip: _hideDepartureCompleted ? '출차 완료 포함하여 보기' : '출차 완료 숨기기',
                         onPressed: _allRows.isEmpty && !_hideDepartureCompleted ? null : _toggleHideDepartureCompleted,
@@ -610,15 +595,15 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
                   suffixIcon: _searchCtrl.text.isEmpty
                       ? null
                       : IconButton(
-                          icon: Icon(
-                            Icons.clear,
-                            color: _Palette.dark.withOpacity(.7),
-                          ),
-                          onPressed: () {
-                            _searchCtrl.clear();
-                            _load();
-                          },
-                        ),
+                    icon: Icon(
+                      Icons.clear,
+                      color: _Palette.dark.withOpacity(.7),
+                    ),
+                    onPressed: () {
+                      _searchCtrl.clear();
+                      _load();
+                    },
+                  ),
                   filled: true,
                   fillColor: _Palette.base.withOpacity(.03),
                   contentPadding: const EdgeInsets.symmetric(
@@ -663,10 +648,10 @@ class _HeaderDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
+      BuildContext context,
+      double shrinkOffset,
+      bool overlapsContent,
+      ) {
     final showShadow = overlapsContent || shrinkOffset > 0;
     return Material(
       elevation: showShadow ? 1.5 : 0,

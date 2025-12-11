@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../sections/simple_inside_report_form_page.dart';
+import '../simple_inside_package/simple_inside_work_form_page.dart';
 
-void showSimpleInsideReportFullScreenBottomSheet(BuildContext context) {
+void showSimpleInsideWorkFullScreenBottomSheet(BuildContext context) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -10,7 +10,7 @@ void showSimpleInsideReportFullScreenBottomSheet(BuildContext context) {
     backgroundColor: Colors.transparent,
     builder: (ctx) => const FractionallySizedBox(
       heightFactor: 1,
-      child: SimpleInsideReportFormPage(),
+      child: SimpleInsideWorkFormPage(),
     ),
   );
 }

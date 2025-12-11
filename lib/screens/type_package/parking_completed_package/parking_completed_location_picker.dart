@@ -1,10 +1,10 @@
+// lib/screens/type_package/parking_completed_package/parking_completed_location_picker.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../states/location/location_state.dart';
 import '../../../repositories/location_repo_services/location_repository.dart';
 import '../../../utils/snackbar_helper.dart';
-import 'table_package/ui/parking_completed_table_sheet.dart'; // ✅ 커스텀 스낵바 헬퍼 사용
 
 /// Deep Blue 팔레트(서비스 카드와 동일 계열)
 class _Palette {
@@ -35,10 +35,10 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
 
   /// ▶ 단일 displayName만 갱신
   Future<void> _refreshOne(
-      LocationState state,
-      LocationRepository repo,
-      String displayName,
-      ) async {
+    LocationState state,
+    LocationRepository repo,
+    String displayName,
+  ) async {
     final now = DateTime.now();
     final last = _lastItemRefreshedAt[displayName];
     if (last != null && now.difference(last) < _itemCooldown) {
@@ -60,30 +60,11 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
       debugPrint('💥 [item] 갱신 실패("$displayName"): $e');
       if (mounted) showFailedSnackbar(context, '갱신 중 오류가 발생했습니다');
     } finally {
-      if (mounted) setState(() => _refreshingNames.remove(displayName));
+      if (mounted) {
+        setState(() => _refreshingNames.remove(displayName));
+      }
     }
   }
-
-  // ────────────────────────────────────────────────────────────────────────────
-  // 버튼 스타일: 흰 배경 + 회색 테두리 + 검정 전경(참고한 아이콘/텍스트 톤)
-  ButtonStyle _whiteBorderButtonStyle(BuildContext context) {
-    return ElevatedButton.styleFrom(
-      backgroundColor: Colors.white,
-      foregroundColor: Colors.black,
-      disabledBackgroundColor: Colors.white,
-      disabledForegroundColor: Colors.black45,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      minimumSize: const Size(0, 44),
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      side: BorderSide(color: Colors.grey.shade300, width: 1.0),
-    ).copyWith(
-      overlayColor: MaterialStateProperty.resolveWith(
-            (states) => states.contains(MaterialState.pressed) ? Colors.black12 : null,
-      ),
-    );
-  }
-  // ────────────────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -134,7 +115,9 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                                   color: _Palette.base,
                                 ),
                                 title: Text(displayName),
-                                subtitle: Text('입차 ${loc.plateCount} / 공간 ${loc.capacity}'),
+                                subtitle: Text(
+                                  '입차 ${loc.plateCount} / 공간 ${loc.capacity}',
+                                ),
                                 trailing: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -142,7 +125,9 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                                       const SizedBox(
                                         width: 20,
                                         height: 20,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
                                       )
                                     else
                                       IconButton(
@@ -169,7 +154,10 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                           onTap: () => setState(() => selectedParent = null),
                           child: Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 16.0,
+                              horizontal: 16.0,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.grey[100],
                               borderRadius: BorderRadius.circular(8),
@@ -178,7 +166,10 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                               children: const [
                                 Icon(Icons.arrow_back, color: Colors.black54),
                                 SizedBox(width: 8),
-                                Text('되돌아가기', style: TextStyle(fontSize: 16)),
+                                Text(
+                                  '되돌아가기',
+                                  style: TextStyle(fontSize: 16),
+                                ),
                               ],
                             ),
                           ),
@@ -194,47 +185,13 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                 return ListView(
                   padding: const EdgeInsets.all(16),
                   children: [
-                    // ============================================================
-                    // ✅ 액션 바: "테이블 열기" 버튼 (가운데 정렬 + 아이콘 디자인 반영)
-                    //    - 흰 배경/테두리 버튼
-                    //    - 아이콘 20, 간격 6
-                    //    - 가운데 정렬
-                    // ============================================================
-                    Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 360),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: widget.isLocked
-                                ? null
-                                : () {
-                              showModalBottomSheet(
-                                context: context,
-                                isScrollControlled: true,
-                                backgroundColor: Colors.transparent,
-                                builder: (_) => const ParkingCompletedTableSheet(),
-                              );
-                            },
-                            style: _whiteBorderButtonStyle(context),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: const [
-                                Icon(Icons.table_chart_outlined, size: 20),
-                                SizedBox(width: 6),
-                                Text('테이블 열기'),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
                     // 단일 주차 구역
                     const Text(
                       '단일 주차 구역',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     ...singles.map((loc) {
@@ -245,7 +202,9 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                         key: ValueKey(displayName),
                         leading: const Icon(Icons.place, color: _Palette.base),
                         title: Text(displayName),
-                        subtitle: Text('입차 ${loc.plateCount} / 공간 ${loc.capacity}'),
+                        subtitle: Text(
+                          '입차 ${loc.plateCount} / 공간 ${loc.capacity}',
+                        ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -253,7 +212,9 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                               const SizedBox(
                                 width: 20,
                                 height: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
                               )
                             else
                               IconButton(
@@ -277,12 +238,18 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                     // 복합 주차 구역 (부모) — 총 입차 수 표시 제거(총 공간만 표시)
                     const Text(
                       '복합 주차 구역',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     ...parentGroups.map((parent) {
                       final children = composites.where((l) => l.parent == parent).toList();
-                      final totalCapacity = children.fold(0, (sum, l) => sum + l.capacity);
+                      final totalCapacity = children.fold(
+                        0,
+                        (sum, l) => sum + l.capacity,
+                      );
 
                       return ListTile(
                         key: ValueKey('parent:$parent'),

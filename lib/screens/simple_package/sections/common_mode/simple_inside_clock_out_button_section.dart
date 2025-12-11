@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
-import 'package:easydev/time_record/simple_mode/simple_mode_attendance_repository.dart';
-import 'package:easydev/utils/app_exit_flag.dart';
+
+import '../../../../time_record/simple_mode/simple_mode_attendance_repository.dart';
+import '../../../../utils/app_exit_flag.dart';
+
 
 class SimpleInsideClockOutButtonSection extends StatelessWidget {
   final bool isDisabled;

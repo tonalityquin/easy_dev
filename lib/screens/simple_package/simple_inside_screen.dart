@@ -7,20 +7,19 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../utils/init/logout_helper.dart';
 import '../../services/endtime_reminder_service.dart';
-import 'simple_inside_package/simple_inside_controller.dart';
-import 'simple_inside_package/widgets/sections/simple_inside_report_button_section.dart';
-import 'simple_inside_package/widgets/sections/simple_inside_work_button_section.dart';
-import 'simple_inside_package/widgets/sections/simple_inside_user_info_card_section.dart';
-import 'simple_inside_package/widgets/sections/simple_inside_header_widget_section.dart';
-import 'simple_inside_package/widgets/sections/simple_inside_clock_out_button_section.dart';
-import 'simple_inside_package/widgets/sections/simple_inside_document_box_button_section.dart';
-import 'simple_inside_package/widgets/sections/simple_inside_document_form_button_section.dart';
-import 'simple_inside_package/widgets/sections/simple_inside_punch_recorder_section.dart';
+import 'sections/simple_inside_header_widget_section.dart';
+import 'simple_inside_controller.dart';
+import 'sections/common_mode/simple_inside_document_box_button_section.dart';
+import 'sections/common_mode/simple_inside_report_button_section.dart';
+import 'sections/team_mode/simple_inside_document_form_button_section.dart';
+import 'sections/team_mode/simple_inside_punch_recorder_section.dart';
 
 /// 약식 출퇴근 화면 모드:
-/// - common: 기존 약식 화면(업무 보고 / 출근하기 / 퇴근하기 / 서류함 열기)
+/// - common: 일반 약식 화면
+///   · team 모드와 동일하게 출근/휴게/퇴근 기록은 "출퇴근 기록기 카드"에서만 펀칭
+///   · 하단 버튼에는 업무 보고 / 서류함 열기 버튼만 노출
 /// - team  : 필드 유저 전용
-///   · 출퇴근/휴게 기록은 "출퇴근 기록기 카드"에서 펀칭으로만 입력
+///   · 출퇴근/휴게 기록은 "출퇴근 기록기 카드"에서만 펀칭
 ///   · 하단 버튼에는 결제 서류 버튼만 노출
 enum SimpleInsideMode {
   common,
@@ -96,11 +95,11 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
   Widget _buildScreenTag(BuildContext context) {
     final base = Theme.of(context).textTheme.labelSmall;
     final style = (base ??
-        const TextStyle(
-          fontSize: 11,
-          color: Colors.black54,
-          fontWeight: FontWeight.w600,
-        ))
+            const TextStyle(
+              fontSize: 11,
+              color: Colors.black54,
+              fontWeight: FontWeight.w600,
+            ))
         .copyWith(
       color: Colors.black54,
       fontWeight: FontWeight.w600,
@@ -175,8 +174,8 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
             }
 
             // 필드명은 실제 UserModel 정의에 맞게 사용
-            final String userId = user.id;      // 예: "01090351868-belivus"
-            final String userName = user.name;  // 예: "조성오"
+            final String userId = user.id; // 예: "01090351868-belivus"
+            final String userName = user.name; // 예: "조성오"
 
             // 🔹 현재 UserModel 에 area / division 이 없으므로
             //    Firestore 보조 로그용으로만 빈 문자열을 전달
@@ -197,18 +196,13 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
                           children: [
                             const SimpleInsideHeaderWidgetSection(),
 
-                            // 🔥 공통/팀원 모드에 따라 다른 카드 사용
-                            if (mode == SimpleInsideMode.team)
-                            // 필드 유저: 출퇴근 기록기 카드로만 펀칭
-                              SimpleInsidePunchRecorderSection(
-                                userId: userId,
-                                userName: userName,
-                                area: area,
-                                division: division,
-                              )
-                            else
-                            // 일반 모드: 근무자 정보 카드 유지
-                              const SimpleInsideUserInfoCardSection(),
+                            // 🔥 공통 / 팀 모드 공통: 출근/휴게/퇴근 기록은 출퇴근 기록기 카드에서만 펀칭
+                            SimpleInsidePunchRecorderSection(
+                              userId: userId,
+                              userName: userName,
+                              area: area,
+                              division: division,
+                            ),
 
                             const SizedBox(height: 6),
 
@@ -271,8 +265,8 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
 }
 
 /// 공통(common) 모드 버튼 그리드
-/// - 1행: 업무 보고 / 출근하기
-/// - 2행: 퇴근하기 / 서류함 열기
+/// - 출근/휴게/퇴근 기록은 상단 "출퇴근 기록기" 카드에서만 펀칭 (team 모드와 동일)
+/// - 여기서는 업무 보고 / 서류함 열기 버튼만 노출
 class _CommonModeButtonGrid extends StatelessWidget {
   const _CommonModeButtonGrid();
 
@@ -284,18 +278,6 @@ class _CommonModeButtonGrid extends StatelessWidget {
           children: [
             Expanded(
               child: SimpleInsideReportButtonSection(),
-            ),
-            SizedBox(width: 12),
-            Expanded(
-              child: SimpleInsideWorkButtonSection(),
-            ),
-          ],
-        ),
-        SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: SimpleInsideClockOutButtonSection(),
             ),
             SizedBox(width: 12),
             Expanded(

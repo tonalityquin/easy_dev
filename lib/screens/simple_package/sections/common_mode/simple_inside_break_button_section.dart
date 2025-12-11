@@ -1,26 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:easydev/time_record/simple_mode/simple_mode_attendance_repository.dart';
 
-import 'widgets/simple_punch_card_feedback.dart';
+import '../../../../time_record/simple_mode/simple_mode_attendance_repository.dart';
 
-
-class SimpleInsideWorkButtonSection extends StatelessWidget {
-  /// 필요하다면 보고 버튼처럼 비활성화 플래그도 쓸 수 있게 확장
-  final bool isDisabled;
-
-  const SimpleInsideWorkButtonSection({
+/// 팀원 모드용 "휴게 시간" 버튼 섹션
+class SimpleInsideBreakButtonSection extends StatelessWidget {
+  const SimpleInsideBreakButtonSection({
     super.key,
     this.isDisabled = false,
   });
 
+  final bool isDisabled;
+
   @override
   Widget build(BuildContext context) {
     return ElevatedButton.icon(
-      icon: const Icon(
-        Icons.access_time,
-      ),
+      icon: const Icon(Icons.free_breakfast),
       label: const Text(
-        '출근하기',
+        '휴게 시간',
         style: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.bold,
@@ -42,17 +38,17 @@ class SimpleInsideWorkButtonSection extends StatelessWidget {
           : () async {
         final now = DateTime.now();
 
-        // 1) SQLite에 출근 기록 저장
+        // ✅ 휴게 시간 버튼 누른 시각을 SQLite에 기록
         await SimpleModeAttendanceRepository.instance.insertEvent(
           dateTime: now,
-          type: SimpleModeAttendanceType.workIn,
+          type: SimpleModeAttendanceType.breakTime,
         );
 
-        // 2) 타임카드 펀칭 연출
-        await showPunchCardFeedback(
-          context,
-          type: SimpleModeAttendanceType.workIn,
-          dateTime: now,
+        // 간단 피드백
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('휴게 시간이 기록되었습니다.'),
+          ),
         );
       },
     );

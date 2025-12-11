@@ -1,4 +1,3 @@
-// lib/screens/simple_package/simple_inside_package/sections/simple_inside_report_signature_dialog.dart
 
 import 'dart:typed_data';
 import 'dart:ui' as ui;

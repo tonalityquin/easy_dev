@@ -1,9 +1,7 @@
 // lib/screens/simple_package/simple_inside_package/sections/simple_inside_report_button_section.dart
 import 'package:flutter/material.dart';
 
-// 같은 디렉토리에 둘 헬퍼 파일 import
-import '../../widgets/simple_inside_report_bottom_sheet.dart';
-
+import '../../sections3/widgets/simple_inside_report_bottom_sheet.dart';
 class SimpleInsideReportButtonSection extends StatelessWidget {
   final bool isDisabled;
 

@@ -5,9 +5,10 @@ import 'package:provider/provider.dart';
 import '../../../../../states/user/user_state.dart';
 import '../../../../../utils/block_dialogs/duration_blocking_dialog.dart';
 import '../../../../../utils/snackbar_helper.dart';
+import '../../reverse_sheet_package/models/parking_completed_record.dart';
+import '../../reverse_sheet_package/repositories/parking_completed_repository.dart';
 
-import '../../../parking_completed_package/table_package/models/parking_completed_record.dart';
-import '../../../parking_completed_package/table_package/repositories/parking_completed_repository.dart';
+
 
 /// Deep Blue 팔레트(서비스 카드 계열과 통일)
 class _Palette {

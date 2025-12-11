@@ -1,5 +1,3 @@
-// lib/screens/type_package/parking_completed_package/repositories/parking_completed_repository.dart
-
 import 'package:sqflite/sqflite.dart';
 
 import '../data/pc_db.dart';

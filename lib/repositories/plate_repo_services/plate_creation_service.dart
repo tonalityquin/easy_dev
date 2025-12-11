@@ -5,8 +5,9 @@ import 'package:flutter/foundation.dart';
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
 import '../../screens/dev_package/debug_package/debug_database_logger.dart';
-import '../../screens/type_package/parking_completed_package/table_package/services/parking_completed_logger.dart';
-import '../../screens/type_package/parking_completed_package/table_package/services/status_mapping.dart';
+import '../../screens/type_package/common_widgets/reverse_sheet_package/services/parking_completed_logger.dart';
+import '../../screens/type_package/common_widgets/reverse_sheet_package/services/status_mapping.dart';
+
 // import '../../utils/usage_reporter.dart';
 
 // 🔹 ParkingCompleted 로컬 로깅용
