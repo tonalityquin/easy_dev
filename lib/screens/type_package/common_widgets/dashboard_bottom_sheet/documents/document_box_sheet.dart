@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 
 import '../../../../../../states/user/user_state.dart';
 import '../backup/backup_form_page.dart';
-import '../end_works/end_work_report_dialog.dart';
 import '../work_start_report/sections/dashboard_end_report_form_page.dart';
 import '../work_start_report/sections/dashboard_start_report_form_page.dart';
 import 'document_inventory_repository.dart';
@@ -120,24 +119,18 @@ class _DocumentBoxSheet extends StatelessWidget {
                                               break;
 
                                             case DocumentType.workEndReportForm:
-                                              // 동일 type 안에서 id 로 역할 분리
-                                              if (item.id == 'template-end-work-report') {
-                                                // ✅ 업무 종료 보고서 → 기존 집계/서버 보고 시트
-                                                showEndReportDialog(context);
-                                              } else if (item.id == 'template-work-end-report') {
-                                                // ✅ 퇴근 보고 양식 → 새로 만든 업무 종료/퇴근 보고 화면
-                                                Navigator.of(context).push(
-                                                  MaterialPageRoute(
-                                                    builder: (_) => const DashboardEndReportFormPage(),
-                                                    fullscreenDialog: true,
-                                                  ),
-                                                );
-                                              }
-                                              // 그 외 id는 현재 아무 동작 없음
+                                            // ✅ 업무 종료/퇴근 보고 양식은 모두 새 DashboardEndReportFormPage 로 이동
+                                            //   (기존 showEndReportDialog 사용 제거)
+                                              Navigator.of(context).push(
+                                                MaterialPageRoute(
+                                                  builder: (_) => const DashboardEndReportFormPage(),
+                                                  fullscreenDialog: true,
+                                                ),
+                                              );
                                               break;
 
                                             case DocumentType.workStartReportForm:
-                                              // ✅ 업무 시작 보고 양식 → 새로 만든 화면으로 이동
+                                            // ✅ 업무 시작 보고 양식 → 새로 만든 화면으로 이동
                                               Navigator.of(context).push(
                                                 MaterialPageRoute(
                                                   builder: (_) => const DashboardStartReportFormPage(),
@@ -147,7 +140,7 @@ class _DocumentBoxSheet extends StatelessWidget {
                                               break;
 
                                             case DocumentType.generic:
-                                              // ✅ generic 문서 중 연차(결근) 지원 신청서 연결
+                                            // ✅ generic 문서 중 연차(결근) 지원 신청서 연결
                                               if (item.id == 'template-annual-leave-application') {
                                                 Navigator.of(context).push(
                                                   MaterialPageRoute(
@@ -227,7 +220,7 @@ class _BinderSpine extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: List.generate(
           5,
-          (index) => Padding(
+              (index) => Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Container(
               width: 10,
@@ -590,7 +583,7 @@ String _typeLabelForType(DocumentType type) {
     case DocumentType.workStartReportForm:
       return '업무 시작 보고';
     case DocumentType.workEndReportForm:
-      // 기본값(위에서 id별로 override 가능)
+    // 기본값(위에서 id별로 override 가능)
       return '퇴근/업무 종료';
     case DocumentType.handoverForm:
       return '업무 인수인계';

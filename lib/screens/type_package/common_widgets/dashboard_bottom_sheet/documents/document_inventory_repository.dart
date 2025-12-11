@@ -10,7 +10,6 @@ class DocumentInventoryRepository {
   static final instance = DocumentInventoryRepository._();
 
   Stream<List<DocumentItem>> streamForUser(UserState userState) async* {
-    // TODO: userState 를 활용한 사용자별/서버 연동 로직은 이후 확장
     yield _buildInitialItems();
   }
 
@@ -24,13 +23,6 @@ class DocumentInventoryRepository {
         subtitle: '업무 시작 시 보고 내용 정리',
         updatedAt: now,
         type: DocumentType.workStartReportForm,
-      ),
-      DocumentItem(
-        id: 'template-work-end-report',
-        title: '퇴근 보고 양식',
-        subtitle: '퇴근 시 보고 내용 정리',
-        updatedAt: now,
-        type: DocumentType.workEndReportForm,
       ),
       DocumentItem(
         id: 'template-end-work-report',
