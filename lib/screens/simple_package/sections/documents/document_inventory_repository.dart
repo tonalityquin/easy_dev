@@ -10,7 +10,6 @@ class DocumentInventoryRepository {
   static final instance = DocumentInventoryRepository._();
 
   Stream<List<DocumentItem>> streamForUser(UserState userState) async* {
-    // TODO: userState 를 활용한 사용자별/서버 연동 로직은 이후 확장
     yield _buildInitialItems();
   }
 
@@ -31,13 +30,6 @@ class DocumentInventoryRepository {
         id: 'template-annual-leave-application',
         title: '연차(결근) 지원 신청서',
         subtitle: '연차/결근 사유 및 일정 정리',
-        updatedAt: now,
-        type: DocumentType.generic,
-      ),
-      DocumentItem(
-        id: 'template-resignation-letter',
-        title: '사직서',
-        subtitle: '퇴사 사유 및 일자 작성',
         updatedAt: now,
         type: DocumentType.generic,
       ),

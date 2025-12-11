@@ -1,7 +1,8 @@
 // lib/screens/simple_package/simple_inside_package/sections/simple_inside_report_button_section.dart
 import 'package:flutter/material.dart';
 
-import '../../sections3/widgets/simple_inside_report_bottom_sheet.dart';
+import 'simple_inside_report_selector_sheet.dart';
+
 class SimpleInsideReportButtonSection extends StatelessWidget {
   final bool isDisabled;
 
@@ -32,7 +33,10 @@ class SimpleInsideReportButtonSection extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
         ),
       ),
-      onPressed: isDisabled ? null : () => showSimpleInsideReportFullScreenBottomSheet(context),
+      // 🔹 문서철 스타일의 선택 시트 → 선택 결과에 따라 시작/종료 보고서 폼 오픈
+      onPressed: isDisabled
+          ? null
+          : () => openSimpleInsideReportSelectorSheet(context),
     );
   }
 }

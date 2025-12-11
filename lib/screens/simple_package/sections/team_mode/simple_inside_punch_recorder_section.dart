@@ -33,12 +33,10 @@ class SimpleInsidePunchRecorderSection extends StatefulWidget {
   final String division;
 
   @override
-  State<SimpleInsidePunchRecorderSection> createState() =>
-      _SimpleInsidePunchRecorderSectionState();
+  State<SimpleInsidePunchRecorderSection> createState() => _SimpleInsidePunchRecorderSectionState();
 }
 
-class _SimpleInsidePunchRecorderSectionState
-    extends State<SimpleInsidePunchRecorderSection> {
+class _SimpleInsidePunchRecorderSectionState extends State<SimpleInsidePunchRecorderSection> {
   // ✅ 선택된 기준 날짜 (기본: 오늘)
   late DateTime _selectedDate;
 
@@ -48,6 +46,7 @@ class _SimpleInsidePunchRecorderSectionState
   bool _loading = true;
 
   bool get _hasWorkIn => _workInTime != null && _workInTime!.isNotEmpty;
+
   bool get _hasBreak => _breakTime != null && _breakTime!.isNotEmpty;
 
   @override
@@ -63,8 +62,7 @@ class _SimpleInsidePunchRecorderSectionState
       _loading = true;
     });
 
-    final events =
-    await SimpleModeAttendanceRepository.instance.getEventsForDate(date);
+    final events = await SimpleModeAttendanceRepository.instance.getEventsForDate(date);
 
     setState(() {
       _selectedDate = date; // 최신 선택 날짜 동기화
@@ -117,8 +115,7 @@ class _SimpleInsidePunchRecorderSectionState
     }
 
     // ✅ 순서 제약 2: 퇴근 펀칭은 출근+휴게 펀칭 후에만 가능
-    if (type == SimpleModeAttendanceType.workOut &&
-        (!_hasWorkIn || !_hasBreak)) {
+    if (type == SimpleModeAttendanceType.workOut && (!_hasWorkIn || !_hasBreak)) {
       _showGuardSnack('출근과 휴게시간을 모두 펀칭한 뒤 퇴근을 펀칭할 수 있습니다.');
       return;
     }
@@ -282,8 +279,7 @@ class _SimpleInsidePunchRecorderSectionState
                             type: SimpleModeAttendanceType.workIn,
                             time: _workInTime,
                             enabled: canPunchWorkIn,
-                            onTap: () =>
-                                _punch(SimpleModeAttendanceType.workIn),
+                            onTap: () => _punch(SimpleModeAttendanceType.workIn),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -293,8 +289,7 @@ class _SimpleInsidePunchRecorderSectionState
                             type: SimpleModeAttendanceType.breakTime,
                             time: _breakTime,
                             enabled: canPunchBreak,
-                            onTap: () =>
-                                _punch(SimpleModeAttendanceType.breakTime),
+                            onTap: () => _punch(SimpleModeAttendanceType.breakTime),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -304,8 +299,7 @@ class _SimpleInsidePunchRecorderSectionState
                             type: SimpleModeAttendanceType.workOut,
                             time: _workOutTime,
                             enabled: canPunchWorkOut,
-                            onTap: () =>
-                                _punch(SimpleModeAttendanceType.workOut),
+                            onTap: () => _punch(SimpleModeAttendanceType.workOut),
                           ),
                         ),
                       ],
@@ -375,9 +369,7 @@ class _PunchSlot extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final bool punched = time != null && time!.isNotEmpty;
 
-    final borderColor = punched
-        ? _accent.withOpacity(0.9)
-        : _Palette.light.withOpacity(enabled ? .7 : .35);
+    final borderColor = punched ? _accent.withOpacity(0.9) : _Palette.light.withOpacity(enabled ? .7 : .35);
 
     final bgColor = punched ? _accent.withOpacity(0.07) : Colors.white;
 
@@ -400,9 +392,7 @@ class _PunchSlot extends StatelessWidget {
               Icon(
                 _icon,
                 size: 14,
-                color: enabled
-                    ? _accent.withOpacity(0.9)
-                    : _Palette.dark.withOpacity(0.3),
+                color: enabled ? _accent.withOpacity(0.9) : _Palette.dark.withOpacity(0.3),
               ),
               const SizedBox(width: 4),
               Text(
@@ -410,9 +400,7 @@ class _PunchSlot extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: enabled
-                      ? _accent.withOpacity(0.9)
-                      : _Palette.dark.withOpacity(0.3),
+                  color: enabled ? _accent.withOpacity(0.9) : _Palette.dark.withOpacity(0.3),
                 ),
               ),
             ],
@@ -420,13 +408,9 @@ class _PunchSlot extends StatelessWidget {
           const SizedBox(height: 6),
           // 하단: 펀칭 여부 시각적 표시 (체크 아이콘 + 텍스트)
           Icon(
-            punched
-                ? Icons.check_circle_rounded
-                : Icons.radio_button_unchecked,
+            punched ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
             size: 18,
-            color: punched
-                ? _accent.withOpacity(0.95)
-                : _Palette.light.withOpacity(enabled ? .9 : .4),
+            color: punched ? _accent.withOpacity(0.95) : _Palette.light.withOpacity(enabled ? .9 : .4),
           ),
           const SizedBox(height: 2),
           Text(
@@ -434,8 +418,7 @@ class _PunchSlot extends StatelessWidget {
             style: textTheme.labelSmall?.copyWith(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color:
-              punched ? const Color(0xFF2E2720) : const Color(0xFF8C8680),
+              color: punched ? const Color(0xFF2E2720) : const Color(0xFF8C8680),
             ),
           ),
         ],

@@ -22,8 +22,8 @@ import 'sections/team_mode/simple_inside_punch_recorder_section.dart';
 ///   · 출퇴근/휴게 기록은 "출퇴근 기록기 카드"에서만 펀칭
 ///   · 하단 버튼에는 결제 서류 버튼만 노출
 enum SimpleInsideMode {
-  common,
-  team,
+  leader,
+  fieldUser,
 }
 
 class SimpleInsideScreen extends StatefulWidget {
@@ -146,11 +146,11 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
 
     if (role == 'fieldCommon') {
       // 필드 유저(팀원) 모드
-      return SimpleInsideMode.team;
+      return SimpleInsideMode.fieldUser;
     }
 
     // 그 외는 common 모드
-    return SimpleInsideMode.common;
+    return SimpleInsideMode.leader;
   }
 
   @override
@@ -207,7 +207,7 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
                             const SizedBox(height: 6),
 
                             // 모드별 버튼 레이아웃 분기
-                            if (mode == SimpleInsideMode.common)
+                            if (mode == SimpleInsideMode.leader)
                               const _CommonModeButtonGrid()
                             else
                               const _TeamModeButtonGrid(),
