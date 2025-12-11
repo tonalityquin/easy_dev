@@ -1,4 +1,3 @@
-// lib/screens/simple_package/simple_inside_package/sections/simple_inside_report_button_section.dart
 import 'package:flutter/material.dart';
 
 import 'simple_inside_report_selector_sheet.dart';

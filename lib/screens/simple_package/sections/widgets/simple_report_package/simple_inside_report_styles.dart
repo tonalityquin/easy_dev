@@ -1,9 +1,7 @@
-// lib/screens/simple_package/simple_inside_package/sections/simple_inside_report_styles.dart
-
 import 'package:flutter/material.dart';
 
 /// 경위서 화면 전용 컬러 팔레트
-class ResignationColors {
+class SimpleReportColors {
   static const Color base = Color(0xFF00897B); // primary
   static const Color dark = Color(0xFF00695C); // 강조 텍스트/아이콘
   static const Color light = Color(0xFF80CBC4); // 톤 변형/보더
@@ -11,18 +9,18 @@ class ResignationColors {
 }
 
 /// 경위서 화면에서 공통으로 사용하는 버튼 스타일 모음
-class ResignationButtonStyles {
+class SimpleReportButtonStyles {
   static const double _radius = 8.0;
 
   /// 메인 액션 버튼
   static ButtonStyle primary({double minHeight = 55}) {
     return ElevatedButton.styleFrom(
-      backgroundColor: ResignationColors.base,
-      foregroundColor: ResignationColors.fg,
+      backgroundColor: SimpleReportColors.base,
+      foregroundColor: SimpleReportColors.fg,
       minimumSize: Size(0, minHeight),
       padding: EdgeInsets.zero,
       side: const BorderSide(
-        color: ResignationColors.dark,
+        color: SimpleReportColors.dark,
         width: 1.0,
       ),
       shape: RoundedRectangleBorder(
@@ -31,18 +29,18 @@ class ResignationButtonStyles {
       elevation: 0,
     ).copyWith(
       overlayColor: MaterialStateProperty.resolveWith<Color?>(
-            (states) => states.contains(MaterialState.pressed) ? ResignationColors.dark.withOpacity(.10) : null,
+        (states) => states.contains(MaterialState.pressed) ? SimpleReportColors.dark.withOpacity(.10) : null,
       ),
     );
   }
 
-  /// 서브/보조 액션 버튼1
+  /// 서브/보조 액션 버튼
   static ButtonStyle outlined({double minHeight = 55}) {
     return OutlinedButton.styleFrom(
-      foregroundColor: ResignationColors.dark,
+      foregroundColor: SimpleReportColors.dark,
       backgroundColor: Colors.white,
       side: const BorderSide(
-        color: ResignationColors.light,
+        color: SimpleReportColors.light,
         width: 1.0,
       ),
       minimumSize: Size(0, minHeight),
@@ -51,7 +49,7 @@ class ResignationButtonStyles {
       ),
     ).copyWith(
       overlayColor: MaterialStateProperty.resolveWith<Color?>(
-            (states) => states.contains(MaterialState.pressed) ? ResignationColors.light.withOpacity(.16) : null,
+        (states) => states.contains(MaterialState.pressed) ? SimpleReportColors.light.withOpacity(.16) : null,
       ),
     );
   }

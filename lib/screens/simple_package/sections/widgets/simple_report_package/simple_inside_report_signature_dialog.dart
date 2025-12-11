@@ -1,27 +1,21 @@
-// lib/screens/simple_package/simple_inside_package/sections/user_statement_signature_dialog.dart
-
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
-import 'user_statement_styles.dart';
-import 'user_statement_signature_painter.dart';
+import 'simple_inside_report_styles.dart';
+import 'simple_inside_report_signature_painter.dart';
 
-class UserStatementSignatureResult {
-  UserStatementSignatureResult({
-    required this.pngBytes,
-    required this.signDateTime,
-  });
+class SignatureResult {
+  SignatureResult({required this.pngBytes, required this.signDateTime});
 
   final Uint8List pngBytes;
   final DateTime signDateTime;
 }
 
-class UserStatementSignatureFullScreenDialog extends StatefulWidget {
-  const UserStatementSignatureFullScreenDialog({
+class SignatureFullScreenDialog extends StatefulWidget {
+  const SignatureFullScreenDialog({
     super.key,
     required this.name,
     required this.initialDateTime,
@@ -31,12 +25,10 @@ class UserStatementSignatureFullScreenDialog extends StatefulWidget {
   final DateTime? initialDateTime;
 
   @override
-  State<UserStatementSignatureFullScreenDialog> createState() =>
-      _UserStatementSignatureFullScreenDialogState();
+  State<SignatureFullScreenDialog> createState() => _SignatureFullScreenDialogState();
 }
 
-class _UserStatementSignatureFullScreenDialogState
-    extends State<UserStatementSignatureFullScreenDialog> {
+class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
   final GlobalKey _boundaryKey = GlobalKey();
   final List<Offset?> _points = <Offset?>[];
   DateTime? _signDateTime;
@@ -59,7 +51,6 @@ class _UserStatementSignatureFullScreenDialogState
   void _undo() {
     HapticFeedback.selectionClick();
     if (_points.isEmpty) return;
-
     int i = _points.length - 1;
     if (_points[i] == null) {
       _points.removeAt(i);
@@ -81,31 +72,26 @@ class _UserStatementSignatureFullScreenDialogState
       setState(() {
         _signDateTime = DateTime.now();
       });
-      // Repaint 적용 위해 한 프레임 대기
       await Future.delayed(const Duration(milliseconds: 16));
 
-      final boundary =
-      _boundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      final boundary = _boundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
       if (boundary == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('캡처 영역을 찾을 수 없습니다.')),
         );
         return;
       }
-
       final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData =
-      await image.toByteData(format: ui.ImageByteFormat.png);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('PNG 변환에 실패했습니다.')),
         );
         return;
       }
-
       final png = byteData.buffer.asUint8List();
       Navigator.of(context).pop(
-        UserStatementSignatureResult(
+        SignatureResult(
           pngBytes: png,
           signDateTime: _signDateTime!,
         ),
@@ -120,8 +106,7 @@ class _UserStatementSignatureFullScreenDialogState
   @override
   Widget build(BuildContext context) {
     final name = widget.name.isEmpty ? '이름 미입력' : widget.name;
-    final timeText =
-    _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
+    final timeText = _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
 
     return Material(
       color: Colors.black54,
@@ -158,7 +143,6 @@ class _UserStatementSignatureFullScreenDialogState
           ),
           body: Column(
             children: [
-              // 상단 서명자 정보 바
               Container(
                 padding: const EdgeInsets.symmetric(
                   vertical: 10,
@@ -202,15 +186,13 @@ class _UserStatementSignatureFullScreenDialogState
                     ),
                     const SizedBox(width: 8),
                     TextButton.icon(
-                      onPressed: () =>
-                          setState(() => _signDateTime = DateTime.now()),
+                      onPressed: () => setState(() => _signDateTime = DateTime.now()),
                       icon: const Icon(Icons.schedule),
                       label: const Text('지금'),
                     ),
                   ],
                 ),
               ),
-              // 서명 캔버스
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(12),
@@ -222,14 +204,11 @@ class _UserStatementSignatureFullScreenDialogState
                         builder: (context, constraints) {
                           return GestureDetector(
                             behavior: HitTestBehavior.translucent,
-                            onPanStart: (d) =>
-                                setState(() => _points.add(d.localPosition)),
-                            onPanUpdate: (d) =>
-                                setState(() => _points.add(d.localPosition)),
-                            onPanEnd: (_) =>
-                                setState(() => _points.add(null)),
+                            onPanStart: (d) => setState(() => _points.add(d.localPosition)),
+                            onPanUpdate: (d) => setState(() => _points.add(d.localPosition)),
+                            onPanEnd: (_) => setState(() => _points.add(null)),
                             child: CustomPaint(
-                              painter: UserStatementSignaturePainter(
+                              painter: SignaturePainter(
                                 points: _points,
                                 strokeWidth: _strokeWidth,
                                 color: Colors.black87,
@@ -246,7 +225,6 @@ class _UserStatementSignatureFullScreenDialogState
                   ),
                 ),
               ),
-              // 하단 버튼
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 child: Row(
@@ -256,7 +234,7 @@ class _UserStatementSignatureFullScreenDialogState
                         onPressed: () => Navigator.of(context).pop(),
                         icon: const Icon(Icons.cancel_outlined),
                         label: const Text('취소'),
-                        style: UserStatementButtonStyles.outlined(),
+                        style: SimpleReportButtonStyles.outlined(),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -265,7 +243,7 @@ class _UserStatementSignatureFullScreenDialogState
                         onPressed: _hasAny ? _save : null,
                         icon: const Icon(Icons.save_alt),
                         label: const Text('저장'),
-                        style: UserStatementButtonStyles.primary(),
+                        style: SimpleReportButtonStyles.primary(),
                       ),
                     ),
                   ],

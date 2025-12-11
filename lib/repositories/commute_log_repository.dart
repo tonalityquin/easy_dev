@@ -1,6 +1,3 @@
-// File: lib/repositories/commute_log_repository.dart
-//
-// ⚠️ import 경로는 실제 프로젝트 구조에 맞게 수정하세요.
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../screens/dev_package/debug_package/debug_database_logger.dart';

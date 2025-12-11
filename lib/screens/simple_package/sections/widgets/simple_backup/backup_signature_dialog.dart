@@ -1,5 +1,3 @@
-// lib/screens/simple_package/simple_inside_package/sections/simple_inside_report_signature_dialog.dart
-
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -7,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
-import 'simple_inside_report_styles.dart';
-import 'simple_inside_report_signature_painter.dart';
+import 'backup_styles.dart';
+import 'backup_signature_painter.dart';
 
 class SignatureResult {
   SignatureResult({required this.pngBytes, required this.signDateTime});
@@ -237,7 +235,7 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
                         onPressed: () => Navigator.of(context).pop(),
                         icon: const Icon(Icons.cancel_outlined),
                         label: const Text('취소'),
-                        style: SimpleReportButtonStyles.outlined(),
+                        style: BackupButtonStyles.outlined(),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -246,7 +244,7 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
                         onPressed: _hasAny ? _save : null,
                         icon: const Icon(Icons.save_alt),
                         label: const Text('저장'),
-                        style: SimpleReportButtonStyles.primary(),
+                        style: BackupButtonStyles.primary(),
                       ),
                     ),
                   ],

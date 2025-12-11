@@ -3,42 +3,35 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
-// 상태
 import '../../../../../../states/user/user_state.dart';
 import '../../../../../../states/area/area_state.dart';
 
-// 문서/양식 화면
-import '../backup/backup_form_page.dart';
-import '../dialog/simple_duration_blocking_dialog.dart';
-import 'document_inventory_repository.dart';
-import 'document_item.dart';
-import 'user_statement_form_page.dart';
-import '../resignation/resignation_form_page.dart';
+import '../../../../repositories/commute_log_repository.dart';
+import '../../../dev_package/debug_package/debug_database_logger.dart';
+import '../../utils/dialog/simple_duration_blocking_dialog.dart';
+import '../../utils/simple_mode/simple_mode_db.dart';
+import '../widgets/simple_backup/backup_form_page.dart';
+import '../widgets/simple_user_document/simple_user_statement_form_page.dart';
+import 'simple_document_inventory_repository.dart';
+import 'simple_document_item.dart';
 
-// SQLite DB
-import 'package:easydev/time_record/simple_mode/simple_mode_db.dart';
-
-// Firestore 출퇴근 로그 레포지토리 & 디버그 로거
-import 'package:easydev/repositories/commute_log_repository.dart';
-import 'package:easydev/screens/dev_package/debug_package/debug_database_logger.dart';
-
-Future<void> openDocumentBox(BuildContext context) async {
+Future<void> openSimpleDocumentBox(BuildContext context) async {
   await showModalBottomSheet<void>(
     context: context,
     useRootNavigator: false,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (ctx) => const _DocumentBoxSheet(),
+    builder: (ctx) => const _SimpleDocumentBoxSheet(),
   );
 }
 
-class _DocumentBoxSheet extends StatelessWidget {
-  const _DocumentBoxSheet();
+class _SimpleDocumentBoxSheet extends StatelessWidget {
+  const _SimpleDocumentBoxSheet();
 
   @override
   Widget build(BuildContext context) {
     final userState = context.watch<UserState>();
-    final repo = DocumentInventoryRepository.instance;
+    final repo = SimpleDocumentInventoryRepository.instance;
 
     return DraggableScrollableSheet(
       expand: false,
@@ -84,7 +77,7 @@ class _DocumentBoxSheet extends StatelessWidget {
                               color: Color(0xFFE5DFD0),
                             ),
                             Expanded(
-                              child: StreamBuilder<List<DocumentItem>>(
+                              child: StreamBuilder<List<SimpleDocumentItem>>(
                                 stream: repo.streamForUser(userState),
                                 builder: (context, snapshot) {
                                   if (snapshot.connectionState == ConnectionState.waiting) {
@@ -93,7 +86,7 @@ class _DocumentBoxSheet extends StatelessWidget {
                                     );
                                   }
 
-                                  final items = snapshot.data ?? const <DocumentItem>[];
+                                  final items = snapshot.data ?? const <SimpleDocumentItem>[];
 
                                   if (items.isEmpty) {
                                     return const _EmptyState();
@@ -111,7 +104,7 @@ class _DocumentBoxSheet extends StatelessWidget {
                                         item: item,
                                         onTap: () async {
                                           switch (item.type) {
-                                            case DocumentType.statementForm:
+                                            case SimpleDocumentType.statementForm:
                                               // ✅ statementForm 안에서 id 기준으로 분기
                                               if (item.id == 'template-commute-record') {
                                                 // 출퇴근 기록 제출:
@@ -147,14 +140,14 @@ class _DocumentBoxSheet extends StatelessWidget {
                                                 // 그 외(경위서 양식 등)는 기존처럼 경위서 작성 화면
                                                 Navigator.of(context).push(
                                                   MaterialPageRoute(
-                                                    builder: (_) => const UserStatementFormPage(),
+                                                    builder: (_) => const SimpleUserStatementFormPage(),
                                                     fullscreenDialog: true,
                                                   ),
                                                 );
                                               }
                                               break;
 
-                                            case DocumentType.handoverForm:
+                                            case SimpleDocumentType.handoverForm:
                                               // ✅ (안씀) 인수인계: Simple 모드에선 안내만
                                               ScaffoldMessenger.of(context).showSnackBar(
                                                 const SnackBar(
@@ -165,7 +158,7 @@ class _DocumentBoxSheet extends StatelessWidget {
                                               );
                                               break;
 
-                                            case DocumentType.workEndReportForm:
+                                            case SimpleDocumentType.workEndReportForm:
                                               // ✅ (안씀) 퇴근/업무 종료: Simple 모드에선 안내만
                                               ScaffoldMessenger.of(context).showSnackBar(
                                                 const SnackBar(
@@ -176,7 +169,7 @@ class _DocumentBoxSheet extends StatelessWidget {
                                               );
                                               break;
 
-                                            case DocumentType.workStartReportForm:
+                                            case SimpleDocumentType.workStartReportForm:
                                               // ✅ (안씀) 업무 시작 보고: Simple 모드에선 안내만
                                               ScaffoldMessenger.of(context).showSnackBar(
                                                 const SnackBar(
@@ -187,7 +180,7 @@ class _DocumentBoxSheet extends StatelessWidget {
                                               );
                                               break;
 
-                                            case DocumentType.generic:
+                                            case SimpleDocumentType.generic:
                                               // ✅ generic 문서 중 연차(결근) 지원 신청서 연결
                                               if (item.id == 'template-annual-leave-application') {
                                                 Navigator.of(context).push(
@@ -198,15 +191,6 @@ class _DocumentBoxSheet extends StatelessWidget {
                                                 );
                                               }
                                               // ✅ generic 문서 중 사직서 연결
-                                              else if (item.id == 'template-resignation-letter') {
-                                                Navigator.of(context).push(
-                                                  MaterialPageRoute(
-                                                    builder: (_) => const ResignationFormPage(),
-                                                    fullscreenDialog: true,
-                                                  ),
-                                                );
-                                              }
-                                              // 그 외 generic 문서는 현재 동작 없음
                                               break;
                                           }
                                         },
@@ -361,7 +345,7 @@ class _SheetHeader extends StatelessWidget {
 
 /// 각각의 문서를 카드 형태로 보여주는 위젯
 class _DocumentListItem extends StatelessWidget {
-  final DocumentItem item;
+  final SimpleDocumentItem item;
   final VoidCallback onTap;
 
   const _DocumentListItem({
@@ -883,7 +867,7 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
 /// 디자인/텍스트 헬퍼 함수 모음
 /// ─────────────────────────
 
-String _buildSubtitle(DocumentItem item) {
+String _buildSubtitle(SimpleDocumentItem item) {
   final parts = <String>[];
   if (item.subtitle != null && item.subtitle!.isNotEmpty) {
     parts.add(item.subtitle!);
@@ -899,11 +883,11 @@ String _formatDateTime(DateTime dt) {
 }
 
 /// 기본 type 기준 색상
-Color _accentColorForType(DocumentType type) {
+Color _accentColorForType(SimpleDocumentType type) {
   switch (type) {
-    case DocumentType.statementForm:
+    case SimpleDocumentType.statementForm:
       return const Color(0xFF5C6BC0); // 기본 블루 (경위서 계열)
-    case DocumentType.generic:
+    case SimpleDocumentType.generic:
       return const Color(0xFF757575);
     default:
       // 이 문서철에서 직접 쓰지 않는 타입(workStartReportForm 등)은 공통 회색으로 처리
@@ -915,9 +899,9 @@ Color _accentColorForType(DocumentType type) {
 ///
 /// - 경위서 / 출퇴근 기록 / 휴게시간 기록을 시각적으로 구분
 /// - 퇴근 vs 업무 종료 보고도 기존 로직 유지
-Color _accentColorForItem(DocumentItem item) {
+Color _accentColorForItem(SimpleDocumentItem item) {
   // 1) statementForm 계열 세분화
-  if (item.type == DocumentType.statementForm) {
+  if (item.type == SimpleDocumentType.statementForm) {
     switch (item.id) {
       case 'template-statement':
         // 경위서: 기본 블루톤 유지
@@ -932,7 +916,7 @@ Color _accentColorForItem(DocumentItem item) {
   }
 
   // 2) 퇴근 vs 업무 종료 세분화 (다른 곳에서 사용할 수도 있으므로 로직 유지)
-  if (item.type == DocumentType.workEndReportForm) {
+  if (item.type == SimpleDocumentType.workEndReportForm) {
     if (item.id == 'template-work-end-report') {
       // 퇴근 보고 양식: 기존 오렌지톤
       return const Color(0xFFEF6C53);
@@ -948,11 +932,11 @@ Color _accentColorForItem(DocumentItem item) {
 }
 
 /// type 기준 기본 아이콘
-IconData _iconForType(DocumentType type) {
+IconData _iconForType(SimpleDocumentType type) {
   switch (type) {
-    case DocumentType.statementForm:
+    case SimpleDocumentType.statementForm:
       return Icons.description_outlined;
-    case DocumentType.generic:
+    case SimpleDocumentType.generic:
       return Icons.insert_drive_file_outlined;
     default:
       // 사용 빈도 낮은 타입들은 공통 문서 아이콘으로 fallback
@@ -964,8 +948,8 @@ IconData _iconForType(DocumentType type) {
 ///
 /// - 출퇴근 기록: 시계 아이콘
 /// - 휴게시간 기록: 커피/휴식 아이콘
-IconData _iconForItem(DocumentItem item) {
-  if (item.type == DocumentType.statementForm) {
+IconData _iconForItem(SimpleDocumentItem item) {
+  if (item.type == SimpleDocumentType.statementForm) {
     switch (item.id) {
       case 'template-commute-record':
         // 출퇴근 기록: 시간/근태 느낌
@@ -983,9 +967,9 @@ IconData _iconForItem(DocumentItem item) {
 }
 
 /// type + id 기준으로 라벨을 세분화
-String _typeLabelForItem(DocumentItem item) {
+String _typeLabelForItem(SimpleDocumentItem item) {
   // 1) 퇴근 vs 업무 종료 (혹시 다른 곳에서 재사용될 수 있으므로 유지)
-  if (item.type == DocumentType.workEndReportForm) {
+  if (item.type == SimpleDocumentType.workEndReportForm) {
     if (item.id == 'template-work-end-report') {
       return '퇴근 보고';
     }
@@ -995,7 +979,7 @@ String _typeLabelForItem(DocumentItem item) {
   }
 
   // 2) 경위서 계열(경위서 / 출퇴근 기록 / 휴게시간 기록)
-  if (item.type == DocumentType.statementForm) {
+  if (item.type == SimpleDocumentType.statementForm) {
     switch (item.id) {
       case 'template-statement':
         return '경위서';
@@ -1015,11 +999,11 @@ String _typeLabelForItem(DocumentItem item) {
 /// - simple 모드 문서철에서 실제로 사용하는 것은
 ///   statementForm(경위서 계열), generic(연차/사직 등) 위주라
 ///   나머지 enum 값들은 공통 fallback 으로 처리
-String _typeLabelForType(DocumentType type) {
+String _typeLabelForType(SimpleDocumentType type) {
   switch (type) {
-    case DocumentType.statementForm:
+    case SimpleDocumentType.statementForm:
       return '경위서';
-    case DocumentType.generic:
+    case SimpleDocumentType.generic:
       return '기타 문서';
     default:
       // workStartReportForm / workEndReportForm / handoverForm 등

@@ -1,7 +1,4 @@
-// lib/screens/simple_package/simple_inside_package/sections/simple_inside_report_form_page.dart
-
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -16,16 +13,14 @@ import '../../../../../utils/api/email_config.dart';
 import 'simple_inside_report_styles.dart';
 import 'simple_inside_report_signature_dialog.dart';
 
-class SimpleInsideWorkFormPage extends StatefulWidget {
-  const SimpleInsideWorkFormPage({super.key});
+class SimpleInsideEndReportFormPage extends StatefulWidget {
+  const SimpleInsideEndReportFormPage({super.key});
 
   @override
-  State<SimpleInsideWorkFormPage> createState() =>
-      _SimpleInsideWorkFormPageState();
+  State<SimpleInsideEndReportFormPage> createState() => _SimpleInsideEndReportFormPageState();
 }
 
-class _SimpleInsideWorkFormPageState
-    extends State<SimpleInsideWorkFormPage> {
+class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFormPage> {
   final _formKey = GlobalKey<FormState>();
 
   // 기존 기본 정보 컨트롤러 (현재 UI에서는 사용하지 않지만, 향후 확장 고려해 유지)
@@ -34,6 +29,7 @@ class _SimpleInsideWorkFormPageState
   final _positionCtrl = TextEditingController();
 
   final _contentCtrl = TextEditingController();
+  final _vehicleCountCtrl = TextEditingController(); // 차량 대수 입력
 
   final _mailSubjectCtrl = TextEditingController();
   final _mailBodyCtrl = TextEditingController();
@@ -59,16 +55,18 @@ class _SimpleInsideWorkFormPageState
   // 페이지 컨트롤러 (섹션별 좌우 스와이프)
   final PageController _pageController = PageController();
 
-  // 현재 페이지 인덱스 (0~3)
+  // 현재 페이지 인덱스 (0~4)
   int _currentPageIndex = 0;
 
   // 키보드가 필드를 가리지 않도록 하기 위한 키
+  final GlobalKey _vehicleFieldKey = GlobalKey();
   final GlobalKey _contentFieldKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
     _nameCtrl.addListener(() => setState(() {}));
+    _vehicleCountCtrl.addListener(_updateMailSubject);
     _updateMailBody(); // 메일 본문 자동 생성
     _loadSelectedArea();
   }
@@ -93,6 +91,7 @@ class _SimpleInsideWorkFormPageState
     _nameCtrl.dispose();
     _positionCtrl.dispose();
     _contentCtrl.dispose();
+    _vehicleCountCtrl.dispose();
     _mailSubjectCtrl.dispose();
     _mailBodyCtrl.dispose();
 
@@ -140,6 +139,7 @@ class _SimpleInsideWorkFormPageState
     _nameCtrl.clear();
     _positionCtrl.clear();
     _contentCtrl.clear();
+    _vehicleCountCtrl.clear();
     _mailSubjectCtrl.clear();
     _mailBodyCtrl.clear();
     setState(() {
@@ -156,7 +156,7 @@ class _SimpleInsideWorkFormPageState
     _pageController.jumpToPage(0);
   }
 
-  /// 특이사항 선택 값 + SharedPreferences 선택 영역에 따라 메일 제목 자동 생성
+  /// 특이사항 선택 값 + SharedPreferences 선택 영역 + 차량 대수에 따라 메일 제목 자동 생성
   void _updateMailSubject() {
     final now = DateTime.now();
     final month = now.month;
@@ -168,14 +168,22 @@ class _SimpleInsideWorkFormPageState
       suffixSpecial = _hasSpecialNote! ? ' - 특이사항 있음' : ' - 특이사항 없음';
     }
 
-    // SharedPreferences에 저장된 selectedArea 사용 (없으면 '업무' 기본값)
-    final area = (_selectedArea != null && _selectedArea!.trim().isNotEmpty)
-        ? _selectedArea!.trim()
-        : '업무';
+    // 차량 대수 부분 " ??대"
+    String vehiclePart = '';
+    final vehicleRaw = _vehicleCountCtrl.text.trim();
+    if (vehicleRaw.isNotEmpty) {
+      final count = int.tryParse(vehicleRaw);
+      if (count != null) {
+        vehiclePart = ' ${count}대';
+      }
+    }
 
-    // 예: 콜센터 업무 시작 보고서 – 11월 25일자 - 특이사항 있음
-    _mailSubjectCtrl.text =
-    '$area 업무 시작 보고서 – ${month}월 ${day}일자$suffixSpecial';
+    // SharedPreferences에 저장된 selectedArea 사용 (없으면 '업무' 기본값)
+    final area = (_selectedArea != null && _selectedArea!.trim().isNotEmpty) ? _selectedArea!.trim() : '업무';
+
+    // selectedArea(업무명)가 제목 가장 앞으로 오도록
+    // 예: 콜센터 업무 종료 보고서 – 11월 25일자 12대 - 특이사항 있음
+    _mailSubjectCtrl.text = '$area 업무 종료 보고서 – ${month}월 ${day}일자$vehiclePart$suffixSpecial';
   }
 
   /// 메일 본문 자동 생성 (작성 일시 포함)
@@ -187,23 +195,25 @@ class _SimpleInsideWorkFormPageState
     final d = now.day;
     final hh = now.hour.toString().padLeft(2, '0');
     final mm = now.minute.toString().padLeft(2, '0');
-    _mailBodyCtrl.text =
-    '본 보고서는 ${y}년 ${m}월 ${d}일 ${hh}시 ${mm}분 기준으로 작성된 업무 시작 보고서입니다.';
+    _mailBodyCtrl.text = '본 보고서는 ${y}년 ${m}월 ${d}일 ${hh}시 ${mm}분 기준으로 작성된 업무 종료 보고서입니다.';
   }
 
   String _buildPreviewText(BuildContext context) {
     final signInfo = (_signaturePngBytes != null)
         ? '전자서명: ${_signerName.isEmpty ? "(이름 미입력)" : _signerName} / '
-        '${_signDateTime != null ? _fmtCompact(_signDateTime!) : "저장 시각 미기록"}'
+            '${_signDateTime != null ? _fmtCompact(_signDateTime!) : "저장 시각 미기록"}'
         : '전자서명: (미첨부)';
 
-    final specialText =
-    _hasSpecialNote == null ? '미선택' : (_hasSpecialNote! ? '있음' : '없음');
+    final specialText = _hasSpecialNote == null ? '미선택' : (_hasSpecialNote! ? '있음' : '없음');
+
+    final vehicleRaw = _vehicleCountCtrl.text.trim();
+    final vehicleText = vehicleRaw.isEmpty ? '입력 안 됨' : '$vehicleRaw대';
 
     return [
-      '— 업무 시작 보고서 —',
+      '— 업무 종료 보고서 —',
       '',
       '특이사항: $specialText',
+      '일일 차량 입고 대수: $vehicleText',
       '',
       '[업무 내용]',
       _contentCtrl.text,
@@ -222,11 +232,11 @@ class _SimpleInsideWorkFormPageState
     final text = _buildPreviewText(context);
 
     // 화면에 보여줄 데이터들 다시 계산
-    final specialText =
-    _hasSpecialNote == null ? '미선택' : (_hasSpecialNote! ? '있음' : '없음');
+    final specialText = _hasSpecialNote == null ? '미선택' : (_hasSpecialNote! ? '있음' : '없음');
+    final vehicleRaw = _vehicleCountCtrl.text.trim();
+    final vehicleText = vehicleRaw.isEmpty ? '입력 안 됨' : '$vehicleRaw대';
     final signName = _signerName.isEmpty ? '이름 미입력' : _signerName;
-    final signTimeText =
-    _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
+    final signTimeText = _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
     final createdAtText = _fmtDT(context, DateTime.now());
 
     Widget _infoPill(IconData icon, String label, String value) {
@@ -292,8 +302,7 @@ class _SimpleInsideWorkFormPageState
                           // 상단 헤더 바
                           Container(
                             width: double.infinity,
-                            padding:
-                            const EdgeInsets.fromLTRB(20, 14, 16, 12),
+                            padding: const EdgeInsets.fromLTRB(20, 14, 16, 12),
                             decoration: const BoxDecoration(
                               color: SimpleReportColors.dark,
                             ),
@@ -306,13 +315,11 @@ class _SimpleInsideWorkFormPageState
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment:
-                                    CrossAxisAlignment.start,
+                                    crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        '업무 시작 보고서 미리보기',
-                                        style: theme.textTheme.titleMedium
-                                            ?.copyWith(
+                                        '업무 종료 보고서 미리보기',
+                                        style: theme.textTheme.titleMedium?.copyWith(
                                           color: Colors.white,
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -320,10 +327,8 @@ class _SimpleInsideWorkFormPageState
                                       const SizedBox(height: 2),
                                       Text(
                                         '전송 전 보고서 내용을 한 번 더 확인해 주세요.',
-                                        style: theme.textTheme.bodySmall
-                                            ?.copyWith(
-                                          color:
-                                          Colors.white.withOpacity(0.8),
+                                        style: theme.textTheme.bodySmall?.copyWith(
+                                          color: Colors.white.withOpacity(0.8),
                                         ),
                                       ),
                                     ],
@@ -345,11 +350,9 @@ class _SimpleInsideWorkFormPageState
                           Flexible(
                             child: Scrollbar(
                               child: SingleChildScrollView(
-                                padding: const EdgeInsets.fromLTRB(
-                                    20, 16, 20, 12),
+                                padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
                                 child: Column(
-                                  crossAxisAlignment:
-                                  CrossAxisAlignment.stretch,
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
                                     // 상단 요약 배지들
                                     Wrap(
@@ -366,6 +369,11 @@ class _SimpleInsideWorkFormPageState
                                           '특이사항',
                                           specialText,
                                         ),
+                                        _infoPill(
+                                          Icons.directions_car_outlined,
+                                          '일일 차량 입고 대수',
+                                          vehicleText,
+                                        ),
                                       ],
                                     ),
                                     const SizedBox(height: 16),
@@ -374,17 +382,14 @@ class _SimpleInsideWorkFormPageState
                                     Container(
                                       decoration: BoxDecoration(
                                         color: const Color(0xFFF9FAFB),
-                                        borderRadius:
-                                        BorderRadius.circular(12),
+                                        borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
-                                          color:
-                                          Colors.grey.withOpacity(0.3),
+                                          color: Colors.grey.withOpacity(0.3),
                                         ),
                                       ),
                                       padding: const EdgeInsets.all(12),
                                       child: Column(
-                                        crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Row(
                                             children: [
@@ -396,13 +401,9 @@ class _SimpleInsideWorkFormPageState
                                               const SizedBox(width: 6),
                                               Text(
                                                 '메일 전송 정보',
-                                                style: theme
-                                                    .textTheme.bodyMedium
-                                                    ?.copyWith(
-                                                  fontWeight:
-                                                  FontWeight.w600,
-                                                  color:
-                                                  SimpleReportColors.dark,
+                                                style: theme.textTheme.bodyMedium?.copyWith(
+                                                  fontWeight: FontWeight.w600,
+                                                  color: SimpleReportColors.dark,
                                                 ),
                                               ),
                                             ],
@@ -412,8 +413,7 @@ class _SimpleInsideWorkFormPageState
                                           const SizedBox(height: 2),
                                           Text(
                                             '제목',
-                                            style: theme.textTheme.bodySmall
-                                                ?.copyWith(
+                                            style: theme.textTheme.bodySmall?.copyWith(
                                               color: Colors.grey[700],
                                               fontWeight: FontWeight.w600,
                                             ),
@@ -421,17 +421,14 @@ class _SimpleInsideWorkFormPageState
                                           const SizedBox(height: 2),
                                           Text(
                                             _mailSubjectCtrl.text,
-                                            style: theme
-                                                .textTheme.bodyMedium
-                                                ?.copyWith(
+                                            style: theme.textTheme.bodyMedium?.copyWith(
                                               fontWeight: FontWeight.w500,
                                             ),
                                           ),
                                           const SizedBox(height: 10),
                                           Text(
                                             '본문 (자동 생성)',
-                                            style: theme.textTheme.bodySmall
-                                                ?.copyWith(
+                                            style: theme.textTheme.bodySmall?.copyWith(
                                               color: Colors.grey[700],
                                               fontWeight: FontWeight.w600,
                                             ),
@@ -439,21 +436,17 @@ class _SimpleInsideWorkFormPageState
                                           const SizedBox(height: 2),
                                           Container(
                                             width: double.infinity,
-                                            padding:
-                                            const EdgeInsets.all(10),
+                                            padding: const EdgeInsets.all(10),
                                             decoration: BoxDecoration(
                                               color: Colors.white,
-                                              borderRadius:
-                                              BorderRadius.circular(10),
+                                              borderRadius: BorderRadius.circular(10),
                                               border: Border.all(
-                                                color: Colors.grey
-                                                    .withOpacity(0.2),
+                                                color: Colors.grey.withOpacity(0.2),
                                               ),
                                             ),
                                             child: Text(
                                               _mailBodyCtrl.text,
-                                              style: theme
-                                                  .textTheme.bodyMedium,
+                                              style: theme.textTheme.bodyMedium,
                                             ),
                                           ),
                                         ],
@@ -466,36 +459,28 @@ class _SimpleInsideWorkFormPageState
                                     Container(
                                       decoration: BoxDecoration(
                                         color: Colors.white,
-                                        borderRadius:
-                                        BorderRadius.circular(12),
+                                        borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
-                                          color:
-                                          Colors.grey.withOpacity(0.3),
+                                          color: Colors.grey.withOpacity(0.3),
                                         ),
                                       ),
                                       padding: const EdgeInsets.all(12),
                                       child: Column(
-                                        crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Row(
                                             children: [
                                               const Icon(
-                                                Icons
-                                                    .report_problem_outlined,
+                                                Icons.report_problem_outlined,
                                                 size: 18,
                                                 color: SimpleReportColors.dark,
                                               ),
                                               const SizedBox(width: 6),
                                               Text(
                                                 '특이 사항 상세 내용',
-                                                style: theme
-                                                    .textTheme.bodyMedium
-                                                    ?.copyWith(
-                                                  fontWeight:
-                                                  FontWeight.w600,
-                                                  color:
-                                                  SimpleReportColors.dark,
+                                                style: theme.textTheme.bodyMedium?.copyWith(
+                                                  fontWeight: FontWeight.w600,
+                                                  color: SimpleReportColors.dark,
                                                 ),
                                               ),
                                             ],
@@ -505,33 +490,20 @@ class _SimpleInsideWorkFormPageState
                                           const SizedBox(height: 2),
                                           Container(
                                             width: double.infinity,
-                                            padding:
-                                            const EdgeInsets.all(10),
+                                            padding: const EdgeInsets.all(10),
                                             decoration: BoxDecoration(
-                                              color:
-                                              const Color(0xFFFBFBFB),
-                                              borderRadius:
-                                              BorderRadius.circular(10),
+                                              color: const Color(0xFFFBFBFB),
+                                              borderRadius: BorderRadius.circular(10),
                                               border: Border.all(
-                                                color: Colors.grey
-                                                    .withOpacity(0.2),
+                                                color: Colors.grey.withOpacity(0.2),
                                               ),
                                             ),
                                             child: Text(
-                                              _contentCtrl.text
-                                                  .trim()
-                                                  .isEmpty
-                                                  ? '입력된 특이 사항이 없습니다.'
-                                                  : _contentCtrl.text,
-                                              style: theme
-                                                  .textTheme.bodyMedium
-                                                  ?.copyWith(
+                                              _contentCtrl.text.trim().isEmpty ? '입력된 특이 사항이 없습니다.' : _contentCtrl.text,
+                                              style: theme.textTheme.bodyMedium?.copyWith(
                                                 height: 1.4,
-                                                color: _contentCtrl.text
-                                                    .trim()
-                                                    .isEmpty
-                                                    ? Colors.grey[600]
-                                                    : Colors.black,
+                                                color:
+                                                    _contentCtrl.text.trim().isEmpty ? Colors.grey[600] : Colors.black,
                                               ),
                                             ),
                                           ),
@@ -545,17 +517,14 @@ class _SimpleInsideWorkFormPageState
                                     Container(
                                       decoration: BoxDecoration(
                                         color: Colors.white,
-                                        borderRadius:
-                                        BorderRadius.circular(12),
+                                        borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
-                                          color:
-                                          Colors.grey.withOpacity(0.3),
+                                          color: Colors.grey.withOpacity(0.3),
                                         ),
                                       ),
                                       padding: const EdgeInsets.all(12),
                                       child: Column(
-                                        crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Row(
                                             children: [
@@ -567,13 +536,9 @@ class _SimpleInsideWorkFormPageState
                                               const SizedBox(width: 6),
                                               Text(
                                                 '전자서명 정보',
-                                                style: theme
-                                                    .textTheme.bodyMedium
-                                                    ?.copyWith(
-                                                  fontWeight:
-                                                  FontWeight.w600,
-                                                  color:
-                                                  SimpleReportColors.dark,
+                                                style: theme.textTheme.bodyMedium?.copyWith(
+                                                  fontWeight: FontWeight.w600,
+                                                  color: SimpleReportColors.dark,
                                                 ),
                                               ),
                                             ],
@@ -585,30 +550,20 @@ class _SimpleInsideWorkFormPageState
                                             children: [
                                               Expanded(
                                                 child: Column(
-                                                  crossAxisAlignment:
-                                                  CrossAxisAlignment
-                                                      .start,
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
                                                     Text(
                                                       '서명자',
-                                                      style: theme.textTheme
-                                                          .bodySmall
-                                                          ?.copyWith(
-                                                        color:
-                                                        Colors.grey[700],
-                                                        fontWeight:
-                                                        FontWeight.w600,
+                                                      style: theme.textTheme.bodySmall?.copyWith(
+                                                        color: Colors.grey[700],
+                                                        fontWeight: FontWeight.w600,
                                                       ),
                                                     ),
-                                                    const SizedBox(
-                                                        height: 2),
+                                                    const SizedBox(height: 2),
                                                     Text(
                                                       signName,
-                                                      style: theme.textTheme
-                                                          .bodyMedium
-                                                          ?.copyWith(
-                                                        fontWeight:
-                                                        FontWeight.w500,
+                                                      style: theme.textTheme.bodyMedium?.copyWith(
+                                                        fontWeight: FontWeight.w500,
                                                       ),
                                                     ),
                                                   ],
@@ -617,30 +572,20 @@ class _SimpleInsideWorkFormPageState
                                               const SizedBox(width: 12),
                                               Expanded(
                                                 child: Column(
-                                                  crossAxisAlignment:
-                                                  CrossAxisAlignment
-                                                      .start,
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
                                                     Text(
                                                       '서명 일시',
-                                                      style: theme.textTheme
-                                                          .bodySmall
-                                                          ?.copyWith(
-                                                        color:
-                                                        Colors.grey[700],
-                                                        fontWeight:
-                                                        FontWeight.w600,
+                                                      style: theme.textTheme.bodySmall?.copyWith(
+                                                        color: Colors.grey[700],
+                                                        fontWeight: FontWeight.w600,
                                                       ),
                                                     ),
-                                                    const SizedBox(
-                                                        height: 2),
+                                                    const SizedBox(height: 2),
                                                     Text(
                                                       signTimeText,
-                                                      style: theme.textTheme
-                                                          .bodyMedium
-                                                          ?.copyWith(
-                                                        fontWeight:
-                                                        FontWeight.w500,
+                                                      style: theme.textTheme.bodyMedium?.copyWith(
+                                                        fontWeight: FontWeight.w500,
                                                       ),
                                                     ),
                                                   ],
@@ -653,38 +598,29 @@ class _SimpleInsideWorkFormPageState
                                             height: 140,
                                             width: double.infinity,
                                             decoration: BoxDecoration(
-                                              borderRadius:
-                                              BorderRadius.circular(12),
+                                              borderRadius: BorderRadius.circular(12),
                                               border: Border.all(
-                                                color: Colors.grey
-                                                    .withOpacity(0.4),
+                                                color: Colors.grey.withOpacity(0.4),
                                               ),
-                                              color:
-                                              const Color(0xFFFAFAFA),
+                                              color: const Color(0xFFFAFAFA),
                                             ),
                                             child: _signaturePngBytes == null
                                                 ? Center(
-                                              child: Text(
-                                                '서명 이미지가 없습니다. (전자서명 완료 후 제출할 수 있습니다.)',
-                                                style: theme.textTheme
-                                                    .bodySmall
-                                                    ?.copyWith(
-                                                  color:
-                                                  Colors.grey[600],
-                                                ),
-                                                textAlign:
-                                                TextAlign.center,
-                                              ),
-                                            )
+                                                    child: Text(
+                                                      '서명 이미지가 없습니다. (전자서명 완료 후 제출할 수 있습니다.)',
+                                                      style: theme.textTheme.bodySmall?.copyWith(
+                                                        color: Colors.grey[600],
+                                                      ),
+                                                      textAlign: TextAlign.center,
+                                                    ),
+                                                  )
                                                 : Padding(
-                                              padding:
-                                              const EdgeInsets.all(
-                                                  8),
-                                              child: Image.memory(
-                                                _signaturePngBytes!,
-                                                fit: BoxFit.contain,
-                                              ),
-                                            ),
+                                                    padding: const EdgeInsets.all(8),
+                                                    child: Image.memory(
+                                                      _signaturePngBytes!,
+                                                      fit: BoxFit.contain,
+                                                    ),
+                                                  ),
                                           ),
                                         ],
                                       ),
@@ -697,12 +633,10 @@ class _SimpleInsideWorkFormPageState
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
                                         color: const Color(0xFFEEF2FF),
-                                        borderRadius:
-                                        BorderRadius.circular(10),
+                                        borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Row(
-                                        crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           const Icon(
                                             Icons.info_outline,
@@ -713,13 +647,10 @@ class _SimpleInsideWorkFormPageState
                                           Expanded(
                                             child: Text(
                                               '하단의 "텍스트 복사" 버튼을 누르면 이 미리보기 내용을 '
-                                                  '텍스트 형태로 복사하여 메신저 등에 붙여넣을 수 있습니다.',
-                                              style: theme
-                                                  .textTheme.bodySmall
-                                                  ?.copyWith(
+                                              '텍스트 형태로 복사하여 메신저 등에 붙여넣을 수 있습니다.',
+                                              style: theme.textTheme.bodySmall?.copyWith(
                                                 height: 1.4,
-                                                color: const Color(
-                                                    0xFF1F2937),
+                                                color: const Color(0xFF1F2937),
                                               ),
                                             ),
                                           ),
@@ -735,14 +666,12 @@ class _SimpleInsideWorkFormPageState
                           // 하단 액션 영역
                           Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.fromLTRB(
-                                16, 10, 16, 12),
+                            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                             decoration: BoxDecoration(
                               color: const Color(0xFFFAFAFA),
                               border: Border(
                                 top: BorderSide(
-                                  color:
-                                  Colors.grey.withOpacity(0.2),
+                                  color: Colors.grey.withOpacity(0.2),
                                 ),
                               ),
                             ),
@@ -751,25 +680,20 @@ class _SimpleInsideWorkFormPageState
                                 TextButton.icon(
                                   onPressed: () async {
                                     HapticFeedback.selectionClick();
-                                    await Clipboard.setData(
-                                        ClipboardData(text: text));
+                                    await Clipboard.setData(ClipboardData(text: text));
                                     if (!mounted) return;
-                                    ScaffoldMessenger.of(context)
-                                        .showSnackBar(
+                                    ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
-                                        content: Text(
-                                            '텍스트가 클립보드에 복사되었습니다.'),
+                                        content: Text('텍스트가 클립보드에 복사되었습니다.'),
                                       ),
                                     );
                                   },
-                                  icon: const Icon(Icons.copy_rounded,
-                                      size: 18),
+                                  icon: const Icon(Icons.copy_rounded, size: 18),
                                   label: const Text('텍스트 복사'),
                                 ),
                                 const SizedBox(width: 4),
                                 TextButton(
-                                  onPressed: () =>
-                                      Navigator.of(ctx).pop(),
+                                  onPressed: () => Navigator.of(ctx).pop(),
                                   child: const Text('닫기'),
                                 ),
                               ],
@@ -822,11 +746,7 @@ class _SimpleInsideWorkFormPageState
         );
         return;
       }
-      final toCsv = cfg.to
-          .split(',')
-          .map((s) => s.trim())
-          .where((s) => s.isNotEmpty)
-          .join(', ');
+      final toCsv = cfg.to.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).join(', ');
 
       final subject = _mailSubjectCtrl.text.trim();
       // 제출 시점 기준으로 본문 시간 강제 갱신
@@ -842,10 +762,8 @@ class _SimpleInsideWorkFormPageState
 
       final pdfBytes = await _buildPdfBytes();
       final now = DateTime.now();
-      final nameForFile =
-      _nameCtrl.text.trim().isEmpty ? '무기명' : _nameCtrl.text.trim();
-      final filename =
-      _safeFileName('업무시작보고서_${nameForFile}_${_dateTag(now)}');
+      final nameForFile = _nameCtrl.text.trim().isEmpty ? '무기명' : _nameCtrl.text.trim();
+      final filename = _safeFileName('업무종료보고서_${nameForFile}_${_dateTag(now)}');
 
       await _sendEmailViaGmail(
         pdfBytes: pdfBytes,
@@ -870,7 +788,7 @@ class _SimpleInsideWorkFormPageState
   }
 
   String _safeFileName(String raw) {
-    final s = raw.trim().isEmpty ? '업무시작보고서' : raw.trim();
+    final s = raw.trim().isEmpty ? '업무종료보고서' : raw.trim();
     return s.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
   }
 
@@ -879,14 +797,12 @@ class _SimpleInsideWorkFormPageState
     pw.Font? bold;
 
     try {
-      final regData =
-      await rootBundle.load('assets/fonts/NotoSansKR/NotoSansKR-Regular.ttf');
+      final regData = await rootBundle.load('assets/fonts/NotoSansKR/NotoSansKR-Regular.ttf');
       regular = pw.Font.ttf(regData);
     } catch (_) {}
 
     try {
-      final boldData =
-      await rootBundle.load('assets/fonts/NotoSansKR/NotoSansKR-Bold.ttf');
+      final boldData = await rootBundle.load('assets/fonts/NotoSansKR/NotoSansKR-Bold.ttf');
       bold = pw.Font.ttf(boldData);
     } catch (_) {
       bold = regular;
@@ -894,84 +810,86 @@ class _SimpleInsideWorkFormPageState
 
     final theme = (regular != null)
         ? pw.ThemeData.withFont(
-      base: regular,
-      bold: bold ?? regular,
-      italic: regular,
-      boldItalic: bold ?? regular,
-    )
+            base: regular,
+            bold: bold ?? regular,
+            italic: regular,
+            boldItalic: bold ?? regular,
+          )
         : pw.ThemeData.base();
 
     final doc = pw.Document();
 
-    final specialText =
-    _hasSpecialNote == null ? '미선택' : (_hasSpecialNote! ? '있음' : '없음');
+    final specialText = _hasSpecialNote == null ? '미선택' : (_hasSpecialNote! ? '있음' : '없음');
 
-    // 상단 간단 필드: 특이사항
+    final vehicleRaw = _vehicleCountCtrl.text.trim();
+    final vehicleText = vehicleRaw.isEmpty ? '입력 안 됨' : '$vehicleRaw대';
+
+    // 상단 간단 필드: 특이사항 + 차량 대수
     final fields = <MapEntry<String, String>>[
       MapEntry('특이사항', specialText),
+      MapEntry('일일 차량 입고 대수', vehicleText),
     ];
 
     pw.Widget buildFieldTable() => pw.Table(
-      border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
-      columnWidths: const {
-        0: pw.FlexColumnWidth(3),
-        1: pw.FlexColumnWidth(7),
-      },
-      children: [
-        for (final kv in fields)
-          pw.TableRow(
-            children: [
-              pw.Container(
-                padding: const pw.EdgeInsets.all(6),
-                color: PdfColors.grey200,
-                child: pw.Text(
-                  kv.key,
-                  style: const pw.TextStyle(fontSize: 11),
-                ),
+          border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+          columnWidths: const {
+            0: pw.FlexColumnWidth(3),
+            1: pw.FlexColumnWidth(7),
+          },
+          children: [
+            for (final kv in fields)
+              pw.TableRow(
+                children: [
+                  pw.Container(
+                    padding: const pw.EdgeInsets.all(6),
+                    color: PdfColors.grey200,
+                    child: pw.Text(
+                      kv.key,
+                      style: const pw.TextStyle(fontSize: 11),
+                    ),
+                  ),
+                  pw.Container(
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Text(
+                      kv.value,
+                      style: const pw.TextStyle(fontSize: 11),
+                    ),
+                  ),
+                ],
               ),
-              pw.Container(
-                padding: const pw.EdgeInsets.all(6),
-                child: pw.Text(
-                  kv.value,
-                  style: const pw.TextStyle(fontSize: 11),
-                ),
-              ),
-            ],
-          ),
-      ],
-    );
+          ],
+        );
 
     pw.Widget buildSection(String title, String body) => pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.SizedBox(height: 8),
-        pw.Text(
-          title,
-          style: pw.TextStyle(
-            fontSize: 13,
-            fontWeight: pw.FontWeight.bold,
-          ),
-        ),
-        pw.SizedBox(height: 4),
-        pw.Container(
-          width: double.infinity,
-          padding: const pw.EdgeInsets.all(8),
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
-            borderRadius: pw.BorderRadius.circular(4),
-          ),
-          child: pw.Text(
-            body.isEmpty ? '-' : body,
-            style: const pw.TextStyle(fontSize: 11),
-          ),
-        ),
-      ],
-    );
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.SizedBox(height: 8),
+            pw.Text(
+              title,
+              style: pw.TextStyle(
+                fontSize: 13,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(8),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: pw.Text(
+                body.isEmpty ? '-' : body,
+                style: const pw.TextStyle(fontSize: 11),
+              ),
+            ),
+          ],
+        );
 
     pw.Widget buildSignature() {
       final name = _signerName.isEmpty ? '이름 미입력' : _signerName;
-      final timeText =
-      _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
+      final timeText = _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
 
       return pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -1010,21 +928,21 @@ class _SimpleInsideWorkFormPageState
             ),
             child: _signaturePngBytes == null
                 ? pw.Center(
-              child: pw.Text(
-                '서명 이미지 없음',
-                style: const pw.TextStyle(
-                  fontSize: 10,
-                  color: PdfColors.grey,
-                ),
-              ),
-            )
+                    child: pw.Text(
+                      '서명 이미지 없음',
+                      style: const pw.TextStyle(
+                        fontSize: 10,
+                        color: PdfColors.grey,
+                      ),
+                    ),
+                  )
                 : pw.Padding(
-              padding: const pw.EdgeInsets.all(6),
-              child: pw.Image(
-                pw.MemoryImage(_signaturePngBytes!),
-                fit: pw.BoxFit.contain,
-              ),
-            ),
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Image(
+                      pw.MemoryImage(_signaturePngBytes!),
+                      fit: pw.BoxFit.contain,
+                    ),
+                  ),
           ),
         ],
       );
@@ -1038,7 +956,7 @@ class _SimpleInsideWorkFormPageState
         build: (context) => [
           pw.Center(
             child: pw.Text(
-              '업무 시작 보고서',
+              '업무 종료 보고서',
               style: pw.TextStyle(
                 fontSize: 20,
                 fontWeight: pw.FontWeight.bold,
@@ -1076,8 +994,7 @@ class _SimpleInsideWorkFormPageState
     final client = await GoogleAuthV7.authedClient(const <String>[]);
     final api = gmail.GmailApi(client);
 
-    final boundary =
-        'dart-mail-boundary-${DateTime.now().millisecondsSinceEpoch}';
+    final boundary = 'dart-mail-boundary-${DateTime.now().millisecondsSinceEpoch}';
     final subjectB64 = base64.encode(utf8.encode(subject));
     final sb = StringBuffer()
       ..writeln('To: $to')
@@ -1099,8 +1016,7 @@ class _SimpleInsideWorkFormPageState
       ..writeln(base64.encode(pdfBytes))
       ..writeln('--$boundary--');
 
-    final raw =
-    base64UrlEncode(utf8.encode(sb.toString())).replaceAll('=', '');
+    final raw = base64UrlEncode(utf8.encode(sb.toString())).replaceAll('=', '');
     final msg = gmail.Message()..raw = raw;
     await api.users.messages.send(msg, 'me');
   }
@@ -1158,8 +1074,8 @@ class _SimpleInsideWorkFormPageState
             Text(
               title,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+                    fontWeight: FontWeight.w700,
+                  ),
             ),
             const SizedBox(height: 10),
             child,
@@ -1184,8 +1100,7 @@ class _SimpleInsideWorkFormPageState
           initialDateTime: _signDateTime,
         );
       },
-      transitionBuilder:
-          (ctx, animation, secondaryAnimation, child) {
+      transitionBuilder: (ctx, animation, secondaryAnimation, child) {
         return FadeTransition(
           opacity: CurvedAnimation(
             parent: animation,
@@ -1212,10 +1127,10 @@ class _SimpleInsideWorkFormPageState
       children: [
         Text(
           '오늘 업무 진행 중 특이사항이 있었는지 선택해 주세요.\n'
-              '(예: 장애, 클레임, 일정 지연, 긴급 지원 등)',
+          '(예: 장애, 클레임, 일정 지연, 긴급 지원 등)',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            height: 1.4,
-          ),
+                height: 1.4,
+              ),
         ),
         const SizedBox(height: 12),
         Row(
@@ -1229,14 +1144,12 @@ class _SimpleInsideWorkFormPageState
                     _updateMailSubject();
                   });
                   _pageController.nextPage(
-                    duration:
-                    const Duration(milliseconds: 250),
+                    duration: const Duration(milliseconds: 250),
                     curve: Curves.easeOut,
                   );
                 },
-                style: _hasSpecialNote == false
-                    ? SimpleReportButtonStyles.primary()
-                    : SimpleReportButtonStyles.outlined(),
+                style:
+                    _hasSpecialNote == false ? SimpleReportButtonStyles.primary() : SimpleReportButtonStyles.outlined(),
                 child: const Text('특이사항 없음'),
               ),
             ),
@@ -1250,14 +1163,12 @@ class _SimpleInsideWorkFormPageState
                     _updateMailSubject();
                   });
                   _pageController.nextPage(
-                    duration:
-                    const Duration(milliseconds: 250),
+                    duration: const Duration(milliseconds: 250),
                     curve: Curves.easeOut,
                   );
                 },
-                style: _hasSpecialNote == true
-                    ? SimpleReportButtonStyles.primary()
-                    : SimpleReportButtonStyles.outlined(),
+                style:
+                    _hasSpecialNote == true ? SimpleReportButtonStyles.primary() : SimpleReportButtonStyles.outlined(),
                 child: const Text('특이사항 있음'),
               ),
             ),
@@ -1267,8 +1178,63 @@ class _SimpleInsideWorkFormPageState
         Text(
           '※ 선택 결과는 메일 제목에 자동으로 반영되며, 다음 항목으로 자동 이동합니다.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Colors.black54,
+                color: Colors.black54,
+              ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildVehicleBody() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '오늘 하루 동안 해당 업무로 입고된 차량 대수를 입력해 주세요.',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                height: 1.4,
+              ),
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          key: _vehicleFieldKey,
+          controller: _vehicleCountCtrl,
+          decoration: _inputDec(
+            labelText: '일일 차량 입고 대수',
+            hintText: '예: 12',
           ),
+          keyboardType: TextInputType.number,
+          onTap: () {
+            // 키보드가 올라온 뒤에 스크롤해서 필드를 키보드 위로 올림
+            Future.delayed(const Duration(milliseconds: 150), () {
+              final ctx = _vehicleFieldKey.currentContext;
+              if (ctx != null) {
+                Scrollable.ensureVisible(
+                  ctx,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOut,
+                );
+              }
+            });
+          },
+          validator: (v) {
+            final value = v?.trim() ?? '';
+            if (value.isEmpty) {
+              // 선택 입력: 비어 있으면 통과
+              return null;
+            }
+            if (!RegExp(r'^\d+$').hasMatch(value)) {
+              return '숫자만 입력하세요.';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '※ 입력 시 메일 제목에 "??대" 형식으로 자동 반영됩니다.',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Colors.black54,
+              ),
         ),
       ],
     );
@@ -1324,12 +1290,9 @@ class _SimpleInsideWorkFormPageState
           enableInteractiveSelection: true,
           decoration: _inputDec(
             labelText: '메일 제목(자동 생성)',
-            hintText:
-            '예: 콜센터 업무 시작 보고서 – 11월 25일자 - 특이사항 있음',
+            hintText: '예: 콜센터 업무 종료 보고서 – 11월 25일자 12대 - 특이사항 있음',
           ),
-          validator: (v) => (v == null || v.trim().isEmpty)
-              ? '메일 제목이 자동 생성되지 않았습니다.'
-              : null,
+          validator: (v) => (v == null || v.trim().isEmpty) ? '메일 제목이 자동 생성되지 않았습니다.' : null,
         ),
         const SizedBox(height: 8),
         TextFormField(
@@ -1463,24 +1426,21 @@ class _SimpleInsideWorkFormPageState
               children: [
                 // 상단 문서 헤더
                 Text(
-                  '업무 시작 보고서',
+                  '업무 종료 보고서',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 4,
-                  ),
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 4,
+                      ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'WORK START REPORT',
+                  'WORK COMPLETION REPORT',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: Colors.black54,
-                    letterSpacing: 3,
-                  ),
+                        color: Colors.black54,
+                        letterSpacing: 3,
+                      ),
                 ),
                 const SizedBox(height: 16),
 
@@ -1490,16 +1450,13 @@ class _SimpleInsideWorkFormPageState
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color:
-                      SimpleReportColors.light.withOpacity(0.8),
+                      color: SimpleReportColors.light.withOpacity(0.8),
                       width: 1,
                     ),
                   ),
-                  padding:
-                  const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
                   child: Column(
-                    crossAxisAlignment:
-                    CrossAxisAlignment.stretch,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       // 상단 메타 정보 라인
                       Row(
@@ -1511,25 +1468,18 @@ class _SimpleInsideWorkFormPageState
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            '업무 시작 보고서 양식',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color:
-                              SimpleReportColors.dark,
-                            ),
+                            '업무 종료 보고서 양식',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: SimpleReportColors.dark,
+                                ),
                           ),
                           const Spacer(),
                           Text(
                             '작성일 ${_fmtCompact(DateTime.now())}',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(
-                              color: Colors.black54,
-                            ),
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Colors.black54,
+                                ),
                           ),
                         ],
                       ),
@@ -1540,20 +1490,15 @@ class _SimpleInsideWorkFormPageState
                       // 안내 문구
                       Container(
                         decoration: BoxDecoration(
-                          color: SimpleReportColors.light
-                              .withOpacity(0.12),
-                          borderRadius:
-                          BorderRadius.circular(12),
+                          color: SimpleReportColors.light.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: SimpleReportColors.light
-                                .withOpacity(0.8),
+                            color: SimpleReportColors.light.withOpacity(0.8),
                           ),
                         ),
-                        padding:
-                        const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(12),
                         child: Row(
-                          crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Icon(
                               Icons.info_outline,
@@ -1564,12 +1509,9 @@ class _SimpleInsideWorkFormPageState
                             Expanded(
                               child: Text(
                                 '해당 업무의 수행 내용과 결과를 사실에 근거하여 간결하게 작성해 주세요.',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                  height: 1.4,
-                                ),
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      height: 1.4,
+                                    ),
                               ),
                             ),
                           ],
@@ -1581,8 +1523,7 @@ class _SimpleInsideWorkFormPageState
                       // 섹션 카드 (한 페이지당 하나만)
                       _sectionCard(
                         title: sectionTitle,
-                        margin:
-                        const EdgeInsets.only(bottom: 0),
+                        margin: const EdgeInsets.only(bottom: 0),
                         child: sectionBody,
                       ),
 
@@ -1593,26 +1534,19 @@ class _SimpleInsideWorkFormPageState
                         children: [
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed:
-                              _sending ? null : _reset,
-                              icon: const Icon(
-                                  Icons.refresh_outlined),
+                              onPressed: _sending ? null : _reset,
+                              icon: const Icon(Icons.refresh_outlined),
                               label: const Text('초기화'),
-                              style: SimpleReportButtonStyles
-                                  .outlined(),
+                              style: SimpleReportButtonStyles.outlined(),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: ElevatedButton.icon(
-                              onPressed:
-                              _sending ? null : _showPreview,
-                              icon: const Icon(
-                                  Icons.visibility_outlined),
+                              onPressed: _sending ? null : _showPreview,
+                              icon: const Icon(Icons.visibility_outlined),
                               label: const Text('미리보기'),
-                              style:
-                              SimpleReportButtonStyles
-                                  .primary(),
+                              style: SimpleReportButtonStyles.primary(),
                             ),
                           ),
                         ],
@@ -1637,7 +1571,7 @@ class _SimpleInsideWorkFormPageState
       // 바깥 배경
       backgroundColor: const Color(0xFFEFF3F6),
       appBar: AppBar(
-        title: const Text('업무 시작 보고서 작성'),
+        title: const Text('업무 종료 보고서 작성'),
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
@@ -1657,64 +1591,54 @@ class _SimpleInsideWorkFormPageState
           ),
         ],
       ),
-      // 👉 4. 전자서명(인덱스 3) 페이지만 제출 버튼 노출 + 서명 전에는 비활성화
-      bottomNavigationBar: _currentPageIndex == 3
+      // 👉 5. 전자서명(인덱스 4) 페이지만 제출 버튼 노출 + 서명 전에는 비활성화
+      bottomNavigationBar: _currentPageIndex == 4
           ? SafeArea(
-        top: false,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 10,
-            bottom: 16 +
-                MediaQuery.of(context).viewInsets.bottom,
-          ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(
-              top: BorderSide(
-                  color: Colors.black12, width: 1),
-            ),
-          ),
-          child: SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              // ✅ 서명 전에는 비활성화, 서명 완료 후에만 활성화
-              onPressed: (!_sending &&
-                  _signaturePngBytes != null)
-                  ? _submit
-                  : null,
-              icon: _sending
-                  ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor:
-                  AlwaysStoppedAnimation<Color>(
-                      Colors.black),
+              top: false,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                curve: Curves.easeOut,
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 10,
+                  bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
                 ),
-              )
-                  : const Icon(Icons.send_outlined),
-              label: Text(
-                _sending ? '전송 중…' : '제출',
-                style: const TextStyle(
-                    fontWeight: FontWeight.bold),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(
+                    top: BorderSide(color: Colors.black12, width: 1),
+                  ),
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    // ✅ 서명 전에는 비활성화, 서명 완료 후에만 활성화
+                    onPressed: (!_sending && _signaturePngBytes != null) ? _submit : null,
+                    icon: _sending
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                            ),
+                          )
+                        : const Icon(Icons.send_outlined),
+                    label: Text(
+                      _sending ? '전송 중…' : '제출',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    style: SimpleReportButtonStyles.primary(),
+                  ),
+                ),
               ),
-              style:
-              SimpleReportButtonStyles.primary(),
-            ),
-          ),
-        ),
-      )
+            )
           : null,
       body: SafeArea(
         child: Form(
           key: _formKey,
-          autovalidateMode:
-          AutovalidateMode.onUserInteraction,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: PageView(
             controller: _pageController,
             onPageChanged: (index) {
@@ -1734,15 +1658,19 @@ class _SimpleInsideWorkFormPageState
                 sectionBody: _buildSpecialNoteBody(),
               ),
               _buildReportPage(
-                sectionTitle: '2. 특이 사항 (조건부 필수)',
+                sectionTitle: '2. 일일 차량 입고 대수',
+                sectionBody: _buildVehicleBody(),
+              ),
+              _buildReportPage(
+                sectionTitle: '3. 특이 사항 (조건부 필수)',
                 sectionBody: _buildWorkContentBody(),
               ),
               _buildReportPage(
-                sectionTitle: '3. 메일 전송 내용',
+                sectionTitle: '4. 메일 전송 내용',
                 sectionBody: _buildMailBody(),
               ),
               _buildReportPage(
-                sectionTitle: '4. 전자서명',
+                sectionTitle: '5. 전자서명',
                 sectionBody: _buildSignatureBody(),
               ),
             ],

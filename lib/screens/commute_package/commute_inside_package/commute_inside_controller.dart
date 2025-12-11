@@ -65,8 +65,7 @@ class CommuteInsideController {
 
       if (!context.mounted) return CommuteDestination.none;
 
-      final isHq =
-          doc.exists && (doc.data()?['isHeadquarter'] == true);
+      final isHq = doc.exists && (doc.data()?['isHeadquarter'] == true);
       return isHq ? CommuteDestination.headquarter : CommuteDestination.type;
     } catch (e) {
       debugPrint('❌ _decideDestination 실패: $e');
@@ -89,15 +88,17 @@ class CommuteInsideController {
         return CommuteDestination.none;
       }
 
-      // 3) 출근 로그 업로드 + 로컬 isWorking prefs/알림 세팅
+      // 3) 출근 로그 저장 + 로컬 isWorking prefs/알림 세팅
+      //    (실제 저장은 CommuteInsideClockInLogUploader에서 SQLite(simple_work_attendance)에 수행)
       final uploadResult = await _uploadAttendanceSilently(context);
 
-      // 업로드 실패/취소 시에는 여기서 종료
+      // 저장 실패/취소 시에는 여기서 종료
       if (uploadResult == null || uploadResult.success != true) {
         return CommuteDestination.none;
       }
 
       // 4) 출근 성공 시: Firestore user_accounts.isWorking 토글(false → true)
+      //    (출근 "상태" 플래그는 기존 정책 그대로 유지)
       await userState.isHeWorking();
 
       // 5) 출근 성공 시: 오늘 출근했다는 사실을 캐시에 반영
@@ -132,9 +133,11 @@ class CommuteInsideController {
     });
   }
 
-  /// 출근 기록을 Firestore에 업로드하고,
+  /// 출근 기록을 **로컬(SQLite, simple_mode 테이블)** 에 저장하고,
   /// 성공 시 로컬 isWorking prefs 및 퇴근 알림까지 세팅하는 헬퍼.
   ///
+  /// - 실제 저장은 CommuteInsideClockInLogUploader.uploadAttendanceJson(...) 에서
+  ///   SimpleModeAttendanceRepository.insertEvent(...) 를 호출해 수행.
   /// - 성공/실패 여부는 반환값의 `success` 필드로 판단(dynamic 사용)
   /// - 스낵바는 이 함수 안에서 처리
   Future<dynamic> _uploadAttendanceSilently(BuildContext context) async {
@@ -175,7 +178,7 @@ class CommuteInsideController {
       await prefs.setBool(kIsWorkingPrefsKey, true);
       final end = prefs.getString('endTime');
       if (end != null && end.isNotEmpty) {
-        await EndtimeReminderService.instance
+        await EndTimeReminderService.instance
             .scheduleDailyOneHourBefore(end);
       }
     } else {

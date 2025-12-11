@@ -99,7 +99,8 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
                     icon: Icon(_layerHidden ? Icons.layers : Icons.layers_clear),
                     label: Text(_layerHidden ? '작업 버튼 펼치기' : '작업 버튼 숨기기'),
                     style: _layerToggleBtnStyle(),
-                    onPressed: () => setState(() => _layerHidden = !_layerHidden),
+                    onPressed: () =>
+                        setState(() => _layerHidden = !_layerHidden),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -137,7 +138,8 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
                             }
 
                             // ✅ 실제 퇴근 처리
-                            await controller.handleWorkStatus(userState, context);
+                            await controller.handleWorkStatus(
+                                userState, context);
 
                             if (!mounted) return;
 

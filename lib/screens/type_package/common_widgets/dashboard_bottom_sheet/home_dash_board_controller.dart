@@ -1,8 +1,6 @@
 // lib/screens/type_package/common_widgets/dashboard_bottom_sheet/home_dash_board_controller.dart
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../../../../../states/user/user_state.dart';
 import '../../../../../../utils/snackbar_helper.dart';
@@ -21,10 +19,11 @@ const kIsWorkingPrefsKey = 'isWorking';
 const kLastBreakDatePrefsKey = 'last_break_date';
 
 class HomeDashBoardController {
-  Future<void> handleWorkStatus(UserState userState, BuildContext context) async {
+  Future<void> handleWorkStatus(
+      UserState userState, BuildContext context) async {
     // ✅ 현재 근무 중인 상태에서 "퇴근하기" 버튼을 누른 경우
     if (userState.isWorking) {
-      // ⬇️ 이제 bool 이 아니라 SheetUploadResult 사용
+      // ⬇️ SQLite 업로더 사용 (ClockOutLogUploader → SimpleModeAttendanceRepository)
       final SheetUploadResult result = await _recordLeaveTime(context);
 
       if (!context.mounted) return;
@@ -36,29 +35,29 @@ class HomeDashBoardController {
         // ✅ 퇴근 상태를 로컬에 저장하고, 예약 알림을 즉시 취소
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool(kIsWorkingPrefsKey, false);
-        await EndtimeReminderService.instance.cancel();
+        await EndTimeReminderService.instance.cancel();
       } else {
-        // 실패 사유를 그대로 노출 (예: "이미 오늘 퇴근 기록이 있습니다" 등)
+        // 실패 사유를 그대로 노출
         showFailedSnackbar(context, result.message);
       }
 
-      // ✅ 포그라운드 서비스 종료
-      await FlutterForegroundTask.stopService();
-
-      // ✅ Firestore의 isWorking 상태 토글
+      // ✅ Firestore의 isWorking 상태 토글(근무 상태 플래그만 변경)
       await userState.isHeWorking();
 
-      // 약간의 딜레이 후 앱 종료 (기존 로직 유지)
-      await Future.delayed(const Duration(seconds: 1));
-      SystemNavigator.pop();
+      // ⚠️ 앱 종료 / 포그라운드 서비스 중지는
+      //    HqDashBoardPage / HomeDashBoardBottomSheet 의
+      //    _exitAppAfterClockOut(...) 에서 일괄 처리합니다.
     } else {
       // 아직 근무 중이 아니면 단순히 isWorking 토글만 (출근/상태 변경)
       await userState.isHeWorking();
     }
   }
 
-  /// 퇴근 시간 기록 → Sheets 업로드 호출
-  /// 기존: Future<bool>  ▶▶  변경: Future<SheetUploadResult>
+  /// 퇴근 시간 기록 → 로컬(SQLite) 기록 헬퍼 호출
+  ///
+  /// - 내부에서는 ClockOutLogUploader.uploadLeaveJson(...) 을 호출하고
+  ///   그 안에서 SimpleModeAttendanceRepository.insertEvent(...) 를 통해
+  ///   simple_work_attendance 테이블에 'work_out' 행을 저장합니다.
   Future<SheetUploadResult> _recordLeaveTime(BuildContext context) async {
     try {
       final userState = Provider.of<UserState>(context, listen: false);
@@ -74,8 +73,9 @@ class HomeDashBoardController {
         'recordedTime': time,
       };
 
-      // ⬇️ 이제 bool 이 아니라 SheetUploadResult 가 반환됨
-      final SheetUploadResult result = await ClockOutLogUploader.uploadLeaveJson(
+      // ⬇️ 여기서부터는 SQLite 기반 업로더가 처리
+      final SheetUploadResult result =
+      await ClockOutLogUploader.uploadLeaveJson(
         context: context,
         data: leaveData,
       );
@@ -91,6 +91,10 @@ class HomeDashBoardController {
   }
 
   /// 휴게 시간 기록
+  ///
+  /// - BreakLogUploader.uploadBreakJson(...) 에서
+  ///   SimpleModeAttendanceRepository.insertEvent(...) 를 통해
+  ///   simple_break_attendance 테이블에 'break' 행을 저장합니다.
   Future<void> recordBreakTime(BuildContext context) async {
     try {
       final userState = Provider.of<UserState>(context, listen: false);
@@ -107,7 +111,7 @@ class HomeDashBoardController {
         'status': '휴게',
       };
 
-      // ⬇️ 이쪽도 bool 이 아니라 SheetUploadResult
+      // ⬇️ 이쪽도 SQLite 기반 업로더 사용
       final SheetUploadResult result = await BreakLogUploader.uploadBreakJson(
         context: context,
         data: breakJson,

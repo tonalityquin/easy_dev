@@ -205,7 +205,7 @@ class SimpleLoginController {
         // ✅ endTime 저장 + 즉시 예약/갱신
         final endHHmm = _timeToString(updatedUser.endTime);
         await prefs.setString('endTime', endHHmm);
-        await EndtimeReminderService.instance
+        await EndTimeReminderService.instance
             .scheduleDailyOneHourBefore(endHHmm);
 
         await prefs.setString('role', updatedUser.role);

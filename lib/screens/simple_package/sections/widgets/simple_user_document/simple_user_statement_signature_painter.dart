@@ -1,9 +1,7 @@
-// lib/screens/simple_package/simple_inside_package/sections/simple_inside_report_signature_painter.dart
-
 import 'package:flutter/material.dart';
 
-class SignaturePainter extends CustomPainter {
-  SignaturePainter({
+class SimpleUserStatementSignaturePainter extends CustomPainter {
+  SimpleUserStatementSignaturePainter({
     required this.points,
     required this.strokeWidth,
     required this.color,
@@ -21,9 +19,11 @@ class SignaturePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // 배경
     final bg = Paint()..color = background;
     canvas.drawRect(Offset.zero & size, bg);
 
+    // 가이드 라인
     final guide = Paint()
       ..color = Colors.black12
       ..strokeWidth = 1;
@@ -38,6 +38,7 @@ class SignaturePainter extends CustomPainter {
       guide,
     );
 
+    // 실제 서명 선
     final p = Paint()
       ..color = color
       ..strokeWidth = strokeWidth
@@ -53,11 +54,15 @@ class SignaturePainter extends CustomPainter {
       }
     }
 
+    // 아무 서명도 없을 때 안내 문구
     final hasAny = points.any((e) => e != null);
     if (!hasAny) {
       const hint = TextSpan(
         text: '화면 전체가 서명 영역입니다. 서명을 시작해 주세요.',
-        style: TextStyle(color: Colors.black38, fontSize: 14),
+        style: TextStyle(
+          color: Colors.black38,
+          fontSize: 14,
+        ),
       );
       final tp = TextPainter(
         text: hint,
@@ -72,10 +77,14 @@ class SignaturePainter extends CustomPainter {
       );
     }
 
+    // 오른쪽 아래 서명자/시간 오버레이
     final overlayTP = TextPainter(
       text: TextSpan(
         text: '서명자: $overlayName   서명일시: $overlayDateText',
-        style: const TextStyle(color: Colors.black45, fontSize: 12),
+        style: const TextStyle(
+          color: Colors.black45,
+          fontSize: 12,
+        ),
       ),
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: size.width - 16);
@@ -87,7 +96,7 @@ class SignaturePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(SignaturePainter old) {
+  bool shouldRepaint(SimpleUserStatementSignaturePainter old) {
     return old.points != points ||
         old.strokeWidth != strokeWidth ||
         old.color != color ||

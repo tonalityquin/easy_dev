@@ -279,7 +279,7 @@ Future<void> _postBootstrap() async {
   }
 
   // 🔔 서비스에 플러그인 주입 (알림 예약/취소에 사용)
-  EndtimeReminderService.instance.attachPlugin(flnp);
+  EndTimeReminderService.instance.attachPlugin(flnp);
 
   // 🔔 앱 시작 시 보강: prefs의 endTime & isWorking 기준으로 예약/취소 정합화
   try {
@@ -288,9 +288,9 @@ Future<void> _postBootstrap() async {
     final isWorking = prefs.getBool(kIsWorkingPrefsKey) ?? false;
 
     if (isWorking && savedEnd != null && savedEnd.isNotEmpty) {
-      await EndtimeReminderService.instance.scheduleDailyOneHourBefore(savedEnd);
+      await EndTimeReminderService.instance.scheduleDailyOneHourBefore(savedEnd);
     } else {
-      await EndtimeReminderService.instance.cancel();
+      await EndTimeReminderService.instance.cancel();
     }
   } catch (e, st) {
     debugPrint('[MAIN][${_ts()}] EndtimeReminderService init error: $e');

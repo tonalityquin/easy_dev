@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 
 /// Deep Blue 팔레트(서비스 카드 계열과 통일)
 class _Palette {
-  static const base = Color(0xFF0D47A1); // primary
-  static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
-  static const light = Color(0xFF5472D3); // 톤 변형/보더
+  static const base = Color(0xFF00897B);
+  static const dark = Color(0xFF00695C);
+  static const light = Color(0xFF80CBC4);
 }
 
 /// 5초 동안 유지되는 취소 가능 blocking dialog

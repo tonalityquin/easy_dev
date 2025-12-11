@@ -7,7 +7,6 @@ import '../../../../states/user/user_state.dart';
 import '../../../utils/init/logout_helper.dart';
 import '../../services/endtime_reminder_service.dart';
 import 'commute_inside_package/commute_inside_controller.dart';
-import 'commute_inside_package/sections/commute_inside_report_button_section.dart';
 import 'commute_inside_package/sections/commute_inside_work_button_section.dart';
 import 'commute_inside_package/sections/commute_inside_user_info_card_section.dart';
 import 'commute_inside_package/sections/commute_inside_header_widget_section.dart';
@@ -65,7 +64,7 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
     await prefs.setBool('isWorking', false);
 
     // 남아 있을 수 있는 퇴근 알림도 취소
-    await EndtimeReminderService.instance.cancel();
+    await EndTimeReminderService.instance.cancel();
   }
 
   Future<void> _loadCustomKakaoUrl() async {
@@ -139,31 +138,28 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
                           children: [
                             const CommuteInsideHeaderWidgetSection(),
                             const CommuteInsideUserInfoCardSection(),
-                            const SizedBox(height: 6),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: CommuteInsideReportButtonSection(),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: CommuteInsideWorkButtonSection(
-                                    controller: controller,
-                                    onLoadingChanged: (value) {
-                                      setState(() {
-                                        _isLoading = value;
-                                      });
-                                    },
-                                  ),
-                                ),
-                              ],
+                            const SizedBox(height: 12),
+
+                            // 🔹 업무 보고 버튼 제거 → 근무 버튼만 전체 폭으로 배치
+                            SizedBox(
+                              width: double.infinity,
+                              child: CommuteInsideWorkButtonSection(
+                                controller: controller,
+                                onLoadingChanged: (value) {
+                                  setState(() {
+                                    _isLoading = value;
+                                  });
+                                },
+                              ),
                             ),
-                            const SizedBox(height: 1),
+
+                            const SizedBox(height: 8),
                             Center(
                               child: SizedBox(
                                 height: 80,
-                                child:
-                                Image.asset('assets/images/pelican.png'),
+                                child: Image.asset(
+                                  'assets/images/pelican.png',
+                                ),
                               ),
                             ),
                           ],

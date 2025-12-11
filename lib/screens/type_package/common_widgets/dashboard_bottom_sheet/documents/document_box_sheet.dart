@@ -120,7 +120,7 @@ class _DocumentBoxSheet extends StatelessWidget {
                                               break;
 
                                             case DocumentType.workEndReportForm:
-                                            // 동일 type 안에서 id 로 역할 분리
+                                              // 동일 type 안에서 id 로 역할 분리
                                               if (item.id == 'template-end-work-report') {
                                                 // ✅ 업무 종료 보고서 → 기존 집계/서버 보고 시트
                                                 showEndReportDialog(context);
@@ -137,7 +137,7 @@ class _DocumentBoxSheet extends StatelessWidget {
                                               break;
 
                                             case DocumentType.workStartReportForm:
-                                            // ✅ 업무 시작 보고 양식 → 새로 만든 화면으로 이동
+                                              // ✅ 업무 시작 보고 양식 → 새로 만든 화면으로 이동
                                               Navigator.of(context).push(
                                                 MaterialPageRoute(
                                                   builder: (_) => const DashboardStartReportFormPage(),
@@ -147,7 +147,7 @@ class _DocumentBoxSheet extends StatelessWidget {
                                               break;
 
                                             case DocumentType.generic:
-                                            // ✅ generic 문서 중 연차(결근) 지원 신청서 연결
+                                              // ✅ generic 문서 중 연차(결근) 지원 신청서 연결
                                               if (item.id == 'template-annual-leave-application') {
                                                 Navigator.of(context).push(
                                                   MaterialPageRoute(
@@ -227,7 +227,7 @@ class _BinderSpine extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: List.generate(
           5,
-              (index) => Padding(
+          (index) => Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Container(
               width: 10,
@@ -590,7 +590,7 @@ String _typeLabelForType(DocumentType type) {
     case DocumentType.workStartReportForm:
       return '업무 시작 보고';
     case DocumentType.workEndReportForm:
-    // 기본값(위에서 id별로 override 가능)
+      // 기본값(위에서 id별로 override 가능)
       return '퇴근/업무 종료';
     case DocumentType.handoverForm:
       return '업무 인수인계';

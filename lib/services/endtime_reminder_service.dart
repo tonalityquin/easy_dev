@@ -6,9 +6,9 @@ import 'package:timezone/timezone.dart' as tz;
 /// - flutter_local_notifications + timezone 기반
 /// - Android Doze 중에도 표시되도록 exactAllowWhileIdle 사용
 /// - matchDateTimeComponents: time 로 매일 반복
-class EndtimeReminderService {
-  EndtimeReminderService._();
-  static final EndtimeReminderService instance = EndtimeReminderService._();
+class EndTimeReminderService {
+  EndTimeReminderService._();
+  static final EndTimeReminderService instance = EndTimeReminderService._();
 
   FlutterLocalNotificationsPlugin? _flnp;
 

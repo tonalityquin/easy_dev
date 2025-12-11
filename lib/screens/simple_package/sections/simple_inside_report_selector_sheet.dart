@@ -1,27 +1,18 @@
 import 'package:flutter/material.dart';
 
-import '../widgets/simple_inside_report_bottom_sheet.dart';
-import '../widgets/simple_inside_work_bottom_sheet.dart';
+import 'widgets/simple_inside_report_bottom_sheet.dart';
+import 'widgets/simple_inside_work_bottom_sheet.dart';
 
-
-
-/// 내부에서만 사용하는 선택 결과 enum
 enum _SimpleReportSheetResult {
   workStart,
   workEnd,
 }
-
-/// SimpleInsideReportButtonSection 에서 호출하는 공개 함수
-/// - 문서철 스타일의 선택 시트를 띄운 뒤
-/// - 선택 결과에 따라 업무 시작/종료 보고서 풀스크린 바텀시트를 연다.
 Future<void> openSimpleInsideReportSelectorSheet(
-    BuildContext context,
-    ) async {
-  // 풀스크린 바텀시트를 띄울 때 사용할 상위 context
+  BuildContext context,
+) async {
   final rootContext = context;
 
-  final _SimpleReportSheetResult? result =
-  await showModalBottomSheet<_SimpleReportSheetResult>(
+  final _SimpleReportSheetResult? result = await showModalBottomSheet<_SimpleReportSheetResult>(
     context: context,
     useRootNavigator: false,
     isScrollControlled: true,
@@ -37,11 +28,11 @@ Future<void> openSimpleInsideReportSelectorSheet(
   // 선택 결과에 따라 기존 풀스크린 바텀시트 헬퍼 호출
   switch (result) {
     case _SimpleReportSheetResult.workStart:
-    // ✅ 업무 시작 보고서 폼 (SimpleInsideWorkFormPage)
+      // ✅ 업무 시작 보고서 폼 (SimpleInsideWorkFormPage)
       showSimpleInsideWorkFullScreenBottomSheet(rootContext);
       break;
     case _SimpleReportSheetResult.workEnd:
-    // ✅ 업무 종료 보고서 폼 (SimpleInsideReportFormPage)
+      // ✅ 업무 종료 보고서 폼 (SimpleInsideReportFormPage)
       showSimpleInsideReportFullScreenBottomSheet(rootContext);
       break;
   }
@@ -68,7 +59,8 @@ class _SimpleReportSelectorSheet extends StatelessWidget {
             title: '업무 시작 보고서',
             subtitle: '근무 시작 시 작성하는 보고서',
             tagLabel: '업무 시작 보고',
-            accentColor: const Color(0xFF4F9A94), // 문서철과 동일한 청록톤
+            accentColor: const Color(0xFF4F9A94),
+            // 문서철과 동일한 청록톤
             iconData: Icons.wb_sunny_outlined,
           ),
           _ReportOption(
@@ -76,7 +68,8 @@ class _SimpleReportSelectorSheet extends StatelessWidget {
             title: '업무 종료 보고서',
             subtitle: '근무 종료 시 작성하는 보고서',
             tagLabel: '업무 종료 보고',
-            accentColor: const Color(0xFFD84315), // 종료 보고서용 진한 레드톤
+            accentColor: const Color(0xFFD84315),
+            // 종료 보고서용 진한 레드톤
             iconData: Icons.nights_stay_outlined,
           ),
         ];
@@ -121,8 +114,7 @@ class _SimpleReportSelectorSheet extends StatelessWidget {
                             Expanded(
                               child: ListView.builder(
                                 controller: scrollController,
-                                padding:
-                                const EdgeInsets.symmetric(vertical: 12),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
                                 itemCount: options.length,
                                 itemBuilder: (context, index) {
                                   final option = options[index];
@@ -131,8 +123,7 @@ class _SimpleReportSelectorSheet extends StatelessWidget {
                                     textTheme: textTheme,
                                     onTap: () {
                                       // 선택 시, 해당 enum을 넘기며 시트 닫기
-                                      Navigator.of(context)
-                                          .pop(option.result);
+                                      Navigator.of(context).pop(option.result);
                                     },
                                   );
                                 },
@@ -191,7 +182,7 @@ class _BinderSpine extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: List.generate(
           5,
-              (index) => Padding(
+          (index) => Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Container(
               width: 10,
@@ -400,8 +391,7 @@ class _SimpleReportListItem extends StatelessWidget {
                                   ),
                                   decoration: BoxDecoration(
                                     color: accentColor.withOpacity(0.14),
-                                    borderRadius:
-                                    BorderRadius.circular(999),
+                                    borderRadius: BorderRadius.circular(999),
                                   ),
                                   child: Text(
                                     option.tagLabel,

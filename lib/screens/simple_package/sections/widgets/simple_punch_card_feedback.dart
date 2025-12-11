@@ -1,19 +1,17 @@
-// lib/screens/simple_package/simple_inside_package/sections/widgets/simple_punch_card_feedback.dart
-
-import 'dart:ui' show lerpDouble; // ✅ lerpDouble 추가
+import 'dart:ui' show lerpDouble;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
-import 'package:easydev/time_record/simple_mode/simple_mode_attendance_repository.dart';
+import '../../utils/simple_mode/simple_mode_attendance_repository.dart';
 
-/// 타임카드 펀칭 느낌의 짧은 바텀시트를 띄우는 헬퍼
+/// 타임카드 펀칭 느낌의 짧은 피드백 시트를 띄우는 헬퍼
 ///
 /// - DB에는 실제 시간(HH:mm)을 저장하지만,
 /// - 이 UI에서는 "몇 시"인지는 전혀 보여주지 않고
 ///   출근/휴게/퇴근 중 어느 칸이 펀칭되었는지만 시각적으로 표현한다.
-Future<void> showPunchCardFeedback(
+Future<void> showSimplePunchCardFeedback(
     BuildContext context, {
       required SimpleModeAttendanceType type,
       required DateTime dateTime,
@@ -22,16 +20,38 @@ Future<void> showPunchCardFeedback(
   HapticFeedback.mediumImpact();
   SystemSound.play(SystemSoundType.click);
 
-  await showModalBottomSheet<void>(
+  // 하단에서 올라오는 showModalBottomSheet 대신,
+  // 위(topCenter)에서 아래로 내려왔다가,
+  // 다시 위로 올라가며 사라지는 showGeneralDialog + SlideTransition 사용
+  await showGeneralDialog<void>(
     context: context,
-    isScrollControlled: false,
-    useRootNavigator: false,
-    backgroundColor: Colors.transparent,
+    barrierDismissible: true,
+    barrierLabel: 'simple_punch_card_feedback',
     barrierColor: Colors.black26,
-    builder: (ctx) => _PunchCardSheet(
-      type: type,
-      dateTime: dateTime,
-    ),
+    transitionDuration: const Duration(milliseconds: 320),
+    pageBuilder: (ctx, anim, secondaryAnim) {
+      return _PunchCardSheet(
+        type: type,
+        dateTime: dateTime,
+      );
+    },
+    transitionBuilder: (ctx, anim, secondaryAnim, child) {
+      // 0 → 1: 위에서 아래로 떨어지는 등장
+      // 1 → 0: 다시 위로 빠져 나가는 퇴장
+      final curved = CurvedAnimation(
+        parent: anim,
+        curve: Curves.easeOutCubic,
+        reverseCurve: Curves.easeInCubic,
+      );
+
+      return SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, -1.0), // 화면 위 바깥
+          end: Offset.zero,             // 제자리 (topCenter)
+        ).animate(curved),
+        child: child,
+      );
+    },
   );
 }
 
@@ -75,7 +95,7 @@ String _weekdayKo(DateTime dt) {
   return days[dt.weekday - 1];
 }
 
-/// 짧게 나타났다 사라지는 "출퇴근기록카드" 바텀시트
+/// 짧게 나타났다 사라지는 "출퇴근기록카드" 피드백 시트
 /// - 상단에 펀칭 헤드(스탬프)가 아래로 떨어지면서 카드에 찍히는 애니메이션
 /// - 오늘 행에서 해당 칸만 강하게 하이라이트
 class _PunchCardSheet extends StatefulWidget {
@@ -150,12 +170,9 @@ class _PunchCardSheetState extends State<_PunchCardSheet>
     super.dispose();
   }
 
-  bool get _punchedWorkIn =>
-      widget.type == SimpleModeAttendanceType.workIn;
-  bool get _punchedBreak =>
-      widget.type == SimpleModeAttendanceType.breakTime;
-  bool get _punchedWorkOut =>
-      widget.type == SimpleModeAttendanceType.workOut;
+  bool get _punchedWorkIn => widget.type == SimpleModeAttendanceType.workIn;
+  bool get _punchedBreak => widget.type == SimpleModeAttendanceType.breakTime;
+  bool get _punchedWorkOut => widget.type == SimpleModeAttendanceType.workOut;
 
   @override
   Widget build(BuildContext context) {
@@ -171,9 +188,10 @@ class _PunchCardSheetState extends State<_PunchCardSheet>
 
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        // 상단에서 내려오는 시트이므로, 위쪽 여백을 조금 두고 topCenter에 정렬
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
         child: Align(
-          alignment: Alignment.bottomCenter,
+          alignment: Alignment.topCenter,
           child: ScaleTransition(
             scale: _sheetScale,
             child: Material(
@@ -202,7 +220,8 @@ class _PunchCardSheetState extends State<_PunchCardSheet>
                           BoxShadow(
                             color: Colors.black.withOpacity(0.20),
                             blurRadius: 20,
-                            offset: const Offset(0, -6),
+                            // 상단에 붙은 카드이므로, 그림자는 아래쪽으로 떨어지게 설정
+                            offset: const Offset(0, 6),
                           ),
                         ],
                         border: Border.all(
@@ -329,9 +348,9 @@ class _PunchCardSheetState extends State<_PunchCardSheet>
                                     horizontal: 10,
                                     vertical: 6,
                                   ),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFF3EEE3),
-                                    borderRadius: const BorderRadius.vertical(
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFF3EEE3),
+                                    borderRadius: BorderRadius.vertical(
                                       top: Radius.circular(12),
                                     ),
                                   ),

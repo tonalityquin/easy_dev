@@ -564,10 +564,10 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                               // 🔔 endTime 기준 알림 스케줄링/취소
                               final endTime = _timeToString(_endTime);
                               if (endTime != null) {
-                                await EndtimeReminderService.instance
+                                await EndTimeReminderService.instance
                                     .scheduleDailyOneHourBefore(endTime);
                               } else {
-                                await EndtimeReminderService.instance
+                                await EndTimeReminderService.instance
                                     .cancel();
                               }
 

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import '../../../../states/user/user_state.dart';
-import '../../../../utils/block_dialogs/blocking_dialog.dart';
+import '../../../simple_package/utils/dialog/simple_duration_blocking_dialog.dart';
 import '../commute_inside_controller.dart';
 import '../../../../routes.dart';
 
@@ -37,39 +38,60 @@ class CommuteInsideWorkButtonSection extends StatelessWidget {
         minimumSize: const Size.fromHeight(55),
         padding: EdgeInsets.zero,
         side: const BorderSide(color: Colors.grey, width: 1.0),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
       ),
       onPressed: isWorking
           ? null // 이미 출근 상태일 경우 버튼 비활성화
           : () async {
-        onLoadingChanged(true);
         try {
-          // ✅ 모달 안에서는 '목적지 결정'만 하고, 라우팅은 모달 종료 후에 실행
-          final dest = await runWithBlockingDialog<CommuteDestination>(
-            context: context,
-            message: '출근 처리 중입니다...',
-            task: () async {
-              return controller.handleWorkStatusAndDecide(
-                context,
-                context.read<UserState>(),
-              );
-            },
+          // 1) simple commute 와 동일하게,
+          //    출근 시작 전에 5초 카운트다운 + 취소 가능한 다이얼로그 먼저 실행
+          final proceed = await showSimpleDurationBlockingDialog(
+            context,
+            message: '출근을 펀칭하면 근무가 시작됩니다.\n약 5초 정도 소요됩니다.',
+            duration: const Duration(seconds: 5),
+          );
+
+          // 취소 또는 false 반환 시, 실제 출근 로직은 수행하지 않음
+          if (!proceed) {
+            return;
+          }
+
+          if (!context.mounted) return;
+
+          // 2) 실제 출근 처리 로직 실행 구간에서만 상위 로딩 오버레이 표시
+          onLoadingChanged(true);
+
+          final dest = await controller.handleWorkStatusAndDecide(
+            context,
+            context.read<UserState>(),
           );
 
           if (!context.mounted) return;
 
-          // ✅ 모달이 닫힌 뒤 실제 라우팅
+          // 3) 출근 처리 결과에 따른 라우팅
           switch (dest) {
             case CommuteDestination.headquarter:
-              Navigator.pushReplacementNamed(context, AppRoutes.headquarterPage);
+              Navigator.pushReplacementNamed(
+                context,
+                AppRoutes.headquarterPage,
+              );
               break;
             case CommuteDestination.type:
-              Navigator.pushReplacementNamed(context, AppRoutes.typePage);
+              Navigator.pushReplacementNamed(
+                context,
+                AppRoutes.typePage,
+              );
               break;
             case CommuteDestination.none:
+            // 아무 라우팅도 하지 않음
               break;
           }
         } finally {
+          // 카운트다운을 통과해 로딩을 켠 경우/안 켠 경우 모두 포함해
+          // 안전하게 로딩 상태 해제
           if (context.mounted) {
             onLoadingChanged(false);
           }

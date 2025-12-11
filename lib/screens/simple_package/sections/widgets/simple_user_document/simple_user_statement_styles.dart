@@ -1,9 +1,7 @@
-// lib/screens/simple_package/simple_inside_package/sections/user_statement_styles.dart
-
 import 'package:flutter/material.dart';
 
 /// 경위서 화면 전용 컬러 팔레트
-class UserStatementColors {
+class SimpleUserStatementColors {
   static const Color base = Color(0xFF0D47A1); // primary
   static const Color dark = Color(0xFF002171); // 강조 텍스트/아이콘
   static const Color light = Color(0xFF5472D3); // 톤 변형/보더
@@ -11,7 +9,7 @@ class UserStatementColors {
 }
 
 /// 경위서 화면에서 공통으로 사용하는 버튼 스타일 모음
-class UserStatementButtonStyles {
+class SimpleUserStatementButtonStyles {
   static const double _radius = 8.0;
 
   /// 메인 액션 버튼 (제출 / 미리보기 등)
@@ -32,7 +30,7 @@ class UserStatementButtonStyles {
     ).copyWith(
       overlayColor: MaterialStateProperty.resolveWith<Color?>(
             (states) => states.contains(MaterialState.pressed)
-            ? UserStatementColors.light.withOpacity(.06)
+            ? SimpleUserStatementColors.light.withOpacity(.06)
             : null,
       ),
     );
@@ -54,7 +52,7 @@ class UserStatementButtonStyles {
     ).copyWith(
       overlayColor: MaterialStateProperty.resolveWith<Color?>(
             (states) => states.contains(MaterialState.pressed)
-            ? UserStatementColors.light.withOpacity(.06)
+            ? SimpleUserStatementColors.light.withOpacity(.06)
             : null,
       ),
     );

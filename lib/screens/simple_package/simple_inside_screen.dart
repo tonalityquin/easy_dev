@@ -6,20 +6,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../states/user/user_state.dart';
 import '../../../utils/init/logout_helper.dart';
-import '../../services/endtime_reminder_service.dart';
+import '../../services/endTime_reminder_service.dart';
 import 'sections/simple_inside_header_widget_section.dart';
 import 'sections/widgets/simple_inside_punch_recorder_section.dart';
+import 'sections/simple_inside_document_box_button_section.dart';
+import 'sections/simple_inside_report_button_section.dart';
 import 'simple_inside_controller.dart';
-import 'sections/common_mode/simple_inside_document_box_button_section.dart';
-import 'sections/common_mode/simple_inside_report_button_section.dart';
 
-/// 약식 출퇴근 화면 모드:
-/// - common: 일반 약식 화면
-///   · team 모드와 동일하게 출근/휴게/퇴근 기록은 "출퇴근 기록기 카드"에서만 펀칭
-///   · 하단 버튼에는 업무 보고 / 서류함 열기 버튼만 노출
-/// - team  : 필드 유저 전용
-///   · 출퇴근/휴게 기록은 "출퇴근 기록기 카드"에서만 펀칭
-///   · 하단 버튼에는 결제 서류 버튼만 노출
 enum SimpleInsideMode {
   leader,
   fieldUser,
@@ -78,7 +71,7 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
     await prefs.setBool('isWorking', false);
 
     // 남아 있을 수 있는 퇴근 알림도 취소
-    await EndtimeReminderService.instance.cancel();
+    await EndTimeReminderService.instance.cancel();
   }
 
   Future<void> _handleLogout(BuildContext context) async {

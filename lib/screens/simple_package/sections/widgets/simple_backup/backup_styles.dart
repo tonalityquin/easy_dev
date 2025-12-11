@@ -1,5 +1,3 @@
-// lib/screens/simple_package/simple_inside_package/sections/simple_inside_report_styles.dart
-
 import 'package:flutter/material.dart';
 
 /// 경위서 화면 전용 컬러 팔레트
