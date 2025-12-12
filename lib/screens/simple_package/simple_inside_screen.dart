@@ -21,12 +21,9 @@ enum SimpleInsideMode {
 class SimpleInsideScreen extends StatefulWidget {
   const SimpleInsideScreen({
     super.key,
-    this.mode, // 외부에서 명시적으로 넘기지 않으면 null
+    this.mode,
   });
 
-  /// 화면 모드
-  /// - null 이면 UserState.user.role 기반으로 자동 결정
-  /// - 값이 있으면 외부 지정 모드를 그대로 사용
   final SimpleInsideMode? mode;
 
   @override
@@ -41,41 +38,29 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
     super.initState();
     controller.initialize(context);
 
-    // OPTION A: 자동 라우팅은 최초 진입 시 1회만 수행
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final userState = context.read<UserState>();
 
-      // 1) 오늘 출근 여부 캐시 보장 (Firestore read는 UserState 내부에서 1일 1회)
       await userState.ensureTodayClockInStatus();
       if (!mounted) return;
 
-      // 2) isWorking=true인데 오늘 출근 로그가 없다면
-      //    → 어제(또는 그 이전)부터 이어진 잘못된 상태로 간주하고 자동 리셋
       if (userState.isWorking && !userState.hasClockInToday) {
         await _resetStaleWorkingState(userState);
       }
       if (!mounted) return;
-
-      // 3) (기존) 근무 중이면 자동 라우팅 로직은 제거됨
-      //    현재는 단순히 상태만 정리하고, 추가 라우팅은 수행하지 않음.
     });
   }
 
-  /// "어제 출근만 하고 퇴근 안 누른 상태" 등을 오늘 앱 실행 시 자동으로 정리
   Future<void> _resetStaleWorkingState(UserState userState) async {
-    // Firestore user_accounts.isWorking 토글(true → false)
     await userState.isHeWorking();
 
-    // 로컬 SharedPreferences 의 isWorking 도 false 로 맞춤
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isWorking', false);
 
-    // 남아 있을 수 있는 퇴근 알림도 취소
     await EndTimeReminderService.instance.cancel();
   }
 
   Future<void> _handleLogout(BuildContext context) async {
-    // 앱 종료 대신 공통 정책: 허브(Selector)로 이동 + prefs('mode') 초기화
     await LogoutHelper.logoutAndGoToLogin(
       context,
       checkWorking: false,
@@ -83,15 +68,14 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
     );
   }
 
-  // 좌측 상단(11시) 고정 라벨: 'simple screen'
   Widget _buildScreenTag(BuildContext context) {
     final base = Theme.of(context).textTheme.labelSmall;
     final style = (base ??
-            const TextStyle(
-              fontSize: 11,
-              color: Colors.black54,
-              fontWeight: FontWeight.w600,
-            ))
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        ))
         .copyWith(
       color: Colors.black54,
       fontWeight: FontWeight.w600,
@@ -110,74 +94,55 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
     );
   }
 
-  /// 실제 사용할 모드를 결정하는 헬퍼
-  /// 1) widget.mode 가 지정되어 있으면 그대로 사용
-  /// 2) null 이면 UserState.user.role 기반으로 자동 결정
   SimpleInsideMode _resolveMode(UserState userState) {
-    // 1) 외부에서 명시적으로 모드가 들어온 경우
-    if (widget.mode != null) {
-      return widget.mode!;
-    }
+    if (widget.mode != null) return widget.mode!;
 
-    // 2) role 기반 자동 모드 결정
-    //    - userState.user 가 null 일 수도 있다는 전제하에 안전하게 처리
     String role = '';
 
-    final user = userState.user; // UserModel? 라고 가정
+    final user = userState.user;
     if (user != null) {
-      // user.role 이 String 또는 String? 일 수 있으므로 한 번 더 방어적으로 처리
-      final dynamic rawRole = user.role;
-      if (rawRole is String) {
-        role = rawRole.trim();
-      } else if (rawRole != null) {
-        role = rawRole.toString().trim();
-      }
+      final rawRole = user.role;
+      role = rawRole.trim();
     }
 
     debugPrint('[SimpleInsideScreen] resolved role="$role"');
 
     if (role == 'fieldCommon') {
-      // 필드 유저(팀원) 모드
       return SimpleInsideMode.fieldUser;
     }
 
-    // 그 외는 common 모드
     return SimpleInsideMode.leader;
   }
 
   @override
   Widget build(BuildContext context) {
-    // 이 화면에서만 뒤로가기로 앱 종료되지 않도록 차단 (스낵바 안내 없음)
     return PopScope(
       canPop: false,
       child: Scaffold(
         body: Consumer<UserState>(
           builder: (context, userState, _) {
-            // 여기서 UserState 기준으로 모드 결정
             final mode = _resolveMode(userState);
 
-            // ✅ 유저 메타 정보 추출
             final user = userState.user;
             if (user == null) {
-              // 로그인 정보가 아직 안 올라온 경우 등 방어
-              return const Center(
-                child: CircularProgressIndicator(),
-              );
+              return const Center(child: CircularProgressIndicator());
             }
 
-            // 필드명은 실제 UserModel 정의에 맞게 사용
-            final String userId = user.id; // 예: "01090351868-belivus"
-            final String userName = user.name; // 예: "조성오"
+            final String userId = user.id;
+            final String userName = user.name;
 
-            // 🔹 현재 UserModel 에 area / division 이 없으므로
-            //    Firestore 보조 로그용으로만 빈 문자열을 전달
-            const String area = '';
-            const String division = '';
+            // 🔹 여기서 area = 현재 근무 지역, division = 회사/법인(또는 본사명)으로 사용
+            final String area = userState.currentArea;
+            final String division = userState.division;
+
+            debugPrint(
+              '[SimpleInsideScreen] punchRecorder props → '
+                  'userId="$userId", userName="$userName", area="$area", division="$division"',
+            );
 
             return SafeArea(
               child: Stack(
                 children: [
-                  // 11시 라벨
                   _buildScreenTag(context),
 
                   SingleChildScrollView(
@@ -188,7 +153,7 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
                           children: [
                             const SimpleInsideHeaderWidgetSection(),
 
-                            // 🔥 공통 / 팀 모드 공통: 출근/휴게/퇴근 기록은 출퇴근 기록기 카드에서만 펀칭
+                            // 🔹 간편 모드 출퇴근 카드에 회사/지역/유저 정보 전달
                             SimpleInsidePunchRecorderSection(
                               userId: userId,
                               userName: userName,
@@ -198,7 +163,6 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
 
                             const SizedBox(height: 6),
 
-                            // 모드별 버튼 레이아웃 분기
                             if (mode == SimpleInsideMode.leader)
                               const _CommonModeButtonGrid()
                             else
@@ -219,16 +183,13 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
                     ),
                   ),
 
-                  // 우측 상단 메뉴(로그아웃만)
                   Positioned(
                     top: 16,
                     right: 16,
                     child: PopupMenuButton<String>(
                       onSelected: (value) {
-                        switch (value) {
-                          case 'logout':
-                            _handleLogout(context);
-                            break;
+                        if (value == 'logout') {
+                          _handleLogout(context);
                         }
                       },
                       itemBuilder: (context) => const [
@@ -256,9 +217,6 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
   }
 }
 
-/// 공통(common) 모드 버튼 그리드
-/// - 출근/휴게/퇴근 기록은 상단 "출퇴근 기록기" 카드에서만 펀칭 (team 모드와 동일)
-/// - 여기서는 업무 보고 / 서류함 열기 버튼만 노출
 class _CommonModeButtonGrid extends StatelessWidget {
   const _CommonModeButtonGrid();
 
@@ -268,13 +226,9 @@ class _CommonModeButtonGrid extends StatelessWidget {
       children: const [
         Row(
           children: [
-            Expanded(
-              child: SimpleInsideReportButtonSection(),
-            ),
+            Expanded(child: SimpleInsideReportButtonSection()),
             SizedBox(width: 12),
-            Expanded(
-              child: SimpleInsideDocumentBoxButtonSection(),
-            ),
+            Expanded(child: SimpleInsideDocumentBoxButtonSection()),
           ],
         ),
       ],
@@ -282,9 +236,6 @@ class _CommonModeButtonGrid extends StatelessWidget {
   }
 }
 
-/// 팀원(team / fieldCommon) 모드 버튼 그리드
-/// - 출근/휴게/퇴근은 상단 "출퇴근 기록기" 카드에서만 펀칭
-/// - 하단에는 결제 서류 버튼만 유지
 class _TeamModeButtonGrid extends StatelessWidget {
   const _TeamModeButtonGrid();
 
@@ -294,9 +245,7 @@ class _TeamModeButtonGrid extends StatelessWidget {
       children: const [
         Row(
           children: [
-            Expanded(
-              child: SimpleInsideDocumentBoxButtonSection(),
-            ),
+            Expanded(child: SimpleInsideDocumentBoxButtonSection()),
           ],
         ),
       ],

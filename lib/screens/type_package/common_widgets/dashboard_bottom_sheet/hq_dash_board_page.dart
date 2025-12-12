@@ -1,20 +1,21 @@
 import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../../states/user/user_state.dart';
-
 import '../../../../utils/init/logout_helper.dart';
 import '../../../../utils/app_exit_flag.dart';
 
+import '../../../simple_package/utils/simple_mode/simple_mode_attendance_repository.dart';
 import 'dialog/dashboard_duration_blocking_dialog.dart';
 import 'home_dash_board_controller.dart';
 import 'widgets/home_user_info_card.dart';
 import 'widgets/home_break_button_widget.dart';
-
 import 'documents/leader_document_box_sheet.dart';
+
 class HqDashBoardPage extends StatefulWidget {
   const HqDashBoardPage({super.key});
 
@@ -25,21 +26,18 @@ class HqDashBoardPage extends StatefulWidget {
 class _HqDashBoardPageState extends State<HqDashBoardPage> {
   bool _layerHidden = true;
 
-  /// ✅ 퇴근 처리 이후 “앱까지 종료”를 담당하는 헬퍼
+  late final HomeDashBoardController _controller = HomeDashBoardController();
+
   Future<void> _exitAppAfterClockOut(BuildContext context) async {
-    // 명시적 종료 플로우 시작 플래그
     AppExitFlag.beginExit();
 
     try {
       if (Platform.isAndroid) {
         bool running = false;
 
-        // 포그라운드 서비스가 돌아가고 있으면 먼저 중지
         try {
           running = await FlutterForegroundTask.isRunningService;
-        } catch (_) {
-          // isRunningService가 예외를 던져도 치명적이진 않으므로 무시
-        }
+        } catch (_) {}
 
         if (running) {
           try {
@@ -59,15 +57,12 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
             }
           }
 
-          // 서비스 중지 브로드캐스트 약간의 딜레이
           await Future.delayed(const Duration(milliseconds: 150));
         }
       }
 
-      // 실제 앱 종료
       await SystemNavigator.pop();
     } catch (e) {
-      // 종료에 실패하면 플래그 롤백
       AppExitFlag.reset();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -77,10 +72,54 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
     }
   }
 
+  /// ✅ 퇴근 확정 후 실제로 실행할 "퇴근 처리" 로직
+  ///
+  /// 순서:
+  ///  1) 기존 컨트롤러 로직으로 userState.isWorking → false 처리
+  ///  2) isWorking=false 확인 후 SQLite(simple_mode_attendance)에 workOut 이벤트 기록(+필요시 업로드)
+  ///  3) 앱 종료 플로우 실행
+  ///
+  /// ⚠️ 정책 변경:
+  ///   - commute_true_false 는 출근 시각 기록용이며,
+  ///     퇴근(workOut) 시에는 이 컬렉션을 절대 수정하지 않습니다.
+  Future<void> _handleClockOutFlow(
+      BuildContext context,
+      UserState userState,
+      ) async {
+    // 1) 기존 퇴근 처리 (user_accounts.isWorking 등)
+    await _controller.handleWorkStatus(userState, context);
+
+    if (!mounted) return;
+
+    // 2) 퇴근 처리 성공 여부 확인
+    if (!userState.isWorking) {
+      final user = userState.user;
+      if (user != null) {
+        final now = DateTime.now();
+
+        final String userId = user.id;
+        final String userName = user.name;
+        final String area = userState.currentArea; // 기존 로직 유지
+        final String division = userState.division;
+
+        // 2-1) SQLite + (필요 시) Firestore commute_user_logs 업로드
+        await SimpleModeAttendanceRepository.instance.insertEventAndUpload(
+          dateTime: now,
+          type: SimpleModeAttendanceType.workOut,
+          userId: userId,
+          userName: userName,
+          area: area,
+          division: division,
+        );
+      }
+
+      // 3) 퇴근 처리 완료 → 앱 종료
+      await _exitAppAfterClockOut(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final controller = HomeDashBoardController();
-
     return Scaffold(
       backgroundColor: Colors.white,
       body: Consumer<UserState>(
@@ -98,8 +137,7 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
                     icon: Icon(_layerHidden ? Icons.layers : Icons.layers_clear),
                     label: Text(_layerHidden ? '작업 버튼 펼치기' : '작업 버튼 숨기기'),
                     style: _layerToggleBtnStyle(),
-                    onPressed: () =>
-                        setState(() => _layerHidden = !_layerHidden),
+                    onPressed: () => setState(() => _layerHidden = !_layerHidden),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -112,7 +150,7 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
                   secondChild: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      HomeBreakButtonWidget(controller: controller),
+                      HomeBreakButtonWidget(controller: _controller),
                       const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,
@@ -121,7 +159,6 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
                           label: const Text('퇴근하기'),
                           style: _clockOutBtnStyle(),
                           onPressed: () async {
-                            // 근무 중일 때만 퇴근 확인 다이얼로그 노출
                             if (userState.isWorking) {
                               final bool confirmed =
                               await showDashboardDurationBlockingDialog(
@@ -131,21 +168,11 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
                                 duration: const Duration(seconds: 5),
                               );
                               if (!confirmed) {
-                                // 사용자가 취소한 경우 → 아무 것도 하지 않음
                                 return;
                               }
                             }
 
-                            // ✅ 실제 퇴근 처리
-                            await controller.handleWorkStatus(
-                                userState, context);
-
-                            if (!mounted) return;
-
-                            // ✅ 퇴근 처리가 정상적으로 끝나서 isWorking이 false라면 → 앱까지 종료
-                            if (!userState.isWorking) {
-                              await _exitAppAfterClockOut(context);
-                            }
+                            await _handleClockOutFlow(context, userState);
                           },
                         ),
                       ),
@@ -156,8 +183,7 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
                           icon: const Icon(Icons.logout),
                           label: const Text('로그아웃'),
                           style: _logoutBtnStyle(),
-                          onPressed: () =>
-                              LogoutHelper.logoutAndGoToLogin(context),
+                          onPressed: () => LogoutHelper.logoutAndGoToLogin(context),
                         ),
                       ),
                       const SizedBox(height: 16),

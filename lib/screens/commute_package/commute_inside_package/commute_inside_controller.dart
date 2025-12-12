@@ -1,4 +1,3 @@
-// lib/screens/commute_package/commute_inside_package/commute_inside_controller.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,10 +7,12 @@ import '../../../states/user/user_state.dart';
 import '../../../states/area/area_state.dart';
 import '../../../utils/snackbar_helper.dart';
 import 'utils/commute_inside_clock_in_log_uploader.dart';
-// import '../../../utils/usage_reporter.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:easydev/services/endtime_reminder_service.dart';
+
+// ✅ commute_true_false(출근시각 Timestamp) 기록용 Firestore 레포지토리
+import '../../../repositories/commute_true_false_repository.dart';
 
 const kIsWorkingPrefsKey = 'isWorking';
 
@@ -19,6 +20,10 @@ const kIsWorkingPrefsKey = 'isWorking';
 enum CommuteDestination { none, headquarter, type }
 
 class CommuteInsideController {
+  // ✅ commute_true_false 전용 레포지토리 인스턴스
+  final CommuteTrueFalseRepository _commuteTrueFalseRepo =
+  CommuteTrueFalseRepository();
+
   void initialize(BuildContext context) {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final userState = context.read<UserState>();
@@ -56,13 +61,6 @@ class CommuteInsideController {
           .doc(docId)
           .get();
 
-      /*await UsageReporter.instance.report(
-       area: area.isNotEmpty ? area : 'unknown',
-       action: 'read',
-       n: 1,
-       source: 'CommuteInsideController._decideDestination/areas.doc.get',
-     );*/
-
       if (!context.mounted) return CommuteDestination.none;
 
       final isHq = doc.exists && (doc.data()?['isHeadquarter'] == true);
@@ -73,7 +71,13 @@ class CommuteInsideController {
     }
   }
 
-  // ✅ 버튼 경로: 모달 안에서 호출 — 상태 갱신 + 목적지 판단만 수행
+  /// ✅ 서비스 로그인 화면의 "출근하기" 버튼에서 호출:
+  /// - 출근 중복 여부 검사
+  /// - 출근 로그 업로드(SQLite)
+  /// - user_accounts.isWorking 토글(true)
+  /// - 오늘 출근 캐시(markClockInToday)
+  /// - commute_true_false 에 "출근 시각 Timestamp" 기록 (퇴근과 무관)
+  /// - 이후 목적지(본사/타입) 판별
   Future<CommuteDestination> handleWorkStatusAndDecide(
       BuildContext context,
       UserState userState,
@@ -89,7 +93,6 @@ class CommuteInsideController {
       }
 
       // 3) 출근 로그 저장 + 로컬 isWorking prefs/알림 세팅
-      //    (실제 저장은 CommuteInsideClockInLogUploader에서 SQLite(simple_work_attendance)에 수행)
       final uploadResult = await _uploadAttendanceSilently(context);
 
       // 저장 실패/취소 시에는 여기서 종료
@@ -98,11 +101,15 @@ class CommuteInsideController {
       }
 
       // 4) 출근 성공 시: Firestore user_accounts.isWorking 토글(false → true)
-      //    (출근 "상태" 플래그는 기존 정책 그대로 유지)
       await userState.isHeWorking();
 
       // 5) 출근 성공 시: 오늘 출근했다는 사실을 캐시에 반영
       userState.markClockInToday();
+
+      // 6) ✅ commute_true_false 에 "출근 시각" 기록 (Timestamp)
+      //    - 문서: 회사명(division)
+      //    - 필드: 지역명(area) → { userName: Timestamp }
+      await _recordClockInAtToCommuteTrueFalse(userState);
 
       // 상태가 true면 목적지 결정
       return _decideDestination(context, userState);
@@ -121,8 +128,7 @@ class CommuteInsideController {
 
       switch (dest) {
         case CommuteDestination.headquarter:
-          Navigator.pushReplacementNamed(
-              context, AppRoutes.headquarterPage);
+          Navigator.pushReplacementNamed(context, AppRoutes.headquarterPage);
           break;
         case CommuteDestination.type:
           Navigator.pushReplacementNamed(context, AppRoutes.typePage);
@@ -146,7 +152,6 @@ class CommuteInsideController {
     final name = userState.name;
 
     if (area.isEmpty || name.isEmpty) {
-      // 사용자 정보 자체가 잘못된 케이스도 스낵바로 알려주고 싶다면 이렇게:
       showFailedSnackbar(
         context,
         '출근 기록 업로드 실패: 사용자 정보(area/name)가 비어 있습니다.\n'
@@ -159,7 +164,6 @@ class CommuteInsideController {
     final nowTime =
         '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
 
-    // ⬇️ bool 이 아니라 SheetUploadResult 가 반환됨 (dynamic 으로 취급)
     final result = await CommuteInsideClockInLogUploader.uploadAttendanceJson(
       context: context,
       data: {
@@ -170,7 +174,6 @@ class CommuteInsideController {
     if (!context.mounted) return null;
 
     if (result.success == true) {
-      // 🔔 업로더가 만들어준 구체 메시지를 그대로 사용
       showSuccessSnackbar(context, result.message);
 
       // ✅ 출근 상태를 로컬에 저장하고, 알림을 즉시 반영
@@ -178,15 +181,51 @@ class CommuteInsideController {
       await prefs.setBool(kIsWorkingPrefsKey, true);
       final end = prefs.getString('endTime');
       if (end != null && end.isNotEmpty) {
-        await EndTimeReminderService.instance
-            .scheduleDailyOneHourBefore(end);
+        await EndTimeReminderService.instance.scheduleDailyOneHourBefore(end);
       }
     } else {
-      // 실패 사유를 담은 메시지를 그대로 노출
       showFailedSnackbar(context, result.message);
     }
 
     return result;
+  }
+
+  /// ✅ 서비스 출근 성공 시 commute_true_false 에 "출근 시각(Timestamp)" 기록
+  ///
+  /// - 문서 ID: 회사명/사업부명(company=division)
+  /// - 필드: area(지역명) → { workerName: Timestamp }
+  ///
+  /// ⚠️ 정책: 퇴근(workOut)에서는 이 컬렉션을 절대 수정하지 않습니다.
+  Future<void> _recordClockInAtToCommuteTrueFalse(UserState userState) async {
+    final company = userState.division.trim(); // 회사명/사업부명
+    final area = userState.area.trim(); // 지역명
+    final workerName = userState.name.trim(); // 사용자 이름
+    final clockInAt = DateTime.now();
+
+    if (company.isEmpty || area.isEmpty || workerName.isEmpty) {
+      debugPrint(
+        '[CommuteInsideController] commute_true_false(clockInAt) 업데이트 스킵 '
+            '(company="$company", area="$area", workerName="$workerName")',
+      );
+      return;
+    }
+
+    try {
+      await _commuteTrueFalseRepo.setClockInAt(
+        company: company,
+        area: area,
+        workerName: workerName,
+        clockInAt: clockInAt,
+      );
+      debugPrint(
+        '[CommuteInsideController] commute_true_false(clockInAt) 반영 완료 '
+            '(company="$company", area="$area", workerName="$workerName", clockInAt="$clockInAt")',
+      );
+    } catch (e, st) {
+      debugPrint(
+        '[CommuteInsideController] commute_true_false(clockInAt) 업데이트 실패: $e\n$st',
+      );
+    }
   }
 
   void _showWorkError(BuildContext context) {

@@ -91,8 +91,8 @@ class HeadStubPage extends StatelessWidget {
                       final textScale =
                       MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
 
-                      final tileWidth =
-                          (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
+                      final tileWidth = (width - spacing * (crossAxisCount - 1)) /
+                          crossAxisCount;
                       const baseTileHeight = 150.0;
                       final tileHeight = baseTileHeight * textScale;
                       final childAspectRatio = tileWidth / tileHeight;
@@ -123,7 +123,7 @@ class HeadStubPage extends StatelessWidget {
                       const statDark = Color(0xFF4A148C); // deep purple 900
                       const statLight = Color(0xFFCE93D8); // deep purple 200
 
-                      // ✅ HR(관리) — Blue (누락됐던 상수 추가)
+                      // ✅ HR(관리) — Blue
                       const hrBase = Color(0xFF1565C0); // blue 800
                       const hrDark = Color(0xFF0D47A1); // blue 900
                       const hrLight = Color(0xFF90CAF9); // blue 200
@@ -225,7 +225,8 @@ class HeadStubPage extends StatelessWidget {
                           tintColor: const Color(0xFF80CBC4),
                           titleColor: const Color(0xFF004D40),
                           onTap: () async {
-                            final selected = await showModalBottomSheet<TutorialItem>(
+                            final selected =
+                            await showModalBottomSheet<TutorialItem>(
                               context: context,
                               isScrollControlled: true,
                               backgroundColor: Colors.transparent,
@@ -233,21 +234,20 @@ class HeadStubPage extends StatelessWidget {
                                 items: const [
                                   TutorialItem(
                                     title: '00.basic',
-                                    assetPath: 'assets/00.basic.pdf', // ⬅️ 사용 중인 에셋 경로
+                                    assetPath: 'assets/00.basic.pdf',
                                   ),
-                                  // 추후 확장: TutorialItem(title: '01.advanced', assetPath: 'assets/01.advanced.pdf'),
                                 ],
                               ),
                             );
 
                             if (selected != null) {
-                              // 바텀시트 닫힌 뒤 푸시
                               await TutorialPdfViewer.open(context, selected);
                             }
                           },
                         ),
 
-                        // ▼ 근무지 현황 (mgmt.Field로 이동)
+                        // ▼ 근무지 현황 (mgmt.Field)
+                        // ✅ 수정: 페이지 push → 92% 바텀시트로 통일
                         _ActionCard(
                           icon: Icons.map_rounded,
                           title: '근무지 현황',
@@ -257,11 +257,7 @@ class HeadStubPage extends StatelessWidget {
                           tintColor: hubLight,
                           titleColor: hubDark,
                           onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const mgmt.Field(),
-                              ),
-                            );
+                            mgmt.Field.showAsBottomSheet(context);
                           },
                         ),
 
@@ -321,7 +317,6 @@ class HeadStubPage extends StatelessWidget {
             ),
           ),
         ),
-        // ✅ 상호 이동 FAB 제거됨
       ),
     );
   }
@@ -383,7 +378,8 @@ class _HeaderBanner extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: on ? _dark.withOpacity(.12) : cs.surfaceVariant,
                       borderRadius: BorderRadius.circular(999),
@@ -406,15 +402,14 @@ class _HeaderBanner extends StatelessWidget {
                     onChanged: (v) async {
                       HeadHubActions.setEnabled(v);
                       if (v) {
-                        // 켜질 때 바로 부착 시도
                         await HeadHubActions.mountIfNeeded();
                       }
                       HapticFeedback.selectionClick();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(v
-                              ? '본사 허브 버블이 켜졌습니다.'
-                              : '본사 허브 버블이 꺼졌습니다.'),
+                          content: Text(
+                            v ? '본사 허브 버블이 켜졌습니다.' : '본사 허브 버블이 꺼졌습니다.',
+                          ),
                           behavior: SnackBarBehavior.floating,
                           duration: const Duration(milliseconds: 900),
                         ),
@@ -462,12 +457,10 @@ class _ActionCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          // ✅ 반드시 이름 있는 인자 사용
           padding: const EdgeInsets.all(12),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // 아이콘은 외곽 카드 탭에 제스처를 위임(스크린리더 중복 방지)
               Semantics(
                 button: true,
                 label: title,
@@ -521,7 +514,7 @@ class _ActionCard extends StatelessWidget {
 class TutorialItem {
   final String title;
   final String? assetPath; // 예: assets/00.basic.pdf
-  final String? filePath;  // 예: /storage/emulated/0/Download/00.basic.pdf
+  final String? filePath; // 예: /storage/emulated/0/Download/00.basic.pdf
 
   const TutorialItem({
     required this.title,
@@ -547,7 +540,8 @@ class TutorialPickerBottomSheet extends StatelessWidget {
           return Container(
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(16)),
               border: Border.all(color: cs.outlineVariant.withOpacity(.35)),
               boxShadow: [
                 BoxShadow(
@@ -570,7 +564,8 @@ class TutorialPickerBottomSheet extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 const ListTile(
-                  title: Text('튜토리얼', style: TextStyle(fontWeight: FontWeight.w800)),
+                  title:
+                  Text('튜토리얼', style: TextStyle(fontWeight: FontWeight.w800)),
                   subtitle: Text('읽을 항목을 선택하세요'),
                 ),
                 const Divider(height: 1),
@@ -581,7 +576,10 @@ class TutorialPickerBottomSheet extends StatelessWidget {
                       final item = items[i];
                       return ListTile(
                         leading: const Icon(Icons.picture_as_pdf_rounded),
-                        title: Text(item.title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                        title: Text(
+                          item.title,
+                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        ),
                         subtitle: Text(
                           item.assetPath != null ? '앱 에셋' : '로컬 파일',
                           style: TextStyle(color: cs.outline),
@@ -614,13 +612,11 @@ class TutorialPdfViewer extends StatefulWidget {
 
   /// 선택한 튜토리얼을 열기 위한 헬퍼
   static Future<void> open(BuildContext context, TutorialItem item) async {
-    // ✅ pdfx(2.9.x) 규격에 맞게 Future<PdfDocument>를 준비
     Future<PdfDocument> futureDoc;
 
     if (item.assetPath != null) {
       futureDoc = PdfDocument.openAsset(item.assetPath!);
     } else if (item.filePath != null) {
-      // 파일 경로가 실제 존재하는지 간단 체크
       if (!File(item.filePath!).existsSync()) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('PDF 파일을 찾을 수 없습니다.')),
@@ -635,11 +631,8 @@ class TutorialPdfViewer extends StatefulWidget {
       return;
     }
 
-    // ✅ Future<PdfDocument>를 그대로 주입
     final controller = PdfControllerPinch(document: futureDoc);
 
-    // 전체 화면으로 푸시
-    // (iOS/Android 공통, 뒤로가기 시 컨트롤러/문서 자동 정리)
     // ignore: use_build_context_synchronously
     await Navigator.of(context).push(
       MaterialPageRoute(
@@ -656,7 +649,6 @@ class TutorialPdfViewer extends StatefulWidget {
 class _TutorialPdfViewerState extends State<TutorialPdfViewer> {
   @override
   void dispose() {
-    // ✅ 메모리 정리
     widget.controller.dispose();
     super.dispose();
   }
@@ -671,7 +663,6 @@ class _TutorialPdfViewerState extends State<TutorialPdfViewer> {
           IconButton(
             tooltip: '첫 페이지',
             icon: const Icon(Icons.first_page_rounded),
-            // ✅ 위치 인자 사용 (이름있는 인자 ❌)
             onPressed: () => widget.controller.jumpToPage(1),
           ),
         ],

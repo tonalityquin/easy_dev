@@ -53,6 +53,16 @@ class CommuteLogRepository {
     }
   }
 
+  DateTime? _parseYmd(String s) {
+    final parts = s.split('-');
+    if (parts.length != 3) return null;
+    final y = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    final d = int.tryParse(parts[2]);
+    if (y == null || m == null || d == null) return null;
+    return DateTime(y, m, d);
+  }
+
   /// 해당 유저/상태/날짜에 이미 로그가 있는지 확인
   ///
   /// - true  → logs.{dateStr} 가 이미 존재
@@ -78,8 +88,6 @@ class CommuteLogRepository {
       }
       return false;
     } catch (e, st) {
-      // 여기서 에러난다고 해서 출근/퇴근 버튼 자체를 막고 싶지는 않으니
-      // 조용히 로그만 남기고 false(없다고 간주) 리턴 → addLog 쪽에서 새 로그 작성.
       try {
         await DebugDatabaseLogger().log(
           {
@@ -94,18 +102,13 @@ class CommuteLogRepository {
           tags: ['firestore', 'commute_user_logs', 'check_duplicate'],
         );
       } catch (_) {}
-
       return false;
     }
   }
 
   /// 유저 당 출근/휴게/퇴근 문서 1개에 날짜별 로그를 쌓는 메서드
   ///
-  /// - 컬렉션: commute_user_logs
-  /// - 문서 ID: "{userId}_clock_in" / "{userId}_break" / "{userId}_clock_out"
-  /// - logs.{dateStr} 에 해당 날짜의 로그 1건을 저장
-  ///
-  /// (중복 체크는 호출 측에서 hasLogForDate(...)로 선행하는 구조)
+  /// - logs.{dateStr} 에 해당 날짜의 로그 1건을 저장 (merge)
   Future<void> addLog({
     required String status,
     required String userId,
@@ -130,7 +133,7 @@ class CommuteLogRepository {
 
       await docRef.set(
         {
-          'userId': userId, // 문서 메타로 userId만 유지
+          'userId': userId,
           'logs': {
             dateStr: logEntry,
           },
@@ -138,8 +141,6 @@ class CommuteLogRepository {
         SetOptions(merge: true),
       );
     } catch (e, st) {
-      // Firestore 기록 실패는 "보조 기능"이므로
-      // 호출 측(출근/퇴근/휴게 업로더)에 예외를 다시 던지지 않고 여기서만 처리.
       try {
         await DebugDatabaseLogger().log(
           {
@@ -158,9 +159,126 @@ class CommuteLogRepository {
           level: 'error',
           tags: ['firestore', 'commute_user_logs', status],
         );
-      } catch (_) {
-        // 로거 실패는 완전히 무시
+      } catch (_) {}
+    }
+  }
+
+  /// (신규) 월 단위 조회: 특정 유저/상태 문서의 logs 중 year/month만 골라 day->HH:mm 반환
+  Future<Map<int, String>> getMonthlyTimes({
+    required String status,
+    required String userId,
+    required int year,
+    required int month,
+  }) async {
+    final docId = _buildDocId(userId: userId, status: status);
+    final docRef = _firestore.collection(_collectionName).doc(docId);
+
+    final snap = await docRef.get();
+    if (!snap.exists) return {};
+
+    final data = snap.data();
+    if (data == null) return {};
+
+    final logs = data['logs'];
+    if (logs is! Map) return {};
+
+    final result = <int, String>{};
+
+    for (final e in logs.entries) {
+      final dateStr = e.key.toString();
+      final dt = _parseYmd(dateStr);
+      if (dt == null) continue;
+      if (dt.year != year || dt.month != month) continue;
+
+      final entry = e.value;
+      if (entry is Map) {
+        final recordedTime = entry['recordedTime']?.toString() ?? '';
+        final t = recordedTime.trim();
+        if (t.isNotEmpty) {
+          result[dt.day] = t;
+        }
       }
     }
+
+    return result;
+  }
+
+  /// (신규) 배치 업서트: logs.{dateStr}들에 기록을 merge로 저장
+  ///
+  /// - dateToTime: key=yyyy-MM-dd, value=HH:mm
+  /// - time이 비어있으면 해당 날짜는 저장하지 않음(삭제는 deleteLogsForDates 사용)
+  Future<void> upsertLogsForDates({
+    required String status,
+    required String userId,
+    required String userName,
+    required String area,
+    required String division,
+    required Map<String, String> dateToTime,
+  }) async {
+    if (dateToTime.isEmpty) return;
+
+    final docId = _buildDocId(userId: userId, status: status);
+    final docRef = _firestore.collection(_collectionName).doc(docId);
+
+    final logsPayload = <String, dynamic>{};
+    dateToTime.forEach((dateStr, time) {
+      final t = time.trim();
+      if (t.isEmpty) return;
+
+      logsPayload[dateStr] = <String, dynamic>{
+        'userId': userId,
+        'userName': userName,
+        'date': dateStr,
+        'recordedTime': t,
+      };
+    });
+
+    if (logsPayload.isEmpty) return;
+
+    await docRef.set(
+      {
+        'userId': userId,
+        'logs': logsPayload,
+      },
+      SetOptions(merge: true),
+    );
+  }
+
+  /// (신규) 배치 삭제: logs.{dateStr} 키들을 FieldValue.delete로 제거 (merge set)
+  ///
+  /// - 문서가 없어도 set(merge)이므로 안전하게 처리되며,
+  ///   삭제 대상이 없어도 no-op에 가깝게 동작합니다.
+  Future<void> deleteLogsForDates({
+    required String status,
+    required String userId,
+    required Iterable<String> dateStrs,
+  }) async {
+    final dates = dateStrs.map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    if (dates.isEmpty) return;
+
+    final docId = _buildDocId(userId: userId, status: status);
+    final docRef = _firestore.collection(_collectionName).doc(docId);
+
+    final logsPayload = <String, dynamic>{};
+    for (final d in dates) {
+      logsPayload[d] = FieldValue.delete();
+    }
+
+    await docRef.set(
+      {
+        'userId': userId,
+        'logs': logsPayload,
+      },
+      SetOptions(merge: true),
+    );
+  }
+
+  /// (신규) 단일 삭제(필요 시)
+  Future<void> deleteLogForDate({
+    required String status,
+    required String userId,
+    required String dateStr,
+  }) async {
+    await deleteLogsForDates(status: status, userId: userId, dateStrs: [dateStr]);
   }
 }

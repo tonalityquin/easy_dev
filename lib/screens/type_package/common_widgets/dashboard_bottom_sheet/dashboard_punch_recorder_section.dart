@@ -10,17 +10,20 @@ import '../../../simple_package/utils/dialog/simple_duration_blocking_dialog.dar
 import '../../../simple_package/utils/simple_mode/simple_mode_attendance_repository.dart';
 import 'dashboard_punch_card_feedback.dart';
 
-/// Teal Palette (Simple 전용)
+import '../../../../../repositories/commute_true_false_repository.dart';
+
+/// Teal Palette (Dashboard 전용)
 class _Palette {
-  static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
-  static const light = Color(0xFF5472D3); // 톤 변형/보더
+  static const dark = Color(0xFF09367D);
+  static const light = Color(0xFF5472D3);
 }
 
 /// 약식 모드용 출퇴근 기록기 카드
-/// - 출근 / 휴게 / 퇴근 3개 펀칭
-/// - 기본은 오늘 날짜 기준이지만, 사용자가 날짜를 선택/수정할 수 있음
-/// - 헤더에 yyyy.MM · MM.dd 표시 → 날짜를 바꿔 과거 기록 수정 가능
-/// - 펀칭 시 **로컬 SQLite에만 기록** (commute_user_logs Firestore는 사용하지 않음)
+/// - 출근/휴게/퇴근 3개 펀칭
+/// - 로컬 SQLite 기록
+/// - 추가 정책:
+///   - 출근(workIn) 시에만 commute_true_false 에 "출근 시각(Timestamp)" 기록
+///   - 퇴근(workOut) 시 commute_true_false 는 무관 (절대 호출하지 않음)
 class DashboardInsidePunchRecorderSection extends StatefulWidget {
   const DashboardInsidePunchRecorderSection({
     super.key,
@@ -30,27 +33,29 @@ class DashboardInsidePunchRecorderSection extends StatefulWidget {
     required this.division,
   });
 
-  /// (현재는 Firestore를 쓰지 않지만, 메타 정보는 API 호환성을 위해 유지)
   final String userId;
   final String userName;
   final String area;
   final String division;
 
   @override
-  State<DashboardInsidePunchRecorderSection> createState() => _DashboardInsidePunchRecorderSectionState();
+  State<DashboardInsidePunchRecorderSection> createState() =>
+      _DashboardInsidePunchRecorderSectionState();
 }
 
-class _DashboardInsidePunchRecorderSectionState extends State<DashboardInsidePunchRecorderSection> {
-  // ✅ 선택된 기준 날짜 (기본: 오늘)
+class _DashboardInsidePunchRecorderSectionState
+    extends State<DashboardInsidePunchRecorderSection> {
   late DateTime _selectedDate;
 
-  String? _workInTime; // 예: 09:01 (DB용, 화면에는 노출하지 않음)
-  String? _breakTime; // 예: 12:30
-  String? _workOutTime; // 예: 18:05
+  String? _workInTime;
+  String? _breakTime;
+  String? _workOutTime;
   bool _loading = true;
 
-  bool get _hasWorkIn => _workInTime != null && _workInTime!.isNotEmpty;
+  final CommuteTrueFalseRepository _commuteTrueFalseRepo =
+  CommuteTrueFalseRepository();
 
+  bool get _hasWorkIn => _workInTime != null && _workInTime!.isNotEmpty;
   bool get _hasBreak => _breakTime != null && _breakTime!.isNotEmpty;
 
   @override
@@ -60,16 +65,16 @@ class _DashboardInsidePunchRecorderSectionState extends State<DashboardInsidePun
     _loadForDate(_selectedDate);
   }
 
-  /// ✅ 특정 날짜의 출근/휴게/퇴근 기록을 로드 (SQLite)
   Future<void> _loadForDate(DateTime date) async {
     setState(() {
       _loading = true;
     });
 
-    final events = await SimpleModeAttendanceRepository.instance.getEventsForDate(date);
+    final events =
+    await SimpleModeAttendanceRepository.instance.getEventsForDate(date);
 
     setState(() {
-      _selectedDate = date; // 최신 선택 날짜 동기화
+      _selectedDate = date;
       _workInTime = events[SimpleModeAttendanceType.workIn];
       _breakTime = events[SimpleModeAttendanceType.breakTime];
       _workOutTime = events[SimpleModeAttendanceType.workOut];
@@ -77,10 +82,8 @@ class _DashboardInsidePunchRecorderSectionState extends State<DashboardInsidePun
     });
   }
 
-  /// 날짜 선택 다이얼로그
   Future<void> _pickDate() async {
     final init = _selectedDate;
-    // 필요에 따라 first/lastDate 범위는 조정 가능
     final first = DateTime(init.year - 1, 1, 1);
     final last = DateTime(init.year + 1, 12, 31);
 
@@ -89,40 +92,52 @@ class _DashboardInsidePunchRecorderSectionState extends State<DashboardInsidePun
       initialDate: init,
       firstDate: first,
       lastDate: last,
-      builder: (context, child) {
-        // 필요 시 테마 커스터마이징
-        return child ?? const SizedBox.shrink();
-      },
+      builder: (context, child) => child ?? const SizedBox.shrink(),
     );
 
     if (picked == null) return;
-
-    // 새 날짜 기준으로 DB 조회
     await _loadForDate(picked);
   }
 
   void _showGuardSnack(String message) {
     final messenger = ScaffoldMessenger.maybeOf(context);
     messenger?.hideCurrentSnackBar();
-    messenger?.showSnackBar(
-      SnackBar(content: Text(message)),
+    messenger?.showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  /// ✅ 출근(workIn) 시에만 commute_true_false에 출근시각 기록
+  Future<void> _recordClockInAtToCommuteTrueFalse(DateTime clockInAt) async {
+    final company = widget.division.trim();
+    final area = widget.area.trim();
+    final workerName = widget.userName.trim();
+
+    if (company.isEmpty || area.isEmpty || workerName.isEmpty) {
+      debugPrint(
+        '[DashboardInsidePunchRecorder] commute_true_false(clockInAt) 업데이트 스킵 '
+            '(company="$company", area="$area", workerName="$workerName")',
+      );
+      return;
+    }
+
+    await _commuteTrueFalseRepo.setClockInAt(
+      company: company,
+      area: area,
+      workerName: workerName,
+      clockInAt: clockInAt,
     );
   }
 
-  /// ✅ 퇴근 후 앱 종료 플로우
   Future<void> _exitAppAfterClockOut(BuildContext context) async {
-    // 명시적 종료 플로우 시작 플래그
     AppExitFlag.beginExit();
 
     try {
       if (Platform.isAndroid) {
         bool running = false;
 
-        // 포그라운드 서비스가 돌아가고 있으면 먼저 중지
         try {
           running = await FlutterForegroundTask.isRunningService;
         } catch (_) {
-          // isRunningService가 예외를 던져도 치명적이진 않으므로 무시
+          running = false;
         }
 
         if (running) {
@@ -143,15 +158,12 @@ class _DashboardInsidePunchRecorderSectionState extends State<DashboardInsidePun
             }
           }
 
-          // 서비스 중지 브로드캐스트 약간의 딜레이
           await Future.delayed(const Duration(milliseconds: 150));
         }
       }
 
-      // 실제 앱 종료
       await SystemNavigator.pop();
     } catch (e) {
-      // 종료에 실패하면 플래그 롤백
       AppExitFlag.reset();
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -164,40 +176,33 @@ class _DashboardInsidePunchRecorderSectionState extends State<DashboardInsidePun
   Future<void> _punch(SimpleModeAttendanceType type) async {
     if (_loading) return;
 
-    // ✅ 순서 제약 1: 휴게 펀칭은 출근 후에만 가능
     if (type == SimpleModeAttendanceType.breakTime && !_hasWorkIn) {
       _showGuardSnack('먼저 출근을 펀칭한 뒤 휴게시간을 펀칭할 수 있습니다.');
       return;
     }
 
-    // ✅ 순서 제약 2: 퇴근 펀칭은 출근+휴게 펀칭 후에만 가능
     if (type == SimpleModeAttendanceType.workOut && (!_hasWorkIn || !_hasBreak)) {
       _showGuardSnack('출근과 휴게시간을 모두 펀칭한 뒤 퇴근을 펀칭할 수 있습니다.');
       return;
     }
 
-    // ✅ 출근 / 퇴근 시에는 먼저 duration blocking dialog 실행
-    if (type == SimpleModeAttendanceType.workIn || type == SimpleModeAttendanceType.workOut) {
+    if (type == SimpleModeAttendanceType.workIn ||
+        type == SimpleModeAttendanceType.workOut) {
       final isClockIn = type == SimpleModeAttendanceType.workIn;
 
       final proceed = await showSimpleDurationBlockingDialog(
         context,
-        message: isClockIn ? '출근을 펀칭하면 근무가 시작됩니다.\n약 5초 정도 소요됩니다.' : '퇴근을 펀칭하면 오늘 근무가 종료되고 앱이 종료됩니다.\n약 5초 정도 소요됩니다.',
+        message: isClockIn
+            ? '출근을 펀칭하면 근무가 시작됩니다.\n약 5초 정도 소요됩니다.'
+            : '퇴근을 펀칭하면 오늘 근무가 종료되고 앱이 종료됩니다.\n약 5초 정도 소요됩니다.',
         duration: const Duration(seconds: 5),
       );
 
-      // 사용자가 '취소'를 눌렀거나, dialog가 false를 반환하면 즉시 종료
-      if (!proceed) {
-        return;
-      }
+      if (!proceed) return;
     }
 
     final now = DateTime.now();
 
-    // ✅ "선택한 날짜" + "현재 시각"을 합쳐서 저장
-    //
-    // - 날짜 부분: _selectedDate (사용자가 고른 날짜)
-    // - 시간 부분: 버튼을 실제로 누른 현재 시각(now)
     final targetDateTime = DateTime(
       _selectedDate.year,
       _selectedDate.month,
@@ -209,23 +214,24 @@ class _DashboardInsidePunchRecorderSectionState extends State<DashboardInsidePun
       now.microsecond,
     );
 
-    // 1) ✅ SQLite에만 펀칭 기록 저장
     await SimpleModeAttendanceRepository.instance.insertEvent(
       dateTime: targetDateTime,
       type: type,
     );
 
-    // 2) 시각적/촉각 피드백 (출퇴근기록카드 피드백 시트)
     await showDashboardPunchCardFeedback(
       context,
       type: type,
       dateTime: targetDateTime,
     );
 
-    // 3) 현재 선택된 날짜의 카드 갱신 (SQLite 재조회)
+    // ✅ 출근(workIn)일 때만 Timestamp 기록
+    if (type == SimpleModeAttendanceType.workIn) {
+      await _recordClockInAtToCommuteTrueFalse(targetDateTime);
+    }
+
     await _loadForDate(_selectedDate);
 
-    // 4) 퇴근 펀칭인 경우 앱 종료 플로우 실행
     if (type == SimpleModeAttendanceType.workOut) {
       await _exitAppAfterClockOut(context);
     }
@@ -233,16 +239,13 @@ class _DashboardInsidePunchRecorderSectionState extends State<DashboardInsidePun
 
   @override
   Widget build(BuildContext context) {
-    // ✅ 화면 표시도 "선택된 날짜" 기준
-    final monthStr = DateFormat('yyyy.MM').format(_selectedDate); // 예: 2025.12
-    final dateStr = DateFormat('MM.dd').format(_selectedDate); // 예: 12.08
-
+    final monthStr = DateFormat('yyyy.MM').format(_selectedDate);
+    final dateStr = DateFormat('MM.dd').format(_selectedDate);
     final textTheme = Theme.of(context).textTheme;
 
-    // 🔒 슬롯별 활성화 여부 계산 (선택된 날짜의 데이터 기준)
-    final bool canPunchWorkIn = true; // 출근은 언제든지 가능
-    final bool canPunchBreak = _hasWorkIn; // 휴게는 출근 이후 가능
-    final bool canPunchWorkOut = _hasWorkIn && _hasBreak; // 퇴근은 출근+휴게 이후 가능
+    final bool canPunchWorkIn = true;
+    final bool canPunchBreak = _hasWorkIn;
+    final bool canPunchWorkOut = _hasWorkIn && _hasBreak;
 
     return Card(
       elevation: 2,
@@ -257,7 +260,6 @@ class _DashboardInsidePunchRecorderSectionState extends State<DashboardInsidePun
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 상단 타이틀 라인
             Row(
               children: [
                 Icon(
@@ -275,7 +277,6 @@ class _DashboardInsidePunchRecorderSectionState extends State<DashboardInsidePun
                   ),
                 ),
                 const Spacer(),
-                // ✅ 선택 날짜/월 표시 + 날짜 변경 버튼
                 InkWell(
                   borderRadius: BorderRadius.circular(999),
                   onTap: _pickDate,
@@ -309,7 +310,6 @@ class _DashboardInsidePunchRecorderSectionState extends State<DashboardInsidePun
             ),
             const SizedBox(height: 4),
             Text(
-              // ✅ "오늘" → "선택한 날짜"로 문구 변경
               '선택한 날짜($dateStr) 기준으로 출근 · 휴게 · 퇴근을 순서대로 펀칭하세요.',
               style: TextStyle(
                 fontSize: 11,
@@ -362,7 +362,8 @@ class _DashboardInsidePunchRecorderSectionState extends State<DashboardInsidePun
                             type: SimpleModeAttendanceType.breakTime,
                             time: _breakTime,
                             enabled: canPunchBreak,
-                            onTap: () => _punch(SimpleModeAttendanceType.breakTime),
+                            onTap: () =>
+                                _punch(SimpleModeAttendanceType.breakTime),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -397,13 +398,10 @@ class _DashboardInsidePunchRecorderSectionState extends State<DashboardInsidePun
   }
 }
 
-/// 개별 펀칭 슬롯(출근/휴게/퇴근)
-/// - 시간 값은 화면에 표시하지 않고, 펀칭 여부만 시각적으로 표현
-/// - enabled=false 이면 반투명 + 탭 비활성화 처리
 class _PunchSlot extends StatelessWidget {
   final String label;
   final SimpleModeAttendanceType type;
-  final String? time; // null/빈 값 여부만 사용 (펀칭 여부 판단용)
+  final String? time;
   final bool enabled;
   final VoidCallback onTap;
 
@@ -418,11 +416,11 @@ class _PunchSlot extends StatelessWidget {
   Color get _accent {
     switch (type) {
       case SimpleModeAttendanceType.workIn:
-        return const Color(0xFF09367D); // 출근
+        return const Color(0xFF09367D);
       case SimpleModeAttendanceType.breakTime:
-        return const Color(0xFFF2A93B); // 휴게
+        return const Color(0xFFF2A93B);
       case SimpleModeAttendanceType.workOut:
-        return const Color(0xFFEF6C53); // 퇴근
+        return const Color(0xFFEF6C53);
     }
   }
 
@@ -442,7 +440,9 @@ class _PunchSlot extends StatelessWidget {
     final textTheme = Theme.of(context).textTheme;
     final bool punched = time != null && time!.isNotEmpty;
 
-    final borderColor = punched ? _accent.withOpacity(0.9) : _Palette.light.withOpacity(enabled ? .7 : .35);
+    final borderColor = punched
+        ? _accent.withOpacity(0.9)
+        : _Palette.light.withOpacity(enabled ? .7 : .35);
 
     final bgColor = punched ? _accent.withOpacity(0.07) : Colors.white;
 
@@ -458,14 +458,15 @@ class _PunchSlot extends StatelessWidget {
       ),
       child: Column(
         children: [
-          // 상단: 라벨 + 아이콘
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
                 _icon,
                 size: 14,
-                color: enabled ? _accent.withOpacity(0.9) : _Palette.dark.withOpacity(0.3),
+                color: enabled
+                    ? _accent.withOpacity(0.9)
+                    : _Palette.dark.withOpacity(0.3),
               ),
               const SizedBox(width: 4),
               Text(
@@ -473,17 +474,20 @@ class _PunchSlot extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: enabled ? _accent.withOpacity(0.9) : _Palette.dark.withOpacity(0.3),
+                  color: enabled
+                      ? _accent.withOpacity(0.9)
+                      : _Palette.dark.withOpacity(0.3),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 6),
-          // 하단: 펀칭 여부 시각적 표시 (체크 아이콘 + 텍스트)
           Icon(
             punched ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
             size: 18,
-            color: punched ? _accent.withOpacity(0.95) : _Palette.light.withOpacity(enabled ? .9 : .4),
+            color: punched
+                ? _accent.withOpacity(0.95)
+                : _Palette.light.withOpacity(enabled ? .9 : .4),
           ),
           const SizedBox(height: 2),
           Text(

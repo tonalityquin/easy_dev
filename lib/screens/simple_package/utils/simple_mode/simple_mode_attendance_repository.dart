@@ -72,7 +72,8 @@ class SimpleModeAttendanceRepository {
     CommuteLogRepository? commuteLogRepository,
   }) : _commuteLogRepository = commuteLogRepository ?? CommuteLogRepository();
 
-  static final SimpleModeAttendanceRepository instance = SimpleModeAttendanceRepository._();
+  static final SimpleModeAttendanceRepository instance =
+  SimpleModeAttendanceRepository._();
 
   /// Firestore 로그용 레포지토리
   final CommuteLogRepository _commuteLogRepository;
@@ -84,6 +85,9 @@ class SimpleModeAttendanceRepository {
   final DateFormat _timeFormatter = DateFormat('HH:mm');
 
   static const String _breakTypeStart = 'start';
+
+  /// 내부 공용 DB 게터
+  Future<Database> get _database async => SimpleModeDb.instance.database;
 
   /// 버튼을 누른 시각을 그대로 한 줄 INSERT (로컬 SQLite 전용)
   ///
@@ -97,7 +101,7 @@ class SimpleModeAttendanceRepository {
     required DateTime dateTime,
     required SimpleModeAttendanceType type,
   }) async {
-    final db = await SimpleModeDb.instance.database;
+    final db = await _database;
 
     // 'yyyy-MM-dd'
     final date = _dateFormatter.format(dateTime);
@@ -141,9 +145,9 @@ class SimpleModeAttendanceRepository {
   ///
   /// 반환: { SimpleModeAttendanceType.workIn: '09:12', ... } 형식
   Future<Map<SimpleModeAttendanceType, String>> getEventsForDate(
-    DateTime dateTime,
-  ) async {
-    final db = await SimpleModeDb.instance.database;
+      DateTime dateTime,
+      ) async {
+    final db = await _database;
 
     final date = _dateFormatter.format(dateTime); // 'yyyy-MM-dd'
 
@@ -167,7 +171,8 @@ class SimpleModeAttendanceRepository {
         continue;
       }
 
-      if (maybeType == SimpleModeAttendanceType.workIn || maybeType == SimpleModeAttendanceType.workOut) {
+      if (maybeType == SimpleModeAttendanceType.workIn ||
+          maybeType == SimpleModeAttendanceType.workOut) {
         result[maybeType] = time;
       }
     }

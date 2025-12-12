@@ -267,8 +267,7 @@ Future<AttendanceTimeResult?> showAttendanceTimeSheet({
   final result = await showTimeEditSheet(
     context: context,
     date: date,
-    title:
-    '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
+    title: '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
     fields: [
       TimeFieldSpec(id: 'in', label: '출근 시간', initial: initialInTime),
       TimeFieldSpec(id: 'out', label: '퇴근 시간', initial: initialOutTime),
@@ -277,7 +276,6 @@ Future<AttendanceTimeResult?> showAttendanceTimeSheet({
           (m) {
         final a = m['in']!;
         final b = m['out']!;
-        // 문자열 비교는 '>'를 사용할 수 없으므로 compareTo 사용
         if (a.isNotEmpty && b.isNotEmpty && a.compareTo(b) > 0) {
           return '퇴근 시간이 출근 시간보다 빠를 수 없습니다.';
         }

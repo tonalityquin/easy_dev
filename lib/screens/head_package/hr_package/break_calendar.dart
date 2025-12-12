@@ -5,15 +5,13 @@ import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import 'utils/google_sheets_helper.dart';
 import '../../../states/head_quarter/calendar_selection_state.dart';
 import '../../../models/user_model.dart';
 import '../../../utils/snackbar_helper.dart';
-import '../../../utils/api/sheets_config.dart';
+import '../../../repositories/commute_log_repository.dart';
 import 'widgets/time_edit_sheet.dart';
-// import '../../../utils/usage_reporter.dart';
 
-/// 휴게(브레이크) 캘린더
+/// 휴게(브레이크) 캘린더 (Firestore 기반)
 /// - asBottomSheet=true: 아래에서 92% 높이로 올라오는 바텀시트 UI
 /// - [BreakCalendar.showAsBottomSheet] 헬퍼로 간편 호출
 class BreakCalendar extends StatefulWidget {
@@ -35,7 +33,7 @@ class BreakCalendar extends StatefulWidget {
         return Padding(
           padding: EdgeInsets.only(bottom: insets.bottom),
           child: const _BottomSheetFrame(
-            heightFactor: 1, // ✅ 진짜 바텀시트 느낌(전체 화면 X)
+            heightFactor: 1,
             child: BreakCalendar(asBottomSheet: true),
           ),
         );
@@ -49,10 +47,10 @@ class BreakCalendar extends StatefulWidget {
 
 class _BreakCalendarState extends State<BreakCalendar> {
   // ── Deep Blue Palette
-  static const _base = Color(0xFF0D47A1); // primary
-  static const _dark = Color(0xFF09367D); // emphasized
-  static const _light = Color(0xFF5472D3); // tone/border
-  static const _fg = Color(0xFFFFFFFF); // foreground
+  static const _base = Color(0xFF0D47A1);
+  static const _dark = Color(0xFF09367D);
+  static const _light = Color(0xFF5472D3);
+  static const _fg = Color(0xFFFFFFFF);
 
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
@@ -63,13 +61,17 @@ class _BreakCalendarState extends State<BreakCalendar> {
   final FocusNode _userInputFocus = FocusNode();
 
   Map<int, String> _breakTimeMap = {};
+  Map<int, String> _loadedBreakTimeMap = {};
+
+  final Set<String> _pendingDeleteBreakDates = <String>{};
+
   final Map<String, Map<int, String>> _breakTimeCache = {};
+  final Map<String, Map<int, String>> _breakLoadedCache = {};
 
   bool _isSearching = false;
 
-  String? _sheetId;
+  final CommuteLogRepository _repo = CommuteLogRepository();
 
-  // 안전한 스낵바 호출(빌드 이후에만)
   void _showFailedAfterBuild(String msg) {
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -84,7 +86,6 @@ class _BreakCalendarState extends State<BreakCalendar> {
 
     _userInputCtrl.addListener(() => setState(() {}));
 
-    // 이전 선택 사용자 복원
     final calendarState = context.read<CalendarSelectionState>();
     final presetUser = calendarState.selectedUser;
     if (presetUser != null) {
@@ -92,15 +93,9 @@ class _BreakCalendarState extends State<BreakCalendar> {
       final area = presetUser.selectedArea?.trim() ?? '';
       _userInputCtrl.text = area.isEmpty ? presetUser.phone : '${presetUser.phone}-$area';
 
-      // 시트 ID 로드 및 초기 데이터 로드는 첫 프레임 이후에
       WidgetsBinding.instance.addPostFrameCallback((_) async {
-        await _loadSheetId();
         if (!mounted) return;
         await _loadBreakTimes(presetUser);
-      });
-    } else {
-      WidgetsBinding.instance.addPostFrameCallback((_) async {
-        await _loadSheetId();
       });
     }
   }
@@ -112,100 +107,17 @@ class _BreakCalendarState extends State<BreakCalendar> {
     super.dispose();
   }
 
-  Future<void> _loadSheetId() async {
-    final id = await SheetsConfig.getCommuteSheetId();
-    if (!mounted) return;
-    setState(() => _sheetId = id);
-  }
-
-  Future<void> _openSetSheetIdSheet() async {
-    final current = await SheetsConfig.getCommuteSheetId();
-    final textCtrl = TextEditingController(text: current ?? '');
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.white,
-      builder: (ctx) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 1.0,
-          maxChildSize: 1.0,
-          minChildSize: 0.25,
-          builder: (ctx, scrollController) {
-            return SingleChildScrollView(
-              controller: scrollController,
-              child: Padding(
-                padding: EdgeInsets.only(
-                  left: 20,
-                  right: 20,
-                  top: 20,
-                  bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      '출근/퇴근/휴게 스프레드시트 ID 입력',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: textCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Google Sheets ID 또는 전체 URL',
-                        helperText: 'URL 전체를 붙여넣어도 ID만 자동 추출됩니다.',
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.url,
-                      textInputAction: TextInputAction.done,
-                    ),
-                    const SizedBox(height: 12),
-                    FilledButton.icon(
-                      icon: const Icon(Icons.save),
-                      style: FilledButton.styleFrom(
-                        backgroundColor: _base,
-                        foregroundColor: _fg,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      onPressed: () async {
-                        final raw = textCtrl.text.trim();
-                        if (raw.isEmpty) return;
-                        final id = SheetsConfig.extractSpreadsheetId(raw);
-                        await SheetsConfig.setCommuteSheetId(id);
-                        if (!mounted) return;
-                        setState(() {
-                          _sheetId = id;
-                          _breakTimeCache.clear();
-                          _breakTimeMap.clear();
-                        });
-                        Navigator.pop(context);
-                        showSuccessSnackbar(context, '시트 ID가 저장되었습니다.');
-                        if (_selectedUser != null) {
-                          _loadBreakTimes(_selectedUser!);
-                        }
-                      },
-                      label: const Text('저장'),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // 전체 지우기(초기화)
   void _clearAll() {
     setState(() {
       _selectedUser = null;
       _userInputCtrl.clear();
 
       _breakTimeMap.clear();
+      _loadedBreakTimeMap.clear();
+      _pendingDeleteBreakDates.clear();
+
       _breakTimeCache.clear();
+      _breakLoadedCache.clear();
 
       _selectedDay = null;
       _focusedDay = DateTime.now();
@@ -229,7 +141,6 @@ class _BreakCalendarState extends State<BreakCalendar> {
     final col = FirebaseFirestore.instance.collection('user_accounts');
 
     try {
-      // 1) 정확한 문서ID로 조회
       if (area != null && area.isNotEmpty) {
         final docId = '$phone-$area';
         final doc = await col.doc(docId).get();
@@ -238,7 +149,6 @@ class _BreakCalendarState extends State<BreakCalendar> {
         }
       }
 
-      // 2) phone으로 다건 조회
       final qs = await col.where('phone', isEqualTo: phone).limit(10).get();
 
       if (qs.docs.isEmpty) return null;
@@ -251,7 +161,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
       final picked = await showModalBottomSheet<UserModel>(
         context: context,
         isScrollControlled: true,
-        builder: (_) {
+        builder: (sheetCtx) {
           return SafeArea(
             child: Material(
               color: Colors.white,
@@ -262,16 +172,16 @@ class _BreakCalendarState extends State<BreakCalendar> {
                 itemBuilder: (_, i) {
                   final d = qs.docs[i];
                   final u = UserModel.fromMap(d.id, d.data());
-                  final area = u.selectedArea ?? '-';
+                  final a = u.selectedArea ?? '-';
                   return ListTile(
                     leading: CircleAvatar(
                       backgroundColor: _light,
                       foregroundColor: _fg,
                       child: const Icon(Icons.person),
                     ),
-                    title: Text('${u.name}  •  $area'),
+                    title: Text('${u.name}  •  $a'),
                     subtitle: Text(u.phone),
-                    onTap: () => Navigator.pop(context, u),
+                    onTap: () => Navigator.pop(sheetCtx, u),
                   );
                 },
                 separatorBuilder: (_, __) => const Divider(height: 1),
@@ -297,116 +207,157 @@ class _BreakCalendarState extends State<BreakCalendar> {
         return;
       }
       context.read<CalendarSelectionState>().setUser(user);
+
       setState(() {
         _selectedUser = user;
+
         _breakTimeMap.clear();
+        _loadedBreakTimeMap.clear();
+        _pendingDeleteBreakDates.clear();
 
         final area = user.selectedArea?.trim() ?? '';
         _userInputCtrl.text = area.isEmpty ? user.phone : '${user.phone}-$area';
       });
-      _loadBreakTimes(user);
+
+      await _loadBreakTimes(user);
       _userInputFocus.unfocus();
     } finally {
       if (mounted) setState(() => _isSearching = false);
     }
   }
 
-  Future<void> _loadBreakTimes(UserModel user) async {
-    if (_sheetId == null || _sheetId!.isEmpty) {
-      _showFailedAfterBuild('스프레드시트 ID가 설정되지 않았습니다. 우측 상단 버튼으로 설정해 주세요.');
-      return;
-    }
-
+  String _userIdOf(UserModel user) {
     final area = (user.selectedArea ?? '').trim();
-    final userId = '${user.phone}-$area';
-    final cacheKey = '$userId-${_focusedDay.year}-${_focusedDay.month}';
+    return '${user.phone}-$area';
+  }
+
+  String _cacheKey(String userId) => '$userId-${_focusedDay.year}-${_focusedDay.month}';
+
+  String _dateStr(int day) =>
+      '${_focusedDay.year}-${_focusedDay.month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}';
+
+  bool _mapEquals(Map<int, String> a, Map<int, String> b) {
+    if (a.length != b.length) return false;
+    for (final e in a.entries) {
+      if (b[e.key] != e.value) return false;
+    }
+    return true;
+  }
+
+  Future<void> _loadBreakTimes(UserModel user) async {
+    final userId = _userIdOf(user);
+    final cacheKey = _cacheKey(userId);
 
     if (_breakTimeCache.containsKey(cacheKey)) {
+      final map = {..._breakTimeCache[cacheKey]!};
+      final loaded = {...(_breakLoadedCache[cacheKey] ?? map)};
+
+      if (!mounted) return;
       setState(() {
-        _breakTimeMap = _breakTimeCache[cacheKey]!;
+        _breakTimeMap = map;
+        _loadedBreakTimeMap = loaded;
+        _pendingDeleteBreakDates.clear();
       });
       return;
     }
 
     try {
-      final allRows = await GoogleSheetsHelper.loadBreakRecordsById(_sheetId!);
-
-      final breakMap = GoogleSheetsHelper.mapToCellData(
-        allRows,
-        statusFilter: '휴게',
-        selectedYear: _focusedDay.year,
-        selectedMonth: _focusedDay.month,
+      final map = await _repo.getMonthlyTimes(
+        status: '휴게',
+        userId: userId,
+        year: _focusedDay.year,
+        month: _focusedDay.month,
       );
 
+      if (!mounted) return;
       setState(() {
-        _breakTimeMap = breakMap[userId] ?? {};
-        _breakTimeCache[cacheKey] = _breakTimeMap;
+        _breakTimeMap = {...map};
+        _loadedBreakTimeMap = {...map};
+        _pendingDeleteBreakDates.clear();
+
+        _breakTimeCache[cacheKey] = {...map};
+        _breakLoadedCache[cacheKey] = {...map};
       });
     } catch (e) {
-      _showFailedAfterBuild('휴게 기록 로드 실패: $e');
+      _showFailedAfterBuild('휴게 기록 로드 실패(Firestore): $e');
     }
   }
 
-  Future<void> _saveAllChangesToSheets() async {
+  Future<void> _saveAllChangesToFirestore() async {
     if (_selectedUser == null) return;
-    if (_sheetId == null || _sheetId!.isEmpty) {
-      _showFailedAfterBuild('스프레드시트 ID가 설정되지 않았습니다.');
+
+    final user = _selectedUser!;
+    final userId = _userIdOf(user);
+    final area = (user.selectedArea ?? '').trim();
+    final division = user.divisions.isNotEmpty ? user.divisions.first : '';
+
+    final changed =
+        !_mapEquals(_breakTimeMap, _loadedBreakTimeMap) || _pendingDeleteBreakDates.isNotEmpty;
+
+    if (!changed) {
+      showSelectedSnackbar(context, '변경된 내용이 없습니다.');
       return;
     }
 
-    final user = _selectedUser!;
-    final area = (user.selectedArea ?? '').trim();
-    final userId = '${user.phone}-$area';
-    final division = user.divisions.isNotEmpty ? user.divisions.first : '';
+    final payload = <String, String>{};
+    for (final e in _breakTimeMap.entries) {
+      final ds = _dateStr(e.key);
+      final t = e.value.trim();
+      if (t.isNotEmpty) payload[ds] = t;
+    }
 
     try {
-      // 변경된 모든 날짜를 BreakRow로 변환해 배치 업서트
-      final List<BreakRow> rows = _breakTimeMap.entries.map((entry) {
-        final date = DateTime(_focusedDay.year, _focusedDay.month, entry.key);
-        return BreakRow(
-          date: date,
+      if (payload.isNotEmpty) {
+        await _repo.upsertLogsForDates(
+          status: '휴게',
           userId: userId,
           userName: user.name,
           area: area,
           division: division,
-          time: entry.value,
+          dateToTime: payload,
         );
-      }).toList();
+      }
 
-      await GoogleSheetsHelper.upsertBreakBatchById(
-        spreadsheetId: _sheetId!,
-        rows: rows,
-      );
+      if (_pendingDeleteBreakDates.isNotEmpty) {
+        await _repo.deleteLogsForDates(
+          status: '휴게',
+          userId: userId,
+          dateStrs: _pendingDeleteBreakDates,
+        );
+      }
 
-      showSuccessSnackbar(context, 'Google Sheets에 저장 완료');
+      showSuccessSnackbar(context, 'Firestore에 저장 완료');
 
-      final cacheKey = '$userId-${_focusedDay.year}-${_focusedDay.month}';
-      _breakTimeCache[cacheKey] = {..._breakTimeMap};
+      final cacheKey = _cacheKey(userId);
+      setState(() {
+        _loadedBreakTimeMap = {..._breakTimeMap};
+        _pendingDeleteBreakDates.clear();
+
+        _breakTimeCache[cacheKey] = {..._breakTimeMap};
+        _breakLoadedCache[cacheKey] = {..._loadedBreakTimeMap};
+      });
     } catch (e) {
-      _showFailedAfterBuild('저장 실패: $e');
+      _showFailedAfterBuild('저장 실패(Firestore): $e');
     }
   }
 
-  // ── 가변 suffix 영역 폭(오버플로우 방지)
   double get _suffixWidth {
     final hasText = _userInputCtrl.text.isNotEmpty;
     final hasSpinner = _isSearching;
-    double w = 56; // 기본(아이콘 1개)
-    if (hasText) w += 36; // 지우기 버튼
+    double w = 56;
+    if (hasText) w += 36;
     if (hasSpinner) {
-      w += 28; // 스피너 여유
+      w += 28;
     } else {
-      w += 36; // 검색 버튼
+      w += 36;
     }
     return w.clamp(56, 160).toDouble();
   }
 
   @override
   Widget build(BuildContext context) {
-    // 공통 본문(페이지/시트 공용)
     final body = CustomScrollView(
       slivers: [
-        // Legend (Wrap)
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
@@ -414,7 +365,6 @@ class _BreakCalendarState extends State<BreakCalendar> {
           ),
         ),
 
-        // User Picker
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -433,28 +383,26 @@ class _BreakCalendarState extends State<BreakCalendar> {
           ),
         ),
 
-        // Month Selector
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
             child: _MonthSelector(
               focusedDay: _focusedDay,
-              onPrev: () {
+              onPrev: () async {
                 final prev = DateTime(_focusedDay.year, _focusedDay.month - 1, 1);
                 setState(() => _focusedDay = prev);
-                if (_selectedUser != null) _loadBreakTimes(_selectedUser!);
+                if (_selectedUser != null) await _loadBreakTimes(_selectedUser!);
               },
-              onNext: () {
+              onNext: () async {
                 final next = DateTime(_focusedDay.year, _focusedDay.month + 1, 1);
                 setState(() => _focusedDay = next);
-                if (_selectedUser != null) _loadBreakTimes(_selectedUser!);
+                if (_selectedUser != null) await _loadBreakTimes(_selectedUser!);
               },
               color: _base,
             ),
           ),
         ),
 
-        // Calendar
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -469,7 +417,6 @@ class _BreakCalendarState extends State<BreakCalendar> {
                   lastDay: DateTime.utc(2025, 12, 31),
                   focusedDay: _focusedDay,
                   rowHeight: 84,
-                  // 가독성 향상
                   selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
                   onDaySelected: (selectedDay, focusedDay) async {
                     setState(() {
@@ -533,23 +480,20 @@ class _BreakCalendarState extends State<BreakCalendar> {
           ),
         ),
 
-        // FAB와 겹치지 않도록 바닥 여백
         const SliverToBoxAdapter(child: SizedBox(height: 96)),
       ],
     );
 
-    // 저장 FAB (공용 위젯)
     final fab = _selectedUser == null
         ? null
         : FloatingActionButton.extended(
-      onPressed: _saveAllChangesToSheets,
+      onPressed: _saveAllChangesToFirestore,
       backgroundColor: _base,
       foregroundColor: _fg,
       icon: const Icon(Icons.save_rounded),
       label: const Text('변경사항 저장'),
     );
 
-    // ===== 페이지 모드 =====
     if (!widget.asBottomSheet) {
       return Scaffold(
         backgroundColor: Colors.white,
@@ -567,11 +511,6 @@ class _BreakCalendarState extends State<BreakCalendar> {
               icon: const Icon(Icons.delete_sweep),
               onPressed: _clearAll,
             ),
-            IconButton(
-              tooltip: '시트 ID 설정',
-              icon: const Icon(Icons.assignment_add),
-              onPressed: _openSetSheetIdSheet,
-            ),
           ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1),
@@ -584,7 +523,6 @@ class _BreakCalendarState extends State<BreakCalendar> {
       );
     }
 
-    // ===== 바텀시트 모드(92%) =====
     return _SheetScaffold(
       title: '휴식 캘린더',
       onClose: () => Navigator.of(context).maybePop(),
@@ -595,13 +533,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
           icon: const Icon(Icons.delete_sweep),
           onPressed: _clearAll,
         ),
-        IconButton(
-          tooltip: '시트 ID 설정',
-          icon: const Icon(Icons.assignment_add),
-          onPressed: _openSetSheetIdSheet,
-        ),
       ],
-      // FAB를 시트 하단 우측에 띄우기
       fab: fab,
       fabAlignment: Alignment.bottomRight,
       fabLift: 20,
@@ -609,10 +541,10 @@ class _BreakCalendarState extends State<BreakCalendar> {
     );
   }
 
-  // Calendar Cell (숫자만, 가변 폰트/간격, 오버플로우 방지)
   Widget _buildCell(BuildContext context, DateTime day, DateTime focusedDay) {
     final isSelected = isSameDay(day, _selectedDay);
     final isToday = isSameDay(day, DateTime.now());
+
     final breakTime = _breakTimeMap[day.day] ?? '';
     final hasBreak = breakTime.isNotEmpty;
 
@@ -622,12 +554,11 @@ class _BreakCalendarState extends State<BreakCalendar> {
       builder: (context, c) {
         final baseSide = c.maxWidth < c.maxHeight ? c.maxWidth : c.maxHeight;
 
-        // 셀 크기에 따른 가변 값
-        final dayFs = (baseSide * 0.40).clamp(14.0, 22.0); // 날짜 숫자
-        final timeFs = (baseSide * 0.34).clamp(12.0, 18.0); // 휴게 시간
-        final smallFs = (baseSide * 0.26).clamp(10.0, 16.0); // 대시
-        final vGap = (baseSide * 0.10).clamp(2.0, 8.0); // 간격
-        final dot = (baseSide * 0.13).clamp(6.0, 10.0); // 상태 점
+        final dayFs = (baseSide * 0.40).clamp(14.0, 22.0);
+        final timeFs = (baseSide * 0.34).clamp(12.0, 18.0);
+        final smallFs = (baseSide * 0.26).clamp(10.0, 16.0);
+        final vGap = (baseSide * 0.10).clamp(2.0, 8.0);
+        final dot = (baseSide * 0.13).clamp(6.0, 10.0);
 
         return Container(
           margin: const EdgeInsets.all(4),
@@ -646,7 +577,6 @@ class _BreakCalendarState extends State<BreakCalendar> {
             padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
             child: Stack(
               children: [
-                // 상태 점 (우상단)
                 Positioned(
                   right: 0,
                   top: 0,
@@ -661,14 +591,12 @@ class _BreakCalendarState extends State<BreakCalendar> {
                   ),
                 ),
 
-                // 본문 (FittedBox로 축소 허용)
                 Center(
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // 날짜
                         Text(
                           '${day.day}',
                           maxLines: 1,
@@ -683,7 +611,6 @@ class _BreakCalendarState extends State<BreakCalendar> {
                         ),
                         SizedBox(height: vGap),
 
-                        // 휴게 시간 (숫자만)
                         hasBreak
                             ? Text(
                           breakTime,
@@ -698,13 +625,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
                             letterSpacing: .2,
                           ),
                         )
-                            : Text(
-                          '—',
-                          style: TextStyle(
-                            fontSize: smallFs,
-                            color: Colors.black38,
-                          ),
-                        ),
+                            : Text('—', style: TextStyle(fontSize: smallFs, color: Colors.black38)),
                       ],
                     ),
                   ),
@@ -728,14 +649,22 @@ class _BreakCalendarState extends State<BreakCalendar> {
     );
     if (newTime == null) return;
 
+    final dateStr = _dateStr(dayKey);
+    final t = newTime.trim();
+
     setState(() {
-      _breakTimeMap[dayKey] = newTime;
+      if (t.isEmpty || t == '00:00') {
+        _breakTimeMap.remove(dayKey);
+        _pendingDeleteBreakDates.add(dateStr);
+      } else {
+        _breakTimeMap[dayKey] = t;
+        _pendingDeleteBreakDates.remove(dateStr);
+      }
     });
   }
 }
 
 /// ===== 가변 높이 바텀시트 프레임 =====
-/// - heightFactor(기본 0.92)로 “바텀시트” 느낌 유지
 class _BottomSheetFrame extends StatelessWidget {
   const _BottomSheetFrame({
     required this.child,
@@ -751,7 +680,7 @@ class _BottomSheetFrame extends StatelessWidget {
       heightFactor: heightFactor,
       widthFactor: 1.0,
       child: SafeArea(
-        top: false, // ⬅️ 상단은 살짝 아래서 시작해야 시트 느낌
+        top: false,
         bottom: true,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -765,7 +694,7 @@ class _BottomSheetFrame extends StatelessWidget {
               ),
             ]),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(16), // ⬅️ 고정 라운드
+              borderRadius: BorderRadius.circular(16),
               child: Material(
                 color: Colors.white,
                 child: child,
@@ -779,8 +708,6 @@ class _BottomSheetFrame extends StatelessWidget {
 }
 
 /// ===== 바텀시트 전용 스캐폴드 =====
-/// - AppBar 대체(핸들 + 타이틀 + 닫기 버튼 + 우측 액션)
-/// - body + (선택) FAB를 하단에 띄울 수 있음
 class _SheetScaffold extends StatelessWidget {
   const _SheetScaffold({
     required this.title,
@@ -798,7 +725,6 @@ class _SheetScaffold extends StatelessWidget {
   final List<Widget>? trailingActions;
   final Widget body;
 
-  // FAB 옵션(선택)
   final Widget? fab;
   final Alignment fabAlignment;
   final double fabLift;
@@ -808,11 +734,9 @@ class _SheetScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // 본문
         Column(
           children: [
             const SizedBox(height: 8),
-            // 상단 핸들
             Container(
               width: 36,
               height: 4,
@@ -822,14 +746,10 @@ class _SheetScaffold extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            // 헤더(타이틀/닫기/액션)
             ListTile(
               dense: true,
               contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-              title: Text(
-                title,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
+              title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -843,13 +763,10 @@ class _SheetScaffold extends StatelessWidget {
               ),
             ),
             const Divider(height: 1),
-            // 본문 스크롤
             Expanded(child: body),
-            const SizedBox(height: 64), // FAB 공간 확보
+            const SizedBox(height: 64),
           ],
         ),
-
-        // FAB (선택)
         if (fab != null)
           Positioned.fill(
             child: IgnorePointer(
@@ -871,7 +788,7 @@ class _SheetScaffold extends StatelessWidget {
   }
 }
 
-/// Legend (휴게 전용, Wrap으로 오버플로우 방지)
+/// Legend (휴게 전용)
 class _LegendRowBreak extends StatelessWidget {
   const _LegendRowBreak({required this.base, required this.light});
 
@@ -988,7 +905,6 @@ class _UserPickerCard extends StatelessWidget {
                   borderSide: BorderSide(color: paletteBase, width: 1.6),
                 ),
                 prefixIcon: const Icon(Icons.person_search),
-                // suffixIcon 대신 suffix + ConstrainedBox (폭 유연)
                 suffix: ConstrainedBox(
                   constraints: BoxConstraints(minWidth: 56, maxWidth: suffixWidth),
                   child: Row(
@@ -1080,7 +996,6 @@ class _SelectedUserRow extends StatelessWidget {
           ),
           const SizedBox(width: 12),
 
-          // 칩들을 '가로 스크롤 한 줄'로
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -1133,7 +1048,6 @@ class _SelectedUserRow extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: fg.withOpacity(.85)),
           const SizedBox(width: 6),
-          // 한 줄 고정
           Text(
             label,
             softWrap: false,

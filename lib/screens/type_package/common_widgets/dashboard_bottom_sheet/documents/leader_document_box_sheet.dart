@@ -7,8 +7,6 @@ import 'package:intl/intl.dart';
 import '../../../../../../states/user/user_state.dart';
 import '../../../../../../states/area/area_state.dart';
 
-
-
 import '../../../../../repositories/commute_log_repository.dart';
 import '../../../../dev_package/debug_package/debug_database_logger.dart';
 import '../../../../simple_package/utils/dialog/simple_duration_blocking_dialog.dart';
@@ -111,7 +109,7 @@ class _LeaderDocumentBoxSheet extends StatelessWidget {
                                         onTap: () async {
                                           switch (item.type) {
                                             case DocumentType.statementForm:
-                                            // ✅ statementForm 안에서 id 기준 분기
+                                              // ✅ statementForm 안에서 id 기준 분기
                                               if (item.id == 'template-commute-record') {
                                                 // 출퇴근 기록 제출
                                                 final proceed = await showSimpleDurationBlockingDialog(
@@ -148,39 +146,35 @@ class _LeaderDocumentBoxSheet extends StatelessWidget {
                                             case DocumentType.handoverForm:
                                               Navigator.of(context).push(
                                                 MaterialPageRoute(
-                                                  builder: (_) =>
-                                                  const ParkingHandoverSharePage(),
+                                                  builder: (_) => const ParkingHandoverSharePage(),
                                                   fullscreenDialog: true,
                                                 ),
                                               );
                                               break;
 
                                             case DocumentType.workEndReportForm:
-                                            // ✅ 업무 종료/퇴근 보고 양식 → DashboardEndReportFormPage
+                                              // ✅ 업무 종료/퇴근 보고 양식 → DashboardEndReportFormPage
                                               Navigator.of(context).push(
                                                 MaterialPageRoute(
-                                                  builder: (_) =>
-                                                  const DashboardEndReportFormPage(),
+                                                  builder: (_) => const DashboardEndReportFormPage(),
                                                   fullscreenDialog: true,
                                                 ),
                                               );
                                               break;
 
                                             case DocumentType.workStartReportForm:
-                                            // ✅ 업무 시작 보고 양식 → DashboardStartReportFormPage
+                                              // ✅ 업무 시작 보고 양식 → DashboardStartReportFormPage
                                               Navigator.of(context).push(
                                                 MaterialPageRoute(
-                                                  builder: (_) =>
-                                                  const DashboardStartReportFormPage(),
+                                                  builder: (_) => const DashboardStartReportFormPage(),
                                                   fullscreenDialog: true,
                                                 ),
                                               );
                                               break;
 
                                             case DocumentType.generic:
-                                            // ✅ generic 문서 중 연차(결근) 지원 신청서 연결
-                                              if (item.id ==
-                                                  'template-annual-leave-application') {
+                                              // ✅ generic 문서 중 연차(결근) 지원 신청서 연결
+                                              if (item.id == 'template-annual-leave-application') {
                                                 Navigator.of(context).push(
                                                   MaterialPageRoute(
                                                     builder: (_) => const BackupFormPage(),
@@ -250,7 +244,7 @@ class _BinderSpine extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: List.generate(
           5,
-              (index) => Padding(
+          (index) => Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Container(
               width: 10,
@@ -645,7 +639,7 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
       const SnackBar(
         content: Text(
           '출퇴근 기록 제출 실패: 사용자/근무지 정보가 비어 있습니다.\n'
-              '관리자에게 계정 및 근무지 설정을 확인해 달라고 요청해 주세요.',
+          '관리자에게 계정 및 근무지 설정을 확인해 달라고 요청해 주세요.',
         ),
       ),
     );
@@ -713,7 +707,7 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
       SnackBar(
         content: Text(
           '출퇴근 기록 제출 완료: $successCount건 업로드, '
-              '중복 $skippedCount건은 건너뛰었습니다.',
+          '중복 $skippedCount건은 건너뛰었습니다.',
         ),
       ),
     );
@@ -737,7 +731,7 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
       const SnackBar(
         content: Text(
           '출퇴근 기록 제출 중 오류가 발생했습니다.\n'
-              '네트워크 또는 Firebase 설정을 확인해 주세요.',
+          '네트워크 또는 Firebase 설정을 확인해 주세요.',
         ),
       ),
     );
@@ -763,7 +757,7 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
       const SnackBar(
         content: Text(
           '휴게시간 기록 제출 실패: 사용자/근무지 정보가 비어 있습니다.\n'
-              '관리자에게 계정 및 근무지 설정을 확인해 달라고 요청해 주세요.',
+          '관리자에게 계정 및 근무지 설정을 확인해 달라고 요청해 주세요.',
         ),
       ),
     );
@@ -828,7 +822,7 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
       SnackBar(
         content: Text(
           '휴게시간 기록 제출 완료: $successCount건 업로드, '
-              '중복 $skippedCount건은 건너뛰었습니다.',
+          '중복 $skippedCount건은 건너뛰었습니다.',
         ),
       ),
     );
@@ -852,7 +846,7 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
       const SnackBar(
         content: Text(
           '휴게시간 기록 제출 중 오류가 발생했습니다.\n'
-              '네트워크 또는 Firebase 설정을 확인해 주세요.',
+          '네트워크 또는 Firebase 설정을 확인해 주세요.',
         ),
       ),
     );
@@ -954,7 +948,7 @@ String _typeLabelForType(DocumentType type) {
     case DocumentType.workStartReportForm:
       return '업무 시작 보고';
     case DocumentType.workEndReportForm:
-    // 기본값(위에서 id별로 override 가능)
+      // 기본값(위에서 id별로 override 가능)
       return '퇴근/업무 종료';
     case DocumentType.handoverForm:
       return '업무 인수인계';

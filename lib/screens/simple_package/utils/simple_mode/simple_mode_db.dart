@@ -16,7 +16,10 @@ class SimpleModeDb {
   Database? _db;
 
   Future<Database> get database async {
-    if (_db != null) return _db!;
+    // 이미 열려 있고 유효하면 그대로 사용
+    if (_db != null && _db!.isOpen) {
+      return _db!;
+    }
 
     final dbPath = await getDatabasesPath();
     final fullPath = p.join(dbPath, _dbName);
@@ -65,6 +68,14 @@ class SimpleModeDb {
     if (oldVersion < 4) {
       await _migrateV4_addTypeToBreakAttendance(db);
     }
+  }
+
+  /// 필요 시 외부에서 DB를 명시적으로 닫고 싶을 때 사용할 수 있는 헬퍼
+  Future<void> close() async {
+    if (_db != null && _db!.isOpen) {
+      await _db!.close();
+    }
+    _db = null;
   }
 
   /// v2 마이그레이션:
