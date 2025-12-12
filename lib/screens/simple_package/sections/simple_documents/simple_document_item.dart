@@ -1,13 +1,5 @@
 import 'package:flutter/foundation.dart';
 
-/// 문서 유형
-///
-/// - [statementForm]
-///   - 경위서, 출퇴근 기록, 휴게시간 기록 등 "진술/사유서" 계열 문서
-/// - [generic]
-///   - 연차(결근) 신청서, 사직서 등 일반 신청/기타 문서
-/// - [workStartReportForm], [workEndReportForm], [handoverForm]
-///   - 기존 서비스 모드에서 사용하던 업무 시작/종료/인수인계 양식용 타입
 enum SimpleDocumentType {
   generic,
   statementForm,

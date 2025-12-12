@@ -3,10 +3,18 @@
 import 'package:flutter/material.dart';
 
 /// 경위서 화면 전용 컬러 팔레트
+/// DocumentType.statementForm 의 기본 색상(0xFF8D6E63)을 기준으로 구성
 class BackupColors {
-  static const Color base = Color(0xFF00897B); // primary
-  static const Color dark = Color(0xFF00695C); // 강조 텍스트/아이콘
-  static const Color light = Color(0xFF80CBC4); // 톤 변형/보더
+  /// 기본 브라운 (statementForm 기준 색)
+  static const Color base = Color(0xFF8D6E63); // primary
+
+  /// base 보다 어두운 브라운 (강조 텍스트/아이콘)
+  static const Color dark = Color(0xFF6D4C41); // 강조 텍스트/아이콘
+
+  /// base 를 옅게 사용한 톤 (보더/톤 변형)
+  static const Color light = Color(0xFFD7CCC8); // 톤 변형/보더
+
+  /// 전경(아이콘/텍스트)
   static const Color fg = Color(0xFFFFFFFF); // 전경(아이콘/텍스트)
 }
 
@@ -31,7 +39,8 @@ class BackupButtonStyles {
       elevation: 0,
     ).copyWith(
       overlayColor: MaterialStateProperty.resolveWith<Color?>(
-            (states) => states.contains(MaterialState.pressed) ? BackupColors.dark.withOpacity(.10) : null,
+            (states) =>
+        states.contains(MaterialState.pressed) ? BackupColors.dark.withOpacity(.10) : null,
       ),
     );
   }
@@ -51,7 +60,8 @@ class BackupButtonStyles {
       ),
     ).copyWith(
       overlayColor: MaterialStateProperty.resolveWith<Color?>(
-            (states) => states.contains(MaterialState.pressed) ? BackupColors.light.withOpacity(.16) : null,
+            (states) =>
+        states.contains(MaterialState.pressed) ? BackupColors.light.withOpacity(.16) : null,
       ),
     );
   }

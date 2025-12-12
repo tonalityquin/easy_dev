@@ -6,23 +6,23 @@ import 'package:intl/intl.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../../../utils/app_exit_flag.dart';
-import '../../utils/dialog/simple_duration_blocking_dialog.dart';
-import '../../utils/simple_mode/simple_mode_attendance_repository.dart';
-import 'simple_punch_card_feedback.dart';
+import '../../../simple_package/utils/dialog/simple_duration_blocking_dialog.dart';
+import '../../../simple_package/utils/simple_mode/simple_mode_attendance_repository.dart';
+import 'dashboard_punch_card_feedback.dart';
 
 /// Teal Palette (Simple 전용)
 class _Palette {
-  static const Color dark = Color(0xFF00695C); // 강조 텍스트/아이콘
-  static const Color light = Color(0xFF80CBC4); // 톤 변형/보더
+  static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
+  static const light = Color(0xFF5472D3); // 톤 변형/보더
 }
 
-/// 대시보드 모드용 출퇴근 기록기 카드
+/// 약식 모드용 출퇴근 기록기 카드
 /// - 출근 / 휴게 / 퇴근 3개 펀칭
 /// - 기본은 오늘 날짜 기준이지만, 사용자가 날짜를 선택/수정할 수 있음
 /// - 헤더에 yyyy.MM · MM.dd 표시 → 날짜를 바꿔 과거 기록 수정 가능
 /// - 펀칭 시 **로컬 SQLite에만 기록** (commute_user_logs Firestore는 사용하지 않음)
-class SimpleInsidePunchRecorderSection extends StatefulWidget {
-  const SimpleInsidePunchRecorderSection({
+class DashboardInsidePunchRecorderSection extends StatefulWidget {
+  const DashboardInsidePunchRecorderSection({
     super.key,
     required this.userId,
     required this.userName,
@@ -37,10 +37,10 @@ class SimpleInsidePunchRecorderSection extends StatefulWidget {
   final String division;
 
   @override
-  State<SimpleInsidePunchRecorderSection> createState() => _SimpleInsidePunchRecorderSectionState();
+  State<DashboardInsidePunchRecorderSection> createState() => _DashboardInsidePunchRecorderSectionState();
 }
 
-class _SimpleInsidePunchRecorderSectionState extends State<SimpleInsidePunchRecorderSection> {
+class _DashboardInsidePunchRecorderSectionState extends State<DashboardInsidePunchRecorderSection> {
   // ✅ 선택된 기준 날짜 (기본: 오늘)
   late DateTime _selectedDate;
 
@@ -216,7 +216,7 @@ class _SimpleInsidePunchRecorderSectionState extends State<SimpleInsidePunchReco
     );
 
     // 2) 시각적/촉각 피드백 (출퇴근기록카드 피드백 시트)
-    await showSimplePunchCardFeedback(
+    await showDashboardPunchCardFeedback(
       context,
       type: type,
       dateTime: targetDateTime,
@@ -418,7 +418,7 @@ class _PunchSlot extends StatelessWidget {
   Color get _accent {
     switch (type) {
       case SimpleModeAttendanceType.workIn:
-        return const Color(0xFF4F9A94); // 출근
+        return const Color(0xFF09367D); // 출근
       case SimpleModeAttendanceType.breakTime:
         return const Color(0xFFF2A93B); // 휴게
       case SimpleModeAttendanceType.workOut:

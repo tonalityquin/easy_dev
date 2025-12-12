@@ -4,10 +4,10 @@ import 'dart:async';
 import '../../../../../../states/user/user_state.dart';
 import 'document_item.dart';
 
-class DocumentInventoryRepository {
-  DocumentInventoryRepository._();
+class LeaderDocumentInventoryRepository {
+  LeaderDocumentInventoryRepository._();
 
-  static final instance = DocumentInventoryRepository._();
+  static final instance = LeaderDocumentInventoryRepository._();
 
   Stream<List<DocumentItem>> streamForUser(UserState userState) async* {
     yield _buildInitialItems();
@@ -31,6 +31,25 @@ class DocumentInventoryRepository {
         updatedAt: now,
         type: DocumentType.workEndReportForm,
       ),
+      // 2) 출퇴근 기록 제출
+      DocumentItem(
+        id: 'template-commute-record',
+        title: '출퇴근 기록 제출',
+        subtitle: '지각 · 조퇴 · 결근 등 출퇴근 관련 사유 보고',
+        updatedAt: now,
+        // 기존 경위서와 동일한 statementForm 타입을 사용하고,
+        // id로 세부 종류를 구분합니다.
+        type: DocumentType.statementForm,
+      ),
+
+      // 3) 휴게시간 기록 제출
+      DocumentItem(
+        id: 'template-resttime-record',
+        title: '휴게시간 기록 제출',
+        subtitle: '휴게시간 미사용 · 지연 · 초과 사용 등 휴게시간 관련 보고',
+        updatedAt: now,
+        type: DocumentType.statementForm,
+      ),
       DocumentItem(
         id: 'template-handover',
         title: '업무 인수인계 양식',
@@ -49,13 +68,6 @@ class DocumentInventoryRepository {
         id: 'template-annual-leave-application',
         title: '연차(결근) 지원 신청서',
         subtitle: '연차/결근 사유 및 일정 정리',
-        updatedAt: now,
-        type: DocumentType.generic,
-      ),
-      DocumentItem(
-        id: 'template-resignation-letter',
-        title: '사직서',
-        subtitle: '퇴사 사유 및 일자 작성',
         updatedAt: now,
         type: DocumentType.generic,
       ),

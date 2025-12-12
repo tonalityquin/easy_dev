@@ -14,8 +14,7 @@ import 'home_dash_board_controller.dart';
 import 'widgets/home_user_info_card.dart';
 import 'widgets/home_break_button_widget.dart';
 
-import 'documents/document_box_sheet.dart';
-
+import 'documents/leader_document_box_sheet.dart';
 class HqDashBoardPage extends StatefulWidget {
   const HqDashBoardPage({super.key});
 
@@ -168,7 +167,7 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
                           icon: const Icon(Icons.folder_open),
                           label: const Text('서류함 열기'),
                           style: _docBoxBtnStyle(),
-                          onPressed: () => openDocumentBox(context),
+                          onPressed: () => openLeaderDocumentBox(context),
                         ),
                       ),
                     ],
