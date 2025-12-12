@@ -105,7 +105,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
         if (mounted && data != null) {
           final fetchedStatus = data['customStatus'] as String?;
-          final fetchedList = (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+          final fetchedList =
+              (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
 
           final String? fetchedCountType = (data['countType'] as String?)?.trim();
 
@@ -191,16 +192,52 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   // 허용 한글 가운데 글자(국내 번호판)
   static const List<String> _allowedKoreanMids = [
-    '가','나','다','라','마','거','너','더','러','머','버','서','어','저',
-    '고','노','도','로','모','보','소','오','조','구','누','두','루','무','부','수','우','주',
-    '하','허','호','배'
+    '가',
+    '나',
+    '다',
+    '라',
+    '마',
+    '거',
+    '너',
+    '더',
+    '러',
+    '머',
+    '버',
+    '서',
+    '어',
+    '저',
+    '고',
+    '노',
+    '도',
+    '로',
+    '모',
+    '보',
+    '소',
+    '오',
+    '조',
+    '구',
+    '누',
+    '두',
+    '루',
+    '무',
+    '부',
+    '수',
+    '우',
+    '주',
+    '하',
+    '허',
+    '호',
+    '배'
   ];
 
   // 흔한 OCR 혼동 치환
   static const Map<String, String> _charMap = {
-    'O': '0', 'o': '0',
-    'I': '1', 'l': '1',
-    'B': '8', 'S': '5',
+    'O': '0',
+    'o': '0',
+    'I': '1',
+    'l': '1',
+    'B': '8',
+    'S': '5',
   };
 
   // 가운데 보정(리→러 등)
@@ -304,7 +341,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     setState(() {
       controller.setFrontDigitMode(front.length == 3);
       controller.controllerFrontDigit.text = front;
-      controller.controllerMidDigit.text = mid;   // 임의문자 허용
+      controller.controllerMidDigit.text = mid; // 임의문자 허용
       controller.controllerBackDigit.text = back;
 
       if (promptMid || mid.isEmpty) {
@@ -362,17 +399,16 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         key: const ValueKey('frontKeypad'),
         controller: controller.controllerFrontDigit,
         maxLength: controller.isThreeDigit ? 3 : 2,
-        onComplete: () =>
-            setState(() {
-              // 도크에서 시작한 앞칸 편집이면 완료 후 닫기
-              if (_dockEditing == _DockField.front) {
-                controller.showKeypad = false;
-                _dockEditing = null;
-              } else {
-                // 일반 흐름: 가운데 칸으로 이동
-                controller.setActiveController(controller.controllerMidDigit);
-              }
-            }),
+        onComplete: () => setState(() {
+          // 도크에서 시작한 앞칸 편집이면 완료 후 닫기
+          if (_dockEditing == _DockField.front) {
+            controller.showKeypad = false;
+            _dockEditing = null;
+          } else {
+            // 일반 흐름: 가운데 칸으로 이동
+            controller.setActiveController(controller.controllerMidDigit);
+          }
+        }),
         onChangeFrontDigitMode: (defaultThree) {
           setState(() {
             controller.setFrontDigitMode(defaultThree);
@@ -386,17 +422,16 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       return KorKeypad(
         key: const ValueKey('midKeypad'),
         controller: controller.controllerMidDigit,
-        onComplete: () =>
-            setState(() {
-              // 도크에서 시작한 가운데 칸 편집이면 완료 후 닫기
-              if (_dockEditing == _DockField.mid) {
-                controller.showKeypad = false;
-                _dockEditing = null;
-              } else {
-                // 일반 흐름: 뒷칸으로 이동
-                controller.setActiveController(controller.controllerBackDigit);
-              }
-            }),
+        onComplete: () => setState(() {
+          // 도크에서 시작한 가운데 칸 편집이면 완료 후 닫기
+          if (_dockEditing == _DockField.mid) {
+            controller.showKeypad = false;
+            _dockEditing = null;
+          } else {
+            // 일반 흐름: 뒷칸으로 이동
+            controller.setActiveController(controller.controllerBackDigit);
+          }
+        }),
       );
     }
 
@@ -428,8 +463,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     return _PlateDock(
       controller: controller,
       onActivateFront: () => _beginDockEdit(_DockField.front),
-      onActivateMid:   () => _beginDockEdit(_DockField.mid),
-      onActivateBack:  () => _beginDockEdit(_DockField.back),
+      onActivateMid: () => _beginDockEdit(_DockField.mid),
+      onActivateBack: () => _beginDockEdit(_DockField.back),
     );
   }
 
@@ -438,6 +473,26 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       controller: controller,
       mountedContext: mounted,
       onStateRefresh: () => setState(() {}),
+    );
+
+    // 실시간 OCR 버튼: 제공해주신 ElevatedButton 스타일 반영
+    final Widget ocrButton = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      child: ElevatedButton.icon(
+        onPressed: _openLiveScanner,
+        icon: const Icon(Icons.camera_alt_outlined),
+        label: const Text('실시간 OCR 다시 스캔'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          minimumSize: const Size.fromHeight(55),
+          padding: EdgeInsets.zero,
+          side: const BorderSide(color: Colors.grey, width: 1.0),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      ),
     );
 
     if (controller.showKeypad) {
@@ -457,13 +512,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             ),
             actionButton: actionButton,
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: SizedBox(
-              height: 48,
-              child: Image.asset('assets/images/pelican.png'),
-            ),
-          ),
+          ocrButton,
         ],
       );
     } else {
@@ -480,13 +529,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             keypad: const SizedBox.shrink(),
             actionButton: actionButton,
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: SizedBox(
-              height: 48,
-              child: Image.asset('assets/images/pelican.png'),
-            ),
-          ),
+          ocrButton,
         ],
       );
     }
@@ -508,7 +551,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     );
 
     return SafeArea(
-      child: IgnorePointer( // 제스처 간섭 방지
+      child: IgnorePointer(
+        // 제스처 간섭 방지 (하지만 부모 GestureDetector는 이벤트를 받음)
         child: Align(
           alignment: Alignment.topLeft,
           child: Padding(
@@ -523,6 +567,18 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     );
   }
 
+  // ★ 상단 AppBar 전체 탭 → 뒤로가기 동작
+  void _handleBackButtonPressed() {
+    // 시트가 열려 있으면 먼저 시트만 닫고
+    if (_sheetOpen) {
+      _animateSheet(open: false);
+      return;
+    }
+
+    // 현재 화면만 pop → TypePage로 복귀
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     // ✅ 키보드/인셋 + 시스템 하단 안전영역 반영
@@ -531,13 +587,13 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     // 패딩: 키패드 열림(도크+키패드) ≈ 280, 닫힘(도크만) ≈ 140
     final bottomSafePadding = (controller.showKeypad ? 280.0 : 140.0) + viewInset + sysBottom;
 
-    // 🔽 뒤로가기: 시트가 열려 있으면 먼저 닫고, 닫혀 있으면 pop 허용
+    // 🔽 뒤로가기: 시트가 열려 있으면 먼저 닫고, 닫혀 있어도 시스템/제스처 pop은 막음
     return PopScope(
-      canPop: !_sheetOpen,
+      canPop: false,
       onPopInvoked: (didPop) async {
-        if (didPop) return; // 이미 pop된 경우
         if (_sheetOpen) {
-          await _animateSheet(open: false); // 시트 먼저 닫기
+          await _animateSheet(open: false);
+          return;
         }
       },
       child: Scaffold(
@@ -547,23 +603,52 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           backgroundColor: Colors.white,
           foregroundColor: Colors.black,
           elevation: 1,
-          // ⬇️ 좌측 상단(11시)에 'plate input' 텍스트 고정
-          flexibleSpace: _buildScreenTag(context),
-          title: Align(
-            alignment: Alignment.centerRight,
-            child: Text(
-              controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리',
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.black),
+          // AppBar 전체 영역을 탭하면 뒤로가기
+          flexibleSpace: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _handleBackButtonPressed,
+            child: Stack(
+              children: [
+                // 좌측 상단 화면 태그
+                _buildScreenTag(context),
+                // 중앙: "뒤로가기 · 현재 앞자리: 세자리/두자리"
+                SafeArea(
+                  child: Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '뒤로가기',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blueGrey,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          width: 1,
+                          height: 16,
+                          color: Colors.grey.shade400,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          controller.isThreeDigit
+                              ? '현재 앞자리: 세자리'
+                              : '현재 앞자리: 두자리',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          actions: [
-            // 수동으로도 다시 열 수 있도록 버튼 유지
-            IconButton(
-              tooltip: '실시간 OCR 스캔',
-              onPressed: _openLiveScanner,
-              icon: const Icon(Icons.auto_awesome_motion),
-            ),
-          ],
         ),
         body: LayoutBuilder(
           builder: (context, constraints) {
@@ -593,8 +678,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                               controller.clearInput();
                               controller.setActiveController(controller.controllerFrontDigit);
                               _dockEditing = null;
-                              // 필요 시 아래 라인 활성화하면 탭 시 항상 하단 키패드+도크가 열립니다.
-                              // controller.showKeypad = true;
                             });
                           },
                           onRegionChanged: (region) {
@@ -679,8 +762,13 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
                                         Text(
-                                          _sheetOpen ? '정산 유형 / 메모 카드 닫기' : '정산 유형 / 메모 카드 열기',
-                                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                                          _sheetOpen
+                                              ? '정산 유형 / 메모 카드 닫기'
+                                              : '정산 유형 / 메모 카드 열기',
+                                          style: const TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.w700,
+                                          ),
                                         ),
                                         Text(
                                           controller.buildPlateNumber(),
@@ -697,9 +785,11 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                             // ⬇️ 정산 영역
                             InputBillSection(
                               selectedBill: controller.selectedBill,
-                              onChanged: (value) => setState(() => controller.selectedBill = value),
+                              onChanged: (value) =>
+                                  setState(() => controller.selectedBill = value),
                               selectedBillType: selectedBillType,
-                              onTypeChanged: (newType) => setState(() => selectedBillType = newType),
+                              onTypeChanged: (newType) =>
+                                  setState(() => selectedBillType = newType),
                               countTypeController: controller.countTypeController,
                             ),
 
@@ -738,8 +828,11 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         ),
         // ✅ 하단 제스처 바와 겹치지 않게 SafeArea로 감싸기
         bottomNavigationBar: SafeArea(
-          top: false, left: false, right: false, bottom: true,
-          child: _buildBottomBar(), // ← 상태에 따라 도크/키패드 배치 스위칭
+          top: false,
+          left: false,
+          right: false,
+          bottom: true,
+          child: _buildBottomBar(), // ← 상태에 따라 도크/키패드 배치 스위칭 + OCR 버튼
         ),
       ),
     );
@@ -763,7 +856,7 @@ class _PlateDock extends StatelessWidget {
   InputDecoration _dec(BuildContext context, bool active) {
     return InputDecoration(
       isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       filled: true,
       fillColor: active ? Colors.yellow.shade50 : Colors.white,
       counterText: '',
@@ -784,11 +877,75 @@ class _PlateDock extends StatelessWidget {
     );
   }
 
+  Widget _buildEditableField({
+    required BuildContext context,
+    required TextEditingController textController,
+    required bool isActive,
+    required VoidCallback onTap,
+    required int maxLength,
+  }) {
+    final chipColor = isActive ? Colors.amber.shade700 : Colors.grey.shade500;
+
+    return GestureDetector(
+      onTap: onTap, // 탭 → 해당 칸만 비우고 활성화 + 키패드 열기
+      child: AbsorbPointer(
+        child: Stack(
+          children: [
+            TextField(
+              controller: textController,
+              readOnly: true,
+              maxLength: maxLength,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+              decoration: _dec(context, isActive),
+            ),
+            Positioned(
+              right: 8,
+              top: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: chipColor.withOpacity(isActive ? 0.18 : 0.10),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.edit_outlined,
+                      size: 12,
+                      color: chipColor,
+                    ),
+                    const SizedBox(width: 2),
+                    Text(
+                      isActive ? '편집중' : '편집',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: chipColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isFrontActive = controller.activeController == controller.controllerFrontDigit;
     final isMidActive = controller.activeController == controller.controllerMidDigit;
     final isBackActive = controller.activeController == controller.controllerBackDigit;
+
+    final labelStyle = TextStyle(
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
+      color: Colors.grey.shade700,
+    );
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
@@ -800,62 +957,96 @@ class _PlateDock extends StatelessWidget {
           BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2)),
         ],
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // 앞자리 (2~3자리)
-          Expanded(
-            flex: 28,
-            child: GestureDetector(
-              onTap: onActivateFront, // 탭 → 해당 칸만 비우고 활성화 + 키패드 열기
-              child: AbsorbPointer(
-                child: TextField(
-                  controller: controller.controllerFrontDigit,
-                  readOnly: true,
-                  maxLength: controller.isThreeDigit ? 3 : 2,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-                  decoration: _dec(context, isFrontActive),
+          // 라벨 + 필드
+          Row(
+            children: [
+              // 앞자리 (2~3자리)
+              Expanded(
+                flex: 28,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('앞자리', style: labelStyle),
+                    const SizedBox(height: 4),
+                    _buildEditableField(
+                      context: context,
+                      textController: controller.controllerFrontDigit,
+                      isActive: isFrontActive,
+                      onTap: onActivateFront,
+                      maxLength: controller.isThreeDigit ? 3 : 2,
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ),
-          const SizedBox(width: 8),
+              const SizedBox(width: 8),
 
-          // 한글 (1글자)
-          Expanded(
-            flex: 18,
-            child: GestureDetector(
-              onTap: onActivateMid, // 탭 → 해당 칸만 비우고 활성화 + 키패드 열기
-              child: AbsorbPointer(
-                child: TextField(
-                  controller: controller.controllerMidDigit,
-                  readOnly: true,
-                  maxLength: 1,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-                  decoration: _dec(context, isMidActive),
+              // 한글 (1글자)
+              Expanded(
+                flex: 18,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('한글', style: labelStyle),
+                    const SizedBox(height: 4),
+                    _buildEditableField(
+                      context: context,
+                      textController: controller.controllerMidDigit,
+                      isActive: isMidActive,
+                      onTap: onActivateMid,
+                      maxLength: 1,
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ),
-          const SizedBox(width: 8),
+              const SizedBox(width: 8),
 
-          // 뒷자리 (4자리)
-          Expanded(
-            flex: 36,
-            child: GestureDetector(
-              onTap: onActivateBack, // 탭 → 해당 칸만 비우고 활성화 + 키패드 열기
-              child: AbsorbPointer(
-                child: TextField(
-                  controller: controller.controllerBackDigit,
-                  readOnly: true,
-                  maxLength: 4,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-                  decoration: _dec(context, isBackActive),
+              // 뒷자리 (4자리)
+              Expanded(
+                flex: 36,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('뒷자리', style: labelStyle),
+                    const SizedBox(height: 4),
+                    _buildEditableField(
+                      context: context,
+                      textController: controller.controllerBackDigit,
+                      isActive: isBackActive,
+                      onTap: onActivateBack,
+                      maxLength: 4,
+                    ),
+                  ],
                 ),
               ),
-            ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // 하단 안내 문구
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.touch_app,
+                size: 14,
+                color: Colors.grey.shade600,
+              ),
+              const SizedBox(width: 4),
+              Flexible(
+                child: Text(
+                  '번호판 각 칸을 탭하면 해당 자리를 수정할 수 있습니다.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey.shade700,
+                  ),
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+            ],
           ),
         ],
       ),
