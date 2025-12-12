@@ -12,6 +12,9 @@ import 'dashboard_punch_card_feedback.dart';
 
 import '../../../../../repositories/commute_true_false_repository.dart';
 
+// ✅ 추가: 기기별 commute_true_false Firestore 업데이트 ON/OFF
+import '../../../../utils/commute_true_false_mode_config.dart';
+
 /// Teal Palette (Dashboard 전용)
 class _Palette {
   static const dark = Color(0xFF09367D);
@@ -107,6 +110,15 @@ class _DashboardInsidePunchRecorderSectionState
 
   /// ✅ 출근(workIn) 시에만 commute_true_false에 출근시각 기록
   Future<void> _recordClockInAtToCommuteTrueFalse(DateTime clockInAt) async {
+    // ✅ 기기 설정이 OFF면 Firestore 업데이트 스킵 (SQLite는 이미 저장됨)
+    final enabled = await CommuteTrueFalseModeConfig.isEnabled();
+    if (!enabled) {
+      debugPrint(
+        '[DashboardInsidePunchRecorder] commute_true_false OFF(기기 설정) → 업데이트 스킵',
+      );
+      return;
+    }
+
     final company = widget.division.trim();
     final area = widget.area.trim();
     final workerName = widget.userName.trim();
@@ -225,7 +237,7 @@ class _DashboardInsidePunchRecorderSectionState
       dateTime: targetDateTime,
     );
 
-    // ✅ 출근(workIn)일 때만 Timestamp 기록
+    // ✅ 출근(workIn)일 때만 Timestamp 기록(단, 기기 설정 OFF면 내부에서 스킵)
     if (type == SimpleModeAttendanceType.workIn) {
       await _recordClockInAtToCommuteTrueFalse(targetDateTime);
     }
@@ -362,8 +374,7 @@ class _DashboardInsidePunchRecorderSectionState
                             type: SimpleModeAttendanceType.breakTime,
                             time: _breakTime,
                             enabled: canPunchBreak,
-                            onTap: () =>
-                                _punch(SimpleModeAttendanceType.breakTime),
+                            onTap: () => _punch(SimpleModeAttendanceType.breakTime),
                           ),
                         ),
                         const SizedBox(width: 8),

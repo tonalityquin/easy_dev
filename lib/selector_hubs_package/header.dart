@@ -1,17 +1,20 @@
 import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // ✅ 추가
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../utils/snackbar_helper.dart';
 import '../../utils/api/email_config.dart';
-import '../../utils/api/sheets_config.dart';
-import '../../utils/app_exit_flag.dart'; // ⬅️ 추가
+import '../../utils/app_exit_flag.dart';
 
-// ⬅️ 신규: 오버레이 모드 설정
+// ⬅️ 오버레이 모드 설정
 import '../../utils/overlay_mode_config.dart';
+
+// ✅ commute_true_false Firestore 기록 On/Off(기기별, 기본 OFF + 유지)
+import '../../utils/commute_true_false_mode_config.dart';
 
 class Header extends StatefulWidget {
   const Header({super.key});
@@ -67,32 +70,29 @@ class _TopRow extends StatelessWidget {
 
   // 앱 종료 처리
   Future<void> _exitApp(BuildContext context) async {
-    // ✅ 명시적 종료 플로우 시작 플래그 ON
     AppExitFlag.beginExit();
 
     try {
-      // 안드로이드일 때만 플로팅 오버레이 및 포그라운드 서비스 정리
       if (Platform.isAndroid) {
-        // 1) 떠 있는 플로팅 버블(overlayMain → QuickOverlayApp)이 있다면 먼저 닫기
         try {
           if (await FlutterOverlayWindow.isActive()) {
             await FlutterOverlayWindow.closeOverlay();
           }
-        } catch (_) {
-          // 오버레이가 없거나 플러그인에서 오류가 나도 치명적이지 않으니 무시
-        }
+        } catch (_) {}
 
-        // 2) 포그라운드 서비스 중지
         bool running = false;
         try {
           running = await FlutterForegroundTask.isRunningService;
         } catch (_) {}
+
         if (running) {
           try {
             final stopped = await FlutterForegroundTask.stopService();
             if (stopped != true) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('포그라운드 중지 실패(플러그인 반환값 false)')),
+                const SnackBar(
+                  content: Text('포그라운드 중지 실패(플러그인 반환값 false)'),
+                ),
               );
             }
           } catch (e) {
@@ -103,15 +103,11 @@ class _TopRow extends StatelessWidget {
           await Future.delayed(const Duration(milliseconds: 150));
         }
 
-        // 3) 실제 앱 종료 (SystemNavigator.pop)
         await SystemNavigator.pop();
       } else {
-        // iOS / 기타 플랫폼
         await SystemNavigator.pop();
       }
     } catch (e) {
-      // ✅ 종료 시도 중 예외가 발생하면 플래그를 원복해서
-      //    이후 라이프사이클에서 다시 정상 동작하도록 함
       AppExitFlag.reset();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('앱 종료 실패: $e')),
@@ -119,15 +115,8 @@ class _TopRow extends StatelessWidget {
     }
   }
 
-  // “설정” 바텀시트 — Google Sheets + Gmail(수신자만) + QuickOverlay 오버레이 권한
+  // “설정” 바텀시트 — Gmail(수신자만) + QuickOverlay 오버레이 권한 + 오버레이 모드(항상 노출) + commute_true_false 토글
   Future<void> _openSheetsLinkSheet(BuildContext context) async {
-    // 현재 저장된 값 선조회
-    final commuteCurrent = await SheetsConfig.getCommuteSheetId();
-    final endReportCurrent = await SheetsConfig.getEndReportSheetId();
-
-    final commuteCtrl = TextEditingController(text: commuteCurrent ?? '');
-    final endReportCtrl = TextEditingController(text: endReportCurrent ?? '');
-
     // Gmail 수신자 로드 (To 만)
     final emailCfg = await EmailConfig.load();
     final mailToCtrl = TextEditingController(text: emailCfg.to);
@@ -135,11 +124,10 @@ class _TopRow extends StatelessWidget {
     // 현재 오버레이 모드 로드
     OverlayMode currentOverlayMode = await OverlayModeConfig.getMode();
 
-    // ✅ SharedPreferences 로드 (오버레이 기본 모드 + HQ 여부 판별용)
+    // SharedPreferences 로드
     final prefs = await SharedPreferences.getInstance();
 
-    // ✅ 오버레이 형태 기본값: 상단 50% 포그라운드
-    //    - overlay_mode_initialized_v2 플래그가 없는 경우 한 번만 topHalf로 강제 세팅
+    // 오버레이 형태 기본값(초기 1회만 topHalf로 강제)
     final initialized = prefs.getBool('overlay_mode_initialized_v2') ?? false;
     if (!initialized) {
       currentOverlayMode = OverlayMode.topHalf;
@@ -147,13 +135,8 @@ class _TopRow extends StatelessWidget {
       await prefs.setBool('overlay_mode_initialized_v2', true);
     }
 
-    // ✅ HQ 여부: division / selectedArea 기반
-    //   - 둘 다 비어 있지 않고
-    //   - 둘의 값이 서로 같을 때만 오버레이 형태 선택 카드 노출
-    final division = prefs.getString('division') ?? '';
-    final selectedArea = prefs.getString('selectedArea') ?? '';
-    final bool overlayModeCardEnabled =
-        division.isNotEmpty && selectedArea.isNotEmpty && division == selectedArea;
+    // ✅ commute_true_false Firestore 기록 토글 로드 (기본 OFF)
+    bool commuteTrueFalseEnabled = await CommuteTrueFalseModeConfig.isEnabled();
 
     await showModalBottomSheet(
       context: context,
@@ -169,156 +152,7 @@ class _TopRow extends StatelessWidget {
           builder: (ctx, sc) {
             return StatefulBuilder(
               builder: (ctx, setSheetState) {
-                // 공통 섹션(시트)
-                Widget buildSheetSection({
-                  required IconData icon,
-                  required String title,
-                  required TextEditingController controller,
-                  required Future<void> Function(String id) onSave,
-                  required Future<void> Function() onClear,
-                }) {
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.black.withOpacity(.08)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(.06),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Icon(icon, size: 20, color: Colors.black87),
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                title,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                            ),
-                            // 현재 입력값 기준으로 복사/초기화 활성화
-                            ValueListenableBuilder<TextEditingValue>(
-                              valueListenable: controller,
-                              builder: (ctx2, value, _) {
-                                final hasText = value.text.trim().isNotEmpty;
-                                return Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      tooltip: '복사',
-                                      onPressed: hasText
-                                          ? () async {
-                                        await Clipboard.setData(
-                                          ClipboardData(
-                                            text: value.text,
-                                          ),
-                                        );
-                                        if (!ctx.mounted) return;
-                                        showSuccessSnackbar(
-                                            context, '현재 입력값을 복사했습니다.');
-                                      }
-                                          : null,
-                                      icon: const Icon(
-                                        Icons.copy_rounded,
-                                        color: Colors.black87,
-                                      ),
-                                    ),
-                                    IconButton(
-                                      tooltip: '초기화',
-                                      onPressed: hasText
-                                          ? () async {
-                                        await onClear();
-                                        controller.text = '';
-                                        setSheetState(() {});
-                                        if (!ctx.mounted) return;
-                                        showSelectedSnackbar(
-                                            context, 'ID를 초기화했습니다.');
-                                      }
-                                          : null,
-                                      icon: const Icon(
-                                        Icons.delete_outline_rounded,
-                                        color: Colors.black87,
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 10),
-                        TextField(
-                          controller: controller,
-                          keyboardType: TextInputType.url,
-                          textInputAction: TextInputAction.done,
-                          decoration: const InputDecoration(
-                            labelText: '스프레드시트 ID 또는 URL (붙여넣기 가능)',
-                            helperText: 'URL 전체를 붙여넣어도 ID만 자동 추출됩니다.',
-                            border: OutlineInputBorder(),
-                            prefixIcon: Icon(Icons.link_rounded),
-                          ),
-                          onSubmitted: (_) => FocusScope.of(ctx).unfocus(),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                icon: const Icon(Icons.copy_rounded),
-                                onPressed: () async {
-                                  final raw = controller.text.trim();
-                                  if (raw.isEmpty) return;
-                                  await Clipboard.setData(
-                                    ClipboardData(text: raw),
-                                  );
-                                  if (!ctx.mounted) return;
-                                  showSuccessSnackbar(context, '입력값을 복사했습니다.');
-                                },
-                                label: const Text('입력값 복사'),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: ElevatedButton.icon(
-                                icon: const Icon(Icons.save),
-                                onPressed: () async {
-                                  final raw = controller.text.trim();
-                                  if (raw.isEmpty) return;
-                                  final id =
-                                  SheetsConfig.extractSpreadsheetId(raw);
-                                  await onSave(id);
-                                  if (!ctx.mounted) return;
-                                  showSuccessSnackbar(context, '저장되었습니다.');
-                                  setSheetState(() {});
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.black,
-                                  foregroundColor: Colors.white,
-                                ),
-                                label: const Text('저장'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                // ✅ QuickOverlayHome 사용을 위한 오버레이 권한 섹션
+                // QuickOverlay 권한 섹션
                 Widget buildOverlayPermissionSection() {
                   return Container(
                     margin: const EdgeInsets.only(bottom: 16),
@@ -361,11 +195,8 @@ class _TopRow extends StatelessWidget {
                         const SizedBox(height: 10),
                         const Text(
                           '다른 앱 위에 플로팅 버블 또는 상단 포그라운드 패널(QuickOverlayHome)을 띄우기 위해서는 '
-                              '안드로이드 “다른 앱 위에 표시” 권한이 필요합니다.',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.black87,
-                          ),
+                          '안드로이드 “다른 앱 위에 표시” 권한이 필요합니다.',
+                          style: TextStyle(fontSize: 13, color: Colors.black87),
                         ),
                         const SizedBox(height: 10),
                         Row(
@@ -383,8 +214,7 @@ class _TopRow extends StatelessWidget {
                                     return;
                                   }
                                   try {
-                                    final granted = await FlutterOverlayWindow
-                                        .isPermissionGranted();
+                                    final granted = await FlutterOverlayWindow.isPermissionGranted();
                                     if (!ctx.mounted) return;
                                     if (granted) {
                                       showSelectedSnackbar(
@@ -411,8 +241,7 @@ class _TopRow extends StatelessWidget {
                             const SizedBox(width: 8),
                             Expanded(
                               child: ElevatedButton.icon(
-                                icon:
-                                const Icon(Icons.open_in_new_rounded),
+                                icon: const Icon(Icons.open_in_new_rounded),
                                 onPressed: () async {
                                   if (!Platform.isAndroid) {
                                     if (!ctx.mounted) return;
@@ -423,9 +252,7 @@ class _TopRow extends StatelessWidget {
                                     return;
                                   }
                                   try {
-                                    final already =
-                                    await FlutterOverlayWindow
-                                        .isPermissionGranted();
+                                    final already = await FlutterOverlayWindow.isPermissionGranted();
                                     if (already) {
                                       if (!ctx.mounted) return;
                                       showSelectedSnackbar(
@@ -435,11 +262,7 @@ class _TopRow extends StatelessWidget {
                                       return;
                                     }
 
-                                    // 🔑 flutter_overlay_window 의 requestPermission:
-                                    //    권한이 없으면 시스템 설정 화면을 열어줌
-                                    final result =
-                                    await FlutterOverlayWindow
-                                        .requestPermission();
+                                    final result = await FlutterOverlayWindow.requestPermission();
 
                                     if (!ctx.mounted) return;
                                     if (result == true) {
@@ -475,7 +298,7 @@ class _TopRow extends StatelessWidget {
                   );
                 }
 
-                // ✅ 오버레이 형태 선택 섹션 (버블 / 상단 50%)
+                // 오버레이 형태 선택 섹션 (✅ 항상 노출)
                 Widget buildOverlayModeSection() {
                   String labelFor(OverlayMode mode) {
                     switch (mode) {
@@ -527,11 +350,8 @@ class _TopRow extends StatelessWidget {
                         const SizedBox(height: 10),
                         const Text(
                           '앱이 백그라운드로 이동했을 때 사용할 오버레이 형태를 선택합니다.\n'
-                              '하나만 선택되며, 선택된 모드만 실행/종료 조건을 공유합니다.',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.black87,
-                          ),
+                          '하나만 선택되며, 선택된 모드만 실행/종료 조건을 공유합니다.',
+                          style: TextStyle(fontSize: 13, color: Colors.black87),
                         ),
                         const SizedBox(height: 12),
                         Wrap(
@@ -540,22 +360,19 @@ class _TopRow extends StatelessWidget {
                           children: [
                             ChoiceChip(
                               label: const Text('플로팅 버블'),
-                              selected:
-                              currentOverlayMode == OverlayMode.bubble,
+                              selected: currentOverlayMode == OverlayMode.bubble,
                               onSelected: (selected) async {
                                 if (!selected) return;
                                 currentOverlayMode = OverlayMode.bubble;
                                 setSheetState(() {});
-                                await OverlayModeConfig
-                                    .setMode(OverlayMode.bubble);
+                                await OverlayModeConfig.setMode(
+                                  OverlayMode.bubble,
+                                );
 
-                                // 이미 떠 있는 오버레이가 있으면 모드 갱신
                                 try {
                                   if (await FlutterOverlayWindow.isActive()) {
-                                    await FlutterOverlayWindow
-                                        .shareData('__mode:bubble__');
-                                    await FlutterOverlayWindow
-                                        .shareData('__collapse__');
+                                    await FlutterOverlayWindow.shareData('__mode:bubble__');
+                                    await FlutterOverlayWindow.shareData('__collapse__');
                                   }
                                 } catch (_) {}
 
@@ -568,21 +385,19 @@ class _TopRow extends StatelessWidget {
                             ),
                             ChoiceChip(
                               label: const Text('상단 50% 포그라운드'),
-                              selected:
-                              currentOverlayMode == OverlayMode.topHalf,
+                              selected: currentOverlayMode == OverlayMode.topHalf,
                               onSelected: (selected) async {
                                 if (!selected) return;
                                 currentOverlayMode = OverlayMode.topHalf;
                                 setSheetState(() {});
-                                await OverlayModeConfig
-                                    .setMode(OverlayMode.topHalf);
+                                await OverlayModeConfig.setMode(
+                                  OverlayMode.topHalf,
+                                );
 
                                 try {
                                   if (await FlutterOverlayWindow.isActive()) {
-                                    await FlutterOverlayWindow
-                                        .shareData('__mode:topHalf__');
-                                    await FlutterOverlayWindow
-                                        .shareData('__collapse__');
+                                    await FlutterOverlayWindow.shareData('__mode:topHalf__');
+                                    await FlutterOverlayWindow.shareData('__collapse__');
                                   }
                                 } catch (_) {}
 
@@ -602,6 +417,84 @@ class _TopRow extends StatelessWidget {
                             fontSize: 12,
                             color: Colors.black54,
                           ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                // ✅ commute_true_false Firestore 기록 On/Off 섹션
+                Widget buildCommuteTrueFalseToggleSection() {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.black.withOpacity(.08)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(.06),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.cloud_upload_outlined,
+                                size: 20,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Text(
+                                '출근 시각 Firestore 기록(commute_true_false)',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          '이 설정은 “기기별(로컬)”로 저장됩니다.\n'
+                          'ON이면 출근 버튼을 누를 때 commute_true_false 컬렉션에 출근 시각(Timestamp)을 기록합니다.\n'
+                          'OFF이면 해당 Firestore 업데이트는 모두 건너뛰고, 로컬(SQLite) 기록만 수행합니다.',
+                          style: TextStyle(fontSize: 13, color: Colors.black87),
+                        ),
+                        const SizedBox(height: 10),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            commuteTrueFalseEnabled ? 'ON (기록함)' : 'OFF (기록 안 함)',
+                          ),
+                          subtitle: Text(
+                            commuteTrueFalseEnabled
+                                ? '출근 시 commute_true_false 업데이트가 실행됩니다.'
+                                : '출근 시 commute_true_false 업데이트를 스킵합니다.',
+                          ),
+                          value: commuteTrueFalseEnabled,
+                          onChanged: (v) async {
+                            commuteTrueFalseEnabled = v;
+                            setSheetState(() {});
+                            await CommuteTrueFalseModeConfig.setEnabled(v);
+
+                            if (!ctx.mounted) return;
+                            showSuccessSnackbar(
+                              context,
+                              v
+                                  ? '이 기기에서 commute_true_false 기록을 ON으로 설정했습니다.'
+                                  : '이 기기에서 commute_true_false 기록을 OFF로 설정했습니다.',
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -649,7 +542,7 @@ class _TopRow extends StatelessWidget {
                             IconButton(
                               tooltip: '기본값으로 초기화',
                               onPressed: () async {
-                                await EmailConfig.clear(); // 수신자 빈 값으로 복원
+                                await EmailConfig.clear();
                                 final cfg = await EmailConfig.load();
                                 mailToCtrl.text = cfg.to;
                                 if (!ctx.mounted) return;
@@ -673,10 +566,8 @@ class _TopRow extends StatelessWidget {
                           decoration: const InputDecoration(
                             labelText: '수신자(To)',
                             border: OutlineInputBorder(),
-                            prefixIcon:
-                            Icon(Icons.person_add_alt_1_outlined),
-                            helperText:
-                            '쉼표로 여러 명 입력 가능 (예: a@x.com, b@y.com)',
+                            prefixIcon: Icon(Icons.person_add_alt_1_outlined),
+                            helperText: '쉼표로 여러 명 입력 가능 (예: a@x.com, b@y.com)',
                           ),
                           onSubmitted: (_) => FocusScope.of(ctx).unfocus(),
                         ),
@@ -696,9 +587,7 @@ class _TopRow extends StatelessWidget {
                                     );
                                     return;
                                   }
-                                  await EmailConfig.save(
-                                    EmailConfig(to: to),
-                                  );
+                                  await EmailConfig.save(EmailConfig(to: to));
                                   if (!ctx.mounted) return;
                                   showSuccessSnackbar(
                                     context,
@@ -711,8 +600,7 @@ class _TopRow extends StatelessWidget {
                             const SizedBox(width: 8),
                             Expanded(
                               child: OutlinedButton.icon(
-                                icon:
-                                const Icon(Icons.copy_all_outlined),
+                                icon: const Icon(Icons.copy_all_outlined),
                                 onPressed: () async {
                                   final raw = 'To: ${mailToCtrl.text}';
                                   await Clipboard.setData(
@@ -732,10 +620,7 @@ class _TopRow extends StatelessWidget {
                         const SizedBox(height: 6),
                         const Text(
                           '※ 저장되는 항목은 수신자(To)뿐입니다. 메일 제목·본문은 경위서 화면에서 작성합니다.',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.black54,
-                          ),
+                          style: TextStyle(fontSize: 12, color: Colors.black54),
                         ),
                       ],
                     ),
@@ -754,7 +639,6 @@ class _TopRow extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        // 헤더줄
                         Row(
                           children: [
                             const Icon(Icons.tune_rounded),
@@ -782,45 +666,14 @@ class _TopRow extends StatelessWidget {
                         ),
                         const SizedBox(height: 16),
 
-                        // ✅ 플로팅 버블/포그라운드 오버레이 권한 섹션 (누구나)
+                        // 오버레이 권한 (누구나)
                         buildOverlayPermissionSection(),
 
-                        // ✅ 오버레이 모드 선택 섹션 (본사 계정에서만 노출)
-                        if (overlayModeCardEnabled)
-                          buildOverlayModeSection(),
+                        // ✅ 오버레이 모드 (항상 노출)
+                        buildOverlayModeSection(),
 
-                        // 업로드용 Google Sheets
-                        buildSheetSection(
-                          icon: Icons.assignment_outlined,
-                          title: '업로드용 Google Sheets',
-                          controller: commuteCtrl,
-                          onSave: (id) async {
-                            await SheetsConfig.setCommuteSheetId(id);
-                            final cur =
-                            await SheetsConfig.getCommuteSheetId();
-                            commuteCtrl.text = cur ?? '';
-                          },
-                          onClear: () async {
-                            await SheetsConfig.clearCommuteSheetId();
-                          },
-                        ),
-
-                        // 업무 종료 보고용 Google Sheets
-                        buildSheetSection(
-                          icon:
-                          Icons.assignment_turned_in_outlined,
-                          title: '업무 종료 보고용 Google Sheets',
-                          controller: endReportCtrl,
-                          onSave: (id) async {
-                            await SheetsConfig.setEndReportSheetId(id);
-                            final cur =
-                            await SheetsConfig.getEndReportSheetId();
-                            endReportCtrl.text = cur ?? '';
-                          },
-                          onClear: () async {
-                            await SheetsConfig.clearEndReportSheetId();
-                          },
-                        ),
+                        // commute_true_false 토글
+                        buildCommuteTrueFalseToggleSection(),
 
                         // Gmail 수신자(To) 설정
                         buildGmailSection(),
@@ -906,10 +759,10 @@ class _AnimatedSide extends StatelessWidget {
         },
         child: show
             ? Container(
-          key: const ValueKey('side-on'),
-          alignment: Alignment.center,
-          child: child,
-        )
+                key: const ValueKey('side-on'),
+                alignment: Alignment.center,
+                child: child,
+              )
             : const SizedBox.shrink(key: ValueKey('side-off')),
       ),
     );
@@ -934,8 +787,7 @@ class HeaderBadge extends StatelessWidget {
       duration: const Duration(milliseconds: 600),
       tween: Tween(begin: .92, end: 1),
       curve: Curves.easeOutBack,
-      builder: (context, scale, child) =>
-          Transform.scale(scale: scale, child: child),
+      builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
       child: SizedBox(
         width: size,
         height: size,
@@ -963,8 +815,7 @@ class _HeaderBadgeInner extends StatefulWidget {
   State<_HeaderBadgeInner> createState() => _HeaderBadgeInnerState();
 }
 
-class _HeaderBadgeInnerState extends State<_HeaderBadgeInner>
-    with SingleTickerProviderStateMixin {
+class _HeaderBadgeInnerState extends State<_HeaderBadgeInner> with SingleTickerProviderStateMixin {
   late final AnimationController _rotCtrl;
 
   @override

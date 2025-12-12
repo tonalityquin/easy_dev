@@ -7,8 +7,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../states/head_quarter/calendar_selection_state.dart';
 import '../../../models/user_model.dart';
+import '../../../utils/api/email_config.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../repositories/commute_log_repository.dart';
+import '../../../utils/google_auth_session.dart';
+import 'utils/calendar_excel_mailer.dart';
+import 'mail_recipient_settings.dart';
 import 'widgets/time_edit_sheet.dart';
 
 /// 출석 캘린더 (Firestore 기반)
@@ -63,6 +67,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
   final FocusNode _userInputFocus = FocusNode();
 
   bool _isSearching = false;
+  bool _isSendingMail = false;
 
   // 현재 화면에 표시되는 월의 출근/퇴근 day->time
   Map<int, String> _clockInMap = {};
@@ -105,8 +110,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     if (presetUser != null) {
       _selectedUser = presetUser;
       final area = presetUser.selectedArea?.trim() ?? '';
-      _userInputCtrl.text =
-      area.isEmpty ? presetUser.phone : '${presetUser.phone}-$area';
+      _userInputCtrl.text = area.isEmpty ? presetUser.phone : '${presetUser.phone}-$area';
 
       WidgetsBinding.instance.addPostFrameCallback((_) async {
         if (!mounted) return;
@@ -244,8 +248,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
         _pendingDeleteOutDates.clear();
 
         final area = user.selectedArea?.trim() ?? '';
-        _userInputCtrl.text =
-        area.isEmpty ? user.phone : '${user.phone}-$area';
+        _userInputCtrl.text = area.isEmpty ? user.phone : '${user.phone}-$area';
       });
 
       await _loadAttendanceTimes(user);
@@ -260,8 +263,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     return '${user.phone}-$area';
   }
 
-  String _cacheKey(String userId) =>
-      '$userId-${_focusedDay.year}-${_focusedDay.month}';
+  String _cacheKey(String userId) => '$userId-${_focusedDay.year}-${_focusedDay.month}';
 
   String _dateStr(int day) =>
       '${_focusedDay.year}-${_focusedDay.month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}';
@@ -423,6 +425,85 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
     } catch (e) {
       _showFailedAfterBuild('저장 실패(Firestore): $e');
     }
+  }
+
+  Future<void> _openMailRecipientSettings() async {
+    await MailRecipientSettings.showAsBottomSheet(context);
+  }
+
+  /// 메일 발송 전 수신자(To) 설정 여부/유효성 검사
+  Future<bool> _ensureRecipientConfigured() async {
+    try {
+      final cfg = await EmailConfig.load();
+      final to = cfg.to.trim();
+      if (EmailConfig.isValidToList(to)) return true;
+
+      _showFailedAfterBuild('메일 수신자(To)가 설정되어 있지 않습니다. 수신자 설정에서 등록하세요.');
+      await _openMailRecipientSettings();
+      return false;
+    } catch (e) {
+      _showFailedAfterBuild('수신자(To) 설정 확인 실패: $e');
+      return false;
+    }
+  }
+
+  Future<void> _sendMonthlyExcelMail() async {
+    if (_selectedUser == null) {
+      _showFailedAfterBuild('사용자를 먼저 선택하세요.');
+      return;
+    }
+    if (_isSendingMail) return;
+
+    // ✅ 수신자 설정 확인
+    final ok = await _ensureRecipientConfigured();
+    if (!ok) return;
+
+    setState(() => _isSendingMail = true);
+    try {
+      final user = _selectedUser!;
+      final userId = _userIdOf(user);
+
+      await CalendarExcelMailer.sendAttendanceMonthExcel(
+        year: _focusedDay.year,
+        month: _focusedDay.month,
+        userId: userId,
+        userName: user.name,
+        clockInByDay: _clockInMap,
+        clockOutByDay: _clockOutMap,
+      );
+
+      showSuccessSnackbar(context, '메일 발송 완료');
+    } catch (e) {
+      if (GoogleAuthSession.isInvalidTokenError(e)) {
+        _showFailedAfterBuild('구글 계정 연결이 만료되었습니다. 다시 로그인 후 시도하세요.');
+      } else {
+        _showFailedAfterBuild('메일 발송 실패: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _isSendingMail = false);
+    }
+  }
+
+  Widget _recipientSettingsButton() {
+    return IconButton(
+      tooltip: '메일 수신자(To) 설정',
+      onPressed: _openMailRecipientSettings,
+      icon: const Icon(Icons.alternate_email_rounded),
+    );
+  }
+
+  Widget _mailActionButton() {
+    return IconButton(
+      tooltip: '엑셀 첨부 메일 발송',
+      onPressed: (_selectedUser == null || _isSendingMail) ? null : _sendMonthlyExcelMail,
+      icon: _isSendingMail
+          ? const SizedBox(
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      )
+          : const Icon(Icons.mail_outline_rounded),
+    );
   }
 
   // ── 가변 suffix 영역 폭(오버플로우 방지)
@@ -602,6 +683,8 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
           title: const Text('출석 캘린더', style: TextStyle(fontWeight: FontWeight.w800)),
           automaticallyImplyLeading: false,
           actions: [
+            _recipientSettingsButton(),
+            _mailActionButton(),
             IconButton(
               tooltip: '전체 지우기',
               icon: const Icon(Icons.delete_sweep),
@@ -625,6 +708,8 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
       onClose: () => Navigator.of(context).maybePop(),
       body: body,
       trailingActions: [
+        _recipientSettingsButton(),
+        _mailActionButton(),
         IconButton(
           tooltip: '전체 지우기',
           icon: const Icon(Icons.delete_sweep),
@@ -639,16 +724,13 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
   }
 
   // Calendar Cell with adaptive sizing
-  // ✅ 리팩터링 포인트:
-  // - 출근(in) 시간은 "윗행", 퇴근(out) 시간은 "아랫행"에 항상 표시
-  // - compact(single line) 표시 제거
+  // - 출근(in) 시간은 "윗행", 퇴근(out) 시간은 "아랫행"
   // - outside day(다른 달)는 현재 달 데이터가 섞이지 않도록 시간 표시를 비움
   Widget _buildCell(BuildContext context, DateTime day, DateTime focusedDay) {
     final isSelected = isSameDay(day, _selectedDay);
     final isToday = isSameDay(day, DateTime.now());
 
-    final bool isInFocusedMonth =
-    (day.year == _focusedDay.year && day.month == _focusedDay.month);
+    final bool isInFocusedMonth = (day.year == _focusedDay.year && day.month == _focusedDay.month);
 
     final inTime = isInFocusedMonth ? (_clockInMap[day.day] ?? '') : '';
     final outTime = isInFocusedMonth ? (_clockOutMap[day.day] ?? '') : '';
@@ -741,17 +823,12 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
                           ),
                         ),
                         SizedBox(height: vGap),
-
                         if (hasIn || hasOut) ...[
-                          // ✅ 항상 2행(윗행=출근, 아랫행=퇴근)
                           _timeText(hasIn ? inTime : '—', strong: hasIn),
                           const SizedBox(height: 2),
                           _timeText(hasOut ? outTime : '—', strong: hasOut),
                         ] else
-                          Text(
-                            '—',
-                            style: TextStyle(fontSize: smallFs, color: Colors.black38),
-                          ),
+                          Text('—', style: TextStyle(fontSize: smallFs, color: Colors.black38)),
                       ],
                     ),
                   ),
@@ -1143,7 +1220,6 @@ class _SelectedUserRow extends StatelessWidget {
             child: const Icon(Icons.person),
           ),
           const SizedBox(width: 12),
-
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -1165,7 +1241,6 @@ class _SelectedUserRow extends StatelessWidget {
               ),
             ),
           ),
-
           const SizedBox(width: 8),
           OutlinedButton.icon(
             onPressed: onClear,

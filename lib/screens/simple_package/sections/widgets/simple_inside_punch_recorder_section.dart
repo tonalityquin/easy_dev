@@ -11,6 +11,9 @@ import '../../utils/simple_mode/simple_mode_attendance_repository.dart';
 import 'simple_punch_card_feedback.dart';
 import '../../../../../repositories/commute_true_false_repository.dart';
 
+// ✅ 추가: 기기별 commute_true_false Firestore 업데이트 ON/OFF
+import '../../../../utils/commute_true_false_mode_config.dart';
+
 /// Teal Palette (Simple 전용)
 class _Palette {
   static const Color dark = Color(0xFF00695C); // 강조 텍스트/아이콘
@@ -109,6 +112,15 @@ class _SimpleInsidePunchRecorderSectionState
 
   /// ✅ 출근(workIn) 시에만 commute_true_false 에 "출근 시각" 기록
   Future<void> _recordClockInAtToCommuteTrueFalse(DateTime clockInAt) async {
+    // ✅ 기기 설정이 OFF면 Firestore 업데이트 스킵 (SQLite는 이미 저장됨)
+    final enabled = await CommuteTrueFalseModeConfig.isEnabled();
+    if (!enabled) {
+      debugPrint(
+        '[SimpleInsidePunchRecorder] commute_true_false OFF(기기 설정) → 업데이트 스킵',
+      );
+      return;
+    }
+
     final company = widget.division.trim();
     final area = widget.area.trim();
     final workerName = widget.userName.trim();
@@ -368,8 +380,7 @@ class _SimpleInsidePunchRecorderSectionState
                             type: SimpleModeAttendanceType.breakTime,
                             time: _breakTime,
                             enabled: canPunchBreak,
-                            onTap: () =>
-                                _punch(SimpleModeAttendanceType.breakTime),
+                            onTap: () => _punch(SimpleModeAttendanceType.breakTime),
                           ),
                         ),
                         const SizedBox(width: 8),

@@ -7,8 +7,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../states/head_quarter/calendar_selection_state.dart';
 import '../../../models/user_model.dart';
+import '../../../utils/api/email_config.dart';
 import '../../../utils/snackbar_helper.dart';
 import '../../../repositories/commute_log_repository.dart';
+import '../../../utils/google_auth_session.dart';
+import 'utils/calendar_excel_mailer.dart';
+import 'mail_recipient_settings.dart';
 import 'widgets/time_edit_sheet.dart';
 
 /// 휴게(브레이크) 캘린더 (Firestore 기반)
@@ -69,6 +73,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
   final Map<String, Map<int, String>> _breakLoadedCache = {};
 
   bool _isSearching = false;
+  bool _isSendingMail = false;
 
   final CommuteLogRepository _repo = CommuteLogRepository();
 
@@ -291,8 +296,7 @@ class _BreakCalendarState extends State<BreakCalendar> {
     final area = (user.selectedArea ?? '').trim();
     final division = user.divisions.isNotEmpty ? user.divisions.first : '';
 
-    final changed =
-        !_mapEquals(_breakTimeMap, _loadedBreakTimeMap) || _pendingDeleteBreakDates.isNotEmpty;
+    final changed = !_mapEquals(_breakTimeMap, _loadedBreakTimeMap) || _pendingDeleteBreakDates.isNotEmpty;
 
     if (!changed) {
       showSelectedSnackbar(context, '변경된 내용이 없습니다.');
@@ -341,6 +345,84 @@ class _BreakCalendarState extends State<BreakCalendar> {
     }
   }
 
+  Future<void> _openMailRecipientSettings() async {
+    await MailRecipientSettings.showAsBottomSheet(context);
+  }
+
+  /// 메일 발송 전 수신자(To) 설정 여부/유효성 검사
+  Future<bool> _ensureRecipientConfigured() async {
+    try {
+      final cfg = await EmailConfig.load();
+      final to = cfg.to.trim();
+      if (EmailConfig.isValidToList(to)) return true;
+
+      _showFailedAfterBuild('메일 수신자(To)가 설정되어 있지 않습니다. 수신자 설정에서 등록하세요.');
+      await _openMailRecipientSettings();
+      return false;
+    } catch (e) {
+      _showFailedAfterBuild('수신자(To) 설정 확인 실패: $e');
+      return false;
+    }
+  }
+
+  Future<void> _sendMonthlyExcelMail() async {
+    if (_selectedUser == null) {
+      _showFailedAfterBuild('사용자를 먼저 선택하세요.');
+      return;
+    }
+    if (_isSendingMail) return;
+
+    // ✅ 수신자 설정 확인
+    final ok = await _ensureRecipientConfigured();
+    if (!ok) return;
+
+    setState(() => _isSendingMail = true);
+    try {
+      final user = _selectedUser!;
+      final userId = _userIdOf(user);
+
+      await CalendarExcelMailer.sendBreakMonthExcel(
+        year: _focusedDay.year,
+        month: _focusedDay.month,
+        userId: userId,
+        userName: user.name,
+        breakByDay: _breakTimeMap,
+      );
+
+      showSuccessSnackbar(context, '메일 발송 완료');
+    } catch (e) {
+      if (GoogleAuthSession.isInvalidTokenError(e)) {
+        _showFailedAfterBuild('구글 계정 연결이 만료되었습니다. 다시 로그인 후 시도하세요.');
+      } else {
+        _showFailedAfterBuild('메일 발송 실패: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _isSendingMail = false);
+    }
+  }
+
+  Widget _recipientSettingsButton() {
+    return IconButton(
+      tooltip: '메일 수신자(To) 설정',
+      onPressed: _openMailRecipientSettings,
+      icon: const Icon(Icons.alternate_email_rounded),
+    );
+  }
+
+  Widget _mailActionButton() {
+    return IconButton(
+      tooltip: '엑셀 첨부 메일 발송',
+      onPressed: (_selectedUser == null || _isSendingMail) ? null : _sendMonthlyExcelMail,
+      icon: _isSendingMail
+          ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.mail_outline_rounded),
+    );
+  }
+
   double get _suffixWidth {
     final hasText = _userInputCtrl.text.isNotEmpty;
     final hasSpinner = _isSearching;
@@ -364,7 +446,6 @@ class _BreakCalendarState extends State<BreakCalendar> {
             child: _LegendRowBreak(base: _base, light: _light),
           ),
         ),
-
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -382,7 +463,6 @@ class _BreakCalendarState extends State<BreakCalendar> {
             ),
           ),
         ),
-
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
@@ -402,7 +482,6 @@ class _BreakCalendarState extends State<BreakCalendar> {
             ),
           ),
         ),
-
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -479,7 +558,6 @@ class _BreakCalendarState extends State<BreakCalendar> {
             ),
           ),
         ),
-
         const SliverToBoxAdapter(child: SizedBox(height: 96)),
       ],
     );
@@ -487,12 +565,12 @@ class _BreakCalendarState extends State<BreakCalendar> {
     final fab = _selectedUser == null
         ? null
         : FloatingActionButton.extended(
-      onPressed: _saveAllChangesToFirestore,
-      backgroundColor: _base,
-      foregroundColor: _fg,
-      icon: const Icon(Icons.save_rounded),
-      label: const Text('변경사항 저장'),
-    );
+            onPressed: _saveAllChangesToFirestore,
+            backgroundColor: _base,
+            foregroundColor: _fg,
+            icon: const Icon(Icons.save_rounded),
+            label: const Text('변경사항 저장'),
+          );
 
     if (!widget.asBottomSheet) {
       return Scaffold(
@@ -506,6 +584,8 @@ class _BreakCalendarState extends State<BreakCalendar> {
           title: const Text('휴식 캘린더', style: TextStyle(fontWeight: FontWeight.w800)),
           automaticallyImplyLeading: false,
           actions: [
+            _recipientSettingsButton(),
+            _mailActionButton(),
             IconButton(
               tooltip: '전체 지우기',
               icon: const Icon(Icons.delete_sweep),
@@ -528,6 +608,8 @@ class _BreakCalendarState extends State<BreakCalendar> {
       onClose: () => Navigator.of(context).maybePop(),
       body: body,
       trailingActions: [
+        _recipientSettingsButton(),
+        _mailActionButton(),
         IconButton(
           tooltip: '전체 지우기',
           icon: const Icon(Icons.delete_sweep),
@@ -545,7 +627,9 @@ class _BreakCalendarState extends State<BreakCalendar> {
     final isSelected = isSameDay(day, _selectedDay);
     final isToday = isSameDay(day, DateTime.now());
 
-    final breakTime = _breakTimeMap[day.day] ?? '';
+    final bool isInFocusedMonth = (day.year == _focusedDay.year && day.month == _focusedDay.month);
+
+    final breakTime = isInFocusedMonth ? (_breakTimeMap[day.day] ?? '') : '';
     final hasBreak = breakTime.isNotEmpty;
 
     final borderColor = isSelected ? _base : (isToday ? _light : Colors.black12);
@@ -590,7 +674,6 @@ class _BreakCalendarState extends State<BreakCalendar> {
                     ),
                   ),
                 ),
-
                 Center(
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
@@ -610,21 +693,20 @@ class _BreakCalendarState extends State<BreakCalendar> {
                           ),
                         ),
                         SizedBox(height: vGap),
-
                         hasBreak
                             ? Text(
-                          breakTime,
-                          maxLines: 1,
-                          overflow: TextOverflow.fade,
-                          softWrap: false,
-                          style: TextStyle(
-                            fontSize: timeFs,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.black87,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                            letterSpacing: .2,
-                          ),
-                        )
+                                breakTime,
+                                maxLines: 1,
+                                overflow: TextOverflow.fade,
+                                softWrap: false,
+                                style: TextStyle(
+                                  fontSize: timeFs,
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.black87,
+                                  fontFeatures: const [FontFeature.tabularFigures()],
+                                  letterSpacing: .2,
+                                ),
+                              )
                             : Text('—', style: TextStyle(fontSize: smallFs, color: Colors.black38)),
                       ],
                     ),
@@ -798,35 +880,35 @@ class _LegendRowBreak extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget dot(Color c) => Container(
-      width: 10,
-      height: 10,
-      decoration: BoxDecoration(color: c, shape: BoxShape.circle),
-    );
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+        );
 
     Widget itemDot(Color c, String t) => Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        dot(c),
-        const SizedBox(width: 6),
-        Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
-      ],
-    );
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            dot(c),
+            const SizedBox(width: 6),
+            Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+          ],
+        );
 
     Widget itemSquare(String t) => Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 14,
-          height: 14,
-          decoration: BoxDecoration(
-            border: Border.all(color: base, width: 1.6),
-            borderRadius: BorderRadius.circular(4),
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
-      ],
-    );
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 14,
+              height: 14,
+              decoration: BoxDecoration(
+                border: Border.all(color: base, width: 1.6),
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+          ],
+        );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -995,7 +1077,6 @@ class _SelectedUserRow extends StatelessWidget {
             child: const Icon(Icons.person),
           ),
           const SizedBox(width: 12),
-
           Expanded(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -1017,7 +1098,6 @@ class _SelectedUserRow extends StatelessWidget {
               ),
             ),
           ),
-
           const SizedBox(width: 8),
           OutlinedButton.icon(
             onPressed: onClear,

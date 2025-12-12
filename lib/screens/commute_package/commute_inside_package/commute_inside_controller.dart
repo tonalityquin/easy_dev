@@ -14,6 +14,9 @@ import 'package:easydev/services/endtime_reminder_service.dart';
 // ✅ commute_true_false(출근시각 Timestamp) 기록용 Firestore 레포지토리
 import '../../../repositories/commute_true_false_repository.dart';
 
+// ✅ 추가: 기기별 commute_true_false Firestore 업데이트 ON/OFF
+import '../../../utils/commute_true_false_mode_config.dart';
+
 const kIsWorkingPrefsKey = 'isWorking';
 
 // ✅ 라우팅을 밖에서 수행하기 위한 목적지 enum
@@ -107,8 +110,7 @@ class CommuteInsideController {
       userState.markClockInToday();
 
       // 6) ✅ commute_true_false 에 "출근 시각" 기록 (Timestamp)
-      //    - 문서: 회사명(division)
-      //    - 필드: 지역명(area) → { userName: Timestamp }
+      //    - 단, 기기 설정 OFF면 내부에서 스킵
       await _recordClockInAtToCommuteTrueFalse(userState);
 
       // 상태가 true면 목적지 결정
@@ -197,6 +199,15 @@ class CommuteInsideController {
   ///
   /// ⚠️ 정책: 퇴근(workOut)에서는 이 컬렉션을 절대 수정하지 않습니다.
   Future<void> _recordClockInAtToCommuteTrueFalse(UserState userState) async {
+    // ✅ 기기 설정이 OFF면 commute_true_false 업데이트 스킵 (SQLite/기타 로직은 유지)
+    final enabled = await CommuteTrueFalseModeConfig.isEnabled();
+    if (!enabled) {
+      debugPrint(
+        '[CommuteInsideController] commute_true_false OFF(기기 설정) → 업데이트 스킵',
+      );
+      return;
+    }
+
     final company = userState.division.trim(); // 회사명/사업부명
     final area = userState.area.trim(); // 지역명
     final workerName = userState.name.trim(); // 사용자 이름

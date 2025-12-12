@@ -24,7 +24,6 @@ import '../utils/tts/tts_manager.dart';
 
 import '../services/latest_message_service.dart';
 
-import 'secondary_package/office_mode_package/user_management_package/sections/user_role_type_section.dart';
 import 'type_package/common_widgets/reverse_sheet_package/parking_completed_table_sheet.dart';
 
 /// Deep Blue 팔레트(서비스 카드와 동일 계열)
@@ -121,9 +120,9 @@ class _ChatDashboardBar extends StatelessWidget {
   const _ChatDashboardBar();
 
   static Future<void> _replayLatestTts(
-    BuildContext context,
-    String area,
-  ) async {
+      BuildContext context,
+      String area,
+      ) async {
     // ★ Firestore 접근 없음: 서비스가 저장해 둔 로컬 캐시만 사용 → READ 0
     final text = (await LatestMessageService.instance.readFromPrefs()).trim();
     if (text.isEmpty) {
@@ -153,58 +152,58 @@ class _ChatDashboardBar extends StatelessWidget {
           Expanded(
             child: area.isEmpty
                 ? ElevatedButton(
-                    onPressed: null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: _Palette.dark.withOpacity(.35),
-                      disabledBackgroundColor: Colors.white,
-                      disabledForegroundColor: _Palette.dark.withOpacity(.35),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 12,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.volume_up, size: 20),
-                        SizedBox(width: 6),
-                        Text('다시 듣기'),
-                      ],
-                    ),
-                  )
+              onPressed: null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: _Palette.dark.withOpacity(.35),
+                disabledBackgroundColor: Colors.white,
+                disabledForegroundColor: _Palette.dark.withOpacity(.35),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.volume_up, size: 20),
+                  SizedBox(width: 6),
+                  Text('다시 듣기'),
+                ],
+              ),
+            )
                 : ValueListenableBuilder<LatestMessageData>(
-                    // ★ 전역 서비스의 메모리 캐시를 구독 → Firestore 접근 없음
-                    valueListenable: LatestMessageService.instance.latest,
-                    builder: (context, latestData, _) {
-                      final hasText = latestData.text.trim().isNotEmpty;
-                      return ElevatedButton(
-                        onPressed: hasText ? () => _replayLatestTts(context, area) : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: _Palette.base,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 12,
-                          ),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.volume_up, size: 20),
-                            SizedBox(width: 6),
-                            Text('다시 듣기', overflow: TextOverflow.ellipsis),
-                          ],
-                        ),
-                      );
-                    },
+              // ★ 전역 서비스의 메모리 캐시를 구독 → Firestore 접근 없음
+              valueListenable: LatestMessageService.instance.latest,
+              builder: (context, latestData, _) {
+                final hasText = latestData.text.trim().isNotEmpty;
+                return ElevatedButton(
+                  onPressed: hasText ? () => _replayLatestTts(context, area) : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: _Palette.base,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.volume_up, size: 20),
+                      SizedBox(width: 6),
+                      Text('다시 듣기', overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
           const SizedBox(width: 8),
 
@@ -277,39 +276,6 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   static const double _vDistanceThresholdDown = 50.0;
   static const double _vVelocityThresholdDown = 700.0;
 
-  // ⬇️ ParkingCompleted 테이블 Top Sheet 접근 허용 역할 세트
-  static const Set<RoleType> _allowedRolesForParkingTableTopSheet = {
-    RoleType.dev,
-    RoleType.adminBillMonthly,
-    RoleType.adminBillMonthlyTablet,
-    RoleType.adminBill,
-    RoleType.adminBillTablet,
-    RoleType.adminCommon,
-    RoleType.adminCommonTablet,
-    RoleType.userLocationMonthly,
-    RoleType.userMonthly,
-    RoleType.userCommon,
-  };
-
-  RoleType? _getRoleType(BuildContext context) {
-    final us = context.read<UserState>();
-    // UserState에 roleType 혹은 role(String) 이 있을 수 있음 → 동적 접근
-    try {
-      final rt = (us as dynamic).roleType as RoleType?;
-      if (rt != null) return rt;
-    } catch (_) {}
-    try {
-      final r = (us as dynamic).role?.toString().trim();
-      if (r != null && r.isNotEmpty) {
-        return RoleType.values.firstWhere(
-          (e) => e.name == r,
-          orElse: () => RoleType.userCommon,
-        );
-      }
-    } catch (_) {}
-    return null;
-  }
-
   void _handleHorizontalDragEnd(BuildContext context, double velocity) {
     if (_dragDistance > _hDistanceThreshold && velocity > _hVelocityThreshold) {
       Navigator.of(context).push(_slidePage(const InputPlateScreen(), fromLeft: true));
@@ -323,30 +289,21 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     _dragDistance = 0.0;
   }
 
-  /// ⬇️ 리팩터링: 위→아래 스와이프 시 열릴 ParkingCompleted 로컬 테이블 Top Sheet
-  ///   - 기존: canShowLiveButton 플래그를 전달해 ReversePage 전환까지 고려
-  ///   - 현재: ReversePage 로직 제거 → 단순 테이블 Top Sheet만 열도록 정리
+  /// ⬇️ 위→아래 스와이프 시 열릴 ParkingCompleted 로컬 테이블 Top Sheet
+  /// ✅ 변경: RoleType 기반 권한 가드 제거 → 누구나 진입 가능
   Future<void> _openParkingCompletedTableSheet(BuildContext context) async {
     // iOS 제스처 충돌 방지용 아주 짧은 디바운스
     await Future<void>.delayed(const Duration(milliseconds: 10));
     if (!mounted) return;
 
-    // ✅ 역할 가드: 허용 목록 외(FieldCommon 등)는 차단
-    final role = _getRoleType(context);
-    final allowed = role != null && _allowedRolesForParkingTableTopSheet.contains(role);
-    if (!allowed) {
-      showFailedSnackbar(context, '권한이 없습니다. 관리자에게 문의하세요.');
-      return;
-    }
-
-    // ✅ 역 Top Sheet로 로컬 테이블만 오픈 (ReversePage 제거됨)
+    // ✅ 역 Top Sheet로 로컬 테이블 오픈 (권한 가드 없음)
     await showParkingCompletedTableTopSheet(context);
   }
 
   Future<void> _handleVerticalDragEnd(
-    BuildContext context,
-    DragEndDetails details,
-  ) async {
+      BuildContext context,
+      DragEndDetails details,
+      ) async {
     final vy = details.primaryVelocity ?? 0.0; // 위로 스와이프는 음수, 아래로는 양수
 
     // 위로 빠르게 스와이프 → 채팅 (둘 중 하나만 만족해도 트리거)
@@ -358,7 +315,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
       _chatOpening = true;
       debugPrint(
         '✅[V-UP] 채팅 오픈: 거리=${_vDragDistance.toStringAsFixed(1)} / 속도=$vy '
-        '(need dist<-${_vDistanceThresholdUp} OR vy<-${_vVelocityThresholdUp})',
+            '(need dist<-${_vDistanceThresholdUp} OR vy<-${_vVelocityThresholdUp})',
       );
       await Future<void>.delayed(const Duration(milliseconds: 10));
       if (mounted) chatBottomSheet(context);
@@ -367,7 +324,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
       _topOpening = true;
       debugPrint(
         '✅[V-DOWN] ParkingCompleted 테이블 Top Sheet 오픈: 거리=${_vDragDistance.toStringAsFixed(1)} / 속도=$vy '
-        '(need dist>${_vDistanceThresholdDown} OR vy>${_vVelocityThresholdDown})',
+            '(need dist>${_vDistanceThresholdDown} OR vy>${_vVelocityThresholdDown})',
       );
       await _openParkingCompletedTableSheet(context);
       _topOpening = false;
@@ -490,7 +447,7 @@ class _PageBottomNavigationState extends State<PageBottomNavigation> {
           backgroundColor: Colors.white,
           items: List.generate(
             pageState.pages.length,
-            (index) {
+                (index) {
               final pageInfo = pageState.pages[index];
               final isSelected = pageState.selectedIndex == index;
 
@@ -532,7 +489,9 @@ class _PageBottomNavigationState extends State<PageBottomNavigation> {
                     final bool isOut = pageInfo.title == '출차 요청';
                     Color countColor;
                     if (isIn || isOut) {
-                      countColor = isSelected ? selectedColor : (isIn ? Colors.redAccent : Colors.indigoAccent);
+                      countColor = isSelected
+                          ? selectedColor
+                          : (isIn ? Colors.redAccent : Colors.indigoAccent);
                     } else {
                       countColor = isSelected ? selectedColor : _Palette.dark.withOpacity(.75);
                     }
