@@ -47,7 +47,7 @@ Future<void> showDashboardPunchCardFeedback(
       return SlideTransition(
         position: Tween<Offset>(
           begin: const Offset(0, -1.0), // 화면 위 바깥
-          end: Offset.zero,             // 제자리 (topCenter)
+          end: Offset.zero, // 제자리 (topCenter)
         ).animate(curved),
         child: child,
       );

@@ -24,8 +24,12 @@ class _Palette {
 /// 약식 모드용 출퇴근 기록기 카드
 /// - 출근/휴게/퇴근 3개 펀칭
 /// - 로컬 SQLite 기록
+/// - 정책(변경):
+///   - 서비스 로그인에서 이미 출근을 처리하므로, 이 화면에서는 "출근"은 절대 펀칭하지 않음(버튼 비활성)
+///   - 휴게/퇴근만 사용자 조작 가능
 /// - 추가 정책:
-///   - 출근(workIn) 시에만 commute_true_false 에 "출근 시각(Timestamp)" 기록
+///   - (기존 코드 유지) 출근(workIn) 시에만 commute_true_false 에 "출근 시각(Timestamp)" 기록
+///     단, 이 화면에서 workIn을 막았으므로 이 경로는 사실상 실행되지 않음(안전망으로 로직만 유지)
 ///   - 퇴근(workOut) 시 commute_true_false 는 무관 (절대 호출하지 않음)
 class DashboardInsidePunchRecorderSection extends StatefulWidget {
   const DashboardInsidePunchRecorderSection({
@@ -60,6 +64,9 @@ class _DashboardInsidePunchRecorderSectionState
 
   bool get _hasWorkIn => _workInTime != null && _workInTime!.isNotEmpty;
   bool get _hasBreak => _breakTime != null && _breakTime!.isNotEmpty;
+
+  // ✅ 이 화면에서는 "출근" 펀칭을 허용하지 않음(서비스 로그인에서 이미 출근 처리됨)
+  bool get _disableWorkInPunch => true;
 
   @override
   void initState() {
@@ -188,6 +195,12 @@ class _DashboardInsidePunchRecorderSectionState
   Future<void> _punch(SimpleModeAttendanceType type) async {
     if (_loading) return;
 
+    // ✅ 추가 가드: 이 화면에서는 출근 펀칭 금지
+    if (type == SimpleModeAttendanceType.workIn && _disableWorkInPunch) {
+      _showGuardSnack('출근은 서비스 로그인에서 처리됩니다. 이 화면에서는 변경할 수 없습니다.');
+      return;
+    }
+
     if (type == SimpleModeAttendanceType.breakTime && !_hasWorkIn) {
       _showGuardSnack('먼저 출근을 펀칭한 뒤 휴게시간을 펀칭할 수 있습니다.');
       return;
@@ -238,6 +251,7 @@ class _DashboardInsidePunchRecorderSectionState
     );
 
     // ✅ 출근(workIn)일 때만 Timestamp 기록(단, 기기 설정 OFF면 내부에서 스킵)
+    //    (현재 화면에선 workIn을 막았으므로 사실상 실행되지 않음)
     if (type == SimpleModeAttendanceType.workIn) {
       await _recordClockInAtToCommuteTrueFalse(targetDateTime);
     }
@@ -255,7 +269,10 @@ class _DashboardInsidePunchRecorderSectionState
     final dateStr = DateFormat('MM.dd').format(_selectedDate);
     final textTheme = Theme.of(context).textTheme;
 
-    final bool canPunchWorkIn = true;
+    // ✅ 변경: 출근은 이 화면에서 항상 비활성
+    final bool canPunchWorkIn = !_disableWorkInPunch ? true : false;
+
+    // 휴게/퇴근은 기존 로직 유지(출근/휴게 기록 유무에 따라 활성)
     final bool canPunchBreak = _hasWorkIn;
     final bool canPunchWorkOut = _hasWorkIn && _hasBreak;
 
@@ -322,10 +339,13 @@ class _DashboardInsidePunchRecorderSectionState
             ),
             const SizedBox(height: 4),
             Text(
-              '선택한 날짜($dateStr) 기준으로 출근 · 휴게 · 퇴근을 순서대로 펀칭하세요.',
+              // ✅ 문구도 정책에 맞게 조정(출근은 여기서 불가)
+              '선택한 날짜($dateStr) 기준으로 휴게 · 퇴근을 순서대로 펀칭하세요.\n'
+                  '출근은 서비스 로그인에서 처리되며, 이 화면에서는 변경할 수 없습니다.',
               style: TextStyle(
                 fontSize: 11,
                 color: _Palette.dark.withOpacity(.6),
+                height: 1.35,
               ),
             ),
             const SizedBox(height: 12),
@@ -363,7 +383,7 @@ class _DashboardInsidePunchRecorderSectionState
                             label: '출근',
                             type: SimpleModeAttendanceType.workIn,
                             time: _workInTime,
-                            enabled: canPunchWorkIn,
+                            enabled: canPunchWorkIn, // ✅ 항상 false
                             onTap: () => _punch(SimpleModeAttendanceType.workIn),
                           ),
                         ),
@@ -374,7 +394,8 @@ class _DashboardInsidePunchRecorderSectionState
                             type: SimpleModeAttendanceType.breakTime,
                             time: _breakTime,
                             enabled: canPunchBreak,
-                            onTap: () => _punch(SimpleModeAttendanceType.breakTime),
+                            onTap: () =>
+                                _punch(SimpleModeAttendanceType.breakTime),
                           ),
                         ),
                         const SizedBox(width: 8),
