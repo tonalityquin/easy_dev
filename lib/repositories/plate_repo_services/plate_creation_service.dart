@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
@@ -9,8 +10,6 @@ import '../../screens/type_package/common_widgets/reverse_sheet_package/services
 import '../../screens/type_package/common_widgets/reverse_sheet_package/services/status_mapping.dart';
 
 // import '../../utils/usage_reporter.dart';
-
-// 🔹 ParkingCompleted 로컬 로깅용
 
 /// 🔹 중복 번호판 전용 도메인 예외
 class DuplicatePlateException implements Exception {
@@ -22,12 +21,56 @@ class DuplicatePlateException implements Exception {
   String toString() => message;
 }
 
+/// ✅ parking_completed_view "쓰기(Upsert/Delete)"를 기기 로컬 토글(SharedPreferences)로 제어
+/// - UI 토글과 동일 키를 사용해야 실제로 연동됩니다.
+/// - 이 클래스는 "쓰기 지점"에서만 사용합니다(트랜잭션 내부에서 prefs 읽기 금지 → 트랜잭션 밖에서 값 확보).
+class _ParkingCompletedViewWriteGate {
+  static const String prefsKey = 'parking_completed_realtime_write_enabled_v1';
+
+  static SharedPreferences? _prefs;
+  static Future<void>? _loading;
+
+  static Future<void> _ensureLoaded() async {
+    if (_prefs != null) return;
+    _loading ??= SharedPreferences.getInstance().then((p) => _prefs = p);
+    await _loading;
+  }
+
+  /// ✅ 항상 prefs에서 최신 값을 읽어옵니다(캐싱된 bool을 들고 있지 않음)
+  static Future<bool> canWrite() async {
+    await _ensureLoaded();
+    return _prefs!.getBool(prefsKey) ?? false; // 기본 OFF
+  }
+}
+
 class PlateCreationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  /// ✅ (변경) 2안용: 경량 View 컬렉션명
+  static const String _parkingCompletedViewCollection = 'parking_completed_view';
 
   static final Map<String, Map<String, dynamic>> _billCache = {};
   static final Map<String, DateTime> _billCacheExpiry = {};
   static const Duration _billTtl = Duration(minutes: 10);
+
+  /// ✅ (추가) view 문서(=area) 안에 들어갈 item payload
+  Map<String, dynamic> _buildParkingCompletedViewItem({
+    required String plateDocId,
+    required String plateNumber,
+    required String location,
+  }) {
+    final safeLocation = location.isNotEmpty ? location : '미지정';
+    return <String, dynamic>{
+      // key는 items.{plateDocId}
+      plateDocId: <String, dynamic>{
+        PlateFields.plateNumber: plateNumber,
+        PlateFields.location: safeLocation,
+        // 이 값은 해당 차량의 "입차 완료 시각"
+        'parkingCompletedAt': FieldValue.serverTimestamp(),
+        PlateFields.updatedAt: FieldValue.serverTimestamp(),
+      },
+    };
+  }
 
   Future<Map<String, dynamic>?> _getBillCached({
     required String? billingType,
@@ -87,7 +130,14 @@ class PlateCreationService {
     String? customStatus,
     required String selectedBillType,
   }) async {
-    final documentId = '${plateNumber}_$area';
+    // ✅ plates 문서명(documentId) = {plateNumber}_{area}
+    final String plateDocId = '${plateNumber}_$area';
+
+    // ✅ (핵심) parking_completed_view 쓰기 가능 여부(트랜잭션 밖에서 미리 확보)
+    final bool canWriteView = await _ParkingCompletedViewWriteGate.canWrite();
+    if (kDebugMode) {
+      debugPrint('🧩 [PlateCreationService] canWrite parking_completed_view = $canWriteView');
+    }
 
     int? regularAmount;
     int? regularDurationHours;
@@ -140,11 +190,10 @@ class PlateCreationService {
     plateNumber.length >= 4 ? plateNumber.substring(plateNumber.length - 4) : plateNumber;
 
     // billingType이 없으면 요금 잠금 처리
-    final effectiveIsLockedFee =
-        isLockedFee || (billingType == null || billingType.trim().isEmpty);
+    final effectiveIsLockedFee = isLockedFee || (billingType == null || billingType.trim().isEmpty);
 
     final base = PlateModel(
-      id: documentId,
+      id: plateDocId,
       plateNumber: plateNumber,
       plateFourDigit: plateFourDigit,
       type: plateType.firestoreValue,
@@ -179,8 +228,7 @@ class PlateCreationService {
       from: '',
       to: base.location,
     );
-    final entryLabel =
-    (plateType == PlateType.parkingRequests) ? '입차 요청' : plateType.label;
+    final entryLabel = (plateType == PlateType.parkingRequests) ? '입차 요청' : plateType.label;
     plateWithLog = plateWithLog.addLog(
       action: entryLabel,
       performedBy: userName,
@@ -188,7 +236,7 @@ class PlateCreationService {
       to: entryLabel,
     );
 
-    final docRef = _firestore.collection('plates').doc(documentId);
+    final docRef = _firestore.collection('plates').doc(plateDocId);
 
     // 🔹 이 호출에서 "처음부터 입차 완료(parking_completed)로 생성"된 경우를 감지하기 위한 플래그
     bool createdAsParkingCompleted = false;
@@ -201,6 +249,9 @@ class PlateCreationService {
         final snap = await tx.get(docRef);
         reads += 1; // ✅ tx.get → read 1
 
+        // ✅ (변경) viewRef는 "지역(area) 문서" 1개
+        final viewRef = _firestore.collection(_parkingCompletedViewCollection).doc(area);
+
         if (snap.exists) {
           final data = snap.data();
           final existingTypeStr = (data?['type'] as String?) ?? '';
@@ -210,52 +261,67 @@ class PlateCreationService {
           );
 
           if (!_isAllowedDuplicate(existingType)) {
-            debugPrint(
-                "🚨 중복된 번호판 등록 시도: $plateNumber (${existingType.name})");
-            // 🔹 여기서 더 이상 일반 Exception이 아닌 도메인 예외를 던짐
+            debugPrint("🚨 중복된 번호판 등록 시도: $plateNumber (${existingType.name})");
             throw DuplicatePlateException("이미 등록된 번호판입니다: $plateNumber");
           } else {
             // 기존 logs 보존 + 신규 로그 append
             final List<Map<String, dynamic>> existingLogs = (() {
               final raw = data?['logs'];
               if (raw is List) {
-                return raw
-                    .whereType<Map>()
-                    .map((e) => Map<String, dynamic>.from(e))
-                    .toList();
+                return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
               }
               return <Map<String, dynamic>>[];
             })();
 
             final List<Map<String, dynamic>> newLogs =
             (plateWithLog.logs ?? []).map((e) => e.toMap()).toList();
-            final List<Map<String, dynamic>> mergedLogs = [
-              ...existingLogs,
-              ...newLogs
-            ];
+            final List<Map<String, dynamic>> mergedLogs = [...existingLogs, ...newLogs];
 
             final partial = <String, dynamic>{
               PlateFields.type: plateType.firestoreValue,
-              // ✅ 클라이언트 시각 → 서버 타임스탬프로 일원화
               PlateFields.updatedAt: FieldValue.serverTimestamp(),
               if (base.location.isNotEmpty) PlateFields.location: base.location,
               if (endTime != null) PlateFields.endTime: endTime,
-              if (billingType != null && billingType.trim().isNotEmpty)
-                PlateFields.billingType: billingType,
+              if (billingType != null && billingType.trim().isNotEmpty) PlateFields.billingType: billingType,
               if (imageUrls != null) PlateFields.imageUrls: imageUrls,
               if (paymentMethod != null) PlateFields.paymentMethod: paymentMethod,
-              if (lockedAtTimeInSeconds != null)
-                PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
-              if (lockedFeeAmount != null)
-                PlateFields.lockedFeeAmount: lockedFeeAmount,
+              if (lockedAtTimeInSeconds != null) PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
+              if (lockedFeeAmount != null) PlateFields.lockedFeeAmount: lockedFeeAmount,
               PlateFields.isLockedFee: effectiveIsLockedFee,
               PlateFields.logs: mergedLogs,
             };
 
+            // ✅ parking_completed로 “등록/갱신”하는 경우:
+            // - plates에도 parkingCompletedAt 기록
+            // - view(area 문서)의 items.{plateDocId} upsert (단, canWriteView=true일 때만)
+            if (plateType == PlateType.parkingCompleted) {
+              partial['parkingCompletedAt'] = FieldValue.serverTimestamp();
+
+              if (canWriteView) {
+                tx.set(
+                  viewRef,
+                  <String, dynamic>{
+                    PlateFields.area: area,
+                    PlateFields.updatedAt: FieldValue.serverTimestamp(),
+                    'items': _buildParkingCompletedViewItem(
+                      plateDocId: plateDocId,
+                      plateNumber: plateNumber,
+                      location: base.location,
+                    ),
+                  },
+                  SetOptions(merge: true),
+                );
+                writes += 1; // view set(merge)
+              } else {
+                if (kDebugMode) {
+                  debugPrint('🚫 [PlateCreationService] skip parking_completed_view upsert (toggle OFF)');
+                }
+              }
+            }
+
             final bool wasLocked = (data?['isLockedFee'] == true);
             if (wasLocked) {
-              final countersRef =
-              _firestore.collection('plate_counters').doc('area_$area');
+              final countersRef = _firestore.collection('plate_counters').doc('area_$area');
               tx.set(
                 countersRef,
                 {'departureCompletedEvents': FieldValue.increment(1)},
@@ -269,25 +335,46 @@ class PlateCreationService {
           }
         } else {
           // 신규 set: 로그 2건 포함
-          // ✅ 생성 시에도 updatedAt을 서버 타임스탬프로 강제 주입
           final map = plateWithLog.toMap();
           map[PlateFields.updatedAt] = FieldValue.serverTimestamp();
+
+          // ✅ 처음부터 parking_completed로 생성되는 경우:
+          // - plates 문서에도 parkingCompletedAt 기록
+          // - view(area 문서)의 items.{plateDocId} upsert (단, canWriteView=true일 때만)
+          if (plateType == PlateType.parkingCompleted) {
+            map['parkingCompletedAt'] = FieldValue.serverTimestamp();
+
+            if (canWriteView) {
+              tx.set(
+                viewRef,
+                <String, dynamic>{
+                  PlateFields.area: area,
+                  PlateFields.updatedAt: FieldValue.serverTimestamp(),
+                  'items': _buildParkingCompletedViewItem(
+                    plateDocId: plateDocId,
+                    plateNumber: plateNumber,
+                    location: base.location,
+                  ),
+                },
+                SetOptions(merge: true),
+              );
+              writes += 1; // view set(merge)
+            } else {
+              if (kDebugMode) {
+                debugPrint('🚫 [PlateCreationService] skip parking_completed_view upsert (toggle OFF)');
+              }
+            }
+
+            createdAsParkingCompleted = true; // (SQLite 유지 플래그)
+          }
+
           tx.set(docRef, map);
           writes += 1; // plates set
-
-          // 🔸 이 호출에서 "처음부터 parking_completed 로 생성"한 경우 플래그 세팅
-          if (plateType == PlateType.parkingCompleted) {
-            createdAsParkingCompleted = true;
-          }
         }
       });
 
-      // 🔹 트랜잭션이 정상적으로 끝난 뒤, 처음부터 parking_completed 로 만든 경우에만
-      //    로컬 SQLite(ParkingCompletedDb)에 한 번 기록
+      // 🔹 트랜잭션 종료 후: 처음부터 parking_completed 로 만든 경우에만 SQLite 기록(기존 유지)
       if (createdAsParkingCompleted) {
-        // Firestore 비용 없음: 로컬(SQLite)만 기록
-        // 기존 스트림 기반 로깅과 동일하게 old/new Status 텍스트 사용
-        // (입차 요청 → 입차 완료로 바로 간 것처럼 취급)
         // ignore: unawaited_futures
         ParkingCompletedLogger.instance.maybeLogCompleted(
           plateNumber: plateNumber,
@@ -314,7 +401,6 @@ class PlateCreationService {
         );*/
       }
     } on DuplicatePlateException {
-      // 🔸 중복 번호판은 도메인 예외이므로 DebugDatabaseLogger에 기록하지 않음
       rethrow;
     } catch (e, st) {
       try {
@@ -322,7 +408,7 @@ class PlateCreationService {
           'op': 'plate.create.transaction',
           'collection': 'plates',
           'docPath': docRef.path,
-          'docId': documentId,
+          'docId': plateDocId,
           'inputs': {
             'plateNumber': plateNumber,
             'area': area,
@@ -345,15 +431,14 @@ class PlateCreationService {
 
     // ✅ plate_status upsert → updatedAt도 서버 타임스탬프로 (일관화)
     if (customStatus != null && customStatus.trim().isNotEmpty) {
-      final statusDocRef =
-      _firestore.collection('plate_status').doc(documentId);
+      final statusDocRef = _firestore.collection('plate_status').doc(plateDocId);
       final expireAt = Timestamp.fromDate(
         DateTime.now().add(const Duration(days: 1)),
       );
 
       final payload = <String, dynamic>{
         'customStatus': customStatus.trim(),
-        'updatedAt': FieldValue.serverTimestamp(), // ← 여기 일원화
+        'updatedAt': FieldValue.serverTimestamp(),
         'createdBy': userName,
         'expireAt': expireAt,
         'area': area,
@@ -373,7 +458,7 @@ class PlateCreationService {
             'op': 'plateStatus.upsert.set',
             'collection': 'plate_status',
             'docPath': statusDocRef.path,
-            'docId': documentId,
+            'docId': plateDocId,
             'error': {
               'type': e.runtimeType.toString(),
               'code': e.code,
@@ -390,7 +475,7 @@ class PlateCreationService {
             'op': 'plateStatus.upsert.unknown',
             'collection': 'plate_status',
             'docPath': statusDocRef.path,
-            'docId': documentId,
+            'docId': plateDocId,
             'error': {
               'type': e.runtimeType.toString(),
               if (e is FirebaseException) 'code': e.code,

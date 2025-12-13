@@ -16,6 +16,9 @@ import '../../utils/overlay_mode_config.dart';
 // ✅ commute_true_false Firestore 기록 On/Off(기기별, 기본 OFF + 유지)
 import '../../utils/commute_true_false_mode_config.dart';
 
+// ✅ (추가) 입차 완료 테이블 "실시간 탭" On/Off(기기별, 기본 OFF + 유지)
+import '../../utils/parking_completed_realtime_tab_mode_config.dart';
+
 class Header extends StatefulWidget {
   const Header({super.key});
 
@@ -115,7 +118,8 @@ class _TopRow extends StatelessWidget {
     }
   }
 
-  // “설정” 바텀시트 — Gmail(수신자만) + QuickOverlay 오버레이 권한 + 오버레이 모드(항상 노출) + commute_true_false 토글
+  // “설정” 바텀시트 — Gmail(수신자만) + QuickOverlay 오버레이 권한 + 오버레이 모드(항상 노출)
+  // + commute_true_false 토글 + parking_completed 실시간 탭 토글
   Future<void> _openSheetsLinkSheet(BuildContext context) async {
     // Gmail 수신자 로드 (To 만)
     final emailCfg = await EmailConfig.load();
@@ -137,6 +141,10 @@ class _TopRow extends StatelessWidget {
 
     // ✅ commute_true_false Firestore 기록 토글 로드 (기본 OFF)
     bool commuteTrueFalseEnabled = await CommuteTrueFalseModeConfig.isEnabled();
+
+    // ✅ (추가) 입차 완료 테이블 "실시간 탭" 토글 로드 (기본 OFF)
+    bool parkingCompletedRealtimeTabEnabled =
+    await ParkingCompletedRealtimeTabModeConfig.isEnabled();
 
     await showModalBottomSheet(
       context: context,
@@ -195,7 +203,7 @@ class _TopRow extends StatelessWidget {
                         const SizedBox(height: 10),
                         const Text(
                           '다른 앱 위에 플로팅 버블 또는 상단 포그라운드 패널(QuickOverlayHome)을 띄우기 위해서는 '
-                          '안드로이드 “다른 앱 위에 표시” 권한이 필요합니다.',
+                              '안드로이드 “다른 앱 위에 표시” 권한이 필요합니다.',
                           style: TextStyle(fontSize: 13, color: Colors.black87),
                         ),
                         const SizedBox(height: 10),
@@ -214,7 +222,8 @@ class _TopRow extends StatelessWidget {
                                     return;
                                   }
                                   try {
-                                    final granted = await FlutterOverlayWindow.isPermissionGranted();
+                                    final granted =
+                                    await FlutterOverlayWindow.isPermissionGranted();
                                     if (!ctx.mounted) return;
                                     if (granted) {
                                       showSelectedSnackbar(
@@ -252,7 +261,8 @@ class _TopRow extends StatelessWidget {
                                     return;
                                   }
                                   try {
-                                    final already = await FlutterOverlayWindow.isPermissionGranted();
+                                    final already =
+                                    await FlutterOverlayWindow.isPermissionGranted();
                                     if (already) {
                                       if (!ctx.mounted) return;
                                       showSelectedSnackbar(
@@ -262,7 +272,8 @@ class _TopRow extends StatelessWidget {
                                       return;
                                     }
 
-                                    final result = await FlutterOverlayWindow.requestPermission();
+                                    final result =
+                                    await FlutterOverlayWindow.requestPermission();
 
                                     if (!ctx.mounted) return;
                                     if (result == true) {
@@ -350,7 +361,7 @@ class _TopRow extends StatelessWidget {
                         const SizedBox(height: 10),
                         const Text(
                           '앱이 백그라운드로 이동했을 때 사용할 오버레이 형태를 선택합니다.\n'
-                          '하나만 선택되며, 선택된 모드만 실행/종료 조건을 공유합니다.',
+                              '하나만 선택되며, 선택된 모드만 실행/종료 조건을 공유합니다.',
                           style: TextStyle(fontSize: 13, color: Colors.black87),
                         ),
                         const SizedBox(height: 12),
@@ -466,8 +477,8 @@ class _TopRow extends StatelessWidget {
                         const SizedBox(height: 10),
                         const Text(
                           '이 설정은 “기기별(로컬)”로 저장됩니다.\n'
-                          'ON이면 출근 버튼을 누를 때 commute_true_false 컬렉션에 출근 시각(Timestamp)을 기록합니다.\n'
-                          'OFF이면 해당 Firestore 업데이트는 모두 건너뛰고, 로컬(SQLite) 기록만 수행합니다.',
+                              'ON이면 출근 버튼을 누를 때 commute_true_false 컬렉션에 출근 시각(Timestamp)을 기록합니다.\n'
+                              'OFF이면 해당 Firestore 업데이트는 모두 건너뛰고, 로컬(SQLite) 기록만 수행합니다.',
                           style: TextStyle(fontSize: 13, color: Colors.black87),
                         ),
                         const SizedBox(height: 10),
@@ -493,6 +504,84 @@ class _TopRow extends StatelessWidget {
                               v
                                   ? '이 기기에서 commute_true_false 기록을 ON으로 설정했습니다.'
                                   : '이 기기에서 commute_true_false 기록을 OFF로 설정했습니다.',
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                // ✅ (추가) 입차 완료 테이블: 실시간 탭 On/Off 섹션
+                Widget buildParkingCompletedRealtimeTabToggleSection() {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.black.withOpacity(.08)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(.06),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.table_chart_outlined,
+                                size: 20,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Text(
+                                '입차 완료 테이블: 실시간 탭(서버 조회)',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          '이 설정은 “기기별(로컬)”로 저장됩니다.\n'
+                              'ON이면 입차 완료 테이블에 “실시간” 탭이 표시되어 진입할 수 있습니다.\n'
+                              'OFF이면 “실시간” 탭 자체가 숨겨져 진입할 수 없습니다(로컬 탭만 사용).',
+                          style: TextStyle(fontSize: 13, color: Colors.black87),
+                        ),
+                        const SizedBox(height: 10),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            parkingCompletedRealtimeTabEnabled ? 'ON (실시간 탭 사용)' : 'OFF (실시간 탭 숨김)',
+                          ),
+                          subtitle: Text(
+                            parkingCompletedRealtimeTabEnabled
+                                ? '입차 완료 테이블에서 실시간 탭 진입이 허용됩니다.'
+                                : '입차 완료 테이블에서 실시간 탭 진입이 차단됩니다.',
+                          ),
+                          value: parkingCompletedRealtimeTabEnabled,
+                          onChanged: (v) async {
+                            parkingCompletedRealtimeTabEnabled = v;
+                            setSheetState(() {});
+                            await ParkingCompletedRealtimeTabModeConfig.setEnabled(v);
+
+                            if (!ctx.mounted) return;
+                            showSuccessSnackbar(
+                              context,
+                              v
+                                  ? '이 기기에서 “입차 완료 테이블 실시간 탭”을 ON으로 설정했습니다.'
+                                  : '이 기기에서 “입차 완료 테이블 실시간 탭”을 OFF로 설정했습니다.',
                             );
                           },
                         ),
@@ -675,6 +764,9 @@ class _TopRow extends StatelessWidget {
                         // commute_true_false 토글
                         buildCommuteTrueFalseToggleSection(),
 
+                        // ✅ (추가) 입차 완료 테이블 실시간 탭 토글
+                        buildParkingCompletedRealtimeTabToggleSection(),
+
                         // Gmail 수신자(To) 설정
                         buildGmailSection(),
                       ],
@@ -759,10 +851,10 @@ class _AnimatedSide extends StatelessWidget {
         },
         child: show
             ? Container(
-                key: const ValueKey('side-on'),
-                alignment: Alignment.center,
-                child: child,
-              )
+          key: const ValueKey('side-on'),
+          alignment: Alignment.center,
+          child: child,
+        )
             : const SizedBox.shrink(key: ValueKey('side-off')),
       ),
     );
@@ -787,7 +879,8 @@ class HeaderBadge extends StatelessWidget {
       duration: const Duration(milliseconds: 600),
       tween: Tween(begin: .92, end: 1),
       curve: Curves.easeOutBack,
-      builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
+      builder: (context, scale, child) =>
+          Transform.scale(scale: scale, child: child),
       child: SizedBox(
         width: size,
         height: size,
@@ -815,7 +908,8 @@ class _HeaderBadgeInner extends StatefulWidget {
   State<_HeaderBadgeInner> createState() => _HeaderBadgeInnerState();
 }
 
-class _HeaderBadgeInnerState extends State<_HeaderBadgeInner> with SingleTickerProviderStateMixin {
+class _HeaderBadgeInnerState extends State<_HeaderBadgeInner>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _rotCtrl;
 
   @override

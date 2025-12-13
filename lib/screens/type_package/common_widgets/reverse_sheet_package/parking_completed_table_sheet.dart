@@ -1,20 +1,39 @@
 // lib/screens/type_package/parking_completed_package/ui/parking_completed_table_sheet.dart
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' show FontFeature;
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../../utils/snackbar_helper.dart';
-import 'models/parking_completed_record.dart';
 import 'repositories/parking_completed_repository.dart';
 import 'ui/reverse_page_top_sheet.dart';
 
+/// ✅ 실시간 탭 진입 게이트(ON/OFF)
+/// - 기본 OFF
+/// - 앱 재실행 후에도 유지(SharedPreferences)
+class ParkingCompletedRealtimeTabGate {
+  static const String _prefsKeyRealtimeTabEnabled = 'parking_completed_realtime_tab_enabled_v1';
 
+  static Future<bool> isEnabled() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_prefsKeyRealtimeTabEnabled) ?? false; // 기본 OFF
+  }
 
-/// 👉 역 Top Sheet로 "Parking Completed 로컬 테이블" 열기 헬퍼
+  static Future<void> setEnabled(bool v) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefsKeyRealtimeTabEnabled, v);
+  }
+}
+
+/// 👉 역 Top Sheet로 "Parking Completed 로컬/실시간 테이블" 열기 헬퍼
 ///
-/// 기존에는 ReversePage(Live 모드)로 전환하기 위한 콜백을 받았지만,
-/// 이제는 단순 테이블 뷰만 열도록 API를 단순화했다.
+/// - 로컬 탭: 기존 SQLite 테이블 뷰
+/// - 실시간 탭: (게이트 ON일 때만) 캐시된 데이터만 표시(탭 진입 시 서버 조회 금지)
+///   서버 조회는 "새로고침" 버튼에서만 수행
 Future<void> showParkingCompletedTableTopSheet(BuildContext context) async {
   await showReversePageTopSheet(
     context: context,
@@ -23,18 +42,241 @@ Future<void> showParkingCompletedTableTopSheet(BuildContext context) async {
   );
 }
 
-/// 로컬 SQLite `parking_completed_records` 테이블 뷰(SQL-like)
-///
-/// - 번호판/주차 구역 텍스트 검색
-/// - createdAt 기준 정렬(오래된 순 / 최신 순 토글)
-/// - 출차 완료(isDepartureCompleted) 숨김 토글
-/// - 전체 삭제
+/// 로컬(SQLite) + 실시간(Firestore view) 탭 제공
+/// ✅ 변경: Stateless -> Stateful (TabController + 게이트 로딩/차단 처리)
 class ParkingCompletedTableSheet extends StatefulWidget {
   const ParkingCompletedTableSheet({super.key});
 
   @override
   State<ParkingCompletedTableSheet> createState() => _ParkingCompletedTableSheetState();
 }
+
+class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet> with SingleTickerProviderStateMixin {
+  late final TabController _tabCtrl;
+
+  bool _realtimeTabEnabled = false; // ✅ 기본 OFF
+  bool _gateLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabCtrl = TabController(length: 2, vsync: this);
+    _loadGate();
+  }
+
+  @override
+  void dispose() {
+    _tabCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadGate() async {
+    try {
+      final enabled = await ParkingCompletedRealtimeTabGate.isEnabled();
+      if (!mounted) return;
+      setState(() {
+        _realtimeTabEnabled = enabled;
+        _gateLoaded = true;
+        if (!_realtimeTabEnabled && _tabCtrl.index == 1) {
+          _tabCtrl.index = 0;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _realtimeTabEnabled = false;
+        _gateLoaded = true;
+        _tabCtrl.index = 0;
+      });
+    }
+  }
+
+  void _onTapTab(int index) {
+    if (index == 1 && !_realtimeTabEnabled) {
+      HapticFeedback.selectionClick();
+      _tabCtrl.animateTo(0);
+      return;
+    }
+
+    _tabCtrl.animateTo(index);
+  }
+
+  Widget _tabLabel({
+    required String text,
+    required bool enabled,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (!enabled) ...[
+          Icon(Icons.lock_outline, size: 16, color: cs.outline.withOpacity(.9)),
+          const SizedBox(width: 6),
+        ],
+        Text(text),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+
+    return SafeArea(
+      top: true,
+      left: false,
+      right: false,
+      bottom: false,
+      child: Container(
+        color: Colors.white,
+        child: Column(
+          children: [
+            const SizedBox(height: 4),
+
+            // ─────────────── 상단 헤더(공통) ───────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: _Palette.base.withOpacity(.08),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.table_chart_outlined,
+                      color: _Palette.base,
+                      size: 18,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '입차 완료 테이블',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: _Palette.dark,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        if (_gateLoaded && !_realtimeTabEnabled) ...[],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    tooltip: '닫기',
+                    onPressed: () => Navigator.of(context).maybePop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: _Palette.base.withOpacity(.04),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _Palette.light.withOpacity(.25)),
+                ),
+                child: TabBar(
+                  controller: _tabCtrl,
+                  onTap: _onTapTab,
+                  // ✅ 진입 차단
+                  labelColor: _Palette.base,
+                  unselectedLabelColor: cs.outline,
+                  indicatorColor: _Palette.base,
+                  indicatorSize: TabBarIndicatorSize.tab,
+                  dividerColor: Colors.transparent,
+                  tabs: [
+                    Tab(child: _tabLabel(text: '로컬', enabled: true)),
+                    Tab(child: _tabLabel(text: '실시간', enabled: _realtimeTabEnabled)),
+                  ],
+                ),
+              ),
+            ),
+
+            const Divider(height: 1),
+
+            // ─────────────── 탭 바디 ───────────────
+            Expanded(
+              child: TabBarView(
+                controller: _tabCtrl,
+                physics: _realtimeTabEnabled ? const PageScrollPhysics() : const NeverScrollableScrollPhysics(),
+                children: [
+                  const _ParkingCompletedTableTab(
+                    mode: _TableMode.local,
+                    description: '하루 업무가 끝나면 꼭 휴지통을 눌러 데이터를 비워주세요.',
+                  ),
+                  _realtimeTabEnabled
+                      ? const _ParkingCompletedTableTab(
+                          mode: _TableMode.realtime,
+                          description: '잦은 새로고침은 앱에 무리를 줍니다.',
+                        )
+                      : const _RealtimeTabLockedPanel(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _RealtimeTabLockedPanel extends StatelessWidget {
+  const _RealtimeTabLockedPanel();
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.lock_outline, size: 44, color: cs.outline),
+            const SizedBox(height: 12),
+            Text(
+              '실시간 탭이 비활성화되어 있습니다',
+              textAlign: TextAlign.center,
+              style: text.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: _Palette.dark,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '설정에서 “실시간 모드(탭) 사용”을 ON으로 변경한 뒤 다시 시도해 주세요.',
+              textAlign: TextAlign.center,
+              style: text.bodyMedium?.copyWith(
+                color: cs.outline,
+                height: 1.45,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+enum _TableMode { local, realtime }
 
 /// Deep Blue 팔레트(서비스 전반에서 사용하는 컬러와 동일 계열)
 class _Palette {
@@ -43,15 +285,54 @@ class _Palette {
   static const light = Color(0xFF5472D3); // 톤 변형/보더
 }
 
-class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet> {
-  final _repo = ParkingCompletedRepository();
+/// UI 렌더링을 위한 내부 Row VM
+/// - 로컬(SQLite): isDepartureCompleted 의미 있음
+/// - 실시간(Firestore): isDepartureCompleted는 false 고정
+class _RowVM {
+  final String plateNumber;
+  final String location;
+  final DateTime? createdAt;
+  final bool isDepartureCompleted;
+
+  const _RowVM({
+    required this.plateNumber,
+    required this.location,
+    required this.createdAt,
+    required this.isDepartureCompleted,
+  });
+}
+
+/// ─────────────────────────────────────────────────────────
+/// 탭 단위 테이블(로컬/실시간 공통 UI, 데이터 소스만 교체)
+/// ─────────────────────────────────────────────────────────
+class _ParkingCompletedTableTab extends StatefulWidget {
+  final _TableMode mode;
+  final String description;
+
+  const _ParkingCompletedTableTab({
+    required this.mode,
+    required this.description,
+  });
+
+  @override
+  State<_ParkingCompletedTableTab> createState() => _ParkingCompletedTableTabState();
+}
+
+class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> with AutomaticKeepAliveClientMixin {
+  // 로컬(SQLite) repo
+  final _localRepo = ParkingCompletedRepository();
+
+  // 실시간(Firestore view) repo
+  final _realtimeRepo = _ParkingCompletedViewRepository();
+
   bool _loading = true;
 
-  /// 전체 로우(필터 전)
-  List<ParkingCompletedRecord> _allRows = [];
+  /// ✅ 전체 로우(필터 전)
+  /// - 실시간 탭: 캐시/서버조회 결과를 유지(필터 변경 시 재조회 금지)
+  List<_RowVM> _allRows = [];
 
-  /// 화면에 표시되는 로우(필터/정렬 후)
-  List<ParkingCompletedRecord> _rows = [];
+  /// ✅ 화면에 표시되는 로우(필터/정렬 후)
+  List<_RowVM> _rows = [];
 
   final TextEditingController _searchCtrl = TextEditingController();
 
@@ -63,25 +344,100 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
   final ScrollController _scrollCtrl = ScrollController();
 
   // 테이블 최소 너비(좁은 폰에선 가로 스크롤)
-  static const double _tableMinWidth = 720; // 출차 완료 컬럼 추가로 약간 확장
+  static const double _tableMinWidth = 720;
   static const double _headerHeight = 44;
 
   // 정렬 상태: true = 오래된 순(ASC), false = 최신 순(DESC)
   bool _sortOldFirst = true;
 
   // 출차 완료 숨김 필터: true면 isDepartureCompleted == true 행을 숨김
+  // - 로컬 모드에서만 의미 있음
   bool _hideDepartureCompleted = false;
+
+  bool get _isLocal => widget.mode == _TableMode.local;
+
+  bool get _isRealtime => widget.mode == _TableMode.realtime;
+
+  // ✅ 실시간 탭: “주차 구역”은 area가 아니라 location
+  static const String _locationAll = '전체';
+  String _selectedLocation = _locationAll;
+  List<String> _availableLocations = [];
+
+  // ✅ 옵션 A: 실시간 탭은 자동 서버조회 금지
+  // - 서버 조회는 오직 "새로고침" 버튼에서만 수행
+  // - 캐시가 있으면 캐시 표시
+  bool _hasFetchedFromServer = false;
+
+  // ✅ 쿨다운 표시 갱신용(리오픈 시에도 repository 값을 기반으로 재시작)
+  Timer? _refreshCooldownTicker;
+
+  bool get _isRefreshBlocked => _realtimeRepo.isRefreshBlocked;
+
+  int get _refreshRemainingSec => _realtimeRepo.refreshRemainingSec;
+
+  void _ensureCooldownTicker() {
+    _refreshCooldownTicker?.cancel();
+
+    if (!_isRealtime) return;
+    if (!_isRefreshBlocked) return;
+
+    _refreshCooldownTicker = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      if (!_isRefreshBlocked) {
+        t.cancel();
+      }
+      setState(() {}); // 남은시간/아이콘 상태 갱신
+    });
+  }
+
+  // ✅ 실시간 write 토글 로딩 상태(SharedPreferences 읽기)
+  bool _writeToggleLoading = false;
+
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
     super.initState();
-    _load();
 
-    // 입력마다 바로 _load() 호출 대신 디바운스
-    _searchCtrl.addListener(() {
-      _debounce?.cancel();
-      _debounce = Timer(const Duration(milliseconds: _debounceMs), _load);
-    });
+    _searchCtrl.addListener(_onSearchChangedDebounced);
+
+    if (_isLocal) {
+      // 로컬은 기존처럼 init에서 로드
+      _loadLocal();
+    } else {
+      // ✅ 옵션 A: 실시간은 init에서 서버 조회 금지
+      // 캐시만 즉시 반영
+      final cached = _realtimeRepo.getCached();
+      _allRows = List.of(cached);
+      _availableLocations = _extractLocations(_allRows);
+      _rows = List.of(_allRows);
+      _applyFilterAndSort();
+      _loading = false;
+
+      // ✅ 리오픈 시에도 쿨다운이 남아있다면 표시 갱신을 재시작
+      _ensureCooldownTicker();
+
+      // ✅ 실시간 "데이터 삽입(Write) ON/OFF" 토글 로드(기기 로컬, 기본 OFF)
+      _loadRealtimeWriteToggle();
+    }
+  }
+
+  Future<void> _loadRealtimeWriteToggle() async {
+    if (!_isRealtime) return;
+
+    setState(() => _writeToggleLoading = true);
+    try {
+      await _realtimeRepo.ensureWriteToggleLoaded();
+    } catch (_) {
+      // prefs 로드 실패는 치명적이지 않으므로 UI만 OFF로 유지
+    } finally {
+      if (!mounted) return;
+      setState(() => _writeToggleLoading = false);
+    }
   }
 
   @override
@@ -89,33 +445,138 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
     _debounce?.cancel();
     _searchCtrl.dispose();
     _scrollCtrl.dispose();
+    _refreshCooldownTicker?.cancel();
     super.dispose();
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
-    final rows = await _repo.listAll(search: _searchCtrl.text);
-    if (!mounted) return;
-    setState(() {
-      _allRows = List.of(rows);
-      _applyFilterAndSort(); // 현재 필터/정렬 상태에 맞춰 적용
-      _loading = false;
+  void _onSearchChangedDebounced() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: _debounceMs), () {
+      if (!mounted) return;
+
+      // ✅ 로컬: 기존 유지(검색어 변경 시 repo 재조회)
+      // ✅ 실시간: 재조회 금지(이미 가진 _allRows 기반으로 숨김/필터만 적용)
+      if (_isRealtime) {
+        setState(() => _applyFilterAndSort());
+      } else {
+        _loadLocal();
+      }
     });
   }
 
-  /// 필터 + 정렬 동시에 적용
+  Future<void> _loadLocal() async {
+    setState(() => _loading = true);
+
+    try {
+      final rows = await _localRepo.listAll(search: _searchCtrl.text);
+      if (!mounted) return;
+
+      setState(() {
+        _allRows = rows
+            .map(
+              (r) => _RowVM(
+                plateNumber: r.plateNumber,
+                location: r.location,
+                createdAt: r.createdAt,
+                isDepartureCompleted: r.isDepartureCompleted,
+              ),
+            )
+            .toList();
+
+        _applyFilterAndSort();
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      showFailedSnackbar(context, '데이터 로드 실패: $e');
+    }
+  }
+
+  /// ✅ 옵션 A: 실시간 서버 조회는 "새로고침" 버튼에서만 수행
+  /// ✅ 추가: 새로고침 1회 수행 후 30초 쿨다운(시트를 닫아도 유지)
+  Future<void> _refreshRealtimeFromServer() async {
+    if (!_isRealtime) return;
+
+    if (_loading) {
+      showSelectedSnackbar(context, '이미 갱신 중입니다.');
+      return;
+    }
+
+    // ✅ repository에 저장된 쿨다운 기준으로 차단(시트 재오픈해도 유지)
+    if (_isRefreshBlocked) {
+      _ensureCooldownTicker();
+      showSelectedSnackbar(context, '새로고침 대기 중: ${_refreshRemainingSec}초');
+      return;
+    }
+
+    // ✅ "클릭 시점"부터 30초 시작(성공/실패 무관)
+    _realtimeRepo.startRefreshCooldown(const Duration(seconds: 30));
+    _ensureCooldownTicker();
+
+    setState(() => _loading = true);
+
+    try {
+      final rows = await _realtimeRepo.fetchFromServerAndCache();
+
+      if (!mounted) return;
+      setState(() {
+        _allRows = List.of(rows);
+        _availableLocations = _extractLocations(_allRows);
+
+        if (_selectedLocation != _locationAll && !_availableLocations.contains(_selectedLocation)) {
+          _selectedLocation = _locationAll;
+        }
+
+        _applyFilterAndSort();
+        _loading = false;
+        _hasFetchedFromServer = true;
+      });
+
+      showSuccessSnackbar(context, '실시간 데이터를 갱신했습니다.');
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      showFailedSnackbar(context, '실시간 갱신 실패: $e');
+    }
+  }
+
+  List<String> _extractLocations(List<_RowVM> rows) {
+    final set = <String>{};
+    for (final r in rows) {
+      final k = r.location.trim();
+      if (k.isNotEmpty) set.add(k);
+    }
+    final list = set.toList()..sort();
+    return list;
+  }
+
   void _applyFilterAndSort() {
-    // 1) 필터: 출차 완료 숨김 여부
+    final search = _searchCtrl.text.trim().toLowerCase();
+
     _rows = _allRows.where((r) {
-      if (!_hideDepartureCompleted) return true;
-      return !r.isDepartureCompleted;
+      // ✅ 로컬 탭: 출차 완료 숨김(기존 유지)
+      if (_isLocal && _hideDepartureCompleted && r.isDepartureCompleted) {
+        return false;
+      }
+
+      // ✅ 실시간 탭: 주차 구역(location) 필터 (재조회 없이 숨김)
+      if (_isRealtime && _selectedLocation != _locationAll) {
+        if (r.location != _selectedLocation) return false;
+      }
+
+      // ✅ 실시간 탭: 검색도 재조회 없이 로컬 필터(숨김)
+      if (_isRealtime && search.isNotEmpty) {
+        final hit = r.plateNumber.toLowerCase().contains(search) || r.location.toLowerCase().contains(search);
+        if (!hit) return false;
+      }
+
+      return true;
     }).toList();
 
-    // 2) 정렬
     _sortRows();
   }
 
-  /// createdAt 기준 정렬
   void _sortRows() {
     _rows.sort((a, b) {
       final ca = a.createdAt;
@@ -128,7 +589,6 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
     });
   }
 
-  /// 헤더 클릭 시 정렬 토글
   void _toggleSortByCreatedAt() {
     setState(() {
       _sortOldFirst = !_sortOldFirst;
@@ -140,8 +600,8 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
     );
   }
 
-  /// 출차 완료 숨김 토글 버튼
   void _toggleHideDepartureCompleted() {
+    if (!_isLocal) return;
     setState(() {
       _hideDepartureCompleted = !_hideDepartureCompleted;
       _applyFilterAndSort();
@@ -152,8 +612,9 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
     );
   }
 
-  /// 전체 삭제
   Future<void> _clearAll() async {
+    if (!_isLocal) return;
+
     final ok = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -172,44 +633,91 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
       ),
     );
     if (ok != true) return;
-    await _repo.clearAll();
+
+    await _localRepo.clearAll();
     if (!mounted) return;
+
     showSuccessSnackbar(context, '전체 삭제되었습니다.');
-    _load();
+    _loadLocal();
   }
 
-  // ────────────────── UI Helpers (SQL-like cells) ──────────────────
+  Future<void> _toggleRealtimeWriteEnabled(bool v) async {
+    if (!_isRealtime) return;
+    if (_writeToggleLoading) return;
+
+    setState(() => _writeToggleLoading = true);
+    try {
+      await _realtimeRepo.setRealtimeWriteEnabled(v);
+      if (!mounted) return;
+
+      showSelectedSnackbar(
+        context,
+        v ? '이 기기에서 실시간 데이터 삽입(Write)을 ON 했습니다.' : '이 기기에서 실시간 데이터 삽입(Write)을 OFF 했습니다.',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showFailedSnackbar(context, '설정 저장 실패: $e');
+    } finally {
+      if (!mounted) return;
+      setState(() => _writeToggleLoading = false);
+    }
+  }
+
+  Widget _buildRowsChip(TextTheme text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: _Palette.base.withOpacity(.06),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.list_alt_outlined, size: 16, color: _Palette.base),
+          const SizedBox(width: 6),
+          Text(
+            'Rows: ${_rows.length}',
+            style: text.labelMedium?.copyWith(
+              color: _Palette.base,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   TextStyle get _headStyle => Theme.of(context).textTheme.labelMedium!.copyWith(
-    fontWeight: FontWeight.w700,
-    letterSpacing: .2,
-    color: _Palette.dark,
-  );
+        fontWeight: FontWeight.w700,
+        letterSpacing: .2,
+        color: _Palette.dark,
+      );
 
   TextStyle get _cellStyle => Theme.of(context).textTheme.bodyMedium!.copyWith(
-    height: 1.25,
-    color: _Palette.dark.withOpacity(.9),
-  );
+        height: 1.25,
+        color: _Palette.dark.withOpacity(.9),
+      );
 
   TextStyle get _monoStyle => _cellStyle.copyWith(
-    fontFeatures: const [FontFeature.tabularFigures()], // 자리 고정 숫자
-    fontFamilyFallback: const ['monospace'],
-  );
+        fontFeatures: const [FontFeature.tabularFigures()],
+        fontFamilyFallback: const ['monospace'],
+      );
 
   Widget _th(
-      String label, {
-        double? width,
-        int flex = 0,
-        TextAlign align = TextAlign.left,
-        bool sortable = false,
-        bool sortAsc = true,
-        VoidCallback? onTap,
-      }) {
+    String label, {
+    double? width,
+    int flex = 0,
+    TextAlign align = TextAlign.left,
+    bool sortable = false,
+    bool sortAsc = true,
+    VoidCallback? onTap,
+  }) {
     final sortIcon = sortable
         ? Icon(
-      sortAsc ? Icons.arrow_upward : Icons.arrow_downward,
-      size: 14,
-      color: _Palette.dark.withOpacity(.8),
-    )
+            sortAsc ? Icons.arrow_upward : Icons.arrow_downward,
+            size: 14,
+            color: _Palette.dark.withOpacity(.8),
+          )
         : null;
 
     final labelRow = Row(
@@ -261,13 +769,13 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
   }
 
   Widget _td(
-      Widget child, {
-        double? width,
-        int flex = 0,
-        TextAlign align = TextAlign.left,
-        Color? bg,
-        bool showRightBorder = false,
-      }) {
+    Widget child, {
+    double? width,
+    int flex = 0,
+    TextAlign align = TextAlign.left,
+    Color? bg,
+    bool showRightBorder = false,
+  }) {
     final cell = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       alignment: _alignTo(align),
@@ -280,9 +788,9 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
           ),
           right: showRightBorder
               ? BorderSide(
-            color: _Palette.light.withOpacity(.25),
-            width: .7,
-          )
+                  color: _Palette.light.withOpacity(.25),
+                  width: .7,
+                )
               : BorderSide.none,
         ),
       ),
@@ -314,10 +822,20 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
     return '$y-$mo-$d $h:$mi';
   }
 
-  /// pinned header + 세로/가로 스크롤 테이블
   Widget _buildTable(ScrollController scrollCtrl) {
     if (_loading) return const ExpandedLoading();
-    if (_rows.isEmpty) return const ExpandedEmpty(message: '기록이 없습니다.');
+
+    if (_rows.isEmpty) {
+      // ✅ 옵션 A: 실시간 탭에서 아직 서버 갱신을 누르지 않았고 캐시도 없을 때
+      if (_isRealtime && !_hasFetchedFromServer && _allRows.isEmpty) {
+        return const ExpandedEmpty(
+          message: '캐시된 데이터가 없습니다.\n오른쪽 위 새로고침을 눌러 실시간 데이터를 불러오세요.',
+        );
+      }
+      return ExpandedEmpty(
+        message: _isLocal ? '기록이 없습니다.' : '표시할 입차 완료 데이터가 없습니다.',
+      );
+    }
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -333,13 +851,10 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
                 maxWidth: tableWidth,
               ),
               child: DecoratedBox(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                ),
+                decoration: const BoxDecoration(color: Colors.white),
                 child: CustomScrollView(
                   controller: scrollCtrl,
                   slivers: [
-                    // ── 고정 헤더 (Pinned) ───────────────────────────────
                     SliverPersistentHeader(
                       pinned: true,
                       delegate: _HeaderDelegate(
@@ -349,34 +864,30 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
                             _th('Plate Number', flex: 2),
                             _th('Location', flex: 2),
                             _th(
-                              'Entry Time', // 컬럼명 영어
+                              'Entry Time',
                               flex: 3,
                               sortable: true,
                               sortAsc: _sortOldFirst,
                               onTap: _toggleSortByCreatedAt,
                             ),
-                            _th(
-                              'Departure',
-                              width: 110,
-                              align: TextAlign.center,
-                            ),
+                            _th('Departure', width: 110, align: TextAlign.center),
                           ],
                         ),
                       ),
                     ),
-
-                    // ── 바디 (행 리스트) ───────────────────────────────
                     SliverList(
                       delegate: SliverChildBuilderDelegate(
-                            (context, i) {
+                        (context, i) {
                           final r = _rows[i];
                           final plate = r.plateNumber;
                           final location = r.location;
                           final created = _fmtDate(r.createdAt);
-                          final departed = r.isDepartureCompleted;
+
+                          // 로컬만 의미 있음. 실시간(view)은 항상 false.
+                          final departed = _isLocal ? r.isDepartureCompleted : false;
+
                           final isEven = i.isEven;
 
-                          // 출차 완료면 연한 초록색 배경, 아니면 기존 번갈아 색
                           Color rowBg;
                           if (departed) {
                             rowBg = Colors.green.withOpacity(.06);
@@ -389,29 +900,19 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
                               _td(
                                 Text(
                                   plate,
-                                  style: _cellStyle.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                  style: _cellStyle.copyWith(fontWeight: FontWeight.w600),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 flex: 2,
                                 bg: rowBg,
                               ),
                               _td(
-                                Text(
-                                  location,
-                                  style: _cellStyle,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                                Text(location, style: _cellStyle, overflow: TextOverflow.ellipsis),
                                 flex: 2,
                                 bg: rowBg,
                               ),
                               _td(
-                                Text(
-                                  created,
-                                  style: _monoStyle,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+                                Text(created, style: _monoStyle, overflow: TextOverflow.ellipsis),
                                 flex: 3,
                                 bg: rowBg,
                               ),
@@ -441,192 +942,410 @@ class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet>
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
+  Widget _buildRealtimeLocationFilter(ColorScheme cs, TextTheme text) {
+    final disabled = _loading || _availableLocations.isEmpty;
 
-    return SafeArea(
-      top: true,
-      left: false,
-      right: false,
-      bottom: false,
-      child: Container(
-        color: Colors.white,
-        child: Column(
-          children: [
-            const SizedBox(height: 4),
-            // ─────────────── 상단 툴바(타이틀 + 액션) ───────────────
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 1행: 아이콘 + 타이틀 + 배지 + 닫기
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: _Palette.base.withOpacity(.08),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(
-                          Icons.table_chart_outlined,
-                          color: _Palette.base,
-                          size: 18,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '입차 완료 테이블',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: text.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: _Palette.dark,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              '로컬에 저장된 입차/출차 완료 내역입니다.',
-                              style: text.bodySmall?.copyWith(
-                                color: cs.outline,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        tooltip: '닫기',
-                        onPressed: () => Navigator.of(context).maybePop(),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-
-                  // 2행: Rows + 출차완료 숨김 토글 + 전체 비우기
-                  Row(
-                    children: [
-                      if (!_loading)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: _Palette.base.withOpacity(.06),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.list_alt_outlined,
-                                  size: 16,
-                                  color: _Palette.base,
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'Rows: ${_rows.length}',
-                                  style: text.labelMedium?.copyWith(
-                                    color: _Palette.base,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      const Spacer(),
-                      // 출차 완료 숨김 토글 버튼
-                      IconButton(
-                        tooltip: _hideDepartureCompleted ? '출차 완료 포함하여 보기' : '출차 완료 숨기기',
-                        onPressed: _allRows.isEmpty && !_hideDepartureCompleted ? null : _toggleHideDepartureCompleted,
-                        icon: Icon(
-                          _hideDepartureCompleted ? Icons.visibility_off : Icons.visibility,
-                          color: _hideDepartureCompleted ? Colors.teal : cs.outline,
-                          size: 20,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      IconButton.filledTonal(
-                        tooltip: '전체 비우기',
-                        style: IconButton.styleFrom(
-                          backgroundColor: cs.errorContainer.withOpacity(
-                            _rows.isEmpty ? 0.12 : 0.2,
-                          ),
-                        ),
-                        onPressed: _rows.isEmpty ? null : _clearAll,
-                        icon: Icon(
-                          Icons.delete_sweep,
-                          color: _rows.isEmpty ? cs.outline : cs.error,
-                          size: 20,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: _Palette.base.withOpacity(.06),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: _Palette.light.withOpacity(.18),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.place_outlined, size: 16, color: _Palette.base),
+          const SizedBox(width: 6),
+          Text(
+            '주차구역:',
+            style: text.labelMedium?.copyWith(
+              color: _Palette.base,
+              fontWeight: FontWeight.w700,
             ),
-
-            // 검색창
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              child: TextField(
-                controller: _searchCtrl,
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  hintText: '번호판 또는 주차 구역으로 검색',
-                  prefixIcon: Icon(
-                    Icons.search,
-                    color: _Palette.dark.withOpacity(.7),
-                  ),
-                  suffixIcon: _searchCtrl.text.isEmpty
-                      ? null
-                      : IconButton(
-                    icon: Icon(
-                      Icons.clear,
-                      color: _Palette.dark.withOpacity(.7),
+          ),
+          const SizedBox(width: 6),
+          DropdownButtonHideUnderline(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 160),
+              child: DropdownButton<String>(
+                value: _selectedLocation,
+                isDense: true,
+                icon: Icon(Icons.expand_more, color: cs.outline),
+                items: <String>[_locationAll, ..._availableLocations].map((v) {
+                  return DropdownMenuItem<String>(
+                    value: v,
+                    child: Text(
+                      v,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.labelMedium?.copyWith(
+                        color: disabled ? cs.outline : _Palette.dark,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                    onPressed: () {
-                      _searchCtrl.clear();
-                      _load();
-                    },
-                  ),
-                  filled: true,
-                  fillColor: _Palette.base.withOpacity(.03),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
+                  );
+                }).toList(),
+                onChanged: disabled
+                    ? null
+                    : (v) {
+                        if (v == null) return;
+                        setState(() {
+                          _selectedLocation = v;
+                          _applyFilterAndSort(); // ✅ 재조회 없이 숨김 처리
+                        });
+                      },
               ),
             ),
-            const Divider(height: 1),
+          ),
+        ],
+      ),
+    );
+  }
 
-            // ──────────────── SQL-like 테이블 (Pinned Header) ────────────────
-            Expanded(
-              child: _buildTable(_scrollCtrl),
+  /// ✅ 실시간 "데이터 삽입(Write)" On/Off UI (기기 로컬 저장, 기본 OFF)
+  /// - 이 스위치는 "실제 Firestore write 수행 지점"에서 반드시 체크해서 동작을 막아야 의미가 있습니다.
+  /// - ✅ 요구사항: 버튼 폭이 "번호판 검색 필드"와 동일한 길이가 되도록(부모 Expanded 폭을 그대로 사용)
+  Widget _buildRealtimeWriteToggle(ColorScheme cs, TextTheme text) {
+    final disabled = _writeToggleLoading;
+    final on = _realtimeRepo.isRealtimeWriteEnabled;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: _Palette.base.withOpacity(.06),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: _Palette.light.withOpacity(.18)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.max, // ✅ Expanded 폭을 실제로 사용
+        children: [
+          Icon(Icons.edit_note_outlined, size: 16, color: _Palette.base),
+          const SizedBox(width: 6),
+          Text(
+            '삽입:',
+            style: text.labelMedium?.copyWith(
+              color: _Palette.base,
+              fontWeight: FontWeight.w700,
             ),
-          ],
+          ),
+          const SizedBox(width: 6),
+          Text(
+            on ? 'ON' : 'OFF',
+            style: text.labelMedium?.copyWith(
+              color: on ? Colors.teal : cs.outline,
+              fontWeight: FontWeight.w800,
+              letterSpacing: .2,
+            ),
+          ),
+          const Spacer(), // ✅ 스위치를 오른쪽 끝으로 밀어 정렬 안정화
+          Transform.scale(
+            scale: 0.85,
+            child: Switch(
+              value: on,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              onChanged: disabled ? null : (v) => _toggleRealtimeWriteEnabled(v),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchField(ColorScheme cs) {
+    return TextField(
+      controller: _searchCtrl,
+      textInputAction: TextInputAction.search,
+      decoration: InputDecoration(
+        hintText: '번호판 또는 주차 구역으로 검색',
+        prefixIcon: Icon(Icons.search, color: _Palette.dark.withOpacity(.7)),
+        suffixIcon: _searchCtrl.text.isEmpty
+            ? null
+            : IconButton(
+                icon: Icon(Icons.clear, color: _Palette.dark.withOpacity(.7)),
+                onPressed: () {
+                  _searchCtrl.clear();
+                  if (_isRealtime) {
+                    setState(() => _applyFilterAndSort()); // ✅ 실시간: 재조회 없이 숨김
+                  } else {
+                    _loadLocal(); // ✅ 로컬: 기존 유지
+                  }
+                },
+              ),
+        filled: true,
+        fillColor: _Palette.base.withOpacity(.03),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
         ),
       ),
     );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+
+    final refreshTooltip = _loading ? '갱신 중…' : (_isRefreshBlocked ? '대기 중: ${_refreshRemainingSec}초' : '새로고침(서버 조회)');
+
+    return Container(
+      color: Colors.white,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.description,
+                    style: text.bodySmall?.copyWith(color: cs.outline),
+                  ),
+                ),
+                if (_isRealtime)
+                  IconButton(
+                    tooltip: refreshTooltip,
+                    onPressed: _loading ? null : _refreshRealtimeFromServer,
+                    icon: Icon(
+                      Icons.refresh,
+                      color: (_loading || _isRefreshBlocked) ? cs.outline.withOpacity(.5) : cs.outline,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          // ✅ Row:2 (Rows 칩 + 삽입 토글)
+          // ✅ 요구사항: "삽입 여부 버튼" 폭이 "번호판 검색 필드"와 동일한 길이(= 5:5 반반)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
+            child: Row(
+              children: [
+                if (_isRealtime) ...[
+                  Expanded(
+                    flex: 5,
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _loading ? const SizedBox.shrink() : _buildRowsChip(text),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 5,
+                    child: _buildRealtimeWriteToggle(cs, text),
+                  ),
+                ] else ...[
+                  // 로컬: 기존 Rows + 눈/삭제 유지
+                  if (!_loading)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: _buildRowsChip(text),
+                    ),
+                  const Spacer(),
+                  IconButton(
+                    tooltip: _hideDepartureCompleted ? '출차 완료 포함하여 보기' : '출차 완료 숨기기',
+                    onPressed: (_allRows.isEmpty && !_hideDepartureCompleted) ? null : _toggleHideDepartureCompleted,
+                    icon: Icon(
+                      _hideDepartureCompleted ? Icons.visibility_off : Icons.visibility,
+                      color: _hideDepartureCompleted ? Colors.teal : cs.outline,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  IconButton.filledTonal(
+                    tooltip: '전체 비우기',
+                    style: IconButton.styleFrom(
+                      backgroundColor: cs.errorContainer.withOpacity(
+                        (_rows.isEmpty) ? 0.12 : 0.2,
+                      ),
+                    ),
+                    onPressed: _rows.isEmpty ? null : _clearAll,
+                    icon: Icon(
+                      Icons.delete_sweep,
+                      color: _rows.isEmpty ? cs.outline : cs.error,
+                      size: 20,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // ✅ 주차구역 칩을 검색 필드와 같은 행으로 내림
+          // ✅ 좌(주차구역) : 우(검색) = 5 : 5
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: _isRealtime
+                ? Row(
+                    children: [
+                      Expanded(
+                        flex: 5,
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: _buildRealtimeLocationFilter(cs, text),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: 5,
+                        child: _buildSearchField(cs),
+                      ),
+                    ],
+                  )
+                : _buildSearchField(cs),
+          ),
+
+          const Divider(height: 1),
+          Expanded(child: _buildTable(_scrollCtrl)),
+        ],
+      ),
+    );
+  }
+}
+
+/// ─────────────────────────
+/// Firestore view repository
+/// - ✅ "옵션 A": 캐시만 노출 + 서버 조회는 명시적 호출(새로고침)에서만
+/// - ✅ location 기준 데이터 채움
+/// - ✅ 쿨다운(30초)도 static으로 유지(시트 닫아도 유지)
+/// - ✅ 실시간 "데이터 삽입(write) ON/OFF"는 SharedPreferences로 기기 로컬 영속 저장
+/// - 하위 호환: 예전(번호판별 문서) 구조도 파싱 가능
+/// ─────────────────────────
+class _ParkingCompletedViewRepository {
+  static const String _collection = 'parking_completed_view';
+  final FirebaseFirestore _firestore;
+
+  _ParkingCompletedViewRepository({FirebaseFirestore? firestore})
+      : _firestore = firestore ?? FirebaseFirestore.instance;
+
+  // ✅ 메모리 캐시(앱 살아있는 동안 유지)
+  static List<_RowVM> _cache = <_RowVM>[];
+  static DateTime? _cachedAt;
+
+  // ✅ 새로고침 쿨다운(앱 살아있는 동안 유지)
+  static DateTime? _refreshBlockedUntil;
+
+  // ✅ 실시간 "데이터 삽입(write)" 토글(기기 로컬, 앱 재실행 후에도 유지)
+  static const String _prefsKeyRealtimeWriteEnabled = 'parking_completed_realtime_write_enabled_v1';
+  static SharedPreferences? _prefs;
+  static bool _prefsLoaded = false;
+  static bool _realtimeWriteEnabled = false; // 기본 OFF
+
+  List<_RowVM> getCached() => List<_RowVM>.of(_cache);
+
+  DateTime? get cachedAt => _cachedAt;
+
+  bool get isRefreshBlocked => _refreshBlockedUntil != null && DateTime.now().isBefore(_refreshBlockedUntil!);
+
+  int get refreshRemainingSec {
+    if (!isRefreshBlocked) return 0;
+    final s = _refreshBlockedUntil!.difference(DateTime.now()).inSeconds;
+    return s < 0 ? 0 : s + 1; // UX상 0초 바로 보이지 않도록 +1
+  }
+
+  void startRefreshCooldown(Duration d) {
+    _refreshBlockedUntil = DateTime.now().add(d);
+  }
+
+  Future<void> ensureWriteToggleLoaded() async {
+    if (_prefsLoaded) return;
+    _prefs = await SharedPreferences.getInstance();
+    _realtimeWriteEnabled = _prefs!.getBool(_prefsKeyRealtimeWriteEnabled) ?? false; // 기본 OFF
+    _prefsLoaded = true;
+  }
+
+  bool get isRealtimeWriteEnabled => _realtimeWriteEnabled;
+
+  Future<void> setRealtimeWriteEnabled(bool v) async {
+    await ensureWriteToggleLoaded();
+    _realtimeWriteEnabled = v;
+    await _prefs!.setBool(_prefsKeyRealtimeWriteEnabled, v);
+  }
+
+  DateTime? _toDate(dynamic v) {
+    if (v is Timestamp) return v.toDate();
+    return null;
+  }
+
+  String _normalizeLocation(String? raw) {
+    final v = (raw ?? '').trim();
+    return v.isEmpty ? '미지정' : v;
+  }
+
+  Future<List<_RowVM>> fetchFromServerAndCache() async {
+    final snap = await _firestore.collection(_collection).get();
+
+    final out = <_RowVM>[];
+
+    for (final doc in snap.docs) {
+      final data = doc.data();
+
+      // ✅ 신규 스키마: 문서 1개에 items 맵이 존재
+      final items = data['items'];
+      if (items is Map) {
+        for (final entry in items.entries) {
+          final plateDocId = entry.key?.toString() ?? '';
+          final v = entry.value;
+
+          if (v is! Map) continue;
+          final m = Map<String, dynamic>.from(v);
+
+          final plateNumber = (m['plateNumber'] as String?) ?? _fallbackPlateFromDocId(plateDocId);
+          final location = _normalizeLocation(m['location'] as String?);
+          final createdAt = _toDate(m['parkingCompletedAt']) ?? _toDate(m['updatedAt']);
+
+          if (plateNumber.isEmpty) continue;
+
+          out.add(
+            _RowVM(
+              plateNumber: plateNumber,
+              location: location,
+              createdAt: createdAt,
+              isDepartureCompleted: false,
+            ),
+          );
+        }
+        continue;
+      }
+
+      // ✅ 하위 호환(예전 스키마): 문서 1개가 plate 1개였던 경우
+      String plateNumber = (data['plateNumber'] as String?) ?? '';
+      if (plateNumber.isEmpty) {
+        plateNumber = _fallbackPlateFromDocId(doc.id);
+      }
+
+      final location = _normalizeLocation(data['location'] as String?);
+      final createdAt = _toDate(data['parkingCompletedAt']) ?? _toDate(data['updatedAt']);
+
+      if (plateNumber.isEmpty) continue;
+
+      out.add(
+        _RowVM(
+          plateNumber: plateNumber,
+          location: location,
+          createdAt: createdAt,
+          isDepartureCompleted: false,
+        ),
+      );
+    }
+
+    // ✅ 캐시 갱신
+    _cache = List<_RowVM>.of(out);
+    _cachedAt = DateTime.now();
+
+    return out;
+  }
+
+  String _fallbackPlateFromDocId(String docId) {
+    // docId가 {plateNumber}_{area}인 경우 plateNumber만 추출
+    final idx = docId.lastIndexOf('_');
+    if (idx > 0) return docId.substring(0, idx);
+    return docId;
   }
 }
 
@@ -648,10 +1367,10 @@ class _HeaderDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(
-      BuildContext context,
-      double shrinkOffset,
-      bool overlapsContent,
-      ) {
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     final showShadow = overlapsContent || shrinkOffset > 0;
     return Material(
       elevation: showShadow ? 1.5 : 0,
