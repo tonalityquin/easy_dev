@@ -724,7 +724,7 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
   String _buildPreviewText(BuildContext context) {
     final signInfo = (_signaturePngBytes != null)
         ? '전자서명: ${_signerName.isEmpty ? "(이름 미입력)" : _signerName} / '
-        '${_signDateTime != null ? _fmtCompact(_signDateTime!) : "저장 시각 미기록"}'
+            '${_signDateTime != null ? _fmtCompact(_signDateTime!) : "저장 시각 미기록"}'
         : '전자서명: (미첨부)';
 
     final specialText = _hasSpecialNote == null ? '미선택' : (_hasSpecialNote! ? '있음' : '없음');
@@ -1012,14 +1012,11 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                                               ),
                                             ),
                                             child: Text(
-                                              _contentCtrl.text.trim().isEmpty
-                                                  ? '입력된 특이 사항이 없습니다.'
-                                                  : _contentCtrl.text,
+                                              _contentCtrl.text.trim().isEmpty ? '입력된 특이 사항이 없습니다.' : _contentCtrl.text,
                                               style: theme.textTheme.bodyMedium?.copyWith(
                                                 height: 1.4,
-                                                color: _contentCtrl.text.trim().isEmpty
-                                                    ? Colors.grey[600]
-                                                    : Colors.black,
+                                                color:
+                                                    _contentCtrl.text.trim().isEmpty ? Colors.grey[600] : Colors.black,
                                               ),
                                             ),
                                           ),
@@ -1119,21 +1116,21 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                                             ),
                                             child: _signaturePngBytes == null
                                                 ? Center(
-                                              child: Text(
-                                                '서명 이미지가 없습니다. (전자서명 완료 후 제출할 수 있습니다.)',
-                                                style: theme.textTheme.bodySmall?.copyWith(
-                                                  color: Colors.grey[600],
-                                                ),
-                                                textAlign: TextAlign.center,
-                                              ),
-                                            )
+                                                    child: Text(
+                                                      '서명 이미지가 없습니다. (전자서명 완료 후 제출할 수 있습니다.)',
+                                                      style: theme.textTheme.bodySmall?.copyWith(
+                                                        color: Colors.grey[600],
+                                                      ),
+                                                      textAlign: TextAlign.center,
+                                                    ),
+                                                  )
                                                 : Padding(
-                                              padding: const EdgeInsets.all(8),
-                                              child: Image.memory(
-                                                _signaturePngBytes!,
-                                                fit: BoxFit.contain,
-                                              ),
-                                            ),
+                                                    padding: const EdgeInsets.all(8),
+                                                    child: Image.memory(
+                                                      _signaturePngBytes!,
+                                                      fit: BoxFit.contain,
+                                                    ),
+                                                  ),
                                           ),
                                         ],
                                       ),
@@ -1160,7 +1157,7 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                                           Expanded(
                                             child: Text(
                                               '하단의 "텍스트 복사" 버튼을 누르면 이 미리보기 내용을 '
-                                                  '텍스트 형태로 복사하여 메신저 등에 붙여넣을 수 있습니다.',
+                                              '텍스트 형태로 복사하여 메신저 등에 붙여넣을 수 있습니다.',
                                               style: theme.textTheme.bodySmall?.copyWith(
                                                 height: 1.4,
                                                 color: const Color(0xFF1F2937),
@@ -1250,7 +1247,7 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
       showFailedSnackbar(
         context,
         '근무 지역/부문/사용자 정보가 없어 1차 업무 종료 보고를 진행할 수 없습니다.\n'
-            '설정 화면에서 정보를 확인해 주세요.',
+        '설정 화면에서 정보를 확인해 주세요.',
       );
       return;
     }
@@ -1288,9 +1285,9 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
 
       dev.log(
         '[END][Dashboard] first submit counts (area=$area, division=$division, user=$userName) '
-            'sysParking=$_sysVehicleInput, sysDeparture=$_sysVehicleOutput, sysExtra=$_sysDepartureExtra, '
-            'uiField=$vehicleFieldValue, vehicleInput(parking+extra)=$vehicleInputCount, '
-            'vehicleOutput(departure+extra)=$vehicleOutputManual',
+        'sysParking=$_sysVehicleInput, sysDeparture=$_sysVehicleOutput, sysExtra=$_sysDepartureExtra, '
+        'uiField=$vehicleFieldValue, vehicleInput(parking+extra)=$vehicleInputCount, '
+        'vehicleOutput(departure+extra)=$vehicleOutputManual',
         name: 'DashboardEndReportFormPage',
       );
 
@@ -1474,11 +1471,11 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
 
     final theme = (regular != null)
         ? pw.ThemeData.withFont(
-      base: regular,
-      bold: bold ?? regular,
-      italic: regular,
-      boldItalic: bold ?? regular,
-    )
+            base: regular,
+            bold: bold ?? regular,
+            italic: regular,
+            boldItalic: bold ?? regular,
+          )
         : pw.ThemeData.base();
 
     final doc = pw.Document();
@@ -1494,61 +1491,61 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
     ];
 
     pw.Widget buildFieldTable() => pw.Table(
-      border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
-      columnWidths: const {
-        0: pw.FlexColumnWidth(3),
-        1: pw.FlexColumnWidth(7),
-      },
-      children: [
-        for (final kv in fields)
-          pw.TableRow(
-            children: [
-              pw.Container(
-                padding: const pw.EdgeInsets.all(6),
-                color: PdfColors.grey200,
-                child: pw.Text(
-                  kv.key,
-                  style: const pw.TextStyle(fontSize: 11),
-                ),
+          border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+          columnWidths: const {
+            0: pw.FlexColumnWidth(3),
+            1: pw.FlexColumnWidth(7),
+          },
+          children: [
+            for (final kv in fields)
+              pw.TableRow(
+                children: [
+                  pw.Container(
+                    padding: const pw.EdgeInsets.all(6),
+                    color: PdfColors.grey200,
+                    child: pw.Text(
+                      kv.key,
+                      style: const pw.TextStyle(fontSize: 11),
+                    ),
+                  ),
+                  pw.Container(
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Text(
+                      kv.value,
+                      style: const pw.TextStyle(fontSize: 11),
+                    ),
+                  ),
+                ],
               ),
-              pw.Container(
-                padding: const pw.EdgeInsets.all(6),
-                child: pw.Text(
-                  kv.value,
-                  style: const pw.TextStyle(fontSize: 11),
-                ),
-              ),
-            ],
-          ),
-      ],
-    );
+          ],
+        );
 
     pw.Widget buildSection(String title, String body) => pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.SizedBox(height: 8),
-        pw.Text(
-          title,
-          style: pw.TextStyle(
-            fontSize: 13,
-            fontWeight: pw.FontWeight.bold,
-          ),
-        ),
-        pw.SizedBox(height: 4),
-        pw.Container(
-          width: double.infinity,
-          padding: const pw.EdgeInsets.all(8),
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
-            borderRadius: pw.BorderRadius.circular(4),
-          ),
-          child: pw.Text(
-            body.isEmpty ? '-' : body,
-            style: const pw.TextStyle(fontSize: 11),
-          ),
-        ),
-      ],
-    );
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.SizedBox(height: 8),
+            pw.Text(
+              title,
+              style: pw.TextStyle(
+                fontSize: 13,
+                fontWeight: pw.FontWeight.bold,
+              ),
+            ),
+            pw.SizedBox(height: 4),
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(8),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: pw.Text(
+                body.isEmpty ? '-' : body,
+                style: const pw.TextStyle(fontSize: 11),
+              ),
+            ),
+          ],
+        );
 
     pw.Widget buildSignature() {
       final name = _signerName.isEmpty ? '이름 미입력' : _signerName;
@@ -1591,21 +1588,21 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
             ),
             child: _signaturePngBytes == null
                 ? pw.Center(
-              child: pw.Text(
-                '서명 이미지 없음',
-                style: const pw.TextStyle(
-                  fontSize: 10,
-                  color: PdfColors.grey,
-                ),
-              ),
-            )
+                    child: pw.Text(
+                      '서명 이미지 없음',
+                      style: const pw.TextStyle(
+                        fontSize: 10,
+                        color: PdfColors.grey,
+                      ),
+                    ),
+                  )
                 : pw.Padding(
-              padding: const pw.EdgeInsets.all(6),
-              child: pw.Image(
-                pw.MemoryImage(_signaturePngBytes!),
-                fit: pw.BoxFit.contain,
-              ),
-            ),
+                    padding: const pw.EdgeInsets.all(6),
+                    child: pw.Image(
+                      pw.MemoryImage(_signaturePngBytes!),
+                      fit: pw.BoxFit.contain,
+                    ),
+                  ),
           ),
         ],
       );
@@ -1737,8 +1734,8 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
             Text(
               title,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+                    fontWeight: FontWeight.w700,
+                  ),
             ),
             const SizedBox(height: 10),
             child,
@@ -1752,10 +1749,10 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
 
   /// 시스템 집계 수치를 한 줄로 표시하는 small row 위젯
   Widget _buildMetricRow(
-      String label,
-      String value, {
-        bool isEmphasis = false,
-      }) {
+    String label,
+    String value, {
+    bool isEmphasis = false,
+  }) {
     final textTheme = Theme.of(context).textTheme;
 
     return Row(
@@ -1817,10 +1814,10 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
       children: [
         Text(
           '오늘 업무 진행 중 특이사항이 있었는지 선택해 주세요.\n'
-              '(예: 장애, 클레임, 일정 지연, 긴급 지원 등)',
+          '(예: 장애, 클레임, 일정 지연, 긴급 지원 등)',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            height: 1.4,
-          ),
+                height: 1.4,
+              ),
         ),
         const SizedBox(height: 12),
         Row(
@@ -1838,9 +1835,7 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                     curve: Curves.easeOut,
                   );
                 },
-                style: _hasSpecialNote == false
-                    ? EndReportButtonStyles.primary()
-                    : EndReportButtonStyles.outlined(),
+                style: _hasSpecialNote == false ? EndReportButtonStyles.primary() : EndReportButtonStyles.outlined(),
                 child: const Text('특이사항 없음'),
               ),
             ),
@@ -1858,9 +1853,7 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                     curve: Curves.easeOut,
                   );
                 },
-                style: _hasSpecialNote == true
-                    ? EndReportButtonStyles.primary()
-                    : EndReportButtonStyles.outlined(),
+                style: _hasSpecialNote == true ? EndReportButtonStyles.primary() : EndReportButtonStyles.outlined(),
                 child: const Text('특이사항 있음'),
               ),
             ),
@@ -1870,8 +1863,8 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
         Text(
           '※ 선택 결과는 메일 제목에 자동으로 반영되며, 다음 항목으로 자동 이동합니다.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: Colors.black54,
-          ),
+                color: Colors.black54,
+              ),
         ),
       ],
     );
@@ -2010,13 +2003,13 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
             style: EndReportButtonStyles.primary(),
             icon: _firstSubmitting
                 ? const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-            )
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
                 : const Icon(Icons.cloud_upload_outlined),
             label: Text(
               _firstSubmitting ? '1차 제출 중…' : '1차 제출',
@@ -2218,18 +2211,18 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                   '업무 종료 보고서',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 4,
-                  ),
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 4,
+                      ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'WORK COMPLETION REPORT',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: Colors.black54,
-                    letterSpacing: 3,
-                  ),
+                        color: Colors.black54,
+                        letterSpacing: 3,
+                      ),
                 ),
                 const SizedBox(height: 16),
                 Container(
@@ -2256,16 +2249,16 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                           Text(
                             '업무 종료 보고서 양식',
                             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: EndReportColors.primaryDark,
-                            ),
+                                  fontWeight: FontWeight.w600,
+                                  color: EndReportColors.primaryDark,
+                                ),
                           ),
                           const Spacer(),
                           Text(
                             '작성일 ${_fmtCompact(DateTime.now())}',
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.black54,
-                            ),
+                                  color: Colors.black54,
+                                ),
                           ),
                         ],
                       ),
@@ -2294,8 +2287,8 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                               child: Text(
                                 '해당 업무의 수행 내용과 결과를 사실에 근거하여 간결하게 작성해 주세요.',
                                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  height: 1.4,
-                                ),
+                                      height: 1.4,
+                                    ),
                               ),
                             ),
                           ],
@@ -2369,45 +2362,45 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
       ),
       bottomNavigationBar: _currentPageIndex == 4
           ? SafeArea(
-        top: false,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 10,
-            bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
-          ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(
-              top: BorderSide(color: Colors.black12, width: 1),
-            ),
-          ),
-          child: SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: (!_sending && _signaturePngBytes != null) ? _submit : null,
-              icon: _sending
-                  ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+              top: false,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                curve: Curves.easeOut,
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 10,
+                  bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
                 ),
-              )
-                  : const Icon(Icons.send_outlined),
-              label: Text(
-                _sending ? '전송 중…' : '제출',
-                style: const TextStyle(fontWeight: FontWeight.bold),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(
+                    top: BorderSide(color: Colors.black12, width: 1),
+                  ),
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: (!_sending && _signaturePngBytes != null) ? _submit : null,
+                    icon: _sending
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                            ),
+                          )
+                        : const Icon(Icons.send_outlined),
+                    label: Text(
+                      _sending ? '전송 중…' : '제출',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    style: EndReportButtonStyles.primary(),
+                  ),
+                ),
               ),
-              style: EndReportButtonStyles.primary(),
-            ),
-          ),
-        ),
-      )
+            )
           : null,
       body: SafeArea(
         child: Form(

@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -20,10 +23,14 @@ class SimpleInsideEndReportFormPage extends StatefulWidget {
   State<SimpleInsideEndReportFormPage> createState() => _SimpleInsideEndReportFormPageState();
 }
 
+/// ─────────────────────────────────────────────────────────────
+/// [요구사항 반영] Firestore 조회(get/query) 없음.
+/// - insert(set/merge)만 수행하여 end_work_reports 스키마에 맞게 저장.
+/// ─────────────────────────────────────────────────────────────
 class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFormPage> {
   final _formKey = GlobalKey<FormState>();
 
-  // 기존 기본 정보 컨트롤러 (현재 UI에서는 사용하지 않지만, 향후 확장 고려해 유지)
+  // 기본 정보 컨트롤러(확장 대비 유지)
   final _deptCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
   final _positionCtrl = TextEditingController();
@@ -45,12 +52,22 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
   // 특이사항 여부: null = 미선택, true = 있음, false = 없음
   bool? _hasSpecialNote;
 
-  // SharedPreferences에서 불러오는 선택 영역 (업무명)
+  // SharedPreferences에서 불러오는 선택 영역(업무명/area로도 사용)
   String? _selectedArea;
+
+  // SharedPreferences에서 불러오는 division (Dashboard 업로드 스키마와 동일 필드로 저장용)
+  String? _divisionFromPrefs;
 
   String get _signerName => _nameCtrl.text.trim();
 
-  bool _sending = false;
+  bool _sending = false; // 최종 메일 제출 중 여부
+
+  // 1차 제출(서버 저장) 상태: Dashboard와 동일한 게이트 로직
+  bool _firstSubmitting = false;
+  bool _firstSubmittedCompleted = false;
+
+  // 차량 대수 입력 유효 여부(1차 제출 버튼 enable)
+  bool _isVehicleCountValid = false;
 
   // 페이지 컨트롤러 (섹션별 좌우 스와이프)
   final PageController _pageController = PageController();
@@ -58,17 +75,25 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
   // 현재 페이지 인덱스 (0~4)
   int _currentPageIndex = 0;
 
-  // 키보드가 필드를 가리지 않도록 하기 위한 키
+  // 키보드 가림 방지용 키
   final GlobalKey _vehicleFieldKey = GlobalKey();
   final GlobalKey _contentFieldKey = GlobalKey();
+
+  // Firestore (write only)
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
   void initState() {
     super.initState();
+
     _nameCtrl.addListener(() => setState(() {}));
-    _vehicleCountCtrl.addListener(_updateMailSubject);
+
+    // Dashboard와 동일하게: 입력 변경 시 유효성 + 제목 업데이트
+    _vehicleCountCtrl.addListener(_onVehicleCountChanged);
+
     _updateMailBody(); // 메일 본문 자동 생성
     _loadSelectedArea();
+    _loadDivision();
   }
 
   Future<void> _loadSelectedArea() async {
@@ -76,13 +101,23 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
     final area = prefs.getString('selectedArea') ?? '';
     if (!mounted) return;
     setState(() {
-      _selectedArea = area.isEmpty ? null : area;
+      _selectedArea = area.trim().isEmpty ? null : area.trim();
     });
 
     // 사용자가 아직 제목을 입력하지 않은 경우에만 자동 채움
     if (_mailSubjectCtrl.text.trim().isEmpty) {
       _updateMailSubject();
     }
+  }
+
+  Future<void> _loadDivision() async {
+    // 기존 통계 페이지에서 사용하던 키와 동일하게 'division' 사용
+    final prefs = await SharedPreferences.getInstance();
+    final div = (prefs.getString('division') ?? '').trim();
+    if (!mounted) return;
+    setState(() {
+      _divisionFromPrefs = div.isEmpty ? null : div;
+    });
   }
 
   @override
@@ -101,8 +136,12 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
     _contentNode.dispose();
 
     _pageController.dispose();
-
     super.dispose();
+  }
+
+  void _showSnack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   String _fmtDT(BuildContext context, DateTime? dt) {
@@ -142,33 +181,37 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
     _vehicleCountCtrl.clear();
     _mailSubjectCtrl.clear();
     _mailBodyCtrl.clear();
+
     setState(() {
       _signaturePngBytes = null;
       _signDateTime = null;
       _hasSpecialNote = null;
-      // _selectedArea는 SharedPreferences 기반 설정 값이라 초기화하지 않고 유지
+
       _currentPageIndex = 0;
+
+      _firstSubmitting = false;
+      _firstSubmittedCompleted = false;
+      _isVehicleCountValid = false;
+      // _selectedArea는 prefs 기반이라 유지
     });
-    // 리셋 후에도 제목/본문은 기본값으로 자동 생성
+
     _updateMailSubject();
     _updateMailBody(force: true);
-    // 페이지도 첫 페이지로
+
     _pageController.jumpToPage(0);
   }
 
-  /// 특이사항 선택 값 + SharedPreferences 선택 영역 + 차량 대수에 따라 메일 제목 자동 생성
+  /// 특이사항 선택 값 + selectedArea + 차량 대수 → 메일 제목 자동 생성
   void _updateMailSubject() {
     final now = DateTime.now();
     final month = now.month;
     final day = now.day;
 
-    // 특이사항 여부 텍스트
     String suffixSpecial = '';
     if (_hasSpecialNote != null) {
       suffixSpecial = _hasSpecialNote! ? ' - 특이사항 있음' : ' - 특이사항 없음';
     }
 
-    // 차량 대수 부분 " ??대"
     String vehiclePart = '';
     final vehicleRaw = _vehicleCountCtrl.text.trim();
     if (vehicleRaw.isNotEmpty) {
@@ -178,15 +221,12 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
       }
     }
 
-    // SharedPreferences에 저장된 selectedArea 사용 (없으면 '업무' 기본값)
     final area = (_selectedArea != null && _selectedArea!.trim().isNotEmpty) ? _selectedArea!.trim() : '업무';
 
-    // selectedArea(업무명)가 제목 가장 앞으로 오도록
-    // 예: 콜센터 업무 종료 보고서 – 11월 25일자 12대 - 특이사항 있음
     _mailSubjectCtrl.text = '$area 업무 종료 보고서 – ${month}월 ${day}일자$vehiclePart$suffixSpecial';
   }
 
-  /// 메일 본문 자동 생성 (작성 일시 포함)
+  /// 메일 본문 자동 생성(작성 일시 포함)
   void _updateMailBody({bool force = false}) {
     if (!force && _mailBodyCtrl.text.trim().isNotEmpty) return;
     final now = DateTime.now();
@@ -198,10 +238,20 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
     _mailBodyCtrl.text = '본 보고서는 ${y}년 ${m}월 ${d}일 ${hh}시 ${mm}분 기준으로 작성된 업무 종료 보고서입니다.';
   }
 
+  /// Dashboard와 동일: 차량 입력 변경 시 유효성 상태 + 제목 업데이트
+  void _onVehicleCountChanged() {
+    final raw = _vehicleCountCtrl.text.trim();
+    final isValid = raw.isNotEmpty && RegExp(r'^\d+$').hasMatch(raw);
+    if (_isVehicleCountValid != isValid) {
+      setState(() => _isVehicleCountValid = isValid);
+    }
+    _updateMailSubject();
+  }
+
   String _buildPreviewText(BuildContext context) {
     final signInfo = (_signaturePngBytes != null)
         ? '전자서명: ${_signerName.isEmpty ? "(이름 미입력)" : _signerName} / '
-            '${_signDateTime != null ? _fmtCompact(_signDateTime!) : "저장 시각 미기록"}'
+        '${_signDateTime != null ? _fmtCompact(_signDateTime!) : "저장 시각 미기록"}'
         : '전자서명: (미첨부)';
 
     final specialText = _hasSpecialNote == null ? '미선택' : (_hasSpecialNote! ? '있음' : '없음');
@@ -228,10 +278,9 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
 
   Future<void> _showPreview() async {
     HapticFeedback.lightImpact();
-    _updateMailBody(); // 미리보기 전에 본문이 비어있으면 자동 생성
+    _updateMailBody();
     final text = _buildPreviewText(context);
 
-    // 화면에 보여줄 데이터들 다시 계산
     final specialText = _hasSpecialNote == null ? '미선택' : (_hasSpecialNote! ? '있음' : '없음');
     final vehicleRaw = _vehicleCountCtrl.text.trim();
     final vehicleText = vehicleRaw.isEmpty ? '입력 안 됨' : '$vehicleRaw대';
@@ -299,7 +348,6 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // 상단 헤더 바
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.fromLTRB(20, 14, 16, 12),
@@ -345,8 +393,6 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                               ],
                             ),
                           ),
-
-                          // 본문 스크롤 영역
                           Flexible(
                             child: Scrollbar(
                               child: SingleChildScrollView(
@@ -354,7 +400,6 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
-                                    // 상단 요약 배지들
                                     Wrap(
                                       spacing: 8,
                                       runSpacing: 8,
@@ -377,8 +422,6 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                                       ],
                                     ),
                                     const SizedBox(height: 16),
-
-                                    // 메일 정보 카드
                                     Container(
                                       decoration: BoxDecoration(
                                         color: const Color(0xFFF9FAFB),
@@ -452,10 +495,7 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                                         ],
                                       ),
                                     ),
-
                                     const SizedBox(height: 16),
-
-                                    // 특이 사항(업무 내용) 카드
                                     Container(
                                       decoration: BoxDecoration(
                                         color: Colors.white,
@@ -502,18 +542,16 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                                               _contentCtrl.text.trim().isEmpty ? '입력된 특이 사항이 없습니다.' : _contentCtrl.text,
                                               style: theme.textTheme.bodyMedium?.copyWith(
                                                 height: 1.4,
-                                                color:
-                                                    _contentCtrl.text.trim().isEmpty ? Colors.grey[600] : Colors.black,
+                                                color: _contentCtrl.text.trim().isEmpty
+                                                    ? Colors.grey[600]
+                                                    : Colors.black,
                                               ),
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
-
                                     const SizedBox(height: 16),
-
-                                    // 서명 정보 + 이미지
                                     Container(
                                       decoration: BoxDecoration(
                                         color: Colors.white,
@@ -606,29 +644,26 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                                             ),
                                             child: _signaturePngBytes == null
                                                 ? Center(
-                                                    child: Text(
-                                                      '서명 이미지가 없습니다. (전자서명 완료 후 제출할 수 있습니다.)',
-                                                      style: theme.textTheme.bodySmall?.copyWith(
-                                                        color: Colors.grey[600],
-                                                      ),
-                                                      textAlign: TextAlign.center,
-                                                    ),
-                                                  )
+                                              child: Text(
+                                                '서명 이미지가 없습니다. (전자서명 완료 후 제출할 수 있습니다.)',
+                                                style: theme.textTheme.bodySmall?.copyWith(
+                                                  color: Colors.grey[600],
+                                                ),
+                                                textAlign: TextAlign.center,
+                                              ),
+                                            )
                                                 : Padding(
-                                                    padding: const EdgeInsets.all(8),
-                                                    child: Image.memory(
-                                                      _signaturePngBytes!,
-                                                      fit: BoxFit.contain,
-                                                    ),
-                                                  ),
+                                              padding: const EdgeInsets.all(8),
+                                              child: Image.memory(
+                                                _signaturePngBytes!,
+                                                fit: BoxFit.contain,
+                                              ),
+                                            ),
                                           ),
                                         ],
                                       ),
                                     ),
-
                                     const SizedBox(height: 12),
-
-                                    // 원본 텍스트 안내
                                     Container(
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
@@ -647,7 +682,7 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                                           Expanded(
                                             child: Text(
                                               '하단의 "텍스트 복사" 버튼을 누르면 이 미리보기 내용을 '
-                                              '텍스트 형태로 복사하여 메신저 등에 붙여넣을 수 있습니다.',
+                                                  '텍스트 형태로 복사하여 메신저 등에 붙여넣을 수 있습니다.',
                                               style: theme.textTheme.bodySmall?.copyWith(
                                                 height: 1.4,
                                                 color: const Color(0xFF1F2937),
@@ -662,8 +697,6 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                               ),
                             ),
                           ),
-
-                          // 하단 액션 영역
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
@@ -712,17 +745,198 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
     );
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // [추가] Dashboard와 동일 UX: 15초 취소 가능 블로킹 다이얼로그
+  // ─────────────────────────────────────────────────────────────
+  Future<bool> _showDurationBlockingDialog({
+    required BuildContext context,
+    required String message,
+    required Duration duration,
+  }) async {
+    return (await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return _DurationBlockingDialog(
+          message: message,
+          duration: duration,
+        );
+      },
+    )) ??
+        false;
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // [추가] Dashboard와 동일 UX: 작업 수행 중 블로킹 다이얼로그
+  // ─────────────────────────────────────────────────────────────
+  Future<void> _runWithBlockingDialog({
+    required BuildContext context,
+    required String message,
+    required Future<void> Function() task,
+  }) async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _BlockingProgressDialog(message: message),
+    );
+
+    try {
+      await task();
+    } finally {
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // [핵심] 2단계 "1차 제출" (Firestore write only)
+  // - 조회(plates/counters 등) 없음
+  // - end_work_reports/area_$area/reports.$date 구조에 동일 필드명으로 삽입
+  // ─────────────────────────────────────────────────────────────
+  Future<void> _submitFirstEndReport() async {
+    if (_firstSubmitting) return;
+
+    final raw = _vehicleCountCtrl.text.trim();
+    if (raw.isEmpty) {
+      _showSnack('일일 차량 입고 대수를 입력해 주세요.');
+      return;
+    }
+    if (!RegExp(r'^\d+$').hasMatch(raw)) {
+      _showSnack('일일 차량 입고 대수에는 숫자만 입력해 주세요.');
+      return;
+    }
+
+    final area = (_selectedArea ?? '').trim();
+    final division = (_divisionFromPrefs ?? '').trim();
+    final userName = (_nameCtrl.text.trim().isEmpty) ? '무기명' : _nameCtrl.text.trim();
+
+    if (area.isEmpty) {
+      _showSnack('업무(Area) 정보가 없습니다. 설정에서 selectedArea를 저장해 주세요.');
+      return;
+    }
+    if (division.isEmpty) {
+      _showSnack('division 정보가 없습니다. SharedPreferences에 division을 저장해 주세요.');
+      return;
+    }
+
+    HapticFeedback.lightImpact();
+
+    final proceed = await _showDurationBlockingDialog(
+      context: context,
+      message: '일일 차량 입고 대수를 기준으로 1차 업무 종료 보고를 저장합니다.\n'
+          '약 15초 후 자동 진행되며, 취소하려면 아래 [취소] 버튼을 눌러 주세요.\n'
+          '중간에 화면을 이탈하지 마세요.',
+      duration: const Duration(seconds: 15),
+    );
+
+    if (!proceed) {
+      _showSnack('1차 업무 종료 보고가 취소되었습니다.');
+      return;
+    }
+
+    setState(() => _firstSubmitting = true);
+
+    try {
+      final vehicleInputCount = int.parse(raw);
+
+      // 조회 금지 요건으로 인해 계산/스냅샷 값은 0으로 저장
+      final vehicleOutputManual = 0;
+      const snapshotLockedVehicleCount = 0;
+      const snapshotTotalLockedFee = 0;
+
+      final now = DateTime.now();
+      final dateStr = _formatDateKey(now); // yyyy-MM-dd
+      final createdAtIso = now.toIso8601String();
+
+      final docRef = _firestore.collection('end_work_reports').doc('area_$area');
+      final reportBasePath = 'reports.$dateStr';
+
+      final historyEntry = <String, dynamic>{
+        'date': dateStr,
+        'createdAt': createdAtIso,
+        'uploadedBy': userName,
+        'vehicleCount': <String, dynamic>{
+          'vehicleInput': vehicleInputCount,
+          'vehicleOutput': vehicleOutputManual,
+        },
+        'metrics': <String, dynamic>{
+          'snapshot_lockedVehicleCount': snapshotLockedVehicleCount,
+          'snapshot_totalLockedFee': snapshotTotalLockedFee,
+        },
+        // reportUrl/logsUrl은 조회/업로드 로직이 없으므로 생략(없음)
+      };
+
+      final payload = <String, dynamic>{
+        // Dashboard 업로드와 동일 최상위 필드
+        'division': division,
+        'area': area,
+
+        // Dashboard 업로드와 동일 reports.<date>.* 구조
+        '$reportBasePath.date': dateStr,
+        '$reportBasePath.vehicleCount': <String, dynamic>{
+          'vehicleInput': vehicleInputCount,
+          'vehicleOutput': vehicleOutputManual,
+        },
+        '$reportBasePath.metrics': <String, dynamic>{
+          'snapshot_lockedVehicleCount': snapshotLockedVehicleCount,
+          'snapshot_totalLockedFee': snapshotTotalLockedFee,
+        },
+        '$reportBasePath.createdAt': createdAtIso,
+        '$reportBasePath.uploadedBy': userName,
+
+        // history 누적(동일 필드명)
+        '$reportBasePath.history': FieldValue.arrayUnion(<Map<String, dynamic>>[historyEntry]),
+      };
+
+      await _runWithBlockingDialog(
+        context: context,
+        message: '1차 업무 종료 보고를 저장 중입니다. 잠시만 기다려 주세요...',
+        task: () async {
+          await docRef.set(payload, SetOptions(merge: true));
+        },
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _firstSubmittedCompleted = true;
+      });
+
+      _showSnack(
+        [
+          '1차 업무 종료 보고 저장 완료',
+          '• area: $area',
+          '• division: $division',
+          '• 서버 저장 입고 대수(vehicleInput): ${vehicleInputCount}대',
+          '• 서버 저장 출고 대수(vehicleOutput): ${vehicleOutputManual}대 (조회 없음 → 0)',
+          '• metrics 스냅샷: ${snapshotLockedVehicleCount} / ${snapshotTotalLockedFee} (조회 없음 → 0)',
+        ].join('\n'),
+      );
+    } catch (e) {
+      _showSnack('1차 업무 종료 보고 저장 중 오류: $e');
+    } finally {
+      if (mounted) setState(() => _firstSubmitting = false);
+    }
+  }
+
+  // yyyy-MM-dd
+  String _formatDateKey(DateTime dt) {
+    final y = dt.year.toString().padLeft(4, '0');
+    final m = dt.month.toString().padLeft(2, '0');
+    final d = dt.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 최종 제출(메일 전송) - 기존 로직 유지
+  // ─────────────────────────────────────────────────────────────
   Future<void> _submit() async {
-    // 1) 폼 필드 검증 (업무 내용 등)
     if (!_formKey.currentState!.validate()) return;
 
-    // 2) 특이사항 여부 필수 선택
     if (_hasSpecialNote == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('특이사항 여부를 선택해 주세요.')),
       );
-      // 자동으로 첫 페이지로 이동해 줘도 UX 좋음
       _pageController.animateToPage(
         0,
         duration: const Duration(milliseconds: 250),
@@ -733,6 +947,7 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
 
     HapticFeedback.lightImpact();
     setState(() => _sending = true);
+
     try {
       final cfg = await EmailConfig.load();
       if (!EmailConfig.isValidToList(cfg.to)) {
@@ -746,12 +961,13 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
         );
         return;
       }
+
       final toCsv = cfg.to.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).join(', ');
 
       final subject = _mailSubjectCtrl.text.trim();
-      // 제출 시점 기준으로 본문 시간 강제 갱신
       _updateMailBody(force: true);
       final body = _mailBodyCtrl.text.trim();
+
       if (subject.isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -810,11 +1026,11 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
 
     final theme = (regular != null)
         ? pw.ThemeData.withFont(
-            base: regular,
-            bold: bold ?? regular,
-            italic: regular,
-            boldItalic: bold ?? regular,
-          )
+      base: regular,
+      bold: bold ?? regular,
+      italic: regular,
+      boldItalic: bold ?? regular,
+    )
         : pw.ThemeData.base();
 
     final doc = pw.Document();
@@ -824,68 +1040,67 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
     final vehicleRaw = _vehicleCountCtrl.text.trim();
     final vehicleText = vehicleRaw.isEmpty ? '입력 안 됨' : '$vehicleRaw대';
 
-    // 상단 간단 필드: 특이사항 + 차량 대수
     final fields = <MapEntry<String, String>>[
       MapEntry('특이사항', specialText),
       MapEntry('일일 차량 입고 대수', vehicleText),
     ];
 
     pw.Widget buildFieldTable() => pw.Table(
-          border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
-          columnWidths: const {
-            0: pw.FlexColumnWidth(3),
-            1: pw.FlexColumnWidth(7),
-          },
-          children: [
-            for (final kv in fields)
-              pw.TableRow(
-                children: [
-                  pw.Container(
-                    padding: const pw.EdgeInsets.all(6),
-                    color: PdfColors.grey200,
-                    child: pw.Text(
-                      kv.key,
-                      style: const pw.TextStyle(fontSize: 11),
-                    ),
-                  ),
-                  pw.Container(
-                    padding: const pw.EdgeInsets.all(6),
-                    child: pw.Text(
-                      kv.value,
-                      style: const pw.TextStyle(fontSize: 11),
-                    ),
-                  ),
-                ],
+      border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+      columnWidths: const {
+        0: pw.FlexColumnWidth(3),
+        1: pw.FlexColumnWidth(7),
+      },
+      children: [
+        for (final kv in fields)
+          pw.TableRow(
+            children: [
+              pw.Container(
+                padding: const pw.EdgeInsets.all(6),
+                color: PdfColors.grey200,
+                child: pw.Text(
+                  kv.key,
+                  style: const pw.TextStyle(fontSize: 11),
+                ),
               ),
-          ],
-        );
+              pw.Container(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Text(
+                  kv.value,
+                  style: const pw.TextStyle(fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+      ],
+    );
 
     pw.Widget buildSection(String title, String body) => pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.SizedBox(height: 8),
-            pw.Text(
-              title,
-              style: pw.TextStyle(
-                fontSize: 13,
-                fontWeight: pw.FontWeight.bold,
-              ),
-            ),
-            pw.SizedBox(height: 4),
-            pw.Container(
-              width: double.infinity,
-              padding: const pw.EdgeInsets.all(8),
-              decoration: pw.BoxDecoration(
-                border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
-                borderRadius: pw.BorderRadius.circular(4),
-              ),
-              child: pw.Text(
-                body.isEmpty ? '-' : body,
-                style: const pw.TextStyle(fontSize: 11),
-              ),
-            ),
-          ],
-        );
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.SizedBox(height: 8),
+        pw.Text(
+          title,
+          style: pw.TextStyle(
+            fontSize: 13,
+            fontWeight: pw.FontWeight.bold,
+          ),
+        ),
+        pw.SizedBox(height: 4),
+        pw.Container(
+          width: double.infinity,
+          padding: const pw.EdgeInsets.all(8),
+          decoration: pw.BoxDecoration(
+            border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
+            borderRadius: pw.BorderRadius.circular(4),
+          ),
+          child: pw.Text(
+            body.isEmpty ? '-' : body,
+            style: const pw.TextStyle(fontSize: 11),
+          ),
+        ),
+      ],
+    );
 
     pw.Widget buildSignature() {
       final name = _signerName.isEmpty ? '이름 미입력' : _signerName;
@@ -928,21 +1143,21 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
             ),
             child: _signaturePngBytes == null
                 ? pw.Center(
-                    child: pw.Text(
-                      '서명 이미지 없음',
-                      style: const pw.TextStyle(
-                        fontSize: 10,
-                        color: PdfColors.grey,
-                      ),
-                    ),
-                  )
+              child: pw.Text(
+                '서명 이미지 없음',
+                style: const pw.TextStyle(
+                  fontSize: 10,
+                  color: PdfColors.grey,
+                ),
+              ),
+            )
                 : pw.Padding(
-                    padding: const pw.EdgeInsets.all(6),
-                    child: pw.Image(
-                      pw.MemoryImage(_signaturePngBytes!),
-                      fit: pw.BoxFit.contain,
-                    ),
-                  ),
+              padding: const pw.EdgeInsets.all(6),
+              child: pw.Image(
+                pw.MemoryImage(_signaturePngBytes!),
+                fit: pw.BoxFit.contain,
+              ),
+            ),
           ),
         ],
       );
@@ -1074,8 +1289,8 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
             Text(
               title,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 10),
             child,
@@ -1119,18 +1334,19 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
     }
   }
 
-  // ===== 섹션별 본문 위젯들 =====
-
+  // ─────────────────────────────────────────────────────────────
+  // 섹션 바디들
+  // ─────────────────────────────────────────────────────────────
   Widget _buildSpecialNoteBody() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           '오늘 업무 진행 중 특이사항이 있었는지 선택해 주세요.\n'
-          '(예: 장애, 클레임, 일정 지연, 긴급 지원 등)',
+              '(예: 장애, 클레임, 일정 지연, 긴급 지원 등)',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                height: 1.4,
-              ),
+            height: 1.4,
+          ),
         ),
         const SizedBox(height: 12),
         Row(
@@ -1148,8 +1364,9 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                     curve: Curves.easeOut,
                   );
                 },
-                style:
-                    _hasSpecialNote == false ? SimpleReportButtonStyles.primary() : SimpleReportButtonStyles.outlined(),
+                style: _hasSpecialNote == false
+                    ? SimpleReportButtonStyles.primary()
+                    : SimpleReportButtonStyles.outlined(),
                 child: const Text('특이사항 없음'),
               ),
             ),
@@ -1167,8 +1384,9 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                     curve: Curves.easeOut,
                   );
                 },
-                style:
-                    _hasSpecialNote == true ? SimpleReportButtonStyles.primary() : SimpleReportButtonStyles.outlined(),
+                style: _hasSpecialNote == true
+                    ? SimpleReportButtonStyles.primary()
+                    : SimpleReportButtonStyles.outlined(),
                 child: const Text('특이사항 있음'),
               ),
             ),
@@ -1178,22 +1396,50 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
         Text(
           '※ 선택 결과는 메일 제목에 자동으로 반영되며, 다음 항목으로 자동 이동합니다.',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.black54,
-              ),
+            color: Colors.black54,
+          ),
         ),
       ],
     );
   }
 
+  /// Dashboard와 동일한 “2단계 UI/로직”:
+  /// - 필수 입력 + 숫자 검증
+  /// - 1차 제출 버튼(유효 입력 시 enable)
+  /// - 시스템 집계 카드 UI는 유지하되, 조회 금지 요건으로 값은 미집계 안내
   Widget _buildVehicleBody() {
+    final textTheme = Theme.of(context).textTheme;
+
+    Widget metricRow(String label, String value, {bool isEmphasis = false}) {
+      return Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: textTheme.bodySmall?.copyWith(
+                color: Colors.black54,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: textTheme.bodySmall?.copyWith(
+              fontWeight: isEmphasis ? FontWeight.w700 : FontWeight.w600,
+              color: isEmphasis ? SimpleReportColors.dark : Colors.black87,
+            ),
+          ),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           '오늘 하루 동안 해당 업무로 입고된 차량 대수를 입력해 주세요.',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                height: 1.4,
-              ),
+          style: textTheme.bodyMedium?.copyWith(
+            height: 1.4,
+          ),
         ),
         const SizedBox(height: 12),
         TextFormField(
@@ -1205,7 +1451,6 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
           ),
           keyboardType: TextInputType.number,
           onTap: () {
-            // 키보드가 올라온 뒤에 스크롤해서 필드를 키보드 위로 올림
             Future.delayed(const Duration(milliseconds: 150), () {
               final ctx = _vehicleFieldKey.currentContext;
               if (ctx != null) {
@@ -1219,22 +1464,123 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
           },
           validator: (v) {
             final value = v?.trim() ?? '';
-            if (value.isEmpty) {
-              // 선택 입력: 비어 있으면 통과
-              return null;
-            }
-            if (!RegExp(r'^\d+$').hasMatch(value)) {
-              return '숫자만 입력하세요.';
-            }
+            if (value.isEmpty) return '일일 차량 입고 대수를 입력하세요.';
+            if (!RegExp(r'^\d+$').hasMatch(value)) return '숫자만 입력하세요.';
             return null;
           },
         ),
-        const SizedBox(height: 6),
-        Text(
-          '※ 입력 시 메일 제목에 "??대" 형식으로 자동 반영됩니다.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.black54,
+        const SizedBox(height: 8),
+
+        // 시스템 집계 안내 카드(디자인은 유지, 값은 조회 금지로 미집계)
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: SimpleReportColors.light.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: SimpleReportColors.light.withOpacity(0.8),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.info_outline,
+                    size: 18,
+                    color: SimpleReportColors.dark,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '시스템 집계 기준 (참고용)',
+                    style: textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: SimpleReportColors.dark,
+                    ),
+                  ),
+                ],
               ),
+              const SizedBox(height: 8),
+              Text(
+                '이 화면은 Firebase 조회를 수행하지 않으므로, 시스템 집계 값을 표시하지 않습니다.\n'
+                    '보고용 "일일 차량 입고 대수"는 반드시 직접 입력해 주세요.',
+                style: textTheme.bodySmall?.copyWith(
+                  color: Colors.black87,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.black12.withOpacity(0.0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    metricRow('시스템 입차', '미집계'),
+                    const SizedBox(height: 4),
+                    metricRow('출차', '미집계'),
+                    const SizedBox(height: 4),
+                    metricRow('중복 입차', '미집계'),
+                    const Divider(height: 16),
+                    metricRow(
+                      '시스템 합산(입차+출차+중복 입차)',
+                      '미집계',
+                      isEmphasis: true,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '※ 시스템 집계는 표시하지 않으며, 입력값이 곧 저장값(vehicleInput)으로 반영됩니다.',
+                style: textTheme.bodySmall?.copyWith(
+                  color: Colors.black54,
+                  height: 1.3,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: (_firstSubmitting || !_isVehicleCountValid) ? null : _submitFirstEndReport,
+            style: SimpleReportButtonStyles.primary(),
+            icon: _firstSubmitting
+                ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            )
+                : const Icon(Icons.cloud_upload_outlined),
+            label: Text(
+              _firstSubmitting ? '1차 제출 중…' : (_firstSubmittedCompleted ? '1차 제출 완료(재제출 가능)' : '1차 제출'),
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 4),
+
+        Text(
+          '※ 1차 제출을 완료해야 다음 단계로 진행할 수 있습니다.',
+          style: textTheme.bodySmall?.copyWith(
+            color: Colors.black54,
+          ),
         ),
       ],
     );
@@ -1269,13 +1615,11 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
         });
       },
       validator: (v) {
-        // ✅ 특이사항 "있음"인 경우에만 필수 입력
         if (_hasSpecialNote == true) {
           if (v == null || v.trim().isEmpty) {
             return '업무 내용을 입력하세요.';
           }
         }
-        // 특이사항 없음(false) 또는 미선택(null)인 경우는 선택 입력으로 처리
         return null;
       },
     );
@@ -1401,7 +1745,6 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
     );
   }
 
-  /// 공통 페이지 래퍼: 문서 헤더 + 안내문 + 섹션 카드 + 하단 (초기화/미리보기)
   Widget _buildReportPage({
     required String sectionTitle,
     required Widget sectionBody,
@@ -1415,7 +1758,7 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
           16,
           16,
           16,
-          16 + bottomInset, // 키보드 높이만큼 추가 패딩
+          16 + bottomInset,
         ),
         child: Align(
           alignment: Alignment.topCenter,
@@ -1424,27 +1767,24 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 상단 문서 헤더
                 Text(
                   '업무 종료 보고서',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 4,
-                      ),
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 4,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'WORK COMPLETION REPORT',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: Colors.black54,
-                        letterSpacing: 3,
-                      ),
+                    color: Colors.black54,
+                    letterSpacing: 3,
+                  ),
                 ),
                 const SizedBox(height: 16),
-
-                // 실제 "종이" 느낌의 보고서 카드
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -1458,7 +1798,6 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // 상단 메타 정보 라인
                       Row(
                         children: [
                           const Icon(
@@ -1470,24 +1809,22 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                           Text(
                             '업무 종료 보고서 양식',
                             style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  color: SimpleReportColors.dark,
-                                ),
+                              fontWeight: FontWeight.w600,
+                              color: SimpleReportColors.dark,
+                            ),
                           ),
                           const Spacer(),
                           Text(
                             '작성일 ${_fmtCompact(DateTime.now())}',
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Colors.black54,
-                                ),
+                              color: Colors.black54,
+                            ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 8),
                       const Divider(height: 24),
                       const SizedBox(height: 4),
-
-                      // 안내 문구
                       Container(
                         decoration: BoxDecoration(
                           color: SimpleReportColors.light.withOpacity(0.12),
@@ -1510,26 +1847,20 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                               child: Text(
                                 '해당 업무의 수행 내용과 결과를 사실에 근거하여 간결하게 작성해 주세요.',
                                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      height: 1.4,
-                                    ),
+                                  height: 1.4,
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
-
                       _gap(20),
-
-                      // 섹션 카드 (한 페이지당 하나만)
                       _sectionCard(
                         title: sectionTitle,
                         margin: const EdgeInsets.only(bottom: 0),
                         child: sectionBody,
                       ),
-
                       _gap(12),
-
-                      // 하단 보조 액션 (초기화 / 미리보기)
                       Row(
                         children: [
                           Expanded(
@@ -1554,7 +1885,6 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 24),
               ],
             ),
@@ -1568,7 +1898,6 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
   Widget build(BuildContext context) {
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      // 바깥 배경
       backgroundColor: const Color(0xFFEFF3F6),
       appBar: AppBar(
         title: const Text('업무 종료 보고서 작성'),
@@ -1591,49 +1920,47 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
           ),
         ],
       ),
-      // 👉 5. 전자서명(인덱스 4) 페이지만 제출 버튼 노출 + 서명 전에는 비활성화
       bottomNavigationBar: _currentPageIndex == 4
           ? SafeArea(
-              top: false,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 150),
-                curve: Curves.easeOut,
-                padding: EdgeInsets.only(
-                  left: 16,
-                  right: 16,
-                  top: 10,
-                  bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+        top: false,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 10,
+            bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+          ),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              top: BorderSide(color: Colors.black12, width: 1),
+            ),
+          ),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: (!_sending && _signaturePngBytes != null) ? _submit : null,
+              icon: _sending
+                  ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
                 ),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  border: Border(
-                    top: BorderSide(color: Colors.black12, width: 1),
-                  ),
-                ),
-                child: SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    // ✅ 서명 전에는 비활성화, 서명 완료 후에만 활성화
-                    onPressed: (!_sending && _signaturePngBytes != null) ? _submit : null,
-                    icon: _sending
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                            ),
-                          )
-                        : const Icon(Icons.send_outlined),
-                    label: Text(
-                      _sending ? '전송 중…' : '제출',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    style: SimpleReportButtonStyles.primary(),
-                  ),
-                ),
+              )
+                  : const Icon(Icons.send_outlined),
+              label: Text(
+                _sending ? '전송 중…' : '제출',
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-            )
+              style: SimpleReportButtonStyles.primary(),
+            ),
+          ),
+        ),
+      )
           : null,
       body: SafeArea(
         child: Form(
@@ -1642,10 +1969,28 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
           child: PageView(
             controller: _pageController,
             onPageChanged: (index) {
+              // Dashboard와 동일: 1차 제출 완료 전에는 2페이지(인덱스 1) 이후로 진행 금지
+              if (!_firstSubmittedCompleted && index > 1) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _pageController.animateToPage(
+                    1,
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                  );
+                });
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('다음 단계로 진행하기 전에 먼저 "1차 제출"을 완료해 주세요.'),
+                  ),
+                );
+                return;
+              }
+
               setState(() {
                 _currentPageIndex = index;
 
-                // 첫 페이지로 다시 돌아오면 특이사항 선택 초기화
+                // 첫 페이지로 돌아오면 특이사항 선택 초기화(기존 로직 유지)
                 if (index == 0) {
                   _hasSpecialNote = null;
                   _updateMailSubject();
@@ -1675,6 +2020,130 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// ─────────────────────────────────────────────────────────────
+/// 15초 취소 가능 다이얼로그(간단 구현)
+/// - duration 종료 시 자동 "진행(true)" 반환
+/// - 사용자가 취소 누르면 false
+/// ─────────────────────────────────────────────────────────────
+class _DurationBlockingDialog extends StatefulWidget {
+  const _DurationBlockingDialog({
+    required this.message,
+    required this.duration,
+  });
+
+  final String message;
+  final Duration duration;
+
+  @override
+  State<_DurationBlockingDialog> createState() => _DurationBlockingDialogState();
+}
+
+class _DurationBlockingDialogState extends State<_DurationBlockingDialog> {
+  Timer? _timer;
+  late int _remainSec;
+
+  @override
+  void initState() {
+    super.initState();
+    _remainSec = widget.duration.inSeconds;
+
+    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (!mounted) return;
+      setState(() {
+        _remainSec -= 1;
+      });
+
+      if (_remainSec <= 0) {
+        _timer?.cancel();
+        if (mounted) Navigator.of(context).pop(true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final remainText = _remainSec > 0 ? '$_remainSec초 후 자동 진행' : '진행 중...';
+
+    return AlertDialog(
+      title: const Text('확인'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(widget.message),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  remainText,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            _timer?.cancel();
+            Navigator.of(context).pop(false);
+          },
+          child: const Text('취소'),
+        ),
+      ],
+    );
+  }
+}
+
+/// ─────────────────────────────────────────────────────────────
+/// 작업 중 블로킹 다이얼로그
+/// ─────────────────────────────────────────────────────────────
+class _BlockingProgressDialog extends StatelessWidget {
+  const _BlockingProgressDialog({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+        child: Row(
+          children: [
+            const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
         ),
       ),
     );

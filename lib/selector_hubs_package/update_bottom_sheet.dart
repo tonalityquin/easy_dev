@@ -18,6 +18,7 @@ class UpdateBottomSheet extends StatelessWidget {
         '업무 중 앱 최소화 시 플로팅 버블 기능 추가',
         '약식 로그인 모드 추가',
         '지역 별 근무자 출퇴근 현황 기능 추가',
+        '지역 별 통계 카드 기능 개선',
       ],
     ),
     UpdateEntry(

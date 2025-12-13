@@ -91,8 +91,8 @@ class HeadStubPage extends StatelessWidget {
                       final textScale =
                       MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
 
-                      final tileWidth = (width - spacing * (crossAxisCount - 1)) /
-                          crossAxisCount;
+                      final tileWidth =
+                          (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
                       const baseTileHeight = 150.0;
                       final tileHeight = baseTileHeight * textScale;
                       final childAspectRatio = tileWidth / tileHeight;
@@ -261,7 +261,8 @@ class HeadStubPage extends StatelessWidget {
                           },
                         ),
 
-                        // ▼ 통계 비교 (mgmt_stats.Statistics로 이동)
+                        // ▼ 통계 비교 (mgmt_stats.Statistics)
+                        // ✅ 수정: 페이지 push → 92% 바텀시트로 통일
                         _ActionCard(
                           icon: Icons.stacked_line_chart_rounded,
                           title: '통계 비교',
@@ -271,11 +272,7 @@ class HeadStubPage extends StatelessWidget {
                           tintColor: statLight,
                           titleColor: statDark,
                           onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const mgmt_stats.Statistics(),
-                              ),
-                            );
+                            mgmt_stats.Statistics.showAsBottomSheet(context);
                           },
                         ),
                       ];
@@ -540,8 +537,7 @@ class TutorialPickerBottomSheet extends StatelessWidget {
           return Container(
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius:
-              const BorderRadius.vertical(top: Radius.circular(16)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
               border: Border.all(color: cs.outlineVariant.withOpacity(.35)),
               boxShadow: [
                 BoxShadow(
@@ -564,8 +560,7 @@ class TutorialPickerBottomSheet extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 const ListTile(
-                  title:
-                  Text('튜토리얼', style: TextStyle(fontWeight: FontWeight.w800)),
+                  title: Text('튜토리얼', style: TextStyle(fontWeight: FontWeight.w800)),
                   subtitle: Text('읽을 항목을 선택하세요'),
                 ),
                 const Divider(height: 1),
@@ -672,8 +667,7 @@ class _TutorialPdfViewerState extends State<TutorialPdfViewer> {
         child: PdfViewPinch(
           controller: widget.controller,
           onDocumentError: (e) {
-            ScaffoldMessenger.of(context)
-                .showSnackBar(SnackBar(content: Text('PDF 오류: $e')));
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('PDF 오류: $e')));
           },
         ),
       ),
