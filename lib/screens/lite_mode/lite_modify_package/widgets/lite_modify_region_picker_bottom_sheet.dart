@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
-Future<void> liteInputRegionPickerBottomSheet({
+Future<void> liteModifyRegionPickerBottomSheet({
   required BuildContext context,
   required String selectedRegion,
   required List<String> regions,
@@ -36,6 +36,7 @@ Future<void> liteInputRegionPickerBottomSheet({
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
+
                 const Text(
                   '지역 선택',
                   style: TextStyle(
@@ -44,7 +45,9 @@ Future<void> liteInputRegionPickerBottomSheet({
                     color: Colors.black,
                   ),
                 ),
+
                 const SizedBox(height: 16),
+
                 Expanded(
                   child: CupertinoPicker(
                     scrollController: FixedExtentScrollController(
@@ -67,16 +70,23 @@ Future<void> liteInputRegionPickerBottomSheet({
                     }).toList(),
                   ),
                 ),
+
                 const Divider(height: 1),
+
                 const SizedBox(height: 12),
+
                 CupertinoButton.filled(
                   padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
                   onPressed: () {
                     Navigator.of(context).pop();
                     onConfirm(tempSelected);
                   },
-                  child: const Text('확인', style: TextStyle(fontSize: 16)),
+                  child: const Text(
+                    '확인',
+                    style: TextStyle(fontSize: 16),
+                  ),
                 ),
+
                 const SizedBox(height: 24),
               ],
             ),

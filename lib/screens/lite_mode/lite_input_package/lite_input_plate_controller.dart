@@ -75,7 +75,7 @@ class LiteInputPlateController {
   late TextEditingController activeController;
   final List<XFile> capturedImages = [];
 
-  InputPlateController() {
+  LiteInputPlateController() {
     activeController = controllerFrontDigit;
     _addInputListeners();
   }

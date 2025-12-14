@@ -3,8 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../models/plate_model.dart';
-import '../../../../../screens/service_mode/modify_package/modify_plate_screen.dart';
-import '../../../../../screens/service_mode/log_package/log_viewer_bottom_sheet.dart';
+
 import '../../../../../states/area/area_state.dart';
 import '../../../../../states/plate/movement_plate.dart';
 import '../../../../../states/user/user_state.dart';
@@ -20,6 +19,8 @@ import '../../../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 
 // ✅ TTS (오프라인 TTS 사용)
 import '../../../../../offlines/tts/offline_tts.dart';
+import '../../../lite_log_package/lite_log_viewer_bottom_sheet.dart';
+import '../../../lite_modify_package/lite_modify_plate_screen.dart';
 
 Future<void> showLiteParkingCompletedStatusBottomSheet({
   required BuildContext context,
@@ -326,7 +327,7 @@ class _FullHeightSheet extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => LogViewerBottomSheet(
+                    builder: (_) => LiteLogViewerBottomSheet(
                       initialPlateNumber: plateNumber,
                       division: division,
                       area: area,
@@ -357,7 +358,7 @@ class _FullHeightSheet extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => ModifyPlateScreen(
+                    builder: (_) => LiteModifyPlateScreen(
                       plate: plate,
                       collectionKey: PlateType.parkingCompleted,
                     ),

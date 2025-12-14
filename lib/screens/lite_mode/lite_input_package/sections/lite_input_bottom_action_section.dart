@@ -39,7 +39,7 @@ class _LiteInputBottomActionSectionState extends State<LiteInputBottomActionSect
 
     await showDialog(
       context: context,
-      builder: (context) => InputCameraPreviewDialog(
+      builder: (context) => LiteInputCameraPreviewDialog(
         onImageCaptured: (image) {
           // ✅ 1) 컨트롤러 리스트에 추가
           widget.controller.capturedImages.add(image);
@@ -63,7 +63,7 @@ class _LiteInputBottomActionSectionState extends State<LiteInputBottomActionSect
   void _selectParkingLocation() {
     showDialog(
       context: context,
-      builder: (_) => InputLocationBottomSheet(
+      builder: (_) => LiteInputLocationBottomSheet(
         locationController: widget.controller.locationController,
         onLocationSelected: (location) {
           setState(() {

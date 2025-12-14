@@ -205,7 +205,7 @@ class _LiteParkingStatusPageState extends State<LiteParkingStatusPage> {
                     value: usageRatio,
                     backgroundColor: Colors.grey[300],
                     valueColor: AlwaysStoppedAnimation<Color>(
-                      usageRatio >= 0.8 ? Colors.red : Colors.grey,
+                      usageRatio >= 0.8 ? Colors.red : Colors.blueAccent,
                     ),
                     minHeight: 8,
                   ),

@@ -75,7 +75,7 @@ class LiteHomeDashBoardController {
 
       // ⬇️ 여기서부터는 SQLite 기반 업로더가 처리
       final SheetUploadResult result =
-      await LiteClockOutLogUploader.uploadLeaveJson(
+      await ClockOutLogUploader.uploadLeaveJson(
         context: context,
         data: leaveData,
       );
@@ -112,7 +112,7 @@ class LiteHomeDashBoardController {
       };
 
       // ⬇️ 이쪽도 SQLite 기반 업로더 사용
-      final SheetUploadResult result = await LiteBreakLogUploader.uploadBreakJson(
+      final SheetUploadResult result = await BreakLogUploader.uploadBreakJson(
         context: context,
         data: breakJson,
       );

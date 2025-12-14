@@ -12,7 +12,7 @@ import '../../../../../simple_mode/utils/simple_mode/simple_mode_attendance_repo
 
 // ✅ DB 전용 로거
 
-class LiteBreakLogUploader {
+class BreakLogUploader {
   static const String _status = '휴게';
 
   // ─────────────────────────────────────────

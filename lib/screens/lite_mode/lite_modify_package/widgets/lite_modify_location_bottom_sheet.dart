@@ -5,35 +5,37 @@ import '../../../../models/location_model.dart';
 import '../../../../states/area/area_state.dart';
 import '../../../../states/location/location_state.dart';
 
-class LiteInputLocationBottomSheet extends StatefulWidget {
+class LiteModifyLocationBottomSheet extends StatefulWidget {
   final TextEditingController locationController;
   final Function(String) onLocationSelected;
 
-  const LiteInputLocationBottomSheet({
+  const LiteModifyLocationBottomSheet({
     super.key,
     required this.locationController,
     required this.onLocationSelected,
   });
 
-  static Future<void> show(BuildContext context, TextEditingController controller, Function(String) onSelected) async {
+  static Future<void> show(
+      BuildContext context,
+      TextEditingController controller,
+      Function(String) onSelected,
+      ) async {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) {
-        return LiteInputLocationBottomSheet(
-          locationController: controller,
-          onLocationSelected: onSelected,
-        );
-      },
+      builder: (_) => LiteModifyLocationBottomSheet(
+        locationController: controller,
+        onLocationSelected: onSelected,
+      ),
     );
   }
 
   @override
-  State<LiteInputLocationBottomSheet> createState() => _LiteInputLocationBottomSheetState();
+  State<LiteModifyLocationBottomSheet> createState() => _LiteModifyLocationBottomSheetState();
 }
 
-class _LiteInputLocationBottomSheetState extends State<LiteInputLocationBottomSheet> {
+class _LiteModifyLocationBottomSheetState extends State<LiteModifyLocationBottomSheet> {
   String? selectedParent;
   String? _previousArea;
   Future<List<LocationModel>>? _futureLocations;
@@ -101,6 +103,7 @@ class _LiteInputLocationBottomSheetState extends State<LiteInputLocationBottomSh
                         controller: scrollController,
                         padding: const EdgeInsets.all(16),
                         children: [
+                          // Top Handle
                           Container(
                             width: 40,
                             height: 4,
@@ -110,15 +113,13 @@ class _LiteInputLocationBottomSheetState extends State<LiteInputLocationBottomSh
                               borderRadius: BorderRadius.circular(2),
                             ),
                           ),
+
                           const Text(
                             '주차 구역 선택',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
-                            ),
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 16),
+
                           if (selectedParent != null) ...[
                             ListTile(
                               leading: const Icon(Icons.arrow_back),

@@ -125,7 +125,7 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
             }
           });
 
-          await inputCustomStatusBottomSheet(context, plateNumber, area);
+          await liteInputCustomStatusBottomSheet(context, plateNumber, area);
         }
       }
     });
@@ -500,7 +500,7 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          InputBottomNavigation(
+          LiteInputBottomNavigation(
             showKeypad: true,
             keypad: Column(
               mainAxisSize: MainAxisSize.min,
@@ -524,7 +524,7 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
             padding: const EdgeInsets.only(left: 12, right: 12, top: 6, bottom: 8),
             child: _buildDock(),
           ),
-          InputBottomNavigation(
+          LiteInputBottomNavigation(
             showKeypad: false,
             keypad: const SizedBox.shrink(),
             actionButton: actionButton,

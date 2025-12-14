@@ -21,7 +21,7 @@ import '../../../../widgets/dialog/plate_remove_dialog.dart';
 
 /// Deep Blue 팔레트(서비스 카드와 동일 계열) + 상태 색상
 class _Palette {
-  static const base = Color(0xFF546E7A); // primary
+  static const base = Color(0xFF37474F); // primary
   static const dark = Color(0xFF37474F); // 강조 텍스트/아이콘
 
   // 상태 강조 색

@@ -150,7 +150,7 @@ class _LiteHqDashBoardPageState extends State<LiteHqDashBoardPage> {
                   secondChild: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      LiteHomeBreakButtonWidget(controller: _controller),
+                      HomeBreakButtonWidget(controller: _controller),
                       const SizedBox(height: 16),
                       SizedBox(
                         width: double.infinity,

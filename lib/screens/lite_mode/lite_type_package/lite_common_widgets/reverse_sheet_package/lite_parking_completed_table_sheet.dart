@@ -20,7 +20,7 @@ import 'ui/lite_reverse_page_top_sheet.dart';
 /// ✅ 실시간 탭 진입 게이트(ON/OFF)
 /// - 기본 OFF
 /// - 앱 재실행 후에도 유지(SharedPreferences)
-class LiteParkingCompletedRealtimeTabGate {
+class ParkingCompletedRealtimeTabGate {
   static const String _prefsKeyRealtimeTabEnabled = 'parking_completed_realtime_tab_enabled_v1';
 
   static Future<bool> isEnabled() async {
@@ -42,7 +42,7 @@ class LiteParkingCompletedRealtimeTabGate {
 ///
 /// ✅ 변경: 로그인 계정(UserState)의 currentArea(우선) / AreaState.currentArea(차선)를 사용해
 ///         해당 area 문서의 데이터만 조회하도록 area를 주입합니다.
-Future<void> showLiteParkingCompletedTableTopSheet(BuildContext context) async {
+Future<void> showParkingCompletedTableTopSheet(BuildContext context) async {
   // 1) 로그인 계정 currentArea 우선
   final userArea = context.read<UserState>().currentArea.trim();
 
@@ -56,28 +56,28 @@ Future<void> showLiteParkingCompletedTableTopSheet(BuildContext context) async {
     return;
   }
 
-  await showLiteReversePageTopSheet(
+  await showReversePageTopSheet(
     context: context,
     maxHeightFactor: 0.95,
-    builder: (_) => LiteParkingCompletedTableSheet(area: area),
+    builder: (_) => ParkingCompletedTableSheet(area: area),
   );
 }
 
 /// 로컬(SQLite) + 실시간(Firestore view) 탭 제공
 /// ✅ 변경: area 주입(해당 지역 문서만 조회)
-class LiteParkingCompletedTableSheet extends StatefulWidget {
+class ParkingCompletedTableSheet extends StatefulWidget {
   final String area;
 
-  const LiteParkingCompletedTableSheet({
+  const ParkingCompletedTableSheet({
     super.key,
     required this.area,
   });
 
   @override
-  State<LiteParkingCompletedTableSheet> createState() => _LiteParkingCompletedTableSheetState();
+  State<ParkingCompletedTableSheet> createState() => _ParkingCompletedTableSheetState();
 }
 
-class _LiteParkingCompletedTableSheetState extends State<LiteParkingCompletedTableSheet> with SingleTickerProviderStateMixin {
+class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet> with SingleTickerProviderStateMixin {
   late final TabController _tabCtrl;
 
   bool _realtimeTabEnabled = false; // ✅ 기본 OFF
@@ -98,7 +98,7 @@ class _LiteParkingCompletedTableSheetState extends State<LiteParkingCompletedTab
 
   Future<void> _loadGate() async {
     try {
-      final enabled = await LiteParkingCompletedRealtimeTabGate.isEnabled();
+      final enabled = await ParkingCompletedRealtimeTabGate.isEnabled();
       if (!mounted) return;
       setState(() {
         _realtimeTabEnabled = enabled;

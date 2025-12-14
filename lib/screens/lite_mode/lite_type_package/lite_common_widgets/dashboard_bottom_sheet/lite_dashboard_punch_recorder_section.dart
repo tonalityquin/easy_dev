@@ -31,8 +31,8 @@ class _Palette {
 ///   - (기존 코드 유지) 출근(workIn) 시에만 commute_true_false 에 "출근 시각(Timestamp)" 기록
 ///     단, 이 화면에서 workIn을 막았으므로 이 경로는 사실상 실행되지 않음(안전망으로 로직만 유지)
 ///   - 퇴근(workOut) 시 commute_true_false 는 무관 (절대 호출하지 않음)
-class LiteDashboardPunchRecorderSection extends StatefulWidget {
-  const LiteDashboardPunchRecorderSection({
+class LiteDashboardInsidePunchRecorderSection extends StatefulWidget {
+  const LiteDashboardInsidePunchRecorderSection({
     super.key,
     required this.userId,
     required this.userName,
@@ -46,12 +46,12 @@ class LiteDashboardPunchRecorderSection extends StatefulWidget {
   final String division;
 
   @override
-  State<LiteDashboardPunchRecorderSection> createState() =>
-      _LiteDashboardPunchRecorderSectionState();
+  State<LiteDashboardInsidePunchRecorderSection> createState() =>
+      _LiteDashboardInsidePunchRecorderSectionState();
 }
 
-class _LiteDashboardPunchRecorderSectionState
-    extends State<LiteDashboardPunchRecorderSection> {
+class _LiteDashboardInsidePunchRecorderSectionState
+    extends State<LiteDashboardInsidePunchRecorderSection> {
   late DateTime _selectedDate;
 
   String? _workInTime;

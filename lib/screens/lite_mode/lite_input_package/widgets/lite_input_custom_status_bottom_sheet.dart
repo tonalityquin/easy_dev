@@ -43,7 +43,7 @@ Widget _infoRow(String label, String? value) {
   );
 }
 
-Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
+Future<Map<String, dynamic>?> liteInputCustomStatusBottomSheet(
     BuildContext context,
     String plateNumber,
     String area,

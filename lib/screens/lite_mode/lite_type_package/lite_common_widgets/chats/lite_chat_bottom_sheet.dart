@@ -195,8 +195,8 @@ void liteChatBottomSheet(BuildContext context) {
 /// 채팅 열기 버튼
 /// - roomId 변화를 감지하도록 `select` 사용 (read → select)
 /// - ValueListenableBuilder로 서비스 캐시 구독
-class LiteChatOpenButton extends StatelessWidget {
-  const LiteChatOpenButton({super.key});
+class ChatOpenButton extends StatelessWidget {
+  const ChatOpenButton({super.key});
 
   @override
   Widget build(BuildContext context) {

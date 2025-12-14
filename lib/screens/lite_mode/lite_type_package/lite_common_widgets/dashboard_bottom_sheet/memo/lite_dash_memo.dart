@@ -110,7 +110,7 @@ class LiteDashMemo {
       useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const _LiteDashMemoSheet(),
+      builder: (_) => const _DashMemoSheet(),
     ).whenComplete(() {
       _isPanelOpen = false;
       _panelFuture = null;
@@ -128,7 +128,7 @@ class LiteDashMemo {
       WidgetsBinding.instance.addPostFrameCallback((_) => _showOverlay());
       return;
     }
-    _entry = OverlayEntry(builder: (context) => const _LiteDashMemoBubble());
+    _entry = OverlayEntry(builder: (context) => const _DashMemoBubble());
     overlay.insert(_entry!);
   }
 
@@ -175,14 +175,14 @@ class LiteDashMemo {
 }
 
 /// 드래그 가능한 플로팅 버블(즉시 열림 버전)
-class _LiteDashMemoBubble extends StatefulWidget {
-  const _LiteDashMemoBubble();
+class _DashMemoBubble extends StatefulWidget {
+  const _DashMemoBubble();
 
   @override
-  State<_LiteDashMemoBubble> createState() => _LiteDashMemoBubbleState();
+  State<_DashMemoBubble> createState() => _DashMemoBubbleState();
 }
 
-class _LiteDashMemoBubbleState extends State<_LiteDashMemoBubble> with SingleTickerProviderStateMixin {
+class _DashMemoBubbleState extends State<_DashMemoBubble> with SingleTickerProviderStateMixin {
   static const double _bubbleSize = 56;
   late Offset _pos;
   bool _clampedOnce = false;
@@ -292,14 +292,14 @@ class _LiteDashMemoBubbleState extends State<_LiteDashMemoBubble> with SingleTic
 }
 
 /// 메모 바텀시트(풀높이 · 스위치 · 검색 · 입력 · 스와이프 삭제)
-class _LiteDashMemoSheet extends StatefulWidget {
-  const _LiteDashMemoSheet();
+class _DashMemoSheet extends StatefulWidget {
+  const _DashMemoSheet();
 
   @override
-  State<_LiteDashMemoSheet> createState() => _LiteDashMemoSheetState();
+  State<_DashMemoSheet> createState() => _DashMemoSheetState();
 }
 
-class _LiteDashMemoSheetState extends State<_LiteDashMemoSheet> {
+class _DashMemoSheetState extends State<_DashMemoSheet> {
   final TextEditingController _inputCtrl = TextEditingController();
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = '';

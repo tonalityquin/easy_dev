@@ -1,31 +1,34 @@
-// input_camera_preview_dialog.dart
+// modify_camera_preview_dialog.dart
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // HapticFeedback, DeviceOrientation
-import '../utils/lite_input_camera_helper.dart';
+import '../utils/lite_modify_camera_helper.dart';
 
 /// 프리뷰가 촬영 결과와 동일한 비율로 보이도록:
 /// - controller.value.previewSize로 종횡비 계산(세로에서 가로/세로 바꿔치기)
 /// - AspectRatio + contain 렌더링(크롭 없음) → 촬영 결과와 동일 프레이밍
 /// - 초기화 후 세로 잠금(lockCaptureOrientation)으로 회전 튐 방지
-class LiteInputCameraPreviewDialog extends StatefulWidget {
+/// - 갤러리 진입 시 pausePreview / 복귀 시 resumePreview
+/// - 탭 포커스/노출 좌표 정확화(LayoutBuilder 사용)
+class LiteModifyCameraPreviewDialog extends StatefulWidget {
   final void Function(List<XFile>)? onCaptureComplete;
   final void Function(XFile)? onImageCaptured;
 
-  const LiteInputCameraPreviewDialog({
+  const LiteModifyCameraPreviewDialog({
     super.key,
     this.onCaptureComplete,
     this.onImageCaptured,
   });
 
   @override
-  State<LiteInputCameraPreviewDialog> createState() =>
-      _LiteInputCameraPreviewDialogState();
+  State<LiteModifyCameraPreviewDialog> createState() =>
+      _LiteModifyCameraPreviewDialogState();
 }
 
-class _LiteInputCameraPreviewDialogState extends State<LiteInputCameraPreviewDialog> {
-  late final LiteInputCameraHelper _cameraHelper;
+class _LiteModifyCameraPreviewDialogState
+    extends State<LiteModifyCameraPreviewDialog> {
+  late final LiteModifyCameraHelper _cameraHelper;
   final List<XFile> _capturedImages = [];
 
   bool _isCameraReady = false;
@@ -38,7 +41,7 @@ class _LiteInputCameraPreviewDialogState extends State<LiteInputCameraPreviewDia
   void initState() {
     super.initState();
 
-    _cameraHelper = LiteInputCameraHelper(
+    _cameraHelper = LiteModifyCameraHelper(
       jpegQuality: 75,
       maxLongSide: 2560, // 촬영 파일 다운스케일(옵션)
       keepOriginalAlso: false,
@@ -62,6 +65,7 @@ class _LiteInputCameraPreviewDialogState extends State<LiteInputCameraPreviewDia
       setState(() {
         _isCameraReady = true;
       });
+      debugPrint('✅ CameraHelper: 카메라 초기화 완료');
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -186,12 +190,23 @@ class _LiteInputCameraPreviewDialogState extends State<LiteInputCameraPreviewDia
     }
 
     // ✅ previewSize를 이용해 현재 화면 방향에 맞는 종횡비 계산
-    final previewSize = ctrl.value.previewSize!;
+    final sizeV = ctrl.value.previewSize;
+    if (sizeV == null || sizeV.width == 0 || sizeV.height == 0) {
+      // 희귀 케이스 폴백: aspectRatio 사용
+      final fallbackRatio = 1 / ctrl.value.aspectRatio;
+      return Center(
+        child: AspectRatio(
+          aspectRatio: fallbackRatio,
+          child: CameraPreview(ctrl),
+        ),
+      );
+    }
+
     final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
 
-    // camera previewSize는 보통 landscape 기준이므로 세로면 반전
-    final previewW = isPortrait ? previewSize.height : previewSize.width;
-    final previewH = isPortrait ? previewSize.width  : previewSize.height;
+    // camera previewSize는 보통 landscape 기준 → 세로면 반전
+    final previewW = isPortrait ? sizeV.height : sizeV.width;
+    final previewH = isPortrait ? sizeV.width  : sizeV.height;
     final previewRatio = previewW / previewH;
 
     return Stack(
@@ -200,23 +215,25 @@ class _LiteInputCameraPreviewDialogState extends State<LiteInputCameraPreviewDia
         Center(
           child: AspectRatio(
             aspectRatio: previewRatio,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown: (d) async {
-                final box = context.findRenderObject() as RenderBox?;
-                if (box == null) return;
-                final size = box.size;
-                final local = d.localPosition;
-                final point = Offset(
-                  (local.dx / size.width).clamp(0.0, 1.0),
-                  (local.dy / size.height).clamp(0.0, 1.0),
+            child: LayoutBuilder(
+              builder: (_, constraints) {
+                final renderSize = constraints.biggest;
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapDown: (d) async {
+                    final local = d.localPosition;
+                    final point = Offset(
+                      (local.dx / renderSize.width).clamp(0.0, 1.0),
+                      (local.dy / renderSize.height).clamp(0.0, 1.0),
+                    );
+                    try {
+                      await ctrl.setFocusPoint(point);
+                      await ctrl.setExposurePoint(point);
+                    } catch (_) {}
+                  },
+                  child: CameraPreview(ctrl),
                 );
-                try {
-                  await ctrl.setFocusPoint(point);
-                  await ctrl.setExposurePoint(point);
-                } catch (_) {}
               },
-              child: CameraPreview(ctrl),
             ),
           ),
         ),

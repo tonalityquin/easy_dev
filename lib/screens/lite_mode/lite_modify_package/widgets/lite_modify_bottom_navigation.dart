@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
-
 import '../../../../utils/init/app_colors.dart';
 
-class LiteInputBottomNavigation extends StatelessWidget {
-  final bool showKeypad;
-  final Widget keypad;
+class LiteModifyBottomNavigation extends StatelessWidget {
+  final bool? showKeypad;
+  final Widget? keypad;
   final Widget actionButton;
   final VoidCallback? onTap;
   final Color? backgroundColor;
 
-  const LiteInputBottomNavigation({
+  const LiteModifyBottomNavigation({
     super.key,
-    required this.showKeypad,
-    required this.keypad,
+    this.showKeypad,
+    this.keypad,
     required this.actionButton,
     this.onTap,
     this.backgroundColor,
@@ -33,17 +32,10 @@ class LiteInputBottomNavigation extends StatelessWidget {
   }
 
   Widget _buildContent() {
-    return Stack(
-      children: [
-        Offstage(
-          offstage: showKeypad,
-          child: actionButton,
-        ),
-        Offstage(
-          offstage: !showKeypad,
-          child: keypad,
-        ),
-      ],
-    );
+    if (showKeypad == true && keypad != null) {
+      return keypad!;
+    } else {
+      return actionButton;
+    }
   }
 }

@@ -19,7 +19,7 @@ class LiteHomeDashBoardBottomSheet extends StatefulWidget {
 }
 
 class _LiteHomeDashBoardBottomSheetState extends State<LiteHomeDashBoardBottomSheet> {
-  static const String screenTag = 'DashBoard D';
+  static const String screenTag = 'DashBoard B';
 
   bool _layerHidden = true;
 
@@ -92,7 +92,7 @@ class _LiteHomeDashBoardBottomSheetState extends State<LiteHomeDashBoardBottomSh
                     const SizedBox(height: 16),
 
                     /// ⬇️ 출퇴근 기록기 카드 (HomeUserInfoCard 대체)
-                    LiteDashboardPunchRecorderSection(
+                    LiteDashboardInsidePunchRecorderSection(
                       userId: userState.name,
                       userName: userState.name,
                       area: areaState.currentArea,
