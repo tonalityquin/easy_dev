@@ -8,22 +8,21 @@ import '../states/area/area_state.dart';
 import '../states/plate/plate_state.dart';
 import '../states/user/user_state.dart';
 
-import '../screens/service_mode/input_package/input_plate_screen.dart';
-import '../screens/service_mode/type_package/common_widgets/dashboard_bottom_sheet/home_dash_board_bottom_sheet.dart';
-import 'service_mode/type_package/common_widgets/chats/chat_bottom_sheet.dart';
+import 'lite_mode/lite_input_package/lite_input_plate_screen.dart';
+import 'lite_mode/lite_type_package/lite_common_widgets/chats/lite_chat_bottom_sheet.dart';
+import 'lite_mode/lite_type_package/lite_common_widgets/dashboard_bottom_sheet/lite_home_dash_board_bottom_sheet.dart';
+import 'lite_mode/lite_type_package/lite_common_widgets/reverse_sheet_package/lite_parking_completed_table_sheet.dart';
 import 'secondary_page.dart';
 import '../utils/snackbar_helper.dart';
 
 import '../utils/tts/tts_manager.dart';
 import '../services/latest_message_service.dart';
 
-import 'service_mode/type_package/common_widgets/reverse_sheet_package/parking_completed_table_sheet.dart';
-
 /// Deep Blue 팔레트(서비스 카드와 동일 계열)
 class _Palette {
-  static const base = Color(0xFF0D47A1);
-  static const dark = Color(0xFF09367D);
-  static const fg = Color(0xFFFFFFFF);
+  static const base = Color(0xFF546E7A);
+  static const dark = Color(0xFF37474F);
+  static const fg = Color(0xFFF5F7FA);
 }
 
 class LiteTypePage extends StatefulWidget {
@@ -115,9 +114,9 @@ class _ChatDashboardBar extends StatelessWidget {
   const _ChatDashboardBar();
 
   static Future<void> _replayLatestTts(
-      BuildContext context,
-      String area,
-      ) async {
+    BuildContext context,
+    String area,
+  ) async {
     final text = (await LatestMessageService.instance.readFromPrefs()).trim();
     if (text.isEmpty) {
       showSelectedSnackbar(context, '최근 메시지가 없습니다.');
@@ -145,47 +144,47 @@ class _ChatDashboardBar extends StatelessWidget {
           Expanded(
             child: area.isEmpty
                 ? ElevatedButton(
-              onPressed: null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: _Palette.dark.withOpacity(.35),
-                disabledBackgroundColor: Colors.white,
-                disabledForegroundColor: _Palette.dark.withOpacity(.35),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.volume_up, size: 20),
-                  SizedBox(width: 6),
-                  Text('다시 듣기'),
-                ],
-              ),
-            )
+                    onPressed: null,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: _Palette.dark.withOpacity(.35),
+                      disabledBackgroundColor: Colors.white,
+                      disabledForegroundColor: _Palette.dark.withOpacity(.35),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.volume_up, size: 20),
+                        SizedBox(width: 6),
+                        Text('다시 듣기'),
+                      ],
+                    ),
+                  )
                 : ValueListenableBuilder<LatestMessageData>(
-              valueListenable: LatestMessageService.instance.latest,
-              builder: (context, latestData, _) {
-                final hasText = latestData.text.trim().isNotEmpty;
-                return ElevatedButton(
-                  onPressed: hasText ? () => _replayLatestTts(context, area) : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: _Palette.base,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    valueListenable: LatestMessageService.instance.latest,
+                    builder: (context, latestData, _) {
+                      final hasText = latestData.text.trim().isNotEmpty;
+                      return ElevatedButton(
+                        onPressed: hasText ? () => _replayLatestTts(context, area) : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: _Palette.base,
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.volume_up, size: 20),
+                            SizedBox(width: 6),
+                            Text('다시 듣기', overflow: TextOverflow.ellipsis),
+                          ],
+                        ),
+                      );
+                    },
                   ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.volume_up, size: 20),
-                      SizedBox(width: 6),
-                      Text('다시 듣기', overflow: TextOverflow.ellipsis),
-                    ],
-                  ),
-                );
-              },
-            ),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -196,7 +195,7 @@ class _ChatDashboardBar extends StatelessWidget {
                   isScrollControlled: true,
                   useSafeArea: true,
                   backgroundColor: Colors.transparent,
-                  builder: (_) => const HomeDashBoardBottomSheet(),
+                  builder: (_) => const LiteHomeDashBoardBottomSheet(),
                 );
               },
               style: ElevatedButton.styleFrom(
@@ -291,7 +290,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
 
   void _handleHorizontalDragEnd(BuildContext context, double velocity) {
     if (_dragDistance > _hDistanceThreshold && velocity > _hVelocityThreshold) {
-      Navigator.of(context).push(_slidePage(const InputPlateScreen(), fromLeft: true));
+      Navigator.of(context).push(_slidePage(const LiteInputPlateScreen(), fromLeft: true));
     } else if (_dragDistance < -_hDistanceThreshold && velocity < -_hVelocityThreshold) {
       Navigator.of(context).push(_slidePage(const SecondaryPage(), fromLeft: false));
     }
@@ -301,7 +300,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   Future<void> _openParkingCompletedTableSheet(BuildContext context) async {
     await Future<void>.delayed(const Duration(milliseconds: 10));
     if (!mounted) return;
-    await showParkingCompletedTableTopSheet(context);
+    await showLiteParkingCompletedTableTopSheet(context);
   }
 
   Future<void> _handleVerticalDragEnd(BuildContext context, DragEndDetails details) async {
@@ -313,7 +312,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     if (firedUp && !_chatOpening) {
       _chatOpening = true;
       await Future<void>.delayed(const Duration(milliseconds: 10));
-      if (mounted) chatBottomSheet(context);
+      if (mounted) liteChatBottomSheet(context);
       _chatOpening = false;
     } else if (firedDown && !_topOpening) {
       _topOpening = true;
@@ -342,15 +341,11 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       dragStartBehavior: DragStartBehavior.down,
-
       onHorizontalDragUpdate: (details) => _dragDistance += details.delta.dx,
-      onHorizontalDragEnd: (details) =>
-          _handleHorizontalDragEnd(context, details.primaryVelocity ?? 0),
-
+      onHorizontalDragEnd: (details) => _handleHorizontalDragEnd(context, details.primaryVelocity ?? 0),
       onVerticalDragStart: (_) => _vDragDistance = 0.0,
       onVerticalDragUpdate: (details) => _vDragDistance += details.delta.dy,
       onVerticalDragEnd: (details) => _handleVerticalDragEnd(context, details),
-
       child: Consumer<LitePageState>(
         builder: (context, state, _) {
           return Stack(

@@ -11,7 +11,7 @@ import '../../../../simple_mode/utils/simple_mode/simple_mode_attendance_reposit
 /// - DB에는 실제 시간(HH:mm)을 저장하지만,
 /// - 이 UI에서는 "몇 시"인지는 전혀 보여주지 않고
 ///   출근/휴게/퇴근 중 어느 칸이 펀칭되었는지만 시각적으로 표현한다.
-Future<void> showDashboardPunchCardFeedback(
+Future<void> showLiteDashboardPunchCardFeedback(
     BuildContext context, {
       required SimpleModeAttendanceType type,
       required DateTime dateTime,

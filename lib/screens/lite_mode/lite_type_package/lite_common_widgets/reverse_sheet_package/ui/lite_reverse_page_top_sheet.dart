@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-Future<T?> showReversePageTopSheet<T>({
+Future<T?> showLiteReversePageTopSheet<T>({
   required BuildContext context,
   required WidgetBuilder builder,
   double maxHeightFactor = 1, // 시트 높이 비율

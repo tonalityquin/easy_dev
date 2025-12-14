@@ -17,8 +17,8 @@ import '../../../../../utils/commute_true_false_mode_config.dart';
 
 /// Teal Palette (Dashboard 전용)
 class _Palette {
-  static const dark = Color(0xFF09367D);
-  static const light = Color(0xFF5472D3);
+  static const dark = Color(0xFF37474F);
+  static const light = Color(0xFFB0BEC5);
 }
 
 /// 약식 모드용 출퇴근 기록기 카드
@@ -31,8 +31,8 @@ class _Palette {
 ///   - (기존 코드 유지) 출근(workIn) 시에만 commute_true_false 에 "출근 시각(Timestamp)" 기록
 ///     단, 이 화면에서 workIn을 막았으므로 이 경로는 사실상 실행되지 않음(안전망으로 로직만 유지)
 ///   - 퇴근(workOut) 시 commute_true_false 는 무관 (절대 호출하지 않음)
-class DashboardInsidePunchRecorderSection extends StatefulWidget {
-  const DashboardInsidePunchRecorderSection({
+class LiteDashboardPunchRecorderSection extends StatefulWidget {
+  const LiteDashboardPunchRecorderSection({
     super.key,
     required this.userId,
     required this.userName,
@@ -46,12 +46,12 @@ class DashboardInsidePunchRecorderSection extends StatefulWidget {
   final String division;
 
   @override
-  State<DashboardInsidePunchRecorderSection> createState() =>
-      _DashboardInsidePunchRecorderSectionState();
+  State<LiteDashboardPunchRecorderSection> createState() =>
+      _LiteDashboardPunchRecorderSectionState();
 }
 
-class _DashboardInsidePunchRecorderSectionState
-    extends State<DashboardInsidePunchRecorderSection> {
+class _LiteDashboardPunchRecorderSectionState
+    extends State<LiteDashboardPunchRecorderSection> {
   late DateTime _selectedDate;
 
   String? _workInTime;
@@ -244,7 +244,7 @@ class _DashboardInsidePunchRecorderSectionState
       type: type,
     );
 
-    await showDashboardPunchCardFeedback(
+    await showLiteDashboardPunchCardFeedback(
       context,
       type: type,
       dateTime: targetDateTime,

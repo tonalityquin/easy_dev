@@ -60,7 +60,7 @@ Widget _buildScreenTag(BuildContext context) {
 
 /// 구역 채팅 바텀시트 열기
 /// (⚠️ 이 함수에서는 Firestore 작업이 없으므로 UsageReporter 계측 없음)
-void chatBottomSheet(BuildContext context) {
+void liteChatBottomSheet(BuildContext context) {
   final currentUser = context.read<UserState>().user;
   final String? roomId = currentUser?.currentArea?.trim();
 
@@ -175,7 +175,7 @@ void chatBottomSheet(BuildContext context) {
                             child: Padding(
                               padding: const EdgeInsets.fromLTRB(
                                   16, 12, 16, 16),
-                              child: ChatPanel(roomId: roomId),
+                              child: LiteChatPanel(roomId: roomId),
                             ),
                           ),
                         ],
@@ -195,8 +195,8 @@ void chatBottomSheet(BuildContext context) {
 /// 채팅 열기 버튼
 /// - roomId 변화를 감지하도록 `select` 사용 (read → select)
 /// - ValueListenableBuilder로 서비스 캐시 구독
-class ChatOpenButton extends StatelessWidget {
-  const ChatOpenButton({super.key});
+class LiteChatOpenButton extends StatelessWidget {
+  const LiteChatOpenButton({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -223,7 +223,7 @@ class ChatOpenButton extends StatelessWidget {
         // 흰색 배경 + 라운드 + 테두리로 깔끔한 버튼
         return ElevatedButton(
           // 버튼을 누르면 바로 채팅 바텀시트를 연다.
-          onPressed: () => chatBottomSheet(context),
+          onPressed: () => liteChatBottomSheet(context),
           style: ElevatedButton.styleFrom(
             elevation: 0,
             backgroundColor: Colors.white, // ✅ 버튼 배경도 흰색

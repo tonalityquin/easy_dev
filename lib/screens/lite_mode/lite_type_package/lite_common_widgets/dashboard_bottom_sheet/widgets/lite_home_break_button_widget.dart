@@ -3,16 +3,16 @@ import 'package:flutter/services.dart';
 
 import '../lite_home_dash_board_controller.dart';
 
-class HomeBreakButtonWidget extends StatefulWidget {
+class LiteHomeBreakButtonWidget extends StatefulWidget {
   final LiteHomeDashBoardController controller;
 
-  const HomeBreakButtonWidget({super.key, required this.controller});
+  const LiteHomeBreakButtonWidget({super.key, required this.controller});
 
   @override
-  State<HomeBreakButtonWidget> createState() => _HomeBreakButtonWidgetState();
+  State<LiteHomeBreakButtonWidget> createState() => _LiteHomeBreakButtonWidgetState();
 }
 
-class _HomeBreakButtonWidgetState extends State<HomeBreakButtonWidget> {
+class _LiteHomeBreakButtonWidgetState extends State<LiteHomeBreakButtonWidget> {
   bool _submitting = false;
 
   Future<void> _onTap() async {

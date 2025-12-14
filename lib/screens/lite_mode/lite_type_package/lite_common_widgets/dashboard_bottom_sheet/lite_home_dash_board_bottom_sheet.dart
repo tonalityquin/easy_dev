@@ -1,5 +1,3 @@
-// lib/screens/.../home_dash_board_bottom_sheet.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -13,15 +11,15 @@ import 'documents/lite_fielder_document_box_sheet.dart';
 
 import 'memo/lite_dash_memo.dart';
 
-class HomeDashBoardBottomSheet extends StatefulWidget {
-  const HomeDashBoardBottomSheet({super.key});
+class LiteHomeDashBoardBottomSheet extends StatefulWidget {
+  const LiteHomeDashBoardBottomSheet({super.key});
 
   @override
-  State<HomeDashBoardBottomSheet> createState() => _HomeDashBoardBottomSheetState();
+  State<LiteHomeDashBoardBottomSheet> createState() => _LiteHomeDashBoardBottomSheetState();
 }
 
-class _HomeDashBoardBottomSheetState extends State<HomeDashBoardBottomSheet> {
-  static const String screenTag = 'DashBoard B';
+class _LiteHomeDashBoardBottomSheetState extends State<LiteHomeDashBoardBottomSheet> {
+  static const String screenTag = 'DashBoard D';
 
   bool _layerHidden = true;
 
@@ -94,7 +92,7 @@ class _HomeDashBoardBottomSheetState extends State<HomeDashBoardBottomSheet> {
                     const SizedBox(height: 16),
 
                     /// ⬇️ 출퇴근 기록기 카드 (HomeUserInfoCard 대체)
-                    DashboardInsidePunchRecorderSection(
+                    LiteDashboardPunchRecorderSection(
                       userId: userState.name,
                       userName: userState.name,
                       area: areaState.currentArea,
@@ -129,9 +127,9 @@ class _HomeDashBoardBottomSheetState extends State<HomeDashBoardBottomSheet> {
                               label: const Text('메모'),
                               style: _memoBtnStyle(),
                               onPressed: () async {
-                                await DashMemo.init();
-                                DashMemo.mountIfNeeded();
-                                await DashMemo.togglePanel();
+                                await LiteDashMemo.init();
+                                LiteDashMemo.mountIfNeeded();
+                                await LiteDashMemo.togglePanel();
                               },
                             ),
                           ),

@@ -28,8 +28,8 @@ const Color _base  = Color(0xFF0D47A1);
 const Color _dark  = Color(0xFF09367D);
 const Color _light = Color(0xFF5472D3);
 
-class DashMemo {
-  DashMemo._();
+class LiteDashMemo {
+  LiteDashMemo._();
 
   static GlobalKey<NavigatorState> get navigatorKey => AppNavigator.key;
 
@@ -110,7 +110,7 @@ class DashMemo {
       useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => const _DashMemoSheet(),
+      builder: (_) => const _LiteDashMemoSheet(),
     ).whenComplete(() {
       _isPanelOpen = false;
       _panelFuture = null;
@@ -128,7 +128,7 @@ class DashMemo {
       WidgetsBinding.instance.addPostFrameCallback((_) => _showOverlay());
       return;
     }
-    _entry = OverlayEntry(builder: (context) => const _DashMemoBubble());
+    _entry = OverlayEntry(builder: (context) => const _LiteDashMemoBubble());
     overlay.insert(_entry!);
   }
 
@@ -175,14 +175,14 @@ class DashMemo {
 }
 
 /// 드래그 가능한 플로팅 버블(즉시 열림 버전)
-class _DashMemoBubble extends StatefulWidget {
-  const _DashMemoBubble();
+class _LiteDashMemoBubble extends StatefulWidget {
+  const _LiteDashMemoBubble();
 
   @override
-  State<_DashMemoBubble> createState() => _DashMemoBubbleState();
+  State<_LiteDashMemoBubble> createState() => _LiteDashMemoBubbleState();
 }
 
-class _DashMemoBubbleState extends State<_DashMemoBubble> with SingleTickerProviderStateMixin {
+class _LiteDashMemoBubbleState extends State<_LiteDashMemoBubble> with SingleTickerProviderStateMixin {
   static const double _bubbleSize = 56;
   late Offset _pos;
   bool _clampedOnce = false;
@@ -194,7 +194,7 @@ class _DashMemoBubbleState extends State<_DashMemoBubble> with SingleTickerProvi
   @override
   void initState() {
     super.initState();
-    _pos = DashMemo.restoreBubblePos();
+    _pos = LiteDashMemo.restoreBubblePos();
     _spinCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
@@ -215,7 +215,7 @@ class _DashMemoBubbleState extends State<_DashMemoBubble> with SingleTickerProvi
   Future<void> _onTap() async {
     HapticFeedback.selectionClick();
     _spinCtrl.forward(from: 0).then((_) => _spinCtrl.reverse());
-    await DashMemo.togglePanel();
+    await LiteDashMemo.togglePanel();
   }
 
   @override
@@ -246,7 +246,7 @@ class _DashMemoBubbleState extends State<_DashMemoBubble> with SingleTickerProvi
               // 좌/우 엣지 스냅
               final snapX = (_pos.dx + _bubbleSize / 2) < screen.width / 2 ? 8.0 : screen.width - _bubbleSize - 8.0;
               setState(() => _pos = Offset(snapX, _pos.dy));
-              await DashMemo.saveBubblePos(_pos);
+              await LiteDashMemo.saveBubblePos(_pos);
             },
             child: Material(
               color: Colors.transparent,
@@ -292,14 +292,14 @@ class _DashMemoBubbleState extends State<_DashMemoBubble> with SingleTickerProvi
 }
 
 /// 메모 바텀시트(풀높이 · 스위치 · 검색 · 입력 · 스와이프 삭제)
-class _DashMemoSheet extends StatefulWidget {
-  const _DashMemoSheet();
+class _LiteDashMemoSheet extends StatefulWidget {
+  const _LiteDashMemoSheet();
 
   @override
-  State<_DashMemoSheet> createState() => _DashMemoSheetState();
+  State<_LiteDashMemoSheet> createState() => _LiteDashMemoSheetState();
 }
 
-class _DashMemoSheetState extends State<_DashMemoSheet> {
+class _LiteDashMemoSheetState extends State<_LiteDashMemoSheet> {
   final TextEditingController _inputCtrl = TextEditingController();
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = '';
@@ -351,14 +351,14 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
                         const Spacer(),
                         // on/off
                         ValueListenableBuilder<bool>(
-                          valueListenable: DashMemo.enabled,
+                          valueListenable: LiteDashMemo.enabled,
                           builder: (_, on, __) => Row(
                             children: [
                               Text(on ? 'On' : 'Off', style: textTheme.labelMedium?.copyWith(color: cs.outline)),
                               const SizedBox(width: 6),
                               Switch(
                                 value: on,
-                                onChanged: (v) => DashMemo.enabled.value = v,
+                                onChanged: (v) => LiteDashMemo.enabled.value = v,
                                 activeColor: _base, // subtle brand
                               ),
                             ],
@@ -452,7 +452,7 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
                   // 리스트
                   Expanded(
                     child: ValueListenableBuilder<List<String>>(
-                      valueListenable: DashMemo.notes,
+                      valueListenable: LiteDashMemo.notes,
                       builder: (_, list, __) {
                         final filtered = _filtered(list, _query);
                         if (filtered.isEmpty) {
@@ -473,7 +473,7 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
                                 iconColor: cs.onErrorContainer,
                               ),
                               onDismissed: (_) async {
-                                await DashMemo.removeLine(line);
+                                await LiteDashMemo.removeLine(line);
                                 HapticFeedback.selectionClick();
                               },
                               child: ListTile(
@@ -509,7 +509,7 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
                                       tooltip: '삭제',
                                       icon: const Icon(Icons.delete_outline_rounded),
                                       onPressed: () async {
-                                        await DashMemo.removeLine(line);
+                                        await LiteDashMemo.removeLine(line);
                                         HapticFeedback.selectionClick();
                                       },
                                     ),
@@ -534,7 +534,7 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
   // ---------- 이메일 전송 ----------
 
   Future<void> _sendNotesByEmail() async {
-    final notes = DashMemo.notes.value;
+    final notes = LiteDashMemo.notes.value;
     if (notes.isEmpty) {
       _showSnack('보낼 메모가 없습니다.');
       return;
@@ -631,7 +631,7 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
   void _submitNote(String raw) {
     final t = raw.trim();
     if (t.isEmpty) return;
-    DashMemo.add(t);
+    LiteDashMemo.add(t);
     _inputCtrl.clear();
     FocusScope.of(context).unfocus();
     HapticFeedback.lightImpact();

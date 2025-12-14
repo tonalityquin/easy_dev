@@ -16,15 +16,14 @@ import 'package:flutter/material.dart';
 
 import '../../models/capability.dart';
 
-import '../../screens/service_mode/secondary_package/office_mode_package/bill_management.dart';
-import '../../screens/service_mode/secondary_package/office_mode_package/location_management.dart';
-import '../../screens/service_mode/secondary_package/office_mode_package/monthly_parking_management.dart';
-import '../../screens/service_mode/secondary_package/office_mode_package/tablet_management.dart';
-import '../../screens/service_mode/secondary_package/office_mode_package/user_management.dart';
-import '../../screens/service_mode/secondary_package/dev_mode_package/back_end_controller.dart';
-import '../../screens/service_mode/secondary_package/dev_mode_package/area_management.dart';
-// 리팩토링: LocalData 대신 DashboardSetting 사용
-import '../../screens/service_mode/secondary_package/dev_mode_package/dash_board_setting.dart';
+import '../../screens/secondary_mode/office_mode_package/bill_management.dart';
+import '../../screens/secondary_mode/office_mode_package/location_management.dart';
+import '../../screens/secondary_mode/office_mode_package/monthly_parking_management.dart';
+import '../../screens/secondary_mode/office_mode_package/tablet_management.dart';
+import '../../screens/secondary_mode/office_mode_package/user_management.dart';
+import '../../screens/secondary_mode/dev_mode_package/back_end_controller.dart';
+import '../../screens/secondary_mode/dev_mode_package/area_management.dart';
+import '../../screens/secondary_mode/dev_mode_package/dash_board_setting.dart';
 
 /// 앱에서 보여줄 하나의 탭(항목)
 class SecondaryInfo {

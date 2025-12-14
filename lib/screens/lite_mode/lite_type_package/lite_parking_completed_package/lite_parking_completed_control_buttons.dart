@@ -21,8 +21,8 @@ import '../../../../widgets/dialog/plate_remove_dialog.dart';
 
 /// Deep Blue 팔레트(서비스 카드와 동일 계열) + 상태 색상
 class _Palette {
-  static const base = Color(0xFF0D47A1); // primary
-  static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
+  static const base = Color(0xFF546E7A); // primary
+  static const dark = Color(0xFF37474F); // 강조 텍스트/아이콘
 
   // 상태 강조 색
   static const danger = Color(0xFFD32F2F); // 출차 요청(붉은색)
@@ -114,10 +114,10 @@ class LiteParkingCompletedControlButtons extends StatelessWidget {
                     ? (selectedPlate.isLockedFee
                     ? const Icon(Icons.lock_open,
                     key: ValueKey('unlock'),
-                    color: Color(0x9909367D))
+                    color: Color(0xFF37474F))
                     : const Icon(Icons.lock,
                     key: ValueKey('lock'),
-                    color: Color(0x9909367D)))
+                    color: Color(0xFF37474F)))
                     : Icon(Icons.refresh,
                     key: const ValueKey('refresh'), color: muted),
               ),

@@ -9,16 +9,16 @@ import '../../../../../utils/snackbar_helper.dart';
 // import '../../../../utils/usage_reporter.dart';
 import '../../../../../services/latest_message_service.dart'; // ★ 추가
 
-class ChatPanel extends StatefulWidget {
+class LiteChatPanel extends StatefulWidget {
   final String roomId;
 
-  const ChatPanel({super.key, required this.roomId});
+  const LiteChatPanel({super.key, required this.roomId});
 
   @override
-  State<ChatPanel> createState() => _ChatPanelState();
+  State<LiteChatPanel> createState() => _LiteChatPanelState();
 }
 
-class _ChatPanelState extends State<ChatPanel> {
+class _LiteChatPanelState extends State<LiteChatPanel> {
   static const int _maxShortcuts = 20;
 
   final TextEditingController _controller = TextEditingController();
@@ -64,7 +64,7 @@ class _ChatPanelState extends State<ChatPanel> {
   }
 
   @override
-  void didUpdateWidget(covariant ChatPanel oldWidget) {
+  void didUpdateWidget(covariant LiteChatPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.roomId != widget.roomId) {
       // ★ 구독 전환 불필요(전역 서비스가 처리)
