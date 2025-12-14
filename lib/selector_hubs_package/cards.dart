@@ -1,4 +1,3 @@
-// lib/selector_hubs_package/cards.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -44,12 +43,19 @@ class _CardBodyState extends State<CardBody> {
   Future<void> _animateThenNavigate() async {
     if (!widget.enabled || widget.onPressed == null || _animating) return;
     _animating = true;
-    setState(() => _pressed = true);
-    await Future<void>.delayed(_frame);
-    await Future<void>.delayed(_duration);
-    HapticFeedback.selectionClick();
-    widget.onPressed!.call();
-    _animating = false;
+
+    try {
+      if (mounted) setState(() => _pressed = true);
+
+      await Future<void>.delayed(_frame);
+      await Future<void>.delayed(_duration);
+
+      HapticFeedback.selectionClick();
+      widget.onPressed!.call();
+    } finally {
+      _animating = false;
+      if (mounted) setState(() => _pressed = false);
+    }
   }
 
   @override
@@ -74,10 +80,8 @@ class _CardBodyState extends State<CardBody> {
             child: IconButton.filled(
               onPressed: widget.enabled ? _animateThenNavigate : null,
               style: IconButton.styleFrom(
-                backgroundColor:
-                widget.buttonBg ?? Theme.of(context).colorScheme.primary,
-                foregroundColor:
-                widget.buttonFg ?? Theme.of(context).colorScheme.onPrimary,
+                backgroundColor: widget.buttonBg ?? Theme.of(context).colorScheme.primary,
+                foregroundColor: widget.buttonFg ?? Theme.of(context).colorScheme.onPrimary,
               ),
               icon: const Icon(Icons.arrow_forward_rounded),
             ),
@@ -156,8 +160,7 @@ class ServiceCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: _base,
         buttonFg: Colors.white,
-        onPressed: () =>
-            Navigator.of(context).pushReplacementNamed(AppRoutes.serviceLogin),
+        onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.serviceLogin),
         enabled: enabled,
         disabledHint: '저장된 모드가 service일 때만 선택할 수 있어요',
       ),
@@ -199,12 +202,58 @@ class SimpleLoginCard extends StatelessWidget {
         onPressed: () => Navigator.of(context).pushReplacementNamed(
           AppRoutes.simpleLogin,
           arguments: {
-            // ✅ 약식 로그인 후에는 약식 출퇴근 화면으로 이동
             'redirectAfterLogin': AppRoutes.simpleCommute,
             'requiredMode': 'simple',
           },
         ),
         enabled: enabled,
+        disabledHint: '저장된 모드가 simple일 때만 선택할 수 있어요',
+      ),
+    );
+  }
+}
+
+class LiteLoginCard extends StatelessWidget {
+  const LiteLoginCard({super.key, this.enabled = true});
+
+  final bool enabled;
+
+  // ✅ 경량(Lite) 로그인 고유 팔레트 (BlueGrey 계열로 기존 카드들과 충돌 최소화)
+  static const Color _base = Color(0xFF546E7A); // BlueGrey 600
+  static const Color _dark = Color(0xFF37474F); // BlueGrey 800
+  static const Color _light = Color(0xFFB0BEC5); // BlueGrey 200
+
+  @override
+  Widget build(BuildContext context) {
+    final title = Text(
+      '경량 로그인',
+      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.w700,
+        color: _dark,
+      ),
+    );
+
+    return Card(
+      color: Colors.white,
+      elevation: 1,
+      clipBehavior: Clip.antiAlias,
+      surfaceTintColor: _light,
+      child: CardBody(
+        icon: Icons.bolt_rounded,
+        bg: _base,
+        iconColor: Colors.white,
+        titleWidget: title,
+        buttonBg: _base,
+        buttonFg: Colors.white,
+        onPressed: () => Navigator.of(context).pushReplacementNamed(
+          // ✅ routes.dart에 AppRoutes.liteLogin이 있어야 합니다(아래 참고).
+          AppRoutes.liteLogin,
+          arguments: {
+            'requiredMode': 'lite',
+          },
+        ),
+        enabled: enabled,
+        disabledHint: '저장된 모드가 lite일 때만 선택할 수 있어요',
       ),
     );
   }
@@ -241,8 +290,7 @@ class TabletCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: _base,
         buttonFg: Colors.white,
-        onPressed: () =>
-            Navigator.of(context).pushReplacementNamed(AppRoutes.tabletLogin),
+        onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.tabletLogin),
         enabled: enabled,
         disabledHint: '저장된 모드가 tablet일 때만 선택할 수 있어요',
       ),
@@ -279,8 +327,7 @@ class CommunityCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: _base,
         buttonFg: Colors.white,
-        onPressed: () => Navigator.of(context)
-            .pushReplacementNamed(AppRoutes.communityStub),
+        onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.communityStub),
       ),
     );
   }
@@ -315,8 +362,7 @@ class FaqCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: _base,
         buttonFg: Colors.white,
-        onPressed: () =>
-            Navigator.of(context).pushReplacementNamed(AppRoutes.faq),
+        onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.faq),
       ),
     );
   }
@@ -453,8 +499,7 @@ class ParkingCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: _base,
         buttonFg: Colors.white,
-        onPressed: () => Navigator.of(context)
-            .pushReplacementNamed(AppRoutes.offlineLogin),
+        onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.offlineLogin),
       ),
     );
   }
