@@ -7,8 +7,9 @@ import '../../../../../../states/user/user_state.dart';
 import '../../../../../../states/area/area_state.dart';
 
 import '../../../../repositories/commute_log_repository.dart';
+import '../../../../utils/block_dialogs/break_duration_blocking_dialog.dart';
+import '../../../../utils/block_dialogs/work_end_duration_blocking_dialog.dart';
 import '../../../dev_package/debug_package/debug_database_logger.dart';
-import '../../utils/dialog/simple_duration_blocking_dialog.dart';
 import '../../utils/simple_mode/simple_mode_db.dart';
 import '../widgets/simple_backup/backup_form_page.dart';
 import '../widgets/simple_user_document/simple_user_statement_form_page.dart';
@@ -110,7 +111,7 @@ class _SimpleDocumentBoxSheet extends StatelessWidget {
                                                 // 출퇴근 기록 제출:
                                                 // 1) 5초 카운트다운 dialog 표시
                                                 // 2) 사용자가 취소하지 않으면 SQLite → Firestore 업로드
-                                                final proceed = await showSimpleDurationBlockingDialog(
+                                                final proceed = await showWorkEndDurationBlockingDialog(
                                                   context,
                                                   message: '단말기에 저장된 출퇴근 기록을\n서버에 제출합니다.\n\n'
                                                       '제출을 원치 않으면 아래 [취소] 버튼을 눌러 주세요.',
@@ -125,7 +126,7 @@ class _SimpleDocumentBoxSheet extends StatelessWidget {
                                                 // 휴게시간 기록 제출:
                                                 // 1) 5초 카운트다운 dialog 표시
                                                 // 2) 사용자가 취소하지 않으면 SQLite → Firestore 업로드
-                                                final proceed = await showSimpleDurationBlockingDialog(
+                                                final proceed = await showBreakDurationBlockingDialog(
                                                   context,
                                                   message: '단말기에 저장된 휴게시간 기록을\n서버에 제출합니다.\n\n'
                                                       '제출을 원치 않으면 아래 [취소] 버튼을 눌러 주세요.',

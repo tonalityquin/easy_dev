@@ -20,8 +20,6 @@ import 'head_package/hr_package/break_calendar.dart' as hr_break;
 
 // ▼ (추가) 본사 달력 바텀시트로 열기 위한 import
 import 'head_package/company_calendar_page.dart'; // ⬅️ 바텀시트 헬퍼 사용
-// ▼ (추가) 회사 노무도 바텀시트로 열기 위한 import
-import 'head_package/labor_guide_page.dart'; // ⬅️ 바텀시트 헬퍼 사용
 
 // ✅ (신규) 본사 허브 퀵 액션 버블 ON/OFF 제어를 위해 import
 import 'head_package/hub_quick_actions.dart';
@@ -103,11 +101,6 @@ class HeadStubPage extends StatelessWidget {
                       const calDark = Color(0xFF2E7D32);
                       const calLight = Color(0xFFA5D6A7);
 
-                      // Labor Guide — Orange/Amber
-                      const laborBase = Color(0xFFF57C00);
-                      const laborDark = Color(0xFFE65100);
-                      const laborLight = Color(0xFFFFCC80);
-
                       // Attendance Sheet(과거) — Indigo
                       const attBase = Color(0xFF3949AB);
                       const attDark = Color(0xFF283593);
@@ -139,18 +132,6 @@ class HeadStubPage extends StatelessWidget {
                           titleColor: calDark,
                           onTap: () {
                             CompanyCalendarPage.showAsBottomSheet(context);
-                          },
-                        ),
-                        _ActionCard(
-                          icon: Icons.gavel_rounded,
-                          title: '회사 노무',
-                          subtitle: 'Google Drive',
-                          bg: laborBase,
-                          fg: Colors.white,
-                          tintColor: laborLight,
-                          titleColor: laborDark,
-                          onTap: () {
-                            LaborGuidePage.showAsBottomSheet(context);
                           },
                         ),
 

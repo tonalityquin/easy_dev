@@ -6,11 +6,11 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../../states/user/user_state.dart';
+import '../../../../utils/block_dialogs/work_end_duration_blocking_dialog.dart';
 import '../../../../utils/init/logout_helper.dart';
 import '../../../../utils/app_exit_flag.dart';
 
 import '../../../simple_package/utils/simple_mode/simple_mode_attendance_repository.dart';
-import 'dialog/dashboard_duration_blocking_dialog.dart';
 import 'home_dash_board_controller.dart';
 import 'widgets/home_user_info_card.dart';
 import 'widgets/home_break_button_widget.dart';
@@ -161,7 +161,7 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
                           onPressed: () async {
                             if (userState.isWorking) {
                               final bool confirmed =
-                              await showDashboardDurationBlockingDialog(
+                              await showWorkEndDurationBlockingDialog(
                                 context,
                                 message:
                                 '지금 퇴근 처리하시겠습니까?\n5초 안에 취소하지 않으면 자동으로 진행됩니다.',

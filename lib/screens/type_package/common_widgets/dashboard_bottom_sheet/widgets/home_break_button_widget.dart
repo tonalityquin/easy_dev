@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../../../../utils/block_dialogs/blocking_dialog.dart';
+
 import '../home_dash_board_controller.dart';
 
 class HomeBreakButtonWidget extends StatefulWidget {
@@ -17,17 +17,12 @@ class _HomeBreakButtonWidgetState extends State<HomeBreakButtonWidget> {
 
   Future<void> _onTap() async {
     if (_submitting) return;
+
     setState(() => _submitting = true);
     HapticFeedback.lightImpact();
 
     try {
-      await runWithBlockingDialog(
-        context: context,
-        message: '휴게 사용 기록 중입니다...',
-        task: () async {
-          await widget.controller.recordBreakTime(context);
-        },
-      );
+      await widget.controller.recordBreakTime(context);
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

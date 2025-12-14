@@ -144,7 +144,8 @@ class InputPlateController {
   }
 
   bool isInputValid() {
-    final validFront = isThreeDigit ? controllerFrontDigit.text.length == 3 : controllerFrontDigit.text.length == 2;
+    final validFront =
+    isThreeDigit ? controllerFrontDigit.text.length == 3 : controllerFrontDigit.text.length == 2;
     return validFront && controllerMidDigit.text.length == 1 && controllerBackDigit.text.length == 4;
   }
 
@@ -183,21 +184,22 @@ class InputPlateController {
     final billState = context.read<BillState>();
     final hasAnyBill = billState.generalBills.isNotEmpty || billState.regularBills.isNotEmpty;
 
+    // 정기인데 선택값이 비어있으면 countTypeController를 폴백으로 반영
     if (selectedBillType == '정기' && (selectedBill == null || selectedBill!.trim().isEmpty)) {
       final ct = countTypeController.text.trim();
-      if (ct.isNotEmpty) selectedBill = ct; // ✅ 변경 반영
+      if (ct.isNotEmpty) selectedBill = ct;
     }
 
     if (hasAnyBill && selectedBill == null && selectedBillType != '정기') {
-      // await 전이므로 context 사용 OK
       showFailedSnackbar(context, '정산 유형을 선택해주세요');
       return;
     }
 
+    bool didPopScreen = false;
+
     isLoading = true;
     refreshUI();
 
-    // await 전이므로 context 사용 OK
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -214,12 +216,12 @@ class InputPlateController {
       );
 
       final wasSuccessful = await InputPlateService.registerPlateEntry(
-        context: context, // 내부에서 await 후 context를 쓸 가능성이 있다면 그 함수 내부에서도 context.mounted 체크 필요
+        context: context,
         plateNumber: plateNumber,
         location: locationController.text,
         isLocationSelected: isLocationSelected,
         imageUrls: uploadedUrls,
-        selectedBill: selectedBill, // ✅ 변경 반영
+        selectedBill: selectedBill,
         selectedStatuses: selectedStatuses,
         basicStandard: selectedBasicStandard,
         basicAmount: selectedBasicAmount,
@@ -232,32 +234,60 @@ class InputPlateController {
         selectedBillType: selectedBillType,
       );
 
-      await _plateRepo.setPlateStatus(
-        plateNumber: plateNumber,
-        area: area,
-        customStatus: customStatusController.text.trim(),
-        statusList: selectedStatuses,
-        createdBy: userName,
-      );
-
       // ✅ async gap 이후, BuildContext 안전성 확인
       if (!context.mounted) return;
 
-      Navigator.of(context).pop();
-      if (wasSuccessful) {
-        showSuccessSnackbar(context, '차량 정보 등록 완료');
-        resetForm();
+      // 1) 로딩 다이얼로그 닫기 (showDialog는 보통 rootNavigator에 붙음)
+      final rootNav = Navigator.of(context, rootNavigator: true);
+      if (rootNav.canPop()) rootNav.pop();
+
+      if (!wasSuccessful) {
+        // ✅ 실패 시: InputPlateScreen에 머물기
+        // (registerPlateEntry 내부에서 이미 안내하는 경우가 있어도 안전하게 한 번 더 안내)
+        showFailedSnackbar(context, '동일한 차량 번호가 있습니다.');
+        return;
       }
-    } catch (e) {
-      // ✅ async gap 이후, BuildContext 안전성 확인
+
+      // 2) 등록 성공 이후: plate_status 저장은 "부가 작업"으로 분리
+      Object? plateStatusError;
+      try {
+        await _plateRepo.setPlateStatus(
+          plateNumber: plateNumber,
+          area: area,
+          customStatus: customStatusController.text.trim(),
+          statusList: selectedStatuses,
+          createdBy: userName,
+        );
+      } catch (e) {
+        plateStatusError = e;
+        debugPrint('[submitPlateEntry] setPlateStatus failed: $e');
+      }
+
       if (!context.mounted) return;
 
-      Navigator.of(context).pop();
+      // 3) 성공 스낵바
+      showSuccessSnackbar(context, '차량 정보 등록 완료');
+
+      // 4) plate_status만 실패한 경우 경고(등록 성공은 유지)
+      if (plateStatusError != null) {
+        showSelectedSnackbar(context, '등록은 완료되었지만 메모/상태 저장에 실패했습니다.');
+      }
+
+      // 5) ✅ 성공 시: TypePage로 복귀 (InputPlateScreen pop)
+      didPopScreen = true;
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!context.mounted) return;
+
+      // 로딩 다이얼로그 닫기
+      final rootNav = Navigator.of(context, rootNavigator: true);
+      if (rootNav.canPop()) rootNav.pop();
+
+      // ✅ 예외 발생 시: 화면 유지
       showFailedSnackbar(context, '등록 실패: ${e.toString()}');
     } finally {
       isLoading = false;
-      // setState를 내부에서 호출하는 형태의 콜백이라면 context 생존 여부 확인 권장
-      if (context.mounted) {
+      if (context.mounted && !didPopScreen) {
         refreshUI();
       }
     }

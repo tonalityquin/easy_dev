@@ -19,7 +19,6 @@ import 'package:easydev/screens/community_stub_page.dart';
 import 'screens/commute_package/commute_inside_screen.dart';
 import 'screens/dev_package/dev_calendar_page.dart';
 import 'screens/head_package/company_calendar_page.dart';
-import 'screens/head_package/labor_guide_page.dart';
 import 'screens/simple_package/simple_inside_screen.dart';
 import 'selector_hubs_page.dart';
 
@@ -94,7 +93,6 @@ final Map<String, WidgetBuilder> appRoutes = {
   // 기존 페이지
   AppRoutes.companyCalendar: (context) => const CompanyCalendarPage(),
   AppRoutes.devCalendar: (context) => const DevCalendarPage(),
-  AppRoutes.laborGuide: (context) => const LaborGuidePage(),
 
   // 신규 타임시트 페이지
   AppRoutes.attendanceSheet: (context) => const TimesheetPage(initialTab: TimesheetTab.attendance),

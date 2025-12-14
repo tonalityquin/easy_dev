@@ -6,7 +6,8 @@ import 'package:intl/intl.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../../../utils/app_exit_flag.dart';
-import '../../utils/dialog/simple_duration_blocking_dialog.dart';
+import '../../../../utils/block_dialogs/work_end_duration_blocking_dialog.dart';
+import '../../../../utils/block_dialogs/work_start_duration_blocking_dialog.dart';
 import '../../utils/simple_mode/simple_mode_attendance_repository.dart';
 import 'simple_punch_card_feedback.dart';
 import '../../../../../repositories/commute_true_false_repository.dart';
@@ -198,18 +199,22 @@ class _SimpleInsidePunchRecorderSectionState
       return;
     }
 
-    if (type == SimpleModeAttendanceType.workIn ||
-        type == SimpleModeAttendanceType.workOut) {
-      final isClockIn = type == SimpleModeAttendanceType.workIn;
-
-      final proceed = await showSimpleDurationBlockingDialog(
+    // ✅ 출근/퇴근 시 Duration Blocking Dialog 분리 적용
+    if (type == SimpleModeAttendanceType.workIn) {
+      final proceed = await showWorkStartDurationBlockingDialog(
         context,
-        message: isClockIn
-            ? '출근을 펀칭하면 근무가 시작됩니다.\n약 5초 정도 소요됩니다.'
-            : '퇴근을 펀칭하면 오늘 근무가 종료되고 앱이 종료됩니다.\n약 5초 정도 소요됩니다.',
+        message: '출근을 펀칭하면 근무가 시작됩니다.\n약 5초 정도 소요됩니다.',
         duration: const Duration(seconds: 5),
       );
+      if (!proceed) return;
+    }
 
+    if (type == SimpleModeAttendanceType.workOut) {
+      final proceed = await showWorkEndDurationBlockingDialog(
+        context,
+        message: '퇴근을 펀칭하면 오늘 근무가 종료되고 앱이 종료됩니다.\n약 5초 정도 소요됩니다.',
+        duration: const Duration(seconds: 5),
+      );
       if (!proceed) return;
     }
 
@@ -380,7 +385,8 @@ class _SimpleInsidePunchRecorderSectionState
                             type: SimpleModeAttendanceType.breakTime,
                             time: _breakTime,
                             enabled: canPunchBreak,
-                            onTap: () => _punch(SimpleModeAttendanceType.breakTime),
+                            onTap: () =>
+                                _punch(SimpleModeAttendanceType.breakTime),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -390,7 +396,8 @@ class _SimpleInsidePunchRecorderSectionState
                             type: SimpleModeAttendanceType.workOut,
                             time: _workOutTime,
                             enabled: canPunchWorkOut,
-                            onTap: () => _punch(SimpleModeAttendanceType.workOut),
+                            onTap: () =>
+                                _punch(SimpleModeAttendanceType.workOut),
                           ),
                         ),
                       ],

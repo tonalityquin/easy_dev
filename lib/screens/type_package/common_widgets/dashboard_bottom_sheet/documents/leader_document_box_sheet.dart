@@ -8,8 +8,9 @@ import '../../../../../../states/user/user_state.dart';
 import '../../../../../../states/area/area_state.dart';
 
 import '../../../../../repositories/commute_log_repository.dart';
+import '../../../../../utils/block_dialogs/break_duration_blocking_dialog.dart';
+import '../../../../../utils/block_dialogs/work_end_duration_blocking_dialog.dart';
 import '../../../../dev_package/debug_package/debug_database_logger.dart';
-import '../../../../simple_package/utils/dialog/simple_duration_blocking_dialog.dart';
 import '../../../../simple_package/utils/simple_mode/simple_mode_db.dart';
 import '../backup/backup_form_page.dart';
 import '../work_start_report/sections/dashboard_end_report_form_page.dart';
@@ -112,7 +113,7 @@ class _LeaderDocumentBoxSheet extends StatelessWidget {
                                               // ✅ statementForm 안에서 id 기준 분기
                                               if (item.id == 'template-commute-record') {
                                                 // 출퇴근 기록 제출
-                                                final proceed = await showSimpleDurationBlockingDialog(
+                                                final proceed = await showWorkEndDurationBlockingDialog(
                                                   context,
                                                   message: '단말기에 저장된 출퇴근 기록을\n서버에 제출합니다.\n\n'
                                                       '제출을 원치 않으면 아래 [취소] 버튼을 눌러 주세요.',
@@ -123,7 +124,7 @@ class _LeaderDocumentBoxSheet extends StatelessWidget {
                                                 await _submitCommuteRecordsFromSqlite(context);
                                               } else if (item.id == 'template-resttime-record') {
                                                 // 휴게시간 기록 제출
-                                                final proceed = await showSimpleDurationBlockingDialog(
+                                                final proceed = await showBreakDurationBlockingDialog(
                                                   context,
                                                   message: '단말기에 저장된 휴게시간 기록을\n서버에 제출합니다.\n\n'
                                                       '제출을 원치 않으면 아래 [취소] 버튼을 눌러 주세요.',

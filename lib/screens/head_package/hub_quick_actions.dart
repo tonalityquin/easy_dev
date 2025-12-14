@@ -8,7 +8,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../utils/app_navigator.dart';
 import '../head_package/head_memo.dart';
 import '../head_package/company_calendar_page.dart';
-import '../head_package/labor_guide_page.dart';
 import '../head_package/hr_package/attendance_calendar.dart' as hr_att;
 import '../head_package/hr_package/break_calendar.dart' as hr_break;
 
@@ -332,17 +331,6 @@ class _HubBubbleState extends State<_HubBubble> with SingleTickerProviderStateMi
                           await _ctrl.reverse();
                           await HeadHubActions.openSheetExclusively((ctx) async {
                             return CompanyCalendarPage.showAsBottomSheet(ctx);
-                          });
-                        },
-                      ),
-                      _DockAction(
-                        icon: Icons.gavel_rounded,
-                        label: '회사 노무',
-                        color: const Color(0xFFF57C00),
-                        onTap: () async {
-                          await _ctrl.reverse();
-                          await HeadHubActions.openSheetExclusively((ctx) async {
-                            return LaborGuidePage.showAsBottomSheet(ctx);
                           });
                         },
                       ),

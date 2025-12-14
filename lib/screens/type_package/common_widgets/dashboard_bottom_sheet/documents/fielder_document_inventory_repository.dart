@@ -16,14 +16,6 @@ class FielderDocumentInventoryRepository {
     final now = DateTime.now();
 
     return <DocumentItem>[
-      // 1) 업무 인수인계
-      DocumentItem(
-        id: 'template-handover',
-        title: '업무 인수인계 양식',
-        subtitle: '업무 인수 · 인계 시 사용',
-        updatedAt: now,
-        type: DocumentType.handoverForm,
-      ),
 
       // 2) 경위서 기본 양식
       DocumentItem(

@@ -5,8 +5,6 @@ import 'package:provider/provider.dart';
 
 import '../enums/plate_type.dart';
 
-// 🔁 리팩터링: 카운트 조회에 Repository가 더 이상 필요하지 않으므로 제거
-// import '../repositories/plate_repo_services/plate_repository.dart';
 import '../states/calendar/field_calendar_state.dart';
 import '../states/page/page_state.dart';
 import '../states/page/page_info.dart';

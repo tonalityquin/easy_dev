@@ -575,8 +575,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       return;
     }
 
-    // 현재 화면만 pop → TypePage로 복귀
-    Navigator.of(context).pop();
+    // ✅ 사용자가 뒤로가기: false 반환
+    Navigator.of(context).pop(false);
   }
 
   @override
@@ -633,9 +633,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          controller.isThreeDigit
-                              ? '현재 앞자리: 세자리'
-                              : '현재 앞자리: 두자리',
+                          controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리',
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
@@ -762,9 +760,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
                                         Text(
-                                          _sheetOpen
-                                              ? '정산 유형 / 메모 카드 닫기'
-                                              : '정산 유형 / 메모 카드 열기',
+                                          _sheetOpen ? '정산 유형 / 메모 카드 닫기' : '정산 유형 / 메모 카드 열기',
                                           style: const TextStyle(
                                             fontSize: 16,
                                             fontWeight: FontWeight.w700,
@@ -785,11 +781,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                             // ⬇️ 정산 영역
                             InputBillSection(
                               selectedBill: controller.selectedBill,
-                              onChanged: (value) =>
-                                  setState(() => controller.selectedBill = value),
+                              onChanged: (value) => setState(() => controller.selectedBill = value),
                               selectedBillType: selectedBillType,
-                              onTypeChanged: (newType) =>
-                                  setState(() => selectedBillType = newType),
+                              onTypeChanged: (newType) => setState(() => selectedBillType = newType),
                               countTypeController: controller.countTypeController,
                             ),
 

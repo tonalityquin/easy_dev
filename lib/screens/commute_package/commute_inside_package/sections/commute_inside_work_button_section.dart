@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../states/user/user_state.dart';
-import '../../../simple_package/utils/dialog/simple_duration_blocking_dialog.dart';
+import '../../../../utils/block_dialogs/work_start_duration_blocking_dialog.dart';
 import '../commute_inside_controller.dart';
 import '../../../../routes.dart';
 
@@ -48,7 +48,7 @@ class CommuteInsideWorkButtonSection extends StatelessWidget {
         try {
           // 1) simple commute 와 동일하게,
           //    출근 시작 전에 5초 카운트다운 + 취소 가능한 다이얼로그 먼저 실행
-          final proceed = await showSimpleDurationBlockingDialog(
+          final proceed = await showWorkStartDurationBlockingDialog(
             context,
             message: '출근을 펀칭하면 근무가 시작됩니다.\n약 5초 정도 소요됩니다.',
             duration: const Duration(seconds: 5),

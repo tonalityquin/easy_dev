@@ -6,7 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../../../utils/app_exit_flag.dart';
-import '../../../simple_package/utils/dialog/simple_duration_blocking_dialog.dart';
+import '../../../../utils/block_dialogs/work_end_duration_blocking_dialog.dart';
 import '../../../simple_package/utils/simple_mode/simple_mode_attendance_repository.dart';
 import 'dashboard_punch_card_feedback.dart';
 
@@ -215,7 +215,7 @@ class _DashboardInsidePunchRecorderSectionState
         type == SimpleModeAttendanceType.workOut) {
       final isClockIn = type == SimpleModeAttendanceType.workIn;
 
-      final proceed = await showSimpleDurationBlockingDialog(
+      final proceed = await showWorkEndDurationBlockingDialog(
         context,
         message: isClockIn
             ? '출근을 펀칭하면 근무가 시작됩니다.\n약 5초 정도 소요됩니다.'

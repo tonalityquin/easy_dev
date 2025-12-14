@@ -51,13 +51,6 @@ class LeaderDocumentInventoryRepository {
         type: DocumentType.statementForm,
       ),
       DocumentItem(
-        id: 'template-handover',
-        title: '업무 인수인계 양식',
-        subtitle: '업무 인수 · 인계 시 사용',
-        updatedAt: now,
-        type: DocumentType.handoverForm,
-      ),
-      DocumentItem(
         id: 'template-statement',
         title: '경위서 양식',
         subtitle: '작성 및 메일 제출',
