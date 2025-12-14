@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class ParkingCompletedPlateSearchHeader extends StatelessWidget {
-  const ParkingCompletedPlateSearchHeader({super.key});
+class LiteParkingCompletedPlateSearchHeader extends StatelessWidget {
+  const LiteParkingCompletedPlateSearchHeader({super.key});
 
   @override
   Widget build(BuildContext context) {

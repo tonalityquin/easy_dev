@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-class ParkingCompletedPlateNumberDisplay extends StatelessWidget {
+class LiteParkingCompletedPlateNumberDisplay extends StatelessWidget {
   final TextEditingController controller;
   final bool Function(String) isValidPlate;
 
-  const ParkingCompletedPlateNumberDisplay({
+  const LiteParkingCompletedPlateNumberDisplay({
     super.key,
     required this.controller,
     required this.isValidPlate,

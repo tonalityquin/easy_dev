@@ -3,16 +3,16 @@ import 'package:provider/provider.dart';
 
 import '../../../../../../states/user/user_state.dart';
 
-/// Deep Blue 팔레트(서비스 카드 계열)
+/// BlueGrey 팔레트(lite 계열과 동일 톤)
 class _Palette {
-  static const base  = Color(0xFF0D47A1); // primary
-  static const dark  = Color(0xFF09367D); // 강조 텍스트/아이콘
-  static const light = Color(0xFF5472D3); // 톤 변형/보더
+  static const base  = Color(0xFF546E7A); // BlueGrey 600
+  static const dark  = Color(0xFF37474F); // BlueGrey 800
+  static const light = Color(0xFFB0BEC5); // BlueGrey 200
   static const fg    = Colors.white;      // 전경(아이콘/텍스트)
 }
 
-class HomeUserInfoCard extends StatelessWidget {
-  const HomeUserInfoCard({super.key});
+class LiteHomeUserInfoCard extends StatelessWidget {
+  const LiteHomeUserInfoCard({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +24,7 @@ class HomeUserInfoCard extends StatelessWidget {
       child: Card(
         elevation: 2,
         color: Colors.white,
-        surfaceTintColor: _Palette.light, // 살짝 블루 틴트
+        surfaceTintColor: _Palette.light, // 살짝 블루그레이 틴트
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(color: _Palette.light.withOpacity(.35)),
@@ -91,7 +91,6 @@ class HomeUserInfoCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  // QR 코드 아이콘
                   Icon(
                     Icons.qr_code,
                     color: _Palette.dark.withOpacity(.85),

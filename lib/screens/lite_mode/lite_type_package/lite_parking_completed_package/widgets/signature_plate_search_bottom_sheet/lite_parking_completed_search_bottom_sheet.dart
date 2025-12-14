@@ -13,21 +13,21 @@ import '../../../../../../repositories/plate_repo_services/firestore_plate_repos
 import '../../../../../../states/plate/movement_plate.dart';
 import '../../../../../../states/plate/delete_plate.dart';
 
-class ParkingCompletedSearchBottomSheet extends StatefulWidget {
+class LiteParkingCompletedSearchBottomSheet extends StatefulWidget {
   final void Function(String) onSearch;
   final String area;
 
-  const ParkingCompletedSearchBottomSheet({
+  const LiteParkingCompletedSearchBottomSheet({
     super.key,
     required this.onSearch,
     required this.area,
   });
 
   @override
-  State<ParkingCompletedSearchBottomSheet> createState() => _ParkingCompletedSearchBottomSheetState();
+  State<LiteParkingCompletedSearchBottomSheet> createState() => _LiteParkingCompletedSearchBottomSheetState();
 }
 
-class _ParkingCompletedSearchBottomSheetState extends State<ParkingCompletedSearchBottomSheet>
+class _LiteParkingCompletedSearchBottomSheetState extends State<LiteParkingCompletedSearchBottomSheet>
     with SingleTickerProviderStateMixin {
   final TextEditingController _controller = TextEditingController();
 
@@ -131,9 +131,9 @@ class _ParkingCompletedSearchBottomSheetState extends State<ParkingCompletedSear
                         ),
                       ),
                       const SizedBox(height: 16),
-                      const ParkingCompletedPlateSearchHeader(),
+                      const LiteParkingCompletedPlateSearchHeader(),
                       const SizedBox(height: 24),
-                      ParkingCompletedPlateNumberDisplay(controller: _controller, isValidPlate: isValidPlate),
+                      LiteParkingCompletedPlateNumberDisplay(controller: _controller, isValidPlate: isValidPlate),
                       const SizedBox(height: 24),
 
                       Builder(
@@ -160,7 +160,7 @@ class _ParkingCompletedSearchBottomSheetState extends State<ParkingCompletedSear
                             return const _EmptyState(text: '검색 결과가 없습니다.');
                           }
 
-                          return ParkingCompletedPlateSearchResults(
+                          return LiteParkingCompletedPlateSearchResults(
                             results: _results,
                             onSelect: (selected) {
                               if (_navigating) return;
@@ -169,7 +169,7 @@ class _ParkingCompletedSearchBottomSheetState extends State<ParkingCompletedSear
                               Navigator.pop(context);
 
                               WidgetsBinding.instance.addPostFrameCallback((_) {
-                                showParkingCompletedStatusBottomSheet(
+                                showLiteParkingCompletedStatusBottomSheet(
                                   context: rootContext,
                                   plate: selected,
                                   onRequestEntry: () async {
@@ -207,7 +207,7 @@ class _ParkingCompletedSearchBottomSheetState extends State<ParkingCompletedSear
                         valueListenable: _controller,
                         builder: (context, value, child) {
                           final valid = isValidPlate(value.text);
-                          return ParkingCompletedSearchButton(
+                          return LiteParkingCompletedSearchButton(
                             isValid: valid,
                             isLoading: _isLoading,
                             onPressed: valid

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-class ParkingCompletedSearchButton extends StatelessWidget {
+class LiteParkingCompletedSearchButton extends StatelessWidget {
   final bool isValid;
   final bool isLoading;
   final VoidCallback? onPressed;
 
-  const ParkingCompletedSearchButton({
+  const LiteParkingCompletedSearchButton({
     super.key,
     required this.isValid,
     required this.isLoading,

@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 
 import '../../../../../states/calendar/field_calendar_state.dart';
 
-class DepartureCompletedSelectedDateBar extends StatelessWidget {
-  const DepartureCompletedSelectedDateBar({
+class LiteDepartureCompletedSelectedDateBar extends StatelessWidget {
+  const LiteDepartureCompletedSelectedDateBar({
     super.key,
     this.visible = true,
   });

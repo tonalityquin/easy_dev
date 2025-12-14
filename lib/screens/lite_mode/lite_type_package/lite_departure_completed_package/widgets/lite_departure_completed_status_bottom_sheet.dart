@@ -13,7 +13,7 @@ import '../../../../service_mode/log_package/log_viewer_bottom_sheet.dart';
 
 // import '../../../../utils/usage_reporter.dart';
 
-Future<void> showDepartureCompletedStatusBottomSheet({
+Future<void> showLiteDepartureCompletedStatusBottomSheet({
   required BuildContext context,
   required PlateModel plate,
 }) async {

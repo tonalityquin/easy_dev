@@ -29,7 +29,7 @@ class _Palette {
   static const success = Color(0xFF2E7D32); // 출차 완료(초록색)
 }
 
-class ParkingCompletedControlButtons extends StatelessWidget {
+class LiteParkingCompletedControlButtons extends StatelessWidget {
   final bool isParkingAreaMode;
   final bool isStatusMode;
   final bool isLocationPickerMode;
@@ -43,7 +43,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
   handleEntryParkingRequest;
   final Function(BuildContext context) handleDepartureRequested;
 
-  const ParkingCompletedControlButtons({
+  const LiteParkingCompletedControlButtons({
     super.key,
     required this.isParkingAreaMode,
     required this.isStatusMode,
@@ -168,7 +168,7 @@ class ParkingCompletedControlButtons extends StatelessWidget {
                   isScrollControlled: true,
                   backgroundColor: Colors.transparent,
                   builder: (context) =>
-                  const DepartureCompletedBottomSheet(),
+                  const LiteDepartureCompletedBottomSheet(),
                 );
               }
               return;
@@ -402,13 +402,13 @@ class ParkingCompletedControlButtons extends StatelessWidget {
               // 출차 요청(확정 동작은 외부 핸들러에서 Firebase 처리/계측)
               showDialog(
                 context: context,
-                builder: (context) => SetDepartureRequestBottomSheet(
+                builder: (context) => LiteSetDepartureRequestDialog(
                   onConfirm: () => handleDepartureRequested(context),
                 ),
               );
             } else if (index == 2) {
               // 상태 수정 시트(삭제 실행 시 DeletePlate 내부에서 Firebase 처리/계측)
-              await showParkingCompletedStatusBottomSheet(
+              await showLiteParkingCompletedStatusBottomSheet(
                 context: context,
                 plate: selectedPlate,
                 onRequestEntry: () => handleEntryParkingRequest(

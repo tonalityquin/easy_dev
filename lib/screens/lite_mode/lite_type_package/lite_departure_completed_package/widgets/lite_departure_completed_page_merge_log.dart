@@ -161,12 +161,12 @@ class RangeControls extends StatelessWidget {
 }
 
 /// === 위젯 ===
-class MergedLogSection extends StatefulWidget {
+class LiteMergedLogSection extends StatefulWidget {
   final List<Map<String, dynamic>> mergedLogs; // 시그니처 호환용(내부 미사용)
   final String division;
   final String area;
 
-  const MergedLogSection({
+  const LiteMergedLogSection({
     super.key,
     this.mergedLogs = const <Map<String, dynamic>>[],
     required this.division,
@@ -174,10 +174,10 @@ class MergedLogSection extends StatefulWidget {
   });
 
   @override
-  State<MergedLogSection> createState() => _MergedLogSectionState();
+  State<LiteMergedLogSection> createState() => _LiteMergedLogSectionState();
 }
 
-class _MergedLogSectionState extends State<MergedLogSection> {
+class _LiteMergedLogSectionState extends State<LiteMergedLogSection> {
   // 날짜 범위(기본: 최근 7일)
   DateTime _start = DateTime.now().subtract(const Duration(days: 6));
   DateTime _end = DateTime.now();
@@ -271,7 +271,7 @@ class _MergedLogSectionState extends State<MergedLogSection> {
       barrierDismissible: true,
       barrierLabel: "사진 보기",
       transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (_, __, ___) => DepartureCompletedPlateImageDialog(plateNumber: plateNumber),
+      pageBuilder: (_, __, ___) => LiteDepartureCompletedPlateImageDialog(plateNumber: plateNumber),
     );
   }
 

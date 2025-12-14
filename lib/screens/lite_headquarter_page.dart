@@ -1,8 +1,8 @@
-import 'package:easydev/states/page/hq_state.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../states/page/page_info.dart';
+import '../states/page/lite_hq_state.dart';
+import '../states/page/lite_page_info.dart';
 
 /// Headquarter 전용 팔레트
 class _HqPalette {
@@ -17,7 +17,7 @@ class LiteHeadquarterPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => HqState(pages: hqPage)),
+        ChangeNotifierProvider(create: (_) => LiteHqState(pages: liteHqPage)),
       ],
       child: Builder(
         builder: (context) {
@@ -46,7 +46,7 @@ class _BottomArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<HqState>();
+    final state = context.watch<LiteHqState>();
     final pages = state.pages;
 
     const footer = _BrandFooter();
@@ -91,7 +91,7 @@ class RefreshableBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<HqState>(
+    return Consumer<LiteHqState>(
       builder: (context, state, child) {
         final pages = state.pages;
 
@@ -133,7 +133,7 @@ class PageBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<HqState>(
+    return Consumer<LiteHqState>(
       builder: (context, state, child) {
         final pages = state.pages;
 

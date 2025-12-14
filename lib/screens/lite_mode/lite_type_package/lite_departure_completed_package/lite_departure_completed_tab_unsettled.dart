@@ -11,8 +11,8 @@ import '../lite_departure_completed_package/widgets/lite_departure_completed_sta
 import '../../../../models/plate_model.dart';
 import 'lite_departure_completed_control_buttons.dart';
 
-class DepartureCompletedUnsettledTab extends StatefulWidget {
-  const DepartureCompletedUnsettledTab({
+class LiteDepartureCompletedUnsettledTab extends StatefulWidget {
+  const LiteDepartureCompletedUnsettledTab({
     super.key,
     required this.firestorePlates,
     required this.userName,
@@ -22,10 +22,10 @@ class DepartureCompletedUnsettledTab extends StatefulWidget {
   final String userName;
 
   @override
-  State<DepartureCompletedUnsettledTab> createState() => _DepartureCompletedUnsettledTabState();
+  State<LiteDepartureCompletedUnsettledTab> createState() => _LiteDepartureCompletedUnsettledTabState();
 }
 
-class _DepartureCompletedUnsettledTabState extends State<DepartureCompletedUnsettledTab> {
+class _LiteDepartureCompletedUnsettledTabState extends State<LiteDepartureCompletedUnsettledTab> {
   bool _openCalendar = true;
   bool _openUnsettled = false;
 
@@ -75,7 +75,7 @@ class _DepartureCompletedUnsettledTabState extends State<DepartureCompletedUnset
               isOpen: _openCalendar,
               child: const Padding(
                 padding: EdgeInsets.fromLTRB(8, 12, 8, 8),
-                child: DepartureCompletedFieldCalendarInline(),
+                child: LiteDepartureCompletedFieldCalendarInline(),
               ),
             ),
             const SizedBox(height: 12),
@@ -117,7 +117,7 @@ class _DepartureCompletedUnsettledTabState extends State<DepartureCompletedUnset
                           if (currentSelected != null &&
                               currentSelected.isSelected &&
                               currentSelected.plateNumber == plateNumber) {
-                            await showDepartureCompletedStatusBottomSheet(
+                            await showLiteDepartureCompletedStatusBottomSheet(
                               context: context,
                               plate: currentSelected,
                             );
@@ -129,7 +129,7 @@ class _DepartureCompletedUnsettledTabState extends State<DepartureCompletedUnset
           ],
         ),
       ),
-      bottomNavigationBar: DepartureCompletedControlButtons(
+      bottomNavigationBar: LiteDepartureCompletedControlButtons(
         isSearchMode: false,
         onResetSearch: () {}, // no-op
         onShowSearchDialog: () {}, // no-op

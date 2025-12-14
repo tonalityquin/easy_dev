@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; // 추가: 통화 포맷을 위해
 import '../../../../../../../models/plate_model.dart';
 
-class ParkingCompletedPlateSearchResults extends StatelessWidget {
+class LiteParkingCompletedPlateSearchResults extends StatelessWidget {
   final List<PlateModel> results;
   final void Function(PlateModel) onSelect;
   final VoidCallback? onRefresh;
 
-  const ParkingCompletedPlateSearchResults({
+  const LiteParkingCompletedPlateSearchResults({
     super.key,
     required this.results,
     required this.onSelect,

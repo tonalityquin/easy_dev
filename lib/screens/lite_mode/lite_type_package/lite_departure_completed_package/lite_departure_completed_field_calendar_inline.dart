@@ -9,14 +9,14 @@ import '../../../../states/calendar/field_calendar_state.dart';
 import '../../../../states/plate/plate_state.dart';
 import '../../../../utils/snackbar_helper.dart';
 
-class DepartureCompletedFieldCalendarInline extends StatefulWidget {
-  const DepartureCompletedFieldCalendarInline({super.key});
+class LiteDepartureCompletedFieldCalendarInline extends StatefulWidget {
+  const LiteDepartureCompletedFieldCalendarInline({super.key});
 
   @override
-  State<DepartureCompletedFieldCalendarInline> createState() => _DepartureCompletedFieldCalendarInlineState();
+  State<LiteDepartureCompletedFieldCalendarInline> createState() => _LiteDepartureCompletedFieldCalendarInlineState();
 }
 
-class _DepartureCompletedFieldCalendarInlineState extends State<DepartureCompletedFieldCalendarInline> {
+class _LiteDepartureCompletedFieldCalendarInlineState extends State<LiteDepartureCompletedFieldCalendarInline> {
   late FieldCalendarState calendar;
   late DateTime _focusedDay;
 

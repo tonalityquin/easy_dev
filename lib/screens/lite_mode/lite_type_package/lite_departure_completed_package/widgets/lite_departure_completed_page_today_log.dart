@@ -2,8 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'lite_departure_completed_plate_image_dialog.dart';
 
-class TodayLogSection extends StatefulWidget {
-  const TodayLogSection({
+class LiteTodayLogSection extends StatefulWidget {
+  const LiteTodayLogSection({
     super.key,
     required this.plateNumber,
     required this.logsRaw,
@@ -13,10 +13,10 @@ class TodayLogSection extends StatefulWidget {
   final List<dynamic> logsRaw;
 
   @override
-  State<TodayLogSection> createState() => _TodayLogSectionState();
+  State<LiteTodayLogSection> createState() => _LiteTodayLogSectionState();
 }
 
-class _TodayLogSectionState extends State<TodayLogSection> {
+class _LiteTodayLogSectionState extends State<LiteTodayLogSection> {
   bool _expanded = false;
 
   // ===== 공통 로직: 로그 정규화 =====
@@ -142,7 +142,7 @@ class _TodayLogSectionState extends State<TodayLogSection> {
                     barrierDismissible: true,
                     barrierLabel: "사진 보기",
                     transitionDuration: const Duration(milliseconds: 300),
-                    pageBuilder: (_, __, ___) => DepartureCompletedPlateImageDialog(plateNumber: widget.plateNumber),
+                    pageBuilder: (_, __, ___) => LiteDepartureCompletedPlateImageDialog(plateNumber: widget.plateNumber),
                   );
                 },
                 style: ElevatedButton.styleFrom(

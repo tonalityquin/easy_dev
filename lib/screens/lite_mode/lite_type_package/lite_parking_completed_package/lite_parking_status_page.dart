@@ -1,4 +1,3 @@
-// lib/screens/type_pages/parking_completed_pages/widgets/parking_status_page.dart
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -15,16 +14,16 @@ import '../../../service_mode/type_package/common_widgets/dashboard_bottom_sheet
 // ⬇️ 지역별 리마인더 콘텐츠 파일 import
 import 'lite_parking_reminder_contents.dart';
 
-class ParkingStatusPage extends StatefulWidget {
+class LiteParkingStatusPage extends StatefulWidget {
   final bool isLocked;
 
-  const ParkingStatusPage({super.key, required this.isLocked});
+  const LiteParkingStatusPage({super.key, required this.isLocked});
 
   @override
-  State<ParkingStatusPage> createState() => _ParkingStatusPageState();
+  State<LiteParkingStatusPage> createState() => _LiteParkingStatusPageState();
 }
 
-class _ParkingStatusPageState extends State<ParkingStatusPage> {
+class _LiteParkingStatusPageState extends State<LiteParkingStatusPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   int _occupiedCount = 0; // 영역 전체의 주차 완료 총합

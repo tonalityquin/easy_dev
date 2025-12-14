@@ -18,7 +18,7 @@ const kIsWorkingPrefsKey = 'isWorking';
 ///    예: '2025-11-29' 같은 문자열이 들어감
 const kLastBreakDatePrefsKey = 'last_break_date';
 
-class HomeDashBoardController {
+class LiteHomeDashBoardController {
   Future<void> handleWorkStatus(
       UserState userState, BuildContext context) async {
     // ✅ 현재 근무 중인 상태에서 "퇴근하기" 버튼을 누른 경우

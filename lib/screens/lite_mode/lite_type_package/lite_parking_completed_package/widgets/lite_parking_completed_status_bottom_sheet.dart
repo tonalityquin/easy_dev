@@ -21,7 +21,7 @@ import '../../../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 // ✅ TTS (오프라인 TTS 사용)
 import '../../../../../offlines/tts/offline_tts.dart';
 
-Future<void> showParkingCompletedStatusBottomSheet({
+Future<void> showLiteParkingCompletedStatusBottomSheet({
   required BuildContext context,
   required PlateModel plate,
   required Future<void> Function() onRequestEntry,

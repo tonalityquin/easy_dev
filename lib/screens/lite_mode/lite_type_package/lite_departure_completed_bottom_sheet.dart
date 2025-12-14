@@ -13,14 +13,14 @@ import 'lite_departure_completed_package/lite_departure_completed_tab_settled.da
 import 'lite_departure_completed_package/lite_departure_completed_tab_unsettled.dart';
 import 'lite_departure_completed_package/widgets/lite_departure_completed_selected_date_bar.dart';
 
-class DepartureCompletedBottomSheet extends StatefulWidget {
-  const DepartureCompletedBottomSheet({super.key});
+class LiteDepartureCompletedBottomSheet extends StatefulWidget {
+  const LiteDepartureCompletedBottomSheet({super.key});
 
   @override
-  State<DepartureCompletedBottomSheet> createState() => _DepartureCompletedBottomSheetState();
+  State<LiteDepartureCompletedBottomSheet> createState() => _LiteDepartureCompletedBottomSheetState();
 }
 
-class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottomSheet> {
+class _LiteDepartureCompletedBottomSheetState extends State<LiteDepartureCompletedBottomSheet> {
   // 화면 식별 태그(FAQ/에러 리포트 연계용)
   static const String screenTag = 'departure completed';
 
@@ -148,16 +148,16 @@ class _DepartureCompletedBottomSheetState extends State<DepartureCompletedBottom
                             ),
                           ),
                           const SizedBox(height: 8),
-                          DepartureCompletedSelectedDateBar(visible: !isSettled),
+                          LiteDepartureCompletedSelectedDateBar(visible: !isSettled),
                           const SizedBox(height: 8),
                           Expanded(
                             child: TabBarView(
                               children: [
-                                DepartureCompletedUnsettledTab(
+                                LiteDepartureCompletedUnsettledTab(
                                   firestorePlates: firestorePlates,
                                   userName: userName,
                                 ),
-                                DepartureCompletedSettledTab(
+                                LiteDepartureCompletedSettledTab(
                                   area: area,
                                   division: division,
                                   selectedDate: selectedDate,

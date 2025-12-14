@@ -11,21 +11,21 @@ class _Palette {
   static const base = Color(0xFF0D47A1); // primary
 }
 
-class ParkingCompletedLocationPicker extends StatefulWidget {
+class LiteParkingCompletedLocationPicker extends StatefulWidget {
   final Function(String locationName) onLocationSelected;
   final bool isLocked;
 
-  const ParkingCompletedLocationPicker({
+  const LiteParkingCompletedLocationPicker({
     super.key,
     required this.onLocationSelected,
     required this.isLocked,
   });
 
   @override
-  State<ParkingCompletedLocationPicker> createState() => _ParkingCompletedLocationPickerState();
+  State<LiteParkingCompletedLocationPicker> createState() => _LiteParkingCompletedLocationPickerState();
 }
 
-class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocationPicker> {
+class _LiteParkingCompletedLocationPickerState extends State<LiteParkingCompletedLocationPicker> {
   String? selectedParent;
 
   // ▶ 항목별 새로고침 상태/쿨다운

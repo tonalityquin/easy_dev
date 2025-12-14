@@ -1,18 +1,25 @@
 import 'package:flutter/material.dart';
-import 'page_info.dart';
+import 'lite_page_info.dart';
 
-class HqState with ChangeNotifier {
-  final List<HqPageInfo> _pages; // ✅ final
+class LiteHqState with ChangeNotifier {
+  final List<LiteHqPageInfo> _pages;
   int _selectedIndex;
-  final bool _isLoading = false; // ✅ final
+  bool _isLoading = false;
 
-  HqState({required List<HqPageInfo> pages})
+  LiteHqState({required List<LiteHqPageInfo> pages})
       : _pages = pages,
-        _selectedIndex = pages.isNotEmpty ? 1 : -1;
+        _selectedIndex = pages.isNotEmpty ? 0 : -1;
 
   int get selectedIndex => _selectedIndex;
-  List<HqPageInfo> get pages => _pages;
+  List<LiteHqPageInfo> get pages => _pages;
   bool get isLoading => _isLoading;
+
+  set isLoading(bool value) {
+    if (_isLoading != value) {
+      _isLoading = value;
+      notifyListeners();
+    }
+  }
 
   void onItemTapped(int index) {
     if (index < 0 || index >= _pages.length) {

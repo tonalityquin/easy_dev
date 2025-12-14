@@ -6,12 +6,12 @@ import '../../../../states/plate/plate_state.dart';
 import '../../../../states/user/user_state.dart';
 import 'widgets/lite_departure_completed_status_bottom_sheet.dart';
 
-class DepartureCompletedControlButtons extends StatelessWidget {
+class LiteDepartureCompletedControlButtons extends StatelessWidget {
   final bool isSearchMode;
   final VoidCallback onResetSearch;
   final VoidCallback onShowSearchDialog;
 
-  const DepartureCompletedControlButtons({
+  const LiteDepartureCompletedControlButtons({
     super.key,
     required this.isSearchMode,
     required this.onResetSearch,
@@ -37,7 +37,7 @@ class DepartureCompletedControlButtons extends StatelessWidget {
             child: isPlateSelected
                 ? TextButton.icon(
               onPressed: () async {
-                await showDepartureCompletedStatusBottomSheet(
+                await showLiteDepartureCompletedStatusBottomSheet(
                   context: context,
                   plate: selectedPlate,
                 );

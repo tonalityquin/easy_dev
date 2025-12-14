@@ -1,22 +1,3 @@
-// lib/screens/type_pages/parking_completed_page.dart
-//
-// 변경 요약 👇
-// - StatusMappingHelper에서 설정한 location별 리미트(컬렉션: location_limits)를 우선 적용,
-//   없으면 전역 기본값(SharedPreferences: PlateLimitConfig.prefsKey) 사용
-// - 위치 선택 시 plateList 화면으로 전환하지 않고,
-//   ✅ 해당 "주차 구역(location)"의 입차 완료 번호판만 BottomSheet로 표시
-// - 판별은 Firestore aggregate count() 1회로 처리(문서 목록 fetch 없이 개수만 확인)  ← location 단위
-// - 개수 ≤ N 이면 그때만 실제 번호판 목록을 소량 조회해(BottomSheet 표시에 필요한 plateNumber만 사용) 렌더링
-// - 기존 plateList 화면 로직은 보존(다른 경로에서 사용할 수 있도록), 기본 흐름에선 사용하지 않음
-//
-// [리팩터링 추가사항]
-// - BottomSheet 중복 오픈 가드(_openingSheet)
-// - 전역/로케이션 리미트 캐싱(_globalLimitCache, _locationLimitCache)
-// - '부모 - 자식' 파싱을 lastIndexOf로 안전 처리
-// - fetch 시 orderBy('request_time', descending: true) 적용(인덱스 필요 시 콘솔에서 구성)
-// - FirebaseException 분기 에러 메시지 개선
-// - BottomSheet 색상을 테마 기반으로(다크모드 대응)
-// - ✅ 홈 버튼 리셋 시 ParkingStatusPage 재생성: _statusKeySeed + ValueKey 적용(집계 재실행 보장)
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -50,22 +31,22 @@ import 'lite_parking_completed_package/lite_parking_completed_control_buttons.da
 import 'lite_parking_completed_package/lite_parking_completed_location_picker.dart';
 import 'lite_parking_completed_package/lite_parking_status_page.dart';
 
-enum ParkingViewMode { status, locationPicker, plateList }
+enum LiteParkingViewMode { status, locationPicker, plateList }
 
-class ParkingCompletedPage extends StatefulWidget {
-  const ParkingCompletedPage({super.key});
+class LiteParkingCompletedPage extends StatefulWidget {
+  const LiteParkingCompletedPage({super.key});
 
   /// 홈 탭 재진입/재탭 시 내부 상태 초기화를 위한 entry point
   static void reset(GlobalKey key) {
-    (key.currentState as _ParkingCompletedPageState?)?._resetInternalState();
+    (key.currentState as _LiteParkingCompletedPageState?)?._resetInternalState();
   }
 
   @override
-  State<ParkingCompletedPage> createState() => _ParkingCompletedPageState();
+  State<LiteParkingCompletedPage> createState() => _LiteParkingCompletedPageState();
 }
 
-class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
-  ParkingViewMode _mode = ParkingViewMode.status; // 기본은 현황 화면
+class _LiteParkingCompletedPageState extends State<LiteParkingCompletedPage> {
+  LiteParkingViewMode _mode = LiteParkingViewMode.status; // 기본은 현황 화면
   String? _selectedParkingArea; // 선택된 주차 구역(location)
   bool _isSorted = true; // true=최신순
   bool _isLocked = true; // 화면 잠금
@@ -98,7 +79,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
   /// 홈 재탭/진입 시 초기 상태로 되돌림
   void _resetInternalState() {
     setState(() {
-      _mode = ParkingViewMode.status;
+      _mode = LiteParkingViewMode.status;
       _selectedParkingArea = null;
       _isSorted = true;
       _isLocked = true; // ✅ 요구사항: 홈에서 다시 시작할 때 잠금 ON
@@ -120,7 +101,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     showDialog(
       context: context,
       builder: (context) {
-        return ParkingCompletedSearchBottomSheet(
+        return LiteParkingCompletedSearchBottomSheet(
           onSearch: (_) {},
           area: currentArea,
         );
@@ -132,7 +113,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     context.read<FilterPlate>().clearLocationSearchQuery();
     setState(() {
       _selectedParkingArea = null;
-      _mode = ParkingViewMode.status;
+      _mode = LiteParkingViewMode.status;
     });
     _log('reset location filter');
   }
@@ -474,12 +455,12 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
         }
 
         // plateList → locationPicker → status 순으로 한 단계씩 되돌기
-        if (_mode == ParkingViewMode.plateList) {
-          setState(() => _mode = ParkingViewMode.locationPicker);
+        if (_mode == LiteParkingViewMode.plateList) {
+          setState(() => _mode = LiteParkingViewMode.locationPicker);
           _log('back → locationPicker');
           return false;
-        } else if (_mode == ParkingViewMode.locationPicker) {
-          setState(() => _mode = ParkingViewMode.status);
+        } else if (_mode == LiteParkingViewMode.locationPicker) {
+          setState(() => _mode = LiteParkingViewMode.status);
           _log('back → status');
           return false;
         }
@@ -496,10 +477,10 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           elevation: 0,
         ),
         body: _buildBody(context),
-        bottomNavigationBar: ParkingCompletedControlButtons(
-          isParkingAreaMode: _mode == ParkingViewMode.plateList,
-          isStatusMode: _mode == ParkingViewMode.status,
-          isLocationPickerMode: _mode == ParkingViewMode.locationPicker,
+        bottomNavigationBar: LiteParkingCompletedControlButtons(
+          isParkingAreaMode: _mode == LiteParkingViewMode.plateList,
+          isStatusMode: _mode == LiteParkingViewMode.status,
+          isLocationPickerMode: _mode == LiteParkingViewMode.locationPicker,
           isSorted: _isSorted,
           isLocked: _isLocked,
           onToggleLock: () {
@@ -523,23 +504,23 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
     final userName = context.read<UserState>().name;
 
     switch (_mode) {
-      case ParkingViewMode.status:
+      case LiteParkingViewMode.status:
         // 🔹 현황 화면을 탭하면 위치 선택 화면으로 전환
         return GestureDetector(
           onTap: () {
-            setState(() => _mode = ParkingViewMode.locationPicker);
+            setState(() => _mode = LiteParkingViewMode.locationPicker);
             _log('open location picker');
           },
           // ✅ 리셋마다 키가 바뀌어 ParkingStatusPage의 State가 새로 만들어짐 → 집계 재실행
-          child: ParkingStatusPage(
+          child: LiteParkingStatusPage(
             key: ValueKey('status-$_statusKeySeed'),
             isLocked: _isLocked,
           ),
         );
 
-      case ParkingViewMode.locationPicker:
+      case LiteParkingViewMode.locationPicker:
         // 🔹 위치 선택 시: plateList 모드로 가지 않고, 번호판 BottomSheet 시도
-        return ParkingCompletedLocationPicker(
+        return LiteParkingCompletedLocationPicker(
           onLocationSelected: (locationName) {
             _selectedParkingArea = locationName; // 선택된 구역 저장(필요 시)
             _tryShowPlateNumbersBottomSheet(locationName);
@@ -547,7 +528,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
           isLocked: _isLocked,
         );
 
-      case ParkingViewMode.plateList:
+      case LiteParkingViewMode.plateList:
         // 🔹 기존 plateList 화면은 보존(다른 경로에서 필요할 수 있음). 현재 기본 흐름에선 사용 안 함.
         List<PlateModel> plates = plateState.getPlatesByCollection(PlateType.parkingCompleted);
         if (_selectedParkingArea != null) {

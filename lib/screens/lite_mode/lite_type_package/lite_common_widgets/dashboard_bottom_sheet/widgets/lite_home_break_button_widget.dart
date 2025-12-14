@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import '../lite_home_dash_board_controller.dart';
 
 class HomeBreakButtonWidget extends StatefulWidget {
-  final HomeDashBoardController controller;
+  final LiteHomeDashBoardController controller;
 
   const HomeBreakButtonWidget({super.key, required this.controller});
 

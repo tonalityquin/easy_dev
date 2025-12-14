@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import '../../../../service_mode/modify_package/utils/modify_plate_service.dart';
 
-class DepartureCompletedPlateImageDialog extends StatelessWidget {
+class LiteDepartureCompletedPlateImageDialog extends StatelessWidget {
   final String plateNumber;
 
-  const DepartureCompletedPlateImageDialog({super.key, required this.plateNumber});
+  const LiteDepartureCompletedPlateImageDialog({super.key, required this.plateNumber});
 
   @override
   Widget build(BuildContext context) {

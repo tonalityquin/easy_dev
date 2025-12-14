@@ -16,17 +16,17 @@ import 'widgets/lite_home_user_info_card.dart';
 import 'widgets/lite_home_break_button_widget.dart';
 import 'documents/lite_leader_document_box_sheet.dart';
 
-class HqDashBoardPage extends StatefulWidget {
-  const HqDashBoardPage({super.key});
+class LiteHqDashBoardPage extends StatefulWidget {
+  const LiteHqDashBoardPage({super.key});
 
   @override
-  State<HqDashBoardPage> createState() => _HqDashBoardPageState();
+  State<LiteHqDashBoardPage> createState() => _LiteHqDashBoardPageState();
 }
 
-class _HqDashBoardPageState extends State<HqDashBoardPage> {
+class _LiteHqDashBoardPageState extends State<LiteHqDashBoardPage> {
   bool _layerHidden = true;
 
-  late final HomeDashBoardController _controller = HomeDashBoardController();
+  late final LiteHomeDashBoardController _controller = LiteHomeDashBoardController();
 
   Future<void> _exitAppAfterClockOut(BuildContext context) async {
     AppExitFlag.beginExit();
@@ -129,7 +129,7 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const HomeUserInfoCard(),
+                const LiteHomeUserInfoCard(),
                 const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,

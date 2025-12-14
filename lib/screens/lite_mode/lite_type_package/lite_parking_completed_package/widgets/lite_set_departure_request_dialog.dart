@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-class SetDepartureRequestBottomSheet extends StatelessWidget {
+class LiteSetDepartureRequestDialog extends StatelessWidget {
   final VoidCallback onConfirm;
 
-  const SetDepartureRequestBottomSheet({super.key, required this.onConfirm});
+  const LiteSetDepartureRequestDialog({super.key, required this.onConfirm});
 
   @override
   Widget build(BuildContext context) {

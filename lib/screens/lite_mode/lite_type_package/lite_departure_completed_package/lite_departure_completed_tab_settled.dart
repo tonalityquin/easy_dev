@@ -9,8 +9,8 @@ import '../lite_departure_completed_package/widgets/lite_departure_completed_pag
 import '../lite_departure_completed_package/widgets/lite_departure_completed_page_today_log.dart';
 import '../../../../utils/snackbar_helper.dart'; // ✅ 커스텀 스낵바 헬퍼 추가
 
-class DepartureCompletedSettledTab extends StatefulWidget {
-  const DepartureCompletedSettledTab({
+class LiteDepartureCompletedSettledTab extends StatefulWidget {
+  const LiteDepartureCompletedSettledTab({
     super.key,
     required this.area,
     required this.division,
@@ -24,10 +24,10 @@ class DepartureCompletedSettledTab extends StatefulWidget {
   final String plateNumber;
 
   @override
-  State<DepartureCompletedSettledTab> createState() => _DepartureCompletedSettledTabState();
+  State<LiteDepartureCompletedSettledTab> createState() => _LiteDepartureCompletedSettledTabState();
 }
 
-class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettledTab> {
+class _LiteDepartureCompletedSettledTabState extends State<LiteDepartureCompletedSettledTab> {
   // ===== 아코디언 상태: 최대 1개만 열림 =====
   bool _openToday = true;
   bool _openMerged = false;
@@ -213,7 +213,7 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
           ),
         // TodayLogSection 내부에 Expanded가 있으므로, 여기서는 Expanded로 감싸서 공간 할당
         Expanded(
-          child: TodayLogSection(
+          child: LiteTodayLogSection(
             plateNumber: plate,
             logsRaw: logsRaw,
           ),
@@ -224,7 +224,7 @@ class _DepartureCompletedSettledTabState extends State<DepartureCompletedSettled
 
   Widget _buildMergedSectionBody() {
     // 리팩토링된 MergedLogSection은 내부에서 날짜 선택/불러오기/검색을 모두 처리
-    return MergedLogSection(
+    return LiteMergedLogSection(
       mergedLogs: const <Map<String, dynamic>>[], // 시그니처 호환용, 내부 미사용
       division: widget.division,
       area: widget.area,
