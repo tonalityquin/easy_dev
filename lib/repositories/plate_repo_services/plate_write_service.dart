@@ -9,7 +9,7 @@ import 'dart:developer' as dev;
 
 import '../../models/plate_log_model.dart';
 import '../../models/plate_model.dart';
-import '../../screens/dev_package/debug_package/debug_database_logger.dart';
+import '../../screens/hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class PlateWriteService {

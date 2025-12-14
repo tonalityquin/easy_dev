@@ -11,7 +11,7 @@ import 'routes.dart';
 import 'providers/providers.dart';
 
 // import 'screens/dev_package/dev_memo.dart'; // ⬅️ DevMemo 더 이상 사용 안 함
-import 'screens/head_package/head_memo.dart';
+import 'screens/hubs_mode/head_package/head_memo.dart';
 import 'theme.dart';
 
 // import 'utils/init/dev_initializer.dart'; // 비상용 개발 지역 계정 임시 비활성화
@@ -34,13 +34,13 @@ import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, Tar
 import 'utils/google_auth_session.dart';
 
 // ✅ (신규) 본사 허브 퀵 액션 오버레이 전역 초기화/부착
-import 'screens/head_package/hub_quick_actions.dart';
+import 'screens/hubs_mode/head_package/hub_quick_actions.dart';
 
 // ✅ (신규) DashMemo 전역 오버레이 부착을 위해 추가
-import 'screens/type_package/common_widgets/dashboard_bottom_sheet/memo/dash_memo.dart';
+import 'screens/service_mode/type_package/common_widgets/dashboard_bottom_sheet/memo/dash_memo.dart';
 
 // ✅ (신규) 개발 허브 퀵 액션(DevQuickActions) 사용
-import 'screens/dev_package/dev_quick_actions.dart';
+import 'screens/hubs_mode/dev_package/dev_quick_actions.dart';
 
 // ✅ (신규) 오버레이 UI(App) 위젯
 import 'utils/quick_overlay_main.dart';

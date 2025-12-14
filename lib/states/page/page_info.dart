@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../screens/type_package/parking_request_page.dart';
-import '../../screens/type_package/parking_completed_page.dart';
-import '../../screens/type_package/departure_request_page.dart';
+import '../../screens/service_mode/type_package/parking_request_page.dart';
+import '../../screens/service_mode/type_package/parking_completed_page.dart';
+import '../../screens/service_mode/type_package/departure_request_page.dart';
 
-import '../../screens/hq_package/dash_board.dart';
+import '../../screens/service_mode/hq_package/dash_board.dart';
 
 import '../../enums/plate_type.dart';
 import 'page_state.dart';

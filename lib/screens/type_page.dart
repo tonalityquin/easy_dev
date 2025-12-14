@@ -12,9 +12,9 @@ import '../states/area/area_state.dart';
 import '../states/plate/plate_state.dart';
 import '../states/user/user_state.dart';
 
-import '../screens/input_package/input_plate_screen.dart';
-import '../screens/type_package/common_widgets/dashboard_bottom_sheet/home_dash_board_bottom_sheet.dart';
-import 'type_package/common_widgets/chats/chat_bottom_sheet.dart';
+import '../screens/service_mode/input_package/input_plate_screen.dart';
+import '../screens/service_mode/type_package/common_widgets/dashboard_bottom_sheet/home_dash_board_bottom_sheet.dart';
+import 'service_mode/type_package/common_widgets/chats/chat_bottom_sheet.dart';
 import 'secondary_page.dart';
 import '../utils/snackbar_helper.dart';
 
@@ -22,7 +22,7 @@ import '../utils/tts/tts_manager.dart';
 
 import '../services/latest_message_service.dart';
 
-import 'type_package/common_widgets/reverse_sheet_package/parking_completed_table_sheet.dart';
+import 'service_mode/type_package/common_widgets/reverse_sheet_package/parking_completed_table_sheet.dart';
 
 /// Deep Blue 팔레트(서비스 카드와 동일 계열)
 class _Palette {

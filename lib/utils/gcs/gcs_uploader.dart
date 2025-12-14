@@ -17,7 +17,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:googleapis/storage/v1.dart' as gcs;
 
 import '../google_auth_session.dart';
-import '../../screens/dev_package/debug_package/debug_api_logger.dart';
+import '../../screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
 
 const String kBucketName = 'easydev-image';
 

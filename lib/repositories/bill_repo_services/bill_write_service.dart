@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/bill_model.dart';
 import '../../models/regular_bill_model.dart';
-import '../../screens/dev_package/debug_package/debug_database_logger.dart';
+import '../../screens/hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class BillWriteService {

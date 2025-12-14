@@ -9,14 +9,14 @@ import '../repositories/user_repo_services/user_repository.dart';
 // 🔽 추가: write 트랜잭션 서비스 DI
 import '../repositories/plate_repo_services/plate_write_service.dart';
 
-import '../screens/head_package/calendar_package/calendar_model.dart';
-import '../screens/head_package/calendar_package/google_calendar_service.dart';
+import '../screens/hubs_mode/head_package/calendar_package/calendar_model.dart';
+import '../screens/hubs_mode/head_package/calendar_package/google_calendar_service.dart';
 
 // ▼ Dev 캘린더 전역 주입을 위한 추가 import
-import '../screens/dev_package/dev_calendar_package/dev_calendar_model.dart';
-import '../screens/dev_package/dev_calendar_package/dev_google_calendar_service.dart';
+import '../screens/hubs_mode/dev_package/dev_calendar_package/dev_calendar_model.dart';
+import '../screens/hubs_mode/dev_package/dev_calendar_package/dev_google_calendar_service.dart';
 
-import '../screens/tablet_package/states/tablet_pad_mode_state.dart';
+import '../screens/tablet_mode/states/tablet_pad_mode_state.dart';
 import '../states/area/area_state.dart';
 import '../states/bill/bill_state.dart';
 import '../states/calendar/field_calendar_state.dart';

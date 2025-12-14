@@ -7,8 +7,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import '../../repositories/plate_repo_services/plate_write_service.dart';
-import '../../screens/type_package/common_widgets/reverse_sheet_package/services/parking_completed_logger.dart';
-import '../../screens/type_package/common_widgets/reverse_sheet_package/services/status_mapping.dart';
+import '../../screens/service_mode/type_package/common_widgets/reverse_sheet_package/services/parking_completed_logger.dart';
+import '../../screens/service_mode/type_package/common_widgets/reverse_sheet_package/services/status_mapping.dart';
 import '../user/user_state.dart';
 
 // 🔹 입차/출차 로컬 SQLite 기록용

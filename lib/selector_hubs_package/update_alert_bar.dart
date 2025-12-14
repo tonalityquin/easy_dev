@@ -3,9 +3,9 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
-import '../screens/dev_package/debug_package/debug_api_logger.dart';
-import '../screens/dev_package/debug_package/debug_database_logger.dart';
-import '../screens/dev_package/debug_package/debug_local_logger.dart';
+import '../screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
+import '../screens/hubs_mode/dev_package/debug_package/debug_database_logger.dart';
+import '../screens/hubs_mode/dev_package/debug_package/debug_local_logger.dart';
 
 
 class UpdateAlertBar extends StatefulWidget {

@@ -7,7 +7,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:googleapis/storage/v1.dart' as gcs;
 
 import '../google_auth_session.dart';
-import '../../screens/dev_package/debug_package/debug_api_logger.dart';
+import '../../screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
 
 /// GCS(easydev-image 버킷)에 이미지를 업로드하는 유틸
 ///

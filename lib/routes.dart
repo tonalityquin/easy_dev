@@ -1,6 +1,5 @@
 // lib/routes.dart
 import 'package:easydev/offlines/offline_type_page.dart';
-import 'package:easydev/screens/lite_commute_package/lite_commute_inside_screen.dart';
 import 'package:flutter/material.dart';
 
 // ▼ 오프라인 패키지
@@ -8,23 +7,26 @@ import 'package:easydev/offlines/offline_commute_package/offline_commute_inside_
 import 'package:easydev/offlines/offline_login_package/offline_login_screen.dart';
 
 // ▼ 일반 화면들
-import 'package:easydev/screens/dev_stub_page.dart';
-import 'package:easydev/screens/head_stub_page.dart';
+import 'package:easydev/screens/hubs_mode/dev_stub_page.dart';
+import 'package:easydev/screens/hubs_mode/head_stub_page.dart';
 import 'package:easydev/screens/headquarter_page.dart';
-import 'package:easydev/screens/login_package/login_screen.dart';
+import 'package:easydev/screens/hubs_mode/login_package/login_screen.dart';
 import 'package:easydev/screens/type_page.dart';
-import 'package:easydev/screens/tablet_package/tablet_page.dart';
-import 'package:easydev/screens/faq_page.dart';
-import 'package:easydev/screens/community_stub_page.dart';
+import 'package:easydev/screens/tablet_mode/tablet_page.dart';
+import 'package:easydev/screens/hubs_mode/faq_page.dart';
+import 'package:easydev/screens/hubs_mode/community_stub_page.dart';
 
-import 'screens/commute_package/commute_inside_screen.dart';
-import 'screens/dev_package/dev_calendar_page.dart';
-import 'screens/head_package/company_calendar_page.dart';
-import 'screens/simple_package/simple_inside_screen.dart';
+import 'screens/lite_headquarter_page.dart';
+import 'screens/lite_mode/lite_commute_package/lite_commute_inside_screen.dart';
+import 'screens/lite_type_page.dart';
+import 'screens/service_mode/commute_package/commute_inside_screen.dart';
+import 'screens/hubs_mode/dev_package/dev_calendar_page.dart';
+import 'screens/hubs_mode/head_package/company_calendar_page.dart';
+import 'screens/simple_mode/simple_inside_screen.dart';
 import 'selector_hubs_page.dart';
 
 // ▼ 신규 페이지 import
-import 'screens/head_package/timesheet_page.dart';
+import 'screens/hubs_mode/head_package/timesheet_page.dart';
 
 class AppRoutes {
   static const selector = '/selector';
@@ -86,8 +88,8 @@ final Map<String, WidgetBuilder> appRoutes = {
   // 기타 페이지들
   AppRoutes.headquarterPage: (context) => const HeadquarterPage(),
   AppRoutes.typePage: (context) => const TypePage(),
-  AppRoutes.liteHeadquarterPage: (context) => const HeadquarterPage(),
-  AppRoutes.liteTypePage: (context) => const TypePage(),
+  AppRoutes.liteHeadquarterPage: (context) => const LiteHeadquarterPage(),
+  AppRoutes.liteTypePage: (context) => const LiteTypePage(),
   AppRoutes.offlineTypePage: (context) => const OfflineTypePage(),
   AppRoutes.tablet: (context) => const TabletPage(),
   AppRoutes.faq: (context) => const FaqPage(),

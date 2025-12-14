@@ -7,7 +7,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis_auth/googleapis_auth.dart' as auth show AuthClient;
 import 'package:extension_google_sign_in_as_googleapis_auth/extension_google_sign_in_as_googleapis_auth.dart';
 
-import '../screens/dev_package/debug_package/debug_api_logger.dart';
+import '../screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
 
 // DebugApiLogger 경로는 실제 파일 위치에 맞게 조정
 

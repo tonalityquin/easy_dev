@@ -7,7 +7,7 @@ import 'routes.dart';
 import 'utils/snackbar_helper.dart';
 
 // 패키지 분리된 섹션들
-import 'screens/dev_package/debug_package/debug_bottom_sheet.dart';
+import 'screens/hubs_mode/dev_package/debug_package/debug_bottom_sheet.dart';
 import 'selector_hubs_package/dev_auth.dart';
 import 'selector_hubs_package/cards.dart';
 import 'selector_hubs_package/cards_pager.dart';

@@ -1,6 +1,6 @@
 // lib/repositories/user_repo_services/user_status_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../screens/dev_package/debug_package/debug_database_logger.dart';
+import '../../screens/hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class UserStatusService {

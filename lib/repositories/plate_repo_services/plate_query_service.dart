@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
-import '../../screens/dev_package/debug_package/debug_database_logger.dart';
+import '../../screens/hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class PlateQueryService {

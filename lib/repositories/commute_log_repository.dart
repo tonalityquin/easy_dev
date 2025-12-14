@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../screens/dev_package/debug_package/debug_database_logger.dart';
+import '../screens/hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 
 /// 출근/퇴근/휴게 공통 Firestore 로그 저장 레포지토리
 ///
