@@ -1,25 +1,3 @@
-// lib/screens/secondary_page.dart
-//
-// 요구사항: "한 번에 두 개의 탭만 보이고, 가로로 스와이프할 때마다 다른 두 개의 탭"이 보이도록.
-// 구현 요약:
-// - 상단 AppBar는 고정 타이틀만 표시.
-// - 본문은 PageView(=청크 페이저)로, 탭들을 2개씩 묶어 페이지화한다(청크 크기 = 2).
-// - 각 청크 페이지 안에는 DefaultTabController + TabBar(최대 2개 탭) + TabBarView(스크롤 비활성)로 구성.
-// - TabBarView는 스와이프 충돌을 방지하기 위해 NeverScrollableScrollPhysics 사용(탭 전환은 탭 클릭으로만).
-// - PageView를 좌우 스와이프하면 다음(또는 이전) 2개 탭 묶음으로 이동.
-// - 외부 SecondaryState.selectedIndex와 양방향 동기화.
-//
-// 팔레트(서비스 카드 색상계열) 반영:
-// - base(Primary), dark(텍스트/아이콘 강조), light(보더/톤 변화), fg(전경 흰색)
-// - AppBar 타이틀/아이콘 색은 dark, 하단 헤어라인은 light
-// - TabBar 라벨/인디케이터는 base, 비선택 라벨은 dark의 0.6
-// - 로딩 인디케이터도 base 컬러로 고정
-//
-// 안전 가드:
-// - 탭이 하나도 없을 때 안내 문구 표시
-// - selectedIndex를 pages 길이에 맞게 clamp
-// - PageStorageKey로 각 실제 탭 콘텐츠 상태 보존
-
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';

@@ -1,14 +1,14 @@
-// lib/screens/secondary_package/office_mode_package/back_end_controller.dart
+// lib/screens/secondary_mode/dev_mode_package/back_end_controller.dart
 //
-// UI/UX 리팩터링 + '서비스 로그인' 팔레트 컬러 반영:
-// - 헤더 배너 추가(브랜드 톤)
-// - 토널(tonal) 카드 느낌의 컨테이너 + 라운딩/보더 정리
-// - 스위치 activeColor/아이콘/보조 텍스트 컬러 일치
-// - 토글 중에는 스피너로 상태 표시(중복 동작 방지)
-// - 잠금(LOCK) 시 입력 차단 + 오버레이 유지
-// - ⬅️ 11시 라벨 추가: "subscribe"
+// ✅ 변경 사항(Dev Auth Gate 추가)
+// - BackEndController 진입 시 DevAuth.restorePrefs()로 개발자 인증 여부 확인
+// - devAuthorized == false 이면, 컨트롤 UI 대신 "개발자 인증 필요" 게이트 화면 표시
+// - 게이트 화면에서 DevLoginBottomSheet 호출 → 성공 시 DevAuth.setDevAuthorized(true) 저장 후 즉시 활성화
+// - 초기화(Reset)도 동일하게 DevLoginBottomSheet의 onReset으로 처리 가능
 //
-// 동작은 기존과 동일합니다.
+// ✅ 추가 수정(요청 사항)
+// - AppBar의 자동 뒤로가기(leading) 아이콘이 보이지 않도록:
+//   automaticallyImplyLeading: false + leading/leadingWidth를 명시
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -17,6 +17,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../enums/plate_type.dart';
 import '../../../../states/plate/plate_state.dart';
 import '../../../../utils/snackbar_helper.dart';
+
+// ✅ Dev Auth / Dev Login BottomSheet
+import '../../../../selector_hubs_package/dev_auth.dart';
+import '../../../../selector_hubs_package/dev_login_bottom_sheet.dart';
 
 /// 서비스 로그인 카드 팔레트 (일관된 브랜드 톤)
 class _SvcColors {
@@ -42,16 +46,45 @@ class _BackEndControllerState extends State<BackEndController> {
   // 타입별 Busy 상태(중복 토글 방지)
   final Set<PlateType> _busy = {};
 
+  // ✅ Dev Auth Gate
+  bool _checkingDevAuth = true;
+  bool _devAuthorized = false;
+
   @override
   void initState() {
     super.initState();
-    _loadLockState();
+    _bootstrap();
+  }
+
+  Future<void> _bootstrap() async {
+    await Future.wait([
+      _loadLockState(),
+      _loadDevAuth(),
+    ]);
+  }
+
+  Future<void> _loadDevAuth() async {
+    try {
+      final restored = await DevAuth.restorePrefs(); // TTL 만료 처리 포함
+      if (!mounted) return;
+      setState(() {
+        _devAuthorized = restored.devAuthorized;
+        _checkingDevAuth = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _devAuthorized = false;
+        _checkingDevAuth = false;
+      });
+    }
   }
 
   Future<void> _loadLockState() async {
     final prefs = await SharedPreferences.getInstance();
     final locked = prefs.getBool(_prefsLockedKey);
-    if (mounted) setState(() => _locked = locked ?? true);
+    if (!mounted) return;
+    setState(() => _locked = locked ?? true);
   }
 
   Future<void> _saveLockState(bool value) async {
@@ -60,7 +93,9 @@ class _BackEndControllerState extends State<BackEndController> {
   }
 
   bool _isBusy(PlateType t) => _busy.contains(t);
+
   void _setBusy(PlateType t, bool v) {
+    if (!mounted) return;
     setState(() {
       if (v) {
         _busy.add(t);
@@ -86,7 +121,8 @@ class _BackEndControllerState extends State<BackEndController> {
     );
 
     return SafeArea(
-      child: IgnorePointer( // 제스처 간섭 방지
+      child: IgnorePointer(
+        // 제스처 간섭 방지
         child: Align(
           alignment: Alignment.topLeft,
           child: Padding(
@@ -101,16 +137,66 @@ class _BackEndControllerState extends State<BackEndController> {
     );
   }
 
+  Future<void> _openDevLogin() async {
+    bool success = false;
+    bool didReset = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        return DevLoginBottomSheet(
+          onSuccess: (id, pw) async {
+            await DevAuth.setDevAuthorized(true);
+            success = true;
+            if (sheetCtx.mounted) Navigator.of(sheetCtx).pop();
+          },
+          onReset: () async {
+            await DevAuth.resetDevAuth();
+            didReset = true;
+            if (sheetCtx.mounted) Navigator.of(sheetCtx).pop();
+          },
+        );
+      },
+    );
+
+    if (!mounted) return;
+
+    // 상태 재반영(만료/정리 포함)
+    await _loadDevAuth();
+
+    if (!mounted) return;
+
+    if (success) {
+      showSuccessSnackbar(context, '개발자 인증이 완료되었습니다.');
+    } else if (didReset) {
+      showSelectedSnackbar(context, '개발자 인증이 초기화되었습니다.');
+    }
+  }
+
+  Future<void> _resetDevAuthInline() async {
+    await DevAuth.resetDevAuth();
+    if (!mounted) return;
+    await _loadDevAuth();
+    if (!mounted) return;
+    showSelectedSnackbar(context, '개발자 인증이 초기화되었습니다.');
+  }
+
   @override
   Widget build(BuildContext context) {
-    final plateState = context.watch<PlateState>();
-
     // 구독 대상에서 '입차 완료' 제거
     final List<PlateType> subscribableTypes =
     PlateType.values.where((t) => t != PlateType.parkingCompleted).toList();
 
     return Scaffold(
       appBar: AppBar(
+        // ✅ 뒤로가기(leading) 자동 표시 방지
+        automaticallyImplyLeading: false,
+        leading: const SizedBox.shrink(),
+        leadingWidth: 0,
+
         title: const Text(
           '실시간 컨트롤러',
           style: TextStyle(fontWeight: FontWeight.w700),
@@ -119,95 +205,141 @@ class _BackEndControllerState extends State<BackEndController> {
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         elevation: 0,
-        // ⬅️ 11시 라벨을 AppBar 영역에 고정
         flexibleSpace: _buildScreenTag(context),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
           child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
         ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Row(
-              children: [
-                Icon(_locked ? Icons.lock : Icons.lock_open, color: _SvcColors.dark),
-                Switch.adaptive(
-                  activeColor: _SvcColors.base,
-                  value: _locked, // true면 잠금
-                  onChanged: (v) async {
-                    setState(() => _locked = v);
-                    await _saveLockState(v);
-                  },
+          if (_checkingDevAuth)
+            const Padding(
+              padding: EdgeInsets.only(right: 12),
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
                 ),
-              ],
-            ),
-          ),
-        ],
-      ),
-      body: Stack(
-        children: [
-          // 잠금 시 입력 차단
-          IgnorePointer(
-            ignoring: _locked,
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-              children: [
-                const _HeaderBanner(),
-                const SizedBox(height: 12),
-
-                // 타입별 구독 카드
-                for (final type in subscribableTypes)
-                  _SubscribeTile(
-                    title: _getTypeLabel(type),
-                    subtitle: _buildSubscribedAreaText(plateState, type),
-                    icon: _iconForType(type),
-                    active: plateState.isSubscribed(type),
-                    busy: _isBusy(type),
-                    onChanged: (value) async {
-                      final typeLabel = _getTypeLabel(type);
-                      _setBusy(type, true);
-                      try {
-                        if (value) {
-                          // subscribeType 이 동기/비동기 모두 안전하게 감싸기
-                          await Future.sync(() => plateState.subscribeType(type));
-                          final currentArea = plateState.currentArea;
-                          showSuccessSnackbar(
-                            context,
-                            '✅ [$typeLabel] 구독 시작됨\n지역: $currentArea',
-                          );
-                        } else {
-                          final unsubscribedArea =
-                              plateState.getSubscribedArea(type) ?? '알 수 없음';
-                          await Future.sync(() => plateState.unsubscribeType(type));
-                          // 안내성(중립) 메시지로 노란 스낵바
-                          showSelectedSnackbar(
-                            context,
-                            '⏹ [$typeLabel] 구독 해제됨\n지역: $unsubscribedArea',
-                          );
-                        }
-                      } catch (e) {
-                        showFailedSnackbar(context, '작업 실패: $e');
-                      } finally {
-                        _setBusy(type, false);
-                      }
+              ),
+            )
+          else if (!_devAuthorized)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: IconButton(
+                tooltip: 'Dev 로그인',
+                onPressed: _openDevLogin,
+                icon: const Icon(Icons.admin_panel_settings),
+                color: _SvcColors.dark,
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Row(
+                children: [
+                  Icon(_locked ? Icons.lock : Icons.lock_open, color: _SvcColors.dark),
+                  Switch.adaptive(
+                    activeColor: _SvcColors.base,
+                    value: _locked, // true면 잠금
+                    onChanged: (v) async {
+                      setState(() => _locked = v);
+                      await _saveLockState(v);
                     },
                   ),
-              ],
-            ),
-          ),
-
-          // 잠금 상태 시 시각적 오버레이
-          if (_locked)
-            Positioned.fill(
-              child: Container(
-                color: Colors.white.withOpacity(0.6),
-                child: const Center(
-                  child: _LockedBanner(),
-                ),
+                  PopupMenuButton<String>(
+                    tooltip: '옵션',
+                    onSelected: (v) async {
+                      if (v == 'reset_dev_auth') {
+                        await _resetDevAuthInline();
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: 'reset_dev_auth',
+                        child: Text('개발자 인증 해제'),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
         ],
       ),
+
+      // ✅ Dev Auth Gate 적용
+      body: _checkingDevAuth
+          ? const Center(child: CircularProgressIndicator())
+          : (!_devAuthorized)
+          ? _DevAuthGate(
+        onLogin: _openDevLogin,
+      )
+          : _buildControllerBody(context, subscribableTypes),
+    );
+  }
+
+  Widget _buildControllerBody(BuildContext context, List<PlateType> subscribableTypes) {
+    final plateState = context.watch<PlateState>();
+
+    return Stack(
+      children: [
+        // 잠금 시 입력 차단
+        IgnorePointer(
+          ignoring: _locked,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            children: [
+              const _HeaderBanner(),
+              const SizedBox(height: 12),
+
+              // 타입별 구독 카드
+              for (final type in subscribableTypes)
+                _SubscribeTile(
+                  title: _getTypeLabel(type),
+                  subtitle: _buildSubscribedAreaText(plateState, type),
+                  icon: _iconForType(type),
+                  active: plateState.isSubscribed(type),
+                  busy: _isBusy(type),
+                  onChanged: (value) async {
+                    final typeLabel = _getTypeLabel(type);
+                    _setBusy(type, true);
+                    try {
+                      if (value) {
+                        await Future.sync(() => plateState.subscribeType(type));
+                        final currentArea = plateState.currentArea;
+                        showSuccessSnackbar(
+                          context,
+                          '✅ [$typeLabel] 구독 시작됨\n지역: $currentArea',
+                        );
+                      } else {
+                        final unsubscribedArea = plateState.getSubscribedArea(type) ?? '알 수 없음';
+                        await Future.sync(() => plateState.unsubscribeType(type));
+                        showSelectedSnackbar(
+                          context,
+                          '⏹ [$typeLabel] 구독 해제됨\n지역: $unsubscribedArea',
+                        );
+                      }
+                    } catch (e) {
+                      showFailedSnackbar(context, '작업 실패: $e');
+                    } finally {
+                      _setBusy(type, false);
+                    }
+                  },
+                ),
+            ],
+          ),
+        ),
+
+        // 잠금 상태 시 시각적 오버레이
+        if (_locked)
+          Positioned.fill(
+            child: Container(
+              color: Colors.white.withOpacity(0.6),
+              child: const Center(
+                child: _LockedBanner(),
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -244,6 +376,78 @@ class _BackEndControllerState extends State<BackEndController> {
       case PlateType.departureCompleted:
         return '출차 완료 (미정산만)';
     }
+  }
+}
+
+/// ===================================
+/// Dev Auth Gate UI
+/// ===================================
+
+class _DevAuthGate extends StatelessWidget {
+  const _DevAuthGate({required this.onLogin});
+
+  final Future<void> Function() onLogin;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _SvcColors.light.withOpacity(.08),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: _SvcColors.light.withOpacity(.35)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: _SvcColors.light.withOpacity(.18),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: const Icon(Icons.admin_panel_settings, color: _SvcColors.dark, size: 28),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  '개발자 인증이 필요합니다',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _SvcColors.dark),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  '해당 페이지 사용은 제한되어 있습니다.',
+                  style: TextStyle(fontSize: 13, color: Colors.black54, height: 1.35),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    onPressed: onLogin,
+                    icon: const Icon(Icons.login),
+                    label: const Text('개발자 로그인', style: TextStyle(fontWeight: FontWeight.w800)),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: _SvcColors.base,
+                      foregroundColor: _SvcColors.fg,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

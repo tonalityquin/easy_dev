@@ -1,9 +1,16 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../routes.dart';
 import '../states/page/hq_state.dart';
 import '../states/page/page_info.dart';
+
+// ✅ Dev Auth (시트는 더 이상 띄우지 않음)
+import '../selector_hubs_package/dev_auth.dart';
+
+// ✅ SecondaryPage (좌 스와이프 시 이동)
+import 'secondary_page.dart';
 
 /// Headquarter 전용 팔레트
 class _HqPalette {
@@ -23,12 +30,9 @@ class HeadquarterPage extends StatelessWidget {
       child: Builder(
         builder: (context) {
           return PopScope(
-            // ✅ 이 화면에서만 뒤로가기(pop) 차단 → 앱 종료 방지
             canPop: false,
             child: Scaffold(
               body: const RefreshableBody(),
-              // ✅ 하단 영역: 탭이 2개 이상이면 BottomNavigationBar + 브랜드 푸터,
-              //    1개 이하이면 브랜드 푸터만 노출
               bottomNavigationBar: const SafeArea(
                 top: false,
                 child: _BottomArea(),
@@ -50,7 +54,6 @@ class _BottomArea extends StatelessWidget {
     final pages = state.pages;
 
     if (pages.length < 2) {
-      // ✅ 탭이 1개 이하면 BottomNavigationBar를 만들지 않음(Assert 회피)
       return const Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -60,7 +63,6 @@ class _BottomArea extends StatelessWidget {
       );
     }
 
-    // ✅ 탭이 2개 이상일 때만 하단 네비게이션 + 푸터
     return const Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -89,7 +91,6 @@ class _HqModeSwitchButton extends StatelessWidget {
             _replaceWithAnimatedRoute(
               context,
               AppRoutes.liteHeadquarterPage,
-              // 서비스 → Lite: 오른쪽에서 들어오는 방향
               beginOffset: const Offset(1.0, 0.0),
             );
           },
@@ -118,48 +119,115 @@ class _BrandFooter extends StatelessWidget {
   }
 }
 
-class RefreshableBody extends StatelessWidget {
+class RefreshableBody extends StatefulWidget {
   const RefreshableBody({super.key});
 
   @override
+  State<RefreshableBody> createState() => _RefreshableBodyState();
+}
+
+class _RefreshableBodyState extends State<RefreshableBody> {
+  // ── 가로 스와이프(우→좌: SecondaryPage 오픈)
+  double _dragDistance = 0.0;
+  bool _openingSecondary = false;
+
+  static const double _hDistanceThreshold = 80.0;
+  static const double _hVelocityThreshold = 1000.0;
+
+  Future<bool> _isDevAuthorized() async {
+    final restored = await DevAuth.restorePrefs(); // TTL 만료 처리 포함
+    return restored.devAuthorized;
+  }
+
+  PageRouteBuilder _slidePage(Widget page, {required bool fromLeft}) {
+    return PageRouteBuilder(
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (_, __, ___) => page,
+      transitionsBuilder: (_, animation, __, child) {
+        final begin = Offset(fromLeft ? -1.0 : 1.0, 0);
+        final end = Offset.zero;
+        final tween = Tween(begin: begin, end: end).chain(
+          CurveTween(curve: Curves.easeInOut),
+        );
+        return SlideTransition(position: animation.drive(tween), child: child);
+      },
+    );
+  }
+
+  Future<void> _openSecondaryIfAuthorized() async {
+    if (_openingSecondary) return;
+    _openingSecondary = true;
+
+    try {
+      final ok = await _isDevAuthorized();
+      if (!mounted) return;
+
+      // ✅ 요구사항: 개발자 인증이 아니면 “아무 반응 없음”
+      if (!ok) return;
+
+      Navigator.of(context).push(
+        _slidePage(const SecondaryPage(), fromLeft: false),
+      );
+    } finally {
+      _openingSecondary = false;
+    }
+  }
+
+  void _handleHorizontalDragEnd(BuildContext context, double velocity) {
+    // 우→좌(좌 스와이프): dragDistance 음수, velocity 음수
+    final fired =
+        (_dragDistance < -_hDistanceThreshold) && (velocity < -_hVelocityThreshold);
+
+    if (fired) {
+      _openSecondaryIfAuthorized();
+    }
+
+    _dragDistance = 0.0;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Consumer<HqState>(
-      builder: (context, state, child) {
-        final pages = state.pages;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      dragStartBehavior: DragStartBehavior.down,
+      onHorizontalDragUpdate: (details) => _dragDistance += details.delta.dx,
+      onHorizontalDragEnd: (details) =>
+          _handleHorizontalDragEnd(context, details.primaryVelocity ?? 0.0),
+      child: Consumer<HqState>(
+        builder: (context, state, child) {
+          final pages = state.pages;
 
-        // ✅ 안전 인덱스(범위 클램프)
-        final safeIndex =
-        pages.isEmpty ? 0 : state.selectedIndex.clamp(0, pages.length - 1);
+          final safeIndex =
+          pages.isEmpty ? 0 : state.selectedIndex.clamp(0, pages.length - 1);
 
-        // ✅ children이 비어 있으면 IndexedStack이 깨지므로 최소 1개는 유지
-        final children = pages.isEmpty
-            ? const <Widget>[SizedBox.shrink()]
-            : pages.map((p) => p.page).toList();
+          final children = pages.isEmpty
+              ? const <Widget>[SizedBox.shrink()]
+              : pages.map((p) => p.page).toList();
 
-        return Stack(
-          children: [
-            IndexedStack(
-              index: safeIndex,
-              children: children,
-            ),
-            if (state.isLoading)
-              Container(
-                color: Colors.white.withOpacity(.35),
-                child: const Center(
-                  child: SizedBox(
-                    width: 28,
-                    height: 28,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 3,
-                      valueColor:
-                      AlwaysStoppedAnimation<Color>(_HqPalette.base),
+          return Stack(
+            children: [
+              IndexedStack(
+                index: safeIndex,
+                children: children,
+              ),
+              if (state.isLoading)
+                Container(
+                  color: Colors.white.withOpacity(.35),
+                  child: const Center(
+                    child: SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 3,
+                        valueColor: AlwaysStoppedAnimation<Color>(_HqPalette.base),
+                      ),
                     ),
                   ),
                 ),
-              ),
-          ],
-        );
-      },
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -173,14 +241,11 @@ class PageBottomNavigation extends StatelessWidget {
       builder: (context, state, child) {
         final pages = state.pages;
 
-        // ✅ 방어적 가드: 2개 미만이면 아무것도 렌더링하지 않음(Assert 예방)
         if (pages.length < 2) {
           return const SizedBox.shrink();
         }
 
-        // ✅ 안전 인덱스 적용
-        final currentIndex =
-        state.selectedIndex.clamp(0, pages.length - 1);
+        final currentIndex = state.selectedIndex.clamp(0, pages.length - 1);
 
         return BottomNavigationBar(
           type: BottomNavigationBarType.fixed,
@@ -205,7 +270,6 @@ class PageBottomNavigation extends StatelessWidget {
   }
 }
 
-/// ✅ 전환 버튼 디자인(요청하신 _layerToggleBtnStyle 디자인 반영)
 ButtonStyle _switchBtnStyle() {
   return ElevatedButton.styleFrom(
     backgroundColor: Colors.white,
@@ -217,7 +281,6 @@ ButtonStyle _switchBtnStyle() {
   );
 }
 
-/// ✅ named route를 유지하면서도, 전환 시 애니메이션을 강제하기 위한 pushReplacement(PageRouteBuilder)
 void _replaceWithAnimatedRoute(
     BuildContext context,
     String routeName, {
