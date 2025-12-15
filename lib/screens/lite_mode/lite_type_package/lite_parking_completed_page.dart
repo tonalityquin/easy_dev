@@ -23,8 +23,8 @@ import '../../../utils/plate_limit/plate_limit_config.dart';
 
 // import '../../utils/usage_reporter.dart';
 
+import '../../../widgets/navigation/lite_top_navigation.dart';
 import 'lite_parking_completed_package/widgets/signature_plate_search_bottom_sheet/lite_parking_completed_search_bottom_sheet.dart';
-import '../../../widgets/navigation/top_navigation.dart';
 import '../../../widgets/container/plate_container.dart';
 
 import 'lite_parking_completed_package/lite_parking_completed_control_buttons.dart';
@@ -470,7 +470,7 @@ class _LiteParkingCompletedPageState extends State<LiteParkingCompletedPage> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: const TopNavigation(),
+          title: const LiteTopNavigation(),
           centerTitle: true,
           backgroundColor: Colors.white,
           foregroundColor: Colors.black,

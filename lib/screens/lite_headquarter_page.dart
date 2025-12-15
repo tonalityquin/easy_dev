@@ -6,8 +6,8 @@ import '../states/page/lite_page_info.dart';
 
 /// Headquarter 전용 팔레트
 class _HqPalette {
-  static const base = Color(0xFF1E88E5); // #1E88E5
-  static const dark = Color(0xFF1565C0); // #1565C0
+  static const base = Color(0xFF546E7A); // #1E88E5
+  static const dark = Color(0xFF37474F); // #1565C0
 }
 
 class LiteHeadquarterPage extends StatelessWidget {

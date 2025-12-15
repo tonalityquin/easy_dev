@@ -4,14 +4,12 @@ class LiteInputAnimatedActionButton extends StatefulWidget {
   final bool isLoading;
   final bool isLocationSelected;
   final Future<void> Function() onPressed;
-  final String? buttonLabel;
 
   const LiteInputAnimatedActionButton({
     super.key,
     required this.isLoading,
     required this.isLocationSelected,
     required this.onPressed,
-    this.buttonLabel,
   });
 
   @override
@@ -57,24 +55,25 @@ class _LiteInputAnimatedActionButtonState extends State<LiteInputAnimatedActionB
     final bool isLoading = widget.isLoading;
     final bool isLocationSelected = widget.isLocationSelected;
 
-    final String label = widget.buttonLabel ??
-        (isLocationSelected ? '입차 완료' : '입차 요청');
+    // ✅ Lite 모드: "입차 완료"만 노출
+    const String label = '입차 완료';
+
+    // ✅ 위치 미선택이면 완료 불가(입차요청 플로우 제거)
+    final bool isDisabled = isLoading || !isLocationSelected;
 
     return ScaleTransition(
       scale: _scaleAnimation,
       child: ElevatedButton(
-        onPressed: isLoading ? null : _handleTap,
+        onPressed: isDisabled ? null : _handleTap,
         style: ElevatedButton.styleFrom(
-          backgroundColor:
-          isLocationSelected ? Colors.indigo[50] : Colors.blueGrey[50],
-          foregroundColor:
-          isLocationSelected ? Colors.indigo[800] : Colors.blueGrey[800],
+          backgroundColor: isLocationSelected ? Colors.indigo[50] : Colors.grey[200],
+          foregroundColor: isLocationSelected ? Colors.indigo[800] : Colors.grey[600],
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 80),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
             side: BorderSide(
-              color: isLocationSelected ? Colors.indigo : Colors.blueGrey,
+              color: isLocationSelected ? Colors.indigo : Colors.grey,
               width: 1.5,
             ),
           ),
@@ -94,10 +93,10 @@ class _LiteInputAnimatedActionButtonState extends State<LiteInputAnimatedActionB
               color: Colors.black,
             ),
           )
-              : Text(
-            key: const ValueKey('buttonText'),
+              : const Text(
+            key: ValueKey('buttonText'),
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
             ),

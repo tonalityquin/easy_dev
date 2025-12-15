@@ -67,18 +67,13 @@ class _LiteInputBottomActionSectionState extends State<LiteInputBottomActionSect
         locationController: widget.controller.locationController,
         onLocationSelected: (location) {
           setState(() {
-            widget.controller.locationController.text = location;
-            widget.controller.isLocationSelected = true;
+            final trimmed = location.trim();
+            widget.controller.locationController.text = trimmed;
+            widget.controller.isLocationSelected = trimmed.isNotEmpty;
           });
         },
       ),
     );
-  }
-
-  VoidCallback _buildLocationAction() {
-    return widget.controller.isLocationSelected
-        ? () => setState(() => widget.controller.clearLocation())
-        : _selectParkingLocation;
   }
 
   @override
@@ -99,7 +94,8 @@ class _LiteInputBottomActionSectionState extends State<LiteInputBottomActionSect
             Expanded(
               child: LiteInputAnimatedParkingButton(
                 isLocationSelected: widget.controller.isLocationSelected,
-                onPressed: _buildLocationAction(),
+                // ✅ 위치 선택/변경만 허용 (clearLocation로 '요청' 상태로 돌아가는 흐름 제거)
+                onPressed: _selectParkingLocation,
               ),
             ),
           ],

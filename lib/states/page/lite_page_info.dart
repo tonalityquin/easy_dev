@@ -3,10 +3,10 @@ import 'package:provider/provider.dart';
 
 import '../../enums/plate_type.dart';
 import '../../screens/lite_mode/lite_hq_package/lite_dash_board.dart';
+import '../../screens/lite_mode/lite_type_package/lite_parking_completed_page.dart';
 import 'lite_page_state.dart';
 
 // ✅ 서비스 모드 기존 페이지 재사용
-import '../../screens/service_mode/type_package/parking_completed_page.dart';
 
 /// 라이트 타입 페이지 탭 메타
 class LitePageInfo {
@@ -28,7 +28,7 @@ final List<LitePageInfo> defaultPages = [
     collectionKey: PlateType.parkingCompleted,
     builder: (context) {
       final liteState = context.read<LitePageState>();
-      return ParkingCompletedPage(key: liteState.parkingCompletedKey);
+      return LiteParkingCompletedPage(key: liteState.parkingCompletedKey);
     },
   ),
 ];

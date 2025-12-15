@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../widgets/navigation/top_navigation.dart';
+import '../../../widgets/navigation/lite_top_navigation.dart';
 import '../lite_type_package/lite_common_widgets/dashboard_bottom_sheet/lite_hq_dash_board_page.dart';
 
 class LiteDashBoard extends StatelessWidget {
@@ -13,7 +13,7 @@ class LiteDashBoard extends StatelessWidget {
       onWillPop: () async => false, // 뒤로가기 차단(기존 동작 유지)
       child: Scaffold(
         appBar: AppBar(
-          title: const TopNavigation(),
+          title: const LiteTopNavigation(),
           centerTitle: true,
           backgroundColor: Colors.white,
           foregroundColor: Colors.black,

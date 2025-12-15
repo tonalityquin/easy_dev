@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-
-import '../../screens/service_mode/type_package/parking_completed_page.dart';
+import '../../screens/lite_mode/lite_type_package/lite_parking_completed_page.dart';
 import 'lite_page_info.dart';
 
 class LitePageState with ChangeNotifier {
@@ -42,7 +41,7 @@ class LitePageState with ChangeNotifier {
 
     // ✅ 같은 탭(홈) 재탭 시: ParkingCompletedPage 리셋
     if (_selectedIndex == index) {
-      ParkingCompletedPage.reset(parkingCompletedKey);
+      LiteParkingCompletedPage.reset(parkingCompletedKey);
       notifyListeners();
       return;
     }
@@ -51,7 +50,7 @@ class LitePageState with ChangeNotifier {
 
     // (확장 대비) 홈 진입 시 리셋 유지
     if (pages[index].title == '홈') {
-      ParkingCompletedPage.reset(parkingCompletedKey);
+      LiteParkingCompletedPage.reset(parkingCompletedKey);
     }
 
     notifyListeners();

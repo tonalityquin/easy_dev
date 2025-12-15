@@ -87,7 +87,6 @@ class LiteInputPlateService {
     required BuildContext context,
     required String plateNumber,
     required String location,
-    required bool isLocationSelected,
     required List<String> imageUrls,
     required String? selectedBill,
     required List<String> selectedStatuses,
@@ -115,11 +114,12 @@ class LiteInputPlateService {
       finalAddAmount = 0;
     }
 
+    // ✅ Lite 모드: 입차 완료만 허용 → isLocationSelected 항상 true로 전달
     return await inputState.registerPlateEntry(
       context: context,
       plateNumber: plateNumber,
       location: location,
-      isLocationSelected: isLocationSelected,
+      isLocationSelected: true,
       areaState: areaState,
       userState: userState,
       billingType: selectedBill,
