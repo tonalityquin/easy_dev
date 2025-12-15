@@ -29,6 +29,23 @@ class _LiteDepartureCompletedUnsettledTabState extends State<LiteDepartureComple
   bool _openCalendar = true;
   bool _openUnsettled = false;
 
+  // ✅ 스트림이 없으므로, 정산 후 즉시 반영을 위한 로컬 리스트
+  late List<PlateModel> _localPlates;
+
+  @override
+  void initState() {
+    super.initState();
+    _localPlates = List<PlateModel>.of(widget.firestorePlates);
+  }
+
+  @override
+  void didUpdateWidget(covariant LiteDepartureCompletedUnsettledTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.firestorePlates, widget.firestorePlates)) {
+      _localPlates = List<PlateModel>.of(widget.firestorePlates);
+    }
+  }
+
   void _toggleCalendar() {
     setState(() {
       if (_openCalendar) {
@@ -53,10 +70,21 @@ class _LiteDepartureCompletedUnsettledTabState extends State<LiteDepartureComple
     });
   }
 
+  void _replaceLocalPlate(PlateModel updated) {
+    final idx = _localPlates.indexWhere((p) => p.id == updated.id);
+    if (idx == -1) return;
+    setState(() {
+      _localPlates[idx] = updated;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final plateState = context.watch<LitePlateState>();
-    final total = widget.firestorePlates.length;
+
+    // ✅ 미정산만 노출
+    final unsettledPlates = _localPlates.where((p) => p.isLockedFee == false).toList();
+    final total = unsettledPlates.length;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -91,40 +119,48 @@ class _LiteDepartureCompletedUnsettledTabState extends State<LiteDepartureComple
               isOpen: _openUnsettled,
               child: (total == 0)
                   ? const _EmptyState(
-                      icon: Icons.inbox_outlined,
-                      title: '표시할 번호판이 없습니다',
-                      message: '달력을 바꾸거나 검색을 사용해 보세요.',
-                    )
+                icon: Icons.inbox_outlined,
+                title: '표시할 번호판이 없습니다',
+                message: '달력을 바꾸거나 검색을 사용해 보세요.',
+              )
                   : Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: PlateContainer(
-                        data: widget.firestorePlates,
-                        collection: PlateType.departureCompleted,
-                        filterCondition: (_) => true,
-                        onPlateTap: (plateNumber, area) async {
-                          await plateState.togglePlateIsSelected(
-                            collection: PlateType.departureCompleted,
-                            plateNumber: plateNumber,
-                            userName: widget.userName,
-                            onError: (msg) => showFailedSnackbar(context, msg),
-                          );
+                padding: const EdgeInsets.all(12),
+                child: PlateContainer(
+                  data: unsettledPlates,
+                  collection: PlateType.departureCompleted,
+                  // ✅ 미정산만 통과
+                  filterCondition: (p) => p.isLockedFee == false,
+                  onPlateTap: (plateNumber, area) async {
+                    await plateState.togglePlateIsSelected(
+                      collection: PlateType.departureCompleted,
+                      plateNumber: plateNumber,
+                      userName: widget.userName,
+                      onError: (msg) => showFailedSnackbar(context, msg),
+                    );
 
-                          final currentSelected = plateState.getSelectedPlate(
-                            PlateType.departureCompleted,
-                            widget.userName,
-                          );
+                    final currentSelected = plateState.getSelectedPlate(
+                      PlateType.departureCompleted,
+                      widget.userName,
+                    );
 
-                          if (currentSelected != null &&
-                              currentSelected.isSelected &&
-                              currentSelected.plateNumber == plateNumber) {
-                            await showLiteDepartureCompletedStatusBottomSheet(
-                              context: context,
-                              plate: currentSelected,
-                            );
-                          }
-                        },
-                      ),
-                    ),
+                    if (currentSelected != null &&
+                        currentSelected.isSelected &&
+                        currentSelected.plateNumber == plateNumber) {
+                      // ✅ 변경: performedBy 전달 + 반환값(PlateModel?) 수신
+                      final PlateModel? updated = await showLiteDepartureCompletedStatusBottomSheet(
+                        context: context,
+                        plate: currentSelected,
+                        performedBy: widget.userName,
+                      );
+
+                      // ✅ 정산 성공 등으로 업데이트된 plate가 반환되면 로컬 반영
+                      if (updated != null) {
+                        _replaceLocalPlate(updated);
+                      }
+                    }
+                  },
+                ),
+              ),
             ),
           ],
         ),
