@@ -5,15 +5,14 @@
 // - 토널 카드(tonal)와 라운딩, 여백 정리, 더 읽기 쉬운 섹션 타이틀
 // - RefreshIndicator(끌어내려 새로고침) + 마지막 동기화 시각 뱃지
 // - 스위치 토글, 액션 버튼 일관된 높이/패딩
-// - 스프레드시트 ID 편집: 풀스크린 화이트 바텀시트 유지 + UX 개선
 // - 스낵바는 snackbar_helper 사용
 // - 잠금(LOCK) 시 시각적 오버레이, 입력 차단 유지
 // - 토글 연타 방지, 비동기 예외 처리 보강
 //
-// 동작적으로는 기존과 동일하며, 레이아웃/스타일만 개선되었습니다.
+// ✅ 변경: "업로드 스프레드시트" / "업무 종료 보고 스프레드시트" 섹션 및 관련 로직 삭제
+// 동작적으로는 기존과 동일하며, 레이아웃/스타일은 유지됩니다.
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -22,7 +21,6 @@ import '../../../../states/area/area_state.dart';
 import '../../../../../states/location/location_state.dart';
 import '../../../../states/bill/bill_state.dart';
 import '../../../../utils/tts/tts_user_filters.dart';
-import '../../../../utils/api/sheets_config.dart';
 import '../../../../utils/tts/chat_tts_listener_service.dart';
 import '../../../../utils/tts/plate_tts_listener_service.dart'; // ✅ PlateTTS setEnabled / updateFilters
 import '../../../../utils/snackbar_helper.dart';
@@ -57,12 +55,6 @@ class _DashboardSettingState extends State<DashboardSetting> {
   // 새로고침 로딩 상태
   bool _refreshing = false;
 
-  // 업로드용 스프레드시트 ID 표시/관리용 상태 (출퇴근)
-  String? _commuteSheetId;
-
-  // ✅ 업무 종료 보고용 스프레드시트 ID 표시/관리용 상태 (신규)
-  String? _endReportSheetId;
-
   // 화면 잠금(기본값 true)
   bool _locked = true;
 
@@ -94,8 +86,6 @@ class _DashboardSettingState extends State<DashboardSetting> {
 
   Future<void> _load() async {
     final loaded = await TtsUserFilters.load();
-    final sheetId = await SheetsConfig.getCommuteSheetId();
-    final endSheetId = await SheetsConfig.getEndReportSheetId(); // ⬅️ 추가
 
     // 시작 시 Chat TTS on/off도 즉시 반영
     try {
@@ -126,8 +116,6 @@ class _DashboardSettingState extends State<DashboardSetting> {
     if (!mounted) return;
     setState(() {
       _filters = loaded;
-      _commuteSheetId = sheetId;
-      _endReportSheetId = endSheetId; // ⬅️ 추가
       _loading = false;
     });
   }
@@ -220,255 +208,13 @@ class _DashboardSettingState extends State<DashboardSetting> {
     );
   }
 
-  // 스프레드시트 ID/URL 삽입(변경) 바텀시트 - 풀스크린 흰 배경/키보드 패딩 (출퇴근용)
-  Future<void> _openSetCommuteSheetIdSheet() async {
-    final current = await SheetsConfig.getCommuteSheetId();
-    final textCtrl = TextEditingController(text: current ?? '');
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true, // 상단 안전영역
-      backgroundColor: Colors.white, // 전면 흰 배경
-      builder: (ctx) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 1.0, // 최상단까지
-          maxChildSize: 1.0,
-          minChildSize: 0.4,
-          builder: (ctx, sc) => SingleChildScrollView(
-            controller: sc,
-            child: Padding(
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(ctx).viewInsets.bottom + 20, // 키보드 패딩
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.assignment_outlined, color: _SvcColors.dark),
-                      const SizedBox(width: 8),
-                      const Text(
-                        '업로드용 Google Sheets',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        tooltip: '닫기',
-                        onPressed: () => Navigator.pop(ctx),
-                        icon: const Icon(Icons.close_rounded),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: textCtrl,
-                    keyboardType: TextInputType.url,
-                    textInputAction: TextInputAction.done,
-                    decoration: const InputDecoration(
-                      labelText: '스프레드시트 ID 또는 URL (붙여넣기 가능)',
-                      helperText: 'URL 전체를 붙여넣어도 ID만 자동 추출됩니다.',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.link_rounded, color: _SvcColors.dark),
-                      focusedBorder: OutlineInputBorder(
-                        borderSide: BorderSide(color: _SvcColors.base, width: 1.2),
-                        borderRadius: BorderRadius.all(Radius.circular(4)),
-                      ),
-                    ),
-                    onSubmitted: (_) => FocusScope.of(ctx).unfocus(),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.copy_rounded, color: _SvcColors.dark),
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(color: _SvcColors.light.withOpacity(.45)),
-                          ),
-                          onPressed: () async {
-                            final raw = textCtrl.text.trim();
-                            if (raw.isEmpty) return;
-                            await Clipboard.setData(ClipboardData(text: raw));
-                            if (!mounted) return;
-                            showSuccessSnackbar(context, '입력값을 복사했습니다.');
-                          },
-                          label: const Text('복사', style: TextStyle(color: _SvcColors.dark)),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.save),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _SvcColors.base,
-                            foregroundColor: _SvcColors.fg,
-                          ),
-                          onPressed: () async {
-                            final raw = textCtrl.text.trim();
-                            if (raw.isEmpty) return;
-                            final id = SheetsConfig.extractSpreadsheetId(raw);
-                            await SheetsConfig.setCommuteSheetId(id);
-                            if (!mounted) return;
-                            setState(() => _commuteSheetId = id);
-                            Navigator.pop(ctx);
-                            showSuccessSnackbar(context, '업로드용 스프레드시트 ID가 저장되었습니다.');
-                          },
-                          label: const Text('저장'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // 스프레드시트 ID 초기화 (출퇴근용)
-  Future<void> _clearCommuteSheetId() async {
-    await SheetsConfig.clearCommuteSheetId();
-    if (!mounted) return;
-    setState(() => _commuteSheetId = null);
-    showSelectedSnackbar(context, '업로드용 스프레드시트 ID를 초기화했습니다.');
-  }
-
-  // 스프레드시트 ID/URL 삽입(변경) 바텀시트 (업무 종료 보고용)
-  Future<void> _openSetEndReportSheetIdSheet() async {
-    final current = await SheetsConfig.getEndReportSheetId();
-    final textCtrl = TextEditingController(text: current ?? '');
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.white,
-      builder: (ctx) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 1.0,
-          maxChildSize: 1.0,
-          minChildSize: 0.4,
-          builder: (ctx, sc) => SingleChildScrollView(
-            controller: sc,
-            child: Padding(
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.assignment_turned_in_outlined, color: _SvcColors.dark),
-                      const SizedBox(width: 8),
-                      const Text(
-                        '업무 종료 보고용 Google Sheets',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const Spacer(),
-                      IconButton(
-                        tooltip: '닫기',
-                        onPressed: () => Navigator.pop(ctx),
-                        icon: const Icon(Icons.close_rounded),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: textCtrl,
-                    keyboardType: TextInputType.url,
-                    textInputAction: TextInputAction.done,
-                    decoration: const InputDecoration(
-                      labelText: '스프레드시트 ID 또는 URL (붙여넣기 가능)',
-                      helperText: 'URL 전체를 붙여넣어도 ID만 자동 추출됩니다.',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.link_rounded, color: _SvcColors.dark),
-                      focusedBorder: OutlineInputBorder(
-                        borderSide: BorderSide(color: _SvcColors.base, width: 1.2),
-                        borderRadius: BorderRadius.all(Radius.circular(4)),
-                      ),
-                    ),
-                    onSubmitted: (_) => FocusScope.of(ctx).unfocus(),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.copy_rounded, color: _SvcColors.dark),
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(color: _SvcColors.light.withOpacity(.45)),
-                          ),
-                          onPressed: () async {
-                            final raw = textCtrl.text.trim();
-                            if (raw.isEmpty) return;
-                            await Clipboard.setData(ClipboardData(text: raw));
-                            if (!mounted) return;
-                            showSuccessSnackbar(context, '입력값을 복사했습니다.');
-                          },
-                          label: const Text('복사', style: TextStyle(color: _SvcColors.dark)),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.save),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _SvcColors.base,
-                            foregroundColor: _SvcColors.fg,
-                          ),
-                          onPressed: () async {
-                            final raw = textCtrl.text.trim();
-                            if (raw.isEmpty) return;
-                            final id = SheetsConfig.extractSpreadsheetId(raw);
-                            await SheetsConfig.setEndReportSheetId(id);
-                            if (!mounted) return;
-                            setState(() => _endReportSheetId = id);
-                            Navigator.pop(ctx);
-                            showSuccessSnackbar(context, '업무 종료 보고 스프레드시트 ID가 저장되었습니다.');
-                          },
-                          label: const Text('저장'),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // 스프레드시트 ID 초기화 (업무 종료 보고용)
-  Future<void> _clearEndReportSheetId() async {
-    await SheetsConfig.clearEndReportSheetId();
-    if (!mounted) return;
-    setState(() => _endReportSheetId = null);
-    showSelectedSnackbar(context, '업무 종료 보고 스프레드시트 ID를 초기화했습니다.');
-  }
-
   String _formatLastSync(DateTime dt) {
     String two(int n) => n.toString().padLeft(2, '0');
     final d = dt.toLocal();
     return '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}';
   }
 
-  // ⬇️ 좌측 상단(11시) 고정 라벨: 'controller'
+  // ⬇️ 좌측 상단(11시) 고정 라벨: 'Setting'
   Widget _buildScreenTag(BuildContext context) {
     final base = Theme.of(context).textTheme.labelSmall;
     final style = (base ??
@@ -587,112 +333,6 @@ class _DashboardSettingState extends State<DashboardSetting> {
         ),
       ),
 
-      // 업로드용 스프레드시트 (출퇴근)
-      _Section(
-        title: '업로드 스프레드시트(ID)',
-        icon: Icons.assignment_outlined,
-        subtitle: 'URL 전체를 붙여넣어도 ID만 자동 추출됩니다.',
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _InfoRow(
-              label: '현재',
-              value: (_commuteSheetId == null || _commuteSheetId!.isEmpty) ? '(미설정)' : _commuteSheetId!,
-              valueStyle: const TextStyle(fontWeight: FontWeight.w700),
-              actions: [
-                IconButton(
-                  tooltip: '복사',
-                  onPressed: (_commuteSheetId == null || _commuteSheetId!.isEmpty)
-                      ? null
-                      : () async {
-                    await Clipboard.setData(ClipboardData(text: _commuteSheetId!));
-                    if (!mounted) return;
-                    showSuccessSnackbar(context, '스프레드시트 ID를 복사했습니다.');
-                  },
-                  icon: const Icon(Icons.copy_rounded, color: _SvcColors.dark),
-                ),
-                IconButton(
-                  tooltip: '초기화',
-                  onPressed:
-                  (_commuteSheetId == null || _commuteSheetId!.isEmpty) ? null : _clearCommuteSheetId,
-                  icon: const Icon(Icons.delete_outline_rounded, color: _SvcColors.dark),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _openSetCommuteSheetIdSheet,
-                    icon: const Icon(Icons.link),
-                    label: const Text('ID/URL 삽입 또는 변경'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _SvcColors.base,
-                      foregroundColor: _SvcColors.fg,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-
-      // ===================== 신규 섹션: 업무 종료 보고 시트 =====================
-      _Section(
-        title: '업무 종료 보고 스프레드시트(ID)',
-        icon: Icons.assignment_turned_in_outlined,
-        subtitle: 'URL 전체를 붙여넣어도 ID만 자동 추출됩니다.',
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _InfoRow(
-              label: '현재',
-              value: (_endReportSheetId == null || _endReportSheetId!.isEmpty)
-                  ? '(미설정)'
-                  : _endReportSheetId!,
-              valueStyle: const TextStyle(fontWeight: FontWeight.w700),
-              actions: [
-                IconButton(
-                  tooltip: '복사',
-                  onPressed: (_endReportSheetId == null || _endReportSheetId!.isEmpty)
-                      ? null
-                      : () async {
-                    await Clipboard.setData(ClipboardData(text: _endReportSheetId!));
-                    if (!mounted) return;
-                    showSuccessSnackbar(context, '스프레드시트 ID를 복사했습니다.');
-                  },
-                  icon: const Icon(Icons.copy_rounded, color: _SvcColors.dark),
-                ),
-                IconButton(
-                  tooltip: '초기화',
-                  onPressed:
-                  (_endReportSheetId == null || _endReportSheetId!.isEmpty) ? null : _clearEndReportSheetId,
-                  icon: const Icon(Icons.delete_outline_rounded, color: _SvcColors.dark),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _openSetEndReportSheetIdSheet,
-                    icon: const Icon(Icons.link),
-                    label: const Text('ID/URL 삽입 또는 변경'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _SvcColors.base,
-                      foregroundColor: _SvcColors.fg,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-
       // 데이터 새로고침
       _Section(
         title: '데이터 새로고침',
@@ -700,9 +340,7 @@ class _DashboardSettingState extends State<DashboardSetting> {
         subtitle: '주차 구역/정산 데이터를 수동으로 동기화합니다.',
         trailing: _refreshing
             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-            : (_lastRefreshAt != null
-            ? _Pill(text: '마지막: ${_formatLastSync(_lastRefreshAt!)}')
-            : null),
+            : (_lastRefreshAt != null ? _Pill(text: '마지막: ${_formatLastSync(_lastRefreshAt!)}') : null),
         child: Row(
           children: [
             Expanded(
@@ -769,9 +407,7 @@ class _DashboardSettingState extends State<DashboardSetting> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          '대시보드 설정',
-        ),
+        title: const Text('대시보드 설정'),
         backgroundColor: Colors.white,
         foregroundColor: Colors.black87,
         elevation: 0,
@@ -1003,34 +639,6 @@ class _SwitchTile extends StatelessWidget {
         activeColor: _SvcColors.base,
         onChanged: onChanged,
       ),
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.label,
-    required this.value,
-    this.valueStyle,
-    this.actions,
-  });
-
-  final String label;
-  final String value;
-  final TextStyle? valueStyle;
-  final List<Widget>? actions;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Text(label, style: text.bodySmall?.copyWith(color: Colors.black54)),
-        const SizedBox(width: 10),
-        Expanded(child: Text(value, style: valueStyle)),
-        if (actions != null) ...actions!,
-      ],
     );
   }
 }

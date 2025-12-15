@@ -1,29 +1,29 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../../models/plate_model.dart';
-import '../widgets/lite_departure_completed_status_bottom_sheet.dart';
 import 'keypad/animated_keypad.dart';
-import 'widgets/lite_departure_completed_plate_number_display.dart';
-import 'widgets/lite_departure_completed_plate_search_header.dart';
-import 'widgets/lite_departure_completed_plate_search_results.dart';
-import 'widgets/lite_departure_completed_search_button.dart';
+import 'departure_completed_status_bottom_sheet.dart';
+import 'widgets/departure_completed_plate_number_display.dart';
+import 'widgets/departure_completed_plate_search_header.dart';
+import 'widgets/departure_completed_plate_search_results.dart';
+import 'widgets/departure_completed_search_button.dart';
 import '../../../../../../repositories/plate_repo_services/firestore_plate_repository.dart';
 
-class LiteDepartureCompletedSearchBottomSheet extends StatefulWidget {
+class DepartureCompletedSearchBottomSheet extends StatefulWidget {
   final void Function(String) onSearch;
   final String area;
 
-  const LiteDepartureCompletedSearchBottomSheet({
+  const DepartureCompletedSearchBottomSheet({
     super.key,
     required this.onSearch,
     required this.area,
   });
 
   @override
-  State<LiteDepartureCompletedSearchBottomSheet> createState() => _LiteDepartureCompletedSearchBottomSheetState();
+  State<DepartureCompletedSearchBottomSheet> createState() => _DepartureCompletedSearchBottomSheetState();
 }
 
-class _LiteDepartureCompletedSearchBottomSheetState extends State<LiteDepartureCompletedSearchBottomSheet>
+class _DepartureCompletedSearchBottomSheetState extends State<DepartureCompletedSearchBottomSheet>
     with SingleTickerProviderStateMixin {
   // ✅ 요청 팔레트 (BlueGrey)
   static const Color _base = Color(0xFF546E7A); // BlueGrey 600
@@ -132,7 +132,7 @@ class _LiteDepartureCompletedSearchBottomSheetState extends State<LiteDepartureC
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Row(
                           children: [
-                            const Expanded(child: LiteDepartureCompletedPlateSearchHeader()),
+                            const Expanded(child: DepartureCompletedPlateSearchHeader()),
                             IconButton(
                               tooltip: '닫기',
                               onPressed: () => Navigator.pop(context),
@@ -154,7 +154,7 @@ class _LiteDepartureCompletedSearchBottomSheetState extends State<LiteDepartureC
                               title: '번호 4자리 입력',
                               subtitle: '예: 1234',
                               accent: _base,
-                              child: LiteDepartureCompletedPlateNumberDisplay(
+                              child: DepartureCompletedPlateNumberDisplay(
                                 controller: _controller,
                                 isValidPlate: isValidPlate,
                               ),
@@ -182,7 +182,7 @@ class _LiteDepartureCompletedSearchBottomSheetState extends State<LiteDepartureC
                           valueListenable: _controller,
                           builder: (context, value, child) {
                             final valid = isValidPlate(value.text);
-                            return LiteDepartureCompletedSearchButton(
+                            return DepartureCompletedSearchButton(
                               isValid: valid,
                               isLoading: _isLoading,
                               onPressed: valid
@@ -256,7 +256,7 @@ class _LiteDepartureCompletedSearchBottomSheetState extends State<LiteDepartureC
       );
     }
 
-    return LiteDepartureCompletedPlateSearchResults(
+    return DepartureCompletedPlateSearchResults(
       results: _results,
       onSelect: (selected) {
         if (_navigating) return;
@@ -265,7 +265,7 @@ class _LiteDepartureCompletedSearchBottomSheetState extends State<LiteDepartureC
         Navigator.pop(context);
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          showLiteDepartureCompletedStatusBottomSheet(
+          showDepartureCompletedStatusBottomSheet(
             context: rootContext,
             plate: selected,
           );
