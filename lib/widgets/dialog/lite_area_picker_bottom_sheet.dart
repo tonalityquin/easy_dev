@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../routes.dart';
 import '../../states/area/area_state.dart';
-import '../../states/plate/plate_state.dart';
+import '../../states/plate/lite_plate_state.dart';
 import '../../states/user/user_state.dart';
 
 // import '../../utils/usage_reporter.dart';
@@ -20,7 +20,7 @@ const fg = Color(0xFFFFFFFF); // onPrimary
 void liteAreaPickerBottomSheet({
   required BuildContext context,
   required AreaState areaState,
-  required PlateState plateState,
+  required LitePlateState litePlateState,
 }) {
   final userState = context.read<UserState>();
   final userAreas = userState.user?.areas ?? [];
@@ -168,13 +168,13 @@ void liteAreaPickerBottomSheet({
 
                             if (isHeadquarter) {
                               // ✅ HQ 전환: 모든 구독 해제 → HQ 페이지로
-                              plateState.disableAll();
+                              litePlateState.disableAll();
                               Navigator.pushReplacementNamed(rootContext, AppRoutes.liteHeadquarterPage);
                             } else {
                               // ✅ 필드 전환: 구독 활성화(최초 진입) + [지역 변경 시에만] 동기화 → 필드 페이지
-                              plateState.enableForTypePages();
+                              litePlateState.enableForTypePages();
                               if (__beforeArea != areaState.currentArea) {
-                                plateState.syncWithAreaState(); // 👈 실제 변경된 경우에만 재구독
+                                litePlateState.syncWithAreaState(); // 👈 실제 변경된 경우에만 재구독
                               }
                               Navigator.pushReplacementNamed(rootContext, AppRoutes.liteTypePage);
                             }

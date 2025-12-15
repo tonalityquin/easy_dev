@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../enums/plate_type.dart';
-import '../../../../states/plate/plate_state.dart';
+import '../../../../states/plate/lite_plate_state.dart';
 import '../../../../states/user/user_state.dart';
 import 'widgets/lite_departure_completed_status_bottom_sheet.dart';
 
@@ -20,7 +20,7 @@ class LiteDepartureCompletedControlButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final plateState = context.watch<PlateState>();
+    final plateState = context.watch<LitePlateState>();
     final userName = context.read<UserState>().name;
     final selectedPlate =
     plateState.getSelectedPlate(PlateType.departureCompleted, userName);

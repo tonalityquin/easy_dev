@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../states/area/area_state.dart';
-import '../../states/plate/plate_state.dart';
+import '../../states/plate/lite_plate_state.dart';
 import '../dialog/lite_area_picker_bottom_sheet.dart';
 
 class LiteTopNavigation extends StatelessWidget {
@@ -17,7 +17,7 @@ class LiteTopNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final areaState = context.watch<AreaState>();
-    final plateState = context.read<PlateState>();
+    final plateState = context.read<LitePlateState>();
     final selectedArea = areaState.currentArea;
 
     return Material(
@@ -27,7 +27,7 @@ class LiteTopNavigation extends StatelessWidget {
             ? () => liteAreaPickerBottomSheet(
           context: context,
           areaState: areaState,
-          plateState: plateState,
+          litePlateState: plateState,
         )
             : null,
         splashColor: Colors.grey.withOpacity(0.2),

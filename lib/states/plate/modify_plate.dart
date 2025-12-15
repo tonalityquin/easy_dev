@@ -1,4 +1,3 @@
-// lib/states/plate/modify_plate.dart
 import 'package:flutter/material.dart';
 import '../../models/plate_model.dart';
 

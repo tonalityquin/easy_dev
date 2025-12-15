@@ -5,8 +5,8 @@ import 'package:provider/provider.dart';
 import '../../../enums/plate_type.dart';
 import '../../../models/plate_model.dart';
 import '../../../states/calendar/field_calendar_state.dart';
-import '../../../states/plate/plate_state.dart';
 import '../../../states/area/area_state.dart';
+import '../../../states/plate/lite_plate_state.dart';
 import '../../../states/user/user_state.dart';
 
 import 'lite_departure_completed_package/lite_departure_completed_tab_settled.dart';
@@ -59,7 +59,7 @@ class _LiteDepartureCompletedBottomSheetState extends State<LiteDepartureComplet
 
   @override
   Widget build(BuildContext context) {
-    final plateState = context.watch<PlateState>();
+    final plateState = context.watch<LitePlateState>();
     final userName = context.read<UserState>().name;
     final areaState = context.watch<AreaState>();
 

@@ -27,6 +27,8 @@ import '../states/page/page_state.dart';
 
 // ⛔️ 리팩터링 후 불필요 → 삭제
 // import '../states/plate/input_log_plate.dart';
+import '../states/plate/lite_filter_plate.dart';
+import '../states/plate/lite_plate_state.dart';
 import '../states/plate/modify_plate.dart';
 import '../states/plate/input_plate.dart';
 import '../states/plate/plate_state.dart';
@@ -60,7 +62,17 @@ final List<SingleChildWidget> stateProviders = [
     },
   ),
   ChangeNotifierProvider(
+    create: (context) {
+      final repo = context.read<PlateRepository>();
+      final area = context.read<AreaState>();
+      return LitePlateState(repo, area);
+    },
+  ),
+  ChangeNotifierProvider(
     create: (context) => FilterPlate(context.read<PlateState>()),
+  ),
+  ChangeNotifierProvider(
+    create: (context) => LiteFilterPlate(context.read<LitePlateState>()),
   ),
   Provider(
     create: (context) => DeletePlate(context.read<PlateRepository>(), {}),

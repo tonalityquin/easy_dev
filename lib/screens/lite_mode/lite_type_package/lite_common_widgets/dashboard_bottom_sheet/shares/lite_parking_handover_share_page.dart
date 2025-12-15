@@ -24,7 +24,7 @@ class _Palette {
 Future<void> _shareParkingTableOnce({
   required String roomId,
   required String senderName,
-  required List<ParkingCompletedRecord> rows,
+  required List<LiteParkingCompletedRecord> rows,
 }) async {
   final firestore = FirebaseFirestore.instance;
 
@@ -77,13 +77,13 @@ Future<void> _importLatestShare({
       return;
     }
 
-    final repo = ParkingCompletedRepository();
+    final repo = LiteParkingCompletedRepository();
     int insertedCount = 0;
 
     for (final item in recordsJson) {
       if (item is Map<String, dynamic>) {
         final map = Map<String, Object?>.from(item);
-        final record = ParkingCompletedRecord.fromMap(map);
+        final record = LiteParkingCompletedRecord.fromMap(map);
 
         // insert는 UNIQUE(plate, area, created_at) + CONFLICT IGNORE 이므로
         // 중복이면 0, 새로 들어가면 1 레코드 삽입됨
@@ -148,7 +148,7 @@ class _ParkingHandoverSharePageState extends State<ParkingHandoverSharePage> {
     });
 
     try {
-      final repo = ParkingCompletedRepository();
+      final repo = LiteParkingCompletedRepository();
       final rows = await repo.listAll(limit: 500);
 
       if (rows.isEmpty) {

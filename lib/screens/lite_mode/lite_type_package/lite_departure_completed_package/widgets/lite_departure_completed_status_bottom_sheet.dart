@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../../../enums/plate_type.dart';
 import '../../../../../models/plate_model.dart';
 import '../../../../../repositories/plate_repo_services/plate_repository.dart';
-import '../../../../../states/plate/plate_state.dart';
+import '../../../../../states/plate/lite_plate_state.dart';
 import '../../../../../states/user/user_state.dart';
 import '../../../../../utils/snackbar_helper.dart';
 import '../../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
@@ -84,7 +84,7 @@ Future<void> showLiteDepartureCompletedStatusBottomSheet({
                       onPressed: () async {
                         final userName = rootContext.read<UserState>().name;
                         final repo = rootContext.read<PlateRepository>();
-                        final plateState = rootContext.read<PlateState>();
+                        final plateState = rootContext.read<LitePlateState>();
                         final firestore = FirebaseFirestore.instance;
 
                         // 사전 조건: 정산 타입 확인 (Firebase 아님 → 계측 제외)

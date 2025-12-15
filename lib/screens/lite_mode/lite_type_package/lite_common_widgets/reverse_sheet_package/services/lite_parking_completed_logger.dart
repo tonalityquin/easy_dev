@@ -2,12 +2,12 @@ import '../models/lite_parking_completed_record.dart';
 import '../repositories/lite_parking_completed_repository.dart';
 import 'lite_status_mapping.dart';
 
-class ParkingCompletedLogger {
-  ParkingCompletedLogger._();
+class LiteParkingCompletedLogger {
+  LiteParkingCompletedLogger._();
 
-  static final ParkingCompletedLogger instance = ParkingCompletedLogger._();
+  static final LiteParkingCompletedLogger instance = LiteParkingCompletedLogger._();
 
-  final _repo = ParkingCompletedRepository();
+  final _repo = LiteParkingCompletedRepository();
 
   Future<void> maybeLogEntryCompleted({
     required String plateNumber,
@@ -21,7 +21,7 @@ class ParkingCompletedLogger {
     if (!entryReqToDone) return;
 
     await _repo.insert(
-      ParkingCompletedRecord(
+      LiteParkingCompletedRecord(
         plateNumber: plateNumber,
         location: location,
         createdAt: DateTime.now(),

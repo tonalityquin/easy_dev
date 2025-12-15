@@ -12,8 +12,8 @@ import '../../../models/plate_model.dart';
 import '../../../enums/plate_type.dart';
 
 import '../../../states/area/area_state.dart';
-import '../../../states/plate/filter_plate.dart';
-import '../../../states/plate/plate_state.dart';
+import '../../../states/plate/lite_filter_plate.dart';
+import '../../../states/plate/lite_plate_state.dart';
 import '../../../states/plate/movement_plate.dart';
 import '../../../states/user/user_state.dart';
 
@@ -110,7 +110,7 @@ class _LiteParkingCompletedPageState extends State<LiteParkingCompletedPage> {
   }
 
   void _resetParkingAreaFilter(BuildContext context) {
-    context.read<FilterPlate>().clearLocationSearchQuery();
+    context.read<LiteFilterPlate>().clearLocationSearchQuery();
     setState(() {
       _selectedParkingArea = null;
       _mode = LiteParkingViewMode.status;
@@ -122,7 +122,7 @@ class _LiteParkingCompletedPageState extends State<LiteParkingCompletedPage> {
   void _handleDepartureRequested(BuildContext context) {
     final movementPlate = context.read<MovementPlate>();
     final userName = context.read<UserState>().name;
-    final plateState = context.read<PlateState>();
+    final plateState = context.read<LitePlateState>();
     final selectedPlate = plateState.getSelectedPlate(PlateType.parkingCompleted, userName);
 
     if (selectedPlate != null) {
@@ -438,7 +438,7 @@ class _LiteParkingCompletedPageState extends State<LiteParkingCompletedPage> {
     return WillPopScope(
       // 시스템/뒤로가기 처리: 선택/모드 단계적으로 해제
       onWillPop: () async {
-        final plateState = context.read<PlateState>();
+        final plateState = context.read<LitePlateState>();
         final userName = context.read<UserState>().name;
         final selectedPlate = plateState.getSelectedPlate(PlateType.parkingCompleted, userName);
 
@@ -500,7 +500,7 @@ class _LiteParkingCompletedPageState extends State<LiteParkingCompletedPage> {
   }
 
   Widget _buildBody(BuildContext context) {
-    final plateState = context.watch<PlateState>();
+    final plateState = context.watch<LitePlateState>();
     final userName = context.read<UserState>().name;
 
     switch (_mode) {
@@ -546,7 +546,7 @@ class _LiteParkingCompletedPageState extends State<LiteParkingCompletedPage> {
               collection: PlateType.parkingCompleted,
               filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
               onPlateTap: (plateNumber, area) {
-                context.read<PlateState>().togglePlateIsSelected(
+                context.read<LitePlateState>().togglePlateIsSelected(
                       collection: PlateType.parkingCompleted,
                       plateNumber: plateNumber,
                       userName: userName,

@@ -1,4 +1,3 @@
-// lib/screens/type_package/parking_completed_package/ui/parking_completed_table_sheet.dart
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show FontFeature;
@@ -42,7 +41,7 @@ class ParkingCompletedRealtimeTabGate {
 ///
 /// ✅ 변경: 로그인 계정(UserState)의 currentArea(우선) / AreaState.currentArea(차선)를 사용해
 ///         해당 area 문서의 데이터만 조회하도록 area를 주입합니다.
-Future<void> showParkingCompletedTableTopSheet(BuildContext context) async {
+Future<void> showLiteParkingCompletedTableTopSheet(BuildContext context) async {
   // 1) 로그인 계정 currentArea 우선
   final userArea = context.read<UserState>().currentArea.trim();
 
@@ -56,28 +55,28 @@ Future<void> showParkingCompletedTableTopSheet(BuildContext context) async {
     return;
   }
 
-  await showReversePageTopSheet(
+  await showLiteReversePageTopSheet(
     context: context,
     maxHeightFactor: 0.95,
-    builder: (_) => ParkingCompletedTableSheet(area: area),
+    builder: (_) => LiteParkingCompletedTableSheet(area: area),
   );
 }
 
 /// 로컬(SQLite) + 실시간(Firestore view) 탭 제공
 /// ✅ 변경: area 주입(해당 지역 문서만 조회)
-class ParkingCompletedTableSheet extends StatefulWidget {
+class LiteParkingCompletedTableSheet extends StatefulWidget {
   final String area;
 
-  const ParkingCompletedTableSheet({
+  const LiteParkingCompletedTableSheet({
     super.key,
     required this.area,
   });
 
   @override
-  State<ParkingCompletedTableSheet> createState() => _ParkingCompletedTableSheetState();
+  State<LiteParkingCompletedTableSheet> createState() => _LiteParkingCompletedTableSheetState();
 }
 
-class _ParkingCompletedTableSheetState extends State<ParkingCompletedTableSheet> with SingleTickerProviderStateMixin {
+class _LiteParkingCompletedTableSheetState extends State<LiteParkingCompletedTableSheet> with SingleTickerProviderStateMixin {
   late final TabController _tabCtrl;
 
   bool _realtimeTabEnabled = false; // ✅ 기본 OFF
@@ -352,7 +351,7 @@ class _ParkingCompletedTableTab extends StatefulWidget {
 
 class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> with AutomaticKeepAliveClientMixin {
   // 로컬(SQLite) repo
-  final _localRepo = ParkingCompletedRepository();
+  final _localRepo = LiteParkingCompletedRepository();
 
   // 실시간(Firestore view) repo
   final _realtimeRepo = _ParkingCompletedViewRepository();

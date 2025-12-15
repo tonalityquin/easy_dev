@@ -6,7 +6,7 @@ import '../../../../enums/plate_type.dart';
 import '../../../../models/plate_model.dart';
 import '../../../../states/area/area_state.dart';
 import '../../../../states/calendar/field_calendar_state.dart';
-import '../../../../states/plate/plate_state.dart';
+import '../../../../states/plate/lite_plate_state.dart';
 import '../../../../utils/snackbar_helper.dart';
 
 class LiteDepartureCompletedFieldCalendarInline extends StatefulWidget {
@@ -57,7 +57,7 @@ class _LiteDepartureCompletedFieldCalendarInlineState extends State<LiteDepartur
   @override
   Widget build(BuildContext context) {
     final area = context.watch<AreaState>().currentArea;
-    final plateState = context.watch<PlateState>();
+    final plateState = context.watch<LitePlateState>();
 
     final allCompleted = plateState.getPlatesByCollection(
       PlateType.departureCompleted,

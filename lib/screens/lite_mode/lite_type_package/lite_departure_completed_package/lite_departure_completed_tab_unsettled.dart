@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../enums/plate_type.dart';
-import '../../../../states/plate/plate_state.dart';
+import '../../../../states/plate/lite_plate_state.dart';
 import '../../../../utils/snackbar_helper.dart';
 import '../../../../widgets/container/plate_container.dart';
 import '../lite_departure_completed_package/lite_departure_completed_field_calendar_inline.dart';
@@ -55,7 +55,7 @@ class _LiteDepartureCompletedUnsettledTabState extends State<LiteDepartureComple
 
   @override
   Widget build(BuildContext context) {
-    final plateState = context.watch<PlateState>();
+    final plateState = context.watch<LitePlateState>();
     final total = widget.firestorePlates.length;
 
     return Scaffold(

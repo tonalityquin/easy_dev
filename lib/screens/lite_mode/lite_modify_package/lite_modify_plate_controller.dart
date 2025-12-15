@@ -8,10 +8,10 @@ import '../../../models/plate_model.dart';
 import '../../../enums/plate_type.dart';
 
 import '../../../models/regular_bill_model.dart';
-import '../../../states/plate/plate_state.dart';
 import '../../../states/bill/bill_state.dart';
 import '../../../states/area/area_state.dart';
 
+import '../../../states/plate/lite_plate_state.dart';
 import '../../../utils/snackbar_helper.dart';
 import 'utils/lite_modify_plate_service.dart';
 
@@ -294,9 +294,9 @@ class LiteModifyPlateController {
         regularDurationHours: selectedRegularDurationHours,
       );
 
-      final plateState = context.read<PlateState>();
+      final litePlateState = context.read<LitePlateState>();
 
-      await plateState.updatePlateLocally(collectionKey, updatedPlate);
+      await litePlateState.updatePlateLocally(collectionKey, updatedPlate);
 
       onSuccess();
     } else {

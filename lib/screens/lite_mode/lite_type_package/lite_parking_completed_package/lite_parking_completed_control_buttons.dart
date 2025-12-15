@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 import '../../../../enums/plate_type.dart';
 import '../../../../repositories/plate_repo_services/plate_repository.dart';
 import '../../../../states/plate/delete_plate.dart';
-import '../../../../states/plate/plate_state.dart';
+import '../../../../states/plate/lite_plate_state.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../utils/snackbar_helper.dart';
 
@@ -60,7 +60,7 @@ class LiteParkingCompletedControlButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<PlateState>(
+    return Consumer<LitePlateState>(
       builder: (context, plateState, _) {
         final userName = context.read<UserState>().name;
         final selectedPlate =
@@ -230,7 +230,7 @@ class LiteParkingCompletedControlButtons extends StatelessWidget {
                   );
 
                   await context
-                      .read<PlateState>()
+                      .read<LitePlateState>()
                       .updatePlateLocally(
                       PlateType.parkingCompleted, updatedPlate);
 
@@ -298,7 +298,7 @@ class LiteParkingCompletedControlButtons extends StatelessWidget {
                   );
 
                   await context
-                      .read<PlateState>()
+                      .read<LitePlateState>()
                       .updatePlateLocally(
                       PlateType.parkingCompleted, updatedPlate);
 
@@ -361,7 +361,7 @@ class LiteParkingCompletedControlButtons extends StatelessWidget {
                   );
 
                   await context
-                      .read<PlateState>()
+                      .read<LitePlateState>()
                       .updatePlateLocally(
                       PlateType.parkingCompleted, updatedPlate);
 

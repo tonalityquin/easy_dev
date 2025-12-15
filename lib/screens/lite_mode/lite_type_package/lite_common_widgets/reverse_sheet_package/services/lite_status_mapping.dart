@@ -4,7 +4,7 @@ const kStatusEntryDone     = '입차 완료';
 const kStatusExitRequest   = '출차 요청';
 const kStatusExitDone      = '출차 완료';
 
-String plateTypeToKorean(String t) {
+String litePlateTypeToKorean(String t) {
   switch (t) {
     case 'parking_requests':   return kStatusEntryRequest;
     case 'parking_completed':  return kStatusEntryDone;

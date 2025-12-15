@@ -11,13 +11,12 @@ import '../states/user/user_state.dart';
 import 'lite_mode/lite_input_package/lite_input_plate_screen.dart';
 import 'lite_mode/lite_type_package/lite_common_widgets/chats/lite_chat_bottom_sheet.dart';
 import 'lite_mode/lite_type_package/lite_common_widgets/dashboard_bottom_sheet/lite_home_dash_board_bottom_sheet.dart';
+import 'lite_mode/lite_type_package/lite_common_widgets/reverse_sheet_package/lite_parking_completed_table_sheet.dart';
 import 'secondary_page.dart';
 import '../utils/snackbar_helper.dart';
 
 import '../utils/tts/tts_manager.dart';
 import '../services/latest_message_service.dart';
-
-import 'service_mode/type_package/common_widgets/reverse_sheet_package/parking_completed_table_sheet.dart';
 
 /// Deep Blue 팔레트(서비스 카드와 동일 계열)
 class _Palette {
@@ -301,7 +300,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   Future<void> _openParkingCompletedTableSheet(BuildContext context) async {
     await Future<void>.delayed(const Duration(milliseconds: 10));
     if (!mounted) return;
-    await showParkingCompletedTableTopSheet(context);
+    await showLiteParkingCompletedTableTopSheet(context);
   }
 
   Future<void> _handleVerticalDragEnd(BuildContext context, DragEndDetails details) async {

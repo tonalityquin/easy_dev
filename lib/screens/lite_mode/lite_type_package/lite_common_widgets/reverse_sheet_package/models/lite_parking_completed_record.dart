@@ -1,4 +1,4 @@
-class ParkingCompletedRecord {
+class LiteParkingCompletedRecord {
   final int? id;
   final String plateNumber; // 전체 번호판
   final String location; // 주차 구역
@@ -7,7 +7,7 @@ class ParkingCompletedRecord {
   /// 출차 완료 여부 (로컬 전용 플래그)
   final bool isDepartureCompleted;
 
-  const ParkingCompletedRecord({
+  const LiteParkingCompletedRecord({
     this.id,
     required this.plateNumber,
     required this.location,
@@ -25,8 +25,8 @@ class ParkingCompletedRecord {
     }..removeWhere((k, v) => v == null);
   }
 
-  factory ParkingCompletedRecord.fromMap(Map<String, Object?> map) {
-    return ParkingCompletedRecord(
+  factory LiteParkingCompletedRecord.fromMap(Map<String, Object?> map) {
+    return LiteParkingCompletedRecord(
       id: map['id'] as int?,
       plateNumber: (map['plate_number'] ?? '') as String,
       location: (map['location'] ?? '') as String,

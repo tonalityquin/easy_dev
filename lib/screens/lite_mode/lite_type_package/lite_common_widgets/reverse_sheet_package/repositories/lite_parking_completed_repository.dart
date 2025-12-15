@@ -3,12 +3,12 @@ import 'package:sqflite/sqflite.dart';
 import '../data/lite_pc_db.dart';
 import '../models/lite_parking_completed_record.dart';
 
-class ParkingCompletedRepository {
+class LiteParkingCompletedRepository {
   final ParkingCompletedDb _dbProvider;
-  ParkingCompletedRepository({ParkingCompletedDb? dbProvider})
+  LiteParkingCompletedRepository({ParkingCompletedDb? dbProvider})
       : _dbProvider = dbProvider ?? ParkingCompletedDb.instance;
 
-  Future<int> insert(ParkingCompletedRecord record) async {
+  Future<int> insert(LiteParkingCompletedRecord record) async {
     final db = await _dbProvider.database;
 
     // UNIQUE(plate_number, location, created_at) 인덱스가 있을 때만 의미 있음.
@@ -20,7 +20,7 @@ class ParkingCompletedRepository {
     );
   }
 
-  Future<List<ParkingCompletedRecord>> listAll({
+  Future<List<LiteParkingCompletedRecord>> listAll({
     int limit = 500,
     String? search, // 번호판 / location 간단 검색
   }) async {
@@ -48,7 +48,7 @@ class ParkingCompletedRepository {
       limit: limit,
     );
 
-    return rows.map((m) => ParkingCompletedRecord.fromMap(m)).toList();
+    return rows.map((m) => LiteParkingCompletedRecord.fromMap(m)).toList();
   }
 
   /// 테이블 전체 비우기

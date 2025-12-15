@@ -5,12 +5,12 @@ import 'package:provider/provider.dart';
 import '../../../../../models/plate_model.dart';
 
 import '../../../../../states/area/area_state.dart';
+import '../../../../../states/plate/lite_plate_state.dart';
 import '../../../../../states/plate/movement_plate.dart';
 import '../../../../../states/user/user_state.dart';
 import '../../../../../enums/plate_type.dart';
 
 import '../../../../../repositories/plate_repo_services/plate_repository.dart';
-import '../../../../../states/plate/plate_state.dart';
 import '../../../../../utils/snackbar_helper.dart';
 import '../../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
@@ -114,7 +114,7 @@ class _FullHeightSheet extends StatelessWidget {
               onPressed: () async {
                 final userName = context.read<UserState>().name;
                 final repo = context.read<PlateRepository>();
-                final plateState = context.read<PlateState>();
+                final plateState = context.read<LitePlateState>();
                 final firestore = FirebaseFirestore.instance;
 
                 final billingType = (plate.billingType ?? '').trim();
@@ -211,7 +211,7 @@ class _FullHeightSheet extends StatelessWidget {
               onPressed: () async {
                 final userName = context.read<UserState>().name;
                 final repo = context.read<PlateRepository>();
-                final plateState = context.read<PlateState>();
+                final plateState = context.read<LitePlateState>();
                 final firestore = FirebaseFirestore.instance;
 
                 if (plate.isLockedFee != true) {
