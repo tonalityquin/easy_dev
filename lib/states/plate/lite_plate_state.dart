@@ -1,13 +1,12 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
-import '../../repositories/plate_repo_services/plate_repository.dart';
-import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
+import '../../models/plate_model.dart';
+import '../../repositories/plate_repo_services/plate_repository.dart';
 import '../area/area_state.dart';
-
-// import '../../utils/usage_reporter.dart';
 
 /// 서버 스냅샷 기준의 선택 상태를 plateId별로 보관하기 위한 베이스라인
 class _SelectionBaseline {
@@ -18,355 +17,365 @@ class _SelectionBaseline {
 }
 
 class LitePlateState extends ChangeNotifier {
-  /// ✅ Lite 모드에서는 "입차 완료/출차 완료"만 사용(구독/데이터 대상 제한)
+  /// ✅ Lite 모드에서는 "입차 완료/출차 완료"만 사용(데이터 대상 제한)
   static const Set<PlateType> liteAllowedTypes = {
-    PlateType.parkingCompleted,   // 입차 완료
-    PlateType.departureCompleted, // 출차 완료
+    PlateType.parkingCompleted,
+    PlateType.departureCompleted,
   };
 
   final PlateRepository _repository;
   final AreaState _areaState;
 
-  // ✅ 필드 페이지에서만 스트림을 켜기 위한 스위치 (HQ에서는 false 유지)
+  /// ✅ Lite 모드에서 “구독”을 절대 하지 않기 위해:
+  /// - StreamSubscription, snapshots().listen() 사용 금지
+  /// - 읽기는 FirebaseFirestore.get() 기반 1회 조회로만 처리
   bool _enabled = false;
 
-  final Map<String, bool> previousIsLockedFee = {};
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  /// 로딩 상태: 여러 타입 동시 로드 가능하므로 Set으로 관리
+  final Set<PlateType> _loadingTypes = <PlateType>{};
+  bool get isLoading => _loadingTypes.isNotEmpty;
+
+  /// Lite에서도 기존 로직 호환을 위해 유지
+  final Map<String, bool> previousIsLockedFee = <String, bool>{};
 
   final Map<PlateType, List<PlateModel>> _data = {
-    for (var c in PlateType.values) c: [],
+    for (var c in PlateType.values) c: <PlateModel>[],
   };
 
-  final Map<PlateType, StreamSubscription> _subscriptions = {};
+  List<PlateModel> dataOfType(PlateType type) => _data[type] ?? <PlateModel>[];
 
+  /// 정렬 방향 저장
   final Map<PlateType, bool> _isSortedMap = {
     for (var c in PlateType.values) c: true,
   };
 
-  final Map<PlateType, String> _subscribedAreas = {};
+  /// “활성화된 타입(= 화면에서 사용 중인 타입)” 기록
+  final Set<PlateType> _activeTypes = <PlateType>{};
 
-  bool _isLoading = false;
-
-  final Set<PlateType> _desiredSubscriptions = {};
-
-  // ─────────────────────────────────────────────────────────────
-  // departureRequests에서 "사라진" 항목 감지를 위한 캐시 & 이벤트
-  // (Lite 모드에서는 departureRequests를 사용하지 않지만, 공용 코드 구조 유지)
-  // ─────────────────────────────────────────────────────────────
-  final Map<PlateType, Map<String, PlateModel>> _lastByType = {
-    for (var c in PlateType.values) c: {},
+  /// 마지막 조회 결과 ID 셋 (removed 감지용)
+  final Map<PlateType, Set<String>> _lastIdsByType = {
+    for (var c in PlateType.values) c: <String>{},
   };
 
-  final StreamController<PlateModel> _departureRemovedCtrl = StreamController<PlateModel>.broadcast();
+  /// plateId별 서버 기준 선택 상태 베이스라인
+  final Map<String, _SelectionBaseline> _baseline = <String, _SelectionBaseline>{};
 
-  /// 출차요청 컬렉션에서 사라진 번호판(= 다른 타입으로 이동 추정) 이벤트 스트림
-  Stream<PlateModel> get onDepartureRequestRemoved => _departureRemovedCtrl.stream;
-
-  // ─────────────────────────────────────────────────────────────
-  // ✅ 선택/해제 지연 반영을 위한 보류 상태
-  // ─────────────────────────────────────────────────────────────
+  /// ✅ 선택/해제 지연 반영을 위한 보류 상태
   PlateType? _pendingCollection;
   String? _pendingPlateId;
   bool? _pendingIsSelected;
   String? _pendingSelectedBy;
 
-  /// 서버 기준 선택 상태 베이스라인 (plateId → 상태)
-  final Map<String, _SelectionBaseline> _baseline = {};
+  bool get hasPendingSelection =>
+      _pendingCollection != null && _pendingPlateId != null && _pendingIsSelected != null;
 
-  /// 현재 보류 중인(아직 서버에 반영하지 않은) 선택/해제 변경이 있는지
-  bool get hasPendingSelection => _pendingCollection != null && _pendingPlateId != null && _pendingIsSelected != null;
-
-  /// 현재 보류가 선택(true)인지 해제(false)인지, 보류 없으면 null
   bool? get pendingIsSelected => _pendingIsSelected;
 
-  void _clearPendingSelection() {
+  /// 라이프사이클 변경(비활성/지역 변경) 토큰
+  int _lifecycleEpoch = 0;
+
+  /// 타입별 최신 요청 시퀀스(동시 로드 시 서로 결과 폐기하지 않도록)
+  final Map<PlateType, int> _reqSeqByType = {
+    for (var c in PlateType.values) c: 0,
+  };
+
+  LitePlateState(this._repository, this._areaState) {
+    _areaState.addListener(_onAreaChanged);
+  }
+
+  String get currentArea => _areaState.currentArea;
+
+  void _clearPendingSelectionInternal() {
     _pendingCollection = null;
     _pendingPlateId = null;
     _pendingIsSelected = null;
     _pendingSelectedBy = null;
   }
 
-  /// 🔸 외부 동작(예: 정보 수정)으로 동일 plateId의 선택 의도가 무의미해졌을 때 호출
+  /// 🔸 외부 동작으로 동일 plateId의 선택 의도가 무의미해졌을 때 호출
   void clearPendingSelection() {
-    _clearPendingSelection();
+    _clearPendingSelectionInternal();
     notifyListeners();
   }
 
   /// 🔸 특정 plateId와 일치할 때만 보류 선택을 해제
   void clearPendingIfMatches(String plateId) {
     if (_pendingPlateId == plateId) {
-      _clearPendingSelection();
+      _clearPendingSelectionInternal();
       notifyListeners();
     }
   }
 
-  LitePlateState(this._repository, this._areaState) {
-    // Lite 모드에서도 "완료 목록"은 지역에 따라 바뀌므로 area change 리스너는 유지
-    _areaState.addListener(_onAreaChanged);
-  }
-
-  String get currentArea => _areaState.currentArea;
-
-  bool get isLoading => _isLoading;
-
-  List<PlateModel> dataOfType(PlateType type) => _data[type] ?? [];
-
-  bool isSubscribed(PlateType type) => _desiredSubscriptions.contains(type);
-
-  String? getSubscribedArea(PlateType type) => _subscribedAreas[type];
-
   // ─────────────────────────────────────────────────────────────
-  // 공개 스위치: 필드 페이지에서만 구독 활성화/비활성화
+  // 공개 스위치: Lite 화면에서만 데이터 로드 활성화
   // ─────────────────────────────────────────────────────────────
-  /// Lite 모드: withDefaults=true면 "입차완료/출차완료" 2종만 즉시 구독합니다.
+
+  /// Lite 모드: withDefaults=true면 "입차완료/출차완료" 2종을 1회 조회로 로드합니다.
+  /// (중요) 여기서 “구독”은 절대 하지 않습니다.
   void enableForTypePages({bool withDefaults = true}) {
     if (_enabled) return;
     _enabled = true;
-    debugPrint('🔔 [Lite] PlateState enabled (Completed only) / withDefaults=$withDefaults');
+
+    debugPrint('🔔 [Lite] LitePlateState enabled (NO-SUBSCRIBE) / withDefaults=$withDefaults');
 
     if (withDefaults) {
-      _initDefaultSubscriptions();
+      _initDefaultLoads();
     }
   }
 
   void disableAll() {
-    if (!_enabled && _subscriptions.isEmpty) return;
+    if (!_enabled && _activeTypes.isEmpty) return;
+
     _enabled = false;
-    debugPrint('🔕 [Lite] PlateState disabled (leaving pages)');
-    _cancelAllSubscriptions();
+    _lifecycleEpoch++; // 진행 중 로드 결과 무시
+    debugPrint('🔕 [Lite] LitePlateState disabled (NO-SUBSCRIBE)');
+
+    _activeTypes.clear();
+    _baseline.clear();
+    _clearPendingSelectionInternal();
+
+    for (final t in PlateType.values) {
+      _data[t] = <PlateModel>[];
+      _lastIdsByType[t] = <String>{};
+      _reqSeqByType[t] = 0;
+    }
+
+    _loadingTypes.clear();
+    notifyListeners();
   }
 
   // ─────────────────────────────────────────────────────────────
-  // 📱 태블릿 전용 헬퍼들 (Lite에서는 원칙적으로 사용하지 않음)
-  // ─────────────────────────────────────────────────────────────
-
-  void tabletEnableWithoutDefaults() {
-    debugPrint('⚠️ [Lite] tabletEnableWithoutDefaults() called but Lite uses completed-only subscriptions');
-    enableForTypePages(withDefaults: false);
-  }
-
-  void tabletSubscribeDeparture() {
-    debugPrint('🚫 [Lite] tabletSubscribeDeparture ignored (Lite does not use departureRequests)');
-  }
-
-  void tabletUnsubscribeDeparture() {
-    debugPrint('🚫 [Lite] tabletUnsubscribeDeparture ignored (Lite does not use departureRequests)');
-  }
-
+  // “subscribe/unsubscribe” API는 유지하되,
+  // 의미를 “활성화 + 1회 로드”로 변경 (구독 금지)
   // ─────────────────────────────────────────────────────────────
 
   void subscribeType(PlateType type) {
-    // ✅ Lite 모드: 허용된 타입(입차완료/출차완료)만 구독
     if (!liteAllowedTypes.contains(type)) {
-      debugPrint('🚫 [Lite] subscribeType ignored (not allowed): $type / area=$currentArea');
+      debugPrint('🚫 [Lite] subscribeType ignored (not allowed): $type');
       return;
     }
-
-    // ✅ 비활성 상태면 아무 것도 하지 않음
     if (!_enabled) {
-      debugPrint('🔕 [Lite] PlateState disabled → subscribeType 무시: $type');
+      debugPrint('🔕 [Lite] disabled → subscribeType ignored: $type');
       return;
     }
 
-    _desiredSubscriptions.add(type);
+    _activeTypes.add(type);
 
-    final descending = _isSortedMap[type] ?? true;
-    final area = currentArea;
+    // “구독 시작”이 아니라 “1회 로드”로 동작
+    unawaited(refreshType(type));
+  }
 
-    final existing = _subscriptions[type];
-    final existingArea = _subscribedAreas[type];
-
-    if (existing != null && existingArea == area) {
-      debugPrint('✅ [Lite] 이미 구독 중(같은 지역): $type / $area');
+  void unsubscribeType(PlateType type) {
+    if (!liteAllowedTypes.contains(type)) {
+      debugPrint('🚫 [Lite] unsubscribeType ignored (not allowed): $type');
       return;
     }
 
-    if (existing != null && existingArea != area) {
-      existing.cancel();
-      _subscriptions.remove(type);
-      _subscribedAreas.remove(type);
-      debugPrint('↺ [Lite][${_getTypeLabel(type)}] 지역 변경으로 재구독 준비 (이전: $existingArea → 현재: $area)');
-    }
+    _activeTypes.remove(type);
+    _data[type] = <PlateModel>[];
+    _lastIdsByType[type] = <String>{};
 
-    debugPrint('🔔 [Lite][${_getTypeLabel(type)}] 구독 시작 (지역: $area)');
-    _isLoading = true;
+    notifyListeners();
+    debugPrint('🧹 [Lite][${_getTypeLabel(type)}] 데이터 비움 (NO-SUBSCRIBE)');
+  }
+
+  /// 정렬 변경 시: (구독이 없으므로) 즉시 1회 재조회로 반영
+  void updateSortOrder(PlateType type, bool descending) {
+    _isSortedMap[type] = descending;
     notifyListeners();
 
-    if (type == PlateType.departureCompleted) {
-      final sub = _repository
-          .departureUnpaidSnapshots(area, descending: descending)
-          .listen((QuerySnapshot<Map<String, dynamic>> snapshot) async {
-        final results = snapshot.docs
-            .map((doc) {
-          try {
-            return PlateModel.fromDocument(doc);
-          } catch (e) {
-            debugPrint('❌ [Lite] departureCompleted parsing error: $e');
-            return null;
-          }
-        })
-            .whereType<PlateModel>()
-            .toList();
+    if (_enabled && _activeTypes.contains(type) && liteAllowedTypes.contains(type)) {
+      unawaited(refreshType(type));
+    }
+  }
 
-        // 서버 베이스라인 갱신 (해제 상태면 selectedBy를 null로 정규화)
-        for (final p in results) {
-          final normalizedSelectedBy = p.isSelected
-              ? ((p.selectedBy?.trim().isNotEmpty ?? false) ? p.selectedBy!.trim() : null)
-              : null;
-          _baseline[p.id] = _SelectionBaseline(
-            isSelected: p.isSelected,
-            selectedBy: normalizedSelectedBy,
-          );
-        }
-
-        _data[type] = results;
-        notifyListeners();
-
-        for (final change in snapshot.docChanges) {
-          if (change.type != DocumentChangeType.removed) continue;
-          try {
-            final ref = change.doc.reference;
-
-            final fresh = await ref.get(const GetOptions(source: Source.server));
-            final data = fresh.data();
-            if (data == null) continue;
-
-            final isDepartureCompleted = data['type'] == PlateType.departureCompleted.firestoreValue;
-            final sameArea = data['area'] == area;
-            final isLockedFeeTrue = data['isLockedFee'] == true;
-
-            if (isDepartureCompleted && sameArea && isLockedFeeTrue) {
-              debugPrint('✅ [Lite] 정산 전이 감지: doc=${fresh.id}, plate=${data['plateNumber']}');
-
-              final key = (data['id'] ?? fresh.id).toString();
-              previousIsLockedFee[key] = true;
-            }
-          } catch (e) {
-            debugPrint('⚠️ [Lite][출차 완료 전이 감지] removed 처리 실패: $e');
-          }
-        }
-
-        // ⬇️ 스트림 갱신 이후 보류 유효성 재점검
-        if (hasPendingSelection && !pendingStillValidFor(type)) {
-          _clearPendingSelection();
-          notifyListeners();
-          debugPrint('ℹ️ [Lite] 전환/필터/외부 변경으로 보류를 해제했습니다.');
-        }
-
-        _isLoading = false;
-      }, onError: (error) {
-        debugPrint('🔥 [Lite][출차 완료] 스냅샷 스트림 에러: $error');
-        _isLoading = false;
-        notifyListeners();
-      });
-
-      _subscriptions[type] = sub;
-      _subscribedAreas[type] = area;
+  /// Area 변경 감지 시: 활성 타입들만 1회 재조회
+  void syncWithAreaState() {
+    if (!_enabled) {
+      debugPrint('🔕 [Lite] disabled → syncWithAreaState ignored');
       return;
     }
 
-    // ✅ parkingCompleted는 일반 스트림 경로 사용
-    final stream = _repository.streamToCurrentArea(
-      type,
-      area,
-      descending: descending,
-    );
+    debugPrint('🔄 [Lite] syncWithAreaState (NO-SUBSCRIBE) → refresh active types');
 
-    bool firstDataReceived = false;
+    _baseline.clear();
+    _clearPendingSelectionInternal();
 
-    final subscription = stream.listen((filteredData) async {
-      // Lite 모드에서는 departureRequests를 구독하지 않으므로 below branch는 사실상 실행되지 않음
-      if (type == PlateType.departureRequests) {
-        final lastMap = _lastByType[type] ?? {};
-        final currentMap = {for (final p in filteredData) p.id: p};
+    for (final t in _activeTypes.toList()) {
+      unawaited(refreshType(t));
+    }
+  }
 
-        for (final removedId in lastMap.keys.where((id) => !currentMap.containsKey(id))) {
-          final removed = lastMap[removedId];
-          if (removed != null) {
-            _departureRemovedCtrl.add(removed);
+  void _initDefaultLoads() {
+    // Lite 기본: 입차 완료 + 출차 완료
+    subscribeType(PlateType.parkingCompleted);
+    subscribeType(PlateType.departureCompleted);
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 1회 조회 로직 (중요: snapshots.listen 금지)
+  // ─────────────────────────────────────────────────────────────
+
+  Query<Map<String, dynamic>> _baseQuery({
+    required PlateType type,
+    required String area,
+    required bool descending,
+  }) {
+    Query<Map<String, dynamic>> q = _firestore
+        .collection('plates')
+        .where(PlateFields.type, isEqualTo: type.firestoreValue)
+        .where(PlateFields.area, isEqualTo: area);
+
+    // departureCompleted는 “미정산(isLockedFee=false)”만 대상
+    if (type == PlateType.departureCompleted) {
+      q = q.where(PlateFields.isLockedFee, isEqualTo: false);
+    }
+
+    q = q.orderBy(PlateFields.requestTime, descending: descending);
+    return q;
+  }
+
+  Future<List<PlateModel>> _getOnce({
+    required PlateType type,
+    required String area,
+    required bool descending,
+    bool cacheFirst = true,
+  }) async {
+    final query = _baseQuery(type: type, area: area, descending: descending);
+
+    QuerySnapshot<Map<String, dynamic>> snap;
+
+    if (cacheFirst) {
+      try {
+        snap = await query.get(const GetOptions(source: Source.cache));
+      } catch (_) {
+        snap = await query.get(const GetOptions(source: Source.server));
+      }
+    } else {
+      snap = await query.get(const GetOptions(source: Source.server));
+    }
+
+    final results = <PlateModel>[];
+    for (final doc in snap.docs) {
+      try {
+        results.add(PlateModel.fromDocument(doc));
+      } catch (e) {
+        debugPrint('❌ [Lite] parse error: type=$type, doc=${doc.id}, err=$e');
+      }
+    }
+    return results;
+  }
+
+  Future<void> refreshType(PlateType type) async {
+    if (!_enabled) return;
+    if (!liteAllowedTypes.contains(type)) return;
+
+    final area = currentArea.trim();
+    if (area.isEmpty) return;
+
+    final int lifeToken = _lifecycleEpoch;
+    final int seq = (_reqSeqByType[type] ?? 0) + 1;
+    _reqSeqByType[type] = seq;
+
+    final descending = _isSortedMap[type] ?? true;
+
+    _loadingTypes.add(type);
+    notifyListeners();
+
+    debugPrint('🔎 [Lite][${_getTypeLabel(type)}] 1회 로드 시작 (area=$area, desc=$descending)');
+
+    try {
+      // ✅ get 기반 1회 조회 (NO-SUBSCRIBE)
+      final results = await _getOnce(
+        type: type,
+        area: area,
+        descending: descending,
+        cacheFirst: true,
+      );
+
+      // 중간에 disable/area 전환 등으로 토큰이 바뀌었으면 결과 폐기
+      if (!_enabled) return;
+      if (_lifecycleEpoch != lifeToken) return;
+      if ((_reqSeqByType[type] ?? 0) != seq) return;
+
+      // removed 감지: 이전/현재 ID 비교로 대체
+      final prevIds = _lastIdsByType[type] ?? <String>{};
+      final newIds = results.map((e) => e.id).toSet();
+      final removedIds = prevIds.difference(newIds);
+      _lastIdsByType[type] = newIds;
+
+      // departureCompleted에서 removed된 항목은 isLockedFee=true로 전이되었는지 확인
+      if (type == PlateType.departureCompleted && removedIds.isNotEmpty) {
+        for (final removedId in removedIds) {
+          try {
+            final fresh = await _repository.getPlate(removedId);
+            if (fresh == null) continue;
+
+            final sameArea = fresh.area == area;
+            final isDepartureCompleted = fresh.type == PlateType.departureCompleted.firestoreValue;
+            final isLockedFeeTrue = fresh.isLockedFee == true;
+
+            if (sameArea && isDepartureCompleted && isLockedFeeTrue) {
+              previousIsLockedFee[removedId] = true;
+              debugPrint('✅ [Lite] 정산 전이 감지(1회 조회 비교): id=$removedId, plate=${fresh.plateNumber}');
+            }
+          } catch (e) {
+            debugPrint('⚠️ [Lite] removed 후속 확인 실패: $e');
           }
         }
-        _lastByType[type] = currentMap;
-      } else {
-        _lastByType[type] = {for (final p in filteredData) p.id: p};
       }
 
-      // 서버 베이스라인 갱신 (해제 상태면 selectedBy를 null로 정규화)
-      for (final p in filteredData) {
+      // 서버 베이스라인 갱신
+      for (final p in results) {
         final normalizedSelectedBy = p.isSelected
             ? ((p.selectedBy?.trim().isNotEmpty ?? false) ? p.selectedBy!.trim() : null)
             : null;
+
         _baseline[p.id] = _SelectionBaseline(
           isSelected: p.isSelected,
           selectedBy: normalizedSelectedBy,
         );
       }
 
-      _data[type] = filteredData;
+      _data[type] = results;
       notifyListeners();
 
+      // 보류 유효성 점검
       if (hasPendingSelection && !pendingStillValidFor(type)) {
-        _clearPendingSelection();
+        _clearPendingSelectionInternal();
         notifyListeners();
-        debugPrint('ℹ️ [Lite] 전환/필터/외부 변경으로 보류를 해제했습니다.');
+        debugPrint('ℹ️ [Lite] 외부 변경/갱신으로 보류 선택을 해제했습니다.');
       }
 
-      if (!firstDataReceived) {
-        firstDataReceived = true;
-        debugPrint('✅ [Lite][${_getTypeLabel(type)}] 초기 데이터 수신: ${filteredData.length}개');
-      } else {
-        debugPrint('📥 [Lite][${_getTypeLabel(type)}] 데이터 업데이트: ${filteredData.length}개');
+      debugPrint('✅ [Lite][${_getTypeLabel(type)}] 1회 로드 완료: ${results.length}개');
+    } catch (e) {
+      debugPrint('🔥 [Lite][${_getTypeLabel(type)}] 1회 로드 실패: $e');
+    } finally {
+      // 토큰이 살아있을 때만 로딩 해제
+      if (_enabled && _lifecycleEpoch == lifeToken && (_reqSeqByType[type] ?? 0) == seq) {
+        _loadingTypes.remove(type);
+        notifyListeners();
       }
-
-      _isLoading = false;
-    }, onError: (error) {
-      debugPrint('🔥 [Lite][${_getTypeLabel(type)}] Plate stream error: $error');
-      _isLoading = false;
-      notifyListeners();
-    });
-
-    _subscriptions[type] = subscription;
-    _subscribedAreas[type] = area;
-  }
-
-  void unsubscribeType(PlateType type) {
-    // ✅ Lite 모드: 허용 타입 외 unsubscribe도 무시(안전)
-    if (!liteAllowedTypes.contains(type)) {
-      debugPrint('🚫 [Lite] unsubscribeType ignored (not allowed): $type');
-      return;
-    }
-
-    _desiredSubscriptions.remove(type);
-
-    final sub = _subscriptions[type];
-    final area = _subscribedAreas[type];
-
-    if (sub != null) {
-      sub.cancel();
-      _subscriptions.remove(type);
-      _subscribedAreas.remove(type);
-      _data[type] = [];
-      _lastByType[type] = {};
-      notifyListeners();
-      debugPrint('🛑 [Lite][${_getTypeLabel(type)}] 구독 해제됨 (지역: $area)');
-    } else {
-      debugPrint('⚠️ [Lite][${_getTypeLabel(type)}] 구독 중이 아님');
     }
   }
+
+  // ─────────────────────────────────────────────────────────────
+  // 선택 로직 (기존 구조 유지)
+  // ─────────────────────────────────────────────────────────────
 
   PlateModel? getSelectedPlate(PlateType collection, String userName) {
     final plates = _data[collection];
     if (plates == null || plates.isEmpty) return null;
 
     try {
-      return plates.firstWhere(
-            (plate) => plate.isSelected && plate.selectedBy == userName,
-      );
+      return plates.firstWhere((plate) => plate.isSelected && plate.selectedBy == userName);
     } catch (_) {
       return null;
     }
   }
 
-  /// ✅ 선택/해제 시 로컬 토글 + 보류 기록
   Future<void> togglePlateIsSelected({
     required PlateType collection,
     required String plateNumber,
@@ -407,7 +416,7 @@ class LitePlateState extends ChangeNotifier {
           area: '',
           userName: '',
           isSelected: false,
-          statusList: [],
+          statusList: const [],
         ),
       );
 
@@ -420,11 +429,13 @@ class LitePlateState extends ChangeNotifier {
         return;
       }
 
+      // 다른 plateId에 대한 보류가 있으면 베이스라인으로 복구
       if (_pendingPlateId != null && _pendingPlateId != plateId) {
         final prevId = _pendingPlateId!;
         final prevType = _pendingCollection!;
         final prevList = _data[prevType];
         final b = _baseline[prevId];
+
         if (prevList != null && b != null) {
           final i = prevList.indexWhere((p) => p.id == prevId);
           if (i != -1) {
@@ -434,7 +445,7 @@ class LitePlateState extends ChangeNotifier {
             );
           }
         }
-        _clearPendingSelection();
+        _clearPendingSelectionInternal();
       }
 
       final newIsSelected = !plate.isSelected;
@@ -447,6 +458,7 @@ class LitePlateState extends ChangeNotifier {
 
       final base = _baseline[plateId];
       bool equalsBaseline = false;
+
       if (base != null) {
         if (!newIsSelected && base.isSelected == false) {
           equalsBaseline = true;
@@ -459,7 +471,7 @@ class LitePlateState extends ChangeNotifier {
 
       if (equalsBaseline) {
         if (_pendingPlateId == plateId) {
-          _clearPendingSelection();
+          _clearPendingSelectionInternal();
         }
       } else {
         _pendingCollection = collection;
@@ -529,7 +541,7 @@ class LitePlateState extends ChangeNotifier {
     final expected = _pendingCollection!;
 
     if (!pendingStillValidFor(expected)) {
-      _clearPendingSelection();
+      _clearPendingSelectionInternal();
       notifyListeners();
       onError('선택 항목이 더 이상 유효하지 않습니다. 목록을 새로고침한 뒤 다시 시도해 주세요.');
       return;
@@ -550,7 +562,7 @@ class LitePlateState extends ChangeNotifier {
             : null,
       );
 
-      _clearPendingSelection();
+      _clearPendingSelectionInternal();
       notifyListeners();
     } on FirebaseException catch (e) {
       switch (e.code) {
@@ -572,7 +584,7 @@ class LitePlateState extends ChangeNotifier {
   }
 
   List<PlateModel> getPlatesByCollection(PlateType collection, {DateTime? selectedDate}) {
-    var plates = _data[collection] ?? [];
+    var plates = _data[collection] ?? <PlateModel>[];
 
     if (collection == PlateType.departureCompleted && selectedDate != null) {
       final start = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
@@ -587,11 +599,6 @@ class LitePlateState extends ChangeNotifier {
     return plates;
   }
 
-  void updateSortOrder(PlateType type, bool descending) {
-    _isSortedMap[type] = descending;
-    notifyListeners();
-  }
-
   Future<void> updatePlateLocally(PlateType collection, PlateModel updatedPlate) async {
     final list = _data[collection];
     if (list == null) return;
@@ -603,68 +610,17 @@ class LitePlateState extends ChangeNotifier {
     }
   }
 
-  void syncWithAreaState() {
-    if (!_enabled) {
-      debugPrint("🔕 [Lite] PlateState disabled → syncWithAreaState 무시");
-      return;
-    }
-
-    final desired = _desiredSubscriptions.toSet();
-    final subscribedTypes = _subscriptions.keys.toSet();
-    final sameTypes = desired.length == subscribedTypes.length && desired.containsAll(subscribedTypes);
-    final sameAreaAll = _subscribedAreas.values.every((a) => a == currentArea);
-    if (sameTypes && sameAreaAll) {
-      debugPrint("ℹ️ [Lite] syncWithAreaState: 동일 구성/지역 → 재구독 생략");
-      return;
-    }
-
-    debugPrint("🔄 [Lite] syncWithAreaState : 지역 변경 감지 및 상태 갱신 호출됨");
-    _cancelAllSubscriptions();
-    _clearPendingSelection();
-    _baseline.clear();
-    for (final t in _desiredSubscriptions) {
-      subscribeType(t);
-    }
-  }
-
-  void _initDefaultSubscriptions() {
-    // ✅ Lite 기본 구독: 입차 완료 + 출차 완료만
-    final defaults = <PlateType>[
-      PlateType.parkingCompleted,
-      PlateType.departureCompleted,
-    ];
-    for (final t in defaults) {
-      subscribeType(t);
-    }
-  }
-
   void _onAreaChanged() {
-    if (!_enabled) {
-      debugPrint("🔕 [Lite] PlateState disabled → _onAreaChanged 무시");
-      return;
-    }
-    debugPrint("🔄 [Lite] 지역 변경 감지됨: ${_areaState.currentArea}");
-    _cancelAllSubscriptions();
-    _clearPendingSelection();
+    if (!_enabled) return;
+
+    debugPrint('🔄 [Lite] area changed → refresh active types (NO-SUBSCRIBE)');
+
     _baseline.clear();
-    for (final t in _desiredSubscriptions) {
-      subscribeType(t);
-    }
-  }
+    _clearPendingSelectionInternal();
 
-  void _cancelAllSubscriptions() {
-    for (var sub in _subscriptions.values) {
-      sub.cancel();
+    for (final t in _activeTypes.toList()) {
+      unawaited(refreshType(t));
     }
-    _subscriptions.clear();
-    _subscribedAreas.clear();
-    _isLoading = false;
-
-    for (final k in _lastByType.keys) {
-      _lastByType[k] = {};
-    }
-
-    notifyListeners();
   }
 
   String _getTypeLabel(PlateType type) {
@@ -682,9 +638,7 @@ class LitePlateState extends ChangeNotifier {
 
   @override
   void dispose() {
-    _cancelAllSubscriptions();
     _areaState.removeListener(_onAreaChanged);
-    _departureRemovedCtrl.close();
     super.dispose();
   }
 }

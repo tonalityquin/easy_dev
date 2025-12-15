@@ -1,58 +1,41 @@
 import 'package:flutter/material.dart';
+
 import '../../screens/lite_mode/lite_type_package/lite_parking_completed_page.dart';
 import 'lite_page_info.dart';
 
-class LitePageState with ChangeNotifier {
-  final List<LitePageInfo> pages;
+class LitePageState extends ChangeNotifier {
+  final GlobalKey parkingCompletedKey;
+  late final List<LitePageInfo> pages;
 
-  /// 홈(완료) 상태 리셋용
-  final GlobalKey parkingCompletedKey = GlobalKey();
+  int selectedIndex = 0;
 
-  int _selectedIndex;
-  bool _isLoading = false;
+  /// UI 오버레이가 필요하면 외부(LitePlateState)의 로딩을 보도록 권장.
+  /// (여기 값은 기본 false 유지)
+  bool isLoading = false;
 
-  /// ✅ 홈 1탭이면 0부터 시작
-  LitePageState({required this.pages})
-      : assert(pages.isNotEmpty, "🚨 페이지 리스트가 비어 있습니다."),
-        _selectedIndex = 0;
-
-  int get selectedIndex => _selectedIndex;
-  bool get isLoading => _isLoading;
-  String get selectedPageTitle => pages[_selectedIndex].title;
-
-  set isLoading(bool value) {
-    if (_isLoading != value) {
-      _isLoading = value;
-      notifyListeners();
-    }
+  LitePageState({List<LitePageInfo>? pages}) : parkingCompletedKey = GlobalKey() {
+    // 기본 페이지 구성(홈 1탭)
+    this.pages = pages ?? buildLiteDefaultPages(parkingCompletedKey: parkingCompletedKey);
   }
 
-  void onItemTapped(
+  Future<void> onItemTapped(
       BuildContext context,
       int index, {
-        void Function(String)? onError,
-      }) {
-    if (index < 0 || index >= pages.length) {
-      final error = '🚨 Invalid index: $index';
-      debugPrint(error);
-      onError?.call(error);
-      return;
-    }
+        required void Function(String) onError,
+      }) async {
+    try {
+      // 홈 1탭 구성: 재탭이면 reset
+      if (index == selectedIndex) {
+        if (index == 0) {
+          LiteParkingCompletedPage.reset(parkingCompletedKey);
+        }
+        return;
+      }
 
-    // ✅ 같은 탭(홈) 재탭 시: ParkingCompletedPage 리셋
-    if (_selectedIndex == index) {
-      LiteParkingCompletedPage.reset(parkingCompletedKey);
+      selectedIndex = index;
       notifyListeners();
-      return;
+    } catch (e) {
+      onError('페이지 이동 처리 중 오류: $e');
     }
-
-    _selectedIndex = index;
-
-    // (확장 대비) 홈 진입 시 리셋 유지
-    if (pages[index].title == '홈') {
-      LiteParkingCompletedPage.reset(parkingCompletedKey);
-    }
-
-    notifyListeners();
   }
 }

@@ -30,6 +30,18 @@ class _AddAreaTabState extends State<AddAreaTab> {
 
   Future<List<String>>? _areasFuture; // FutureBuilder 재호출 최소화
 
+  // ✅ 신규: 지역 생성 시 적용할 모드 선택
+  //  - service: 서비스 모드 전용
+  //  - lite: Lite 모드 전용
+  //  - both: 공용(서비스+Lite)
+  String _selectedModeKey = 'service';
+
+  static const List<_ModeItem> _modeItems = <_ModeItem>[
+    _ModeItem(key: 'service', label: '서비스 모드'),
+    _ModeItem(key: 'lite', label: 'Lite 모드'),
+    _ModeItem(key: 'both', label: '공용(서비스+Lite)'),
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -55,6 +67,18 @@ class _AddAreaTabState extends State<AddAreaTab> {
   // 입력 정규화: 선후 공백 제거, '/' → '-', 다중 공백 1개로
   String _norm(String s) => s.trim().replaceAll('/', '-').replaceAll(RegExp(r'\s+'), ' ');
 
+  List<String> _toModes(String key) {
+    switch (key) {
+      case 'lite':
+        return const ['lite'];
+      case 'both':
+        return const ['service', 'lite'];
+      case 'service':
+      default:
+        return const ['service'];
+    }
+  }
+
   Future<void> _addArea() async {
     if (_adding) return;
 
@@ -73,6 +97,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
     }
 
     final areaId = '$division-$areaName';
+    final modes = _toModes(_selectedModeKey);
 
     setState(() => _adding = true);
 
@@ -95,6 +120,9 @@ class _AddAreaTabState extends State<AddAreaTab> {
           'name': areaName,
           'englishName': englishAreaName,
           'division': division,
+          // ✅ 신규: 서비스/Lite 공용 여부 저장
+          //    예) 서비스: ['service'], Lite: ['lite'], 공용: ['service','lite']
+          'modes': modes,
           'createdAt': FieldValue.serverTimestamp(),
         });
         writes += 1; // ✅ Firestore WRITE
@@ -238,7 +266,9 @@ class _AddAreaTabState extends State<AddAreaTab> {
         children: [
           DropdownButtonFormField<String>(
             value: widget.selectedDivision,
-            items: widget.divisionList.map((div) => DropdownMenuItem(value: div, child: Text(div))).toList(),
+            items: widget.divisionList
+                .map((div) => DropdownMenuItem(value: div, child: Text(div)))
+                .toList(),
             onChanged: busy
                 ? null
                 : (val) {
@@ -251,6 +281,21 @@ class _AddAreaTabState extends State<AddAreaTab> {
             decoration: const InputDecoration(labelText: '회사 선택'),
           ),
           const SizedBox(height: 12),
+
+          // ✅ 신규: 모드 선택
+          DropdownButtonFormField<String>(
+            value: _selectedModeKey,
+            items: _modeItems
+                .map((m) => DropdownMenuItem<String>(
+              value: m.key,
+              child: Text(m.label),
+            ))
+                .toList(),
+            onChanged: busy ? null : (v) => setState(() => _selectedModeKey = v ?? 'service'),
+            decoration: const InputDecoration(labelText: '추가할 지역의 모드'),
+          ),
+          const SizedBox(height: 12),
+
           TextField(
             controller: _areaController,
             textInputAction: TextInputAction.done,
@@ -321,4 +366,10 @@ class _AddAreaTabState extends State<AddAreaTab> {
       ),
     );
   }
+}
+
+class _ModeItem {
+  final String key;
+  final String label;
+  const _ModeItem({required this.key, required this.label});
 }

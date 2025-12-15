@@ -68,6 +68,8 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
         'name': input,
         'division': input,
         'isHeadquarter': true,
+        // ✅ 신규: 본사 area는 기본적으로 공용으로 생성(서비스+Lite)
+        'modes': const ['service', 'lite'],
         'createdAt': FieldValue.serverTimestamp(),
       });
 

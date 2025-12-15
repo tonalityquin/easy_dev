@@ -3,9 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../states/page/lite_page_state.dart';
-import '../states/page/lite_page_info.dart';
 import '../states/area/area_state.dart';
-import '../states/plate/plate_state.dart';
+import '../states/plate/lite_plate_state.dart';
 import '../states/user/user_state.dart';
 
 import 'lite_mode/lite_input_package/lite_input_plate_screen.dart';
@@ -37,20 +36,29 @@ class _LiteTypePageState extends State<LiteTypePage> {
   void initState() {
     super.initState();
 
-    // ✅ 필드 페이지 진입: PlateState 활성화만
+    // ✅ Lite 진입: PlateState 절대 금지(구독 시작됨)
+    // ✅ LitePlateState만 1회 로드(get) 수행
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final plateState = context.read<PlateState>();
-      plateState.enableForTypePages();
+      context.read<LitePlateState>().enableForTypePages(withDefaults: true);
     });
+  }
+
+  @override
+  void dispose() {
+    // ✅ Lite 이탈: 로드/보류 상태 정리
+    try {
+      context.read<LitePlateState>().disableAll();
+    } catch (_) {}
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => LitePageState(pages: defaultPages),
+      create: (_) => LitePageState(), // ✅ defaultPages 주입 제거(순환 참조 방지)
       child: Builder(
         builder: (context) {
-          final plateState = context.read<PlateState>();
+          final plateState = context.read<LitePlateState>();
           final pageState = context.read<LitePageState>();
           final userName = context.read<UserState>().name;
 
@@ -65,7 +73,6 @@ class _LiteTypePageState extends State<LiteTypePage> {
             onPopInvoked: (didPop) async {
               if (didPop) return;
 
-              // ✅ 탭이 1개(홈)만 있어도 동작하도록: 현재 페이지 기준으로 selection 해제 로직 유지
               final currentPage = pageState.pages[pageState.selectedIndex];
               final collection = currentPage.collectionKey;
               final selectedPlate = plateState.getSelectedPlate(collection, userName);
@@ -87,11 +94,7 @@ class _LiteTypePageState extends State<LiteTypePage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const _ChatDashboardBar(),
-
-                    // ✅ BottomNavigationBar는 items>=2 조건 때문에 사용 불가
-                    // ✅ 홈 1탭 전용 커스텀 바 사용
                     const _SingleHomeTabBar(),
-
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       child: SizedBox(
@@ -113,10 +116,7 @@ class _LiteTypePageState extends State<LiteTypePage> {
 class _ChatDashboardBar extends StatelessWidget {
   const _ChatDashboardBar();
 
-  static Future<void> _replayLatestTts(
-    BuildContext context,
-    String area,
-  ) async {
+  static Future<void> _replayLatestTts(BuildContext context, String area) async {
     final text = (await LatestMessageService.instance.readFromPrefs()).trim();
     if (text.isEmpty) {
       showSelectedSnackbar(context, '최근 메시지가 없습니다.');
@@ -144,47 +144,47 @@ class _ChatDashboardBar extends StatelessWidget {
           Expanded(
             child: area.isEmpty
                 ? ElevatedButton(
-                    onPressed: null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.white,
-                      foregroundColor: _Palette.dark.withOpacity(.35),
-                      disabledBackgroundColor: Colors.white,
-                      disabledForegroundColor: _Palette.dark.withOpacity(.35),
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                    ),
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.volume_up, size: 20),
-                        SizedBox(width: 6),
-                        Text('다시 듣기'),
-                      ],
-                    ),
-                  )
+              onPressed: null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: _Palette.dark.withOpacity(.35),
+                disabledBackgroundColor: Colors.white,
+                disabledForegroundColor: _Palette.dark.withOpacity(.35),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.volume_up, size: 20),
+                  SizedBox(width: 6),
+                  Text('다시 듣기'),
+                ],
+              ),
+            )
                 : ValueListenableBuilder<LatestMessageData>(
-                    valueListenable: LatestMessageService.instance.latest,
-                    builder: (context, latestData, _) {
-                      final hasText = latestData.text.trim().isNotEmpty;
-                      return ElevatedButton(
-                        onPressed: hasText ? () => _replayLatestTts(context, area) : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: _Palette.base,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.volume_up, size: 20),
-                            SizedBox(width: 6),
-                            Text('다시 듣기', overflow: TextOverflow.ellipsis),
-                          ],
-                        ),
-                      );
-                    },
+              valueListenable: LatestMessageService.instance.latest,
+              builder: (context, latestData, _) {
+                final hasText = latestData.text.trim().isNotEmpty;
+                return ElevatedButton(
+                  onPressed: hasText ? () => _replayLatestTts(context, area) : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: _Palette.base,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.volume_up, size: 20),
+                      SizedBox(width: 6),
+                      Text('다시 듣기', overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -222,7 +222,6 @@ class _ChatDashboardBar extends StatelessWidget {
   }
 }
 
-/// ✅ 홈 1탭 전용 하단 바 (BottomNavigationBar 대체)
 class _SingleHomeTabBar extends StatelessWidget {
   const _SingleHomeTabBar();
 
@@ -236,7 +235,6 @@ class _SingleHomeTabBar extends StatelessWidget {
             color: Colors.white,
             child: InkWell(
               onTap: () {
-                // 홈(0) 재탭 시 ParkingCompletedPage.reset 동작 유지
                 pageState.onItemTapped(
                   context,
                   0,
@@ -346,12 +344,12 @@ class _RefreshableBodyState extends State<RefreshableBody> {
       onVerticalDragStart: (_) => _vDragDistance = 0.0,
       onVerticalDragUpdate: (details) => _vDragDistance += details.delta.dy,
       onVerticalDragEnd: (details) => _handleVerticalDragEnd(context, details),
-      child: Consumer<LitePageState>(
-        builder: (context, state, _) {
+      child: Consumer2<LitePageState, LitePlateState>(
+        builder: (context, pageState, plateState, _) {
           return Stack(
             children: [
-              _buildCurrentPage(context, state),
-              if (state.isLoading)
+              _buildCurrentPage(context, pageState),
+              if (plateState.isLoading)
                 Container(
                   color: Colors.white.withOpacity(.35),
                   child: const Center(
@@ -373,7 +371,6 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   }
 
   Widget _buildCurrentPage(BuildContext context, LitePageState state) {
-    // ✅ 탭이 1개(홈)여도 안전하게 현재 탭 builder 사용
     final pageInfo = state.pages[state.selectedIndex];
     return pageInfo.builder(context);
   }

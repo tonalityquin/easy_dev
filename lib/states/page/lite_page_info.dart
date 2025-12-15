@@ -1,12 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../../enums/plate_type.dart';
 import '../../screens/lite_mode/lite_hq_package/lite_dash_board.dart';
 import '../../screens/lite_mode/lite_type_package/lite_parking_completed_page.dart';
-import 'lite_page_state.dart';
-
-// ✅ 서비스 모드 기존 페이지 재사용
 
 /// 라이트 타입 페이지 탭 메타
 class LitePageInfo {
@@ -22,18 +18,21 @@ class LitePageInfo {
 }
 
 /// ✅ 하단 탭: "홈" 1개만 유지 (입차/출차 탭 제거)
-final List<LitePageInfo> defaultPages = [
-  LitePageInfo(
-    title: '홈',
-    collectionKey: PlateType.parkingCompleted,
-    builder: (context) {
-      final liteState = context.read<LitePageState>();
-      return LiteParkingCompletedPage(key: liteState.parkingCompletedKey);
-    },
-  ),
-];
+/// ✅ 순환 참조 방지를 위해 LitePageState를 import 하지 않습니다.
+/// 필요한 GlobalKey는 LitePageState에서 생성 후 여기로 "주입"합니다.
+List<LitePageInfo> buildLiteDefaultPages({
+  required GlobalKey parkingCompletedKey,
+}) {
+  return <LitePageInfo>[
+    LitePageInfo(
+      title: '홈',
+      collectionKey: PlateType.parkingCompleted,
+      builder: (context) => LiteParkingCompletedPage(key: parkingCompletedKey),
+    ),
+  ];
+}
 
-/// ✅ LiteHqPageInfo 로직 유지
+/// ✅ HQ 페이지 메타
 class LiteHqPageInfo {
   final String title;
   final Widget page;

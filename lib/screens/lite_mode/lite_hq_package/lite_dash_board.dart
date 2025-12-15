@@ -33,10 +33,10 @@ class LiteDashBoard extends StatelessWidget {
                     child: Text(
                       screenTag,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: Colors.black54,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.2,
-                              ) ??
+                        color: Colors.black54,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.2,
+                      ) ??
                           const TextStyle(
                             fontSize: 11,
                             color: Colors.black54,
