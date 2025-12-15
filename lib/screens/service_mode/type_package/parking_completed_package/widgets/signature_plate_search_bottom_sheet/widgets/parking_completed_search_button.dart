@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 class ParkingCompletedSearchButton extends StatelessWidget {
+  // 브랜드 컬러(요청 반영)
+  static const Color _base = Color(0xFF0D47A1);
+
   final bool isValid;
   final bool isLoading;
   final VoidCallback? onPressed;
@@ -14,19 +17,18 @@ class ParkingCompletedSearchButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    final onPrimary = Theme.of(context).colorScheme.onPrimary;
+    final enabled = isValid && !isLoading;
 
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
-        onPressed: isValid && !isLoading ? onPressed : null,
+        onPressed: enabled ? onPressed : null,
         style: ElevatedButton.styleFrom(
-          backgroundColor: isValid ? primary : Colors.grey.shade300,
-          foregroundColor: isValid ? onPrimary : Colors.black45,
+          backgroundColor: enabled ? _base : Colors.grey.shade300,
+          foregroundColor: enabled ? Colors.white : Colors.black45,
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
           ),
           elevation: 0,
         ),
@@ -39,9 +41,16 @@ class ParkingCompletedSearchButton extends StatelessWidget {
             valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
           ),
         )
-            : const Text(
-          '검색',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+            : const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search, size: 18),
+            SizedBox(width: 8),
+            Text(
+              '검색',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+          ],
         ),
       ),
     );

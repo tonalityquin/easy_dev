@@ -24,11 +24,17 @@ class LiteParkingCompletedSearchBottomSheet extends StatefulWidget {
   });
 
   @override
-  State<LiteParkingCompletedSearchBottomSheet> createState() => _LiteParkingCompletedSearchBottomSheetState();
+  State<LiteParkingCompletedSearchBottomSheet> createState() =>
+      _LiteParkingCompletedSearchBottomSheetState();
 }
 
-class _LiteParkingCompletedSearchBottomSheetState extends State<LiteParkingCompletedSearchBottomSheet>
+class _LiteParkingCompletedSearchBottomSheetState
+    extends State<LiteParkingCompletedSearchBottomSheet>
     with SingleTickerProviderStateMixin {
+  // ✅ 요청 팔레트 (BlueGrey)
+  static const Color _base = Color(0xFF546E7A); // BlueGrey 600
+  static const Color _dark = Color(0xFF37474F); // BlueGrey 800
+
   final TextEditingController _controller = TextEditingController();
 
   bool _isLoading = false;
@@ -44,7 +50,8 @@ class _LiteParkingCompletedSearchBottomSheetState extends State<LiteParkingCompl
   @override
   void initState() {
     super.initState();
-    _keypadController = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
+    _keypadController =
+        AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.2),
       end: Offset.zero,
@@ -66,9 +73,7 @@ class _LiteParkingCompletedSearchBottomSheetState extends State<LiteParkingCompl
 
   Future<void> _refreshSearchResults() async {
     if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       final repository = FirestorePlateRepository();
@@ -86,9 +91,7 @@ class _LiteParkingCompletedSearchBottomSheetState extends State<LiteParkingCompl
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() {
-        _isLoading = false;
-      });
+      setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('검색 중 오류가 발생했습니다: $e')),
       );
@@ -112,115 +115,93 @@ class _LiteParkingCompletedSearchBottomSheetState extends State<LiteParkingCompl
               return Container(
                 decoration: const BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 ),
                 child: ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                  child: ListView(
-                    controller: scrollController,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  child: Column(
                     children: [
+                      const SizedBox(height: 10),
                       Center(
                         child: Container(
-                          width: 40,
+                          width: 44,
                           height: 4,
                           decoration: BoxDecoration(
                             color: Colors.grey.shade300,
-                            borderRadius: BorderRadius.circular(2),
+                            borderRadius: BorderRadius.circular(999),
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      const LiteParkingCompletedPlateSearchHeader(),
-                      const SizedBox(height: 24),
-                      LiteParkingCompletedPlateNumberDisplay(controller: _controller, isValidPlate: isValidPlate),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 12),
 
-                      Builder(
-                        builder: (_) {
-                          final text = _controller.text;
-                          final valid = isValidPlate(text);
-
-                          if (!_hasSearched) {
-                            return const SizedBox.shrink();
-                          }
-
-                          if (_isLoading) {
-                            return const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 24),
-                              child: Center(child: CircularProgressIndicator()),
-                            );
-                          }
-
-                          if (!valid) {
-                            return const _EmptyState(text: '유효하지 않은 번호 형식입니다. (숫자 4자리)');
-                          }
-
-                          if (_results.isEmpty) {
-                            return const _EmptyState(text: '검색 결과가 없습니다.');
-                          }
-
-                          return LiteParkingCompletedPlateSearchResults(
-                            results: _results,
-                            onSelect: (selected) {
-                              if (_navigating) return;
-                              _navigating = true;
-
-                              Navigator.pop(context);
-
-                              WidgetsBinding.instance.addPostFrameCallback((_) {
-                                showLiteParkingCompletedStatusBottomSheet(
-                                  context: rootContext,
-                                  plate: selected,
-                                  onRequestEntry: () async {
-                                    await rootContext.read<MovementPlate>().goBackToParkingRequest(
-                                      fromType: PlateType.parkingCompleted,
-                                      plateNumber: selected.plateNumber,
-                                      area: selected.area,
-                                      newLocation: "미지정",
-                                    );
-                                    await _refreshSearchResults();
-                                  },
-                                  onDelete: () async {
-                                    await rootContext.read<DeletePlate>().deleteFromParkingCompleted(
-                                      selected.plateNumber,
-                                      selected.area,
-                                    );
-                                    await _refreshSearchResults();
-                                  },
-                                );
-                              });
-                            },
-                          );
-                        },
-                      ),
-
-                      Center(
-                        child: TextButton(
-                          onPressed: () => Navigator.pop(context),
-                          child: const Text('닫기'),
+                      // 상단 헤더(닫기 버튼 포함)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Row(
+                          children: [
+                            const Expanded(child: LiteParkingCompletedPlateSearchHeader()),
+                            IconButton(
+                              tooltip: '닫기',
+                              onPressed: () => Navigator.pop(context),
+                              icon: Icon(Icons.close, color: _dark),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(height: 16),
 
-                      ValueListenableBuilder<TextEditingValue>(
-                        valueListenable: _controller,
-                        builder: (context, value, child) {
-                          final valid = isValidPlate(value.text);
-                          return LiteParkingCompletedSearchButton(
-                            isValid: valid,
-                            isLoading: _isLoading,
-                            onPressed: valid
-                                ? () async {
-                              await _refreshSearchResults();
-                              widget.onSearch(value.text);
-                            }
-                                : null,
-                          );
-                        },
+                      const SizedBox(height: 8),
+
+                      Expanded(
+                        child: ListView(
+                          controller: scrollController,
+                          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                          children: [
+                            // 입력 카드
+                            _CardSection(
+                              title: '번호 4자리 입력',
+                              subtitle: '예: 1234',
+                              accent: _base,
+                              child: LiteParkingCompletedPlateNumberDisplay(
+                                controller: _controller,
+                                isValidPlate: isValidPlate,
+                              ),
+                            ),
+
+                            const SizedBox(height: 12),
+
+                            // 결과 영역
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 220),
+                              switchInCurve: Curves.easeOut,
+                              switchOutCurve: Curves.easeIn,
+                              child: _buildResultSection(rootContext, scrollController),
+                            ),
+
+                            const SizedBox(height: 12),
+                          ],
+                        ),
                       ),
 
-                      const SizedBox(height: 16),
+                      // 하단 CTA (검색 버튼)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
+                        child: ValueListenableBuilder<TextEditingValue>(
+                          valueListenable: _controller,
+                          builder: (context, value, child) {
+                            final valid = isValidPlate(value.text);
+                            return LiteParkingCompletedSearchButton(
+                              isValid: valid,
+                              isLoading: _isLoading,
+                              onPressed: valid
+                                  ? () async {
+                                await _refreshSearchResults();
+                                widget.onSearch(value.text);
+                              }
+                                  : null,
+                            );
+                          },
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -228,6 +209,8 @@ class _LiteParkingCompletedSearchBottomSheetState extends State<LiteParkingCompl
             },
           ),
         ),
+
+        // 키패드(검색 전만 노출) — 기존 로직 유지
         bottomNavigationBar: _hasSearched
             ? const SizedBox.shrink()
             : AnimatedKeypad(
@@ -246,22 +229,174 @@ class _LiteParkingCompletedSearchBottomSheetState extends State<LiteParkingCompl
       ),
     );
   }
+
+  Widget _buildResultSection(BuildContext rootContext, ScrollController scrollController) {
+    final text = _controller.text;
+    final valid = isValidPlate(text);
+
+    if (!_hasSearched) {
+      return const SizedBox.shrink();
+    }
+
+    if (_isLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 26),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (!valid) {
+      return const _EmptyState(
+        icon: Icons.error_outline,
+        title: '유효하지 않은 번호 형식',
+        message: '숫자 4자리를 입력해주세요.',
+        tone: _EmptyTone.danger,
+      );
+    }
+
+    if (_results.isEmpty) {
+      return const _EmptyState(
+        icon: Icons.search_off,
+        title: '검색 결과 없음',
+        message: '해당 4자리 번호판을 찾지 못했습니다.',
+        tone: _EmptyTone.neutral,
+      );
+    }
+
+    return LiteParkingCompletedPlateSearchResults(
+      results: _results,
+      onSelect: (selected) {
+        if (_navigating) return;
+        _navigating = true;
+
+        Navigator.pop(context);
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          showLiteParkingCompletedStatusBottomSheet(
+            context: rootContext,
+            plate: selected,
+            onRequestEntry: () async {
+              await rootContext.read<MovementPlate>().goBackToParkingRequest(
+                fromType: PlateType.parkingCompleted,
+                plateNumber: selected.plateNumber,
+                area: selected.area,
+                newLocation: "미지정",
+              );
+              await _refreshSearchResults(); // (기존 로직 유지)
+            },
+            onDelete: () async {
+              await rootContext.read<DeletePlate>().deleteFromParkingCompleted(
+                selected.plateNumber,
+                selected.area,
+              );
+              await _refreshSearchResults(); // (기존 로직 유지)
+            },
+          );
+        });
+      },
+    );
+  }
 }
 
-class _EmptyState extends StatelessWidget {
-  final String text;
-  const _EmptyState({required this.text});
+class _CardSection extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Widget child;
+  final Color accent;
+
+  const _CardSection({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+    required this.accent,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Center(
-        child: Text(
-          text,
-          style: const TextStyle(color: Colors.redAccent, fontSize: 16),
-          textAlign: TextAlign.center,
-        ),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.black12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 8),
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 12)),
+          const SizedBox(height: 12),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+enum _EmptyTone { neutral, danger }
+
+class _EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String message;
+  final _EmptyTone tone;
+
+  const _EmptyState({
+    required this.icon,
+    required this.title,
+    required this.message,
+    required this.tone,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Color fg = (tone == _EmptyTone.danger) ? Colors.redAccent : Colors.black54;
+    final Color bg =
+    (tone == _EmptyTone.danger) ? Colors.red.withOpacity(0.05) : Colors.grey.shade100;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: fg),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: TextStyle(color: fg, fontWeight: FontWeight.w900)),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: TextStyle(color: fg.withOpacity(0.85), fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

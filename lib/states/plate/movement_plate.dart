@@ -11,8 +11,6 @@ import '../../screens/service_mode/type_package/common_widgets/reverse_sheet_pac
 import '../../screens/service_mode/type_package/common_widgets/reverse_sheet_package/services/status_mapping.dart';
 import '../user/user_state.dart';
 
-// 🔹 입차/출차 로컬 SQLite 기록용
-
 /// ✅ parking_completed_view "쓰기(Upsert/Delete)"를 기기 로컬 토글(SharedPreferences)로 제어
 /// - UI 토글과 동일 키를 사용해야 실제로 연동됩니다.
 class _ParkingCompletedViewWriteGate {
@@ -123,6 +121,27 @@ class MovementPlate extends ChangeNotifier {
     }
   }
 
+  /// ✅ 로컬 SQLite: (필요 시) 입차완료 로그를 만들고 출차완료 처리까지 보장
+  /// - status_mapping.dart 상수(kStatusEntryRequest/kStatusEntryDone) 및 ParkingCompletedLogger 적용
+  Future<void> _ensureLocalEntryAndMarkDepartureCompleted({
+    required String plateNumber,
+    required String location,
+  }) async {
+    // (1) 혹시 이 기기 로컬에 입차완료 로그가 없는 경우 대비: 있으면 skip될 수 있도록 maybeLog 사용
+    await ParkingCompletedLogger.instance.maybeLogEntryCompleted(
+      plateNumber: plateNumber,
+      location: location,
+      oldStatus: kStatusEntryRequest,
+      newStatus: kStatusEntryDone,
+    );
+
+    // (2) 출차 완료 플래그 ON
+    await ParkingCompletedLogger.instance.markDepartureCompleted(
+      plateNumber: plateNumber,
+      location: location,
+    );
+  }
+
   /// 입차 완료 (parking_requests → parking_completed)
   Future<void> setParkingCompleted(
       String plateNumber,
@@ -198,6 +217,48 @@ class MovementPlate extends ChangeNotifier {
     // 출차 요청 자체는 로컬 ParkingCompleted에 별도 변동 없음 (기존 유지)
   }
 
+  /// ✅ (신규) 출차 완료 "직접" 처리 (parking_completed → departure_completed)
+  ///
+  /// - Firestore 타입 전환: parking_completed → departure_completed
+  /// - parking_completed_view에서는 해당 item 제거(토글 ON인 경우)
+  /// - 로컬 SQLite: (필요 시) 입차완료 로그 생성 후 출차완료로 마킹
+  Future<void> setDepartureCompletedDirectFromParkingCompleted(
+      String plateNumber,
+      String area,
+      String location, {
+        bool forceOverride = true,
+      }) async {
+    final actor = _user.name;
+    final plateDocId = _plateDocId(plateNumber, area);
+
+    // 1) Firestore: parking_completed -> departure_completed 직접 전환
+    await _write.transitionPlateType(
+      plateId: plateDocId,
+      actor: actor,
+      fromType: PlateType.parkingCompleted.firestoreValue,
+      toType: PlateType.departureCompleted.firestoreValue,
+      extraFields: {
+        'area': area,
+        'location': location,
+        'departureCompletedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+      forceOverride: forceOverride,
+    );
+
+    // 2) View: parking_completed 이탈이므로 제거(토글 ON일 때만)
+    await _removeParkingCompletedViewItem(
+      area: area,
+      plateDocId: plateDocId,
+    );
+
+    // 3) 로컬 SQLite: 출차 완료 플래그 ON (입차완료 로그 없으면 만들어 둔 뒤 처리)
+    await _ensureLocalEntryAndMarkDepartureCompleted(
+      plateNumber: plateNumber,
+      location: location,
+    );
+  }
+
   /// 출차 완료 (departure_requests → departure_completed)
   ///
   /// - Firestore 타입 전환
@@ -221,6 +282,7 @@ class MovementPlate extends ChangeNotifier {
       extraFields: {
         'area': selectedPlate.area,
         'location': selectedPlate.location,
+        'departureCompletedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       },
       forceOverride: forceOverride,
