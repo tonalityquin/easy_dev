@@ -1,3 +1,4 @@
+// lib/screens/input_package/lite_input_plate_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -47,20 +48,114 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
   final DraggableScrollableController _sheetController = DraggableScrollableController();
   bool _sheetOpen = false; // 현재 열림 상태
 
+  // ✅ 시트 내부 스크롤 컨트롤러(닫힘에서 스크롤 잠금/원복을 위해 보관)
+  ScrollController? _sheetScrollController;
+
   // 도크에서 편집 시작 여부(완료 시 키패드 닫기 위한 플래그)
   _DockField? _dockEditing;
 
   static const double _sheetClosed = 0.16; // 헤더만 살짝
-  static const double _sheetOpened = 1.00; // ★ 최상단까지 (화면 높이 꽉 채움)
+  static const double _sheetOpened = 1.00; // 최상단까지
 
-  // ✅ 월정기 문서 존재 여부(정기 버튼으로 불러오기 성공했는지)
+  // ✅ 월정기 문서 존재 여부(정기에서 불러오기 성공했는지)
   bool _monthlyDocExists = false;
 
   // ✅ monthly_plate_status "메모/상태 반영" 처리 중 플래그(중복 클릭 방지)
   bool _monthlyApplying = false;
 
+  // ─────────────────────────────
+  // ✅ 도커 내부 페이지(정산 유형 / 추가 상태·메모) 스와이프 전환
+  //  - 버튼/탭 제거
+  //  - 스와이프만 전환
+  //  - 헤더 우측 인디케이터(●○) 표시
+  //  - 완전 닫힘 상태에서는 가로 스와이프 비활성화
+  // ─────────────────────────────
+  static const int _dockPageBill = 0;
+  static const int _dockPageMemo = 1;
+
+  int _dockPageIndex = _dockPageBill;
+  bool _dockSlideFromRight = true;
+
+  String get _pageIndicatorText => (_dockPageIndex == _dockPageBill) ? '●○' : '○●';
+
+  void _jumpSheetScrollToTop() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        final sc = _sheetScrollController;
+        if (sc != null && sc.hasClients) {
+          sc.jumpTo(0);
+        }
+      } catch (_) {
+        // ignore
+      }
+    });
+  }
+
+  void _resetDockToBillPage() {
+    if (!mounted) return;
+    setState(() {
+      _dockSlideFromRight = false;
+      _dockPageIndex = _dockPageBill;
+    });
+    _jumpSheetScrollToTop();
+  }
+
+  void _setDockPage(int index) {
+    if (index == _dockPageIndex) return;
+    if (!mounted) return;
+
+    setState(() {
+      _dockSlideFromRight = index > _dockPageIndex;
+      _dockPageIndex = index;
+    });
+
+    _jumpSheetScrollToTop();
+  }
+
+  void _handleDockHorizontalSwipe(DragEndDetails details, {required bool canSwipe}) {
+    if (!canSwipe) return;
+
+    final v = details.primaryVelocity ?? 0.0;
+    if (v.abs() < 250) return;
+
+    if (v < 0) {
+      // left swipe
+      _setDockPage(_dockPageMemo);
+    } else {
+      // right swipe
+      _setDockPage(_dockPageBill);
+    }
+  }
+
+  bool _isSheetFullyClosed() {
+    try {
+      if (!_sheetController.isAttached) return false;
+      return (_sheetController.size <= _sheetClosed + 0.0005);
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _animateSheet({required bool open}) async {
     final target = open ? _sheetOpened : _sheetClosed;
+
+    // ✅ 열 때마다 항상 정산 유형 페이지에서 시작
+    if (open) {
+      _resetDockToBillPage();
+    }
+
+    // ✅ 닫을 때는 내부 스크롤을 최상단으로 되돌림
+    if (!open) {
+      try {
+        final sc = _sheetScrollController;
+        if (sc != null && sc.hasClients) {
+          sc.jumpTo(0);
+        }
+      } catch (_) {
+        // ignore
+      }
+    }
+
     try {
       await _sheetController.animateTo(
         target,
@@ -69,7 +164,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
       );
       if (mounted) setState(() => _sheetOpen = open);
     } catch (_) {
-      // 컨트롤러가 아직 attach되지 않았을 수 있음 → 프레임 이후 재시도
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _sheetController.jumpTo(target);
         if (mounted) setState(() => _sheetOpen = open);
@@ -77,9 +171,7 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     }
   }
 
-  void _toggleSheet() {
-    _animateSheet(open: !_sheetOpen);
-  }
+  void _toggleSheet() => _animateSheet(open: !_sheetOpen);
 
   @override
   void initState() {
@@ -93,14 +185,34 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     // ⬇️ 시트 사이즈 변화에 따라 _sheetOpen 동기화 (드래그로 여닫을 때도 반영)
     _sheetController.addListener(() {
       try {
-        final s = _sheetController.size; // 0.0~1.0
-        // 닫힘(0.16)과 열림(1.0) 중간값(≈0.58)을 기준으로 열림/닫힘 판정
+        final s = _sheetController.size;
         final bool openNow = s >= ((_sheetClosed + _sheetOpened) / 2);
+
         if (openNow != _sheetOpen && mounted) {
-          setState(() => _sheetOpen = openNow);
+          setState(() {
+            _sheetOpen = openNow;
+
+            // ✅ 드래그로 열려도 항상 bill 페이지로 시작
+            if (openNow) {
+              _dockSlideFromRight = false;
+              _dockPageIndex = _dockPageBill;
+            }
+          });
+
+          if (openNow) {
+            _jumpSheetScrollToTop();
+          }
+        }
+
+        // ✅ 완전 닫힘 상태에서는 내부 스크롤 offset을 0으로 강제
+        if (_isSheetFullyClosed()) {
+          final sc = _sheetScrollController;
+          if (sc != null && sc.hasClients && sc.offset != 0) {
+            sc.jumpTo(0);
+          }
         }
       } catch (_) {
-        // attach 전 접근 등은 무시
+        // ignore
       }
     });
 
@@ -110,7 +222,7 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
         final plateNumber = controller.buildPlateNumber();
         final area = context.read<AreaState>().currentArea;
 
-        // ✅ 변경: 현재 선택된 정산 유형에 따라 조회 컬렉션 분기
+        // ✅ 현재 선택된 정산 유형에 따라 조회 컬렉션 분기
         final bool isMonthly = controller.selectedBillType == '정기';
         final data = isMonthly
             ? await _fetchMonthlyPlateStatus(plateNumber, area)
@@ -121,7 +233,7 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
           final fetchedList =
               (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
 
-          // ✅ 정기인 경우에만 countType을 의미 있게 취급
+          // ✅ 정기인 경우에만 countType 의미 있게 취급
           final String? fetchedCountType = isMonthly ? (data['countType'] as String?)?.trim() : null;
 
           setState(() {
@@ -131,14 +243,12 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
             statusSectionKey = UniqueKey();
 
             if (isMonthly) {
-              _monthlyDocExists = true; // monthly_plate_status 문서 존재
+              _monthlyDocExists = true;
               if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
                 controller.countTypeController.text = fetchedCountType;
                 controller.selectedBill = fetchedCountType;
               }
             } else {
-              // ✅ 중요: plate_status에서 countType이 들어오더라도
-              // 정기처럼 UI/상태를 바꾸지 않음(오염 방지)
               _monthlyDocExists = false;
             }
           });
@@ -167,13 +277,12 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (_openedScannerOnce) return;
       _openedScannerOnce = true;
-      await _openLiveScanner(); // 사용자가 닫으면 plate == null 로 처리
+      await _openLiveScanner();
     });
   }
 
   @override
   void dispose() {
-    // ✅ 컨트롤러 정리
     _sheetController.dispose();
     controller.dispose();
     super.dispose();
@@ -185,10 +294,7 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     final docId = '${plateNumber}_$area';
     try {
       final doc = await FirebaseFirestore.instance.collection('plate_status').doc(docId).get();
-
-      if (doc.exists) {
-        return doc.data();
-      }
+      if (doc.exists) return doc.data();
       return null;
     } on FirebaseException catch (e) {
       debugPrint('[_fetchPlateStatus] FirebaseException: ${e.code} ${e.message}');
@@ -207,16 +313,14 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     }
   }
 
-  /// ✅ monthly_plate_status 단건 조회 (정기 버튼 클릭 / 정기 상태에서 자동 조회)
+  /// monthly_plate_status 단건 조회
   /// ✅ UsageReporter: area 기준 read 1회 보고(성공/실패 불문)
   Future<Map<String, dynamic>?> _fetchMonthlyPlateStatus(String plateNumber, String area) async {
     final docId = '${plateNumber}_$area';
     try {
-      final doc = await FirebaseFirestore.instance.collection('monthly_plate_status').doc(docId).get();
-
-      if (doc.exists) {
-        return doc.data();
-      }
+      final doc =
+      await FirebaseFirestore.instance.collection('monthly_plate_status').doc(docId).get();
+      if (doc.exists) return doc.data();
       return null;
     } on FirebaseException catch (e) {
       debugPrint('[_fetchMonthlyPlateStatus] FirebaseException: ${e.code} ${e.message}');
@@ -235,9 +339,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     }
   }
 
-  /// ✅ '정기' 버튼 클릭 시: monthly_plate_status에서 동일 번호판 문서가 있으면 불러와 화면에 출력(반영)
+  /// '정기' 선택 시 monthly_plate_status에서 불러와 화면에 반영
   Future<void> _handleMonthlySelectedFetchAndApply() async {
-    // 번호판이 아직 완성되지 않은 상태면 조회하지 않음
     if (!controller.isInputValid()) {
       if (!mounted) return;
       setState(() => _monthlyDocExists = false);
@@ -262,27 +365,24 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     }
 
     final fetchedStatus = (data['customStatus'] as String?)?.trim();
-    final fetchedList = (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+    final fetchedList =
+        (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
     final fetchedCountType = (data['countType'] as String?)?.trim();
 
     setState(() {
       _monthlyDocExists = true;
 
-      // 메모/상태 출력
       controller.fetchedCustomStatus = fetchedStatus;
       controller.customStatusController.text = fetchedStatus ?? '';
       selectedStatusNames = fetchedList;
       statusSectionKey = UniqueKey();
 
-      // 정기 출력(countType)
       if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
         controller.countTypeController.text = fetchedCountType;
         controller.selectedBill = fetchedCountType;
       }
-      // selectedBillType은 이미 '정기'로 바뀐 상태이므로 여기서는 재설정하지 않음
     });
 
-    // 바로 보이도록 시트를 열어줌
     if (!_sheetOpen) {
       await _animateSheet(open: true);
     }
@@ -293,8 +393,7 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     );
   }
 
-  /// ✅ 월정기( monthly_plate_status )에 "메모/상태"만 반영(merge)
-  /// - plate_status는 건드리지 않음
+  /// 월정기(monthly_plate_status)에 "메모/상태"만 반영(merge)
   Future<void> _applyMonthlyMemoAndStatusOnly() async {
     if (_monthlyApplying) return;
 
@@ -326,7 +425,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     try {
       await FirebaseFirestore.instance.collection('monthly_plate_status').doc(docId).set(
         {
-          // ✅ 핵심: "추가 상태/메모"만 반영
           'customStatus': customStatus,
           'statusList': statusList,
           'updatedAt': FieldValue.serverTimestamp(),
@@ -334,7 +432,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
         SetOptions(merge: true),
       );
 
-      // ✅ UsageReporter: write 1회
       await UsageReporter.instance.report(
         area: (area.isEmpty ? 'unknown' : area),
         action: 'write',
@@ -364,9 +461,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     }
   }
 
-  /// ✅ "반영" 버튼(추가 상태/메모 섹션 하단)
+  /// "반영" 버튼(추가 상태/메모 섹션 하단) - 정기일 때만 노출
   Widget _buildMonthlyApplyButton() {
-    // 정기 탭일 때만 노출
     if (controller.selectedBillType != '정기') {
       return const SizedBox.shrink();
     }
@@ -417,7 +513,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
   // ─────────────────────────────
   // 🔽 가운데 임의문자/누락 허용 파서 + 폴백
   // ─────────────────────────────
-
   static const List<String> _allowedKoreanMids = [
     '가', '나', '다', '라', '마', '거', '너', '더', '러', '머', '버', '서', '어', '저',
     '고', '노', '도', '로', '모', '보', '소', '오', '조', '구', '누', '두', '루', '무',
@@ -457,7 +552,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
       final back = s.group(3)!;
 
       mid = _midNormalize[mid] ?? mid;
-
       _applyToFields(front: front, mid: mid, back: back);
       return;
     }
@@ -513,7 +607,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
 
       if (promptMid || mid.isEmpty) {
         controller.showKeypad = true;
-
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('가운데 글자가 누락되었습니다. 가운데 한 글자를 입력해 주세요.')),
         );
@@ -532,6 +625,7 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     _applyPlateWithFallback(plate);
   }
 
+  /// 도크에서 특정 칸 편집 시작
   void _beginDockEdit(_DockField field) {
     setState(() {
       _dockEditing = field;
@@ -728,6 +822,89 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     Navigator.of(context).pop(false);
   }
 
+  Widget _buildDockPagedBody({required bool canSwipe}) {
+    final Widget page = (_dockPageIndex == _dockPageBill)
+        ? Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LiteInputBillSection(
+          selectedBill: controller.selectedBill,
+          onChanged: (value) => setState(() => controller.selectedBill = value),
+          selectedBillType: controller.selectedBillType,
+          onTypeChanged: (newType) {
+            setState(() {
+              controller.selectedBillType = newType;
+
+              // ✅ 정기로 바뀌면 fetch 결과로 확정
+              if (newType == '정기') {
+                _monthlyDocExists = false;
+              } else {
+                _monthlyDocExists = false;
+              }
+            });
+
+            if (newType == '정기') {
+              _handleMonthlySelectedFetchAndApply();
+            }
+          },
+          countTypeController: controller.countTypeController,
+        ),
+      ],
+    )
+        : Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LiteInputCustomStatusSection(
+          controller: controller,
+          fetchedCustomStatus: controller.fetchedCustomStatus,
+          selectedStatusNames: selectedStatusNames,
+          statusSectionKey: statusSectionKey,
+          onDeleted: () {
+            setState(() {
+              controller.fetchedCustomStatus = null;
+              controller.customStatusController.clear();
+            });
+          },
+          onStatusCleared: () {
+            setState(() {
+              selectedStatusNames = [];
+              statusSectionKey = UniqueKey();
+            });
+          },
+        ),
+        _buildMonthlyApplyButton(),
+        const SizedBox(height: 8),
+      ],
+    );
+
+    final content = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      transitionBuilder: (child, animation) {
+        final begin = _dockSlideFromRight ? const Offset(0.10, 0) : const Offset(-0.10, 0);
+        final offsetAnim = Tween<Offset>(begin: begin, end: Offset.zero).animate(animation);
+        return SlideTransition(
+          position: offsetAnim,
+          child: FadeTransition(opacity: animation, child: child),
+        );
+      },
+      child: KeyedSubtree(
+        key: ValueKey<int>(_dockPageIndex),
+        child: page,
+      ),
+    );
+
+    // ✅ 완전 닫힘(canSwipe=false)에서는 가로 스와이프 전환 완전 비활성화
+    if (!canSwipe) return content;
+
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onHorizontalDragEnd: (d) => _handleDockHorizontalSwipe(d, canSwipe: canSwipe),
+      child: content,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final viewInset = MediaQuery.of(context).viewInsets.bottom;
@@ -815,7 +992,7 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
                               controller.clearInput();
                               controller.setActiveController(controller.controllerFrontDigit);
                               _dockEditing = null;
-                              _monthlyDocExists = false; // ✅ 번호판 변경 흐름에서 월정기 로딩 상태 리셋
+                              _monthlyDocExists = false;
                             });
                           },
                           onRegionChanged: (region) {
@@ -838,7 +1015,7 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
                   ),
                 ),
 
-                // 하단 시트
+                // ✅ 카드 영역: 내부 세로 스크롤 + 헤더 고정 + 닫힘(_sheetClosed)에서는 스크롤 완전 비활성화
                 DraggableScrollableSheet(
                   controller: _sheetController,
                   initialChildSize: _sheetClosed,
@@ -849,9 +1026,19 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
                   builder: (context, scrollController) {
                     const sheetBg = Color(0xFFF6F8FF);
 
+                    // ✅ 최신 스크롤 컨트롤러 보관
+                    _sheetScrollController = scrollController;
+
+                    final bool lockScroll = _isSheetFullyClosed();
+                    final bool canSwipe = !lockScroll;
+
+                    // ✅ 핵심: bottom padding 과다 제거(“끝이 없는 스크롤” 방지)
+                    // - 시스템 키보드(viewInset)만 대응
+                    // - 커스텀 키패드는 bottomNavigationBar로 인해 body 높이가 이미 줄어듦
+                    final sheetBottomPadding = 16.0 + viewInset;
+
                     return Container(
                       decoration: const BoxDecoration(
-                        color: sheetBg,
                         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                         boxShadow: [
                           BoxShadow(
@@ -861,103 +1048,60 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
                           ),
                         ],
                       ),
-                      child: SafeArea(
-                        top: true,
-                        bottom: false,
-                        child: ListView(
-                          controller: scrollController,
-                          physics: const NeverScrollableScrollPhysics(),
-                          padding: EdgeInsets.fromLTRB(
-                            16,
-                            8,
-                            16,
-                            16 + (controller.showKeypad ? 260 : 100) + viewInset + sysBottom,
-                          ),
-                          children: [
-                            GestureDetector(
-                              behavior: HitTestBehavior.opaque,
-                              onTap: _toggleSheet,
-                              child: Padding(
-                                padding: const EdgeInsets.only(top: 8, bottom: 12),
-                                child: Column(
-                                  children: [
-                                    Container(
-                                      width: 40,
-                                      height: 4,
-                                      decoration: BoxDecoration(
-                                        color: Colors.black38,
-                                        borderRadius: BorderRadius.circular(2),
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                        clipBehavior: Clip.antiAlias,
+                        child: ColoredBox(
+                          color: sheetBg,
+                          child: SafeArea(
+                            top: true,
+                            bottom: false,
+                            child: NotificationListener<ScrollNotification>(
+                              onNotification: (notification) {
+                                if (!lockScroll) return false;
+
+                                if (notification is ScrollUpdateNotification ||
+                                    notification is OverscrollNotification ||
+                                    notification is UserScrollNotification) {
+                                  try {
+                                    if (scrollController.hasClients && scrollController.offset != 0) {
+                                      scrollController.jumpTo(0);
+                                    }
+                                  } catch (_) {
+                                    // ignore
+                                  }
+                                  return true;
+                                }
+                                return false;
+                              },
+                              child: CustomScrollView(
+                                controller: scrollController,
+                                physics: const ClampingScrollPhysics(),
+                                slivers: [
+                                  SliverPersistentHeader(
+                                    pinned: true,
+                                    delegate: _SheetHeaderDelegate(
+                                      backgroundColor: sheetBg,
+                                      sheetOpen: _sheetOpen,
+                                      plateText: controller.buildPlateNumber(),
+                                      onToggle: _toggleSheet,
+                                      pageIndicatorText: _pageIndicatorText,
+                                    ),
+                                  ),
+                                  SliverPadding(
+                                    padding: EdgeInsets.fromLTRB(16, 12, 16, sheetBottomPadding),
+                                    sliver: SliverList(
+                                      delegate: SliverChildListDelegate(
+                                        [
+                                          _buildDockPagedBody(canSwipe: canSwipe),
+                                        ],
                                       ),
                                     ),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          _sheetOpen ? '정산 유형 / 메모 카드 닫기' : '정산 유형 / 메모 카드 열기',
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                        Text(
-                                          controller.buildPlateNumber(),
-                                          style: const TextStyle(color: Colors.black54),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 12),
-
-                            // ⬇️ 정산 영역 (정기 클릭 시 monthly_plate_status에서 조회/반영)
-                            LiteInputBillSection(
-                              selectedBill: controller.selectedBill,
-                              onChanged: (value) => setState(() => controller.selectedBill = value),
-                              selectedBillType: controller.selectedBillType,
-                              onTypeChanged: (newType) {
-                                setState(() {
-                                  controller.selectedBillType = newType;
-                                  if (newType == '정기') {
-                                    _monthlyDocExists = false; // ✅ fetch 결과로 다시 확정
-                                  }
-                                });
-
-                                if (newType == '정기') {
-                                  _handleMonthlySelectedFetchAndApply();
-                                }
-                              },
-                              countTypeController: controller.countTypeController,
-                            ),
-
-                            const SizedBox(height: 24),
-
-                            LiteInputCustomStatusSection(
-                              controller: controller,
-                              fetchedCustomStatus: controller.fetchedCustomStatus,
-                              selectedStatusNames: selectedStatusNames,
-                              statusSectionKey: statusSectionKey,
-                              onDeleted: () {
-                                setState(() {
-                                  controller.fetchedCustomStatus = null;
-                                  controller.customStatusController.clear();
-                                });
-                              },
-                              onStatusCleared: () {
-                                setState(() {
-                                  selectedStatusNames = [];
-                                  statusSectionKey = UniqueKey();
-                                });
-                              },
-                            ),
-
-                            // ✅ 추가: 메모/상태 하단 "반영" 버튼(정기일 때만 표시)
-                            _buildMonthlyApplyButton(),
-
-                            const SizedBox(height: 8),
-                          ],
+                          ),
                         ),
                       ),
                     );
@@ -976,6 +1120,102 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
         ),
       ),
     );
+  }
+}
+
+/// ✅ 카드 헤더(핸들/타이틀/번호판) 고정 + 탭으로 열기/닫기
+/// ✅ 헤더 우측에 페이지 인디케이터(●○) 표시
+class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final Color backgroundColor;
+  final bool sheetOpen;
+  final String plateText;
+  final String pageIndicatorText;
+  final VoidCallback onToggle;
+
+  _SheetHeaderDelegate({
+    required this.backgroundColor,
+    required this.sheetOpen,
+    required this.plateText,
+    required this.onToggle,
+    required this.pageIndicatorText,
+  });
+
+  @override
+  double get minExtent => 86;
+
+  @override
+  double get maxExtent => 86;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Material(
+      color: backgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onToggle,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          child: Column(
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.black38,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    sheetOpen ? '정산 유형 / 메모 카드 닫기' : '정산 유형 / 메모 카드 열기',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        plateText,
+                        style: const TextStyle(color: Colors.black54),
+                      ),
+                      const SizedBox(width: 10),
+                      Semantics(
+                        label: 'dock_page_indicator: $pageIndicatorText',
+                        child: Text(
+                          pageIndicatorText,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.black87,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _SheetHeaderDelegate oldDelegate) {
+    return oldDelegate.sheetOpen != sheetOpen ||
+        oldDelegate.plateText != plateText ||
+        oldDelegate.backgroundColor != backgroundColor ||
+        oldDelegate.pageIndicatorText != pageIndicatorText;
   }
 }
 
