@@ -61,11 +61,17 @@ class LiteInputBillSection extends StatelessWidget {
         if (isMonthly) ...[
           TextField(
             controller: countTypeController,
-            onChanged: (v) => onChanged(v),
-            decoration: const InputDecoration(
+            // ✅ 사용자 수정 불가
+            readOnly: true,
+            enabled: false,
+            decoration: InputDecoration(
               labelText: '정기 - 호실/구분(=countType)',
               hintText: '예: 1901호',
-              border: OutlineInputBorder(),
+              border: const OutlineInputBorder(),
+              filled: true,
+              fillColor: Colors.grey.shade100,
+              labelStyle: TextStyle(color: Colors.grey.shade600),
+              hintStyle: TextStyle(color: Colors.grey.shade500),
             ),
           ),
         ] else ...[
