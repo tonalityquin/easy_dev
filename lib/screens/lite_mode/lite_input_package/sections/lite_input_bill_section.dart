@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../states/bill/bill_state.dart';
-import '../../../../models/bill_model.dart';
-import '../../../../models/regular_bill_model.dart';
 
 class LiteInputBillSection extends StatelessWidget {
   final String? selectedBill;
@@ -28,13 +26,13 @@ class LiteInputBillSection extends StatelessWidget {
     final billState = context.watch<BillState>();
     final isLoading = billState.isLoading;
     final generalBills = billState.generalBills;
-    final fixedBills = billState.regularBills;
 
-    final isGeneral = selectedBillType == '변동';
-    final isFixed = selectedBillType == '고정';
-    final isMonthly = selectedBillType == '정기';
+    final normalizedType = (selectedBillType == '고정') ? '변동' : selectedBillType;
 
-    final filteredBills = isGeneral ? generalBills : fixedBills;
+    final isGeneral = normalizedType == '변동';
+    final isMonthly = normalizedType == '정기';
+
+    final filteredBills = generalBills;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -50,12 +48,6 @@ class LiteInputBillSection extends StatelessWidget {
               label: '변동',
               isSelected: isGeneral,
               onTap: () => onTypeChanged('변동'),
-            ),
-            const SizedBox(width: 8),
-            _buildTypeButton(
-              label: '고정',
-              isSelected: isFixed,
-              onTap: () => onTypeChanged('고정'),
             ),
             const SizedBox(width: 8),
             _buildTypeButton(
@@ -87,7 +79,7 @@ class LiteInputBillSection extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Center(
                 child: Text(
-                  '$selectedBillType 정산 유형이 없습니다.',
+                  '$normalizedType 정산 유형이 없습니다.',
                   style: const TextStyle(color: Colors.grey),
                 ),
               ),
@@ -133,18 +125,18 @@ class LiteInputBillSection extends StatelessWidget {
                                 ),
                               ),
                               Text(
-                                '$selectedBillType 정산 선택',
+                                '$normalizedType 정산 선택',
                                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 24),
                               ...filteredBills.map((bill) {
-                                final countType =
-                                    isGeneral ? (bill as BillModel).countType : (bill as RegularBillModel).countType;
+                                final countType = (bill).countType;
 
                                 return ListTile(
                                   title: Text(countType),
-                                  trailing:
-                                      countType == selectedBill ? const Icon(Icons.check, color: Colors.green) : null,
+                                  trailing: countType == selectedBill
+                                      ? const Icon(Icons.check, color: Colors.green)
+                                      : null,
                                   onTap: () {
                                     Navigator.pop(context);
                                     onChanged(countType);

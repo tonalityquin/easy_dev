@@ -7,6 +7,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../states/bill/bill_state.dart';
 import '../../../states/area/area_state.dart';
 
+import '../../../repositories/plate_repo_services/firestore_plate_repository.dart';
+
 import 'input_plate_controller.dart';
 import 'sections/input_bill_section.dart';
 import 'sections/input_location_section.dart';
@@ -36,14 +38,13 @@ class InputPlateScreen extends StatefulWidget {
 
 class _InputPlateScreenState extends State<InputPlateScreen> {
   final controller = InputPlateController();
+  final FirestorePlateRepository _plateRepo = FirestorePlateRepository();
 
   // ⬇️ 화면 식별 태그(FAQ/에러 리포트 연계용)
   static const String screenTag = 'plate input';
 
   List<String> selectedStatusNames = [];
   Key statusSectionKey = UniqueKey();
-
-  String selectedBillType = '변동';
 
   bool _openedScannerOnce = false;
 
@@ -55,6 +56,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   static const double _sheetClosed = 0.16; // 헤더만 살짝
   static const double _sheetOpened = 1.00; // ★ 최상단까지 (화면 높이 꽉 채움)
+
+  // ✅ 월정기 문서 존재 여부(정기 버튼으로 불러오기 성공했는지)
+  bool _monthlyDocExists = false;
+
+  // ✅ monthly_plate_status "메모/상태 반영" 처리 중 플래그(중복 클릭 방지)
+  bool _monthlyApplying = false;
 
   Future<void> _animateSheet({required bool open}) async {
     final target = open ? _sheetOpened : _sheetClosed;
@@ -105,8 +112,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
         if (mounted && data != null) {
           final fetchedStatus = data['customStatus'] as String?;
-          final fetchedList =
-              (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+          final fetchedList = (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
 
           final String? fetchedCountType = (data['countType'] as String?)?.trim();
 
@@ -119,7 +125,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
             if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
               controller.countTypeController.text = fetchedCountType;
-              selectedBillType = '정기';
               controller.selectedBillType = '정기';
               controller.selectedBill = fetchedCountType;
             }
@@ -184,6 +189,214 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         useSourceOnlyKey: true, // ★ 중요
       );
     }
+  }
+
+  /// ✅ monthly_plate_status 단건 조회 (정기 버튼 클릭 시 사용)
+  /// ✅ UsageReporter: area 기준 read 1회 보고(성공/실패 불문)
+  Future<Map<String, dynamic>?> _fetchMonthlyPlateStatus(String plateNumber, String area) async {
+    final docId = '${plateNumber}_$area';
+    try {
+      final doc = await FirebaseFirestore.instance.collection('monthly_plate_status').doc(docId).get();
+
+      if (doc.exists) {
+        return doc.data();
+      }
+      return null;
+    } on FirebaseException catch (e) {
+      debugPrint('[_fetchMonthlyPlateStatus] FirebaseException: ${e.code} ${e.message}');
+      return null;
+    } catch (e) {
+      debugPrint('[_fetchMonthlyPlateStatus] error: $e');
+      return null;
+    } finally {
+      await UsageReporter.instance.report(
+        area: (area.isEmpty ? 'unknown' : area),
+        action: 'read',
+        n: 1,
+        source: 'InputPlateScreen._fetchMonthlyPlateStatus/monthly_plate_status.doc.get',
+        useSourceOnlyKey: true,
+      );
+    }
+  }
+
+  /// ✅ '정기' 버튼 클릭 시: monthly_plate_status에서 동일 번호판 문서가 있으면 불러와 화면에 출력(반영)
+  Future<void> _handleMonthlySelectedFetchAndApply() async {
+    // 번호판이 아직 완성되지 않은 상태면 조회하지 않음
+    if (!controller.isInputValid()) {
+      if (!mounted) return;
+      setState(() => _monthlyDocExists = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('번호판 입력을 완료한 후 정기 정보를 불러올 수 있습니다.')),
+      );
+      return;
+    }
+
+    final plateNumber = controller.buildPlateNumber();
+    final area = context.read<AreaState>().currentArea;
+
+    final data = await _fetchMonthlyPlateStatus(plateNumber, area);
+    if (!mounted) return;
+
+    if (data == null) {
+      // 문서 없음 → 기존 입력은 건드리지 않고 안내만
+      setState(() => _monthlyDocExists = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('해당 번호판의 정기(월정기) 등록 정보가 없습니다.')),
+      );
+      return;
+    }
+
+    final fetchedStatus = (data['customStatus'] as String?)?.trim();
+    final fetchedList = (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+
+    final fetchedCountType = (data['countType'] as String?)?.trim();
+
+    setState(() {
+      _monthlyDocExists = true;
+
+      // 메모/상태 출력
+      controller.fetchedCustomStatus = fetchedStatus;
+      controller.customStatusController.text = fetchedStatus ?? '';
+      selectedStatusNames = fetchedList;
+      statusSectionKey = UniqueKey();
+
+      // 정기 출력(countType)
+      if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
+        controller.countTypeController.text = fetchedCountType;
+        controller.selectedBill = fetchedCountType;
+      }
+      // selectedBillType은 이미 '정기'로 바뀐 상태이므로 여기서는 재설정하지 않음
+    });
+
+    // 사용자가 즉시 보도록 시트를 열어줌(출력 체감 강화)
+    if (!_sheetOpen) {
+      await _animateSheet(open: true);
+    }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('정기(월정기) 정보를 불러왔습니다.')),
+    );
+  }
+
+  /// ✅ 월정기( monthly_plate_status )에 "메모/상태"만 반영(update)
+  /// - plate_status는 건드리지 않음
+  Future<void> _applyMonthlyMemoAndStatusOnly() async {
+    if (_monthlyApplying) return;
+
+    if (!controller.isInputValid()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('번호판 입력을 완료한 후 반영할 수 있습니다.')),
+      );
+      return;
+    }
+
+    if (!_monthlyDocExists) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('정기(월정기) 문서가 없습니다. 먼저 정기 정보를 불러오거나 등록해 주세요.')),
+      );
+      return;
+    }
+
+    final plateNumber = controller.buildPlateNumber();
+    final area = context.read<AreaState>().currentArea;
+
+    final customStatus = controller.customStatusController.text.trim();
+    final statusList = List<String>.from(selectedStatusNames);
+
+    setState(() => _monthlyApplying = true);
+
+    try {
+      // ✅ Repository로 통일 + update() 기반(문서 생성 방지)
+      await _plateRepo.setMonthlyMemoAndStatusOnly(
+        plateNumber: plateNumber,
+        area: area,
+        createdBy: 'system', // 화면 단에서 userName이 필요하면 주입해 사용하세요(현재 파일 scope엔 UserState import가 없음)
+        customStatus: customStatus,
+        statusList: statusList,
+        skipIfDocMissing: false,
+      );
+
+      // ✅ UsageReporter: write 1회
+      await UsageReporter.instance.report(
+        area: (area.isEmpty ? 'unknown' : area),
+        action: 'write',
+        n: 1,
+        source: 'InputPlateScreen._applyMonthlyMemoAndStatusOnly/monthly_plate_status.doc.update',
+        useSourceOnlyKey: true,
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('월정기(정기) 메모/상태가 반영되었습니다.')),
+      );
+    } on FirebaseException catch (e) {
+      debugPrint('[_applyMonthlyMemoAndStatusOnly] FirebaseException: ${e.code} ${e.message}');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('반영 실패: ${e.message ?? e.code}')),
+      );
+    } catch (e) {
+      debugPrint('[_applyMonthlyMemoAndStatusOnly] error: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('반영 실패: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _monthlyApplying = false);
+    }
+  }
+
+  /// ✅ "반영" 버튼(추가 상태/메모 섹션 하단)
+  Widget _buildMonthlyApplyButton() {
+    // 정기 탭일 때만 노출
+    if (controller.selectedBillType != '정기') {
+      return const SizedBox.shrink();
+    }
+
+    final enabled = !_monthlyApplying && _monthlyDocExists;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 50,
+          child: ElevatedButton(
+            onPressed: enabled ? _applyMonthlyMemoAndStatusOnly : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.black,
+              foregroundColor: Colors.white,
+              disabledBackgroundColor: Colors.grey.shade300,
+              disabledForegroundColor: Colors.grey.shade600,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: _monthlyApplying
+                ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            )
+                : const Text(
+              '반영',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+        ),
+        if (!_monthlyDocExists) ...[
+          const SizedBox(height: 8),
+          Text(
+            '정기(월정기) 문서를 불러온 경우에만 반영할 수 있습니다.',
+            style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+          ),
+        ],
+      ],
+    );
   }
 
   // ─────────────────────────────
@@ -264,7 +477,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   RegExp get _rxStrict {
     final allowed = _allowedKoreanMids.join();
     return RegExp(r'^(\d{2,3})([' + allowed + r'])(\d{4})$');
-    // 예: 12가3456, 123허4567
   }
 
   /// 임의문자 허용: (2~3)숫자 + (.) + (4)숫자
@@ -285,9 +497,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       var mid = s.group(2)!;
       final back = s.group(3)!;
 
-      // 가운데 보정(있으면)
       mid = _midNormalize[mid] ?? mid;
-
       _applyToFields(front: front, mid: mid, back: back);
       return;
     }
@@ -296,20 +506,18 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     final a = _rxAnyMid.firstMatch(raw);
     if (a != null) {
       final front = a.group(1)!;
-      var mid = a.group(2)!; // 한글이 아니어도 그대로 수용
+      var mid = a.group(2)!;
       final back = a.group(3)!;
 
-      // 한글이면 보정 후 허용 목록 안에 있으면 치환(선택적)
       if (RegExp(r'^[가-힣]$').hasMatch(mid)) {
         final fixed = _midNormalize[mid];
         if (fixed != null) mid = fixed;
       }
-
       _applyToFields(front: front, mid: mid, back: back);
       return;
     }
 
-    // 3) 숫자만 7자리 → 3+4 (가운데 누락)
+    // 3) 숫자만 7자리 → 3+4
     if (_rxOnly7.hasMatch(raw)) {
       final front = raw.substring(0, 3);
       final back = raw.substring(3, 7);
@@ -317,7 +525,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       return;
     }
 
-    // 4) 숫자만 6자리 → 2+4 (가운데 누락)
+    // 4) 숫자만 6자리 → 2+4
     if (_rxOnly6.hasMatch(raw)) {
       final front = raw.substring(0, 2);
       final back = raw.substring(2, 6);
@@ -325,7 +533,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       return;
     }
 
-    // 그 외: 형식 불명 → 사용자 안내
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('인식값 형식 확인 필요: $plate')),
     );
@@ -336,18 +543,16 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     required String front,
     required String mid,
     required String back,
-    bool promptMid = false, // 가운데 누락 시 true로 주더라도 포커스는 유지(요청 반영)
+    bool promptMid = false,
   }) {
     setState(() {
       controller.setFrontDigitMode(front.length == 3);
       controller.controllerFrontDigit.text = front;
-      controller.controllerMidDigit.text = mid; // 임의문자 허용
+      controller.controllerMidDigit.text = mid;
       controller.controllerBackDigit.text = back;
 
       if (promptMid || mid.isEmpty) {
-        // ✅ 가운데 누락이어도 포커스는 기존 상태 유지, 키패드만 열어둠
         controller.showKeypad = true;
-
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('가운데 글자가 누락되었습니다. 가운데 한 글자를 입력해 주세요.')),
         );
@@ -357,19 +562,17 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     });
   }
 
-  // ─────────────────────────────
-
-  // 🔽 스캐너로 이동 → 성공 시 입력칸 자동 채우기 (사용자가 닫으면 plate == null)
+  // 🔽 스캐너로 이동 → 성공 시 입력칸 자동 채우기
   Future<void> _openLiveScanner() async {
     final plate = await Navigator.of(context).push<String>(
       MaterialPageRoute(builder: (_) => const LiveOcrPage()),
     );
-    if (plate == null) return; // 사용자가 LiveOcrPage를 넘긴(닫은) 경우
+    if (plate == null) return;
 
     _applyPlateWithFallback(plate);
   }
 
-  /// 도크에서 특정 칸 편집 시작: 해당 칸만 비우고 활성화 + 키패드 열기
+  /// 도크에서 특정 칸 편집 시작
   void _beginDockEdit(_DockField field) {
     setState(() {
       _dockEditing = field;
@@ -400,12 +603,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         controller: controller.controllerFrontDigit,
         maxLength: controller.isThreeDigit ? 3 : 2,
         onComplete: () => setState(() {
-          // 도크에서 시작한 앞칸 편집이면 완료 후 닫기
           if (_dockEditing == _DockField.front) {
             controller.showKeypad = false;
             _dockEditing = null;
           } else {
-            // 일반 흐름: 가운데 칸으로 이동
             controller.setActiveController(controller.controllerMidDigit);
           }
         }),
@@ -423,12 +624,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         key: const ValueKey('midKeypad'),
         controller: controller.controllerMidDigit,
         onComplete: () => setState(() {
-          // 도크에서 시작한 가운데 칸 편집이면 완료 후 닫기
           if (_dockEditing == _DockField.mid) {
             controller.showKeypad = false;
             _dockEditing = null;
           } else {
-            // 일반 흐름: 뒷칸으로 이동
             controller.setActiveController(controller.controllerBackDigit);
           }
         }),
@@ -454,11 +653,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     );
   }
 
-  // ─────────────────────────────────────────────
-  // 도크 위치 스위칭:
-  //  - showKeypad == true : keypad 슬롯 내 [도크 + 키패드]
-  //  - showKeypad == false: bottomNavigationBar 액션바 바로 윗행에 [도크]만
-  // ─────────────────────────────────────────────
   Widget _buildDock() {
     return _PlateDock(
       controller: controller,
@@ -475,7 +669,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       onStateRefresh: () => setState(() {}),
     );
 
-    // 실시간 OCR 버튼: 제공해주신 ElevatedButton 스타일 반영
     final Widget ocrButton = Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
       child: ElevatedButton.icon(
@@ -496,7 +689,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     );
 
     if (controller.showKeypad) {
-      // ✅ 키패드 열림: keypad 슬롯에 도크 + 키패드 함께
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -516,7 +708,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         ],
       );
     } else {
-      // ✅ 키패드 닫힘: 액션 바 바로 윗행에 도크만 붙여 표시
       return Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -535,7 +726,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     }
   }
 
-  // 좌측 상단(11시) 화면 태그 위젯
   Widget _buildScreenTag(BuildContext context) {
     final base = Theme.of(context).textTheme.labelSmall;
     final style = (base ??
@@ -552,7 +742,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
     return SafeArea(
       child: IgnorePointer(
-        // 제스처 간섭 방지 (하지만 부모 GestureDetector는 이벤트를 받음)
         child: Align(
           alignment: Alignment.topLeft,
           child: Padding(
@@ -567,27 +756,20 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     );
   }
 
-  // ★ 상단 AppBar 전체 탭 → 뒤로가기 동작
   void _handleBackButtonPressed() {
-    // 시트가 열려 있으면 먼저 시트만 닫고
     if (_sheetOpen) {
       _animateSheet(open: false);
       return;
     }
-
-    // ✅ 사용자가 뒤로가기: false 반환
     Navigator.of(context).pop(false);
   }
 
   @override
   Widget build(BuildContext context) {
-    // ✅ 키보드/인셋 + 시스템 하단 안전영역 반영
     final viewInset = MediaQuery.of(context).viewInsets.bottom;
     final sysBottom = MediaQuery.of(context).padding.bottom;
-    // 패딩: 키패드 열림(도크+키패드) ≈ 280, 닫힘(도크만) ≈ 140
     final bottomSafePadding = (controller.showKeypad ? 280.0 : 140.0) + viewInset + sysBottom;
 
-    // 🔽 뒤로가기: 시트가 열려 있으면 먼저 닫고, 닫혀 있어도 시스템/제스처 pop은 막음
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) async {
@@ -603,15 +785,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           backgroundColor: Colors.white,
           foregroundColor: Colors.black,
           elevation: 1,
-          // AppBar 전체 영역을 탭하면 뒤로가기
           flexibleSpace: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: _handleBackButtonPressed,
             child: Stack(
               children: [
-                // 좌측 상단 화면 태그
                 _buildScreenTag(context),
-                // 중앙: "뒤로가기 · 현재 앞자리: 세자리/두자리"
                 SafeArea(
                   child: Center(
                     child: Row(
@@ -652,18 +831,14 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           builder: (context, constraints) {
             return Stack(
               children: [
-                // 상단(기본) 콘텐츠: 번호판/위치/사진 섹션 — ✅ 세로 스크롤 가능
                 Positioned.fill(
                   child: SingleChildScrollView(
-                    // 🔹 작은 폰 보완: 항상 세로 스크롤 가능 + 드래그 시 키보드 닫기
                     physics: const AlwaysScrollableScrollPhysics(),
                     keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: EdgeInsets.fromLTRB(16, 16, 16, bottomSafePadding),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // ⚠️ 업종 드롭다운은 보통 InputPlateSection 내부에 있으므로
-                        // 그 파일에서 숨겨야 UI에서 완전히 사라집니다.
                         InputPlateSection(
                           dropdownValue: controller.dropdownValue,
                           regions: controller.regions,
@@ -676,6 +851,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                               controller.clearInput();
                               controller.setActiveController(controller.controllerFrontDigit);
                               _dockEditing = null;
+                              _monthlyDocExists = false;
                             });
                           },
                           onRegionChanged: (region) {
@@ -692,29 +868,24 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                           capturedImages: controller.capturedImages,
                           plateNumber: controller.buildPlateNumber(),
                         ),
-                        // 필요 시 추가 안내/여백
                         const SizedBox(height: 8),
                       ],
                     ),
                   ),
                 ),
-
-                // 하단 시트: 컨트롤러로 열고 닫을 때 애니메이션 + 최상단까지 열림
                 DraggableScrollableSheet(
                   controller: _sheetController,
                   initialChildSize: _sheetClosed,
                   minChildSize: _sheetClosed,
                   maxChildSize: _sheetOpened,
-                  // ★ 1.0 = 최상단까지
                   snap: true,
                   snapSizes: const [_sheetClosed, _sheetOpened],
                   builder: (context, scrollController) {
-                    // 메인 배경(화이트)와 구분되는 아주 옅은 톤
-                    const sheetBg = Color(0xFFF6F8FF); // subtle blue-tinted light gray
+                    const sheetBg = Color(0xFFF6F8FF);
 
                     return Container(
                       decoration: const BoxDecoration(
-                        color: sheetBg, // 기존: Colors.white
+                        color: sheetBg,
                         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                         boxShadow: [
                           BoxShadow(
@@ -724,13 +895,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                           ),
                         ],
                       ),
-                      // ✅ SafeArea: 상단만 보호 / 하단은 우리가 직접 패딩 관리
                       child: SafeArea(
                         top: true,
                         bottom: false,
                         child: ListView(
                           controller: scrollController,
-                          physics: const NeverScrollableScrollPhysics(), // 내부 스크롤 금지(요청 유지)
+                          physics: const NeverScrollableScrollPhysics(),
                           padding: EdgeInsets.fromLTRB(
                             16,
                             8,
@@ -738,7 +908,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                             16 + (controller.showKeypad ? 260 : 100) + viewInset + sysBottom,
                           ),
                           children: [
-                            // 헤더(탭으로 열고 닫기 + 애니메이션)
                             GestureDetector(
                               behavior: HitTestBehavior.opaque,
                               onTap: _toggleSheet,
@@ -750,8 +919,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                                       width: 40,
                                       height: 4,
                                       decoration: BoxDecoration(
-                                        // 핸들 색도 살짝 진하게 해서 대비 ↑ (선택)
-                                        color: Colors.black38, // 기존: Colors.black26
+                                        color: Colors.black38,
                                         borderRadius: BorderRadius.circular(2),
                                       ),
                                     ),
@@ -777,19 +945,25 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                               ),
                             ),
                             const SizedBox(height: 12),
-
-                            // ⬇️ 정산 영역
                             InputBillSection(
                               selectedBill: controller.selectedBill,
                               onChanged: (value) => setState(() => controller.selectedBill = value),
-                              selectedBillType: selectedBillType,
-                              onTypeChanged: (newType) => setState(() => selectedBillType = newType),
+                              selectedBillType: controller.selectedBillType,
+                              onTypeChanged: (newType) {
+                                setState(() {
+                                  controller.selectedBillType = newType;
+                                  if (newType == '정기') {
+                                    _monthlyDocExists = false;
+                                  }
+                                });
+
+                                if (newType == '정기') {
+                                  _handleMonthlySelectedFetchAndApply();
+                                }
+                              },
                               countTypeController: controller.countTypeController,
                             ),
-
                             const SizedBox(height: 24),
-
-                            // 차량 상태 토글은 제거, 메모 섹션만 유지
                             InputCustomStatusSection(
                               controller: controller,
                               fetchedCustomStatus: controller.fetchedCustomStatus,
@@ -808,7 +982,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                                 });
                               },
                             ),
-
+                            _buildMonthlyApplyButton(),
                             const SizedBox(height: 8),
                           ],
                         ),
@@ -820,13 +994,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             );
           },
         ),
-        // ✅ 하단 제스처 바와 겹치지 않게 SafeArea로 감싸기
         bottomNavigationBar: SafeArea(
           top: false,
           left: false,
           right: false,
           bottom: true,
-          child: _buildBottomBar(), // ← 상태에 따라 도크/키패드 배치 스위칭 + OCR 버튼
+          child: _buildBottomBar(),
         ),
       ),
     );
@@ -881,7 +1054,7 @@ class _PlateDock extends StatelessWidget {
     final chipColor = isActive ? Colors.amber.shade700 : Colors.grey.shade500;
 
     return GestureDetector(
-      onTap: onTap, // 탭 → 해당 칸만 비우고 활성화 + 키패드 열기
+      onTap: onTap,
       child: AbsorbPointer(
         child: Stack(
           children: [
@@ -954,10 +1127,8 @@ class _PlateDock extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 라벨 + 필드
           Row(
             children: [
-              // 앞자리 (2~3자리)
               Expanded(
                 flex: 28,
                 child: Column(
@@ -976,8 +1147,6 @@ class _PlateDock extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-
-              // 한글 (1글자)
               Expanded(
                 flex: 18,
                 child: Column(
@@ -996,8 +1165,6 @@ class _PlateDock extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 8),
-
-              // 뒷자리 (4자리)
               Expanded(
                 flex: 36,
                 child: Column(
@@ -1018,7 +1185,6 @@ class _PlateDock extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 8),
-          // 하단 안내 문구
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

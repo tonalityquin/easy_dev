@@ -1,9 +1,8 @@
+// lib/screens/input_package/sections/input_bill_section.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../states/bill/bill_state.dart';
-import '../../../../models/bill_model.dart';
-import '../../../../models/regular_bill_model.dart';
 
 class InputBillSection extends StatelessWidget {
   final String? selectedBill;
@@ -28,13 +27,12 @@ class InputBillSection extends StatelessWidget {
     final billState = context.watch<BillState>();
     final isLoading = billState.isLoading;
     final generalBills = billState.generalBills;
-    final fixedBills = billState.regularBills;
 
     final isGeneral = selectedBillType == '변동';
-    final isFixed = selectedBillType == '고정';
     final isMonthly = selectedBillType == '정기';
 
-    final filteredBills = isGeneral ? generalBills : fixedBills;
+    // '고정' 제거: 비정기(변동)에서는 generalBills만 사용
+    final filteredBills = generalBills;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -50,12 +48,6 @@ class InputBillSection extends StatelessWidget {
               label: '변동',
               isSelected: isGeneral,
               onTap: () => onTypeChanged('변동'),
-            ),
-            const SizedBox(width: 8),
-            _buildTypeButton(
-              label: '고정',
-              isSelected: isFixed,
-              onTap: () => onTypeChanged('고정'),
             ),
             const SizedBox(width: 8),
             _buildTypeButton(
@@ -138,13 +130,13 @@ class InputBillSection extends StatelessWidget {
                               ),
                               const SizedBox(height: 24),
                               ...filteredBills.map((bill) {
-                                final countType =
-                                    isGeneral ? (bill as BillModel).countType : (bill as RegularBillModel).countType;
+                                final countType = (bill).countType;
 
                                 return ListTile(
                                   title: Text(countType),
-                                  trailing:
-                                      countType == selectedBill ? const Icon(Icons.check, color: Colors.green) : null,
+                                  trailing: countType == selectedBill
+                                      ? const Icon(Icons.check, color: Colors.green)
+                                      : null,
                                   onTap: () {
                                     Navigator.pop(context);
                                     onChanged(countType);

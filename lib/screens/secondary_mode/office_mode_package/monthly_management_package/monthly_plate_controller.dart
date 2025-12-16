@@ -120,17 +120,17 @@ class MonthlyPlateController {
   // 유틸/검증
   // ─────────────────────────────────────────────────────────────────────────────
 
-  /// 상태 or 메모가 하나 이상 입력되어 있는지
-  bool get hasStatusOrMemo => customStatusController.text.trim().isNotEmpty || selectedStatuses.isNotEmpty;
+  bool get hasStatusOrMemo =>
+      customStatusController.text.trim().isNotEmpty || selectedStatuses.isNotEmpty;
 
-  /// 제출 전 간단 가드(번호판/기간/상태·메모)
+  /// 제출 전 가드
+  /// ✅ 월 주차는 customStatus/상태가 필수가 아니므로 hasStatusOrMemo 검증 없음
   bool _validateBeforeWrite(BuildContext context) {
     if (!isInputValid()) {
       showFailedSnackbar(context, '번호판을 올바르게 입력해주세요.');
       return false;
     }
 
-    // 기간 필수 및 양수 검증
     final startTxt = startDateController?.text.trim() ?? '';
     final durTxt = durationController?.text.trim() ?? '';
     final dur = int.tryParse(durTxt);
@@ -140,24 +140,20 @@ class MonthlyPlateController {
       return false;
     }
 
-    if (!hasStatusOrMemo) {
-      showFailedSnackbar(context, '상태를 선택하거나 메모를 입력해주세요.');
-      return false;
-    }
     return true;
   }
 
-  /// ✅ 앞자리 2자리 또는 3자리 모두 허용하도록 수정
-  /// 앞자리(2/3자리), 중간(한글 1자), 뒷자리(4자리) 유효성
+  /// 앞자리(2/3자리), 중간(한글 1자), 뒷자리(4자리)
   bool isInputValid() {
     final frontLen = controllerFrontDigit.text.length;
     final frontOk = (frontLen == 2 || frontLen == 3);
-    return frontOk && controllerMidDigit.text.length == 1 && controllerBackDigit.text.length == 4;
+    return frontOk &&
+        controllerMidDigit.text.length == 1 &&
+        controllerBackDigit.text.length == 4;
   }
 
   /// "plateNumber_area" 형태의 문서 ID에서 plateNumber만 추출
   String _extractPlateFromDocId(String docId) {
-    // ex) "12-가-3456_서울" -> "12-가-3456"
     return docId.split('_').first;
   }
 
@@ -318,7 +314,6 @@ class MonthlyPlateController {
   // Firestore 연동
   // ─────────────────────────────────────────────────────────────────────────────
   Future<void> recordPaymentHistory(BuildContext context) async {
-    // 기존 UI 코드 호환을 위해 context를 유지
     final plateNumber = buildPlateNumber();
     final area = context.read<AreaState>().currentArea;
     final userName = context.read<UserState>().name;
@@ -334,69 +329,80 @@ class MonthlyPlateController {
 
     try {
       final docId = '${plateNumber}_$area';
-      await FirebaseFirestore.instance.collection('plate_status').doc(docId).set(
+
+      await FirebaseFirestore.instance.collection('monthly_plate_status').doc(docId).set(
         {
           'payment_history': FieldValue.arrayUnion([historyEntry])
         },
         SetOptions(merge: true),
       );
-
-      // ✅ UsageReporter: write 1회
-      try {
-        /*await UsageReporter.instance.report(
-          area: area.isNotEmpty ? area : 'unknown',
-          action: 'write',
-          n: 1,
-          source: 'MonthlyPlateController.recordPaymentHistory.set',
-        );*/
-      } catch (_) {}
     } catch (e) {
       rethrow;
     }
   }
 
+  /// ✅ 변경(정합성):
+  /// - 기존: plate_status 삭제 + monthly_plate_status 문서 삭제
+  /// - 변경: monthly_plate_status 문서는 유지하고,
+  ///        customStatus/statusList만 "비우기(update/merge)" 처리
   Future<void> deleteCustomStatusFromFirestore(BuildContext context) async {
     final plateNumber = buildPlateNumber();
     final area = context.read<AreaState>().currentArea;
+    final userName = context.read<UserState>().name;
+
+    final docId = '${plateNumber}_$area';
+    final ref = FirebaseFirestore.instance.collection('monthly_plate_status').doc(docId);
 
     try {
-      await _plateRepo.deletePlateStatus(plateNumber, area);
+      // 문서가 없는데 set(merge)로 만들지 않도록 update를 사용
+      await ref.update({
+        'customStatus': '',
+        'statusList': <String>[],
+        'updatedAt': FieldValue.serverTimestamp(),
+        'clearedAt': FieldValue.serverTimestamp(),
+        'clearedBy': userName,
+      });
+
+      // 로컬 상태도 같이 정리(UI 정합성)
+      customStatusController.clear();
+      selectedStatuses.clear();
       fetchedCustomStatus = null;
       fetchedStatusList = [];
+      isSelected = List.generate(statuses.length, (_) => false);
 
-      // ✅ UsageReporter: delete 1회
-      try {
-        /*await UsageReporter.instance.report(
-          area: area.isNotEmpty ? area : 'unknown',
-          action: 'delete',
-          n: 1,
-          source: 'MonthlyPlateController.deleteCustomStatusFromFirestore.delete',
-        );*/
-      } catch (_) {}
+      if (!context.mounted) return;
+      showSuccessSnackbar(context, '메모/상태가 초기화되었습니다.');
+    } on FirebaseException catch (e) {
+      if (!context.mounted) return;
+
+      if (e.code == 'not-found') {
+        showFailedSnackbar(context, '대상 문서가 없습니다. 먼저 등록 후 시도해주세요.');
+        return;
+      }
+      showFailedSnackbar(context, '초기화 실패: ${e.message ?? e.code}');
+      rethrow;
     } catch (e) {
+      if (!context.mounted) return;
+      showFailedSnackbar(context, '초기화 실패: $e');
       rethrow;
     }
   }
 
-
-
-
   /// 기존 문서 데이터 로딩(편집 진입 시)
   Future<void> loadExistingData(
-    Map<String, dynamic> data, {
-    required String docId,
-  }) async {
+      Map<String, dynamic> data, {
+        required String docId,
+      }) async {
     isEditMode = true;
     docIdToEdit = docId;
 
     final plate = _extractPlateFromDocId(docId);
-    final parts = plate.split('-'); // [앞, 한글, 뒤]
+    final parts = plate.split('-');
     if (parts.length == 3) {
       final front = parts[0];
       final mid = parts[1];
       final back = parts[2];
 
-      // ✅ 저장된 번호판 앞자리 길이에 맞춰 플래그 동기화
       isThreeDigit = (front.length == 3);
 
       controllerFrontDigit.text = front;
@@ -420,15 +426,17 @@ class MonthlyPlateController {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // 등록/수정 (UI와의 호환 유지)
+  // 등록/수정
   // ─────────────────────────────────────────────────────────────────────────────
+
+  /// ✅ 변경(선택):
+  /// - 월정기 수정 시 plate_status에는 쓰지 않고 monthly_plate_status에만 저장
   Future<void> updatePlateEntry(
-    BuildContext context,
-    VoidCallback refreshUI,
-  ) async {
+      BuildContext context,
+      VoidCallback refreshUI,
+      ) async {
     if (!_validateBeforeWrite(context)) return;
 
-    // await 전에 필요한 핸들러를 확보해 두면 lint를 더 쉽게 피할 수 있습니다.
     final nav = Navigator.of(context, rootNavigator: true);
 
     final plateNumber = buildPlateNumber();
@@ -438,7 +446,6 @@ class MonthlyPlateController {
     isLoading = true;
     refreshUI();
 
-    // await 전이므로 context 사용 OK
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -446,14 +453,7 @@ class MonthlyPlateController {
     );
 
     try {
-      await _plateRepo.setPlateStatus(
-        plateNumber: plateNumber,
-        area: area,
-        customStatus: customStatusController.text.trim(),
-        statusList: selectedStatuses,
-        createdBy: userName,
-      );
-
+      // ✅ plate_status 저장 제거
       await _plateRepo.setMonthlyPlateStatus(
         plateNumber: plateNumber,
         area: area,
@@ -471,19 +471,8 @@ class MonthlyPlateController {
         isExtended: isExtended,
       );
 
-      // ✅ UsageReporter: write 2회 (plate_status + monthly plate_status)
-      try {
-        /*await UsageReporter.instance.report(
-          area: area.isNotEmpty ? area : 'unknown',
-          action: 'write',
-          n: 2,
-          source: 'MonthlyPlateController.updatePlateEntry.write',
-        );*/
-      } catch (_) {}
-
       await extendDatesIfNeeded();
 
-      // ✅ async gap 이후엔 BuildContext 생존 확인
       if (!context.mounted) return;
 
       if (nav.canPop()) nav.pop();
@@ -502,13 +491,14 @@ class MonthlyPlateController {
     }
   }
 
+  /// ✅ 변경(선택):
+  /// - 월정기 등록 시 plate_status에는 쓰지 않고 monthly_plate_status에만 저장
   Future<void> submitPlateEntry(
-    BuildContext context,
-    VoidCallback refreshUI,
-  ) async {
+      BuildContext context,
+      VoidCallback refreshUI,
+      ) async {
     if (!_validateBeforeWrite(context)) return;
 
-    // await 이전에 핸들러 캐싱
     final nav = Navigator.of(context, rootNavigator: true);
 
     final plateNumber = buildPlateNumber();
@@ -519,7 +509,6 @@ class MonthlyPlateController {
     isLoading = true;
     refreshUI();
 
-    // await 전이므로 context 사용 OK
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -527,14 +516,7 @@ class MonthlyPlateController {
     );
 
     try {
-      await _plateRepo.setPlateStatus(
-        plateNumber: plateNumber,
-        area: area,
-        customStatus: customStatusController.text.trim(),
-        statusList: selectedStatuses,
-        createdBy: userName,
-      );
-
+      // ✅ plate_status 저장 제거
       await _plateRepo.setMonthlyPlateStatus(
         plateNumber: plateNumber,
         area: area,
@@ -552,17 +534,6 @@ class MonthlyPlateController {
         isExtended: isExtended,
       );
 
-      // ✅ UsageReporter: write 2회 (plate_status + monthly plate_status)
-      try {
-        /*await UsageReporter.instance.report(
-          area: area.isNotEmpty ? area : 'unknown',
-          action: 'write',
-          n: 2,
-          source: 'MonthlyPlateController.submitPlateEntry.write',
-        );*/
-      } catch (_) {}
-
-      // ✅ async gap 이후 BuildContext 생존 여부 확인
       if (!context.mounted) return;
 
       if (nav.canPop()) nav.pop();

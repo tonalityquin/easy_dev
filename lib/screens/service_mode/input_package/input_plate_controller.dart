@@ -242,25 +242,37 @@ class InputPlateController {
       if (rootNav.canPop()) rootNav.pop();
 
       if (!wasSuccessful) {
-        // ✅ 실패 시: InputPlateScreen에 머물기
-        // (registerPlateEntry 내부에서 이미 안내하는 경우가 있어도 안전하게 한 번 더 안내)
         showFailedSnackbar(context, '동일한 차량 번호가 있습니다.');
         return;
       }
 
-      // 2) 등록 성공 이후: plate_status 저장은 "부가 작업"으로 분리
+      // 2) 등록 성공 이후: 상태 저장은 "부가 작업"으로 분리
       Object? plateStatusError;
       try {
-        await _plateRepo.setPlateStatus(
-          plateNumber: plateNumber,
-          area: area,
-          customStatus: customStatusController.text.trim(),
-          statusList: selectedStatuses,
-          createdBy: userName,
-        );
+        if (selectedBillType == '정기') {
+          // ✅ 핵심 변경: 정기일 때 plate_status 저장 금지
+          // ✅ monthly_plate_status에만 메모/상태 업데이트(문서 없으면 생성하지 않음)
+          await _plateRepo.setMonthlyMemoAndStatusOnly(
+            plateNumber: plateNumber,
+            area: area,
+            createdBy: userName,
+            customStatus: customStatusController.text.trim(),
+            statusList: selectedStatuses,
+            skipIfDocMissing: false, // 문서 없으면 예외로 알려서 경고 노출
+          );
+        } else {
+          // ✅ 변동(일반)일 때만 plate_status 저장
+          await _plateRepo.setPlateStatus(
+            plateNumber: plateNumber,
+            area: area,
+            customStatus: customStatusController.text.trim(),
+            statusList: selectedStatuses,
+            createdBy: userName,
+          );
+        }
       } catch (e) {
         plateStatusError = e;
-        debugPrint('[submitPlateEntry] setPlateStatus failed: $e');
+        debugPrint('[submitPlateEntry] status save failed: $e');
       }
 
       if (!context.mounted) return;
@@ -268,7 +280,7 @@ class InputPlateController {
       // 3) 성공 스낵바
       showSuccessSnackbar(context, '차량 정보 등록 완료');
 
-      // 4) plate_status만 실패한 경우 경고(등록 성공은 유지)
+      // 4) 상태 저장만 실패한 경우 경고(등록 성공은 유지)
       if (plateStatusError != null) {
         showSelectedSnackbar(context, '등록은 완료되었지만 메모/상태 저장에 실패했습니다.');
       }

@@ -110,6 +110,17 @@ abstract class PlateRepository {
     bool? isExtended,
   });
 
+  /// ✅ 신규: 정기(월정기)일 때 monthly_plate_status에 "메모/상태"만 업데이트
+  /// - update() 기반으로 문서 미존재 시 생성되지 않도록 강제
+  Future<void> setMonthlyMemoAndStatusOnly({
+    required String plateNumber,
+    required String area,
+    required String createdBy,
+    required String customStatus,
+    required List<String> statusList,
+    bool skipIfDocMissing = true,
+  });
+
   Future<void> deletePlateStatus(String plateNumber, String area);
 
   // ========= Transitions =========

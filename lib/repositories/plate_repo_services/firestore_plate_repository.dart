@@ -220,6 +220,25 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
+  Future<void> setMonthlyMemoAndStatusOnly({
+    required String plateNumber,
+    required String area,
+    required String createdBy,
+    required String customStatus,
+    required List<String> statusList,
+    bool skipIfDocMissing = true,
+  }) {
+    return _statusService.setMonthlyMemoAndStatusOnly(
+      plateNumber: plateNumber,
+      area: area,
+      createdBy: createdBy,
+      customStatus: customStatus,
+      statusList: statusList,
+      skipIfDocMissing: skipIfDocMissing,
+    );
+  }
+
+  @override
   Future<void> deletePlateStatus(String plateNumber, String area) {
     return _statusService.deletePlateStatus(plateNumber, area);
   }

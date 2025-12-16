@@ -41,11 +41,8 @@ class _LiteInputBottomActionSectionState extends State<LiteInputBottomActionSect
       context: context,
       builder: (context) => LiteInputCameraPreviewDialog(
         onImageCaptured: (image) {
-          // ✅ 1) 컨트롤러 리스트에 추가
           widget.controller.capturedImages.add(image);
-          // ✅ 2) 부모(메인 화면) 리빌드 → InputPhotoSection 즉시 갱신
           widget.onStateRefresh();
-          // (선택) 3) 현재 섹션도 리빌드하여 로컬 UI 반영
           if (mounted) setState(() {});
         },
       ),
@@ -54,9 +51,7 @@ class _LiteInputBottomActionSectionState extends State<LiteInputBottomActionSect
     await _cameraHelper.dispose();
     await Future.delayed(const Duration(milliseconds: 200));
 
-    // (선택) 이 섹션도 갱신
     if (mounted) setState(() {});
-    // ✅ 다이얼로그 종료 후에도 부모를 한 번 더 갱신해 썸네일 노출을 보장
     widget.onStateRefresh();
   }
 
@@ -94,7 +89,6 @@ class _LiteInputBottomActionSectionState extends State<LiteInputBottomActionSect
             Expanded(
               child: LiteInputAnimatedParkingButton(
                 isLocationSelected: widget.controller.isLocationSelected,
-                // ✅ 위치 선택/변경만 허용 (clearLocation로 '요청' 상태로 돌아가는 흐름 제거)
                 onPressed: _selectParkingLocation,
               ),
             ),
@@ -106,7 +100,7 @@ class _LiteInputBottomActionSectionState extends State<LiteInputBottomActionSect
           isLocationSelected: widget.controller.isLocationSelected,
           onPressed: () => widget.controller.submitPlateEntry(
             context,
-            widget.onStateRefresh, // ✅ 기존 구조 유지
+            widget.onStateRefresh,
           ),
         ),
       ],

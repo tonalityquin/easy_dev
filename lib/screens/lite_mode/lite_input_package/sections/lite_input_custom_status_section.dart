@@ -22,6 +22,9 @@ class LiteInputCustomStatusSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ 정기(월정기)에서는 "자동 저장된 메모" 블록을 출력하지 않음
+    final bool isMonthly = controller.selectedBillType == '정기';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -36,7 +39,10 @@ class LiteInputCustomStatusSection extends StatelessWidget {
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           ),
         ),
-        if (fetchedCustomStatus != null)
+
+        // ✅ 핵심 변경:
+        // - 정기(isMonthly == true)면 fetchedCustomStatus가 있어도 "자동 저장된 메모" UI를 노출하지 않음
+        if (!isMonthly && fetchedCustomStatus != null)
           Padding(
             padding: const EdgeInsets.only(top: 12),
             child: Container(
@@ -61,17 +67,13 @@ class LiteInputCustomStatusSection extends StatelessWidget {
                     icon: const Icon(Icons.delete_outline, color: Colors.red),
                     onPressed: () async {
                       try {
-
                         await controller.deleteCustomStatusFromFirestore(context);
 
                         onDeleted();
                         onStatusCleared();
 
-                        // ✅ 성공 스낵바
                         showSuccessSnackbar(context, '자동 메모가 삭제되었습니다');
                       } catch (e) {
-
-                        // ✅ 실패 스낵바
                         showFailedSnackbar(context, '삭제 실패. 다시 시도해주세요');
                       }
                     },
@@ -79,7 +81,7 @@ class LiteInputCustomStatusSection extends StatelessWidget {
                 ],
               ),
             ),
-          )
+          ),
       ],
     );
   }

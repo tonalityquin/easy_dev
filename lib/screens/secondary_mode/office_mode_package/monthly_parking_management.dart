@@ -73,7 +73,10 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
 
     // index 0: 수정
     try {
-      final docRef = FirebaseFirestore.instance.collection('plate_status').doc(_selectedDocId!);
+      // ✅ 변경: monthly_plate_status에서 문서 로딩
+      final docRef = FirebaseFirestore.instance
+          .collection('monthly_plate_status')
+          .doc(_selectedDocId!);
       final snap = await docRef.get();
 
       // ✅ 계측: read 1회 (가능한 정확한 area로 보고)
@@ -144,12 +147,17 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
           ),
         ],
       ),
-    ) ?? false;
+    ) ??
+        false;
 
     if (!ok) return;
 
     try {
-      await FirebaseFirestore.instance.collection('plate_status').doc(_selectedDocId).delete();
+      // ✅ 변경: monthly_plate_status에서 삭제
+      await FirebaseFirestore.instance
+          .collection('monthly_plate_status')
+          .doc(_selectedDocId)
+          .delete();
 
       // ✅ 계측: delete 1회
       try {
@@ -189,7 +197,8 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
           fontSize: 11,
           color: Colors.black54,
           fontWeight: FontWeight.w600,
-        )).copyWith(
+        ))
+        .copyWith(
       color: Colors.black54,
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
@@ -234,7 +243,8 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
       ),
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
-            .collection('plate_status')
+        // ✅ 변경: monthly_plate_status 스트림 사용
+            .collection('monthly_plate_status')
             .where('type', isEqualTo: '정기')
             .where('area', isEqualTo: currentArea)
             .orderBy('updatedAt', descending: true)
@@ -375,8 +385,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                               const Divider(height: 24),
 
                               // 결제 내역
-                              if (data['payment_history'] != null &&
-                                  data['payment_history'] is List)
+                              if (data['payment_history'] != null && data['payment_history'] is List)
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -691,11 +700,3 @@ class _FabLabel extends StatelessWidget {
     );
   }
 }
-
-/// plate_status 문서 ID에서 area 추출: 규칙이 'plateNumber_area' 라고 가정.
-/// 규칙이 다르면 'unknown' 반환.
-/*String _inferAreaFromPlateStatusDocId(String docId) {
-  final idx = docId.lastIndexOf('_');
-  if (idx <= 0 || idx >= docId.length - 1) return 'unknown';
-  return docId.substring(idx + 1);
-}*/
