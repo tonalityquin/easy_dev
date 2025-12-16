@@ -1,4 +1,3 @@
-// lib/screens/input_package/sections/input_custom_status_section.dart
 import 'package:flutter/material.dart';
 import '../../../../utils/snackbar_helper.dart';
 import '../input_plate_controller.dart';
@@ -23,13 +22,14 @@ class InputCustomStatusSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ 정기(월정기)에서는 "자동 저장된 메모" 블록을 출력하지 않음
+    // ✅ 정기(월정기)에서는 plate_status 기반 "자동 저장된 메모" 블록을 출력하지 않음
+    // (정기 데이터는 monthly_plate_status를 사용)
     final bool isMonthly = controller.selectedBillType == '정기';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('추가 상태 메모 (최대 10자)', style: TextStyle(fontWeight: FontWeight.bold)),
+        const Text('추가 상태 메모 (최대 20자)', style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         TextField(
           controller: controller.customStatusController,
@@ -41,8 +41,9 @@ class InputCustomStatusSection extends StatelessWidget {
           ),
         ),
 
-        // ✅ 핵심 변경:
-        // - 정기(isMonthly == true)면 fetchedCustomStatus가 있어도 "자동 저장된 메모" UI를 노출하지 않음
+        // ✅ 핵심:
+        // - 정기(isMonthly == true)면 fetchedCustomStatus가 있어도
+        //   plate_status 기반 "자동 저장된 메모" UI를 노출하지 않음
         if (!isMonthly && fetchedCustomStatus != null)
           Padding(
             padding: const EdgeInsets.only(top: 12),
@@ -67,6 +68,8 @@ class InputCustomStatusSection extends StatelessWidget {
                   IconButton(
                     icon: const Icon(Icons.delete_outline, color: Colors.red),
                     onPressed: () async {
+                      // ✅ 이 버튼은 비정기(plate_status)에서만 노출되므로
+                      // plate_status 삭제만 수행한다.
                       try {
                         await controller.deleteCustomStatusFromFirestore(context);
 

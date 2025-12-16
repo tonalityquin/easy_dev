@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 
 import '../../../../utils/usage/usage_reporter.dart';
 
-
 String _formatAnyDate(dynamic v) {
   if (v == null) return '시간 정보 없음';
   if (v is Timestamp) return DateFormat('yyyy-MM-dd HH:mm:ss').format(v.toDate());
@@ -43,30 +42,38 @@ Widget _infoRow(String label, String? value) {
   );
 }
 
+/// ✅ 정산 유형에 따라 조회 컬렉션을 분기하는 BottomSheet
+/// - selectedBillType == '정기'  → monthly_plate_status
+/// - 그 외                     → plate_status
+///
+/// 주의: 이 함수는 "조회/표시"만 합니다(쓰기 없음).
 Future<Map<String, dynamic>?> liteInputCustomStatusBottomSheet(
     BuildContext context,
     String plateNumber,
-    String area,
-    ) async {
+    String area, {
+      required String selectedBillType,
+    }) async {
   final docId = '${plateNumber}_$area';
+
+  final bool isMonthly = selectedBillType.trim() == '정기';
+  final String collectionName = isMonthly ? 'monthly_plate_status' : 'plate_status';
 
   DocumentSnapshot<Map<String, dynamic>>? docSnapshot;
   try {
-    docSnapshot = await FirebaseFirestore.instance.collection('plate_status').doc(docId).get();
+    docSnapshot = await FirebaseFirestore.instance.collection(collectionName).doc(docId).get();
   } on FirebaseException catch (e) {
-    debugPrint('[inputCustomStatusBottomSheet] FirebaseException: ${e.code} ${e.message}');
+    debugPrint('[liteInputCustomStatusBottomSheet] FirebaseException: ${e.code} ${e.message}');
     docSnapshot = null;
   } catch (e) {
-    debugPrint('[inputCustomStatusBottomSheet] error: $e');
+    debugPrint('[liteInputCustomStatusBottomSheet] error: $e');
     docSnapshot = null;
   } finally {
-    // ⬇️ 집계 계측에서 installId prefix 제거
     await UsageReporter.instance.report(
       area: (area.isEmpty ? 'unknown' : area),
       action: 'read',
       n: 1,
-      source: 'InputPlateScreen._fetchPlateStatus/plate_status.doc.get',
-      useSourceOnlyKey: true, // ★ 중요
+      source: 'liteInputCustomStatusBottomSheet/$collectionName.doc.get',
+      useSourceOnlyKey: true,
     );
   }
 
@@ -132,7 +139,9 @@ Future<Map<String, dynamic>?> liteInputCustomStatusBottomSheet(
                       (customStatus != null && customStatus.isNotEmpty)
                           ? Icons.warning_amber_rounded
                           : Icons.info_outline,
-                      color: (customStatus != null && customStatus.isNotEmpty) ? Colors.redAccent : Colors.blueAccent,
+                      color: (customStatus != null && customStatus.isNotEmpty)
+                          ? Colors.redAccent
+                          : Colors.blueAccent,
                       size: 28,
                     ),
                     const SizedBox(width: 10),
@@ -141,6 +150,14 @@ Future<Map<String, dynamic>?> liteInputCustomStatusBottomSheet(
                       style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                     ),
                   ],
+                ),
+
+                const SizedBox(height: 12),
+
+                // ✅ 어떤 컬렉션을 보고 있는지 표기(디버깅/오해 방지)
+                Text(
+                  '데이터 출처: $collectionName',
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
                 ),
 
                 const SizedBox(height: 20),
@@ -288,5 +305,6 @@ Future<Map<String, dynamic>?> liteInputCustomStatusBottomSheet(
     'startDate': startDate,
     'endDate': endDate,
     'payment_history': paymentHistory,
+    'collection': collectionName,
   };
 }

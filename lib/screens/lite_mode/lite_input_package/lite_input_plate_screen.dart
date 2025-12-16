@@ -109,34 +109,46 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
       if (text.length == 4 && controller.isInputValid()) {
         final plateNumber = controller.buildPlateNumber();
         final area = context.read<AreaState>().currentArea;
-        final data = await _fetchPlateStatus(plateNumber, area);
+
+        // ✅ 변경: 현재 선택된 정산 유형에 따라 조회 컬렉션 분기
+        final bool isMonthly = controller.selectedBillType == '정기';
+        final data = isMonthly
+            ? await _fetchMonthlyPlateStatus(plateNumber, area)
+            : await _fetchPlateStatus(plateNumber, area);
 
         if (mounted && data != null) {
-          final fetchedStatus = data['customStatus'] as String?;
+          final fetchedStatus = (data['customStatus'] as String?)?.trim();
           final fetchedList =
               (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
 
-          final String? fetchedCountType = (data['countType'] as String?)?.trim();
+          // ✅ 정기인 경우에만 countType을 의미 있게 취급
+          final String? fetchedCountType = isMonthly ? (data['countType'] as String?)?.trim() : null;
 
           setState(() {
             controller.fetchedCustomStatus = fetchedStatus;
             controller.customStatusController.text = fetchedStatus ?? '';
-            // 토글 UI는 없지만, 서버 값은 메모 섹션에서 참고 가능
             selectedStatusNames = fetchedList;
             statusSectionKey = UniqueKey();
 
-            if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
-              controller.countTypeController.text = fetchedCountType;
-              controller.selectedBillType = '정기';
-              controller.selectedBill = fetchedCountType;
-
-              // ✅ plate_status에서 정기처럼 보이게 세팅되더라도,
-              // monthly_plate_status 문서가 있다고 확정할 수는 없으므로 false 유지(사용자 fetch 후 true)
+            if (isMonthly) {
+              _monthlyDocExists = true; // monthly_plate_status 문서 존재
+              if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
+                controller.countTypeController.text = fetchedCountType;
+                controller.selectedBill = fetchedCountType;
+              }
+            } else {
+              // ✅ 중요: plate_status에서 countType이 들어오더라도
+              // 정기처럼 UI/상태를 바꾸지 않음(오염 방지)
               _monthlyDocExists = false;
             }
           });
 
-          await liteInputCustomStatusBottomSheet(context, plateNumber, area);
+          await liteInputCustomStatusBottomSheet(
+            context,
+            plateNumber,
+            area,
+            selectedBillType: controller.selectedBillType,
+          );
         }
       }
     });
@@ -195,15 +207,12 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     }
   }
 
-  /// ✅ monthly_plate_status 단건 조회 (정기 버튼 클릭 시 사용)
+  /// ✅ monthly_plate_status 단건 조회 (정기 버튼 클릭 / 정기 상태에서 자동 조회)
   /// ✅ UsageReporter: area 기준 read 1회 보고(성공/실패 불문)
   Future<Map<String, dynamic>?> _fetchMonthlyPlateStatus(String plateNumber, String area) async {
     final docId = '${plateNumber}_$area';
     try {
-      final doc = await FirebaseFirestore.instance
-          .collection('monthly_plate_status')
-          .doc(docId)
-          .get();
+      final doc = await FirebaseFirestore.instance.collection('monthly_plate_status').doc(docId).get();
 
       if (doc.exists) {
         return doc.data();
@@ -253,8 +262,7 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     }
 
     final fetchedStatus = (data['customStatus'] as String?)?.trim();
-    final fetchedList =
-        (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+    final fetchedList = (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
     final fetchedCountType = (data['countType'] as String?)?.trim();
 
     setState(() {
@@ -316,10 +324,7 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     setState(() => _monthlyApplying = true);
 
     try {
-      await FirebaseFirestore.instance
-          .collection('monthly_plate_status')
-          .doc(docId)
-          .set(
+      await FirebaseFirestore.instance.collection('monthly_plate_status').doc(docId).set(
         {
           // ✅ 핵심: "추가 상태/메모"만 반영
           'customStatus': customStatus,
@@ -414,17 +419,17 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
   // ─────────────────────────────
 
   static const List<String> _allowedKoreanMids = [
-    '가','나','다','라','마','거','너','더','러','머','버','서','어','저',
-    '고','노','도','로','모','보','소','오','조','구','누','두','루','무',
-    '부','수','우','주','하','허','호','배'
+    '가', '나', '다', '라', '마', '거', '너', '더', '러', '머', '버', '서', '어', '저',
+    '고', '노', '도', '로', '모', '보', '소', '오', '조', '구', '누', '두', '루', '무',
+    '부', '수', '우', '주', '하', '허', '호', '배'
   ];
 
   static const Map<String, String> _charMap = {
-    'O': '0','o': '0','I': '1','l': '1','B': '8','S': '5',
+    'O': '0', 'o': '0', 'I': '1', 'l': '1', 'B': '8', 'S': '5',
   };
 
   static const Map<String, String> _midNormalize = {
-    '리': '러','이': '어','지': '저','히': '허','기': '거','니': '너','디': '더','미': '머','비': '버','시': '서',
+    '리': '러', '이': '어', '지': '저', '히': '허', '기': '거', '니': '너', '디': '더', '미': '머', '비': '버', '시': '서',
   };
 
   String _normalize(String s) {

@@ -49,6 +49,9 @@ class PlateCreationService {
   /// ✅ (변경) 2안용: 경량 View 컬렉션명
   static const String _parkingCompletedViewCollection = 'parking_completed_view';
 
+  /// ✅ (추가) 정기(월정기) 전용 컬렉션명
+  static const String _monthlyPlateStatusCollection = 'monthly_plate_status';
+
   static final Map<String, Map<String, dynamic>> _billCache = {};
   static final Map<String, DateTime> _billCacheExpiry = {};
   static const Duration _billTtl = Duration(minutes: 10);
@@ -429,64 +432,107 @@ class PlateCreationService {
       rethrow;
     }
 
-    // ✅ plate_status upsert → updatedAt도 서버 타임스탬프로 (일관화)
-    if (customStatus != null && customStatus.trim().isNotEmpty) {
-      final statusDocRef = _firestore.collection('plate_status').doc(plateDocId);
-      final expireAt = Timestamp.fromDate(
-        DateTime.now().add(const Duration(days: 1)),
-      );
+    // =========================================================================
+    // ✅ (리팩터링) 메모/상태 upsert
+    // - 정기(selectedBillType == '정기')   → monthly_plate_status 에만 저장 (plate_status 금지)
+    // - 그 외                              → plate_status 저장(+expireAt 유지)
+    //
+    // 기존 문제 원인: customStatus가 있으면 무조건 plate_status에 expireAt 포함 set() 하던 블록
+    // =========================================================================
+    final String memo = (customStatus ?? '').trim();
+    final List<String> statuses = (statusList ?? const <String>[])
+        .map((e) => e.toString().trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
 
-      final payload = <String, dynamic>{
-        'customStatus': customStatus.trim(),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'createdBy': userName,
-        'expireAt': expireAt,
-        'area': area,
-      };
+    final bool hasMemoOrStatus = memo.isNotEmpty || statuses.isNotEmpty;
+    if (!hasMemoOrStatus) return;
 
+    final bool isMonthly = selectedBillType.trim() == '정기';
+    final String targetCollection = isMonthly ? _monthlyPlateStatusCollection : 'plate_status';
+    final statusDocRef = _firestore.collection(targetCollection).doc(plateDocId);
+
+    final payload = <String, dynamic>{
+      'customStatus': memo,
+      'statusList': statuses,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'createdBy': userName,
+      'area': area,
+      if (isMonthly) 'type': '정기',
+      // 정기에서 countType이 필요하다면 billingType을 보조로 적재(프로젝트 정책에 따라 제거 가능)
+      if (isMonthly && billingType != null && billingType.trim().isNotEmpty) 'countType': billingType.trim(),
+      // 비정기(plate_status)에서만 TTL 유지
+      if (!isMonthly)
+        'expireAt': Timestamp.fromDate(
+          DateTime.now().add(const Duration(days: 1)),
+        ),
+    };
+
+    try {
+      await statusDocRef.set(payload, SetOptions(merge: true));
+      /*await UsageReporter.instance.report(
+        area: area,
+        action: 'write',
+        n: 1,
+        source: 'PlateCreationService.addPlate.statusUpsert/$targetCollection',
+      );*/
+    } on FirebaseException catch (e, st) {
       try {
-        await statusDocRef.set(payload, SetOptions(merge: true));
-        /*await UsageReporter.instance.report(
-          area: area,
-          action: 'write',
-          n: 1,
-          source: 'PlateCreationService.addPlate.statusUpsert',
-        );*/
-      } on FirebaseException catch (e, st) {
-        try {
-          await DebugDatabaseLogger().log({
-            'op': 'plateStatus.upsert.set',
-            'collection': 'plate_status',
-            'docPath': statusDocRef.path,
-            'docId': plateDocId,
-            'error': {
-              'type': e.runtimeType.toString(),
-              'code': e.code,
-              'message': e.toString(),
-            },
-            'stack': st.toString(),
-            'tags': ['plateStatus', 'upsert', 'set', 'error'],
-          }, level: 'error');
-        } catch (_) {}
-        rethrow;
-      } catch (e, st) {
-        try {
-          await DebugDatabaseLogger().log({
-            'op': 'plateStatus.upsert.unknown',
-            'collection': 'plate_status',
-            'docPath': statusDocRef.path,
-            'docId': plateDocId,
-            'error': {
-              'type': e.runtimeType.toString(),
-              if (e is FirebaseException) 'code': e.code,
-              'message': e.toString(),
-            },
-            'stack': st.toString(),
-            'tags': ['plateStatus', 'upsert', 'error'],
-          }, level: 'error');
-        } catch (_) {}
-        rethrow;
-      }
+        await DebugDatabaseLogger().log({
+          'op': isMonthly ? 'monthlyPlateStatus.upsert.set' : 'plateStatus.upsert.set',
+          'collection': targetCollection,
+          'docPath': statusDocRef.path,
+          'docId': plateDocId,
+          'inputs': {
+            'plateNumber': plateNumber,
+            'area': area,
+            'selectedBillType': selectedBillType,
+            'statusListLen': statuses.length,
+            'customStatusLen': memo.length,
+          },
+          'error': {
+            'type': e.runtimeType.toString(),
+            'code': e.code,
+            'message': e.toString(),
+          },
+          'stack': st.toString(),
+          'tags': [
+            isMonthly ? 'monthlyPlateStatus' : 'plateStatus',
+            'upsert',
+            'set',
+            'error',
+          ],
+        }, level: 'error');
+      } catch (_) {}
+      rethrow;
+    } catch (e, st) {
+      try {
+        await DebugDatabaseLogger().log({
+          'op': isMonthly ? 'monthlyPlateStatus.upsert.unknown' : 'plateStatus.upsert.unknown',
+          'collection': targetCollection,
+          'docPath': statusDocRef.path,
+          'docId': plateDocId,
+          'inputs': {
+            'plateNumber': plateNumber,
+            'area': area,
+            'selectedBillType': selectedBillType,
+            'statusListLen': statuses.length,
+            'customStatusLen': memo.length,
+          },
+          'error': {
+            'type': e.runtimeType.toString(),
+            if (e is FirebaseException) 'code': e.code,
+            'message': e.toString(),
+          },
+          'stack': st.toString(),
+          'tags': [
+            isMonthly ? 'monthlyPlateStatus' : 'plateStatus',
+            'upsert',
+            'error',
+          ],
+        }, level: 'error');
+      } catch (_) {}
+      rethrow;
     }
   }
 

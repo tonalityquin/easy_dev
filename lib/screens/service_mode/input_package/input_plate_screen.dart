@@ -130,7 +130,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             }
           });
 
-          await inputCustomStatusBottomSheet(context, plateNumber, area);
+          await inputCustomStatusBottomSheet(
+            context,
+            plateNumber,
+            area,
+            selectedBillType: controller.selectedBillType,
+          );
         }
       }
     });
@@ -313,7 +318,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       await _plateRepo.setMonthlyMemoAndStatusOnly(
         plateNumber: plateNumber,
         area: area,
-        createdBy: 'system', // 화면 단에서 userName이 필요하면 주입해 사용하세요(현재 파일 scope엔 UserState import가 없음)
+        createdBy: 'system',
+        // 화면 단에서 userName이 필요하면 주입해 사용하세요(현재 파일 scope엔 UserState import가 없음)
         customStatus: customStatus,
         statusList: statusList,
         skipIfDocMissing: false,
@@ -378,14 +384,14 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             ),
             child: _monthlyApplying
                 ? const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-            )
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
                 : const Text(
-              '반영',
-              style: TextStyle(fontWeight: FontWeight.w800),
-            ),
+                    '반영',
+                    style: TextStyle(fontWeight: FontWeight.w800),
+                  ),
           ),
         ),
         if (!_monthlyDocExists) ...[
@@ -729,11 +735,11 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   Widget _buildScreenTag(BuildContext context) {
     final base = Theme.of(context).textTheme.labelSmall;
     final style = (base ??
-        const TextStyle(
-          fontSize: 11,
-          color: Colors.black54,
-          fontWeight: FontWeight.w600,
-        ))
+            const TextStyle(
+              fontSize: 11,
+              color: Colors.black54,
+              fontWeight: FontWeight.w600,
+            ))
         .copyWith(
       color: Colors.black54,
       fontWeight: FontWeight.w600,

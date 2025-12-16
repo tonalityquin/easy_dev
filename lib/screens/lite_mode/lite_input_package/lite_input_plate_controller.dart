@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../utils/snackbar_helper.dart';
+import '../../../utils/usage/usage_reporter.dart';
 import 'utils/lite_input_plate_service.dart';
 
 import '../../../states/bill/bill_state.dart';
@@ -123,7 +125,7 @@ class LiteInputPlateController {
     clearLocation();
     capturedImages.clear();
     selectedStatuses.clear();
-    selectedBill = null; // ✅ 변경 반영
+    selectedBill = null;
     selectedBasicStandard = 0;
     selectedBasicAmount = 0;
     selectedAddStandard = 0;
@@ -159,17 +161,98 @@ class LiteInputPlateController {
     countTypeController.dispose();
   }
 
+  /// ✅ 비정기: plate_status 삭제
+  /// ✅ 정기: monthly_plate_status는 “문서 삭제” 대신 메모/상태만 비우는 방식으로 안전 처리(필요 시 정책 변경 가능)
   Future<void> deleteCustomStatusFromFirestore(BuildContext context) async {
     final plateNumber = buildPlateNumber();
     final area = context.read<AreaState>().currentArea;
+    final docId = '${plateNumber}_$area';
+
+    final bool isMonthly = selectedBillType == '정기';
 
     try {
-      await _plateRepo.deletePlateStatus(plateNumber, area);
+      if (!isMonthly) {
+        await _plateRepo.deletePlateStatus(plateNumber, area);
+      } else {
+        await FirebaseFirestore.instance.collection('monthly_plate_status').doc(docId).set(
+          {
+            'customStatus': '',
+            'statusList': <String>[],
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+
+        await UsageReporter.instance.report(
+          area: (area.isEmpty ? 'unknown' : area),
+          action: 'write',
+          n: 1,
+          source: 'LiteInputPlateController.deleteCustomStatusFromFirestore/monthly_plate_status.doc.set(merge)',
+          useSourceOnlyKey: true,
+        );
+      }
+
       fetchedCustomStatus = null;
       fetchedStatusList = [];
     } catch (e) {
       rethrow;
     }
+  }
+
+  /// ✅ 등록 성공 후 메모/상태 저장을 정산 유형에 따라 분기
+  /// - 정기: monthly_plate_status (merge upsert)  ★ plate_status 금지
+  /// - 비정기: plate_status (기존 repo 메서드 사용)
+  Future<void> _persistMemoAndStatusAfterEntry({
+    required String plateNumber,
+    required String area,
+    required String userName,
+  }) async {
+    final bool isMonthly = selectedBillType.trim() == '정기';
+    final docId = '${plateNumber}_$area';
+
+    final memo = customStatusController.text.trim();
+    final statuses = List<String>.from(selectedStatuses);
+
+    final bool hasAny = memo.isNotEmpty || statuses.isNotEmpty;
+    if (!hasAny) return;
+
+    if (!isMonthly) {
+      // ✅ 기존 동작: 비정기만 plate_status 저장
+      await _plateRepo.setPlateStatus(
+        plateNumber: plateNumber,
+        area: area,
+        customStatus: memo,
+        statusList: statuses,
+        createdBy: userName,
+      );
+      return;
+    }
+
+    // ✅ 정기(월정기): monthly_plate_status에만 저장 (plate_status 절대 사용하지 않음)
+    final String ct = (selectedBill ?? '').trim().isNotEmpty
+        ? (selectedBill ?? '').trim()
+        : countTypeController.text.trim();
+
+    await FirebaseFirestore.instance.collection('monthly_plate_status').doc(docId).set(
+      {
+        'customStatus': memo,
+        'statusList': statuses,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'area': area,
+        'createdBy': userName,
+        'type': '정기',
+        if (ct.isNotEmpty) 'countType': ct,
+      },
+      SetOptions(merge: true),
+    );
+
+    await UsageReporter.instance.report(
+      area: (area.isEmpty ? 'unknown' : area),
+      action: 'write',
+      n: 1,
+      source: 'LiteInputPlateController._persistMemoAndStatusAfterEntry/monthly_plate_status.doc.set(merge)',
+      useSourceOnlyKey: true,
+    );
   }
 
   Future<void> submitPlateEntry(
@@ -235,8 +318,9 @@ class LiteInputPlateController {
         addStandard: selectedAddStandard,
         addAmount: selectedAddAmount,
         region: dropdownValue,
-        customStatus:
-        customStatusController.text.trim().isNotEmpty ? customStatusController.text : fetchedCustomStatus ?? '',
+        customStatus: customStatusController.text.trim().isNotEmpty
+            ? customStatusController.text
+            : fetchedCustomStatus ?? '',
         selectedBillType: selectedBillType,
       );
 
@@ -248,25 +332,23 @@ class LiteInputPlateController {
       if (rootNav.canPop()) rootNav.pop();
 
       if (!wasSuccessful) {
-        // ✅ 실패 시: InputPlateScreen에 머물기
-        // (registerPlateEntry 내부에서 이미 안내하는 경우가 있어도 안전하게 한 번 더 안내)
         showFailedSnackbar(context, '동일한 차량 번호가 있습니다.');
         return;
       }
 
-      // 2) 등록 성공 이후: plate_status 저장은 "부가 작업"으로 분리
-      Object? plateStatusError;
+      // 2) ✅ 등록 성공 이후: 메모/상태 저장은 selectedBillType에 따라 분기
+      //    - 정기: monthly_plate_status (plate_status 금지)
+      //    - 비정기: plate_status
+      Object? memoStatusError;
       try {
-        await _plateRepo.setPlateStatus(
+        await _persistMemoAndStatusAfterEntry(
           plateNumber: plateNumber,
           area: area,
-          customStatus: customStatusController.text.trim(),
-          statusList: selectedStatuses,
-          createdBy: userName,
+          userName: userName,
         );
       } catch (e) {
-        plateStatusError = e;
-        debugPrint('[submitPlateEntry] setPlateStatus failed: $e');
+        memoStatusError = e;
+        debugPrint('[submitPlateEntry] persist memo/status failed: $e');
       }
 
       if (!context.mounted) return;
@@ -274,8 +356,8 @@ class LiteInputPlateController {
       // 3) 성공 스낵바
       showSuccessSnackbar(context, '차량 정보 등록 완료');
 
-      // 4) plate_status만 실패한 경우 경고(등록 성공은 유지)
-      if (plateStatusError != null) {
+      // 4) 메모/상태만 실패한 경우 경고(등록 성공은 유지)
+      if (memoStatusError != null) {
         showSelectedSnackbar(context, '등록은 완료되었지만 메모/상태 저장에 실패했습니다.');
       }
 
@@ -289,7 +371,6 @@ class LiteInputPlateController {
       final rootNav = Navigator.of(context, rootNavigator: true);
       if (rootNav.canPop()) rootNav.pop();
 
-      // ✅ 예외 발생 시: 화면 유지
       showFailedSnackbar(context, '등록 실패: ${e.toString()}');
     } finally {
       isLoading = false;

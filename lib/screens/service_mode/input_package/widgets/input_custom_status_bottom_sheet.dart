@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 
 import '../../../../utils/usage/usage_reporter.dart';
 
-
 String _formatAnyDate(dynamic v) {
   if (v == null) return '시간 정보 없음';
   if (v is Timestamp) return DateFormat('yyyy-MM-dd HH:mm:ss').format(v.toDate());
@@ -43,16 +42,25 @@ Widget _infoRow(String label, String? value) {
   );
 }
 
+/// ✅ 정산 유형에 따라 조회 컬렉션을 분기하는 BottomSheet
+/// - selectedBillType == '정기'  → monthly_plate_status
+/// - 그 외                     → plate_status
+///
+/// 주의: 이 함수는 "조회/표시"만 합니다(쓰기 없음).
 Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
     BuildContext context,
     String plateNumber,
-    String area,
-    ) async {
+    String area, {
+      required String selectedBillType,
+    }) async {
   final docId = '${plateNumber}_$area';
+
+  final bool isMonthly = selectedBillType.trim() == '정기';
+  final String collectionName = isMonthly ? 'monthly_plate_status' : 'plate_status';
 
   DocumentSnapshot<Map<String, dynamic>>? docSnapshot;
   try {
-    docSnapshot = await FirebaseFirestore.instance.collection('plate_status').doc(docId).get();
+    docSnapshot = await FirebaseFirestore.instance.collection(collectionName).doc(docId).get();
   } on FirebaseException catch (e) {
     debugPrint('[inputCustomStatusBottomSheet] FirebaseException: ${e.code} ${e.message}');
     docSnapshot = null;
@@ -60,13 +68,13 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
     debugPrint('[inputCustomStatusBottomSheet] error: $e');
     docSnapshot = null;
   } finally {
-    // ⬇️ 집계 계측에서 installId prefix 제거
+    // ✅ 집계 계측: 실제 접근한 컬렉션으로 source 구분
     await UsageReporter.instance.report(
       area: (area.isEmpty ? 'unknown' : area),
       action: 'read',
       n: 1,
-      source: 'InputPlateScreen._fetchPlateStatus/plate_status.doc.get',
-      useSourceOnlyKey: true, // ★ 중요
+      source: 'inputCustomStatusBottomSheet/$collectionName.doc.get',
+      useSourceOnlyKey: true,
     );
   }
 
@@ -76,9 +84,11 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
 
   final String? customStatus = (data['customStatus'] as String?)?.trim();
   final Timestamp? updatedAt = data['updatedAt'];
+
   final List<dynamic>? statusListRaw = data['statusList'];
   final List<String> statusList = statusListRaw?.map((e) => e.toString()).toList() ?? [];
 
+  // monthly_plate_status에서 주로 내려오는 필드들(plate_status에도 있을 수 있음)
   final String? countType = (data['countType'] as String?)?.trim();
   final String? type = (data['type'] as String?)?.trim();
   final String? periodUnit = (data['periodUnit'] as String?)?.trim();
@@ -141,6 +151,14 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
                       style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                     ),
                   ],
+                ),
+
+                const SizedBox(height: 12),
+
+                // ✅ 어떤 컬렉션을 보고 있는지 표기(디버깅/오해 방지)
+                Text(
+                  '데이터 출처: $collectionName',
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
                 ),
 
                 const SizedBox(height: 20),
@@ -288,5 +306,6 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
     'startDate': startDate,
     'endDate': endDate,
     'payment_history': paymentHistory,
+    'collection': collectionName, // ✅ 디버깅/검증용
   };
 }
