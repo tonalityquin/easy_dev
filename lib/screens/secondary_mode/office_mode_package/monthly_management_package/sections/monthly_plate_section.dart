@@ -2,6 +2,11 @@ import 'package:flutter/material.dart';
 import '../utils/monthly_plate_field.dart';
 import '../widgets/monthly_region_bottom_sheet.dart';
 
+class _SvcColors {
+  static const dark = Color(0xFF09367D);
+  static const light = Color(0xFF5472D3);
+}
+
 class MonthlyPlateSection extends StatelessWidget {
   final String dropdownValue;
   final List<String> regions;
@@ -36,89 +41,137 @@ class MonthlyPlateSection extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '번호 입력',
-          style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // 지역 선택: 폭 제한 + 말줄임 + 편집 모드 비활성화
-            Semantics(
-              button: true,
-              enabled: !isEditMode,
-              label: '지역 선택: $dropdownValue',
-              child: OutlinedButton(
-                onPressed: isEditMode
-                    ? null
-                    : () {
-                  monthlyRegionPickerBottomSheet(
-                    context: context,
-                    selectedRegion: dropdownValue,
-                    regions: regions,
-                    onConfirm: onRegionChanged,
-                  );
-                },
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: cs.primary,
-                  side: BorderSide(color: cs.primary, width: 1),
-                  backgroundColor: cs.surface,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 12,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(.04),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 헤더
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: _SvcColors.light.withOpacity(.18),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: _SvcColors.light.withOpacity(.40)),
+                ),
+                child: const Icon(Icons.directions_car_outlined, color: _SvcColors.dark),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  '번호 입력',
+                  style: text.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: _SvcColors.dark,
                   ),
                 ),
-                child: ConstrainedBox(
-                  // 드롭다운(지역명) 버튼이 가로 공간을 과도하게 차지하지 않도록 상한을 둔다.
-                  constraints: const BoxConstraints(maxWidth: 160),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // 버튼 내부 텍스트는 길면 말줄임 처리
-                      Flexible(
-                        child: Text(
-                          dropdownValue,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: text.bodyLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                            color: cs.primary,
-                            letterSpacing: .2,
-                          ),
-                        ),
+              ),
+              if (isEditMode)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceVariant.withOpacity(.7),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: cs.outlineVariant.withOpacity(.7)),
+                  ),
+                  child: Text(
+                    '수정 모드',
+                    style: text.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: cs.onSurface.withOpacity(.65),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          Text(
+            '지역을 선택하고 번호판을 입력하세요.',
+            style: text.bodyMedium?.copyWith(
+              color: Colors.black.withOpacity(.60),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // 지역 선택
+              Semantics(
+                button: true,
+                enabled: !isEditMode,
+                label: '지역 선택: $dropdownValue',
+                child: OutlinedButton.icon(
+                  onPressed: isEditMode
+                      ? null
+                      : () {
+                    monthlyRegionPickerBottomSheet(
+                      context: context,
+                      selectedRegion: dropdownValue,
+                      regions: regions,
+                      onConfirm: onRegionChanged,
+                    );
+                  },
+                  icon: const Icon(Icons.place_outlined, size: 18),
+                  label: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 160),
+                    child: Text(
+                      dropdownValue,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
                       ),
-                      const SizedBox(width: 6),
-                      Icon(Icons.expand_more, size: 18, color: cs.primary),
-                    ],
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _SvcColors.dark,
+                    side: BorderSide(color: _SvcColors.light.withOpacity(.75)),
+                    backgroundColor: _SvcColors.light.withOpacity(.06),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            // 번호판 입력 필드: 남은 가로 공간 전부 사용
-            Expanded(
-              child: MonthlyPlateField(
-                frontDigitCount: isThreeDigit ? 3 : 2,
-                hasMiddleChar: true,
-                backDigitCount: 4,
-                frontController: controllerFrontDigit,
-                middleController: controllerMidDigit,
-                backController: controllerBackDigit,
-                activeController: activeController,
-                onKeypadStateChanged: onKeypadStateChanged,
-                isEditMode: isEditMode,
+              const SizedBox(width: 12),
+
+              // 번호판 입력
+              Expanded(
+                child: MonthlyPlateField(
+                  frontDigitCount: isThreeDigit ? 3 : 2,
+                  hasMiddleChar: true,
+                  backDigitCount: 4,
+                  frontController: controllerFrontDigit,
+                  middleController: controllerMidDigit,
+                  backController: controllerBackDigit,
+                  activeController: activeController,
+                  onKeypadStateChanged: onKeypadStateChanged,
+                  isEditMode: isEditMode,
+                ),
               ),
-            ),
-          ],
-        ),
-      ],
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

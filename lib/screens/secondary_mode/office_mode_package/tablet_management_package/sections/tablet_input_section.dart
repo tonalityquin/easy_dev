@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 
 /// 서비스(로그인 카드)와 동일 계열 팔레트
 class _SvcColors {
-  static const base = Color(0xFF0D47A1); // primary
+  static const base = Color(0xFF0D47A1);
+  static const dark = Color(0xFF09367D);
+  static const light = Color(0xFF5472D3);
 }
 
 /// 대문자 입력 시 자동으로 소문자로 변환
@@ -26,52 +28,94 @@ class LowercaseTextFormatter extends TextInputFormatter {
 
 class TabletInputSection extends StatelessWidget {
   final TextEditingController nameController;
-  final TextEditingController handleController; // 🔁 phone → handle
+  final TextEditingController handleController;
   final TextEditingController emailController;
 
   final FocusNode nameFocus;
-  final FocusNode handleFocus; // 🔁 phone → handle
+  final FocusNode handleFocus;
   final FocusNode emailFocus;
 
-  /// 현재 구조와의 호환을 위해 유지.
-  /// (권장: 필드별 에러 전달 또는 Form/validator로 대체)
+  /// 기존 호환 유지(문자열 기반 에러)
   final String? errorMessage;
+
+  /// 입력 변경 시(에러 해제 등) 호출
+  final VoidCallback? onEdited;
+
+  /// 이메일 로컬파트 유효성 검사(선택)
+  final bool Function(String input)? emailLocalPartValidator;
 
   const TabletInputSection({
     super.key,
     required this.nameController,
-    required this.handleController, // 🔁
+    required this.handleController,
     required this.emailController,
     required this.nameFocus,
-    required this.handleFocus, // 🔁
+    required this.handleFocus,
     required this.emailFocus,
     required this.errorMessage,
+    this.onEdited,
+    this.emailLocalPartValidator,
   });
 
-  InputDecoration _decoration(
-      BuildContext context, {
-        required String label,
-        String? errorText,
-        String? suffixText,
-        IconData? prefixIcon,
-      }) {
+  bool _isNameOk(String v) => v.trim().isNotEmpty;
+
+  bool _isHandleOk(String v) => RegExp(r'^[a-z]{3,20}$').hasMatch(v.trim());
+
+  bool _isEmailOk(String v) {
+    final t = v.trim();
+    if (t.isEmpty) return false;
+    final fn = emailLocalPartValidator;
+    return fn == null ? true : fn(t);
+  }
+
+  InputDecoration _decoration({
+    required String label,
+    required String helperText,
+    String? errorText,
+    String? suffixText,
+    IconData? prefixIcon,
+    bool showDoneIcon = false,
+    bool done = false,
+  }) {
     return InputDecoration(
       labelText: label,
+      helperText: helperText,
+      floatingLabelStyle: const TextStyle(
+        color: _SvcColors.dark,
+        fontWeight: FontWeight.w700,
+      ),
+      prefixIcon: prefixIcon == null ? null : Icon(prefixIcon),
+      prefixIconColor: _SvcColors.dark,
       suffixText: suffixText,
+      suffixStyle: const TextStyle(
+        color: _SvcColors.dark,
+        fontWeight: FontWeight.w600,
+      ),
+      suffixIcon: showDoneIcon
+          ? Icon(
+        done ? Icons.check_circle : Icons.radio_button_unchecked,
+        color: done ? _SvcColors.dark : _SvcColors.light.withOpacity(.70),
+      )
+          : null,
+      filled: true,
+      fillColor: _SvcColors.light.withOpacity(.06),
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-      prefixIcon: prefixIcon == null ? null : Icon(prefixIcon),
-      prefixIconColor: _SvcColors.base.withOpacity(.85),
-      focusedBorder: OutlineInputBorder(
-        borderSide: const BorderSide(color: _SvcColors.base),
-        borderRadius: BorderRadius.circular(8),
-      ),
       enabledBorder: OutlineInputBorder(
-        borderSide: BorderSide(color: _SvcColors.base.withOpacity(.28)),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: _SvcColors.light.withOpacity(.45)),
       ),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: const BorderSide(color: _SvcColors.base, width: 1.2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.red.shade300),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: Colors.red.shade400, width: 1.2),
       ),
       errorText: errorText,
     );
@@ -80,16 +124,19 @@ class TabletInputSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // 문자열 비교는 유지(호환). 추후 필드별 에러로 교체 권장.
-    final nameError  = errorMessage == '이름을 다시 입력하세요' ? errorMessage : null;
+    final nameError =
+    errorMessage == '이름을 다시 입력하세요' ? errorMessage : null;
 
-    // 새 규칙/문구와의 호환 + 과거 문구 호환(전화번호 → 아이디 전환기)
     final handleError = (errorMessage == '아이디는 소문자 영어 3~20자로 입력하세요' ||
         errorMessage == '아이디를 다시 입력하세요' ||
         errorMessage == '전화번호를 다시 입력하세요')
         ? errorMessage
         : null;
 
-    final emailError = errorMessage == '이메일을 입력하세요' ? errorMessage : null;
+    final emailError = (errorMessage == '이메일을 입력하세요' ||
+        errorMessage == '이메일을 다시 확인하세요')
+        ? errorMessage
+        : null;
 
     return Column(
       children: [
@@ -97,55 +144,63 @@ class TabletInputSection extends StatelessWidget {
         TextField(
           controller: nameController,
           focusNode: nameFocus,
+          onChanged: (_) => onEdited?.call(),
           textInputAction: TextInputAction.next,
           onSubmitted: (_) => FocusScope.of(context).nextFocus(),
           textCapitalization: TextCapitalization.words,
           autofillHints: const [AutofillHints.name],
           decoration: _decoration(
-            context,
             label: '이름',
+            helperText: '예: 태블릿A, 로비태블릿 등',
             errorText: nameError,
             prefixIcon: Icons.person_outline,
+            showDoneIcon: true,
+            done: _isNameOk(nameController.text),
           ),
         ),
         const SizedBox(height: 16),
 
-        // 아이디(소문자 영문) — 기존 전화번호 입력 대체
+        // 아이디(소문자 영문)
         TextField(
           controller: handleController,
           focusNode: handleFocus,
+          onChanged: (_) => onEdited?.call(),
           textInputAction: TextInputAction.next,
           onSubmitted: (_) => FocusScope.of(context).nextFocus(),
           keyboardType: TextInputType.visiblePassword,
           autofillHints: const [AutofillHints.username],
-          // ❗ const 리스트 → 일반 리스트로 변경 (RegExp가 const 아님)
           inputFormatters: [
-            const LowercaseTextFormatter(),                          // 대문자 → 소문자
-            FilteringTextInputFormatter.allow(RegExp(r'[a-z]')),     // 소문자만
-            LengthLimitingTextInputFormatter(20),                    // 최대 20자
+            const LowercaseTextFormatter(),
+            FilteringTextInputFormatter.allow(RegExp(r'[a-z]')),
+            LengthLimitingTextInputFormatter(20),
           ],
           decoration: _decoration(
-            context,
             label: '아이디(소문자 영문)',
+            helperText: '소문자 a~z, 3~20자',
             errorText: handleError,
             prefixIcon: Icons.tag,
+            showDoneIcon: true,
+            done: _isHandleOk(handleController.text),
           ),
         ),
         const SizedBox(height: 16),
 
-        // 이메일(로컬파트) + suffixText
+        // 이메일(로컬파트)
         TextField(
           controller: emailController,
           focusNode: emailFocus,
+          onChanged: (_) => onEdited?.call(),
           textInputAction: TextInputAction.done,
           keyboardType: TextInputType.emailAddress,
           autofillHints: const [AutofillHints.username],
           decoration: _decoration(
-            context,
             label: '이메일(구글)',
-            suffixText: '@gmail.com', // ✅ Row 대신 suffixText 사용
+            helperText: '영문/숫자/._- 만 입력 가능',
+            suffixText: '@gmail.com',
             errorText: emailError,
             prefixIcon: Icons.alternate_email,
+            showDoneIcon: true,
+            done: _isEmailOk(emailController.text),
           ),
         ),
       ],

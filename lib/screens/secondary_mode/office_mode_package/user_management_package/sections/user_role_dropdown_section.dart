@@ -1,4 +1,3 @@
-// lib/widgets/.../user_role_dropdown_section.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -8,8 +7,8 @@ import 'user_role_type_section.dart'; // RoleType 정의
 
 /// 서비스 로그인 카드와 동일 톤의 팔레트
 class _SvcColors {
-  static const base = Color(0xFF0D47A1);  // primary
-  static const dark = Color(0xFF09367D);  // 진한 텍스트/아이콘
+  static const base = Color(0xFF0D47A1); // primary
+  static const dark = Color(0xFF09367D); // 진한 텍스트/아이콘
   static const light = Color(0xFF5472D3); // 라이트 톤/보더
 }
 
@@ -32,6 +31,9 @@ class UserRoleDropdownSection extends StatelessWidget {
   /// 라벨 텍스트(선택)
   final String label;
 
+  /// 지역 capability 힌트 표시 여부
+  final bool showAreaCapabilityHint;
+
   const UserRoleDropdownSection({
     super.key,
     required this.selectedRole,
@@ -40,6 +42,7 @@ class UserRoleDropdownSection extends StatelessWidget {
     this.validator,
     this.autovalidateMode = AutovalidateMode.disabled,
     this.label = '권한',
+    this.showAreaCapabilityHint = true,
   }) : assert(allowedRoles.length > 0, 'allowedRoles는 비어 있을 수 없습니다.');
 
   // ⬇️ 역할별 "최소 요구 capability" 정의
@@ -102,8 +105,12 @@ class UserRoleDropdownSection extends StatelessWidget {
     }
 
     // Dropdown 팝업 배경색
-    final Color dropdownBgColor =
-        colorScheme.surface; // 심플하게 서피스 톤 사용(테마와 자연스럽게 어울림)
+    final Color dropdownBgColor = colorScheme.surface;
+
+    final String capsHuman = showAreaCapabilityHint ? Cap.human(areaCaps) : '';
+    final String helper = showAreaCapabilityHint
+        ? '현재 지역 기능: $capsHuman (해당 기능에 맞는 권한만 표시됩니다)'
+        : '';
 
     // 선택 가능한 역할이 없다면 안내만 출력
     if (effectiveRoles.isEmpty) {
@@ -114,6 +121,8 @@ class UserRoleDropdownSection extends StatelessWidget {
             color: _SvcColors.dark,
             fontWeight: FontWeight.w700,
           ),
+          helperText: showAreaCapabilityHint ? helper : null,
+          helperMaxLines: 2,
           isDense: true,
           contentPadding:
           const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
@@ -132,9 +141,8 @@ class UserRoleDropdownSection extends StatelessWidget {
           ),
         ),
         child: Text(
-          '현재 지역 기능(${Cap.human(areaCaps)})으로 선택 가능한 권한이 없습니다.',
-          style:
-          theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
+          '현재 지역 기능으로 선택 가능한 권한이 없습니다.',
+          style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
         ),
       );
     }
@@ -153,8 +161,9 @@ class UserRoleDropdownSection extends StatelessWidget {
           color: _SvcColors.dark,
           fontWeight: FontWeight.w700,
         ),
+        helperText: showAreaCapabilityHint ? helper : null,
+        helperMaxLines: 2,
 
-        // 토널 느낌
         filled: true,
         fillColor: _SvcColors.light.withOpacity(.06),
 
@@ -162,7 +171,6 @@ class UserRoleDropdownSection extends StatelessWidget {
         contentPadding:
         const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
 
-        // 보더 톤 정리(라이트/포커스)
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
           borderSide: BorderSide(color: _SvcColors.light.withOpacity(.45)),

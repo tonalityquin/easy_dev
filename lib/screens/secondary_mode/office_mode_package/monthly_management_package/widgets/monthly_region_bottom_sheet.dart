@@ -4,30 +4,90 @@ import 'package:flutter/services.dart';
 
 /// 서비스 로그인 카드(Deep Blue 팔레트)와 톤을 맞춘 보조 팔레트
 class _SvcColors {
-  static const base  = Color(0xFF0D47A1);
+  static const base = Color(0xFF0D47A1);
+  static const dark = Color(0xFF09367D);
   static const light = Color(0xFF5472D3);
+  static const fg = Color(0xFFFFFFFF);
 }
 
-/// 지역 선택 바텀시트 (CupertinoPicker)
-/// - 앱 테마의 ColorScheme + 서비스 팔레트에 맞춰 색 반영
-/// - 드래그 핸들/테두리/배경 톤 정리
 Future<void> monthlyRegionPickerBottomSheet({
   required BuildContext context,
   required String selectedRegion,
   required List<String> regions,
   required ValueChanged<String> onConfirm,
 }) async {
-  // 빈 목록 가드
+  // 빈 목록 가드 (로직 유지)
   if (regions.isEmpty) {
     await showModalBottomSheet(
       context: context,
       useSafeArea: true,
-      builder: (ctx) => SafeArea(
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          child: const Text('선택 가능한 지역이 없습니다.'),
-        ),
-      ),
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        return SafeArea(
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              border: Border.all(color: cs.outlineVariant.withOpacity(.5)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(.08),
+                  blurRadius: 14,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Center(
+                  child: Container(
+                    width: 42,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: cs.outlineVariant.withOpacity(.6),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                const Row(
+                  children: [
+                    Icon(Icons.info_outline, color: _SvcColors.dark),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '선택 가능한 지역이 없습니다.',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          color: _SvcColors.dark,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _SvcColors.base,
+                      foregroundColor: _SvcColors.fg,
+                      shape: const StadiumBorder(),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      elevation: 0,
+                    ),
+                    child: const Text('닫기'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
     return;
   }
@@ -44,9 +104,9 @@ Future<void> monthlyRegionPickerBottomSheet({
       final cs = Theme.of(sheetCtx).colorScheme;
 
       return DraggableScrollableSheet(
-        initialChildSize: 0.5,
-        minChildSize: 0.4,
-        maxChildSize: 0.9,
+        initialChildSize: 0.55,
+        minChildSize: 0.45,
+        maxChildSize: 0.90,
         builder: (ctx, scrollController) {
           return SafeArea(
             top: false,
@@ -54,19 +114,19 @@ Future<void> monthlyRegionPickerBottomSheet({
             child: Container(
               decoration: BoxDecoration(
                 color: cs.surface,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(.5))),
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(.55))),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(.06),
-                    blurRadius: 12,
+                    color: Colors.black.withOpacity(.08),
+                    blurRadius: 14,
                     offset: const Offset(0, -2),
                   ),
                 ],
               ),
               child: ListView(
                 controller: scrollController,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
                 children: [
                   // Drag handle
                   Center(
@@ -81,27 +141,68 @@ Future<void> monthlyRegionPickerBottomSheet({
                     ),
                   ),
 
-                  Text(
-                    '지역 선택',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: .2,
-                      color: cs.onSurface,
+                  // 헤더(아이콘+제목+닫기)
+                  Row(
+                    children: [
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: _SvcColors.light.withOpacity(.18),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: _SvcColors.light.withOpacity(.40)),
+                        ),
+                        child: const Icon(Icons.place_outlined, color: _SvcColors.dark),
+                      ),
+                      const SizedBox(width: 10),
+                      const Expanded(
+                        child: Text(
+                          '지역 선택',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: _SvcColors.dark,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '닫기',
+                        onPressed: () => Navigator.of(sheetCtx).pop(),
+                        icon: const Icon(Icons.close),
+                        color: _SvcColors.dark,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _SvcColors.light.withOpacity(.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: _SvcColors.light.withOpacity(.25)),
+                    ),
+                    child: Text(
+                      '현재 선택: $selectedRegion',
+                      style: const TextStyle(
+                        color: _SvcColors.dark,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 14),
 
-                  // 픽커(고정 높이)
+                  // Picker
                   SizedBox(
                     height: 216,
                     child: CupertinoTheme(
                       data: CupertinoThemeData(
-                        primaryColor: _SvcColors.base, // 버튼/하이라이트 컬러
+                        primaryColor: _SvcColors.base,
                         textTheme: CupertinoTextThemeData(
                           pickerTextStyle: TextStyle(
                             fontSize: 18,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w800,
                             color: cs.onSurface,
                           ),
                         ),
@@ -114,7 +215,7 @@ Future<void> monthlyRegionPickerBottomSheet({
                           HapticFeedback.selectionClick();
                         },
                         selectionOverlay: CupertinoPickerDefaultSelectionOverlay(
-                          background: _SvcColors.light.withOpacity(.08),
+                          background: _SvcColors.light.withOpacity(.10),
                         ),
                         children: [
                           for (final region in regions)
@@ -130,43 +231,42 @@ Future<void> monthlyRegionPickerBottomSheet({
                     ),
                   ),
 
-                  const SizedBox(height: 16),
-                  Divider(color: cs.outlineVariant.withOpacity(.4), height: 24),
+                  const SizedBox(height: 10),
+                  Divider(color: cs.outlineVariant.withOpacity(.45), height: 24),
 
-                  // 확인/취소 버튼
-                  Padding(
-                    padding: const EdgeInsets.only(top: 12, bottom: 24),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: cs.onSurface,
-                              side: BorderSide(color: cs.outlineVariant),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: const StadiumBorder(),
-                            ),
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('취소'),
+                  // 취소/확인
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: _SvcColors.dark,
+                            side: BorderSide(color: _SvcColors.light.withOpacity(.75)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: const StadiumBorder(),
                           ),
+                          onPressed: () => Navigator.of(sheetCtx).pop(),
+                          child: const Text('취소'),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: CupertinoTheme(
-                            data: CupertinoThemeData(primaryColor: _SvcColors.base),
-                            child: CupertinoButton(
-                              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
-                              color: _SvcColors.base, // 서비스 팔레트 적용
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                                onConfirm(tempSelected);
-                              },
-                              child: const Text('확인', style: TextStyle(fontSize: 16)),
-                            ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _SvcColors.base,
+                            foregroundColor: _SvcColors.fg,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: const StadiumBorder(),
+                            elevation: 0,
                           ),
+                          onPressed: () {
+                            Navigator.of(sheetCtx).pop();
+                            onConfirm(tempSelected);
+                          },
+                          child: const Text('확인'),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ],
               ),

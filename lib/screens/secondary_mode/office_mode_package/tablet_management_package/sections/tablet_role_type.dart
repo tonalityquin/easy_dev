@@ -1,13 +1,13 @@
 enum TabletRoleType {
-  dev,            // 개발자
-  admin,          // 관리자 (전반)
-  ceo,            // 대표자
-  highManager,    // 상급 관리
-  middleManager,  // 중급 관리
-  lowManager,     // 하급 관리
-  highField,      // 상급 필드
-  middleField,    // 중급 필드
-  lowField;       // 하급 필드
+  dev, // 개발자
+  admin, // 관리자 (전반)
+  ceo, // 대표자
+  highManager, // 상급 관리
+  middleManager, // 중급 관리
+  lowManager, // 하급 관리
+  highField, // 상급 필드
+  middleField, // 중급 필드
+  lowField; // 하급 필드
 
   /// 한국어 라벨 반환
   String get label {

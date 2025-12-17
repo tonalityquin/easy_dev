@@ -1,17 +1,10 @@
 // lib/screens/secondary_package/office_mode_package/monthly_management_package/monthly_bottom_navigation.dart
 import 'package:flutter/material.dart';
 
-import '../../../../../utils/init/app_colors.dart';
-
-/// 서비스 로그인 카드(Deep Blue 팔레트)와 톤을 맞춘 보조 팔레트
-class _SvcColors {
-  static const base = Color(0xFF0D47A1);
-  static const light = Color(0xFF5472D3);
-}
-
 /// 하단 고정 네비: 액션 버튼 vs. 숫자/한글 키패드 토글 표시
-/// - 색상은 앱 테마(colorScheme) + 서비스 팔레트 기반으로 토널 처리
-/// - 키패드 표시 시 살짝 진한 톤/상단 보더로 레이어를 구분
+/// - ✅ 바텀시트 배경색과 다르게 노는 문제를 방지하기 위해
+///   기본 배경을 AppColors 같은 고정 흰색이 아니라 `Theme.colorScheme.surface`로 통일
+/// - showKeypad일 때만 약간 톤 변화(원치 않으면 baseBg 그대로 사용하면 됨)
 /// - Offstage + AnimatedOpacity로 상태 유지 + 자연스러운 페이드
 class MonthlyBottomNavigation extends StatelessWidget {
   final bool showKeypad;
@@ -35,13 +28,15 @@ class MonthlyBottomNavigation extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    // 기본 바탕(앱 공통) → showKeypad 시 서비스 팔레트로 약간 짙게
-    final Color baseBg = backgroundColor ?? AppColors.bottomNavBackground;
+    // ✅ 기본 배경을 바텀시트/테마 surface로 통일 (배경 이질감 방지)
+    final Color baseBg = backgroundColor ?? cs.surface;
+
+    // 키패드 표시 시에만 아주 약한 톤 구분
     final Color effectiveBg =
-        backgroundColor ?? (showKeypad ? _SvcColors.light.withOpacity(.12) : baseBg);
+    showKeypad ? cs.surfaceVariant.withOpacity(.55) : baseBg;
 
     final Color borderTop =
-    showKeypad ? _SvcColors.base.withOpacity(.28) : cs.outlineVariant.withOpacity(.5);
+    showKeypad ? cs.primary.withOpacity(.18) : cs.outlineVariant.withOpacity(.5);
 
     return GestureDetector(
       onTap: onTap ?? () {},
@@ -55,7 +50,6 @@ class MonthlyBottomNavigation extends StatelessWidget {
             color: effectiveBg,
             border: Border(top: BorderSide(color: borderTop, width: 1)),
             boxShadow: [
-              // 상단에 살짝 얹힌 느낌
               BoxShadow(
                 color: Colors.black.withOpacity(.06),
                 blurRadius: 12,

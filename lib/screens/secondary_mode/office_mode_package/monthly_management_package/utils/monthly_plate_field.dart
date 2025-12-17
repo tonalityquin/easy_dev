@@ -8,8 +8,8 @@ class _SvcColors {
 }
 
 /// 공통 번호판 입력 필드 위젯
-/// - 앱 ColorScheme와 서비스 팔레트 컬러를 반영
-/// - 활성/비활성/포커스 상태별 톤 분리
+/// - 기존 로직(키패드 활성 컨트롤러, editMode 비활성화 등) 유지
+/// - 시각적으로 “현재 입력 칸”에 집중되도록 토널/보더/아이콘 정리
 class MonthlyPlateField extends StatelessWidget {
   final int frontDigitCount;
   final bool hasMiddleChar;
@@ -25,7 +25,7 @@ class MonthlyPlateField extends StatelessWidget {
   /// 수정 모드에서는 입력 비활성화
   final bool isEditMode;
 
-  /// ✅ 중간 한글 칸 최소/고정 폭(잘림 방지)
+  /// 중간 한글 칸 최소/고정 폭(잘림 방지)
   final double middleBoxWidth;
 
   const MonthlyPlateField({
@@ -40,79 +40,98 @@ class MonthlyPlateField extends StatelessWidget {
     required this.onKeypadStateChanged,
     this.isEditMode = false,
     this.middleBoxWidth = 56,
-  }) : assert(
-  !hasMiddleChar || middleController != null,
-  'hasMiddleChar=true이면 middleController가 필요합니다.',
-  );
+  }) : assert(!hasMiddleChar || middleController != null,
+  'hasMiddleChar=true이면 middleController가 필요합니다.');
 
-  static const _radius = 10.0;
+  static const _radius = 12.0;
   static const _anim = Duration(milliseconds: 180);
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        // 앞자리
         Expanded(
           flex: frontDigitCount,
-          child: _buildDigitInput(context, frontController, maxLen: 4),
+          child: _buildBoxInput(
+            context,
+            frontController,
+            maxLen: 4,
+            isMiddle: false,
+            isKorean: false,
+          ),
         ),
         if (hasMiddleChar) const SizedBox(width: 8),
-        // 중간 한글
         if (hasMiddleChar)
           SizedBox(
             width: middleBoxWidth,
-            child: _buildMiddleInput(context, middleController!),
+            child: _buildBoxInput(
+              context,
+              middleController!,
+              maxLen: 1,
+              isMiddle: true,
+              isKorean: true,
+            ),
           ),
         const SizedBox(width: 8),
-        // 뒷자리
         Expanded(
           flex: backDigitCount,
-          child: _buildDigitInput(context, backController, maxLen: 4),
+          child: _buildBoxInput(
+            context,
+            backController,
+            maxLen: 4,
+            isMiddle: false,
+            isKorean: false,
+          ),
         ),
       ],
     );
   }
 
-  InputBorder _underline({
-    required Color color,
-    required double width,
-  }) =>
-      UnderlineInputBorder(
-        borderSide: BorderSide(width: width, color: color),
-      );
-
   BoxDecoration _fieldBox({
     required bool isActive,
+    required bool enabled,
     required ColorScheme cs,
   }) {
-    // 활성 시 토널 하이라이트 + 아주 은은한 그림자
-    final bg = isActive
-        ? cs.primaryContainer.withOpacity(.22)
-        : cs.surface;
+    final bg = !enabled
+        ? cs.surfaceVariant.withOpacity(.55)
+        : (isActive ? _SvcColors.light.withOpacity(.10) : cs.surface);
+
     return BoxDecoration(
       color: bg,
       borderRadius: BorderRadius.circular(_radius),
+      border: Border.all(
+        color: isActive
+            ? _SvcColors.base.withOpacity(.45)
+            : cs.outlineVariant.withOpacity(.55),
+        width: isActive ? 1.6 : 1.0,
+      ),
       boxShadow: isActive
           ? [
         BoxShadow(
-          color: _SvcColors.light.withOpacity(.08),
+          color: _SvcColors.light.withOpacity(.10),
           blurRadius: 10,
           offset: const Offset(0, 4),
         ),
       ]
           : const [],
-      border: Border.all(
-        color: isActive ? _SvcColors.base.withOpacity(.28) : cs.outlineVariant.withOpacity(.48),
-        width: 1,
-      ),
     );
   }
 
-  Widget _buildDigitInput(
+  TextStyle _textStyle(ColorScheme cs, {required bool enabled, required bool isKorean}) {
+    return TextStyle(
+      fontSize: isKorean ? 20 : 18,
+      color: enabled ? cs.onSurface : cs.onSurface.withOpacity(.45),
+      fontWeight: isKorean ? FontWeight.w800 : FontWeight.w700,
+      letterSpacing: .6,
+    );
+  }
+
+  Widget _buildBoxInput(
       BuildContext context,
       TextEditingController controller, {
         required int maxLen,
+        required bool isMiddle,
+        required bool isKorean,
       }) {
     final cs = Theme.of(context).colorScheme;
     final isActive = controller == activeController;
@@ -120,74 +139,54 @@ class MonthlyPlateField extends StatelessWidget {
 
     return AnimatedContainer(
       duration: _anim,
-      margin: const EdgeInsets.symmetric(horizontal: 4.0),
-      padding: const EdgeInsets.all(6),
-      decoration: _fieldBox(isActive: isActive, cs: cs),
-      child: TextField(
-        controller: controller,
-        keyboardType: TextInputType.none,
-        maxLength: maxLen,
-        textAlign: TextAlign.center,
-        readOnly: true,
-        enabled: enabled,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        style: TextStyle(
-          fontSize: 18,
-          color: enabled ? cs.onSurface : cs.onSurface.withOpacity(.5),
-          fontWeight: FontWeight.w600,
-          letterSpacing: .5,
-        ),
-        decoration: InputDecoration(
-          isDense: true,
-          counterText: "",
-          contentPadding: const EdgeInsets.symmetric(vertical: 8),
-          border: _underline(color: cs.outline, width: 2),
-          enabledBorder: _underline(color: cs.outline, width: 2),
-          focusedBorder: _underline(color: cs.primary, width: 2.2),
-          disabledBorder: _underline(color: cs.outline.withOpacity(.5), width: 2),
-        ),
-        onTap: isEditMode ? null : () => onKeypadStateChanged(controller),
-      ),
-    );
-  }
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: _fieldBox(isActive: isActive, enabled: enabled, cs: cs),
+      child: Stack(
+        children: [
+          TextField(
+            controller: controller,
+            keyboardType: TextInputType.none,
+            maxLength: maxLen,
+            textAlign: TextAlign.center,
+            readOnly: true,
+            enabled: enabled,
+            showCursor: false,
+            inputFormatters: [
+              if (!isKorean) FilteringTextInputFormatter.digitsOnly,
+              if (isKorean)
+                FilteringTextInputFormatter.allow(RegExp(r'[ㄱ-ㅎㅏ-ㅣ가-힣]')),
+            ],
+            style: _textStyle(cs, enabled: enabled, isKorean: isKorean),
+            decoration: const InputDecoration(
+              isDense: true,
+              counterText: "",
+              border: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              disabledBorder: InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+            ),
+            onTap: isEditMode ? null : () => onKeypadStateChanged(controller),
+          ),
 
-  Widget _buildMiddleInput(BuildContext context, TextEditingController controller) {
-    final cs = Theme.of(context).colorScheme;
-    final isActive = controller == activeController;
-    final enabled = !isEditMode;
-
-    return AnimatedContainer(
-      duration: _anim,
-      margin: const EdgeInsets.symmetric(horizontal: 4.0),
-      padding: const EdgeInsets.all(6),
-      decoration: _fieldBox(isActive: isActive, cs: cs),
-      child: TextField(
-        controller: controller,
-        keyboardType: TextInputType.none,
-        maxLength: 1,
-        textAlign: TextAlign.center,
-        readOnly: true,
-        enabled: enabled,
-        inputFormatters: [
-          // 한글 1자 (키패드 입력 가정)
-          FilteringTextInputFormatter.allow(RegExp(r'[ㄱ-ㅎㅏ-ㅣ가-힣]')),
+          // 활성 표시(미세한 점/가이드)
+          Positioned(
+            right: 0,
+            top: 0,
+            child: AnimatedOpacity(
+              opacity: isActive ? 1 : 0,
+              duration: _anim,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: _SvcColors.base,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            ),
+          ),
         ],
-        style: TextStyle(
-          fontSize: 20,
-          color: enabled ? cs.onSurface : cs.onSurface.withOpacity(.5),
-          fontWeight: FontWeight.w700,
-          letterSpacing: .5,
-        ),
-        decoration: InputDecoration(
-          isDense: true,
-          counterText: "",
-          contentPadding: const EdgeInsets.symmetric(vertical: 8),
-          border: _underline(color: cs.outline, width: 2),
-          enabledBorder: _underline(color: cs.outline, width: 2),
-          focusedBorder: _underline(color: cs.primary, width: 2.2),
-          disabledBorder: _underline(color: cs.outline.withOpacity(.5), width: 2),
-        ),
-        onTap: isEditMode ? null : () => onKeypadStateChanged(controller),
       ),
     );
   }

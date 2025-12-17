@@ -1,16 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+class _SvcColors {
+  static const base = Color(0xFF0D47A1);
+}
+
+/// ✅ “결제 버튼(OutlinedButton.icon)”과 동일한 디자인을 공용으로 쓰기 위한 버튼
+/// - StadiumBorder / minHeight 56 / border 1.4 / foreground base / bg surface
+/// - disabled/pressed/overlay 톤까지 결제 버튼과 동일 계열로 정리
+/// - 기존 Scale 애니메이션 + 로딩 스위처 유지
 class MonthlyAnimatedActionButton extends StatefulWidget {
   final bool isLoading;
+  final bool enabled;
   final Future<void> Function() onPressed;
+
   final String? buttonLabel;
+  final IconData? leadingIcon;
 
   const MonthlyAnimatedActionButton({
     super.key,
     required this.isLoading,
     required this.onPressed,
+    this.enabled = true,
     this.buttonLabel,
+    this.leadingIcon,
   });
 
   @override
@@ -18,29 +31,30 @@ class MonthlyAnimatedActionButton extends StatefulWidget {
       _MonthlyAnimatedActionButtonState();
 }
 
-class _MonthlyAnimatedActionButtonState
-    extends State<MonthlyAnimatedActionButton> with SingleTickerProviderStateMixin {
+class _MonthlyAnimatedActionButtonState extends State<MonthlyAnimatedActionButton>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _scaleAnimation;
+
+  static const _kAnim = Duration(milliseconds: 150);
 
   @override
   void initState() {
     super.initState();
-    // 버튼 살짝 눌리는 스케일 애니메이션(0.95 ↔ 1.0)
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 150),
+      duration: _kAnim,
       lowerBound: 0.95,
       upperBound: 1.0,
-      value: 1.0, // ✅ 초기값을 상한으로 지정(범위 밖 값 방지)
+      value: 1.0,
     );
     _scaleAnimation = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
   }
 
   Future<void> _handleTap() async {
     HapticFeedback.selectionClick();
-    await _controller.reverse(); // 1.0 → 0.95
-    await _controller.forward(); // 0.95 → 1.0
+    await _controller.reverse();
+    await _controller.forward();
     await widget.onPressed();
   }
 
@@ -51,54 +65,107 @@ class _MonthlyAnimatedActionButtonState
   }
 
   ButtonStyle _buttonStyle(ColorScheme cs) {
-    // 톤 다운 배경 + 선(primary) + 텍스트(onPrimaryContainer)
+    // ✅ 결제 버튼과 동일 기준:
+    // - bg: cs.surface
+    // - fg: base
+    // - side: base 45% 1.4
+    // - disabled: surfaceVariant / outlineVariant / fg 38%
     return ButtonStyle(
-      elevation: const MaterialStatePropertyAll(0),
-      minimumSize: const MaterialStatePropertyAll(Size(0, 56)),
+      minimumSize: const MaterialStatePropertyAll(Size.fromHeight(56)),
       padding: const MaterialStatePropertyAll(
-        EdgeInsets.symmetric(vertical: 16.0, horizontal: 80),
+        EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
-      shape: MaterialStatePropertyAll(
-        RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
+      shape: const MaterialStatePropertyAll(StadiumBorder()),
+      elevation: const MaterialStatePropertyAll(0),
+
       backgroundColor: MaterialStateProperty.resolveWith((states) {
         if (states.contains(MaterialState.disabled)) {
-          return cs.surfaceVariant; // 비활성 배경
+          return cs.surfaceVariant.withOpacity(.70);
         }
-        if (states.contains(MaterialState.pressed)) {
-          return cs.primaryContainer.withOpacity(.92); // 눌림 톤
-        }
-        return cs.primaryContainer; // 기본 톤(라이트)
+        return cs.surface;
       }),
+
       foregroundColor: MaterialStateProperty.resolveWith((states) {
         if (states.contains(MaterialState.disabled)) {
-          return cs.onSurface.withOpacity(.38); // 비활성 텍스트
+          return cs.onSurface.withOpacity(.38);
         }
-        return cs.onPrimaryContainer; // 기본 텍스트
+        return _SvcColors.base;
       }),
+
       side: MaterialStateProperty.resolveWith((states) {
-        final color = states.contains(MaterialState.disabled)
-            ? cs.outlineVariant
-            : cs.primary;
-        return BorderSide(color: color, width: 1.5);
+        if (states.contains(MaterialState.disabled)) {
+          return BorderSide(color: cs.outlineVariant, width: 1.4);
+        }
+        return BorderSide(color: _SvcColors.base.withOpacity(.45), width: 1.4);
       }),
-      overlayColor: MaterialStatePropertyAll(cs.primary.withOpacity(.06)),
+
+      overlayColor: MaterialStatePropertyAll(_SvcColors.base.withOpacity(.06)),
+    );
+  }
+
+  Widget _buildIdleChild(String label, ColorScheme cs) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (widget.leadingIcon != null) ...[
+          Icon(widget.leadingIcon, size: 18),
+          const SizedBox(width: 8),
+        ],
+        Text(
+          label,
+          style: const TextStyle(
+            fontWeight: FontWeight.w900,
+            letterSpacing: .2,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLoadingChild(ColorScheme cs) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(
+              // disabled 상태에선 버튼이 눌리지 않으므로 base로 고정
+              _SvcColors.base,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        const Text(
+          '처리 중...',
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            letterSpacing: .2,
+          ),
+        ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+
     final String label = widget.buttonLabel ?? '정기 정산 생성';
+    final bool isEnabled = widget.enabled && !widget.isLoading;
 
     return Semantics(
       button: true,
-      enabled: !widget.isLoading,
+      enabled: isEnabled,
       label: label,
       child: ScaleTransition(
         scale: _scaleAnimation,
-        child: ElevatedButton(
-          onPressed: widget.isLoading ? null : _handleTap,
+        child: OutlinedButton(
+          onPressed: isEnabled ? _handleTap : null,
           style: _buttonStyle(cs),
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 220),
@@ -107,25 +174,13 @@ class _MonthlyAnimatedActionButtonState
             transitionBuilder: (child, anim) =>
                 ScaleTransition(scale: anim, child: child),
             child: widget.isLoading
-                ? SizedBox(
+                ? KeyedSubtree(
               key: const ValueKey('loading'),
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  cs.onPrimaryContainer,
-                ),
-              ),
+              child: _buildLoadingChild(cs),
             )
-                : Text(
-              key: const ValueKey('buttonText'),
-              label,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                letterSpacing: .2,
-              ),
+                : KeyedSubtree(
+              key: const ValueKey('idle'),
+              child: _buildIdleChild(label, cs),
             ),
           ),
         ),

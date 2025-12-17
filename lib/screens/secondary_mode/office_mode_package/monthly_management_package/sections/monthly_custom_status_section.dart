@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // ✅ 입력 포맷터 & MaxLengthEnforcement
+import 'package:flutter/services.dart';
 import '../../../../../../utils/snackbar_helper.dart';
 import '../monthly_plate_controller.dart';
+
+class _SvcColors {
+  static const base = Color(0xFF0D47A1);
+  static const dark = Color(0xFF09367D);
+  static const light = Color(0xFF5472D3);
+}
 
 class MonthlyCustomStatusSection extends StatefulWidget {
   final MonthlyPlateController controller;
@@ -34,6 +40,45 @@ class _MonthlyCustomStatusSectionState extends State<MonthlyCustomStatusSection>
     });
   }
 
+  InputDecoration _svcInputDecoration(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return InputDecoration(
+      hintText: '예: 뒷범퍼 손상',
+      floatingLabelStyle: const TextStyle(
+        color: _SvcColors.dark,
+        fontWeight: FontWeight.w700,
+      ),
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      filled: true,
+      fillColor: _SvcColors.light.withOpacity(.06),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      enabledBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: _SvcColors.light.withOpacity(.45)),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: _SvcColors.base, width: 1.2),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: cs.error, width: 1.4),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: cs.error, width: 1.6),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      counterStyle: TextStyle(
+        color: _errorMessage != null ? cs.error : cs.onSurface.withOpacity(.54),
+        fontWeight: FontWeight.w700,
+        fontSize: 11.5,
+      ),
+      errorText: _errorMessage,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -41,163 +86,141 @@ class _MonthlyCustomStatusSectionState extends State<MonthlyCustomStatusSection>
 
     return KeyedSubtree(
       key: widget.statusSectionKey,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 섹션 타이틀
-          Row(
-            children: [
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: cs.primary.withOpacity(.10),
-                  borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 헤더
+            Row(
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: _SvcColors.light.withOpacity(.18),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _SvcColors.light.withOpacity(.40)),
+                  ),
+                  child: const Icon(Icons.sticky_note_2_outlined, color: _SvcColors.dark, size: 18),
                 ),
-                child: Icon(
-                  Icons.sticky_note_2_outlined,
-                  size: 18,
-                  color: cs.primary,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    '추가 상태 메모',
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: _SvcColors.dark,
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Text(
-                '추가 상태 메모',
-                style: textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '최대 20자',
-                style: textTheme.bodySmall?.copyWith(color: Colors.black54),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-
-          // 접근성 라벨 + 길이 제한 + 문자 필터
-          Semantics(
-            label: '추가 상태 메모 입력',
-            hint: '최대 20자까지 입력할 수 있습니다',
-            child: TextField(
-              controller: widget.controller.customStatusController,
-              maxLength: 20,
-              // ✅ 한글 조합 친화: 조합 종료 후 길이 잘라내기
-              //    (Flutter 버전이 지원하지 않으면 MaxLengthEnforcement.none + onChanged 트리밍으로 대체)
-              maxLengthEnforcement: MaxLengthEnforcement.truncateAfterCompositionEnds,
-              onChanged: (_) => _validateInput(),
-              inputFormatters: [
-                // ✅ 허용 문자 확장: 한글/영문/숫자/공백/기본 구두점 + ! ? : ; ' "
-                FilteringTextInputFormatter.allow(
-                  RegExp("[a-zA-Z0-9가-힣\\s.,()/!?;:'\\\"-]"),
+                Text(
+                  '최대 20자',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: Colors.black54,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ],
-              style: const TextStyle(fontSize: 14.5),
-              decoration: InputDecoration(
-                hintText: '예: 뒷범퍼 손상',
-                isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                filled: true,
-                fillColor: cs.surface,
-                // ✅ 톤 맞춤
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: cs.outlineVariant),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: cs.primary, width: 1.6),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                errorBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: cs.error, width: 1.4),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                focusedErrorBorder: OutlineInputBorder(
-                  borderSide: BorderSide(color: cs.error, width: 1.6),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                counterStyle: TextStyle(
-                  color: _errorMessage != null ? cs.error : cs.onSurface.withOpacity(.54),
-                  fontWeight: FontWeight.w600,
-                  fontSize: 11.5,
-                ),
-                errorText: _errorMessage,
+            ),
+            const SizedBox(height: 10),
+
+            // 입력
+            Semantics(
+              label: '추가 상태 메모 입력',
+              hint: '최대 20자까지 입력할 수 있습니다',
+              child: TextField(
+                controller: widget.controller.customStatusController,
+                maxLength: 20,
+                maxLengthEnforcement: MaxLengthEnforcement.truncateAfterCompositionEnds,
+                onChanged: (_) => _validateInput(),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(
+                    RegExp("[a-zA-Z0-9가-힣\\s.,()/!?;:'\\\"-]"),
+                  ),
+                ],
+                style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
+                decoration: _svcInputDecoration(context),
               ),
             ),
-          ),
 
-          // 자동 저장된 메모 뱃지/카드
-          if (widget.fetchedCustomStatus != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: cs.secondaryContainer, // ✅ 토널 배경
-                  border: Border.all(color: cs.outlineVariant),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.info_outline_rounded,
-                      size: 20,
-                      color: cs.onSecondaryContainer,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '자동 저장된 메모: "${widget.fetchedCustomStatus}"',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: cs.onSecondaryContainer,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    _deleting
-                        ? SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(cs.error),
-                            ),
-                          )
-                        : IconButton(
-                            tooltip: '자동 메모 삭제',
-                            splashRadius: 20,
-                            icon: Icon(Icons.delete_outline, color: cs.error),
-                            onPressed: () async {
-                              FocusScope.of(context).unfocus();
-                              setState(() => _deleting = true);
-                              try {
-                                await widget.controller.deleteCustomStatusFromFirestore(context);
-
-                                widget.onDeleted();
-                                widget.onStatusCleared();
-
-                                showSuccessSnackbar(context, '자동 메모가 삭제되었습니다');
-                              } catch (e) {
-                                showFailedSnackbar(context, '삭제 실패. 다시 시도해주세요');
-                              } finally {
-                                if (mounted) {
-                                  setState(() => _deleting = false);
-                                }
-                              }
-                            },
+            // 자동 저장된 메모 카드
+            if (widget.fetchedCustomStatus != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: _SvcColors.light.withOpacity(.10),
+                    border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.all(12),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline_rounded, size: 20, color: _SvcColors.dark),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '자동 저장된 메모: "${widget.fetchedCustomStatus}"',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: _SvcColors.dark,
+                            fontWeight: FontWeight.w700,
                           ),
-                  ],
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      _deleting
+                          ? SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(cs.error),
+                        ),
+                      )
+                          : IconButton(
+                        tooltip: '자동 메모 삭제',
+                        splashRadius: 20,
+                        icon: Icon(Icons.delete_outline, color: cs.error),
+                        onPressed: () async {
+                          FocusScope.of(context).unfocus();
+                          setState(() => _deleting = true);
+                          try {
+                            await widget.controller.deleteCustomStatusFromFirestore(context);
+
+                            widget.onDeleted();
+                            widget.onStatusCleared();
+
+                            showSuccessSnackbar(context, '자동 메모가 삭제되었습니다');
+                          } catch (e) {
+                            showFailedSnackbar(context, '삭제 실패. 다시 시도해주세요');
+                          } finally {
+                            if (mounted) {
+                              setState(() => _deleting = false);
+                            }
+                          }
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

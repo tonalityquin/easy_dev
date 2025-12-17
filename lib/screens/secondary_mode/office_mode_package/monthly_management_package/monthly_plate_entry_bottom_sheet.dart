@@ -1,9 +1,7 @@
-// lib/screens/secondary_package/office_mode_package/monthly_management_package/monthly_plate_bottom_sheet.dart
 import 'package:flutter/material.dart';
 
 import 'monthly_plate_controller.dart';
 
-import 'monthly_plate_payment_bottom_sheet.dart';
 import 'sections/monthly_date_range_picker_section.dart';
 import 'sections/monthly_plate_section.dart';
 import 'sections/monthly_bottom_action_section.dart';
@@ -14,22 +12,18 @@ import 'keypad/num_keypad.dart';
 import 'keypad/kor_keypad.dart';
 import 'monthly_bottom_navigation.dart';
 
-// ✅ 결제 버튼도 동일 UI로 맞추기 위해 공용 버튼 import
-import 'utils/buttons/monthly_animated_action_button.dart';
-
-/// 서비스 로그인 카드와 동일 팔레트(Deep Blue)
 class _SvcColors {
   static const base = Color(0xFF0D47A1);
   static const dark = Color(0xFF09367D);
   static const light = Color(0xFF5472D3);
 }
 
-class MonthlyPlateBottomSheet extends StatefulWidget {
+class MonthlyPlateEntryBottomSheet extends StatefulWidget {
   final bool isEditMode;
   final String? initialDocId;
   final Map<String, dynamic>? initialData;
 
-  const MonthlyPlateBottomSheet({
+  const MonthlyPlateEntryBottomSheet({
     super.key,
     this.isEditMode = false,
     this.initialDocId,
@@ -37,10 +31,10 @@ class MonthlyPlateBottomSheet extends StatefulWidget {
   });
 
   @override
-  State<MonthlyPlateBottomSheet> createState() => _MonthlyPlateBottomSheetState();
+  State<MonthlyPlateEntryBottomSheet> createState() => _MonthlyPlateEntryBottomSheetState();
 }
 
-class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
+class _MonthlyPlateEntryBottomSheetState extends State<MonthlyPlateEntryBottomSheet> {
   late final MonthlyPlateController controller;
   Key statusSectionKey = UniqueKey();
 
@@ -53,7 +47,7 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
   final TextEditingController _startDateController = TextEditingController();
   final TextEditingController _endDateController = TextEditingController();
 
-  static const String _screenTag = 'monthly setting';
+  static const String _screenTag = 'monthly entry';
 
   late VoidCallback _backListener;
 
@@ -73,12 +67,19 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
     );
 
     controller.isEditMode = widget.isEditMode;
+
+    // 수정 모드: 키패드 기본 숨김(번호판/지역은 수정 불가이므로)
     if (widget.isEditMode) {
       controller.showKeypad = false;
     }
 
-    if (widget.isEditMode && widget.initialData != null) {
-      _populateFields(widget.initialData!);
+    // 초기 데이터 세팅
+    if (widget.isEditMode && widget.initialData != null && widget.initialDocId != null) {
+      controller.loadExistingData(widget.initialData!, docId: widget.initialDocId!);
+
+      // UI 상태 동기화(드롭다운/단위 등)
+      _selectedRegularType = controller.selectedRegularType;
+      _selectedPeriodUnit = controller.selectedPeriodUnit;
     }
 
     _backListener = () {
@@ -87,34 +88,6 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
       }
     };
     controller.controllerBackDigit.addListener(_backListener);
-  }
-
-  void _populateFields(Map<String, dynamic> data) {
-    final plateParts = (widget.initialDocId?.split('_').first ?? '').split('-');
-
-    if (plateParts.length == 3) {
-      controller.controllerFrontDigit.text = plateParts[0];
-      controller.controllerMidDigit.text = plateParts[1];
-      controller.controllerBackDigit.text = plateParts[2];
-    }
-
-    controller.dropdownValue = data['region'] ?? '전국';
-
-    _regularNameController.text = data['countType'] ?? '';
-    _regularAmountController.text = (data['regularAmount'] ?? '').toString();
-    _regularDurationController.text = (data['regularDurationHours'] ?? '').toString();
-    _startDateController.text = data['startDate'] ?? '';
-    _endDateController.text = data['endDate'] ?? '';
-
-    _selectedPeriodUnit = data['periodUnit'] ?? '월';
-    _selectedRegularType = data['regularType'];
-
-    controller.selectedPeriodUnit = _selectedPeriodUnit;
-    controller.selectedRegularType = _selectedRegularType;
-
-    controller.customStatusController.text = data['customStatus'] ?? '';
-    controller.selectedStatuses = List<String>.from(data['statusList'] ?? []);
-    controller.specialNote = data['specialNote'] ?? '';
   }
 
   @override
@@ -128,20 +101,6 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
     _startDateController.dispose();
     _endDateController.dispose();
     super.dispose();
-  }
-
-  Future<void> _openPaymentSheet() async {
-    FocusScope.of(context).unfocus();
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      useSafeArea: true,
-      builder: (_) => MonthlyPaymentBottomSheet(controller: controller),
-    );
-
-    if (mounted) setState(() {});
   }
 
   Widget _buildKeypad() {
@@ -213,81 +172,15 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
     );
   }
 
-  Widget _buildTopBar(ColorScheme cs) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-      decoration: BoxDecoration(
-        color: _SvcColors.light.withOpacity(.10),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _SvcColors.light.withOpacity(.25)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: _SvcColors.base.withOpacity(.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.tune_rounded, color: _SvcColors.base, size: 20),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              widget.isEditMode
-                  ? '정기 정산 수정'
-                  : (controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리'),
-              style: const TextStyle(fontWeight: FontWeight.w800),
-            ),
-          ),
-          IconButton(
-            tooltip: '닫기',
-            icon: const Icon(Icons.close, color: _SvcColors.dark),
-            onPressed: () {
-              final nav = Navigator.of(context, rootNavigator: true);
-              if (nav.canPop()) nav.pop();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEntryActionArea(ColorScheme cs) {
-    // ✅ 결제 버튼과 정기 정산 생성/수정 버튼을 “동일 컴포넌트”로 통일
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (widget.isEditMode) ...[
-          MonthlyAnimatedActionButton(
-            isLoading: false,
-            enabled: !controller.isLoading,
-            buttonLabel: '결제',
-            leadingIcon: Icons.payments_outlined,
-            onPressed: _openPaymentSheet,
-          ),
-          const SizedBox(height: 10),
-        ],
-        MonthlyBottomActionSection(
-          controller: controller,
-          mountedContext: mounted,
-          onStateRefresh: () => setState(() {}),
-          isEditMode: widget.isEditMode,
-        ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    // 컨트롤러 단위를 신뢰원천으로 동기화
     _selectedPeriodUnit = controller.selectedPeriodUnit;
+    _selectedRegularType = controller.selectedRegularType;
 
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final screenHeight = MediaQuery.of(context).size.height;
     final effectiveHeight = screenHeight - bottomInset;
-
-    final cs = Theme.of(context).colorScheme;
 
     return SafeArea(
       child: Padding(
@@ -299,7 +192,7 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: cs.surface,
+                  color: Colors.white,
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                   border: Border.all(color: _SvcColors.base.withOpacity(.12)),
                   boxShadow: [
@@ -312,7 +205,43 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                 ),
                 child: Column(
                   children: [
-                    _buildTopBar(cs),
+                    // 상단 바
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _SvcColors.light.withOpacity(.10),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _SvcColors.light.withOpacity(.25)),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              color: _SvcColors.base.withOpacity(.12),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.edit_note_rounded, color: _SvcColors.base, size: 20),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              widget.isEditMode ? '정기 정보 수정' : '정기 정보 등록',
+                              style: const TextStyle(fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: '닫기',
+                            icon: const Icon(Icons.close, color: _SvcColors.dark),
+                            onPressed: () {
+                              final nav = Navigator.of(context, rootNavigator: true);
+                              if (nav.canPop()) nav.pop();
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Container(height: 1, color: Colors.black.withOpacity(0.06)),
 
@@ -323,6 +252,7 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                           children: [
                             const SizedBox(height: 16),
 
+                            // 번호 입력(수정 모드: 입력/지역 버튼 비활성화 유지)
                             MonthlyPlateSection(
                               dropdownValue: controller.dropdownValue,
                               regions: MonthlyPlateController.regions,
@@ -334,19 +264,21 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                                 setState(() => controller.setActiveController(tc));
                               },
                               onRegionChanged: (region) {
-                                setState(() => controller.dropdownValue = region);
+                                setState(() {
+                                  controller.dropdownValue = region;
+                                });
                               },
                               isThreeDigit: controller.isThreeDigit,
                               isEditMode: widget.isEditMode,
                             ),
-                            const SizedBox(height: 32),
+
+                            const SizedBox(height: 24),
 
                             InputDecorator(
                               decoration: InputDecoration(
                                 labelText: '정산 유형',
                                 isDense: true,
-                                contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                                 focusedBorder: OutlineInputBorder(
                                   borderSide: const BorderSide(color: _SvcColors.base),
                                   borderRadius: BorderRadius.circular(8),
@@ -358,8 +290,9 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                               child: const Text('정기'),
                             ),
 
-                            const SizedBox(height: 32),
+                            const SizedBox(height: 24),
 
+                            // 정산 입력(수정 모드: 이름 수정 불가 적용)
                             MonthlyBillSection(
                               nameController: _regularNameController,
                               amountController: _regularAmountController,
@@ -376,9 +309,10 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                                   _selectedPeriodUnit = val;
                                 });
                               },
+                              isEditMode: widget.isEditMode,
                             ),
 
-                            const SizedBox(height: 32),
+                            const SizedBox(height: 24),
 
                             MonthlyCustomStatusSection(
                               controller: controller,
@@ -412,11 +346,16 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
 
                     const SizedBox(height: 16),
 
+                    // 하단 네비: (등록 모드) 키패드/버튼 토글, (수정 모드) 키패드 기본 비표시
                     MonthlyBottomNavigation(
                       showKeypad: controller.showKeypad,
                       keypad: _buildKeypad(),
-                      actionButton: _buildEntryActionArea(cs),
-                      backgroundColor: cs.surface,
+                      actionButton: MonthlyBottomActionSection(
+                        controller: controller,
+                        mountedContext: mounted,
+                        onStateRefresh: () => setState(() {}),
+                        isEditMode: widget.isEditMode,
+                      ),
                     ),
 
                     const SizedBox(height: 6),

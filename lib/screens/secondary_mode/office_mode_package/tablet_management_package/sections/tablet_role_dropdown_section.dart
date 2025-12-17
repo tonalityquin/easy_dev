@@ -1,29 +1,20 @@
-// lib/screens/secondary_package/office_mode_package/tablet_management_package/sections/tablet_role_dropdown_section.dart
 import 'package:flutter/material.dart';
 import 'tablet_role_type.dart';
 
 /// 서비스 로그인 카드와 같은 계열 팔레트
 class _SvcColors {
-  static const base = Color(0xFF0D47A1); // Deep Blue
+  static const base = Color(0xFF0D47A1);
+  static const dark = Color(0xFF09367D);
+  static const light = Color(0xFF5472D3);
 }
 
 class TabletRoleDropdownSection extends StatelessWidget {
-  /// 현재 선택된 역할
   final TabletRoleType selectedRole;
-
-  /// 선택 변경 콜백
   final ValueChanged<TabletRoleType> onChanged;
 
-  /// 선택 가능 역할 목록 (기본: 모든 역할)
   final List<TabletRoleType> allowedRoles;
-
-  /// 폼 검증기(선택)
   final String? Function(TabletRoleType?)? validator;
-
-  /// 자동 검증 모드(선택)
   final AutovalidateMode autovalidateMode;
-
-  /// 라벨 텍스트(선택)
   final String label;
 
   const TabletRoleDropdownSection({
@@ -39,16 +30,15 @@ class TabletRoleDropdownSection extends StatelessWidget {
   Color _resolveDropdownBg(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-    return theme.dropdownMenuTheme.menuStyle?.backgroundColor?.resolve(const <MaterialState>{}) ??
+    return theme.dropdownMenuTheme.menuStyle?.backgroundColor
+        ?.resolve(const <MaterialState>{}) ??
         cs.surface;
   }
 
   @override
   Widget build(BuildContext context) {
-    const base = _SvcColors.base;
     final theme = Theme.of(context);
 
-    // selectedRole이 allowedRoles에 없다면 안전한 폴백값 사용
     final TabletRoleType safeValue =
     allowedRoles.contains(selectedRole) ? selectedRole : allowedRoles.first;
 
@@ -57,25 +47,32 @@ class TabletRoleDropdownSection extends StatelessWidget {
       isExpanded: true,
       autovalidateMode: autovalidateMode,
       validator: validator,
+      dropdownColor: _resolveDropdownBg(context),
+      menuMaxHeight: 360,
+      iconEnabledColor: _SvcColors.base,
       decoration: InputDecoration(
         labelText: label,
-        focusedBorder: OutlineInputBorder(
-          borderSide: const BorderSide(color: base),
-          borderRadius: BorderRadius.circular(8),
+        floatingLabelStyle: const TextStyle(
+          color: _SvcColors.dark,
+          fontWeight: FontWeight.w700,
         ),
+        filled: true,
+        fillColor: _SvcColors.light.withOpacity(.06),
+        isDense: true,
+        contentPadding:
+        const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
         enabledBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: base.withOpacity(.28)),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: _SvcColors.light.withOpacity(.45)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: const BorderSide(color: _SvcColors.base, width: 1.2),
         ),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
         ),
-        isDense: true,
-        contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       ),
-      menuMaxHeight: 360,
-      dropdownColor: _resolveDropdownBg(context),
-      iconEnabledColor: base,
       items: allowedRoles
           .map(
             (role) => DropdownMenuItem<TabletRoleType>(
@@ -83,7 +80,10 @@ class TabletRoleDropdownSection extends StatelessWidget {
           child: Text(
             role.label,
             overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodyMedium,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: _SvcColors.dark,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       )

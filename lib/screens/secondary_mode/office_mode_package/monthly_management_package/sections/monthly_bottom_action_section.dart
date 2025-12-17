@@ -24,26 +24,34 @@ class MonthlyBottomActionSection extends StatefulWidget {
 class _MonthlyBottomActionSectionState extends State<MonthlyBottomActionSection> {
   @override
   Widget build(BuildContext context) {
+    final String label = widget.isEditMode ? '수정' : '정기 정산 생성';
+    final IconData icon = widget.isEditMode ? Icons.save_outlined : Icons.add_circle_outline;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const SizedBox(height: 15),
+        const SizedBox(height: 6),
+
+        // ✅ 결제 버튼과 동일한 Outlined 스타일 버튼
         MonthlyAnimatedActionButton(
           isLoading: widget.controller.isLoading,
+          enabled: true, // isLoading으로 자동 disable 처리됨
+          buttonLabel: label,
+          leadingIcon: icon,
           onPressed: () async {
             if (widget.isEditMode) {
               await widget.controller.updatePlateEntry(
                 context,
-                widget.onStateRefresh, // ✅ 두 개만 전달
+                widget.onStateRefresh,
               );
             } else {
               await widget.controller.submitPlateEntry(
                 context,
-                widget.onStateRefresh, // ✅ 두 개만 전달
+                widget.onStateRefresh,
               );
             }
           },
-        )
+        ),
       ],
     );
   }

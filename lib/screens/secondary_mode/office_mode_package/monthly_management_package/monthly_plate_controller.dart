@@ -8,7 +8,6 @@ import '../../../../../utils/snackbar_helper.dart';
 import '../../../../../repositories/plate_repo_services/firestore_plate_repository.dart';
 import '../../../../../states/user/user_state.dart';
 import '../../../../../states/area/area_state.dart';
-// import '../../../../utils/usage_reporter.dart';
 
 class MonthlyPlateController {
   // ─────────────────────────────────────────────────────────────────────────────
@@ -123,8 +122,7 @@ class MonthlyPlateController {
   bool get hasStatusOrMemo =>
       customStatusController.text.trim().isNotEmpty || selectedStatuses.isNotEmpty;
 
-  /// 제출 전 가드
-  /// ✅ 월 주차는 customStatus/상태가 필수가 아니므로 hasStatusOrMemo 검증 없음
+  /// 제출 전 가드(등록/수정)
   bool _validateBeforeWrite(BuildContext context) {
     if (!isInputValid()) {
       showFailedSnackbar(context, '번호판을 올바르게 입력해주세요.');
@@ -137,6 +135,14 @@ class MonthlyPlateController {
 
     if (startTxt.isEmpty || durTxt.isEmpty || dur == null || dur <= 0) {
       showFailedSnackbar(context, '기간 정보를 올바르게 입력해주세요.');
+      return false;
+    }
+
+    // 포함형 기준 start<=end 체크
+    final start = DateTime.tryParse(startTxt);
+    final end = DateTime.tryParse(endDateController?.text.trim() ?? '');
+    if (start == null || end == null || start.isAfter(end)) {
+      showFailedSnackbar(context, '시작/종료일을 확인해주세요.');
       return false;
     }
 
@@ -171,6 +177,25 @@ class MonthlyPlateController {
     final lastDay = DateTime(y, m + 1, 0).day;
     final d = dt.day > lastDay ? lastDay : dt.day;
     return DateTime(y, m, d);
+  }
+
+  /// ✅ 포함형(inclusive) 종료일 계산
+  /// - 일: start + (dur-1)
+  /// - 주: start + (dur*7-1)
+  /// - 월: addMonths(start, dur) - 1day
+  DateTime _calcInclusiveEnd(DateTime start, int dur, String unit) {
+    if (dur <= 0) return start;
+
+    switch (unit) {
+      case '일':
+        return start.add(Duration(days: dur - 1));
+      case '주':
+        return start.add(Duration(days: dur * 7 - 1));
+      case '월':
+      default:
+        final exclusive = _addMonths(start, dur);
+        return exclusive.subtract(const Duration(days: 1));
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -266,48 +291,86 @@ class MonthlyPlateController {
     final dur = int.tryParse(durationText);
     if (start == null || dur == null || dur <= 0) return;
 
-    DateTime end;
-    switch (selectedPeriodUnit) {
-      case '일':
-        end = start.add(Duration(days: dur));
-        break;
-      case '주':
-        end = start.add(Duration(days: dur * 7));
-        break;
-      case '월':
-      default:
-        end = _addMonths(start, dur);
-        break;
-    }
+    final end = _calcInclusiveEnd(start, dur, selectedPeriodUnit);
     endDateController?.text = formatDate(end);
   }
 
+  /// ✅ 연장 시 날짜 겹침 방지
+  /// - 새 시작일 = 기존 종료일 + 1일
+  /// - 새 종료일 = 새 시작일 기준 포함형 규칙 적용
   Future<void> extendDatesIfNeeded() async {
     if (!isExtended) return;
 
-    final currentEnd = DateTime.tryParse(endDateController?.text ?? '');
+    final currentEnd = DateTime.tryParse(endDateController?.text.trim() ?? '');
     if (currentEnd == null) return;
 
     final dur = int.tryParse(durationController?.text.trim() ?? '');
     if (dur == null || dur <= 0) return;
 
-    final newStart = currentEnd;
-    DateTime newEnd;
-    switch (selectedPeriodUnit) {
-      case '일':
-        newEnd = currentEnd.add(Duration(days: dur));
-        break;
-      case '주':
-        newEnd = currentEnd.add(Duration(days: dur * 7));
-        break;
-      case '월':
-      default:
-        newEnd = _addMonths(currentEnd, dur);
-        break;
-    }
+    final newStart = currentEnd.add(const Duration(days: 1));
+    final newEnd = _calcInclusiveEnd(newStart, dur, selectedPeriodUnit);
 
     startDateController?.text = formatDate(newStart);
     endDateController?.text = formatDate(newEnd);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // ✅ 결제 전용: 검증 + 처리(섹션에서 호출)
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  /// 결제 전용 검증
+  /// - 번호판 유효성
+  /// - amountController 유효성(결제 금액)
+  /// - (선택) 결제는 통상 edit 상태에서 수행되므로 isEditMode=false라도 막지 않음
+  bool validatePaymentBeforeWrite(BuildContext context) {
+    if (!isInputValid()) {
+      showFailedSnackbar(context, '번호판을 먼저 정확히 입력하세요.');
+      return false;
+    }
+
+    final amount = int.tryParse(amountController?.text.trim() ?? '');
+    if (amount == null || amount <= 0) {
+      showFailedSnackbar(context, '결제 금액을 확인해주세요.');
+      return false;
+    }
+
+    // 결제는 기존 등록된 문서가 있어야 의미가 큼: 필요하면 체크(선택)
+    // final area = context.read<AreaState>().currentArea;
+    // final docId = '${buildPlateNumber()}_$area';
+    // (존재 체크는 processPayment에서 트랜잭션/업데이트로 처리 가능)
+
+    return true;
+  }
+
+  /// 결제 처리
+  /// - payment_history 기록
+  /// - 연장 체크 시 날짜 자동 연장 반영(로컬 컨트롤러 값 갱신)
+  /// - 연장 후, 연장된 start/end를 monthly_plate_status 문서에 저장(정합성)
+  Future<void> processPayment(BuildContext context) async {
+    // 1) 결제 내역 기록
+    await recordPaymentHistory(context);
+
+    // 2) 연장 처리(필요 시)
+    if (isExtended) {
+      // 컨트롤러 텍스트를 다음 기간으로 갱신
+      await extendDatesIfNeeded();
+
+      // 연장된 기간을 문서에 저장(결제 이력만 기록하면 UI/데이터 불일치가 생길 수 있음)
+      final area = context.read<AreaState>().currentArea;
+      final plateNumber = buildPlateNumber();
+      final docId = '${plateNumber}_$area';
+
+      await FirebaseFirestore.instance.collection('monthly_plate_status').doc(docId).set(
+        {
+          'startDate': startDateController?.text.trim() ?? '',
+          'endDate': endDateController?.text.trim() ?? '',
+          'updatedAt': FieldValue.serverTimestamp(),
+          'extendedAt': FieldValue.serverTimestamp(),
+          'extendedBy': context.read<UserState>().name,
+        },
+        SetOptions(merge: true),
+      );
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -327,24 +390,15 @@ class MonthlyPlateController {
       'extended': isExtended,
     };
 
-    try {
-      final docId = '${plateNumber}_$area';
+    final docId = '${plateNumber}_$area';
 
-      await FirebaseFirestore.instance.collection('monthly_plate_status').doc(docId).set(
-        {
-          'payment_history': FieldValue.arrayUnion([historyEntry])
-        },
-        SetOptions(merge: true),
-      );
-    } catch (e) {
-      rethrow;
-    }
+    await FirebaseFirestore.instance.collection('monthly_plate_status').doc(docId).set(
+      {'payment_history': FieldValue.arrayUnion([historyEntry])},
+      SetOptions(merge: true),
+    );
   }
 
-  /// ✅ 변경(정합성):
-  /// - 기존: plate_status 삭제 + monthly_plate_status 문서 삭제
-  /// - 변경: monthly_plate_status 문서는 유지하고,
-  ///        customStatus/statusList만 "비우기(update/merge)" 처리
+  /// customStatus/statusList 초기화(문서 유지)
   Future<void> deleteCustomStatusFromFirestore(BuildContext context) async {
     final plateNumber = buildPlateNumber();
     final area = context.read<AreaState>().currentArea;
@@ -354,7 +408,6 @@ class MonthlyPlateController {
     final ref = FirebaseFirestore.instance.collection('monthly_plate_status').doc(docId);
 
     try {
-      // 문서가 없는데 set(merge)로 만들지 않도록 update를 사용
       await ref.update({
         'customStatus': '',
         'statusList': <String>[],
@@ -363,7 +416,6 @@ class MonthlyPlateController {
         'clearedBy': userName,
       });
 
-      // 로컬 상태도 같이 정리(UI 정합성)
       customStatusController.clear();
       selectedStatuses.clear();
       fetchedCustomStatus = null;
@@ -429,8 +481,6 @@ class MonthlyPlateController {
   // 등록/수정
   // ─────────────────────────────────────────────────────────────────────────────
 
-  /// ✅ 변경(선택):
-  /// - 월정기 수정 시 plate_status에는 쓰지 않고 monthly_plate_status에만 저장
   Future<void> updatePlateEntry(
       BuildContext context,
       VoidCallback refreshUI,
@@ -453,7 +503,6 @@ class MonthlyPlateController {
     );
 
     try {
-      // ✅ plate_status 저장 제거
       await _plateRepo.setMonthlyPlateStatus(
         plateNumber: plateNumber,
         area: area,
@@ -485,14 +534,10 @@ class MonthlyPlateController {
       showFailedSnackbar(context, '수정 실패: ${e.toString()}');
     } finally {
       isLoading = false;
-      if (context.mounted) {
-        refreshUI();
-      }
+      if (context.mounted) refreshUI();
     }
   }
 
-  /// ✅ 변경(선택):
-  /// - 월정기 등록 시 plate_status에는 쓰지 않고 monthly_plate_status에만 저장
   Future<void> submitPlateEntry(
       BuildContext context,
       VoidCallback refreshUI,
@@ -516,7 +561,6 @@ class MonthlyPlateController {
     );
 
     try {
-      // ✅ plate_status 저장 제거
       await _plateRepo.setMonthlyPlateStatus(
         plateNumber: plateNumber,
         area: area,
@@ -546,9 +590,7 @@ class MonthlyPlateController {
       showFailedSnackbar(context, '등록 실패: ${e.toString()}');
     } finally {
       isLoading = false;
-      if (context.mounted) {
-        refreshUI();
-      }
+      if (context.mounted) refreshUI();
     }
   }
 
