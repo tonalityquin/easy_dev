@@ -61,7 +61,7 @@ class UserWriteService {
     return map;
   }
 
-  /// ✅ show 메타에서 limit/count 정규화
+  /// ✅ show 메타에서 limit 정규화
   int _normalizeLimit(dynamic v) {
     if (v is int && v > 0) return v;
     // limit 미설정/비정상 값이면 사실상 무제한으로 취급(정책에 맞게 조정 가능)
@@ -71,35 +71,48 @@ class UserWriteService {
   int? _asInt(dynamic v) => (v is int) ? v : null;
 
   /// ✅ (중요) Transaction 내부에서 Query get이 불가하므로,
-  /// activeCount가 없는 레거시 문서는 "트랜잭션 밖에서" 1회 계산/저장한다.
-  Future<int> _ensureActiveCountInitialized({
+  /// - activeCount 미존재(레거시) 또는
+  /// - (strict 모드에서) activeCount 정합성 검증이 필요한 경우
+  /// 트랜잭션 밖에서 show/users(isActive==true) 재집계를 수행하고 meta에 반영한다.
+  ///
+  /// strict=true:
+  ///   - 항상 실제 개수를 계산하여 meta.activeCount와 비교(불일치면 갱신)
+  /// strict=false:
+  ///   - meta.activeCount가 없거나 비정상(<0)일 때만 1회 계산/저장
+  Future<int> _ensureOrSyncActiveCount({
     required DocumentReference<Map<String, dynamic>> showDocRef,
     required String division,
     required String area,
+    required bool strict,
   }) async {
     try {
-      final snap = await showDocRef.get();
-      final data = snap.data() ?? <String, dynamic>{};
-      final existing = _asInt(data['activeCount']);
-      if (existing != null) return existing;
+      final metaSnap = await showDocRef.get();
+      final meta = metaSnap.data() ?? <String, dynamic>{};
+      final metaCount = _asInt(meta['activeCount']);
 
-      // 레거시: show/users에서 isActive==true 개수를 계산(트랜잭션 밖)
+      final bool needCompute = strict || metaCount == null || metaCount < 0;
+      if (!needCompute) return metaCount;
+
+      // ✅ show/users에서 isActive==true 개수를 계산(트랜잭션 밖)
       final qSnap = await showDocRef.collection('users').where('isActive', isEqualTo: true).get();
-      final count = qSnap.docs.length;
+      final actual = qSnap.docs.length;
 
-      await showDocRef.set(
-        {
-          'division': division,
-          'area': area,
-          'activeCount': count,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+      // metaCount가 없거나, 불일치하거나, 음수였으면 갱신
+      if (metaCount == null || metaCount < 0 || metaCount != actual) {
+        await showDocRef.set(
+          {
+            'division': division,
+            'area': area,
+            'activeCount': actual,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      }
 
-      return count;
+      return actual;
     } catch (_) {
-      // 초기화 실패는 치명적으로 만들지 않음(이후 트랜잭션에서 0 fallback)
+      // 정합성 보정 실패는 치명적으로 만들지 않음(이후 트랜잭션에서 0 fallback)
       return 0;
     }
   }
@@ -109,9 +122,9 @@ class UserWriteService {
   /// - user_accounts_show/{division-area} 메타 upsert (+ activeCount 유지)
   /// - user_accounts_show/{division-area}/users/{userId} 저장 (✅ isActive 저장)
   ///
-  /// ✅ activeLimit 초과 방지:
-  /// - 트랜잭션에서 showDoc.activeCount 기준으로 검증/증감
-  /// - 레거시(activeCount 없음)는 트랜잭션 밖에서 1회 초기화 후 진행
+  /// ✅ activeLimit 초과 방지(엄격):
+  /// - (활성 생성 시) 트랜잭션 전에 show/users를 재집계하여 activeCount 정합성 보정(strict)
+  /// - 트랜잭션에서는 meta.activeCount 기준으로 delta(상태 변화량) 계산 후 제한 검사
   Future<void> addUserCard(UserModel user) async {
     final userDocRef = _getUserCollectionRef().doc(user.id);
 
@@ -124,8 +137,15 @@ class UserWriteService {
 
     final bool wantActive = user.isActive;
 
-    // ✅ 레거시 activeCount 초기화(트랜잭션 밖)
-    await _ensureActiveCountInitialized(showDocRef: showDocRef, division: division, area: area);
+    // ✅ 레거시/정합성 보정:
+    // - 활성 생성이면 strict=true로 실제 activeCount 재집계
+    // - 비활성 생성이면 activeCount가 없을 때만 초기화
+    await _ensureOrSyncActiveCount(
+      showDocRef: showDocRef,
+      division: division,
+      area: area,
+      strict: wantActive,
+    );
 
     try {
       await _firestore.runTransaction((tx) async {
@@ -133,13 +153,14 @@ class UserWriteService {
         final showData = showSnap.data() ?? <String, dynamic>{};
 
         final limit = _normalizeLimit(showData['activeLimit']);
-        final activeCount0 = _asInt(showData['activeCount']) ?? 0;
+        final activeCount0Raw = _asInt(showData['activeCount']) ?? 0;
+        final activeCount0 = activeCount0Raw < 0 ? 0 : activeCount0Raw;
 
         // 기존 유저 문서가 있으면 delta 계산(재실행/중복 호출 안전)
         final existingSnap = await tx.get(showUserDocRef);
         final existingData = existingSnap.data() ?? <String, dynamic>{};
-        final bool existingActive = (existingData['isActive'] as bool?) ?? false;
         final bool existed = existingSnap.exists;
+        final bool existingActive = (existingData['isActive'] as bool?) ?? false;
 
         int delta = 0;
         if (!existed) {
@@ -151,8 +172,15 @@ class UserWriteService {
           if (existingActive && !wantActive) delta = -1;
         }
 
-        if (delta > 0 && (activeCount0 + delta) > limit) {
-          throw StateError('ACTIVE_LIMIT_REACHED:$limit');
+        // ✅ 엄격 제한 검사
+        if (delta > 0) {
+          // 이미 limit 이상이면 어떤 경우에도 증가 불가
+          if (activeCount0 >= limit) {
+            throw StateError('ACTIVE_LIMIT_REACHED:$limit');
+          }
+          if ((activeCount0 + delta) > limit) {
+            throw StateError('ACTIVE_LIMIT_REACHED:$limit');
+          }
         }
 
         // 1) 원본 user_accounts 저장(✅ isActive/disabledAt 제거)
@@ -278,6 +306,7 @@ class UserWriteService {
   /// ✅ 중요:
   /// - updateUser는 "활성 상태 변경"이 목적이 아니므로 isActive/disabledAt은 기본적으로 건드리지 않는다.
   /// - 이동 시에는 old show/users의 isActive를 읽어 activeCount를 정확히 -1/+1 보정한다.
+  /// - 이동 + 활성 계정이면 destination activeLimit을 엄격히 적용(정합성 보정 후 트랜잭션)
   Future<void> updateUser(UserModel user) async {
     final userDocRef = _getUserCollectionRef().doc(user.id);
 
@@ -306,10 +335,22 @@ class UserWriteService {
     final oldShowDocRef = _getUserShowCollectionRef().doc(oldShowId);
     final oldShowUserDocRef = oldShowDocRef.collection('users').doc(user.id);
 
-    // ✅ 레거시 activeCount 초기화(트랜잭션 밖)
-    await _ensureActiveCountInitialized(showDocRef: newShowDocRef, division: newDivision, area: newArea);
+    // ✅ 레거시 activeCount 초기화/정합성:
+    // - 이동이 없으면 strict 불필요(활성 제한이 변하지 않음)
+    // - 이동이 있으면 "활성 계정 이동"은 사실상 destination에서 +1이 될 수 있으므로 strict로 보정
+    await _ensureOrSyncActiveCount(
+      showDocRef: newShowDocRef,
+      division: newDivision,
+      area: newArea,
+      strict: moved, // 이동 시 destination은 정합성 강화
+    );
     if (moved) {
-      await _ensureActiveCountInitialized(showDocRef: oldShowDocRef, division: oldDivision, area: oldArea);
+      await _ensureOrSyncActiveCount(
+        showDocRef: oldShowDocRef,
+        division: oldDivision,
+        area: oldArea,
+        strict: false,
+      );
     }
 
     try {
@@ -317,7 +358,8 @@ class UserWriteService {
         final newShowSnap = await tx.get(newShowDocRef);
         final newShowData = newShowSnap.data() ?? <String, dynamic>{};
         final newLimit = _normalizeLimit(newShowData['activeLimit']);
-        final newCount0 = _asInt(newShowData['activeCount']) ?? 0;
+        final newCount0Raw = _asInt(newShowData['activeCount']) ?? 0;
+        final newCount0 = newCount0Raw < 0 ? 0 : newCount0Raw;
 
         // old show/users에서 실제 활성 상태를 읽어서 이동 count 보정에 사용
         bool wasActive = false;
@@ -329,7 +371,6 @@ class UserWriteService {
             wasActive = (d['isActive'] as bool?) ?? false;
             disabledAtValue = d['disabledAt'];
           } else {
-            // 데이터 정합성이 깨진 경우: count 보정은 하지 않고 문서만 이동 생성
             wasActive = false;
           }
         }
@@ -338,12 +379,16 @@ class UserWriteService {
         if (moved) {
           final oldShowSnap = await tx.get(oldShowDocRef);
           final oldShowData = oldShowSnap.data() ?? <String, dynamic>{};
-          oldCount0 = _asInt(oldShowData['activeCount']) ?? 0;
+          final oldCount0Raw = _asInt(oldShowData['activeCount']) ?? 0;
+          oldCount0 = oldCount0Raw < 0 ? 0 : oldCount0Raw;
         }
 
-        // 이동 + 활성 계정이면 destination 제한 체크
+        // ✅ 이동 + 활성 계정이면 destination 제한 체크(엄격)
         if (moved && wasActive) {
           if (newCount0 >= newLimit) {
+            throw StateError('ACTIVE_LIMIT_REACHED:$newLimit');
+          }
+          if ((newCount0 + 1) > newLimit) {
             throw StateError('ACTIVE_LIMIT_REACHED:$newLimit');
           }
         }
@@ -372,18 +417,14 @@ class UserWriteService {
           return;
         }
 
-        // moved=true 인 경우:
-        // - old show/users 삭제
-        // - new show/users 생성(활성 상태 유지)
-        // - activeCount old -1, new +1 (활성 계정일 때만)
+        // moved=true:
         tx.delete(oldShowUserDocRef);
 
         final movedUserMap = <String, dynamic>{
           ...userMap,
           'isActive': wasActive,
           if (wasActive) 'disabledAt': FieldValue.delete(),
-          if (!wasActive)
-            'disabledAt': (disabledAtValue != null) ? disabledAtValue : FieldValue.serverTimestamp(),
+          if (!wasActive) 'disabledAt': (disabledAtValue != null) ? disabledAtValue : FieldValue.serverTimestamp(),
         };
         tx.set(newShowUserDocRef, movedUserMap, SetOptions(merge: true));
 
@@ -510,13 +551,13 @@ class UserWriteService {
   /// - isActive는 user_accounts_show/{division-area}/users/{userId} 에만 저장
   /// - activeLimit/activeCount는 user_accounts_show/{division-area} 메타에서 관리
   ///
-  /// ✅ 핵심:
-  /// - 활성화 시 activeCount < activeLimit 조건을 트랜잭션으로 강제
-  /// - 레거시(activeCount 없음)는 트랜잭션 밖에서 1회 초기화
+  /// ✅ 엄격 제한:
+  /// - 활성화(isActive=true) 시에는 트랜잭션 전에 show/users 재집계(strict)로 activeCount를 동기화한 뒤 진행
+  /// - 트랜잭션 내부에서는 meta.activeCount 기준으로 제한 체크 및 +1 반영(동시성 안전)
   Future<void> setUserActiveStatus(
-      String userId, {
-        required bool isActive,
-      }) async {
+    String userId, {
+    required bool isActive,
+  }) async {
     final userDocRef = _getUserCollectionRef().doc(userId);
 
     try {
@@ -535,24 +576,34 @@ class UserWriteService {
       final showDocRef = _getUserShowCollectionRef().doc(showId);
       final showUserDocRef = showDocRef.collection('users').doc(userId);
 
-      // ✅ 레거시 activeCount 초기화(트랜잭션 밖)
-      await _ensureActiveCountInitialized(showDocRef: showDocRef, division: division, area: area);
+      // ✅ 레거시/정합성 보정:
+      // - 활성화라면 strict=true로 실제 activeCount 재집계
+      // - 비활성화라면 activeCount 없을 때만 초기화
+      await _ensureOrSyncActiveCount(
+        showDocRef: showDocRef,
+        division: division,
+        area: area,
+        strict: isActive,
+      );
 
       await _firestore.runTransaction((tx) async {
         final showSnap = await tx.get(showDocRef);
         final showData = showSnap.data() ?? <String, dynamic>{};
 
         final int limit = _normalizeLimit(showData['activeLimit']);
-        int activeCount = _asInt(showData['activeCount']) ?? 0;
+        int activeCountRaw = _asInt(showData['activeCount']) ?? 0;
+        int activeCount = activeCountRaw < 0 ? 0 : activeCountRaw;
 
         final userSnap = await tx.get(showUserDocRef);
         if (!userSnap.exists) {
+          // 운영상 안전을 위해: show/users가 없으면 에러로 처리(=데이터 정합성 깨짐)
           throw StateError('SHOW_USER_DOC_MISSING:showId=$showId userId=$userId');
         }
 
         final userData = userSnap.data() ?? <String, dynamic>{};
         final bool currentActive = (userData['isActive'] as bool?) ?? true;
 
+        // 변화 없으면 메타만 터치하고 종료
         if (currentActive == isActive) {
           tx.set(
             showDocRef,
@@ -568,7 +619,11 @@ class UserWriteService {
         }
 
         if (isActive) {
+          // ✅ 활성화 제한 체크(엄격)
           if (activeCount >= limit) {
+            throw StateError('ACTIVE_LIMIT_REACHED:$limit');
+          }
+          if ((activeCount + 1) > limit) {
             throw StateError('ACTIVE_LIMIT_REACHED:$limit');
           }
 
@@ -598,6 +653,7 @@ class UserWriteService {
           if (activeCount < 0) activeCount = 0;
         }
 
+        // show 메타 갱신(division/area도 같이 유지)
         tx.set(
           showDocRef,
           {
@@ -644,7 +700,7 @@ class UserWriteService {
   ///
   /// ✅ count 보정:
   /// - show/users 문서가 존재하고 isActive=true면 activeCount -1
-  /// - 레거시(activeCount 없음)는 트랜잭션 밖에서 1회 초기화
+  /// - activeCount가 없으면(레거시) 1회 초기화 후 트랜잭션에서 보정
   Future<void> deleteUsers(List<String> ids) async {
     final buckets = <String, int>{};
 
@@ -652,6 +708,7 @@ class UserWriteService {
       final userDocRef = _getUserCollectionRef().doc(id);
 
       try {
+        // show 경로 파악을 위해 user_accounts 문서를 가능한 한 읽음
         UserModel? prevUser;
         try {
           final snap = await userDocRef.get();
@@ -674,13 +731,19 @@ class UserWriteService {
         final showDocRef = _getUserShowCollectionRef().doc(showId);
         final showUserDocRef = showDocRef.collection('users').doc(id);
 
-        // ✅ 레거시 activeCount 초기화(트랜잭션 밖)
-        await _ensureActiveCountInitialized(showDocRef: showDocRef, division: division, area: area);
+        // ✅ 레거시 activeCount 초기화(필요 시)
+        await _ensureOrSyncActiveCount(
+          showDocRef: showDocRef,
+          division: division,
+          area: area,
+          strict: false,
+        );
 
         await _firestore.runTransaction((tx) async {
           final showSnap = await tx.get(showDocRef);
           final showData = showSnap.data() ?? <String, dynamic>{};
-          int activeCount = _asInt(showData['activeCount']) ?? 0;
+          int activeCountRaw = _asInt(showData['activeCount']) ?? 0;
+          int activeCount = activeCountRaw < 0 ? 0 : activeCountRaw;
 
           bool wasActive = false;
           final showUserSnap = await tx.get(showUserDocRef);
@@ -694,9 +757,12 @@ class UserWriteService {
             if (activeCount < 0) activeCount = 0;
           }
 
+          // show/users 삭제
           tx.delete(showUserDocRef);
+          // 원본 삭제
           tx.delete(userDocRef);
 
+          // 메타 갱신
           tx.set(
             showDocRef,
             {
@@ -740,7 +806,7 @@ class UserWriteService {
       }
     }
 
-    // (기존 코드에서 UsageReporter 루프가 주석 처리되어 unused warning이 떠서 제거했습니다.)
+    // (기존 코드의 delete 집계 UsageReporter가 주석 처리되어 unused 경고가 나던 부분은 제거 유지)
   }
 
   Future<void> deleteTablets(List<String> ids) async {
