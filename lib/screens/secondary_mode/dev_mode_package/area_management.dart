@@ -23,7 +23,7 @@ class _AreaManagementState extends State<AreaManagement>
   /// 0: AddAreaTab (지역 추가)
   /// 1: DivisionManagementTab (회사 관리)
   /// 2: UserAccountsTab (계정 조회/관리)
-  /// 3: StatusMappingHelper (리밋 설정)
+  /// 3: StatusMappingHelper (✅ activeLimit/activeCount 메타 관리; location_limits 로직 폐기)
   late final TabController _tabController;
 
   // 상태
@@ -45,7 +45,7 @@ class _AreaManagementState extends State<AreaManagement>
   @override
   void initState() {
     super.initState();
-    // ✅ 가시 탭 4개만 관리 (숨은 탭 없음 → 탭 공간 0)
+    // ✅ 가시 탭 4개만 관리
     _tabController = TabController(length: 4, vsync: this, initialIndex: 0);
 
     // 사용자가 탭을 직접 전환했을 때, 0/1/2에 첫 진입하면 로드
@@ -259,11 +259,10 @@ class _AreaManagementState extends State<AreaManagement>
               _accountSelectedArea = null;
             });
           },
-          onAreaChanged: (val) =>
-              setState(() => _accountSelectedArea = val),
+          onAreaChanged: (val) => setState(() => _accountSelectedArea = val),
         ),
 
-        // 3: 리밋 설정
+        // 3: ✅ activeLimit 설정 + activeCount 리빌드(기존 location_limits 폐기)
         const StatusMappingHelper(),
       ],
     );
@@ -311,11 +310,9 @@ class _AreaManagementState extends State<AreaManagement>
                         ),
                         const SizedBox(height: 12),
 
-                        // 여기부터: Wrap → Column(세로 정렬 + 가득 너비)
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // 1) 지역 추가 (Filled)
                             FilledButton(
                               onPressed: () {
                                 if (!_divisionsLoaded) {
@@ -323,16 +320,16 @@ class _AreaManagementState extends State<AreaManagement>
                                   _loadDivisions();
                                 }
                                 setState(() => _showIntroOverlay = false);
-                                _tabController.index = 0; // 지역 추가
+                                _tabController.index = 0;
                               },
                               child: const Padding(
                                 padding: EdgeInsets.symmetric(vertical: 12),
-                                child: Text('지역 추가', textAlign: TextAlign.center),
+                                child: Text('지역 추가',
+                                    textAlign: TextAlign.center),
                               ),
                             ),
                             const SizedBox(height: 8),
 
-                            // 2) 회사 관리
                             OutlinedButton(
                               onPressed: () {
                                 if (!_divisionsLoaded) {
@@ -340,42 +337,42 @@ class _AreaManagementState extends State<AreaManagement>
                                   _loadDivisions();
                                 }
                                 setState(() => _showIntroOverlay = false);
-                                _tabController.index = 1; // 회사 관리
-                              },
-                              child: const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 12),
-                                child: Text('회사 관리', textAlign: TextAlign.center),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-
-                            // 3) 계정 조회/관리
-                            OutlinedButton(
-                              onPressed: () {
-                                if (!_divisionsLoaded) {
-                                  _divisionsLoaded = true;
-                                  _loadDivisions();
-                                }
-                                setState(() => _showIntroOverlay = false);
-                                _tabController.index = 2; // 계정 조회/관리
+                                _tabController.index = 1;
                               },
                               child: const Padding(
                                 padding: EdgeInsets.symmetric(vertical: 12),
                                 child:
-                                Text('계정 조회/관리', textAlign: TextAlign.center),
+                                Text('회사 관리', textAlign: TextAlign.center),
                               ),
                             ),
                             const SizedBox(height: 8),
 
-                            // 4) 리밋 설정
                             OutlinedButton(
                               onPressed: () {
+                                if (!_divisionsLoaded) {
+                                  _divisionsLoaded = true;
+                                  _loadDivisions();
+                                }
                                 setState(() => _showIntroOverlay = false);
-                                _tabController.index = 3; // 리밋 설정
+                                _tabController.index = 2;
                               },
                               child: const Padding(
                                 padding: EdgeInsets.symmetric(vertical: 12),
-                                child: Text('리밋 설정', textAlign: TextAlign.center),
+                                child: Text('계정 조회/관리',
+                                    textAlign: TextAlign.center),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+
+                            OutlinedButton(
+                              onPressed: () {
+                                setState(() => _showIntroOverlay = false);
+                                _tabController.index = 3;
+                              },
+                              child: const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                child:
+                                Text('리밋 설정', textAlign: TextAlign.center),
                               ),
                             ),
                           ],
@@ -396,8 +393,7 @@ class _AreaManagementState extends State<AreaManagement>
 
           if (_isDeletingDivision)
             ModalBarrier(color: Colors.black26, dismissible: false),
-          if (_isDeletingDivision)
-            const Center(child: CircularProgressIndicator()),
+          if (_isDeletingDivision) const Center(child: CircularProgressIndicator()),
           if (_isDeletingDivision && _deletingDivisionName != null)
             Positioned(
               bottom: 24,

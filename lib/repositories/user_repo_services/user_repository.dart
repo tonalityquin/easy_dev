@@ -1,4 +1,3 @@
-// lib/repositories/user_repo_services/user_repository.dart
 import '../../models/tablet_model.dart';
 import '../../models/user_model.dart';
 
@@ -19,6 +18,18 @@ abstract class UserRepository {
   Future<void> updateLogOutUserStatus(String phone, String area, {bool? isWorking, bool? isSaved});
   Future<void> updateWorkingUserStatus(String phone, String area, {bool? isWorking, bool? isSaved});
 
+  /// ✅ 활성/비활성(soft disable) - 삭제 대체
+  /// ✅ 중요 정책:
+  /// - isActive/disabledAt는 "반드시" user_accounts_show에서만 관리
+  /// - user_accounts에는 isActive/disabledAt을 저장/갱신하지 않음
+  ///
+  /// ✅ 활성화 제한 정책:
+  /// - user_accounts_show/{division-area} 메타의
+  ///   - activeLimit: 최대 활성 계정 수
+  ///   - activeCount: 현재 활성 계정 수(계수)
+  ///   를 기준으로, 활성화(=true) 시 트랜잭션으로 제한을 강제
+  Future<void> setUserActiveStatus(String userId, {required bool isActive});
+
   // ===== 상태 업데이트 (tablet_accounts) =====
   Future<void> updateLoadCurrentAreaTablet(String handle, String areaName, String currentArea);
   Future<void> areaPickerCurrentAreaTablet(String handle, String areaName, String currentArea);
@@ -38,6 +49,11 @@ abstract class UserRepository {
   Future<List<UserModel>> getTabletsByAreaOnceWithCache(String selectedArea);
 
   Future<List<UserModel>> refreshUsersBySelectedArea(String selectedArea);
+
+  /// ✅ user_accounts_show 기반 1회 get 조회
+  /// - docId: "{division}-{area}"
+  /// - path: user_accounts_show/{docId}/users
+  Future<List<UserModel>> refreshUsersByDivisionAreaFromShow(String division, String area);
   Future<List<UserModel>> refreshTabletsBySelectedArea(String selectedArea);
 
   // ===== 캐시 갱신(로컬에서 즉시 반영 용) =====

@@ -1,11 +1,8 @@
 // lib/screens/secondary_package/dev_mode_package/area_management_package/status_mapping_helper.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-// 🔧 전역 리미트 설정값(최소/최대/기본값, prefsKey)을 단일 소스로 관리
-import '../../../../../utils/plate_limit/plate_limit_config.dart';
-// ✅ UsageReporter 계측
+import '../../../../../utils/snackbar_helper.dart';
 import '../../../../../utils/usage/usage_reporter.dart';
 
 class StatusMappingHelper extends StatefulWidget {
@@ -16,6 +13,8 @@ class StatusMappingHelper extends StatefulWidget {
 }
 
 class _StatusMappingHelperState extends State<StatusMappingHelper> {
+  static const int _maxLimit = 1 << 30;
+
   // 선택 상태
   String? _selectedDivision;
   String? _selectedArea;
@@ -24,248 +23,280 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
   List<String> _divisions = [];
   List<String> _areas = [];
 
-  // 새 location 추가 입력
-  final TextEditingController _newLocCtrl = TextEditingController();
+  // activeLimit 입력
+  final TextEditingController _limitCtrl = TextEditingController();
+
   bool _busy = false;
 
-  // 전역 기본값(표시 목적): SharedPreferences(PlateLimitConfig.prefsKey) [디바이스 단위 기본]
-  int _globalDefault = PlateLimitConfig.defaultLimit;
+  // 리빌드 진행 표시(division 전체 리빌드 등)
+  String? _progressLabel;
+  int _progressDone = 0;
+  int _progressTotal = 0;
 
   @override
   void initState() {
     super.initState();
     _loadDivisions();
-    _loadGlobalDefault();
   }
 
   @override
   void dispose() {
-    _newLocCtrl.dispose();
+    _limitCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _loadGlobalDefault() async {
-    try {
-      final p = await SharedPreferences.getInstance();
-      final v = p.getInt(PlateLimitConfig.prefsKey) ?? PlateLimitConfig.defaultLimit;
-      if (!mounted) return;
-      setState(() => _globalDefault = v.clamp(PlateLimitConfig.min, PlateLimitConfig.max));
-    } catch (_) {
-      // 표시 실패는 무시
-    }
+  FirebaseFirestore get _fs => FirebaseFirestore.instance;
+
+  String _showDocId(String division, String area) {
+    final d = division.trim().isEmpty ? 'unknownDivision' : division.trim();
+    final a = area.trim().isEmpty ? 'unknownArea' : area.trim();
+    return '$d-$a';
+  }
+
+  DocumentReference<Map<String, dynamic>> _showDocRef(String division, String area) {
+    final id = _showDocId(division, area);
+    return _fs.collection('user_accounts_show').doc(id);
+  }
+
+  CollectionReference<Map<String, dynamic>> _showUsersCol(String division, String area) {
+    return _showDocRef(division, area).collection('users');
   }
 
   Future<void> _loadDivisions() async {
-    final fs = FirebaseFirestore.instance;
-    final snap = await fs.collection('divisions').get();
-
-    // ✅ UsageReporter: read (divisions)
     try {
-      await UsageReporter.instance.report(
-        area: 'unknown',
-        action: 'read',
-        n: snap.docs.length,
-        source: 'StatusMappingHelper._loadDivisions.get',
-      );
-    } catch (_) {}
+      final snap = await _fs.collection('divisions').orderBy('name').get();
 
-    final list = snap.docs
-        .map((d) => (d['name'] as String?)?.trim())
-        .whereType<String>()
-        .toList()
-      ..sort();
-    if (!mounted) return;
-    setState(() {
-      _divisions = list;
-      _selectedDivision ??= _divisions.isNotEmpty ? _divisions.first : null;
-    });
-    await _loadAreas(); // division 선택 후 area 로딩
+      // ✅ UsageReporter: read (divisions)
+      try {
+        await UsageReporter.instance.report(
+          area: 'StatusMappingHelper',
+          action: 'read',
+          n: snap.docs.isEmpty ? 1 : snap.docs.length,
+          source: 'StatusMappingHelper._loadDivisions.divisions.get',
+        );
+      } catch (_) {}
+
+      final list = snap.docs
+          .map((d) => (d.data()['name'] as String?)?.trim())
+          .whereType<String>()
+          .toList()
+        ..sort();
+
+      if (!mounted) return;
+      setState(() {
+        _divisions = list;
+        _selectedDivision ??= _divisions.isNotEmpty ? _divisions.first : null;
+      });
+
+      await _loadAreas();
+    } catch (e) {
+      if (!mounted) return;
+      showFailedSnackbar(context, '회사 목록 로드 실패: $e');
+    }
   }
 
   Future<void> _loadAreas() async {
-    _areas = [];
-    _selectedArea = null;
-    if (_selectedDivision == null) {
-      if (mounted) setState(() {}); // 빈 상태 반영
+    final division = _selectedDivision;
+    if (division == null || division.trim().isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _areas = [];
+        _selectedArea = null;
+      });
       return;
     }
-    final fs = FirebaseFirestore.instance;
-    final snap = await fs.collection('areas').where('division', isEqualTo: _selectedDivision).get();
 
-    // ✅ UsageReporter: read (areas by division)
     try {
-      await UsageReporter.instance.report(
-        area: 'unknown',
-        action: 'read',
-        n: snap.docs.length,
-        source: 'StatusMappingHelper._loadAreas.get',
-      );
-    } catch (_) {}
+      final snap = await _fs
+          .collection('areas')
+          .where('division', isEqualTo: division)
+          .orderBy('name')
+          .get();
 
-    final list = snap.docs
-        .map((d) => (d['name'] as String?)?.trim())
-        .whereType<String>()
-        .toList()
-      ..sort();
-    if (!mounted) return;
-    setState(() {
-      _areas = list;
-      _selectedArea = _areas.isNotEmpty ? _areas.first : null;
-    });
-  }
-
-  /// area + location 필드로 기존 문서 ref를 찾는다. 없으면 null.
-  Future<DocumentReference<Map<String, dynamic>>?> _findLimitDocRef(String area, String location) async {
-    final fs = FirebaseFirestore.instance;
-    final qs = await fs
-        .collection('location_limits')
-        .where('area', isEqualTo: area)
-        .where('location', isEqualTo: location)
-        .limit(1)
-        .get();
-
-    // ✅ UsageReporter: read (find existing limit doc)
-    try {
-      await UsageReporter.instance.report(
-        area: area.isNotEmpty ? area : 'unknown',
-        action: 'read',
-        n: qs.docs.length,
-        source: 'StatusMappingHelper._findLimitDocRef.query',
-      );
-    } catch (_) {}
-
-    if (qs.docs.isEmpty) return null;
-    return qs.docs.first.reference;
-  }
-
-  Future<void> _upsertLimit(String area, String location, int limit) async {
-    final clamped = limit.clamp(PlateLimitConfig.min, PlateLimitConfig.max);
-    final fs = FirebaseFirestore.instance;
-
-    // 1) area+location 조합으로 기존 문서를 찾는다(과거 __, 현재 _ 모두 커버).
-    final existRef = await _findLimitDocRef(area, location);
-    if (existRef != null) {
-      await existRef.set({
-        'area': area,
-        'location': location,
-        'limit': clamped,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      // ✅ UsageReporter: write (update)
+      // ✅ UsageReporter: read (areas by division)
       try {
         await UsageReporter.instance.report(
-          area: area.isNotEmpty ? area : 'unknown',
-          action: 'write',
-          n: 1,
-          source: 'StatusMappingHelper._upsertLimit.update',
+          area: division,
+          action: 'read',
+          n: snap.docs.isEmpty ? 1 : snap.docs.length,
+          source: 'StatusMappingHelper._loadAreas.areas.get',
         );
       } catch (_) {}
 
-      return;
+      final list = snap.docs
+          .map((d) => (d.data()['name'] as String?)?.trim())
+          .whereType<String>()
+          .toList()
+        ..sort();
+
+      if (!mounted) return;
+      setState(() {
+        _areas = list;
+        _selectedArea = _areas.isNotEmpty ? _areas.first : null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      showFailedSnackbar(context, '지역 목록 로드 실패: $e');
     }
+  }
 
-    // 2) 없으면 새 문서 생성 → 단일 언더스코어 ID 사용
-    final newId = '${area}_$location';
-    await fs.collection('location_limits').doc(newId).set({
-      'area': area,
-      'location': location,
-      'limit': clamped,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+  int? _parseLimit(String s) {
+    final t = s.trim();
+    if (t.isEmpty) return null;
+    final v = int.tryParse(t);
+    if (v == null) return null;
+    if (v < 0) return 0;
+    if (v > _maxLimit) return _maxLimit;
+    return v;
+  }
 
-    // ✅ UsageReporter: write (create)
+  Future<void> _saveActiveLimit({
+    required String division,
+    required String area,
+    required int activeLimit,
+  }) async {
+    final ref = _showDocRef(division, area);
+    final showId = _showDocId(division, area);
+
+    await ref.set(
+      {
+        'division': division,
+        'area': area,
+        'activeLimit': activeLimit,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
+
+    // ✅ UsageReporter: write
     try {
       await UsageReporter.instance.report(
-        area: area.isNotEmpty ? area : 'unknown',
+        area: area,
         action: 'write',
         n: 1,
-        source: 'StatusMappingHelper._upsertLimit.create',
+        source: 'StatusMappingHelper._saveActiveLimit.user_accounts_show.set:$showId',
       );
     } catch (_) {}
   }
 
-  Future<void> _deleteLimit(String area, String location) async {
-    final fs = FirebaseFirestore.instance;
+  /// ✅ 레거시/정합성 보정: show/users에서 isActive==true를 재집계하여
+  /// user_accounts_show/{division-area}.activeCount를 갱신한다.
+  Future<int> _rebuildActiveCountForOne({
+    required String division,
+    required String area,
+  }) async {
+    final showId = _showDocId(division, area);
+    final usersCol = _showUsersCol(division, area);
 
-    // 1) area+location 조합으로 기존 문서를 찾는다.
-    final existRef = await _findLimitDocRef(area, location);
-    if (existRef != null) {
-      await existRef.delete();
+    // active 사용자 재집계 (레거시 데이터가 많으면 비용 큼)
+    final qSnap = await usersCol.where('isActive', isEqualTo: true).get();
 
-      // ✅ UsageReporter: delete (by query)
-      try {
-        await UsageReporter.instance.report(
-          area: area.isNotEmpty ? area : 'unknown',
-          action: 'delete',
-          n: 1,
-          source: 'StatusMappingHelper._deleteLimit.deleteByQuery',
-        );
-      } catch (_) {}
-      return;
-    }
-
-    // 2) 혹시 남아있을지 모르는 ID 호환 처리(신규/구버전 ID 모두 시도)
-    final newId = '${area}_$location';
-    final oldId = '${area}__$location';
-    final newRef = fs.collection('location_limits').doc(newId);
-    final oldRef = fs.collection('location_limits').doc(oldId);
-
-    final newSnap = await newRef.get();
-    // ✅ UsageReporter: read (newId)
+    // ✅ UsageReporter: read (active users fetched)
     try {
       await UsageReporter.instance.report(
-        area: area.isNotEmpty ? area : 'unknown',
+        area: area,
         action: 'read',
-        n: newSnap.exists ? 1 : 0,
-        source: 'StatusMappingHelper._deleteLimit.getNewId',
+        n: qSnap.docs.isEmpty ? 1 : qSnap.docs.length,
+        source: 'StatusMappingHelper._rebuildActiveCountForOne.showUsers.query:$showId',
       );
     } catch (_) {}
 
-    if (newSnap.exists) {
-      await newRef.delete();
+    final count = qSnap.docs.length;
 
-      // ✅ UsageReporter: delete (by newId)
-      try {
-        await UsageReporter.instance.report(
-          area: area.isNotEmpty ? area : 'unknown',
-          action: 'delete',
-          n: 1,
-          source: 'StatusMappingHelper._deleteLimit.deleteByNewId',
-        );
-      } catch (_) {}
-      return;
-    }
+    await _showDocRef(division, area).set(
+      {
+        'division': division,
+        'area': area,
+        'activeCount': count,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
 
-    final oldSnap = await oldRef.get();
-    // ✅ UsageReporter: read (oldId)
+    // ✅ UsageReporter: write (meta update)
     try {
       await UsageReporter.instance.report(
-        area: area.isNotEmpty ? area : 'unknown',
-        action: 'read',
-        n: oldSnap.exists ? 1 : 0,
-        source: 'StatusMappingHelper._deleteLimit.getOldId',
+        area: area,
+        action: 'write',
+        n: 1,
+        source: 'StatusMappingHelper._rebuildActiveCountForOne.meta.set:$showId',
       );
     } catch (_) {}
 
-    if (oldSnap.exists) {
-      await oldRef.delete();
+    return count;
+  }
 
-      // ✅ UsageReporter: delete (by oldId)
+  /// ✅ 레거시 데이터가 많을 때: division 내 모든 area에 대해 activeCount 재빌드
+  /// (areas 컬렉션을 기준으로 showId를 만들고 순차 처리)
+  Future<void> _rebuildActiveCountForDivision(String division) async {
+    setState(() {
+      _busy = true;
+      _progressLabel = '회사 전체(activeCount) 리빌드 중: $division';
+      _progressDone = 0;
+      _progressTotal = 0;
+    });
+
+    try {
+      final areasSnap = await _fs
+          .collection('areas')
+          .where('division', isEqualTo: division)
+          .orderBy('name')
+          .get();
+
+      // ✅ UsageReporter: read (areas list)
       try {
         await UsageReporter.instance.report(
-          area: area.isNotEmpty ? area : 'unknown',
-          action: 'delete',
-          n: 1,
-          source: 'StatusMappingHelper._deleteLimit.deleteByOldId',
+          area: division,
+          action: 'read',
+          n: areasSnap.docs.isEmpty ? 1 : areasSnap.docs.length,
+          source: 'StatusMappingHelper._rebuildActiveCountForDivision.areas.get',
         );
       } catch (_) {}
+
+      final areas = areasSnap.docs
+          .map((d) => (d.data()['name'] as String?)?.trim())
+          .whereType<String>()
+          .toList()
+        ..sort();
+
+      if (!mounted) return;
+      setState(() {
+        _progressTotal = areas.length;
+        _progressDone = 0;
+      });
+
+      for (final area in areas) {
+        if (!mounted) return;
+        setState(() {
+          _progressLabel = '리빌드 진행: $division / $area';
+        });
+
+        await _rebuildActiveCountForOne(division: division, area: area);
+
+        if (!mounted) return;
+        setState(() {
+          _progressDone += 1;
+        });
+      }
+
+      if (!mounted) return;
+      showSuccessSnackbar(context, '✅ 회사 "$division" activeCount 리빌드 완료');
+    } catch (e) {
+      if (!mounted) return;
+      showFailedSnackbar(context, '❌ 회사 전체 리빌드 실패: $e');
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _progressLabel = null;
+        _progressDone = 0;
+        _progressTotal = 0;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // ✅ 오버플로 방지: isExpanded + ellipsis + isDense
     final divisionDropdown = DropdownButtonFormField<String>(
       value: _selectedDivision,
       isExpanded: true,
@@ -275,17 +306,14 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
         child: Text(e, maxLines: 1, overflow: TextOverflow.ellipsis),
       ))
           .toList(),
-      selectedItemBuilder: (context) => _divisions
-          .map((e) => Align(
-        alignment: Alignment.centerLeft,
-        child: Text(e, maxLines: 1, overflow: TextOverflow.ellipsis),
-      ))
-          .toList(),
-      onChanged: (v) async {
+      onChanged: _busy
+          ? null
+          : (v) async {
         setState(() {
           _selectedDivision = v;
           _areas = [];
           _selectedArea = null;
+          _limitCtrl.clear();
         });
         await _loadAreas();
       },
@@ -293,7 +321,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
         labelText: '회사(division) 선택',
         border: OutlineInputBorder(),
         isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       ),
     );
 
@@ -306,19 +334,228 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
         child: Text(e, maxLines: 1, overflow: TextOverflow.ellipsis),
       ))
           .toList(),
-      selectedItemBuilder: (context) => _areas
-          .map((e) => Align(
-        alignment: Alignment.centerLeft,
-        child: Text(e, maxLines: 1, overflow: TextOverflow.ellipsis),
-      ))
-          .toList(),
-      onChanged: (v) => setState(() => _selectedArea = v),
+      onChanged: _busy
+          ? null
+          : (v) {
+        setState(() {
+          _selectedArea = v;
+          _limitCtrl.clear();
+        });
+      },
       decoration: const InputDecoration(
         labelText: '지역(area) 선택',
         border: OutlineInputBorder(),
         isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       ),
+    );
+
+    final division = _selectedDivision;
+    final area = _selectedArea;
+
+    final showMeta = (division == null || area == null)
+        ? const SizedBox.shrink()
+        : StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: _showDocRef(division, area).snapshots(),
+      builder: (context, snap) {
+        final data = snap.data?.data() ?? <String, dynamic>{};
+        final exists = snap.data?.exists ?? false;
+
+        final activeLimit = data['activeLimit'];
+        final activeCount = data['activeCount'];
+
+        final int? limitInt = (activeLimit is int) ? activeLimit : null;
+        final int? countInt = (activeCount is int) ? activeCount : null;
+
+        // updatedAt 표시(옵션)
+        DateTime? updatedAt;
+        final ua = data['updatedAt'];
+        if (ua is Timestamp) {
+          updatedAt = ua.toDate();
+        }
+
+        // ✅ UsageReporter: read (meta snapshot)
+        if (snap.hasData) {
+          try {
+            UsageReporter.instance.report(
+              area: area,
+              action: 'read',
+              n: 1,
+              source: 'StatusMappingHelper.showMeta.stream:$division-$area',
+            );
+          } catch (_) {}
+        }
+
+        // limit 필드가 비어 있으면, 표시용으로 컨트롤러를 자동 채움(단, 사용자가 직접 수정 중이면 덮지 않도록 단순 조건)
+        if (_limitCtrl.text.trim().isEmpty && limitInt != null) {
+          _limitCtrl.text = '$limitInt';
+        }
+
+        final warn = (limitInt != null && countInt != null && countInt > limitInt);
+
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.black12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '메타 문서: user_accounts_show/${_showDocId(division, area)}',
+                style: const TextStyle(fontSize: 12, color: Colors.black54),
+              ),
+              const SizedBox(height: 8),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      exists ? '상태: 존재함' : '상태: 없음(저장 시 생성됨)',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: exists ? Colors.black87 : Colors.orange[800],
+                      ),
+                    ),
+                  ),
+                  if (updatedAt != null)
+                    Text(
+                      'updatedAt: ${updatedAt.toString()}',
+                      style: const TextStyle(fontSize: 11, color: Colors.black54),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              Text(
+                'activeCount: ${countInt ?? '(미설정)'}   /   activeLimit: ${limitInt ?? '(미설정)'}',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: warn ? Colors.redAccent : Colors.black87,
+                ),
+              ),
+              if (warn)
+                const Padding(
+                  padding: EdgeInsets.only(top: 6),
+                  child: Text(
+                    '주의: activeCount가 activeLimit을 초과합니다. 제한을 상향하거나 비활성화를 진행하세요.',
+                    style: TextStyle(color: Colors.redAccent, fontSize: 12),
+                  ),
+                ),
+              const SizedBox(height: 12),
+
+              TextField(
+                controller: _limitCtrl,
+                keyboardType: TextInputType.number,
+                enabled: !_busy,
+                decoration: const InputDecoration(
+                  labelText: 'activeLimit (정수)',
+                  hintText: '예: 30',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.save),
+                      label: const Text('activeLimit 저장'),
+                      onPressed: _busy
+                          ? null
+                          : () async {
+                        final v = _parseLimit(_limitCtrl.text);
+                        if (v == null) {
+                          showFailedSnackbar(context, 'activeLimit 값이 올바르지 않습니다.');
+                          return;
+                        }
+
+                        setState(() => _busy = true);
+                        try {
+                          await _saveActiveLimit(
+                            division: division,
+                            area: area,
+                            activeLimit: v,
+                          );
+                          if (!mounted) return;
+                          showSuccessSnackbar(context, '✅ activeLimit 저장 완료 (N=$v)');
+                        } catch (e) {
+                          if (!mounted) return;
+                          showFailedSnackbar(context, '❌ 저장 실패: $e');
+                        } finally {
+                          if (!mounted) return;
+                          setState(() => _busy = false);
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('activeCount 리빌드'),
+                    onPressed: _busy
+                        ? null
+                        : () async {
+                      setState(() => _busy = true);
+                      try {
+                        final c = await _rebuildActiveCountForOne(
+                          division: division,
+                          area: area,
+                        );
+                        if (!mounted) return;
+                        showSuccessSnackbar(context, '✅ activeCount 리빌드 완료 (activeCount=$c)');
+                      } catch (e) {
+                        if (!mounted) return;
+                        showFailedSnackbar(context, '❌ 리빌드 실패: $e');
+                      } finally {
+                        if (!mounted) return;
+                        setState(() => _busy = false);
+                      }
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              OutlinedButton.icon(
+                icon: const Icon(Icons.playlist_add_check),
+                label: const Text('회사 전체 activeCount 리빌드'),
+                onPressed: _busy
+                    ? null
+                    : () async {
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      title: const Text('회사 전체 리빌드'),
+                      content: const Text(
+                        '선택된 회사의 모든 지역(area)에 대해 activeCount를 재집계합니다.\n'
+                            '레거시 데이터가 많거나 users가 많은 경우 시간이 오래 걸릴 수 있습니다.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('취소'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('실행'),
+                        ),
+                      ],
+                    ),
+                  ) ??
+                      false;
+                  if (!ok) return;
+                  await _rebuildActiveCountForDivision(division);
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
 
     return AbsorbPointer(
@@ -327,21 +564,18 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // 전역 기본값 안내(표시 전용)
-            Align(
+            const Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                '전역 기본 리미트(표시): N = $_globalDefault  (디바이스 기본)\n'
-                    '※ 아래에서 설정하는 값은 "선택한 지역의 location별 서버 리미트"입니다. 서버 리미트가 존재하면 전역값 대신 우선 적용됩니다.',
-                style: const TextStyle(fontSize: 12, color: Colors.black54),
+                '이 화면은 더 이상 location_limits를 사용하지 않습니다.\n'
+                    'user_accounts_show/{division-area} 메타의 activeLimit 설정 및 activeCount 리빌드(재집계) 용도입니다.',
+                style: TextStyle(fontSize: 12, color: Colors.black54),
               ),
             ),
             const SizedBox(height: 12),
 
-            // 선택 영역
             LayoutBuilder(
               builder: (context, c) {
-                // 화면이 좁으면 세로 배치로 자동 전환
                 final narrow = c.maxWidth < 360;
                 if (narrow) {
                   return Column(
@@ -361,237 +595,48 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                 );
               },
             ),
+
             const SizedBox(height: 16),
 
+            if (_progressLabel != null)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.04),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.black12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(_progressLabel!, style: const TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    if (_progressTotal > 0)
+                      LinearProgressIndicator(
+                        value: (_progressDone / _progressTotal).clamp(0.0, 1.0),
+                      ),
+                    const SizedBox(height: 6),
+                    if (_progressTotal > 0)
+                      Text('$_progressDone / $_progressTotal', style: const TextStyle(fontSize: 12)),
+                  ],
+                ),
+              ),
+
+            if (_progressLabel != null) const SizedBox(height: 12),
+
             Expanded(
-              child: _selectedArea == null
-                  ? const Center(child: Text('지역을 선택하세요.'))
-                  : StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: FirebaseFirestore.instance
-                    .collection('location_limits')
-                    .where('area', isEqualTo: _selectedArea)
-                    .orderBy('location')
-                    .snapshots(),
-                builder: (context, snap) {
-                  if (snap.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  final docs = snap.data?.docs ?? [];
-
-                  // ✅ UsageReporter: read (stream of location_limits for selected area)
-                  if (_selectedArea != null && snap.hasData) {
-                    try {
-                      // 스트림마다 들어오는 스냅샷 크기를 그대로 기록
-                      UsageReporter.instance.report(
-                        area: _selectedArea!,
-                        action: 'read',
-                        n: docs.length,
-                        source: 'StatusMappingHelper.location_limits.stream',
-                      );
-                    } catch (_) {}
-                  }
-
-                  if (docs.isEmpty) {
-                    return const Center(
-                      child: Text('등록된 location 리미트가 없습니다. 아래에서 추가하세요.'),
-                    );
-                  }
-                  return ListView.separated(
-                    itemCount: docs.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (_, i) {
-                      final data = docs[i].data();
-                      final loc = (data['location'] ?? '').toString();
-                      int limit = (data['limit'] ?? _globalDefault) as int;
-                      limit = limit.clamp(PlateLimitConfig.min, PlateLimitConfig.max);
-
-                      return _LimitTile(
-                        area: _selectedArea!,
-                        location: loc,
-                        limit: limit,
-                        onSave: (v) => _upsertLimit(_selectedArea!, loc, v),
-                        onDelete: () => _deleteLimit(_selectedArea!, loc),
-                      );
-                    },
-                  );
-                },
+              child: (division == null || area == null)
+                  ? const Center(child: Text('회사와 지역을 선택하세요.'))
+                  : SingleChildScrollView(
+                child: showMeta,
               ),
             ),
 
-            const SizedBox(height: 12),
-            // 새 location 추가
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _newLocCtrl,
-                    textInputAction: TextInputAction.done,
-                    decoration: const InputDecoration(
-                      hintText: '새 location 이름 입력 (예: B2-01)',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    ),
-                    onSubmitted: (_) async {
-                      if (_selectedArea == null) return;
-                      final name = _newLocCtrl.text.trim();
-                      if (name.isEmpty) return;
-                      setState(() => _busy = true);
-                      try {
-                        await _upsertLimit(_selectedArea!, name, _globalDefault);
-                        _newLocCtrl.clear();
-                      } finally {
-                        if (mounted) setState(() => _busy = false);
-                      }
-                    },
-                  ),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.add),
-                  label: const Text('추가'),
-                  onPressed: _selectedArea == null
-                      ? null
-                      : () async {
-                    final name = _newLocCtrl.text.trim();
-                    if (name.isEmpty) return;
-                    setState(() => _busy = true);
-                    try {
-                      await _upsertLimit(_selectedArea!, name, _globalDefault);
-                      _newLocCtrl.clear();
-                    } finally {
-                      if (mounted) setState(() => _busy = false);
-                    }
-                  },
-                ),
-              ],
-            ),
+            if (_busy) const SizedBox(height: 8),
+            if (_busy) const LinearProgressIndicator(),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _LimitTile extends StatefulWidget {
-  final String area;
-  final String location;
-  final int limit;
-  final ValueChanged<int> onSave; // ✅ 저장 시에만 write
-  final VoidCallback onDelete;
-
-  const _LimitTile({
-    required this.area,
-    required this.location,
-    required this.limit,
-    required this.onSave,
-    required this.onDelete,
-  });
-
-  @override
-  State<_LimitTile> createState() => _LimitTileState();
-}
-
-class _LimitTileState extends State<_LimitTile> {
-  late int _value;
-  late int _initial;
-  bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _value = widget.limit.clamp(PlateLimitConfig.min, PlateLimitConfig.max);
-    _initial = _value;
-  }
-
-  void _onSlider(int v) {
-    setState(() => _value = v.clamp(PlateLimitConfig.min, PlateLimitConfig.max));
-  }
-
-  Future<void> _onSavePressed() async {
-    if (_value == _initial) return;
-    setState(() => _saving = true);
-    try {
-      await Future.sync(() => widget.onSave(_value));
-      if (!mounted) return;
-      setState(() {
-        _initial = _value; // 최신 저장값을 기준값으로 동기화
-      });
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('리미트가 저장되었습니다.')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).hideCurrentSnackBar();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('저장 실패: $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final dirty = _value != _initial;
-
-    return ListTile(
-      leading: const Icon(Icons.place, color: Colors.teal),
-      title: Text(
-        widget.location,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(fontWeight: FontWeight.w600),
-      ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // 상단 상태/저장 버튼 행
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  'N = $_value${dirty ? "  (변경됨)" : ""}',
-                  style: TextStyle(
-                    color: dirty ? Colors.orange[800] : Colors.black87,
-                    fontWeight: dirty ? FontWeight.w600 : FontWeight.normal,
-                  ),
-                ),
-              ),
-              SizedBox(
-                height: 32,
-                child: OutlinedButton.icon(
-                  onPressed: (!dirty || _saving) ? null : _onSavePressed,
-                  icon: _saving
-                      ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                      : const Icon(Icons.save_outlined, size: 18),
-                  label: const Text('저장'),
-                ),
-              ),
-            ],
-          ),
-          // 슬라이더
-          Slider(
-            value: _value.toDouble(),
-            min: PlateLimitConfig.min.toDouble(),
-            max: PlateLimitConfig.max.toDouble(),
-            divisions: PlateLimitConfig.max - PlateLimitConfig.min,
-            label: '$_value',
-            onChanged: (v) => _onSlider(v.round()),
-          ),
-        ],
-      ),
-      // 삭제 버튼은 trailing에 유지
-      trailing: IconButton(
-        tooltip: '리미트 삭제(전역 기본 사용)',
-        icon: const Icon(Icons.delete_outline),
-        onPressed: _saving ? null : widget.onDelete,
       ),
     );
   }

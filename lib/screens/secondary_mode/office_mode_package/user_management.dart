@@ -1,13 +1,25 @@
-// lib/screens/secondary_package/office_mode_package/user_management.dart
+// lib/screens/secondary_mode/office_mode_package/user_management.dart
 //
 // 색 반영(UI/UX 리팩터링):
 // - '서비스 로그인' 카드 팔레트(#0D47A1 base / #09367D dark / #5472D3 light) 통일 적용
 // - 상단 그라디언트 헤더 배너
 // - 선택된 항목은 브랜드 톤으로 또렷하게 하이라이트(보더/배경/체크 아이콘)
-// - FAB(추가/수정/삭제) 라운드 필 버튼 일관 스타일
+// - FAB(추가/수정/활성/비활성) 라운드 필 버튼 일관 스타일
 // - 스낵바는 snackbar_helper 사용 (변경 없음)
 // - 기능/로직은 기존과 동일
 // - ⬅️ 11시 라벨 추가: "user management"
+//
+// [변경 사항]
+// - 요구사항 반영: user_management에서 표시 정보는 이름/이메일/직책/전화번호만 노출
+// - ✅ 삭제 버튼 제거 → 활성화/비활성화 토글로 변경(soft disable)
+//
+// ✅ 중요:
+// - isActive는 user_accounts_show에서만 관리하므로,
+//   초기 로딩은 refreshUsersBySelectedAreaAndCache()를 사용(가능한 경우 show 기반 갱신)
+//
+// ✅ 추가 요구사항 반영:
+// - 활성화 계정은 상단, 비활성화 계정은 하단
+// - 두 그룹 사이에 Divider 삽입
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -53,7 +65,8 @@ class _UserManagementState extends State<UserManagement> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<UserState>().loadUsersOnly();
+      // ✅ isActive는 show에서만 존재하므로, 가능한 경우 show 기반 갱신을 우선 사용
+      context.read<UserState>().refreshUsersBySelectedAreaAndCache();
     });
   }
 
@@ -136,8 +149,7 @@ class _UserManagementState extends State<UserManagement> {
         String? endTime,
         List<String> fixedHolidays,
         String position,
-        )
-    onSave,
+        ) onSave,
     UserModel? initialUser,
   }) {
     final areaState = context.read<AreaState>();
@@ -162,12 +174,17 @@ class _UserManagementState extends State<UserManagement> {
     );
   }
 
-  Future<bool> _confirmDelete(BuildContext context) async {
+  /// ✅ 삭제 대신: 활성/비활성 확인 다이얼로그
+  Future<bool> _confirmToggleActive(BuildContext context, {required bool toActive}) async {
+    final title = toActive ? '활성화 확인' : '비활성화 확인';
+    final content = toActive ? '선택한 계정을 활성화하시겠습니까?' : '선택한 계정을 비활성화하시겠습니까?';
+    final actionLabel = toActive ? '활성화' : '비활성화';
+
     return await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('삭제 확인'),
-        content: const Text('선택한 계정을 삭제하시겠습니까?'),
+        title: Text(title),
+        content: Text(content),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -175,7 +192,7 @@ class _UserManagementState extends State<UserManagement> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('삭제'),
+            child: Text(actionLabel),
           ),
         ],
       ),
@@ -185,7 +202,7 @@ class _UserManagementState extends State<UserManagement> {
 
   /// ▼ 기존 onIconTapped() 로직을 FAB로 그대로 매핑
   /// - 선택 없음: index 0 → 추가
-  /// - 선택 있음: index 0 → 수정, index 1 → 삭제
+  /// - 선택 있음: index 0 → 수정
   Future<void> _handlePrimaryAction(BuildContext context) async {
     final userState = context.read<UserState>();
     final selectedId = userState.selectedUserId;
@@ -211,9 +228,7 @@ class _UserManagementState extends State<UserManagement> {
             position,
             ) async {
           try {
-            final englishName = await context
-                .read<UserRepository>()
-                .getEnglishNameByArea(selectedArea, division);
+            final englishName = await context.read<UserRepository>().getEnglishNameByArea(selectedArea, division);
 
             final newUser = UserModel(
               id: '$phone-$area',
@@ -234,6 +249,7 @@ class _UserManagementState extends State<UserManagement> {
               startTime: _stringToTimeOfDay(startTime),
               endTime: _stringToTimeOfDay(endTime),
               fixedHolidays: fixedHolidays,
+              // isActive는 show에서 관리(권장: 모델 default true 또는 show mirror 생성 시 true)
             );
 
             await userState.addUserCard(
@@ -252,8 +268,7 @@ class _UserManagementState extends State<UserManagement> {
     }
 
     // index 0: 수정 (선택 있음)
-    final selectedUser =
-    userState.users.firstWhereOrNull((u) => u.id == selectedId);
+    final selectedUser = userState.users.firstWhereOrNull((u) => u.id == selectedId);
     if (selectedUser == null) {
       showFailedSnackbar(context, '선택된 계정을 찾지 못했습니다.');
       return;
@@ -279,9 +294,7 @@ class _UserManagementState extends State<UserManagement> {
           position,
           ) async {
         try {
-          final englishName = await context
-              .read<UserRepository>()
-              .getEnglishNameByArea(selectedArea, division);
+          final englishName = await context.read<UserRepository>().getEnglishNameByArea(selectedArea, division);
 
           final updatedUser = selectedUser.copyWith(
             name: name,
@@ -300,6 +313,7 @@ class _UserManagementState extends State<UserManagement> {
             startTime: _stringToTimeOfDay(startTime),
             endTime: _stringToTimeOfDay(endTime),
             fixedHolidays: fixedHolidays,
+            // isActive는 유지(copyWith 기본 유지)
           );
 
           await userState.updateLoginUser(updatedUser);
@@ -313,7 +327,8 @@ class _UserManagementState extends State<UserManagement> {
     );
   }
 
-  Future<void> _handleDelete(BuildContext context) async {
+  /// ✅ 삭제 대신: 활성/비활성 토글 실행
+  Future<void> _handleToggleActive(BuildContext context) async {
     final userState = context.read<UserState>();
     final selectedId = userState.selectedUserId;
     if (selectedId == null) {
@@ -321,35 +336,130 @@ class _UserManagementState extends State<UserManagement> {
       return;
     }
 
-    final ok = await _confirmDelete(context);
+    final selectedUser = userState.users.firstWhereOrNull((u) => u.id == selectedId);
+    if (selectedUser == null) {
+      showFailedSnackbar(context, '선택된 계정을 찾지 못했습니다.');
+      return;
+    }
+
+    final toActive = !selectedUser.isActive;
+    final ok = await _confirmToggleActive(context, toActive: toActive);
     if (!ok) return;
 
-    await userState.deleteUserCard(
-      [selectedId],
+    await userState.setSelectedUserActiveStatus(
+      toActive,
       onError: (msg) => showFailedSnackbar(context, msg),
     );
+
     if (!context.mounted) return;
-    showSuccessSnackbar(context, '삭제되었습니다.');
+    showSuccessSnackbar(context, toActive ? '활성화되었습니다.' : '비활성화되었습니다.');
+  }
+
+  Widget _buildUserTile(BuildContext context, UserState userState, UserModel user) {
+    final isSelected = userState.selectedUserId == user.id;
+
+    // ✅ 비활성 계정은 시각적으로만 약간 낮춤(표시 정보 추가 노출 없음)
+    final double inactiveOpacity = user.isActive ? 1.0 : 0.55;
+
+    // 선택 시 브랜드 톤 하이라이트
+    final bg = isSelected ? _SvcColors.light.withOpacity(.10) : Colors.white;
+    final border = isSelected
+        ? Border.all(color: _SvcColors.base, width: 1.25)
+        : Border.all(color: Colors.black.withOpacity(.08));
+
+    return Opacity(
+      opacity: inactiveOpacity,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(14),
+          border: border,
+        ),
+        child: ListTile(
+          key: ValueKey(user.id),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          leading: CircleAvatar(
+            backgroundColor: _SvcColors.light.withOpacity(.25),
+            foregroundColor: _SvcColors.dark,
+            child: const Icon(Icons.person_outline),
+          ),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  user.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+              if (isSelected) const Icon(Icons.check_circle, color: _SvcColors.base),
+            ],
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('이메일: ${user.email}'),
+                Text('전화번호: ${user.phone}'),
+                if (user.position?.isNotEmpty == true) Text('직책: ${user.position!}'),
+              ],
+            ),
+          ),
+          onTap: () => userState.toggleUserCard(user.id),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActiveInactiveDivider(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(2, 10, 2, 6),
+      child: Column(
+        children: [
+          Divider(
+            height: 18,
+            thickness: 1.2,
+            color: Colors.black.withOpacity(0.10),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final userState = context.watch<UserState>();
     final areaState = context.watch<AreaState>();
-    final currentArea = areaState.currentArea; // non-nullable 가정
-    final currentDivision = areaState.currentDivision; // non-nullable 가정
+    final currentArea = areaState.currentArea;
+    final currentDivision = areaState.currentDivision;
 
     bool matches(UserModel u) {
       final areas = u.areas;
       final divisions = u.divisions;
       final areaOk = currentArea.isEmpty || areas.contains(currentArea);
-      final divisionOk =
-          currentDivision.isEmpty || divisions.contains(currentDivision);
+      final divisionOk = currentDivision.isEmpty || divisions.contains(currentDivision);
       return areaOk && divisionOk;
     }
 
     final filteredUsers = userState.users.where(matches).toList();
+
+    // ✅ 활성 상단 / 비활성 하단 분리
+    final activeUsers = filteredUsers.where((u) => u.isActive).toList();
+    final inactiveUsers = filteredUsers.where((u) => !u.isActive).toList();
+    final bool needDivider = activeUsers.isNotEmpty && inactiveUsers.isNotEmpty;
+
     final bool hasSelection = userState.selectedUserId != null;
+
+    // ✅ 토글 버튼 라벨/아이콘 결정(선택된 유저 기반)
+    final selectedUser =
+    hasSelection ? userState.users.firstWhereOrNull((u) => u.id == userState.selectedUserId) : null;
+    final bool selectedIsActive = selectedUser?.isActive ?? true;
+    final String toggleLabel = selectedIsActive ? '비활성화' : '활성화';
+    final IconData toggleIcon = selectedIsActive ? Icons.pause_circle : Icons.play_circle;
 
     return Scaffold(
       appBar: AppBar(
@@ -359,7 +469,6 @@ class _UserManagementState extends State<UserManagement> {
         title: const Text('계정', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         automaticallyImplyLeading: false,
-        // ⬅️ 11시 라벨을 AppBar에 고정
         flexibleSpace: _buildScreenTag(context),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
@@ -383,74 +492,34 @@ class _UserManagementState extends State<UserManagement> {
       )
           : ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        itemCount: filteredUsers.length + 1,
+        itemCount: 1 + activeUsers.length + (needDivider ? 1 : 0) + inactiveUsers.length,
         itemBuilder: (context, index) {
           if (index == 0) {
             return const _HeaderBanner();
           }
 
-          final user = filteredUsers[index - 1];
-          final isSelected = userState.selectedUserId == user.id;
+          // index 매핑:
+          // [1 .. activeUsers.length] => 활성
+          // [divider] (optional)
+          // [inactive] => 비활성
+          var cursor = index - 1;
 
-          // 선택 시 브랜드 톤 하이라이트
-          final bg = isSelected
-              ? _SvcColors.light.withOpacity(.10)
-              : Colors.white;
-          final border = isSelected
-              ? Border.all(color: _SvcColors.base, width: 1.25)
-              : Border.all(color: Colors.black.withOpacity(.08));
+          if (cursor < activeUsers.length) {
+            final user = activeUsers[cursor];
+            return _buildUserTile(context, userState, user);
+          }
 
-          return Container(
-            margin: const EdgeInsets.symmetric(vertical: 6),
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(14),
-              border: border,
-            ),
-            child: ListTile(
-              key: ValueKey(user.id),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 10,
-              ),
-              leading: CircleAvatar(
-                backgroundColor: _SvcColors.light.withOpacity(.25),
-                foregroundColor: _SvcColors.dark,
-                child: const Icon(Icons.person_outline),
-              ),
-              title: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      user.name,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                  if (isSelected)
-                    const Icon(Icons.check_circle,
-                        color: _SvcColors.base),
-                ],
-              ),
-              subtitle: Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('이메일: ${user.email}'),
-                    Text(
-                        '출근: ${formatTime(user.startTime)} / 퇴근: ${formatTime(user.endTime)}'),
-                    Text('역할: ${user.role}'),
-                    if (user.position?.isNotEmpty == true)
-                      Text('직책: ${user.position!}'),
-                  ],
-                ),
-              ),
-              onTap: () => userState.toggleUserCard(user.id),
-            ),
-          );
+          cursor -= activeUsers.length;
+
+          if (needDivider) {
+            if (cursor == 0) {
+              return _buildActiveInactiveDivider(context);
+            }
+            cursor -= 1;
+          }
+
+          final user = inactiveUsers[cursor];
+          return _buildUserTile(context, userState, user);
         },
       ),
 
@@ -461,7 +530,10 @@ class _UserManagementState extends State<UserManagement> {
         spacing: _fabSpacing,
         hasSelection: hasSelection,
         onPrimary: () => _handlePrimaryAction(context), // 추가/수정
-        onDelete: hasSelection ? () => _handleDelete(context) : null, // 삭제
+        onSecondary: hasSelection ? () => _handleToggleActive(context) : null, // 활성/비활성
+        secondaryLabel: toggleLabel,
+        secondaryIcon: toggleIcon,
+        secondaryIsDanger: selectedIsActive, // 비활성화(=내리는 동작)일 때만 경고 톤
       ),
     );
   }
@@ -494,7 +566,7 @@ class _HeaderBanner extends StatelessWidget {
           SizedBox(width: 10),
           Expanded(
             child: Text(
-              '계정을 추가/수정/삭제할 수 있습니다.\n선택 시 항목이 강조 표시됩니다.',
+              '계정을 추가/수정/활성/비활성할 수 있습니다.\n선택 시 항목이 강조 표시됩니다.',
               style: TextStyle(
                 color: _SvcColors.fg,
                 fontWeight: FontWeight.w700,
@@ -515,14 +587,22 @@ class _FabStack extends StatelessWidget {
     required this.spacing,
     required this.hasSelection,
     required this.onPrimary,
-    required this.onDelete,
+    required this.onSecondary,
+    required this.secondaryLabel,
+    required this.secondaryIcon,
+    required this.secondaryIsDanger,
   });
 
   final double bottomGap;
   final double spacing;
   final bool hasSelection;
+
   final VoidCallback onPrimary; // 선택 없음: 추가 / 선택 있음: 수정
-  final VoidCallback? onDelete; // 선택 있음에서만 사용
+  final VoidCallback? onSecondary; // 선택 있음: 활성/비활성
+
+  final String secondaryLabel;
+  final IconData secondaryIcon;
+  final bool secondaryIsDanger;
 
   @override
   Widget build(BuildContext context) {
@@ -536,11 +616,12 @@ class _FabStack extends StatelessWidget {
       textStyle: const TextStyle(fontWeight: FontWeight.w700),
     );
 
-    final ButtonStyle deleteStyle = ElevatedButton.styleFrom(
-      backgroundColor: Theme.of(context).colorScheme.error,
-      foregroundColor: Theme.of(context).colorScheme.onError,
+    final ButtonStyle secondaryStyle = ElevatedButton.styleFrom(
+      backgroundColor: secondaryIsDanger ? Theme.of(context).colorScheme.error : _SvcColors.base,
+      foregroundColor: secondaryIsDanger ? Theme.of(context).colorScheme.onError : _SvcColors.fg,
       elevation: 3,
-      shadowColor: Theme.of(context).colorScheme.error.withOpacity(0.35),
+      shadowColor:
+      (secondaryIsDanger ? Theme.of(context).colorScheme.error : _SvcColors.base).withOpacity(0.35),
       shape: const StadiumBorder(),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       textStyle: const TextStyle(fontWeight: FontWeight.w700),
@@ -551,7 +632,6 @@ class _FabStack extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         if (hasSelection) ...[
-          // index 0 → 수정
           _ElevatedPillButton.icon(
             icon: Icons.edit,
             label: '수정',
@@ -559,15 +639,13 @@ class _FabStack extends StatelessWidget {
             onPressed: onPrimary,
           ),
           SizedBox(height: spacing),
-          // index 1 → 삭제
           _ElevatedPillButton.icon(
-            icon: Icons.delete,
-            label: '삭제',
-            style: deleteStyle,
-            onPressed: onDelete!,
+            icon: secondaryIcon,
+            label: secondaryLabel,
+            style: secondaryStyle,
+            onPressed: onSecondary!,
           ),
         ] else ...[
-          // index 0 → 추가
           _ElevatedPillButton.icon(
             icon: Icons.add,
             label: '추가',
@@ -575,8 +653,6 @@ class _FabStack extends StatelessWidget {
             onPressed: onPrimary,
           ),
         ],
-
-        // ▼ 하단 여백: 버튼을 위로 띄우는 역할(요구사항)
         SizedBox(height: bottomGap),
       ],
     );
@@ -591,7 +667,6 @@ class _ElevatedPillButton extends StatelessWidget {
     Key? key,
   }) : super(key: key);
 
-  // const 사용 대신 factory로 생성(아이콘/라벨 동적 조합)
   factory _ElevatedPillButton.icon({
     required IconData icon,
     required String label,
@@ -622,8 +697,7 @@ class _ElevatedPillButton extends StatelessWidget {
 }
 
 class _FabLabel extends StatelessWidget {
-  const _FabLabel({required this.icon, required this.label, Key? key})
-      : super(key: key);
+  const _FabLabel({required this.icon, required this.label, Key? key}) : super(key: key);
   final IconData icon;
   final String label;
 

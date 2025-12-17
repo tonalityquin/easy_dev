@@ -16,6 +16,10 @@ class UserReadService {
     return _firestore.collection('user_accounts');
   }
 
+  CollectionReference<Map<String, dynamic>> _getUserShowCollectionRef() {
+    return _firestore.collection('user_accounts_show');
+  }
+
   CollectionReference<Map<String, dynamic>> _getTabletCollectionRef() {
     return _firestore.collection('tablet_accounts');
   }
@@ -32,6 +36,12 @@ class UserReadService {
     final idx = id.lastIndexOf('-');
     if (idx <= 0 || idx >= id.length - 1) return 'unknown';
     return id.substring(idx + 1);
+  }
+
+  String _showDocId(String division, String area) {
+    final d = division.trim().isEmpty ? 'unknownDivision' : division.trim();
+    final a = area.trim().isEmpty ? 'unknownArea' : area.trim();
+    return '$d-$a';
   }
 
   /*String _areaFromDoc(Map<String, dynamic>? data, String id) {
@@ -331,6 +341,41 @@ class UserReadService {
           'tags': ['users', 'refreshByArea', 'error'],
         }, level: 'error');
       } catch (_) {}
+      rethrow;
+    }
+  }
+
+  Future<List<UserModel>> refreshUsersByDivisionAreaFromShow(String division, String area) async {
+    final docId = _showDocId(division, area);
+    debugPrint('🔥 Firestore 호출 시작 (users_show) → $division / $area → docId=$docId');
+
+    try {
+      final usersRef = _getUserShowCollectionRef().doc(docId).collection('users');
+      final snap = await usersRef.get(); // ✅ 1회 get
+
+      final users = snap.docs
+          .map((doc) => UserModel.fromMap(doc.id, doc.data()))
+          .toList(growable: false);
+
+      // 캐시 키 정책을 기존과 동일하게(area 기준) 유지
+      await updateCacheWithUsers(area.trim(), users);
+      return users;
+    } on FirebaseException catch (e, st) {
+      try {
+        await DebugDatabaseLogger().log({
+          'op': 'users_show.refreshByDivisionArea',
+          'collection': 'user_accounts_show',
+          'docId': docId,
+          'subcollection': 'users',
+          'inputs': {'division': division, 'area': area},
+          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
+          'stack': st.toString(),
+          'tags': ['users_show', 'refreshByDivisionArea', 'error'],
+        }, level: 'error');
+      } catch (_) {}
+      rethrow;
+    } catch (e) {
+      debugPrint("refreshUsersByDivisionAreaFromShow 예외: $e");
       rethrow;
     }
   }

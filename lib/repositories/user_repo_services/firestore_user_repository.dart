@@ -1,4 +1,3 @@
-// lib/repositories/user_repo_services/firestore_user_repository.dart
 import '../../models/tablet_model.dart';
 import '../../models/user_model.dart';
 import 'user_read_service.dart';
@@ -22,8 +21,7 @@ class FirestoreUserRepository implements UserRepository {
   Future<UserModel?> getUserByHandle(String handle) => _readService.getUserByHandle(handle);
 
   @override
-  Future<TabletModel?> getTabletByHandle(String handle) =>
-      _readService.getTabletByHandle(handle);
+  Future<TabletModel?> getTabletByHandle(String handle) => _readService.getTabletByHandle(handle);
 
   @override
   Future<TabletModel?> getTabletByHandleAndAreaName(String handle, String areaName) =>
@@ -43,6 +41,10 @@ class FirestoreUserRepository implements UserRepository {
       _readService.refreshUsersBySelectedArea(selectedArea);
 
   @override
+  Future<List<UserModel>> refreshUsersByDivisionAreaFromShow(String division, String area) =>
+      _readService.refreshUsersByDivisionAreaFromShow(division, area);
+
+  @override
   Future<List<UserModel>> refreshTabletsBySelectedArea(String selectedArea) =>
       _readService.refreshTabletsBySelectedArea(selectedArea);
 
@@ -56,12 +58,10 @@ class FirestoreUserRepository implements UserRepository {
       _readService.updateCacheWithTablets(selectedArea, tablets);
 
   @override
-  Future<void> clearUsersCache(String selectedArea) =>
-      _readService.clearUserCache(selectedArea);
+  Future<void> clearUsersCache(String selectedArea) => _readService.clearUserCache(selectedArea);
 
   @override
-  Future<void> clearTabletsCache(String selectedArea) =>
-      _readService.clearTabletCache(selectedArea);
+  Future<void> clearTabletsCache(String selectedArea) => _readService.clearTabletCache(selectedArea);
 
   // ===== 부가 조회 =====
   @override
@@ -86,6 +86,13 @@ class FirestoreUserRepository implements UserRepository {
 
   @override
   Future<void> deleteTablets(List<String> ids) => _writeService.deleteTablets(ids);
+
+  /// ✅ 추가: 활성/비활성(soft disable)
+  /// - ✅ isActive는 user_accounts_show에서만 관리
+  /// - ✅ activeLimit/activeCount 기반 제한은 UserWriteService 트랜잭션에서 강제
+  @override
+  Future<void> setUserActiveStatus(String userId, {required bool isActive}) =>
+      _writeService.setUserActiveStatus(userId, isActive: isActive);
 
   // ===== 상태 업데이트: user_accounts =====
   @override

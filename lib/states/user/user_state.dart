@@ -1,4 +1,3 @@
-// lib/states/user/user_state.dart
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
@@ -12,7 +11,6 @@ import '../../models/user_model.dart';
 import '../../utils/tts/plate_tts_listener_service.dart';
 import '../../utils/tts/chat_tts_listener_service.dart';
 import '../area/area_state.dart';
-// ★ 추가: 로그아웃 시 전역 메시지 구독도 정리하기 위해 import
 import '../../services/latest_message_service.dart';
 import '../../repositories/commute_log_repository.dart';
 
@@ -61,12 +59,10 @@ class UserState extends ChangeNotifier {
   UserModel? get user => _user;
 
   /// 사람 계정 리스트(외부에 변경 불가)
-  UnmodifiableListView<UserModel> get users =>
-      UnmodifiableListView(_userList);
+  UnmodifiableListView<UserModel> get users => UnmodifiableListView(_userList);
 
   /// 태블릿 계정 리스트(외부에 변경 불가)
-  UnmodifiableListView<UserModel> get tabletUsers =>
-      UnmodifiableListView(_tabletList);
+  UnmodifiableListView<UserModel> get tabletUsers => UnmodifiableListView(_tabletList);
 
   /// 과거 코드 호환용
   UnmodifiableListView<UserModel> get tablets => tabletUsers;
@@ -91,10 +87,8 @@ class UserState extends ChangeNotifier {
   String get currentArea => _user?.currentArea ?? area;
 
   // 🔹 유저별 오늘 출근 여부 SharedPreferences 캐시 키
-  String? get _clockInCacheDateKey =>
-      _user == null ? null : 'clockInDate';
-  String? get _clockInCacheFlagKey =>
-      _user == null ? null : 'clockInHas';
+  String? get _clockInCacheDateKey => _user == null ? null : 'clockInDate';
+  String? get _clockInCacheFlagKey => _user == null ? null : 'clockInHas';
 
   UserState(this._repository, this._areaState) {
     _areaState.addListener(_fetchUsersByAreaWithCache);
@@ -102,13 +96,20 @@ class UserState extends ChangeNotifier {
 
   // ========== 목록 갱신(사람) ==========
 
+  /// ✅ 새로고침(사람): show 컬렉션 기반 1회 get으로 갱신
+  /// - division이 비어있으면 기존 user_accounts 쿼리로 fallback
   Future<void> refreshUsersBySelectedAreaAndCache() async {
     final selectedArea = _areaState.currentArea.trim();
+    final currentDivision = _areaState.currentDivision.trim();
+
     _isLoading = true;
     notifyListeners();
 
     try {
-      final data = await _repository.refreshUsersBySelectedArea(selectedArea);
+      final data = currentDivision.isNotEmpty
+          ? await _repository.refreshUsersByDivisionAreaFromShow(currentDivision, selectedArea)
+          : await _repository.refreshUsersBySelectedArea(selectedArea);
+
       _userList = List<UserModel>.of(data, growable: false);
       _selectedUserId = null;
       _prevAreaUsers = selectedArea;
@@ -128,8 +129,7 @@ class UserState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final data =
-      await _repository.refreshTabletsBySelectedArea(selectedArea);
+      final data = await _repository.refreshTabletsBySelectedArea(selectedArea);
       _tabletList = List<UserModel>.of(data, growable: false);
       _selectedUserId = null;
       _prevAreaTablets = selectedArea;
@@ -164,6 +164,50 @@ class UserState extends ChangeNotifier {
     notifyListeners();
   }
 
+  String? _tryParseActiveLimitError(Object e) {
+    final s = e.toString();
+    // StateError('ACTIVE_LIMIT_REACHED:$limit') -> "Bad state: ACTIVE_LIMIT_REACHED:50"
+    const key = 'ACTIVE_LIMIT_REACHED:';
+    final idx = s.indexOf(key);
+    if (idx < 0) return null;
+    return s.substring(idx + key.length).trim();
+  }
+
+  /// ✅ 추가: 선택된 사용자 계정 활성/비활성(삭제 대체)
+  /// ✅ 활성화 제한(activeLimit) 초과 시 사용자 메시지로 변환
+  Future<void> setSelectedUserActiveStatus(
+      bool isActive, {
+        void Function(String)? onError,
+      }) async {
+    final selectedId = _selectedUserId;
+    if (selectedId == null) {
+      onError?.call('선택된 계정이 없습니다.');
+      return;
+    }
+
+    try {
+      await _repository.setUserActiveStatus(selectedId, isActive: isActive);
+
+      // 로컬 리스트 반영 + 캐시 갱신(네트워크 재조회 없음)
+      final area = _areaState.currentArea.trim();
+      final idx = _userList.indexWhere((u) => u.id == selectedId);
+      if (idx >= 0) {
+        final updated = _userList[idx].copyWith(isActive: isActive);
+        _userList = _replaceItem(_userList, updated);
+        await _repository.updateUsersCache(area, _userList);
+      }
+
+      notifyListeners();
+    } catch (e) {
+      final limit = _tryParseActiveLimitError(e);
+      if (limit != null && isActive) {
+        onError?.call('활성화 제한에 도달했습니다. (최대 $limit)');
+        return;
+      }
+      onError?.call('계정 활성 상태 변경 실패: $e');
+    }
+  }
+
   // 🔥 오늘 출근 여부를 Firestore에서 "유저 × 날짜" 당 1번만 조회하는 메서드
   Future<void> ensureTodayClockInStatus() async {
     if (_user == null) return;
@@ -194,7 +238,6 @@ class UserState extends ChangeNotifier {
       }
     } catch (e, st) {
       debugPrint('ensureTodayClockInStatus prefs 캐시 읽기 실패: $e\n$st');
-      // 캐시 읽기 실패 시에는 그냥 Firestore 조회로 진행
     }
 
     // 3) 캐시가 없거나 날짜가 바뀐 경우에만 Firestore 조회
@@ -218,8 +261,7 @@ class UserState extends ChangeNotifier {
           await prefs.setString(dateKey, today);
           await prefs.setBool(flagKey, exists);
         } catch (e, st) {
-          debugPrint(
-              'ensureTodayClockInStatus prefs 캐시 쓰기 실패: $e\n$st');
+          debugPrint('ensureTodayClockInStatus prefs 캐시 쓰기 실패: $e\n$st');
         }
       }
 
@@ -268,25 +310,16 @@ class UserState extends ChangeNotifier {
     await saveCardToUserPhone(updatedUser);
   }
 
-  /// ✅ Firestore를 전혀 호출하지 않고 로그인 유저만 교체하는 로컬 전용 진입점
-  /// - 약식 로그인(local-only) 재로그인 등에 사용
   Future<void> updateLoginUserLocalOnly(UserModel updatedUser) async {
     _isTablet = false;
     _user = updatedUser;
 
-    // 로그인 시 메모리 캐시 리셋 (자동 로그인과 동일한 정책 유지)
     _hasClockInToday = false;
     _hasClockInTodayForDate = null;
 
     notifyListeners();
 
-    // SharedPreferences에는 저장(→ 이후 local-only 자동 로그인 가능)
     await saveCardToUserPhone(updatedUser);
-
-    // ⚠ Firestore 비용을 줄이기 위해
-    //   - _repository.updateUser(...)
-    //   - _repository.updateUsersCache(...)
-    //   는 호출하지 않습니다.
   }
 
   Future<void> updateLoginTablet(UserModel updatedUserAsTablet) async {
@@ -324,7 +357,6 @@ class UserState extends ChangeNotifier {
 
     await _repository.updateTablet(tablet);
 
-    // 로컬 리스트 교체 및 캐시 갱신(네트워크 호출 없음)
     final area = _areaState.currentArea.trim();
     final mappedAsUser = _mapTabletToUser(tablet, currentAreaOverride: area);
     _tabletList = _replaceItem(_tabletList, mappedAsUser);
@@ -368,24 +400,20 @@ class UserState extends ChangeNotifier {
         debugPrint('clearUserToPhone clock-in 캐시 제거 실패: $e\n$st');
       }
 
-      // ===== [변경] 전체 삭제 금지 → 선택 삭제로 변경 =====
       await _clearUserPrefsSelective(keepArea: true);
     } catch (e) {
       debugPrint('clearUserToPhone error: $e');
     } finally {
-      // TTS/메시지 리스너는 예외와 무관하게 정리
       try {
         PlateTtsListenerService.stop();
       } catch (_) {}
       try {
         ChatTtsListenerService.stop();
       } catch (_) {}
-      // ★ 전역 메시지 서비스 구독도 종료(로그아웃/세션 종료 시)
       try {
         await LatestMessageService.instance.stop();
       } catch (_) {}
 
-      // 🔹 출근 여부 캐시도 메모리에서 리셋
       _hasClockInToday = false;
       _hasClockInTodayForDate = null;
 
@@ -399,14 +427,14 @@ class UserState extends ChangeNotifier {
 
   Future<void> loadUsersOnly() async {
     _isLoading = true;
-    _resetPrevAreaGateUsers(); // ✅ 사람 게이트만 초기화
+    _resetPrevAreaGateUsers();
     notifyListeners();
     await _fetchUsersByAreaWithCache();
   }
 
   Future<void> loadTabletsOnly() async {
     _isLoading = true;
-    _resetPrevAreaGateTablets(); // ✅ 태블릿 게이트만 초기화
+    _resetPrevAreaGateTablets();
     notifyListeners();
     await _fetchTabletsByAreaWithCache();
   }
@@ -420,7 +448,6 @@ class UserState extends ChangeNotifier {
     try {
       await _repository.addUserCard(user.copyWith());
 
-      // 로컬 반영 + 캐시 갱신
       final area = _areaState.currentArea.trim();
       _userList = _insertOrReplace(_userList, user);
       await _repository.updateUsersCache(area, _userList);
@@ -438,7 +465,6 @@ class UserState extends ChangeNotifier {
     try {
       await _repository.addTabletCard(tablet.copyWith());
 
-      // TabletModel → UserModel로 변환 후 로컬 반영 + 캐시 갱신
       final area = _areaState.currentArea.trim();
       final asUser = _mapTabletToUser(tablet, currentAreaOverride: area);
       _tabletList = _insertOrReplace(_tabletList, asUser);
@@ -458,11 +484,8 @@ class UserState extends ChangeNotifier {
     try {
       await _repository.deleteUsers(ids);
 
-      // 로컬 반영 + 캐시 갱신
       final area = _areaState.currentArea.trim();
-      _userList = _userList
-          .where((u) => !ids.contains(u.id))
-          .toList(growable: false);
+      _userList = _userList.where((u) => !ids.contains(u.id)).toList(growable: false);
       await _repository.updateUsersCache(area, _userList);
 
       notifyListeners();
@@ -478,11 +501,8 @@ class UserState extends ChangeNotifier {
     try {
       await _repository.deleteTablets(ids);
 
-      // 로컬 반영 + 캐시 갱신
       final area = _areaState.currentArea.trim();
-      _tabletList = _tabletList
-          .where((u) => !ids.contains(u.id))
-          .toList(growable: false);
+      _tabletList = _tabletList.where((u) => !ids.contains(u.id)).toList(growable: false);
       await _repository.updateTabletsCache(area, _tabletList);
 
       notifyListeners();
@@ -509,7 +529,6 @@ class UserState extends ChangeNotifier {
     await prefs.setStringList('fixedHolidays', user.fixedHolidays);
     await prefs.setString('position', user.position ?? '');
 
-    // ✅ 전체 UserModel 스냅샷을 JSON으로 로컬 캐시 (local-only 자동 로그인을 위해)
     try {
       final map = user.toMap();
       final json = jsonEncode(map);
@@ -522,16 +541,12 @@ class UserState extends ChangeNotifier {
   Future<void> _saveTabletPrefsFromUser(UserModel asUser) async {
     final prefs = await SharedPreferences.getInstance();
     final handle = asUser.phone.trim().toLowerCase();
-    final areaName = (asUser.selectedArea ??
-        asUser.currentArea ??
-        asUser.areas.firstOrNull ??
-        '')
-        .trim();
+    final areaName =
+    (asUser.selectedArea ?? asUser.currentArea ?? asUser.areas.firstOrNull ?? '').trim();
 
     await prefs.setString('handle', handle);
     await prefs.setString('selectedArea', areaName);
-    await prefs.setString(
-        'englishSelectedAreaName', asUser.englishSelectedAreaName ?? areaName);
+    await prefs.setString('englishSelectedAreaName', asUser.englishSelectedAreaName ?? areaName);
     await prefs.setString('division', asUser.divisions.firstOrNull ?? '');
     await prefs.setString('role', asUser.role);
     await prefs.setString('startTime', _timeToString(asUser.startTime) ?? '');
@@ -542,9 +557,6 @@ class UserState extends ChangeNotifier {
 
   // ========== 자동 로그인 ==========
 
-  /// ✅ Firestore를 전혀 호출하지 않는 로컬 전용 자동 로그인
-  /// - 최초 로그인에서 Firestore로 받아온 UserModel 스냅샷(JSON)을 재사용
-  /// - 약식 로그인(simple) 모드에서 호출하도록 설계
   Future<void> loadUserToLogInLocalOnly() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -559,7 +571,6 @@ class UserState extends ChangeNotifier {
       final cachedJson = prefs.getString(_prefsKeyCachedUser);
 
       if (phone == null || selectedArea == null || cachedJson == null) {
-        // 캐시가 없으면 아무 것도 하지 않고 반환
         return;
       }
 
@@ -570,30 +581,25 @@ class UserState extends ChangeNotifier {
       _isTablet = false;
       final trimmedArea = selectedArea.trim();
 
-      // SharedPreferences에 보관된 값으로 오버라이드
       userData = userData.copyWith(
         currentArea: trimmedArea,
         role: role ?? userData.role,
         position: position ?? userData.position,
         startTime: _stringToTimeOfDay(startTimeStr),
         endTime: _stringToTimeOfDay(endTimeStr),
-        fixedHolidays:
-        fixedHolidays.isNotEmpty ? fixedHolidays : userData.fixedHolidays,
+        fixedHolidays: fixedHolidays.isNotEmpty ? fixedHolidays : userData.fixedHolidays,
         divisions: division != null ? [division] : userData.divisions,
         isSaved: true,
       );
 
-      // 로그인 시 메모리 캐시 리셋
       _hasClockInToday = false;
       _hasClockInTodayForDate = null;
 
       _user = userData;
       notifyListeners();
 
-      // ✅ Firestore를 사용하지 않고 현재 지역만 메모리에 반영
       _areaState.setAreaLocalOnly(trimmedArea, division: division);
 
-      // ✅ Plate/Chat TTS 시작 (동일하게 area 기반)
       PlateTtsListenerService.start(trimmedArea);
       ChatTtsListenerService.start(trimmedArea);
     } catch (e, st) {
@@ -622,8 +628,7 @@ class UserState extends ChangeNotifier {
       _isTablet = false;
       final trimmedArea = selectedArea.trim();
 
-      await _repository.updateLoadCurrentArea(
-          phone, trimmedArea, trimmedArea);
+      await _repository.updateLoadCurrentArea(phone, trimmedArea, trimmedArea);
 
       userData = userData.copyWith(
         currentArea: trimmedArea,
@@ -636,7 +641,6 @@ class UserState extends ChangeNotifier {
         isSaved: true,
       );
 
-      // 🔹 로그인 시 메모리 캐시 리셋
       _hasClockInToday = false;
       _hasClockInTodayForDate = null;
 
@@ -645,7 +649,6 @@ class UserState extends ChangeNotifier {
 
       await _areaState.initializeArea(trimmedArea);
 
-      // ✅ Plate/Chat TTS 시작(여기서 ChatTTS는 전역 서비스 캐시만 구독)
       PlateTtsListenerService.start(trimmedArea);
       ChatTtsListenerService.start(trimmedArea);
     } catch (e) {
@@ -667,26 +670,22 @@ class UserState extends ChangeNotifier {
 
       if (handle == null || selectedArea == null) return;
 
-      final tablet = await _repository.getTabletByHandleAndAreaName(
-          handle, selectedArea);
+      final tablet = await _repository.getTabletByHandleAndAreaName(handle, selectedArea);
       if (tablet == null) return;
 
       _isTablet = true;
 
-      var userData =
-      _mapTabletToUser(tablet, currentAreaOverride: selectedArea);
+      var userData = _mapTabletToUser(tablet, currentAreaOverride: selectedArea);
       userData = userData.copyWith(
         role: role ?? userData.role,
         position: position ?? userData.position,
         startTime: _stringToTimeOfDay(startTimeStr),
         endTime: _stringToTimeOfDay(endTimeStr),
-        fixedHolidays:
-        fixedHolidays.isNotEmpty ? fixedHolidays : userData.fixedHolidays,
+        fixedHolidays: fixedHolidays.isNotEmpty ? fixedHolidays : userData.fixedHolidays,
         divisions: division != null ? [division] : userData.divisions,
         isSaved: true,
       );
 
-      // 🔹 로그인 시 메모리 캐시 리셋
       _hasClockInToday = false;
       _hasClockInTodayForDate = null;
 
@@ -700,7 +699,6 @@ class UserState extends ChangeNotifier {
       );
       await _areaState.initializeArea(selectedArea);
 
-      // ✅ Plate/Chat TTS 시작(여기서 ChatTTS는 전역 서비스 캐시만 구독)
       PlateTtsListenerService.start(selectedArea);
       ChatTtsListenerService.start(selectedArea);
     } catch (e) {
@@ -734,8 +732,6 @@ class UserState extends ChangeNotifier {
 
     await _areaState.updateArea(newArea, isSyncing: true);
 
-    // ✅ 지역 변경 시에도 Plate/Chat TTS 모두 동일 타이밍으로 시작
-    //    (ChatTTS → LatestMessageService.start(newArea) 호출 포함)
     PlateTtsListenerService.start(newArea);
     ChatTtsListenerService.start(newArea);
   }
@@ -752,8 +748,7 @@ class UserState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final data =
-      await _repository.getUsersByAreaOnceWithCache(selectedArea);
+      final data = await _repository.getUsersByAreaOnceWithCache(selectedArea);
       _userList = List<UserModel>.of(data, growable: false);
       _selectedUserId = null;
     } catch (e) {
@@ -774,8 +769,7 @@ class UserState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final data =
-      await _repository.getTabletsByAreaOnceWithCache(selectedArea);
+      final data = await _repository.getTabletsByAreaOnceWithCache(selectedArea);
       _tabletList = List<UserModel>.of(data, growable: false);
       _selectedUserId = null;
     } catch (e) {
@@ -837,6 +831,7 @@ class UserState extends ChangeNotifier {
       role: t.role,
       selectedArea: currentAreaOverride ?? t.selectedArea,
       startTime: t.startTime,
+      isActive: true,
     );
   }
 
@@ -863,23 +858,16 @@ class UserState extends ChangeNotifier {
     super.dispose();
   }
 
-  // ===== [추가] 선택 삭제 유틸 =====
   Future<void> _clearUserPrefsSelective({bool keepArea = true}) async {
     final prefs = await SharedPreferences.getInstance();
 
-    // 1) 사용자 민감 키들만 제거
     for (final k in _userSensitiveKeys) {
       await prefs.remove(k);
     }
 
-    // 2) 영역/디바이스 키 보존
     if (!keepArea) {
-      // 필요 시 영역 키까지 지우고 싶을 때 호출
       await prefs.remove('selectedArea');
       await prefs.remove('englishSelectedAreaName');
     }
-
-    // 3) 캐시 계열 접두사는 그대로 둡니다(users_ / tablets_ / cached_)
-    //    → 여기선 아무 것도 하지 않음(보존).
   }
 }

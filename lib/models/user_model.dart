@@ -18,9 +18,11 @@ class UserModel {
   final String? position;
   final String role;
   final String? selectedArea;
-
   final TimeOfDay? startTime;
 
+  /// ✅ 추가: 계정 활성 상태(soft delete 대체)
+  /// - Firestore에 isActive가 없던 기존 데이터는 기본 true로 간주
+  final bool isActive;
 
   const UserModel({
     required this.id,
@@ -42,6 +44,8 @@ class UserModel {
     this.selectedArea,
     this.startTime,
 
+    /// ✅ 기존 생성 코드 영향 최소화를 위해 default true
+    this.isActive = true,
   });
 
   UserModel copyWith({
@@ -63,7 +67,7 @@ class UserModel {
     String? role,
     String? selectedArea,
     TimeOfDay? startTime,
-
+    bool? isActive,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -84,6 +88,7 @@ class UserModel {
       role: role ?? this.role,
       selectedArea: selectedArea ?? this.selectedArea,
       startTime: startTime ?? this.startTime,
+      isActive: isActive ?? this.isActive,
     );
   }
 
@@ -107,6 +112,9 @@ class UserModel {
       role: data['role'] ?? '',
       selectedArea: data['selectedArea'],
       startTime: _parseTime(data['startTime']),
+
+      /// ✅ 추가: 기존 문서에 값이 없으면 true
+      isActive: data['isActive'] ?? true,
     );
   }
 
@@ -129,6 +137,9 @@ class UserModel {
       'role': role,
       'selectedArea': selectedArea,
       'startTime': _timeToMap(startTime),
+
+      /// ✅ 추가
+      'isActive': isActive,
     };
   }
 
@@ -152,6 +163,9 @@ class UserModel {
       role: json['role'] ?? '',
       selectedArea: json['selectedArea'],
       startTime: _parseTime(json['startTime']),
+
+      /// ✅ 추가
+      isActive: json['isActive'] ?? true,
     );
   }
 
@@ -175,6 +189,9 @@ class UserModel {
       'role': role,
       'selectedArea': selectedArea,
       'startTime': _timeToMap(startTime),
+
+      /// ✅ 추가
+      'isActive': isActive,
     };
   }
 
