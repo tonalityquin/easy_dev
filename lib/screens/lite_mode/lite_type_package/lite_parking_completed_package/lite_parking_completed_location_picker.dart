@@ -1,4 +1,3 @@
-// lib/screens/type_package/parking_completed_package/parking_completed_location_picker.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -35,10 +34,10 @@ class _LiteParkingCompletedLocationPickerState extends State<LiteParkingComplete
 
   /// ▶ 단일 displayName만 갱신
   Future<void> _refreshOne(
-    LocationState state,
-    LocationRepository repo,
-    String displayName,
-  ) async {
+      LocationState state,
+      LocationRepository repo,
+      String displayName,
+      ) async {
     final now = DateTime.now();
     final last = _lastItemRefreshedAt[displayName];
     if (last != null && now.difference(last) < _itemCooldown) {
@@ -142,7 +141,8 @@ class _LiteParkingCompletedLocationPickerState extends State<LiteParkingComplete
                                     const Icon(Icons.chevron_right),
                                   ],
                                 ),
-                                onTap: () => widget.onLocationSelected(displayName),
+                                // ✅ 요구사항: 주차 구역(자식) 탭 시 아무 반응 없음
+                                onTap: null,
                               );
                             }),
                           ],
@@ -229,7 +229,8 @@ class _LiteParkingCompletedLocationPickerState extends State<LiteParkingComplete
                             const Icon(Icons.chevron_right),
                           ],
                         ),
-                        onTap: () => widget.onLocationSelected(displayName),
+                        // ✅ 요구사항: 주차 구역(단일) 탭 시 아무 반응 없음
+                        onTap: null,
                       );
                     }),
 
@@ -248,7 +249,7 @@ class _LiteParkingCompletedLocationPickerState extends State<LiteParkingComplete
                       final children = composites.where((l) => l.parent == parent).toList();
                       final totalCapacity = children.fold(
                         0,
-                        (sum, l) => sum + l.capacity,
+                            (sum, l) => sum + l.capacity,
                       );
 
                       return ListTile(
