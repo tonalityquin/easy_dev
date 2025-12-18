@@ -93,8 +93,7 @@ class LocationState extends ChangeNotifier {
         final jsonData = json.encode(data.map((e) => e.toCacheMap()).toList());
         await prefs.setString('cached_locations_$currentArea', jsonData);
 
-        final totalCapacity =
-        data.fold<int>(0, (sum, loc) => sum + loc.capacity);
+        final totalCapacity = data.fold<int>(0, (sum, loc) => sum + loc.capacity);
         await prefs.setInt('total_capacity_$currentArea', totalCapacity);
 
         debugPrint('✅ Firestore 데이터 캐시에 갱신됨 (area: $currentArea)');
@@ -135,14 +134,12 @@ class LocationState extends ChangeNotifier {
     if (displayNames.isEmpty) return;
 
     final uniq = displayNames.toSet().toList();
-    debugPrint(
-        '🎯 부분 갱신 요청(bypass cache): ${uniq.length}개 → 예: ${uniq.take(5).toList()}');
+    debugPrint('🎯 부분 갱신 요청: ${uniq.length}개 → 예: ${uniq.take(5).toList()}');
 
-    // 🔵 캐시 우회: 개별 새로고침은 항상 실시간 count() 강제
+    // ✅ locationCounts 캐시 제거 정책: 항상 count() 기반 집계 호출
     final counts = await repo.getPlateCountsForLocations(
       locationNames: uniq,
       area: _areaState.currentArea,
-      bypassCache: true, // ⬅⬅⬅ 핵심 변경
     );
 
     updatePlateCounts(counts);

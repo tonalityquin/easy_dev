@@ -14,11 +14,11 @@ abstract class LocationRepository {
       );
 
   /// 기본: 동일 area로 묶어 집계
-  /// - bypassCache=true일 때는 캐시를 무시하고 Firestore count()를 강제 수행
+  /// - locationCounts 캐시(areas/{area}/locationCounts/{type})는 더 이상 사용하지 않음
+  /// - 항상 Firestore aggregation count() 기반으로 집계 결과를 반환
   Future<Map<String, int>> getPlateCountsForLocations({
     required List<String> locationNames,
     required String area,
     String type = 'parking_completed',
-    bool bypassCache = false, // ⬅⬅⬅ 인터페이스에도 기본값 명시
   });
 }
