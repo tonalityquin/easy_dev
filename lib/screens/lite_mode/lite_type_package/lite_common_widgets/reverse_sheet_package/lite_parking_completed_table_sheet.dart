@@ -382,6 +382,7 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
   Timer? _refreshCooldownTicker;
 
   bool get _isRefreshBlocked => _realtimeRepo.isRefreshBlocked(widget.area);
+
   int get _refreshRemainingSec => _realtimeRepo.refreshRemainingSec(widget.area);
 
   void _ensureCooldownTicker() {
@@ -408,9 +409,7 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
   bool get wantKeepAlive => true;
 
   // ─────────────────────────────────────────────────────────
-  // ✅ [핵심] LocationState 갱신을 post-frame(다음 프레임)으로 이연
-  // - build 중 notifyListeners()를 호출하면 Provider가 setState/markNeedsBuild 오류를 발생시킬 수 있음
-  // - 동일 프레임에서 여러 번 들어오면 마지막 값만 1회 적용(coalesce)
+  // ✅ LocationState 갱신을 post-frame(다음 프레임)으로 이연
   // ─────────────────────────────────────────────────────────
   Map<String, int>? _pendingPlateCountsByDisplayName;
   bool _plateCountsApplyScheduled = false;
@@ -453,8 +452,6 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
 
   // ─────────────────────────────────────────────────────────
   // ✅ rows(location 기반) → LocationState.locations의 plateCount 동기화
-  // - row.location이 leaf이거나 "parent - leaf" 형태인 케이스 모두 대응
-  // - LocationState가 아직 로딩 중(빈 리스트)일 수 있으므로 짧게 재시도
   // ─────────────────────────────────────────────────────────
   void _syncLocationPickerCountsFromRows(
       List<_RowVM> rows, {
@@ -476,8 +473,8 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
     }
 
     // 1) rows에서 location 집계
-    final rawCounts = <String, int>{}; // r.location 그대로(=displayName일 수도 있음)
-    final leafCounts = <String, int>{}; // leaf만 추출하여 집계
+    final rawCounts = <String, int>{};
+    final leafCounts = <String, int>{};
 
     for (final r in rows) {
       final raw = r.location.trim();
@@ -500,11 +497,10 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
 
       final displayName = loc.type == 'composite' ? (parent.isEmpty ? leaf : '$parent - $leaf') : leaf;
 
-      // 우선순위: rows가 displayName으로 들어왔다면 rawCounts로 정확 매칭, 아니면 leafCounts로 매칭
       countsByDisplayName[displayName] = rawCounts[displayName] ?? leafCounts[leaf] ?? 0;
     }
 
-    // ✅ 3) build-phase notifyListeners 방지: post-frame으로 이연
+    // 3) 상태 반영 (post-frame)
     _scheduleApplyPlateCountsAfterFrame(countsByDisplayName);
   }
 
@@ -533,7 +529,7 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
       _applyFilterAndSort();
       _loading = false;
 
-      // ✅ 캐시 rows도 LocationPicker에 반영 (post-frame 적용)
+      // ✅ 캐시 rows도 LocationPicker에 반영
       _syncLocationPickerCountsFromRows(_allRows);
 
       _ensureCooldownTicker();
@@ -607,7 +603,6 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
   }
 
   /// ✅ 실시간 서버 조회는 "새로고침" 버튼에서만 수행
-  /// ✅ 새로고침 1회 수행 후 30초 쿨다운(시트를 닫아도 area별로 유지)
   Future<void> _refreshRealtimeFromServer() async {
     if (!_isRealtime) return;
 
@@ -630,7 +625,7 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
     try {
       final rows = await _realtimeRepo.fetchFromServerAndCache(widget.area);
 
-      // ✅ [핵심] 서버 rows로 LocationPicker 카운트 동기화 (post-frame 적용)
+      // ✅ 서버 rows로 LocationPicker 카운트 동기화
       _syncLocationPickerCountsFromRows(rows);
 
       if (!mounted) return;

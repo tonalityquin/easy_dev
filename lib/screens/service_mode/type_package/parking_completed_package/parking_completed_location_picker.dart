@@ -148,7 +148,7 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
 
                     const Divider(),
 
-                    // 복합 주차 구역 (부모)
+                    // 복합 주차 구역 (부모) — ✅ 총 입차(합계) + 총 공간(합계) 표시
                     const Text(
                       '복합 주차 구역',
                       style: TextStyle(
@@ -159,16 +159,22 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                     const SizedBox(height: 8),
                     ...parentGroups.map((parent) {
                       final children = composites.where((l) => l.parent == parent).toList();
+
                       final totalCapacity = children.fold(
                         0,
                             (sum, l) => sum + l.capacity,
+                      );
+
+                      final totalPlateCount = children.fold(
+                        0,
+                            (sum, l) => sum + l.plateCount,
                       );
 
                       return ListTile(
                         key: ValueKey('parent:$parent'),
                         leading: const Icon(Icons.layers, color: _Palette.base),
                         title: Text(parent),
-                        subtitle: Text('총 공간 $totalCapacity'),
+                        subtitle: Text('총 입차 $totalPlateCount / 총 공간 $totalCapacity'),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => setState(() => selectedParent = parent),
                       );
