@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../states/location/location_state.dart';
-import '../../../../repositories/location_repo_services/location_repository.dart';
-import '../../../../utils/snackbar_helper.dart';
 
 /// Deep Blue 팔레트(서비스 카드와 동일 계열)
 class _Palette {
@@ -27,48 +25,8 @@ class ParkingCompletedLocationPicker extends StatefulWidget {
 class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocationPicker> {
   String? selectedParent;
 
-  // ▶ 항목별 새로고침 상태/쿨다운
-  final Set<String> _refreshingNames = {};
-  final Map<String, DateTime> _lastItemRefreshedAt = {};
-  final Duration _itemCooldown = const Duration(seconds: 20);
-
-  /// ▶ 단일 displayName만 갱신
-  Future<void> _refreshOne(
-      LocationState state,
-      LocationRepository repo,
-      String displayName,
-      ) async {
-    final now = DateTime.now();
-    final last = _lastItemRefreshedAt[displayName];
-    if (last != null && now.difference(last) < _itemCooldown) {
-      final remain = _itemCooldown - now.difference(last);
-      debugPrint('🧊 [item] "$displayName" 쿨다운 ${remain.inSeconds}s 남음');
-      showSelectedSnackbar(context, '${remain.inSeconds}초 후 다시 시도해주세요');
-      return;
-    }
-
-    if (_refreshingNames.contains(displayName)) return;
-    setState(() => _refreshingNames.add(displayName));
-
-    try {
-      debugPrint('🎯 [item] 갱신 요청 → "$displayName"');
-      await state.updatePlateCountsForNames(repo, [displayName]);
-      _lastItemRefreshedAt[displayName] = DateTime.now();
-      debugPrint('✅ [item] 갱신 완료 → "$displayName"');
-    } catch (e) {
-      debugPrint('💥 [item] 갱신 실패("$displayName"): $e');
-      if (mounted) showFailedSnackbar(context, '갱신 중 오류가 발생했습니다');
-    } finally {
-      if (mounted) {
-        setState(() => _refreshingNames.remove(displayName));
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final locationRepo = context.read<LocationRepository>();
-
     return Scaffold(
       backgroundColor: Colors.white,
       body: Consumer<LocationState>(
@@ -105,7 +63,6 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                             const Divider(),
                             ...children.map((loc) {
                               final displayName = '${loc.parent} - ${loc.locationName}';
-                              final busy = _refreshingNames.contains(displayName);
 
                               return ListTile(
                                 key: ValueKey(displayName),
@@ -117,32 +74,8 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                                 subtitle: Text(
                                   '입차 ${loc.plateCount} / 공간 ${loc.capacity}',
                                 ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    if (busy)
-                                      const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    else
-                                      IconButton(
-                                        icon: const Icon(Icons.refresh),
-                                        tooltip: '이 항목만 새로고침',
-                                        onPressed: () => _refreshOne(
-                                          locationState,
-                                          locationRepo,
-                                          displayName,
-                                        ),
-                                      ),
-                                    const Icon(Icons.chevron_right),
-                                  ],
-                                ),
-                                // ✅ 요구사항: 주차 구역(자식) 탭 시 아무 반응 없음
-                                onTap: null,
+                                trailing: const Icon(Icons.chevron_right),
+                                onTap: () => widget.onLocationSelected(displayName),
                               );
                             }),
                           ],
@@ -180,7 +113,11 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                 }
 
                 // ▶ 루트(단일/부모 그룹 리스트)
-                final parentGroups = composites.map((loc) => loc.parent).whereType<String>().toSet().toList();
+                final parentGroups = composites
+                    .map((loc) => loc.parent)
+                    .whereType<String>()
+                    .toSet()
+                    .toList();
 
                 return ListView(
                   padding: const EdgeInsets.all(16),
@@ -196,7 +133,6 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                     const SizedBox(height: 8),
                     ...singles.map((loc) {
                       final displayName = loc.locationName;
-                      final busy = _refreshingNames.contains(displayName);
 
                       return ListTile(
                         key: ValueKey(displayName),
@@ -205,38 +141,14 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                         subtitle: Text(
                           '입차 ${loc.plateCount} / 공간 ${loc.capacity}',
                         ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (busy)
-                              const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            else
-                              IconButton(
-                                icon: const Icon(Icons.refresh),
-                                tooltip: '이 항목만 새로고침',
-                                onPressed: () => _refreshOne(
-                                  locationState,
-                                  locationRepo,
-                                  displayName,
-                                ),
-                              ),
-                            const Icon(Icons.chevron_right),
-                          ],
-                        ),
-                        // ✅ 요구사항: 주차 구역(단일) 탭 시 아무 반응 없음
-                        onTap: null,
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap: () => widget.onLocationSelected(displayName),
                       );
                     }),
 
                     const Divider(),
 
-                    // 복합 주차 구역 (부모) — 총 입차 수 표시 제거(총 공간만 표시)
+                    // 복합 주차 구역 (부모)
                     const Text(
                       '복합 주차 구역',
                       style: TextStyle(
@@ -257,7 +169,6 @@ class _ParkingCompletedLocationPickerState extends State<ParkingCompletedLocatio
                         leading: const Icon(Icons.layers, color: _Palette.base),
                         title: Text(parent),
                         subtitle: Text('총 공간 $totalCapacity'),
-                        // ⛔️ 새로고침 버튼 없음 — 진입만 가능
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => setState(() => selectedParent = parent),
                       );
