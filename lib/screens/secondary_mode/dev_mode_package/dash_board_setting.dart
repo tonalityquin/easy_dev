@@ -11,11 +11,17 @@
 //
 // ✅ 변경: "업로드 스프레드시트" / "업무 종료 보고 스프레드시트" 섹션 및 관련 로직 삭제
 // 동작적으로는 기존과 동일하며, 레이아웃/스타일은 유지됩니다.
+//
+// ✅ 추가 변경(요청 반영):
+// - 데이터 새로고침 시 monthly_plate_status 컬렉션에서 "현재 지역(area) 문서가 하나라도 존재하는지" 확인
+// - SharedPreferences에는 지역별로 저장하지 않고, 단일 boolean 키(has_monthly_parking)만 저장
+// - 문서가 없으면 false로 갱신됨(조회 성공 기준). 조회 실패 시에는 기존 값 유지(덮어쓰기 방지).
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ 추가: 월주차 문서 존재 여부 확인
 
 import '../../../../states/area/area_state.dart';
 import '../../../../../states/location/location_state.dart';
@@ -45,6 +51,9 @@ class DashboardSetting extends StatefulWidget {
 
 class _DashboardSettingState extends State<DashboardSetting> {
   static const _prefsLockedKey = 'dashboard_setting_locked';
+
+  // ✅ 지역별이 아닌 "월주차 문서 존재 여부" 단일 boolean 키
+  static const _prefsHasMonthlyKey = 'has_monthly_parking';
 
   TtsUserFilters _filters = TtsUserFilters.defaults();
   bool _loading = true;
@@ -173,6 +182,42 @@ class _DashboardSettingState extends State<DashboardSetting> {
     }
   }
 
+  /// ✅ 월주차 문서 존재 여부를 확인하고, SharedPreferences에 단일 bool로 저장
+  ///
+  /// - 기준: monthly_plate_status where('area' == currentArea) limit(1)
+  /// - 결과:
+  ///   - 조회 성공 + 문서 존재 -> true 저장
+  ///   - 조회 성공 + 문서 없음 -> false 저장 (요청사항)
+  ///   - 조회 실패 -> null 반환, SharedPreferences 값은 "기존 값 유지"(덮어쓰기 방지)
+  Future<bool?> _syncHasMonthlyParkingFlag() async {
+    final area = context.read<AreaState>().currentArea.trim();
+
+    // 지역이 비어있으면 "없음"으로 저장(정책: 단일 값 유지 목적)
+    if (area.isEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_prefsHasMonthlyKey, false);
+      return false;
+    }
+
+    try {
+      final qs = await FirebaseFirestore.instance
+          .collection('monthly_plate_status')
+          .where('area', isEqualTo: area)
+          .limit(1)
+          .get();
+
+      final exists = qs.docs.isNotEmpty;
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_prefsHasMonthlyKey, exists);
+
+      return exists;
+    } catch (e) {
+      debugPrint('월주차 존재 여부 확인 실패: $e');
+      return null;
+    }
+  }
+
   // 주차 구역/정산 수동 새로고침
   Future<void> _manualRefreshAll() async {
     if (_refreshing) return;
@@ -183,6 +228,11 @@ class _DashboardSettingState extends State<DashboardSetting> {
 
       await locationState.manualLocationRefresh();
       await billState.manualBillRefresh();
+
+      // ✅ 추가: 새로고침 시점에 월주차 문서 존재 여부를 SharedPreferences 단일 bool로 갱신
+      // - 문서가 없으면 false로 저장됨(조회 성공 기준)
+      // - 조회 실패 시에는 기존 값 유지(null 반환)
+      await _syncHasMonthlyParkingFlag();
 
       if (mounted) {
         setState(() => _lastRefreshAt = DateTime.now());
@@ -270,9 +320,8 @@ class _DashboardSettingState extends State<DashboardSetting> {
         title: 'TTS 알림 설정',
         icon: Icons.record_voice_over_rounded,
         subtitle: '스위치를 변경하면 즉시 저장되고 FG 서비스에 적용됩니다.',
-        trailing: _applying
-            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-            : null,
+        trailing:
+        _applying ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : null,
         child: Column(
           children: [
             _SwitchTile(

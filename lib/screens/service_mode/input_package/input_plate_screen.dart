@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // ✅ 추가: has_monthly_parking 읽기
 
 // 기존 프로젝트 상태/섹션/위젯 import 그대로 유지
 import '../../../states/bill/bill_state.dart';
@@ -43,6 +44,13 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   // ⬇️ 화면 식별 태그(FAQ/에러 리포트 연계용)
   static const String screenTag = 'plate input';
 
+  // ✅ DashboardSetting에서 저장한 단일 플래그 키
+  static const String _prefsHasMonthlyKey = 'has_monthly_parking';
+
+  // ✅ 현재 기기 로컬 플래그(정기 선택 가능 여부)
+  bool _hasMonthlyParking = false;
+  bool _hasMonthlyLoaded = false;
+
   List<String> selectedStatusNames = [];
   Key statusSectionKey = UniqueKey();
 
@@ -68,10 +76,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   // ─────────────────────────────
   // ✅ 도커 내부 페이지(정산 유형 / 추가 상태·메모) 스와이프 전환
-  //  - 버튼/탭 선택 제거
-  //  - 스와이프만으로 전환
-  //  - 헤더 우측에 페이지 인디케이터(●○) 표시
-  //  - 완전 닫힘 상태에서는 가로 스와이프 완전 비활성화
   // ─────────────────────────────
   static const int _dockPageBill = 0;
   static const int _dockPageMemo = 1;
@@ -80,6 +84,34 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   bool _dockSlideFromRight = true; // AnimatedSwitcher 슬라이드 방향
 
   String get _pageIndicatorText => (_dockPageIndex == _dockPageBill) ? '●○' : '○●';
+
+  // ✅ SharedPreferences에서 has_monthly_parking 로드
+  Future<void> _loadHasMonthlyParkingFlag() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final v = prefs.getBool(_prefsHasMonthlyKey) ?? false;
+
+      if (!mounted) return;
+      if (!_hasMonthlyLoaded || _hasMonthlyParking != v) {
+        setState(() {
+          _hasMonthlyParking = v;
+          _hasMonthlyLoaded = true;
+        });
+
+        // (선택) 이미 정기가 선택된 상태인데 false로 바뀐 경우를 강제로 되돌릴지 여부는 정책 문제입니다.
+        // 현재는 "기존 선택을 강제 변경하지 않고", 앞으로의 '정기 선택'만 막습니다.
+      }
+    } catch (e) {
+      debugPrint('has_monthly_parking 로드 실패: $e');
+      if (!mounted) return;
+      if (!_hasMonthlyLoaded) {
+        setState(() {
+          _hasMonthlyParking = false;
+          _hasMonthlyLoaded = true;
+        });
+      }
+    }
+  }
 
   void _jumpSheetScrollToTop() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -187,6 +219,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   void initState() {
     super.initState();
 
+    // ✅ 화면 진입 시 로컬 플래그 로드
+    _loadHasMonthlyParkingFlag();
+
     // ⬇️ 시트 사이즈 변화에 따라 _sheetOpen 동기화 (드래그로 여닫을 때도 반영)
     _sheetController.addListener(() {
       try {
@@ -277,6 +312,13 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // ✅ 다른 화면에서 refresh 후 돌아오는 경우를 대비해 재로드(비용 매우 낮음)
+    _loadHasMonthlyParkingFlag();
+  }
+
+  @override
   void dispose() {
     // ✅ 컨트롤러 정리
     _sheetController.dispose();
@@ -349,9 +391,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       if (!mounted) return;
       setState(() => _monthlyDocExists = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('번호판 입력을 완료한 후 정기 정보를 불러올 수 있습니다.')),
-      );
-      return;
+          const SnackBar(content: Text('번호판 입력을 완료한 후 정기 정보를 불러올 수 있습니다.')),
+    );
+    return;
     }
 
     final plateNumber = controller.buildPlateNumber();
@@ -361,12 +403,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     if (!mounted) return;
 
     if (data == null) {
-      // 문서 없음 → 기존 입력은 건드리지 않고 안내만
-      setState(() => _monthlyDocExists = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('해당 번호판의 정기(월정기) 등록 정보가 없습니다.')),
-      );
-      return;
+    // 문서 없음 → 기존 입력은 건드리지 않고 안내만
+    setState(() => _monthlyDocExists = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('해당 번호판의 정기(월정기) 등록 정보가 없습니다.')),
+    );
+    return;
     }
 
     final fetchedStatus = (data['customStatus'] as String?)?.trim();
@@ -375,30 +417,30 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     final fetchedCountType = (data['countType'] as String?)?.trim();
 
     setState(() {
-      _monthlyDocExists = true;
+    _monthlyDocExists = true;
 
-      // 메모/상태 출력
-      controller.fetchedCustomStatus = fetchedStatus;
-      controller.customStatusController.text = fetchedStatus ?? '';
-      selectedStatusNames = fetchedList;
-      statusSectionKey = UniqueKey();
+    // 메모/상태 출력
+    controller.fetchedCustomStatus = fetchedStatus;
+    controller.customStatusController.text = fetchedStatus ?? '';
+    selectedStatusNames = fetchedList;
+    statusSectionKey = UniqueKey();
 
-      // 정기 출력(countType)
-      if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
-        controller.countTypeController.text = fetchedCountType;
-        controller.selectedBill = fetchedCountType;
-      }
-      // selectedBillType은 이미 '정기'로 바뀐 상태이므로 여기서는 재설정하지 않음
+    // 정기 출력(countType)
+    if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
+    controller.countTypeController.text = fetchedCountType;
+    controller.selectedBill = fetchedCountType;
+    }
+    // selectedBillType은 이미 '정기'로 바뀐 상태이므로 여기서는 재설정하지 않음
     });
 
     // 사용자가 즉시 보도록 시트를 열어줌(출력 체감 강화)
     if (!_sheetOpen) {
-      await _animateSheet(open: true); // ✅ 열 때마다 정산 유형 페이지로 리셋됨
+    await _animateSheet(open: true); // ✅ 열 때마다 정산 유형 페이지로 리셋됨
     }
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('정기(월정기) 정보를 불러왔습니다.')),
+    const SnackBar(content: Text('정기(월정기) 정보를 불러왔습니다.')),
     );
   }
 
@@ -502,14 +544,14 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
             ),
             child: _monthlyApplying
                 ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+            )
                 : const Text(
-                    '반영',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
+              '반영',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
           ),
         ),
         if (!_monthlyDocExists) ...[
@@ -529,42 +571,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   // 허용 한글 가운데 글자(국내 번호판)
   static const List<String> _allowedKoreanMids = [
-    '가',
-    '나',
-    '다',
-    '라',
-    '마',
-    '거',
-    '너',
-    '더',
-    '러',
-    '머',
-    '버',
-    '서',
-    '어',
-    '저',
-    '고',
-    '노',
-    '도',
-    '로',
-    '모',
-    '보',
-    '소',
-    '오',
-    '조',
-    '구',
-    '누',
-    '두',
-    '루',
-    '무',
-    '부',
-    '수',
-    '우',
-    '주',
-    '하',
-    '허',
-    '호',
-    '배'
+    '가','나','다','라','마','거','너','더','러','머','버','서','어','저','고','노','도','로','모','보','소','오','조','구','누','두','루','무','부','수','우','주','하','허','호','배'
   ];
 
   // 흔한 OCR 혼동 치환
@@ -853,11 +860,11 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   Widget _buildScreenTag(BuildContext context) {
     final base = Theme.of(context).textTheme.labelSmall;
     final style = (base ??
-            const TextStyle(
-              fontSize: 11,
-              color: Colors.black54,
-              fontWeight: FontWeight.w600,
-            ))
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        ))
         .copyWith(
       color: Colors.black54,
       fontWeight: FontWeight.w600,
@@ -891,53 +898,84 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   Widget _buildDockPagedBody({required bool canSwipe}) {
     final Widget page = (_dockPageIndex == _dockPageBill)
         ? Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              InputBillSection(
-                selectedBill: controller.selectedBill,
-                onChanged: (value) => setState(() => controller.selectedBill = value),
-                selectedBillType: controller.selectedBillType,
-                onTypeChanged: (newType) {
-                  setState(() {
-                    controller.selectedBillType = newType;
-                    if (newType == '정기') {
-                      _monthlyDocExists = false;
-                    }
-                  });
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // ✅ has_monthly_parking이 false면 정기 선택을 막는 안내(선택)
+        if (_hasMonthlyLoaded && !_hasMonthlyParking)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF8E1),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFFFFECB3)),
+              ),
+              child: const Text(
+                  '정기 주차가 제한된 근무지입니다.',
+                style: TextStyle(fontSize: 12, height: 1.25),
+              ),
+            ),
+          ),
 
-                  if (newType == '정기') {
-                    _handleMonthlySelectedFetchAndApply();
-                  }
-                },
-                countTypeController: controller.countTypeController,
-              ),
-            ],
-          )
+        InputBillSection(
+          selectedBill: controller.selectedBill,
+          onChanged: (value) => setState(() => controller.selectedBill = value),
+          selectedBillType: controller.selectedBillType,
+
+          // ✅ 여기서 '정기' 선택 가능 여부를 has_monthly_parking로 게이팅
+          onTypeChanged: (newType) {
+            // 1) 정기 선택 시도 + 월주차 플래그 false -> 차단
+            if (newType == '정기' && _hasMonthlyLoaded && !_hasMonthlyParking) {
+              // 상태 변경 없음 -> UI는 기존 선택으로 유지됨
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('현재 지역에서는 정기(월주차) 기능을 사용할 수 없습니다.')),
+              );
+              return;
+            }
+
+            // 2) 정상 선택 처리(기존 로직 유지)
+            setState(() {
+              controller.selectedBillType = newType;
+              if (newType == '정기') {
+                _monthlyDocExists = false;
+              }
+            });
+
+            if (newType == '정기') {
+              _handleMonthlySelectedFetchAndApply();
+            }
+          },
+
+          countTypeController: controller.countTypeController,
+        ),
+      ],
+    )
         : Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              InputCustomStatusSection(
-                controller: controller,
-                fetchedCustomStatus: controller.fetchedCustomStatus,
-                selectedStatusNames: selectedStatusNames,
-                statusSectionKey: statusSectionKey,
-                onDeleted: () {
-                  setState(() {
-                    controller.fetchedCustomStatus = null;
-                    controller.customStatusController.clear();
-                  });
-                },
-                onStatusCleared: () {
-                  setState(() {
-                    selectedStatusNames = [];
-                    statusSectionKey = UniqueKey();
-                  });
-                },
-              ),
-              _buildMonthlyApplyButton(),
-              const SizedBox(height: 8),
-            ],
-          );
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        InputCustomStatusSection(
+          controller: controller,
+          fetchedCustomStatus: controller.fetchedCustomStatus,
+          selectedStatusNames: selectedStatusNames,
+          statusSectionKey: statusSectionKey,
+          onDeleted: () {
+            setState(() {
+              controller.fetchedCustomStatus = null;
+              controller.customStatusController.clear();
+            });
+          },
+          onStatusCleared: () {
+            setState(() {
+              selectedStatusNames = [];
+              statusSectionKey = UniqueKey();
+            });
+          },
+        ),
+        _buildMonthlyApplyButton(),
+        const SizedBox(height: 8),
+      ],
+    );
 
     final content = AnimatedSwitcher(
       duration: const Duration(milliseconds: 220),
@@ -1077,8 +1115,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                   ),
                 ),
 
-                // ✅ 카드 영역: 내부 세로 스크롤 + 헤더 고정 + 닫힘(_sheetClosed)에서는 스크롤 완전 비활성화
-                // ✅ 헤더 모서리 둥근 유지: ClipRRect + 헤더 Material shape/clip 적용
                 DraggableScrollableSheet(
                   controller: _sheetController,
                   initialChildSize: _sheetClosed,
@@ -1094,10 +1130,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
                     final bool lockScroll = _isSheetFullyClosed();
                     final bool canSwipe = !lockScroll; // ✅ 완전 닫힘에서는 가로 스와이프 비활성화
-                    final sheetBottomPadding = 16.0 + viewInset; // 시스템 키보드만 대응(커스텀 키패드는 body가 이미 줄어듦)
+                    final sheetBottomPadding = 16.0 + viewInset;
 
                     return Container(
-                      // ✅ 그림자는 바깥 컨테이너에서 유지(둥근 그림자 유지 위해 borderRadius 포함)
                       decoration: const BoxDecoration(
                         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                         boxShadow: [
@@ -1109,7 +1144,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                         ],
                       ),
                       child: ClipRRect(
-                        // ✅ 실제 클리핑: pinned 헤더 포함 상단 라운드가 깨지지 않음
                         borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                         clipBehavior: Clip.antiAlias,
                         child: ColoredBox(
@@ -1118,9 +1152,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                             top: true,
                             bottom: false,
                             child: NotificationListener<ScrollNotification>(
-                              // ✅ 닫힌 상태에서는 내부 스크롤 "완전 비활성화"
-                              // - 스크롤 시도 발생 시 즉시 offset 0으로 되돌림
-                              // - DraggableScrollableSheet의 드래그/확장은 유지(physics를 막지 않음)
                               onNotification: (notification) {
                                 if (!lockScroll) return false;
 
@@ -1134,7 +1165,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                                   } catch (_) {
                                     // ignore
                                   }
-                                  // 외부 리스너로 전파 불필요
                                   return true;
                                 }
 
@@ -1151,7 +1181,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                                       sheetOpen: _sheetOpen,
                                       plateText: controller.buildPlateNumber(),
                                       onToggle: _toggleSheet,
-                                      pageIndicatorText: _pageIndicatorText, // ✅ 헤더 우측 ●○
+                                      pageIndicatorText: _pageIndicatorText,
                                     ),
                                   ),
                                   SliverPadding(
@@ -1190,8 +1220,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 }
 
 /// ✅ 카드 헤더(핸들/타이틀/번호판) 고정 + 탭으로 열기/닫기
-/// ✅ 헤더 우측에 페이지 인디케이터(●○) 표시
-/// ✅ 헤더 모서리 둥근 유지: shape + clipBehavior 적용(잉크 리플 포함)
 class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
   final Color backgroundColor;
   final bool sheetOpen;
@@ -1257,7 +1285,7 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
                       Semantics(
                         label: 'dock_page_indicator: $pageIndicatorText',
                         child: Text(
-                          pageIndicatorText, // ✅ “●○” / “○●”
+                          pageIndicatorText,
                           style: const TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w800,

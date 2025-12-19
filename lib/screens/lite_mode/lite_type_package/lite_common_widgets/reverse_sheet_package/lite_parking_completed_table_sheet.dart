@@ -445,8 +445,13 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
 
       _lastAppliedPlateCountsByDisplayName = Map<String, int>.of(toApply);
 
-      final locationState = context.read<LocationState>();
-      locationState.updatePlateCounts(toApply);
+      // ✅ Provider 미존재 트리 방어(크래시 방지)
+      try {
+        final locationState = context.read<LocationState>();
+        locationState.updatePlateCounts(toApply);
+      } catch (_) {
+        // no-op
+      }
     });
   }
 
@@ -459,7 +464,13 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
       }) {
     if (!mounted) return;
 
-    final locationState = context.read<LocationState>();
+    LocationState locationState;
+    try {
+      locationState = context.read<LocationState>();
+    } catch (_) {
+      return;
+    }
+
     final locations = locationState.locations;
 
     if (locations.isEmpty) {
@@ -1046,10 +1057,15 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
     );
   }
 
+  /// ✅ [FIX] 오버플로우 방지:
+  /// - Container는 부모(Expanded) 폭을 그대로 사용(width: double.infinity)
+  /// - Row는 mainAxisSize: max
+  /// - DropdownButton은 Expanded + isExpanded: true로 “남는 공간만” 사용
   Widget _buildRealtimeLocationFilter(ColorScheme cs, TextTheme text) {
     final disabled = _loading || _availableLocations.isEmpty;
 
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: _Palette.base.withOpacity(.06),
@@ -1059,7 +1075,7 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
         ),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: MainAxisSize.max,
         children: [
           Icon(Icons.place_outlined, size: 16, color: _Palette.base),
           const SizedBox(width: 6),
@@ -1071,18 +1087,20 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
             ),
           ),
           const SizedBox(width: 6),
-          DropdownButtonHideUnderline(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 160),
+
+          Expanded(
+            child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: _selectedLocation,
                 isDense: true,
+                isExpanded: true,
                 icon: Icon(Icons.expand_more, color: cs.outline),
                 items: <String>[_locationAll, ..._availableLocations].map((v) {
                   return DropdownMenuItem<String>(
                     value: v,
                     child: Text(
                       v,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: text.labelMedium?.copyWith(
                         color: disabled ? cs.outline : _Palette.dark,
@@ -1280,10 +1298,7 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
               children: [
                 Expanded(
                   flex: 5,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: _buildRealtimeLocationFilter(cs, text),
-                  ),
+                  child: _buildRealtimeLocationFilter(cs, text), // ✅ Align 제거(폭 안정)
                 ),
                 const SizedBox(width: 8),
                 Expanded(

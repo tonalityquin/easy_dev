@@ -509,7 +509,9 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab>
       final leaf = loc.locationName.trim();
       final parent = (loc.parent ?? '').trim();
 
-      final displayName = loc.type == 'composite' ? (parent.isEmpty ? leaf : '$parent - $leaf') : leaf;
+      final displayName = loc.type == 'composite'
+          ? (parent.isEmpty ? leaf : '$parent - $leaf')
+          : leaf;
 
       // 우선순위: rows가 displayName으로 들어왔다면 rawCounts로 정확 매칭, 아니면 leafCounts로 매칭
       countsByDisplayName[displayName] = rawCounts[displayName] ?? leafCounts[leaf] ?? 0;
@@ -1103,10 +1105,15 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab>
     );
   }
 
+  /// ✅ [FIX] 주차구역 선택 시 Row overflow 방지:
+  /// - DropdownButton이 남는 공간만 사용하도록 Expanded + isExpanded 적용
+  /// - Container는 부모(Expanded)의 폭을 그대로 사용하도록 width: double.infinity
+  /// - mainAxisSize는 max
   Widget _buildRealtimeLocationFilter(ColorScheme cs, TextTheme text) {
     final disabled = _loading || _availableLocations.isEmpty;
 
     return Container(
+      width: double.infinity, // ✅ 부모 폭 사용
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: _Palette.base.withOpacity(.06),
@@ -1114,7 +1121,7 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab>
         border: Border.all(color: _Palette.light.withOpacity(.18)),
       ),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
+        mainAxisSize: MainAxisSize.max, // ✅ 가로 확장
         children: [
           const Icon(Icons.place_outlined, size: 16, color: _Palette.base),
           const SizedBox(width: 6),
@@ -1126,18 +1133,21 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab>
             ),
           ),
           const SizedBox(width: 6),
-          DropdownButtonHideUnderline(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 160),
+
+          // ✅ 핵심: 드롭다운을 Expanded로 감싸 “남는 공간만” 사용
+          Expanded(
+            child: DropdownButtonHideUnderline(
               child: DropdownButton<String>(
                 value: _selectedLocation,
                 isDense: true,
+                isExpanded: true, // ✅ 선택 텍스트가 영역을 넘지 않게
                 icon: Icon(Icons.expand_more, color: cs.outline),
                 items: <String>[_locationAll, ..._availableLocations].map((v) {
                   return DropdownMenuItem<String>(
                     value: v,
                     child: Text(
                       v,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: text.labelMedium?.copyWith(
                         color: disabled ? cs.outline : _Palette.dark,
@@ -1344,10 +1354,7 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab>
               children: [
                 Expanded(
                   flex: 5,
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: _buildRealtimeLocationFilter(cs, text),
-                  ),
+                  child: _buildRealtimeLocationFilter(cs, text), // ✅ Align 제거(레이아웃 안정)
                 ),
                 const SizedBox(width: 8),
                 Expanded(
