@@ -9,6 +9,8 @@ class ModifyBillSection extends StatelessWidget {
   final String? selectedBill;
   final String selectedBillType;
   final ValueChanged<dynamic> onChanged;
+
+  /// 정기 버튼 제거로 인해 외부에서 전달되더라도 사용하지 않음(호환 유지용)
   final ValueChanged<String> onTypeChanged;
 
   const ModifyBillSection({
@@ -26,7 +28,8 @@ class ModifyBillSection extends StatelessWidget {
     final generalBills = billState.generalBills;
     final regularBills = billState.regularBills;
 
-    final isGeneral = selectedBillType == '변동';
+    // ✅ 정기 버튼 제거: 타입 변경 UI 없음 → 현재 타입 기준으로만 리스트 구성
+    final bool isGeneral = selectedBillType == '변동';
     final filteredBills = isGeneral ? generalBills : regularBills;
 
     return Column(
@@ -38,22 +41,7 @@ class ModifyBillSection extends StatelessWidget {
         ),
         const SizedBox(height: 12.0),
 
-        Row(
-          children: [
-            _buildTypeButton(
-              label: '변동',
-              isSelected: isGeneral,
-              onTap: () => onTypeChanged('변동'),
-            ),
-            const SizedBox(width: 8),
-            _buildTypeButton(
-              label: '고정',
-              isSelected: !isGeneral,
-              onTap: () => onTypeChanged('고정'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12.0),
+        // ✅ 정기/변동 타입 버튼 삭제
 
         if (isLoading)
           const Padding(
@@ -65,7 +53,7 @@ class ModifyBillSection extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Center(
               child: Text(
-                '$selectedBillType 정산 유형이 없습니다.',
+                '${isGeneral ? '변동' : '정기'} 정산 유형이 없습니다.',
                 style: const TextStyle(color: Colors.grey),
               ),
             ),
@@ -105,13 +93,13 @@ class ModifyBillSection extends StatelessWidget {
                                 height: 4,
                                 margin: const EdgeInsets.only(bottom: 16),
                                 decoration: BoxDecoration(
-                                  color: Colors.grey.shade300,
+                                  color: Colors.grey,
                                   borderRadius: BorderRadius.circular(2),
                                 ),
                               ),
                             ),
                             Text(
-                              '$selectedBillType 정산 선택',
+                              '${isGeneral ? '변동' : '정기'} 정산 선택',
                               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 24),
@@ -149,34 +137,6 @@ class ModifyBillSection extends StatelessWidget {
             ),
           ),
       ],
-    );
-  }
-
-  Widget _buildTypeButton({
-    required String label,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isSelected ? Colors.black : Colors.white,
-            border: Border.all(color: Colors.black),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isSelected ? Colors.white : Colors.black,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

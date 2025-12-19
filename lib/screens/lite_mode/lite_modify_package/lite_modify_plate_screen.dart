@@ -5,7 +5,6 @@ import '../../../models/plate_model.dart';
 import '../../../enums/plate_type.dart';
 
 import 'lite_modify_plate_controller.dart';
-import 'sections/lite_modify_bill_section.dart';
 import 'sections/lite_modify_location_section.dart';
 import 'sections/lite_modify_photo_section.dart';
 import 'sections/lite_modify_plate_section.dart';
@@ -98,12 +97,29 @@ class _LiteModifyPlateScreenState extends State<LiteModifyPlateScreen> {
     );
 
     _cameraHelper = LiteModifyCameraHelper();
-    _cameraHelper.initializeInputCamera().then((_) => setState(() {}));
+
+    // ✅ mounted 체크 보강
+    _cameraHelper.initializeInputCamera().then((_) {
+      if (mounted) setState(() {});
+    });
 
     _controller.initializePlate();
     _controller.initializeFieldValues();
 
     selectedStatusNames = List<String>.from(widget.plate.statusList);
+
+    // ✅ 드래그로 열고/닫을 때도 _sheetOpen 동기화(원본 Modify와 동일하게 보강)
+    _sheetController.addListener(() {
+      try {
+        final s = _sheetController.size;
+        final bool openNow = s >= ((_sheetClosed + _sheetOpened) / 2);
+        if (mounted && openNow != _sheetOpen) {
+          setState(() => _sheetOpen = openNow);
+        }
+      } catch (_) {
+        // ignore
+      }
+    });
   }
 
   void _showCameraPreviewDialog() async {
@@ -169,7 +185,8 @@ class _LiteModifyPlateScreenState extends State<LiteModifyPlateScreen> {
     );
 
     return SafeArea(
-      child: IgnorePointer( // 제스처 간섭 방지
+      child: IgnorePointer(
+        // 제스처 간섭 방지
         child: Align(
           alignment: Alignment.topLeft,
           child: Padding(
@@ -189,6 +206,11 @@ class _LiteModifyPlateScreenState extends State<LiteModifyPlateScreen> {
     final viewInset = MediaQuery.of(context).viewInsets.bottom;
     // 본문이 하단 내비/시트와 겹치지 않도록 여유 패딩
     final bottomSafePadding = 140.0 + viewInset;
+
+    final readOnlyCountType = _controller.selectedBillCountType ??
+        _controller.selectedBill ??
+        widget.plate.billingType ??
+        '-';
 
     return Scaffold(
       appBar: AppBar(
@@ -241,7 +263,7 @@ class _LiteModifyPlateScreenState extends State<LiteModifyPlateScreen> {
                 ),
               ),
 
-              // ─── 하단 시트: 정산 / 상태(토글) / 메모 ───
+              // ─── 하단 시트: 정산(읽기 전용) / 메모 ───
               DraggableScrollableSheet(
                 controller: _sheetController,
                 initialChildSize: _sheetClosed,
@@ -250,7 +272,6 @@ class _LiteModifyPlateScreenState extends State<LiteModifyPlateScreen> {
                 snap: true,
                 snapSizes: const [_sheetClosed, _sheetOpened],
                 builder: (context, scrollController) {
-                  // 메인 배경과 미세하게 구분되는 옅은 톤
                   const sheetBg = Color(0xFFF6F8FF);
 
                   return Container(
@@ -296,7 +317,10 @@ class _LiteModifyPlateScreenState extends State<LiteModifyPlateScreen> {
                                     children: [
                                       Text(
                                         _sheetOpen ? '정산 / 상태 (탭하여 닫기)' : '정산 / 상태 (탭하여 열기)',
-                                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
                                       Text(
                                         widget.plate.plateNumber,
@@ -310,20 +334,10 @@ class _LiteModifyPlateScreenState extends State<LiteModifyPlateScreen> {
                           ),
                           const SizedBox(height: 12),
 
-                          // 정산
-                          LiteModifyBillSection(
-                            selectedBill: _controller.selectedBillCountType,
-                            selectedBillType: _controller.selectedBillType,
-                            onChanged: (bill) {
-                              setState(() {
-                                _controller.applyBillDefaults(bill);
-                              });
-                            },
-                            onTypeChanged: (type) {
-                              setState(() {
-                                _controller.onBillTypeChanged(type);
-                              });
-                            },
+                          // ✅ 정산: 사용자 수정 불가(읽기 전용)
+                          _ReadOnlyBillSection(
+                            billTypeLabel: _controller.selectedBillType,
+                            countTypeLabel: readOnlyCountType,
                           ),
 
                           const SizedBox(height: 24),
@@ -340,7 +354,8 @@ class _LiteModifyPlateScreenState extends State<LiteModifyPlateScreen> {
                             decoration: InputDecoration(
                               hintText: '예: 뒷범퍼 손상',
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                             ),
                           ),
 
@@ -350,6 +365,8 @@ class _LiteModifyPlateScreenState extends State<LiteModifyPlateScreen> {
                               onDelete: () async {
                                 try {
                                   await _controller.deleteCustomStatusFromFirestore(context);
+                                  if (!mounted) return;
+
                                   setState(() {
                                     _controller.fetchedCustomStatus = null;
                                     _controller.customStatusController.clear();
@@ -357,6 +374,7 @@ class _LiteModifyPlateScreenState extends State<LiteModifyPlateScreen> {
                                   });
                                   showSuccessSnackbar(context, '자동 메모가 삭제되었습니다');
                                 } catch (_) {
+                                  if (!mounted) return;
                                   showFailedSnackbar(context, '삭제 실패. 다시 시도해주세요');
                                 }
                               },
@@ -401,12 +419,14 @@ class _LiteModifyPlateScreenState extends State<LiteModifyPlateScreen> {
                   buttonLabel: '수정 완료',
                   onPressed: () async {
                     setState(() => isLoading = true);
+
                     await _controller.handleAction(() {
                       if (mounted) {
                         Navigator.pop(context);
                         showSuccessSnackbar(context, "수정이 완료되었습니다!");
                       }
                     }, selectedStatusNames);
+
                     if (mounted) setState(() => isLoading = false);
                   },
                 ),
@@ -425,6 +445,63 @@ class _LiteModifyPlateScreenState extends State<LiteModifyPlateScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ReadOnlyBillSection extends StatelessWidget {
+  final String billTypeLabel;
+  final String countTypeLabel;
+
+  const _ReadOnlyBillSection({
+    required this.billTypeLabel,
+    required this.countTypeLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '정산 유형',
+          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12.0),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border.all(color: Colors.black26),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                child: Text(
+                  countTypeLabel.isEmpty ? '-' : countTypeLabel,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.black87),
+                ),
+              ),
+              Text(
+                billTypeLabel,
+                style: const TextStyle(
+                  color: Colors.black54,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          '정산 유형은 이 화면에서 변경할 수 없습니다.',
+          style: TextStyle(fontSize: 12, color: Colors.black54),
+        ),
+      ],
     );
   }
 }

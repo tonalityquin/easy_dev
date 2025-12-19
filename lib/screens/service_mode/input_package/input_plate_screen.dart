@@ -40,12 +40,19 @@ class InputPlateScreen extends StatefulWidget {
 class _InputPlateScreenState extends State<InputPlateScreen> {
   final controller = InputPlateController();
   final FirestorePlateRepository _plateRepo = FirestorePlateRepository();
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   // ⬇️ 화면 식별 태그(FAQ/에러 리포트 연계용)
   static const String screenTag = 'plate input';
 
   // ✅ DashboardSetting에서 저장한 단일 플래그 키
   static const String _prefsHasMonthlyKey = 'has_monthly_parking';
+
+  // ✅ Firestore 경로 상수(정책 고정)
+  static const String _plateStatusRoot = 'plate_status';
+  static const String _monthsSub = 'months';
+  static const String _platesSub = 'plates';
+  static const String _monthlyPlateStatusRoot = 'monthly_plate_status';
 
   // ✅ 현재 기기 로컬 플래그(정기 선택 가능 여부)
   bool _hasMonthlyParking = false;
@@ -84,6 +91,32 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   bool _dockSlideFromRight = true; // AnimatedSwitcher 슬라이드 방향
 
   String get _pageIndicatorText => (_dockPageIndex == _dockPageBill) ? '●○' : '○●';
+
+  // ─────────────────────────────
+  // ✅ 문서명 정책 유틸
+  // ─────────────────────────────
+
+  /// area가 비어있으면 Firestore doc('') 불가 → 안전 처리
+  String _safeArea(String area) {
+    final a = area.trim();
+    return a.isEmpty ? 'unknown' : a;
+  }
+
+  /// ✅ (핵심) 번호판/상태 문서명(documentId)은 항상 "{plateNumber}_{area}" 유지
+  /// 예) 72-로-6085_가로수길(캔버스랩)
+  String _plateDocId(String plateNumber, String area) {
+    final p = plateNumber.trim();
+    final a = _safeArea(area);
+    return '${p}_$a';
+  }
+
+  /// ✅ 레거시(읽기 폴백용): 과거 하이픈 제거 docId로 저장된 데이터 대응
+  /// - docId에는 더 이상 사용하지 않지만, 마이그레이션 전까지 조회는 지원(읽기만)
+  String _legacyPlatePk(String plateNumber) {
+    return plateNumber.replaceAll('-', '').replaceAll(' ', '').trim();
+  }
+
+  String _monthKey(DateTime dt) => '${dt.year}${dt.month.toString().padLeft(2, '0')}'; // yyyyMM
 
   // ✅ SharedPreferences에서 has_monthly_parking 로드
   Future<void> _loadHasMonthlyParkingFlag() async {
@@ -265,7 +298,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
         if (mounted && data != null) {
           final fetchedStatus = data['customStatus'] as String?;
-          final fetchedList = (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+          final fetchedList =
+              (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
 
           final String? fetchedCountType = (data['countType'] as String?)?.trim();
 
@@ -326,42 +360,114 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     super.dispose();
   }
 
-  /// plate_status 단건 조회
-  /// ✅ UsageReporter: area 기준 read 1회 보고(성공/실패 불문)
+  /// plate_status 단건 조회 (월 단위 샤딩 구조)
+  ///
+  /// ✅ 저장 구조:
+  ///   plate_status/{area}/months/{yyyyMM}/plates/{plateDocId}
+  ///
+  /// ✅ (핵심) plateDocId 정책:
+  ///   plateDocId = "{plateNumber}_{area}"  (하이픈 포함, 원문 그대로)
+  ///   예) 72-로-6085_가로수길(캔버스랩)
+  ///
+  /// ✅ 조회 정책:
+  ///   - 현재월 → 직전월(폴백) 순으로 조회(최대 2개월)
+  ///
+  /// ✅ 레거시 폴백(읽기만):
+  ///   - 과거 코드에서 docId를 하이픈 제거 pk로 저장했을 가능성에 대비해,
+  ///     신규 docId가 없으면 legacyPk도 추가로 조회합니다.
+  ///   - 마이그레이션 완료 후 제거 가능.
+  ///
+  /// ✅ UsageReporter:
+  ///   - 실제 Firestore read 시도 횟수만큼 n을 보고
   Future<Map<String, dynamic>?> _fetchPlateStatus(String plateNumber, String area) async {
-    final docId = '${plateNumber}_$area';
-    try {
-      final doc = await FirebaseFirestore.instance.collection('plate_status').doc(docId).get();
+    int reads = 0;
 
-      if (doc.exists) {
-        return doc.data();
+    final safeArea = _safeArea(area);
+
+    // ✅ (핵심) 신규 정책 docId
+    final plateDocId = _plateDocId(plateNumber, safeArea);
+
+    // ✅ 레거시(하이픈 제거) docId 폴백
+    final legacyPk = _legacyPlatePk(plateNumber);
+
+    // 현재월/전월 폴백
+    final now = DateTime.now();
+    final monthsToTry = <DateTime>[
+      DateTime(now.year, now.month, 1),
+      DateTime(now.year, now.month - 1, 1),
+    ];
+
+    try {
+      for (final m in monthsToTry) {
+        final mk = _monthKey(m);
+
+        // 1) 신규 정책 docId (문서명 유지)
+        final doc = await _firestore
+            .collection(_plateStatusRoot)
+            .doc(safeArea)
+            .collection(_monthsSub)
+            .doc(mk)
+            .collection(_platesSub)
+            .doc(plateDocId)
+            .get();
+        reads += 1;
+
+        if (doc.exists) {
+          return doc.data();
+        }
+
+        // 2) 레거시 docId 폴백(있을 때만)
+        if (legacyPk.isNotEmpty) {
+          final legacyDoc = await _firestore
+              .collection(_plateStatusRoot)
+              .doc(safeArea)
+              .collection(_monthsSub)
+              .doc(mk)
+              .collection(_platesSub)
+              .doc(legacyPk)
+              .get();
+          reads += 1;
+
+          if (legacyDoc.exists) {
+            return legacyDoc.data();
+          }
+        }
       }
       return null;
     } on FirebaseException catch (e) {
-      // 필요 시 UI 로그/스낵바 등 처리 가능
       debugPrint('[_fetchPlateStatus] FirebaseException: ${e.code} ${e.message}');
       return null;
     } catch (e) {
       debugPrint('[_fetchPlateStatus] error: $e');
       return null;
     } finally {
-      // ⬇️ installId prefix 없이 source 슬러그만으로 집계
-      await UsageReporter.instance.report(
-        area: (area.isEmpty ? 'unknown' : area),
-        action: 'read',
-        n: 1,
-        source: 'InputPlateScreen._fetchPlateStatus/plate_status.doc.get',
-        useSourceOnlyKey: true, // ★ 중요
-      );
+      // reads가 0인 경우는 거의 없지만, 안전상 1로 보고(내부 규칙 유지)
+      final nToReport = (reads <= 0) ? 1 : reads;
+
+      try {
+        await UsageReporter.instance.report(
+          area: safeArea,
+          action: 'read',
+          n: nToReport,
+          source: 'InputPlateScreen._fetchPlateStatus/plate_status.monthlyShard.doc.get',
+          useSourceOnlyKey: true, // ★ 중요
+        );
+      } catch (e) {
+        // 리포터 실패가 UX/업무 로직을 깨면 안 됨
+        debugPrint('[UsageReporter] report failed in _fetchPlateStatus: $e');
+      }
     }
   }
 
   /// ✅ monthly_plate_status 단건 조회 (정기 버튼 클릭 시 사용)
+  /// ✅ (핵심) docId 정책 통일: "{plateNumber}_{area}"
   /// ✅ UsageReporter: area 기준 read 1회 보고(성공/실패 불문)
   Future<Map<String, dynamic>?> _fetchMonthlyPlateStatus(String plateNumber, String area) async {
-    final docId = '${plateNumber}_$area';
+    final safeArea = _safeArea(area);
+    final docId = _plateDocId(plateNumber, safeArea); // ✅ 문서명 정책 통일
+
     try {
-      final doc = await FirebaseFirestore.instance.collection('monthly_plate_status').doc(docId).get();
+      final doc = await _firestore.collection(_monthlyPlateStatusRoot).doc(docId).get();
 
       if (doc.exists) {
         return doc.data();
@@ -374,13 +480,17 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       debugPrint('[_fetchMonthlyPlateStatus] error: $e');
       return null;
     } finally {
-      await UsageReporter.instance.report(
-        area: (area.isEmpty ? 'unknown' : area),
-        action: 'read',
-        n: 1,
-        source: 'InputPlateScreen._fetchMonthlyPlateStatus/monthly_plate_status.doc.get',
-        useSourceOnlyKey: true,
-      );
+      try {
+        await UsageReporter.instance.report(
+          area: safeArea,
+          action: 'read',
+          n: 1,
+          source: 'InputPlateScreen._fetchMonthlyPlateStatus/monthly_plate_status.doc.get',
+          useSourceOnlyKey: true,
+        );
+      } catch (e) {
+        debugPrint('[UsageReporter] report failed in _fetchMonthlyPlateStatus: $e');
+      }
     }
   }
 
@@ -391,9 +501,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       if (!mounted) return;
       setState(() => _monthlyDocExists = false);
       ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('번호판 입력을 완료한 후 정기 정보를 불러올 수 있습니다.')),
-    );
-    return;
+        const SnackBar(content: Text('번호판 입력을 완료한 후 정기 정보를 불러올 수 있습니다.')),
+      );
+      return;
     }
 
     final plateNumber = controller.buildPlateNumber();
@@ -403,12 +513,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     if (!mounted) return;
 
     if (data == null) {
-    // 문서 없음 → 기존 입력은 건드리지 않고 안내만
-    setState(() => _monthlyDocExists = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('해당 번호판의 정기(월정기) 등록 정보가 없습니다.')),
-    );
-    return;
+      // 문서 없음 → 기존 입력은 건드리지 않고 안내만
+      setState(() => _monthlyDocExists = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('해당 번호판의 정기(월정기) 등록 정보가 없습니다.')),
+      );
+      return;
     }
 
     final fetchedStatus = (data['customStatus'] as String?)?.trim();
@@ -417,30 +527,30 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     final fetchedCountType = (data['countType'] as String?)?.trim();
 
     setState(() {
-    _monthlyDocExists = true;
+      _monthlyDocExists = true;
 
-    // 메모/상태 출력
-    controller.fetchedCustomStatus = fetchedStatus;
-    controller.customStatusController.text = fetchedStatus ?? '';
-    selectedStatusNames = fetchedList;
-    statusSectionKey = UniqueKey();
+      // 메모/상태 출력
+      controller.fetchedCustomStatus = fetchedStatus;
+      controller.customStatusController.text = fetchedStatus ?? '';
+      selectedStatusNames = fetchedList;
+      statusSectionKey = UniqueKey();
 
-    // 정기 출력(countType)
-    if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
-    controller.countTypeController.text = fetchedCountType;
-    controller.selectedBill = fetchedCountType;
-    }
-    // selectedBillType은 이미 '정기'로 바뀐 상태이므로 여기서는 재설정하지 않음
+      // 정기 출력(countType)
+      if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
+        controller.countTypeController.text = fetchedCountType;
+        controller.selectedBill = fetchedCountType;
+      }
+      // selectedBillType은 이미 '정기'로 바뀐 상태이므로 여기서는 재설정하지 않음
     });
 
     // 사용자가 즉시 보도록 시트를 열어줌(출력 체감 강화)
     if (!_sheetOpen) {
-    await _animateSheet(open: true); // ✅ 열 때마다 정산 유형 페이지로 리셋됨
+      await _animateSheet(open: true); // ✅ 열 때마다 정산 유형 페이지로 리셋됨
     }
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-    const SnackBar(content: Text('정기(월정기) 정보를 불러왔습니다.')),
+      const SnackBar(content: Text('정기(월정기) 정보를 불러왔습니다.')),
     );
   }
 
@@ -486,13 +596,17 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       );
 
       // ✅ UsageReporter: write 1회
-      await UsageReporter.instance.report(
-        area: (area.isEmpty ? 'unknown' : area),
-        action: 'write',
-        n: 1,
-        source: 'InputPlateScreen._applyMonthlyMemoAndStatusOnly/monthly_plate_status.doc.update',
-        useSourceOnlyKey: true,
-      );
+      try {
+        await UsageReporter.instance.report(
+          area: _safeArea(area),
+          action: 'write',
+          n: 1,
+          source: 'InputPlateScreen._applyMonthlyMemoAndStatusOnly/monthly_plate_status.doc.update',
+          useSourceOnlyKey: true,
+        );
+      } catch (e) {
+        debugPrint('[UsageReporter] report failed in _applyMonthlyMemoAndStatusOnly: $e');
+      }
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -912,17 +1026,15 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                 border: Border.all(color: const Color(0xFFFFECB3)),
               ),
               child: const Text(
-                  '정기 주차가 제한된 근무지입니다.',
+                '정기 주차가 제한된 근무지입니다.',
                 style: TextStyle(fontSize: 12, height: 1.25),
               ),
             ),
           ),
-
         InputBillSection(
           selectedBill: controller.selectedBill,
           onChanged: (value) => setState(() => controller.selectedBill = value),
           selectedBillType: controller.selectedBillType,
-
           // ✅ 여기서 '정기' 선택 가능 여부를 has_monthly_parking로 게이팅
           onTypeChanged: (newType) {
             // 1) 정기 선택 시도 + 월주차 플래그 false -> 차단
@@ -946,7 +1058,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
               _handleMonthlySelectedFetchAndApply();
             }
           },
-
           countTypeController: controller.countTypeController,
         ),
       ],
@@ -1114,7 +1225,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                     ),
                   ),
                 ),
-
                 DraggableScrollableSheet(
                   controller: _sheetController,
                   initialChildSize: _sheetClosed,

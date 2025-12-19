@@ -1,4 +1,4 @@
-// lib/screens/modify_package/modify_plate_controller.dart
+// lib/screens/modify_package/lite_modify_plate_controller.dart
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
@@ -45,7 +45,7 @@ class LiteModifyPlateController {
   int selectedRegularDurationHours = 0;
 
   String? selectedBill;
-  String selectedBillType = '변동';
+  String selectedBillType = '변동'; // 변동/고정(정기) 표시용
   String dropdownValue = '전국';
   String? selectedBillCountType;
   dynamic selectedBillModel;
@@ -136,6 +136,7 @@ class LiteModifyPlateController {
 
     dropdownValue = plate.region ?? '전국';
     locationController.text = plate.location;
+
     selectedBill = plate.billingType;
     selectedBillType = _determineBillType(plate.billingType);
     selectedBillCountType = plate.billingType;
@@ -156,20 +157,16 @@ class LiteModifyPlateController {
   String _determineBillType(String? billingType) {
     if (billingType == null || billingType.isEmpty) return '변동';
     if (billingType.contains('고정')) return '고정';
-    if (plate.regularAmount != null && plate.regularAmount! > 0) return '고정';
+    if ((plate.regularAmount ?? 0) > 0) return '고정';
     return '변동';
   }
 
+  /// ✅ 정기/고정 버튼 로직 삭제에 맞춰 타입 변경은 허용하지 않음
   void onBillTypeChanged(String type) {
     if (type != selectedBillType) {
       debugPrint('❌ 정산 유형 변경은 허용되지 않습니다. 기존: $selectedBillType → 시도: $type');
       return;
     }
-    selectedBill = null;
-    selectedBasicAmount = 0;
-    selectedBasicStandard = 0;
-    selectedAddAmount = 0;
-    selectedAddStandard = 0;
   }
 
   void applyBillDefaults(dynamic bill) {
@@ -181,6 +178,7 @@ class LiteModifyPlateController {
 
     if (bill is BillModel) {
       selectedBillType = '변동';
+
       selectedBasicAmount = bill.basicAmount ?? 0;
       selectedBasicStandard = bill.basicStandard ?? 0;
       selectedAddAmount = bill.addAmount ?? 0;
@@ -189,7 +187,9 @@ class LiteModifyPlateController {
       selectedRegularAmount = 0;
       selectedRegularDurationHours = 0;
     } else if (bill is RegularBillModel) {
+      // 버튼이 없어도 정기 요금 선택 시에는 표시 상태가 '고정'으로 바뀔 수 있음(기존 호환)
       selectedBillType = '고정';
+
       selectedRegularAmount = bill.regularAmount;
       selectedRegularDurationHours = bill.regularDurationHours;
 
@@ -251,10 +251,8 @@ class LiteModifyPlateController {
     final newBillingType = selectedBill;
     final updatedCustomStatus = customStatusController.text.trim();
 
-    // (Storage 업로드 — 과금/계측 제외)
     final mergedImageUrls = await service.uploadAndMergeImages(plateNumber);
 
-    // ✅ 단일 update로 모든 필드 반영(사전조회 1 + 쓰기 1)
     final success = await service.updatePlateInfo(
       plateNumber: plateNumber,
       imageUrls: mergedImageUrls,
@@ -265,8 +263,8 @@ class LiteModifyPlateController {
     );
 
     if (success) {
-      // plate_status: 문서 비어있으면 delete, 아니면 upsert(tx)
       final area = context.read<AreaState>().currentArea;
+
       await _plateRepo.setPlateStatus(
         plateNumber: plateNumber,
         area: area,
@@ -275,7 +273,6 @@ class LiteModifyPlateController {
         createdBy: 'devAdmin020',
       );
 
-      // 로컬 상태 반영
       final updatedPlate = plate.copyWith(
         billingType: newBillingType,
         basicStandard: selectedBasicStandard,
@@ -287,7 +284,6 @@ class LiteModifyPlateController {
         region: dropdownValue,
         imageUrls: mergedImageUrls,
         customStatus: updatedCustomStatus,
-        // ✅ 서버와 동일하게 선택 해제 반영
         isSelected: false,
         selectedBy: null,
         regularAmount: selectedRegularAmount,
@@ -295,12 +291,9 @@ class LiteModifyPlateController {
       );
 
       final litePlateState = context.read<LitePlateState>();
-
       await litePlateState.updatePlateLocally(collectionKey, updatedPlate);
 
       onSuccess();
-    } else {
-      // 실패 시 UI 처리만
     }
   }
 

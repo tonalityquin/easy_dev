@@ -9,6 +9,9 @@ import '../../screens/hubs_mode/dev_package/debug_package/debug_database_logger.
 import '../../screens/service_mode/type_package/common_widgets/reverse_sheet_package/services/parking_completed_logger.dart';
 import '../../screens/service_mode/type_package/common_widgets/reverse_sheet_package/services/status_mapping.dart';
 
+// ✅ (추가) 비정기 plate_status는 월 단위 샤딩 저장을 PlateStatusService에 위임
+import 'plate_status_service.dart';
+
 // import '../../utils/usage_reporter.dart';
 
 /// 🔹 중복 번호판 전용 도메인 예외
@@ -45,6 +48,9 @@ class _ParkingCompletedViewWriteGate {
 
 class PlateCreationService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  /// ✅ (추가) 비정기 plate_status 저장 위임 서비스
+  final PlateStatusService _plateStatusService = PlateStatusService();
 
   /// ✅ (변경) 2안용: 경량 View 컬렉션명
   static const String _parkingCompletedViewCollection = 'parking_completed_view';
@@ -92,13 +98,6 @@ class PlateCreationService {
 
     final billDoc = await _firestore.collection('bill').doc(key).get();
 
-    /*await UsageReporter.instance.report(
-      area: area,
-      action: 'read',
-      n: 1,
-      source: 'PlateCreationService.addPlate.billRead',
-    );*/
-
     if (billDoc.exists) {
       final data = billDoc.data()!;
       _billCache[key] = data;
@@ -133,7 +132,7 @@ class PlateCreationService {
     String? customStatus,
     required String selectedBillType,
   }) async {
-    // ✅ plates 문서명(documentId) = {plateNumber}_{area}
+    // ✅ plates 문서명(documentId) = {plateNumber}_{area} (문서명 유지)
     final String plateDocId = '${plateNumber}_$area';
 
     // ✅ (핵심) parking_completed_view 쓰기 가능 여부(트랜잭션 밖에서 미리 확보)
@@ -388,20 +387,10 @@ class PlateCreationService {
       }
 
       if (reads > 0) {
-        /*await UsageReporter.instance.report(
-          area: area,
-          action: 'read',
-          n: reads,
-          source: 'PlateCreationService.addPlate.tx',
-        );*/
+        // UsageReporter 옵션 유지 시 여기에 추가
       }
       if (writes > 0) {
-        /*await UsageReporter.instance.report(
-          area: area,
-          action: 'write',
-          n: writes,
-          source: 'PlateCreationService.addPlate.tx',
-        );*/
+        // UsageReporter 옵션 유지 시 여기에 추가
       }
     } on DuplicatePlateException {
       rethrow;
@@ -434,10 +423,12 @@ class PlateCreationService {
 
     // =========================================================================
     // ✅ (리팩터링) 메모/상태 upsert
-    // - 정기(selectedBillType == '정기')   → monthly_plate_status 에만 저장 (plate_status 금지)
-    // - 그 외                              → plate_status 저장(+expireAt 유지)
+    // - 정기(selectedBillType == '정기')   → monthly_plate_status 에만 저장 (기존 정책 유지)
+    // - 그 외                              → plate_status를 월 단위 샤딩 구조로 저장
+    //                                      (PlateStatusService.setPlateStatus로 위임)
     //
-    // 기존 문제 원인: customStatus가 있으면 무조건 plate_status에 expireAt 포함 set() 하던 블록
+    // ✅ (핵심) 문서명 정책 유지:
+    // - PlateStatusService 내부에서 docId를 "{plateNumber}_{area}"로 고정하여 저장
     // =========================================================================
     final String memo = (customStatus ?? '').trim();
     final List<String> statuses = (statusList ?? const <String>[])
@@ -449,8 +440,27 @@ class PlateCreationService {
     if (!hasMemoOrStatus) return;
 
     final bool isMonthly = selectedBillType.trim() == '정기';
-    final String targetCollection = isMonthly ? _monthlyPlateStatusCollection : 'plate_status';
-    final statusDocRef = _firestore.collection(targetCollection).doc(plateDocId);
+
+    if (!isMonthly) {
+      // ✅ 비정기: plate_status 월 샤딩 경로로 저장 (docId = "{plateNumber}_{area}" 유지)
+      await _plateStatusService.setPlateStatus(
+        plateNumber: plateNumber,
+        area: area,
+        customStatus: memo,
+        statusList: statuses,
+        createdBy: userName,
+        deleteWhenEmpty: false,
+        extra: <String, dynamic>{
+          'source': 'PlateCreationService.addPlate',
+          'platesDocId': plateDocId, // 참고용(plates docId)
+        },
+        forDate: DateTime.now(),
+      );
+      return;
+    }
+
+    // ✅ 정기: monthly_plate_status는 기존대로 평면 docId로 저장(생성 가능)
+    final statusDocRef = _firestore.collection(_monthlyPlateStatusCollection).doc(plateDocId);
 
     final payload = <String, dynamic>{
       'customStatus': memo,
@@ -458,29 +468,17 @@ class PlateCreationService {
       'updatedAt': FieldValue.serverTimestamp(),
       'createdBy': userName,
       'area': area,
-      if (isMonthly) 'type': '정기',
-      // 정기에서 countType이 필요하다면 billingType을 보조로 적재(프로젝트 정책에 따라 제거 가능)
-      if (isMonthly && billingType != null && billingType.trim().isNotEmpty) 'countType': billingType.trim(),
-      // 비정기(plate_status)에서만 TTL 유지
-      if (!isMonthly)
-        'expireAt': Timestamp.fromDate(
-          DateTime.now().add(const Duration(days: 1)),
-        ),
+      'type': '정기',
+      if (billingType != null && billingType.trim().isNotEmpty) 'countType': billingType.trim(),
     };
 
     try {
       await statusDocRef.set(payload, SetOptions(merge: true));
-      /*await UsageReporter.instance.report(
-        area: area,
-        action: 'write',
-        n: 1,
-        source: 'PlateCreationService.addPlate.statusUpsert/$targetCollection',
-      );*/
     } on FirebaseException catch (e, st) {
       try {
         await DebugDatabaseLogger().log({
-          'op': isMonthly ? 'monthlyPlateStatus.upsert.set' : 'plateStatus.upsert.set',
-          'collection': targetCollection,
+          'op': 'monthlyPlateStatus.upsert.set',
+          'collection': _monthlyPlateStatusCollection,
           'docPath': statusDocRef.path,
           'docId': plateDocId,
           'inputs': {
@@ -497,7 +495,7 @@ class PlateCreationService {
           },
           'stack': st.toString(),
           'tags': [
-            isMonthly ? 'monthlyPlateStatus' : 'plateStatus',
+            'monthlyPlateStatus',
             'upsert',
             'set',
             'error',
@@ -508,8 +506,8 @@ class PlateCreationService {
     } catch (e, st) {
       try {
         await DebugDatabaseLogger().log({
-          'op': isMonthly ? 'monthlyPlateStatus.upsert.unknown' : 'plateStatus.upsert.unknown',
-          'collection': targetCollection,
+          'op': 'monthlyPlateStatus.upsert.unknown',
+          'collection': _monthlyPlateStatusCollection,
           'docPath': statusDocRef.path,
           'docId': plateDocId,
           'inputs': {
@@ -526,7 +524,7 @@ class PlateCreationService {
           },
           'stack': st.toString(),
           'tags': [
-            isMonthly ? 'monthlyPlateStatus' : 'plateStatus',
+            'monthlyPlateStatus',
             'upsert',
             'error',
           ],

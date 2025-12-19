@@ -45,7 +45,7 @@ class ModifyPlateController {
   int selectedRegularDurationHours = 0;
 
   String? selectedBill;
-  String selectedBillType = '변동';
+  String selectedBillType = '변동'; // 변동/정기 판단 값(버튼으로 변경하지 않음)
   String dropdownValue = '전국';
   String? selectedBillCountType;
   dynamic selectedBillModel;
@@ -136,6 +136,7 @@ class ModifyPlateController {
 
     dropdownValue = plate.region ?? '전국';
     locationController.text = plate.location;
+
     selectedBill = plate.billingType;
     selectedBillType = _determineBillType(plate.billingType);
     selectedBillCountType = plate.billingType;
@@ -155,21 +156,23 @@ class ModifyPlateController {
 
   String _determineBillType(String? billingType) {
     if (billingType == null || billingType.isEmpty) return '변동';
-    if (billingType.contains('고정')) return '고정';
-    if (plate.regularAmount != null && plate.regularAmount! > 0) return '고정';
+
+    // 레거시 호환: billingType에 '정기'/'고정' 문자열이 들어오는 경우가 있을 수 있음
+    if (billingType.contains('정기') || billingType.contains('고정')) return '정기';
+
+    final hasRegularAmount = (plate.regularAmount ?? 0) > 0;
+    final hasRegularDuration = (plate.regularDurationHours ?? 0) > 0;
+    if (hasRegularAmount || hasRegularDuration) return '정기';
+
     return '변동';
   }
 
+  /// ✅ 정기 버튼(타입 변경 UI) 제거에 맞춰 “타입 변경 불가”로 유지
   void onBillTypeChanged(String type) {
     if (type != selectedBillType) {
       debugPrint('❌ 정산 유형 변경은 허용되지 않습니다. 기존: $selectedBillType → 시도: $type');
       return;
     }
-    selectedBill = null;
-    selectedBasicAmount = 0;
-    selectedBasicStandard = 0;
-    selectedAddAmount = 0;
-    selectedAddStandard = 0;
   }
 
   void applyBillDefaults(dynamic bill) {
@@ -189,7 +192,8 @@ class ModifyPlateController {
       selectedRegularAmount = 0;
       selectedRegularDurationHours = 0;
     } else if (bill is RegularBillModel) {
-      selectedBillType = '고정';
+      // 정기 선택은 “버튼”이 아니라 “정기 bill 선택”으로만 발생할 수 있음
+      selectedBillType = '정기';
       selectedRegularAmount = bill.regularAmount;
       selectedRegularDurationHours = bill.regularDurationHours;
 
@@ -251,10 +255,8 @@ class ModifyPlateController {
     final newBillingType = selectedBill;
     final updatedCustomStatus = customStatusController.text.trim();
 
-    // (Storage 업로드 — 과금/계측 제외)
     final mergedImageUrls = await service.uploadAndMergeImages(plateNumber);
 
-    // ✅ 단일 update로 모든 필드 반영(사전조회 1 + 쓰기 1)
     final success = await service.updatePlateInfo(
       plateNumber: plateNumber,
       imageUrls: mergedImageUrls,
@@ -265,8 +267,9 @@ class ModifyPlateController {
     );
 
     if (success) {
-      // plate_status: 문서 비어있으면 delete, 아니면 upsert(tx)
       final area = context.read<AreaState>().currentArea;
+
+      // ✅ 월정기/정기 버튼 로직 제거: plate_status는 기존대로 저장(정기라도 별도 monthly 문서 반영 없음)
       await _plateRepo.setPlateStatus(
         plateNumber: plateNumber,
         area: area,
@@ -275,7 +278,6 @@ class ModifyPlateController {
         createdBy: 'devAdmin020',
       );
 
-      // 로컬 상태 반영
       final updatedPlate = plate.copyWith(
         billingType: newBillingType,
         basicStandard: selectedBasicStandard,
@@ -287,7 +289,6 @@ class ModifyPlateController {
         region: dropdownValue,
         imageUrls: mergedImageUrls,
         customStatus: updatedCustomStatus,
-        // ✅ 서버와 동일하게 선택 해제 반영
         isSelected: false,
         selectedBy: null,
         regularAmount: selectedRegularAmount,
@@ -295,12 +296,9 @@ class ModifyPlateController {
       );
 
       final plateState = context.read<PlateState>();
-
       await plateState.updatePlateLocally(collectionKey, updatedPlate);
 
       onSuccess();
-    } else {
-      // 실패 시 UI 처리만
     }
   }
 

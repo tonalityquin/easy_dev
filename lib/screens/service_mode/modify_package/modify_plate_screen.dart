@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../models/plate_model.dart';
 import '../../../enums/plate_type.dart';
 
+import '../../../states/area/area_state.dart';
+import '../../../utils/usage/usage_reporter.dart';
+
 import 'modify_plate_controller.dart';
-import 'sections/modify_bill_section.dart';
 import 'sections/modify_location_section.dart';
 import 'sections/modify_photo_section.dart';
 import 'sections/modify_plate_section.dart';
@@ -39,6 +43,14 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   // ⬇️ 화면 식별 태그(FAQ/에러 리포트 연계용)
   static const String screenTag = 'plate modify';
 
+  // ✅ Firestore
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  // ✅ Firestore 경로 상수(정책 고정)
+  static const String _plateStatusRoot = 'plate_status';
+  static const String _monthsSub = 'months';
+  static const String _platesSub = 'plates';
+
   late ModifyPlateController _controller;
   late ModifyCameraHelper _cameraHelper;
 
@@ -53,12 +65,320 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   bool isLoading = false;
   late List<String> selectedStatusNames;
 
+  // ✅ plate_status에서 실제로 찾은 문서 ref를 보관(삭제/업데이트 시 동일 문서 타겟 보장)
+  DocumentReference<Map<String, dynamic>>? _resolvedPlateStatusRef;
+
   // ───── DraggableScrollableSheet 상태/애니메이션 ─────
   final DraggableScrollableController _sheetController = DraggableScrollableController();
   bool _sheetOpen = false; // 현재 열림 상태
   static const double _sheetClosed = 0.16; // 헤더만 보이게
   static const double _sheetOpened = 1.00; // 최상단까지(가득)
 
+  // ─────────────────────────────
+  // ✅ 문서명 정책 유틸
+  // ─────────────────────────────
+
+  /// area가 비어있으면 doc('')/경로 불일치 → 안전 처리
+  String _safeArea(String area) {
+    final a = area.trim();
+    return a.isEmpty ? 'unknown' : a;
+  }
+
+  /// ✅ 레거시(읽기/삭제 폴백용): 과거 하이픈 제거 docId 저장 데이터 대응
+  String _legacyPlatePk(String plateNumber) {
+    return plateNumber.replaceAll('-', '').replaceAll(' ', '').trim();
+  }
+
+  /// yyyyMM
+  String _monthKey(DateTime dt) => '${dt.year}${dt.month.toString().padLeft(2, '0')}';
+
+  /// ✅ plateNumber 표기 차이(하이픈 유무)를 흡수하기 위한 후보 생성
+  List<String> _plateNumberVariants(String plateNumber) {
+    final t = plateNumber.trim().replaceAll(' ', '');
+    final raw = t.replaceAll('-', '');
+
+    final m = RegExp(r'^(\d{2,3})([가-힣])(\d{4})$').firstMatch(raw);
+    if (m == null) {
+      return [t];
+    }
+
+    final noHyphen = '${m.group(1)}${m.group(2)}${m.group(3)}';
+    final withHyphen = '${m.group(1)}-${m.group(2)}-${m.group(3)}';
+
+    final res = <String>[];
+    void add(String s) {
+      if (s.isNotEmpty && !res.contains(s)) res.add(s);
+    }
+
+    add(t); // 원문 우선
+    add(noHyphen); // 72로6085
+    add(withHyphen); // 72-로-6085
+    return res;
+  }
+
+  /// ✅ "{plateNumber}_{area}" docId 후보 리스트(하이픈/비하이픈 둘 다)
+  List<String> _plateDocIdCandidates(String plateNumber, String area) {
+    final a = _safeArea(area);
+    return _plateNumberVariants(plateNumber).map((p) => '${p}_$a').toList();
+  }
+
+  /// ✅ 레거시 pk 후보들(하이픈 제거)
+  List<String> _legacyPkCandidates(String plateNumber) {
+    final res = <String>[];
+    for (final p in _plateNumberVariants(plateNumber)) {
+      final legacy = _legacyPlatePk(p);
+      if (legacy.isNotEmpty && !res.contains(legacy)) res.add(legacy);
+    }
+    return res;
+  }
+
+  String _currentAreaSafe() {
+    try {
+      final a = context.read<AreaState>().currentArea;
+      return _safeArea(a);
+    } catch (_) {
+      return 'unknown';
+    }
+  }
+
+  // ─────────────────────────────
+  // ✅ plate_status 조회/해결(월샤딩 + 폴백)
+  // ─────────────────────────────
+
+  Future<_PlateStatusLookupResult?> _lookupPlateStatus({
+    required String plateNumber,
+    required String area,
+  }) async {
+    int reads = 0;
+    final safeArea = _safeArea(area);
+
+    final docIdCandidates = _plateDocIdCandidates(plateNumber, safeArea);
+    final legacyCandidates = _legacyPkCandidates(plateNumber);
+
+    final now = DateTime.now();
+    final monthsToTry = <DateTime>[
+      DateTime(now.year, now.month, 1),
+      DateTime(now.year, now.month - 1, 1),
+    ];
+
+    try {
+      // 1) 빠른 경로: 현재월/전월
+      for (final m in monthsToTry) {
+        final mk = _monthKey(m);
+
+        // 신규 docId 후보들
+        for (final docId in docIdCandidates) {
+          final ref = _firestore
+              .collection(_plateStatusRoot)
+              .doc(safeArea)
+              .collection(_monthsSub)
+              .doc(mk)
+              .collection(_platesSub)
+              .doc(docId);
+
+          final snap = await ref.get();
+          reads += 1;
+
+          if (snap.exists) {
+            return _PlateStatusLookupResult(
+              data: snap.data() ?? <String, dynamic>{},
+              ref: ref,
+              reads: reads,
+            );
+          }
+        }
+
+        // 레거시 후보들
+        for (final legacyId in legacyCandidates) {
+          final ref = _firestore
+              .collection(_plateStatusRoot)
+              .doc(safeArea)
+              .collection(_monthsSub)
+              .doc(mk)
+              .collection(_platesSub)
+              .doc(legacyId);
+
+          final snap = await ref.get();
+          reads += 1;
+
+          if (snap.exists) {
+            return _PlateStatusLookupResult(
+              data: snap.data() ?? <String, dynamic>{},
+              ref: ref,
+              reads: reads,
+            );
+          }
+        }
+      }
+
+      // 2) 느린 경로: 전체월 폴백(collectionGroup)
+      try {
+        final subset = docIdCandidates.take(10).toList();
+        if (subset.isNotEmpty) {
+          final qs = await _firestore
+              .collectionGroup(_platesSub)
+              .where(FieldPath.documentId, whereIn: subset)
+              .get();
+          reads += 1;
+
+          if (qs.docs.isNotEmpty) {
+            QueryDocumentSnapshot<Map<String, dynamic>>? best;
+            int bestMonth = -1;
+
+            for (final d in qs.docs) {
+              final path = d.reference.path;
+              if (!path.contains('$_plateStatusRoot/$safeArea/$_monthsSub/')) continue;
+
+              final parts = path.split('/');
+              final monthsIndex = parts.indexOf(_monthsSub);
+              if (monthsIndex < 0 || monthsIndex + 1 >= parts.length) continue;
+
+              final mk = parts[monthsIndex + 1];
+              final mkInt = int.tryParse(mk) ?? -1;
+              if (mkInt > bestMonth) {
+                bestMonth = mkInt;
+                best = d;
+              }
+            }
+
+            final chosen = best ?? qs.docs.first;
+            return _PlateStatusLookupResult(
+              data: chosen.data(),
+              ref: chosen.reference,
+              reads: reads,
+            );
+          }
+        }
+
+        final legacySubset = legacyCandidates.take(10).toList();
+        if (legacySubset.isNotEmpty) {
+          final qsLegacy = await _firestore
+              .collectionGroup(_platesSub)
+              .where(FieldPath.documentId, whereIn: legacySubset)
+              .get();
+          reads += 1;
+
+          if (qsLegacy.docs.isNotEmpty) {
+            QueryDocumentSnapshot<Map<String, dynamic>>? best;
+            int bestMonth = -1;
+
+            for (final d in qsLegacy.docs) {
+              final path = d.reference.path;
+              if (!path.contains('$_plateStatusRoot/$safeArea/$_monthsSub/')) continue;
+
+              final parts = path.split('/');
+              final monthsIndex = parts.indexOf(_monthsSub);
+              if (monthsIndex < 0 || monthsIndex + 1 >= parts.length) continue;
+
+              final mk = parts[monthsIndex + 1];
+              final mkInt = int.tryParse(mk) ?? -1;
+              if (mkInt > bestMonth) {
+                bestMonth = mkInt;
+                best = d;
+              }
+            }
+
+            final chosen = best ?? qsLegacy.docs.first;
+            return _PlateStatusLookupResult(
+              data: chosen.data(),
+              ref: chosen.reference,
+              reads: reads,
+            );
+          }
+        }
+      } on FirebaseException catch (e) {
+        debugPrint('[ModifyPlateScreen] collectionGroup fallback blocked: ${e.code} ${e.message}');
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('[ModifyPlateScreen] _lookupPlateStatus error: $e');
+      return null;
+    } finally {
+      final nToReport = (reads <= 0) ? 1 : reads;
+      try {
+        await UsageReporter.instance.report(
+          area: safeArea,
+          action: 'read',
+          n: nToReport,
+          source: 'ModifyPlateScreen._lookupPlateStatus/plate_status.lookup',
+          useSourceOnlyKey: true,
+        );
+      } catch (e) {
+        debugPrint('[UsageReporter] report failed in _lookupPlateStatus: $e');
+      }
+    }
+  }
+
+  Future<void> _loadPlateStatusToUiOnce() async {
+    final plateNumber = widget.plate.plateNumber;
+    final area = _currentAreaSafe();
+
+    final result = await _lookupPlateStatus(plateNumber: plateNumber, area: area);
+    if (!mounted) return;
+    if (result == null) return;
+
+    final data = result.data;
+    _resolvedPlateStatusRef = result.ref;
+
+    final fetchedStatus = (data['customStatus'] as String?)?.trim();
+    final fetchedList =
+        (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+    final fetchedCountType = (data['countType'] as String?)?.trim();
+
+    setState(() {
+      _controller.fetchedCustomStatus = fetchedStatus;
+      _controller.customStatusController.text = fetchedStatus ?? '';
+      selectedStatusNames = fetchedList;
+
+      // ✅ 정산 유형은 사용자 수정 불가이지만, "서버에 저장된 현재값 표기"는 허용
+      // (원치 않으면 이 블록을 제거하면 됩니다)
+      if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
+        _controller.selectedBillCountType = fetchedCountType;
+        _controller.selectedBill = fetchedCountType;
+      }
+    });
+  }
+
+  Future<void> _deletePlateStatusMemoAndStatus() async {
+    if (_resolvedPlateStatusRef == null) {
+      final plateNumber = widget.plate.plateNumber;
+      final area = _currentAreaSafe();
+      final result = await _lookupPlateStatus(plateNumber: plateNumber, area: area);
+      if (result == null) {
+        throw StateError('plate_status 문서를 찾을 수 없습니다.');
+      }
+      _resolvedPlateStatusRef = result.ref;
+    }
+
+    final ref = _resolvedPlateStatusRef!;
+    try {
+      await ref.update({
+        'customStatus': FieldValue.delete(),
+        'statusList': FieldValue.delete(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      try {
+        await UsageReporter.instance.report(
+          area: _currentAreaSafe(),
+          action: 'write',
+          n: 1,
+          source: 'ModifyPlateScreen._deletePlateStatusMemoAndStatus/plate_status.doc.update(delete)',
+          useSourceOnlyKey: true,
+        );
+      } catch (e) {
+        debugPrint('[UsageReporter] report failed in _deletePlateStatusMemoAndStatus: $e');
+      }
+    } on FirebaseException catch (e) {
+      debugPrint('[ModifyPlateScreen] delete memo firebase error: ${e.code} ${e.message}');
+      rethrow;
+    }
+  }
+
+  // ─────────────────────────────
+  // ✅ Sheet open 상태 동기화(드래그 포함)
+  // ─────────────────────────────
   Future<void> _animateSheet({required bool open}) async {
     final target = open ? _sheetOpened : _sheetClosed;
     try {
@@ -69,7 +389,6 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
       );
       if (mounted) setState(() => _sheetOpen = open);
     } catch (_) {
-      // attach 전일 수 있으므로 프레임 이후 보정
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _sheetController.jumpTo(target);
         if (mounted) setState(() => _sheetOpen = open);
@@ -98,12 +417,31 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
     );
 
     _cameraHelper = ModifyCameraHelper();
-    _cameraHelper.initializeInputCamera().then((_) => setState(() {}));
+
+    _cameraHelper.initializeInputCamera().then((_) {
+      if (mounted) setState(() {});
+    });
 
     _controller.initializePlate();
     _controller.initializeFieldValues();
 
     selectedStatusNames = List<String>.from(widget.plate.statusList);
+
+    _sheetController.addListener(() {
+      try {
+        final s = _sheetController.size;
+        final bool openNow = s >= ((_sheetClosed + _sheetOpened) / 2);
+        if (mounted && openNow != _sheetOpen) {
+          setState(() => _sheetOpen = openNow);
+        }
+      } catch (_) {
+        // ignore
+      }
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _loadPlateStatusToUiOnce();
+    });
   }
 
   void _showCameraPreviewDialog() async {
@@ -169,7 +507,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
     );
 
     return SafeArea(
-      child: IgnorePointer( // 제스처 간섭 방지
+      child: IgnorePointer(
         child: Align(
           alignment: Alignment.topLeft,
           child: Padding(
@@ -187,17 +525,15 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   @override
   Widget build(BuildContext context) {
     final viewInset = MediaQuery.of(context).viewInsets.bottom;
-    // 본문이 하단 내비/시트와 겹치지 않도록 여유 패딩
     final bottomSafePadding = 140.0 + viewInset;
 
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: false, // ⬅️ 뒤로가기 화살표 제거
+        automaticallyImplyLeading: false,
         centerTitle: true,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
         elevation: 1,
-        // ⬇️ 좌측 상단(11시)에 'plate modify' 텍스트 고정
         flexibleSpace: _buildScreenTag(context),
         title: const Text(
           "번호판 수정",
@@ -208,7 +544,6 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
         builder: (context, constraints) {
           return Stack(
             children: [
-              // ─── 상단 본문: 번호판 / 위치 / 사진 (작은 폰 보완: 스크롤 허용) ───
               Positioned.fill(
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -241,16 +576,14 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                 ),
               ),
 
-              // ─── 하단 시트: 정산 / 상태(토글) / 메모 ───
               DraggableScrollableSheet(
                 controller: _sheetController,
                 initialChildSize: _sheetClosed,
                 minChildSize: _sheetClosed,
-                maxChildSize: _sheetOpened, // 최상단까지
+                maxChildSize: _sheetOpened,
                 snap: true,
                 snapSizes: const [_sheetClosed, _sheetOpened],
                 builder: (context, scrollController) {
-                  // 메인 배경과 미세하게 구분되는 옅은 톤
                   const sheetBg = Color(0xFFF6F8FF);
 
                   return Container(
@@ -266,15 +599,14 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                       bottom: false,
                       child: ListView(
                         controller: scrollController,
-                        physics: const NeverScrollableScrollPhysics(), // 내부 스크롤 금지(요청 유지)
+                        physics: const NeverScrollableScrollPhysics(),
                         padding: EdgeInsets.fromLTRB(
                           16,
                           8,
                           16,
-                          16 + 100 + viewInset, // 하단 내비와 겹치지 않도록 여유
+                          16 + 100 + viewInset,
                         ),
                         children: [
-                          // 헤더(탭으로 열고/닫기 + 애니메이션)
                           GestureDetector(
                             behavior: HitTestBehavior.opaque,
                             onTap: _toggleSheet,
@@ -296,7 +628,10 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                                     children: [
                                       Text(
                                         _sheetOpen ? '정산 / 상태 (탭하여 닫기)' : '정산 / 상태 (탭하여 열기)',
-                                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
                                       Text(
                                         widget.plate.plateNumber,
@@ -310,25 +645,17 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                           ),
                           const SizedBox(height: 12),
 
-                          // 정산
-                          ModifyBillSection(
-                            selectedBill: _controller.selectedBillCountType,
-                            selectedBillType: _controller.selectedBillType,
-                            onChanged: (bill) {
-                              setState(() {
-                                _controller.applyBillDefaults(bill);
-                              });
-                            },
-                            onTypeChanged: (type) {
-                              setState(() {
-                                _controller.onBillTypeChanged(type);
-                              });
-                            },
+                          // ✅ 정산 유형: 사용자 수정 불가(읽기 전용)
+                          _ReadOnlyBillSection(
+                            billTypeLabel: _controller.selectedBillType,
+                            countTypeLabel: _controller.selectedBillCountType ??
+                                _controller.selectedBill ??
+                                widget.plate.billingType ??
+                                '-',
                           ),
 
                           const SizedBox(height: 24),
 
-                          // 추가 상태 메모
                           const Text(
                             '추가 상태 메모 (최대 20자)',
                             style: TextStyle(fontWeight: FontWeight.bold),
@@ -340,7 +667,8 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                             decoration: InputDecoration(
                               hintText: '예: 뒷범퍼 손상',
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                             ),
                           ),
 
@@ -349,7 +677,9 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                               customStatus: _controller.fetchedCustomStatus!,
                               onDelete: () async {
                                 try {
-                                  await _controller.deleteCustomStatusFromFirestore(context);
+                                  await _deletePlateStatusMemoAndStatus();
+
+                                  if (!mounted) return;
                                   setState(() {
                                     _controller.fetchedCustomStatus = null;
                                     _controller.customStatusController.clear();
@@ -357,6 +687,7 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                                   });
                                   showSuccessSnackbar(context, '자동 메모가 삭제되었습니다');
                                 } catch (_) {
+                                  if (!mounted) return;
                                   showFailedSnackbar(context, '삭제 실패. 다시 시도해주세요');
                                 }
                               },
@@ -401,12 +732,14 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                   buttonLabel: '수정 완료',
                   onPressed: () async {
                     setState(() => isLoading = true);
+
                     await _controller.handleAction(() {
                       if (mounted) {
                         Navigator.pop(context);
                         showSuccessSnackbar(context, "수정이 완료되었습니다!");
                       }
                     }, selectedStatusNames);
+
                     if (mounted) setState(() => isLoading = false);
                   },
                 ),
@@ -427,4 +760,76 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
       ),
     );
   }
+}
+
+class _ReadOnlyBillSection extends StatelessWidget {
+  final String billTypeLabel;
+  final String countTypeLabel;
+
+  const _ReadOnlyBillSection({
+    required this.billTypeLabel,
+    required this.countTypeLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '정산 유형',
+          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12.0),
+
+        // 타입/선택 모두 읽기 전용 표시
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border.all(color: Colors.black26),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                child: Text(
+                  countTypeLabel.isEmpty ? '-' : countTypeLabel,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Colors.black87),
+                ),
+              ),
+              Text(
+                billTypeLabel,
+                style: const TextStyle(
+                  color: Colors.black54,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 8),
+        const Text(
+          '정산 유형은 이 화면에서 변경할 수 없습니다.',
+          style: TextStyle(fontSize: 12, color: Colors.black54),
+        ),
+      ],
+    );
+  }
+}
+
+class _PlateStatusLookupResult {
+  final Map<String, dynamic> data;
+  final DocumentReference<Map<String, dynamic>> ref;
+  final int reads;
+
+  _PlateStatusLookupResult({
+    required this.data,
+    required this.ref,
+    required this.reads,
+  });
 }
