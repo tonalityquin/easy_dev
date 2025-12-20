@@ -110,7 +110,7 @@ class _LeaderDocumentBoxSheet extends StatelessWidget {
                                         onTap: () async {
                                           switch (item.type) {
                                             case DocumentType.statementForm:
-                                              // ✅ statementForm 안에서 id 기준 분기
+                                            // ✅ statementForm 안에서 id 기준 분기
                                               if (item.id == 'template-commute-record') {
                                                 // 출퇴근 기록 제출
                                                 final proceed = await showWorkEndDurationBlockingDialog(
@@ -154,7 +154,7 @@ class _LeaderDocumentBoxSheet extends StatelessWidget {
                                               break;
 
                                             case DocumentType.workEndReportForm:
-                                              // ✅ 업무 종료/퇴근 보고 양식 → DashboardEndReportFormPage
+                                            // ✅ 업무 종료/퇴근 보고 양식 → DashboardEndReportFormPage
                                               Navigator.of(context).push(
                                                 MaterialPageRoute(
                                                   builder: (_) => const DashboardEndReportFormPage(),
@@ -164,7 +164,7 @@ class _LeaderDocumentBoxSheet extends StatelessWidget {
                                               break;
 
                                             case DocumentType.workStartReportForm:
-                                              // ✅ 업무 시작 보고 양식 → DashboardStartReportFormPage
+                                            // ✅ 업무 시작 보고 양식 → DashboardStartReportFormPage
                                               Navigator.of(context).push(
                                                 MaterialPageRoute(
                                                   builder: (_) => const DashboardStartReportFormPage(),
@@ -174,7 +174,7 @@ class _LeaderDocumentBoxSheet extends StatelessWidget {
                                               break;
 
                                             case DocumentType.generic:
-                                              // ✅ generic 문서 중 연차(결근) 지원 신청서 연결
+                                            // ✅ generic 문서 중 연차(결근) 지원 신청서 연결
                                               if (item.id == 'template-annual-leave-application') {
                                                 Navigator.of(context).push(
                                                   MaterialPageRoute(
@@ -245,7 +245,7 @@ class _BinderSpine extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: List.generate(
           5,
-          (index) => Padding(
+              (index) => Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Container(
               width: 10,
@@ -538,9 +538,21 @@ class LocalCommuteRecord {
   /// 실제 이벤트 시각 (date + time 기준)
   final DateTime dateTime;
 
+  /// 로컬 SQLite 테이블명 (simple_work_attendance / simple_break_attendance)
+  final String localTable;
+
+  /// 로컬 SQLite date 값(yyyy-MM-dd)
+  final String localDate;
+
+  /// 로컬 SQLite type 값(work_in/work_out/start)
+  final String localType;
+
   LocalCommuteRecord({
     required this.status,
     required this.dateTime,
+    required this.localTable,
+    required this.localDate,
+    required this.localType,
   });
 }
 
@@ -587,7 +599,15 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
 
       try {
         final dt = dateTimeParser.parse('$dateStr $timeStr');
-        result.add(LocalCommuteRecord(status: statusLabel, dateTime: dt));
+        result.add(
+          LocalCommuteRecord(
+            status: statusLabel,
+            dateTime: dt,
+            localTable: 'simple_work_attendance',
+            localDate: dateStr,
+            localType: typeCode,
+          ),
+        );
       } catch (_) {
         // 파싱 실패는 무시
         continue;
@@ -595,22 +615,31 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
     }
   }
 
-  // 2) 휴게 (simple_break_attendance, type = "start")
+  // 2) 휴게 (simple_break_attendance)
   final needBreak = statuses.contains('휴게');
   if (needBreak) {
     final breakRows = await db.query(
       'simple_break_attendance',
-      columns: ['date', 'time'],
+      columns: ['date', 'type', 'time'],
       orderBy: 'date ASC, created_at ASC',
     );
 
     for (final row in breakRows) {
       final dateStr = row['date'] as String;
+      final typeCode = (row['type'] as String?) ?? 'start';
       final timeStr = row['time'] as String;
 
       try {
         final dt = dateTimeParser.parse('$dateStr $timeStr');
-        result.add(LocalCommuteRecord(status: '휴게', dateTime: dt));
+        result.add(
+          LocalCommuteRecord(
+            status: '휴게',
+            dateTime: dt,
+            localTable: 'simple_break_attendance',
+            localDate: dateStr,
+            localType: typeCode,
+          ),
+        );
       } catch (_) {
         continue;
       }
@@ -620,9 +649,22 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
   return result;
 }
 
+/// 업로드(또는 서버 중복으로 간주)된 로컬 행을 삭제합니다.
+/// - (date, type) PK 기반으로 1건 삭제
+Future<int> _deleteLocalAttendanceRow(LocalCommuteRecord record) async {
+  final db = await SimpleModeDb.instance.database;
+
+  return db.delete(
+    record.localTable,
+    where: 'date = ? AND type = ?',
+    whereArgs: [record.localDate, record.localType],
+  );
+}
+
 /// 출퇴근 기록 제출:
 /// - SQLite(simple_work_attendance)에 있는 출근/퇴근 전체 →
 ///   Firestore(commute_user_logs)의 "출근"/"퇴근" 로그로 업로드
+/// - 업로드 완료(또는 서버 중복)된 데이터는 SQLite에서 삭제(리팩터링 반영)
 Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
   final messenger = ScaffoldMessenger.of(context);
 
@@ -640,7 +682,7 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
       const SnackBar(
         content: Text(
           '출퇴근 기록 제출 실패: 사용자/근무지 정보가 비어 있습니다.\n'
-          '관리자에게 계정 및 근무지 설정을 확인해 달라고 요청해 주세요.',
+              '관리자에게 계정 및 근무지 설정을 확인해 달라고 요청해 주세요.',
         ),
       ),
     );
@@ -670,8 +712,10 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
 
     var successCount = 0;
     var skippedCount = 0;
+    var failedCount = 0;
+    var deletedCount = 0;
 
-    // 2) Firestore commute_user_logs 에 업로드
+    // 2) Firestore commute_user_logs 에 업로드 + 로컬 삭제
     for (final record in records) {
       final status = record.status; // "출근" 또는 "퇴근"
       final eventDateTime = record.dateTime;
@@ -686,7 +730,9 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
       );
 
       if (alreadyExists) {
+        // 서버 중복: 업로드 없이 스킵하되, 로컬은 정리(삭제)
         skippedCount++;
+        deletedCount += await _deleteLocalAttendanceRow(record);
         continue;
       }
 
@@ -701,14 +747,30 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
         dateTime: eventDateTime,
       );
 
-      successCount++;
+      // addLog 내부 구현에 따라 예외를 외부로 throw하지 않을 수 있으므로,
+      // 업로드 여부를 재검증한 후에만 로컬 삭제합니다.
+      final nowExists = await repo.hasLogForDate(
+        status: status,
+        userId: userId,
+        dateStr: dateStr,
+      );
+
+      if (nowExists) {
+        successCount++;
+        deletedCount += await _deleteLocalAttendanceRow(record);
+      } else {
+        failedCount++;
+      }
     }
 
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          '출퇴근 기록 제출 완료: $successCount건 업로드, '
-          '중복 $skippedCount건은 건너뛰었습니다.',
+          '출퇴근 기록 제출 완료: '
+              '$successCount건 업로드, '
+              '중복 $skippedCount건, '
+              '실패 $failedCount건, '
+              '로컬 삭제 $deletedCount건.',
         ),
       ),
     );
@@ -732,7 +794,7 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
       const SnackBar(
         content: Text(
           '출퇴근 기록 제출 중 오류가 발생했습니다.\n'
-          '네트워크 또는 Firebase 설정을 확인해 주세요.',
+              '네트워크 또는 Firebase 설정을 확인해 주세요.',
         ),
       ),
     );
@@ -742,6 +804,7 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
 /// 휴게시간 기록 제출:
 /// - SQLite(simple_break_attendance)에 있는 휴게 로그 전체 →
 ///   Firestore(commute_user_logs)의 "휴게" 로그로 업로드
+/// - 업로드 완료(또는 서버 중복)된 데이터는 SQLite에서 삭제(리팩터링 반영)
 Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
   final messenger = ScaffoldMessenger.of(context);
 
@@ -758,7 +821,7 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
       const SnackBar(
         content: Text(
           '휴게시간 기록 제출 실패: 사용자/근무지 정보가 비어 있습니다.\n'
-          '관리자에게 계정 및 근무지 설정을 확인해 달라고 요청해 주세요.',
+              '관리자에게 계정 및 근무지 설정을 확인해 달라고 요청해 주세요.',
         ),
       ),
     );
@@ -788,6 +851,8 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
 
     var successCount = 0;
     var skippedCount = 0;
+    var failedCount = 0;
+    var deletedCount = 0;
 
     for (final record in records) {
       final eventDateTime = record.dateTime;
@@ -802,6 +867,7 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
 
       if (alreadyExists) {
         skippedCount++;
+        deletedCount += await _deleteLocalAttendanceRow(record);
         continue;
       }
 
@@ -816,14 +882,28 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
         dateTime: eventDateTime,
       );
 
-      successCount++;
+      final nowExists = await repo.hasLogForDate(
+        status: '휴게',
+        userId: userId,
+        dateStr: dateStr,
+      );
+
+      if (nowExists) {
+        successCount++;
+        deletedCount += await _deleteLocalAttendanceRow(record);
+      } else {
+        failedCount++;
+      }
     }
 
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          '휴게시간 기록 제출 완료: $successCount건 업로드, '
-          '중복 $skippedCount건은 건너뛰었습니다.',
+          '휴게시간 기록 제출 완료: '
+              '$successCount건 업로드, '
+              '중복 $skippedCount건, '
+              '실패 $failedCount건, '
+              '로컬 삭제 $deletedCount건.',
         ),
       ),
     );
@@ -847,7 +927,7 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
       const SnackBar(
         content: Text(
           '휴게시간 기록 제출 중 오류가 발생했습니다.\n'
-          '네트워크 또는 Firebase 설정을 확인해 주세요.',
+              '네트워크 또는 Firebase 설정을 확인해 주세요.',
         ),
       ),
     );
@@ -949,7 +1029,7 @@ String _typeLabelForType(DocumentType type) {
     case DocumentType.workStartReportForm:
       return '업무 시작 보고';
     case DocumentType.workEndReportForm:
-      // 기본값(위에서 id별로 override 가능)
+    // 기본값(위에서 id별로 override 가능)
       return '퇴근/업무 종료';
     case DocumentType.handoverForm:
       return '업무 인수인계';
