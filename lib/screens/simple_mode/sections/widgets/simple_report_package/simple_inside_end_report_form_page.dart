@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:googleapis/gmail/v1.dart' as gmail;
@@ -26,6 +27,8 @@ class SimpleInsideEndReportFormPage extends StatefulWidget {
 /// ─────────────────────────────────────────────────────────────
 /// [요구사항 반영] Firestore 조회(get/query) 없음.
 /// - insert(set/merge)만 수행하여 end_work_reports 스키마에 맞게 저장.
+/// - [추가 요구사항] 월 샤딩(months/yyyyMM/reports/yyyy-MM-dd) 구조로 저장
+/// - [추가 요구사항] 동일 batch 내 3개 문서 원자 upsert
 /// ─────────────────────────────────────────────────────────────
 class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFormPage> {
   final _formKey = GlobalKey<FormState>();
@@ -542,9 +545,7 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                                               _contentCtrl.text.trim().isEmpty ? '입력된 특이 사항이 없습니다.' : _contentCtrl.text,
                                               style: theme.textTheme.bodyMedium?.copyWith(
                                                 height: 1.4,
-                                                color: _contentCtrl.text.trim().isEmpty
-                                                    ? Colors.grey[600]
-                                                    : Colors.black,
+                                                color: _contentCtrl.text.trim().isEmpty ? Colors.grey[600] : Colors.black,
                                               ),
                                             ),
                                           ),
@@ -789,8 +790,22 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
 
   // ─────────────────────────────────────────────────────────────
   // [핵심] 2단계 "1차 제출" (Firestore write only)
-  // - 조회(plates/counters 등) 없음
-  // - end_work_reports/area_$area/reports.$date 구조에 동일 필드명으로 삽입
+  //
+  // 요구사항 반영:
+  //  1) 월 샤딩 저장:
+  //     end_work_reports/area_<area>/months/<yyyyMM>/reports/<yyyy-MM-dd>
+  //     history는 일별 report 문서 필드로 유지(arrayUnion)
+  //  2) 메타 문서 upsert:
+  //     동일 batch에
+  //       - end_work_reports/area_<area>
+  //       - end_work_reports/area_<area>/months/<yyyyMM>
+  //       - end_work_reports/area_<area>/months/<yyyyMM>/reports/<yyyy-MM-dd>
+  //     를 원자적으로 commit
+  //  3) monthKey(yyyyMM) 추가:
+  //     DateFormat('yyyyMM').format(now)
+  //     일별 report 문서에도 monthKey 저장
+  //  4) 레거시 dot-path 저장 제거:
+  //     reports.<dateStr>.* payload 구성 삭제
   // ─────────────────────────────────────────────────────────────
   Future<void> _submitFirstEndReport() async {
     if (_firstSubmitting) return;
@@ -844,14 +859,24 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
       const snapshotTotalLockedFee = 0;
 
       final now = DateTime.now();
-      final dateStr = _formatDateKey(now); // yyyy-MM-dd
+
+      // yyyy-MM-dd (일별 doc id)
+      final dateStr = DateFormat('yyyy-MM-dd').format(now);
+
+      // yyyyMM (월 샤딩 key)
+      final monthKey = DateFormat('yyyyMM').format(now);
+
       final createdAtIso = now.toIso8601String();
 
-      final docRef = _firestore.collection('end_work_reports').doc('area_$area');
-      final reportBasePath = 'reports.$dateStr';
+      // refs
+      final areaRef = _firestore.collection('end_work_reports').doc('area_$area');
+      final monthRef = areaRef.collection('months').doc(monthKey);
+      final reportRef = monthRef.collection('reports').doc(dateStr);
 
+      // history entry (일별 report 문서 필드)
       final historyEntry = <String, dynamic>{
         'date': dateStr,
+        'monthKey': monthKey,
         'createdAt': createdAtIso,
         'uploadedBy': userName,
         'vehicleCount': <String, dynamic>{
@@ -862,36 +887,58 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
           'snapshot_lockedVehicleCount': snapshotLockedVehicleCount,
           'snapshot_totalLockedFee': snapshotTotalLockedFee,
         },
-        // reportUrl/logsUrl은 조회/업로드 로직이 없으므로 생략(없음)
       };
 
-      final payload = <String, dynamic>{
-        // Dashboard 업로드와 동일 최상위 필드
+      // 1) area meta upsert
+      final areaMetaPayload = <String, dynamic>{
         'division': division,
         'area': area,
+        'updatedAt': createdAtIso,
+        'lastReportDate': dateStr,
+        'lastMonthKey': monthKey,
+      };
 
-        // Dashboard 업로드와 동일 reports.<date>.* 구조
-        '$reportBasePath.date': dateStr,
-        '$reportBasePath.vehicleCount': <String, dynamic>{
+      // 2) month meta upsert
+      final monthMetaPayload = <String, dynamic>{
+        'division': division,
+        'area': area,
+        'monthKey': monthKey,
+        'updatedAt': createdAtIso,
+        'lastReportDate': dateStr,
+      };
+
+      // 3) daily report upsert (신규 문서 기반 payload)
+      final dailyReportPayload = <String, dynamic>{
+        'division': division,
+        'area': area,
+        'date': dateStr,
+        'monthKey': monthKey,
+        'vehicleCount': <String, dynamic>{
           'vehicleInput': vehicleInputCount,
           'vehicleOutput': vehicleOutputManual,
         },
-        '$reportBasePath.metrics': <String, dynamic>{
+        'metrics': <String, dynamic>{
           'snapshot_lockedVehicleCount': snapshotLockedVehicleCount,
           'snapshot_totalLockedFee': snapshotTotalLockedFee,
         },
-        '$reportBasePath.createdAt': createdAtIso,
-        '$reportBasePath.uploadedBy': userName,
+        'createdAt': createdAtIso,
+        'uploadedBy': userName,
 
-        // history 누적(동일 필드명)
-        '$reportBasePath.history': FieldValue.arrayUnion(<Map<String, dynamic>>[historyEntry]),
+        // history는 "일별 report 문서"의 필드로 유지
+        'history': FieldValue.arrayUnion(<Map<String, dynamic>>[historyEntry]),
       };
 
       await _runWithBlockingDialog(
         context: context,
         message: '1차 업무 종료 보고를 저장 중입니다. 잠시만 기다려 주세요...',
         task: () async {
-          await docRef.set(payload, SetOptions(merge: true));
+          final batch = _firestore.batch();
+
+          batch.set(areaRef, areaMetaPayload, SetOptions(merge: true));
+          batch.set(monthRef, monthMetaPayload, SetOptions(merge: true));
+          batch.set(reportRef, dailyReportPayload, SetOptions(merge: true));
+
+          await batch.commit();
         },
       );
 
@@ -906,6 +953,8 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
           '1차 업무 종료 보고 저장 완료',
           '• area: $area',
           '• division: $division',
+          '• monthKey: $monthKey',
+          '• 저장 경로: end_work_reports/area_$area/months/$monthKey/reports/$dateStr',
           '• 서버 저장 입고 대수(vehicleInput): ${vehicleInputCount}대',
           '• 서버 저장 출고 대수(vehicleOutput): ${vehicleOutputManual}대 (조회 없음 → 0)',
           '• metrics 스냅샷: ${snapshotLockedVehicleCount} / ${snapshotTotalLockedFee} (조회 없음 → 0)',
@@ -916,14 +965,6 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
     } finally {
       if (mounted) setState(() => _firstSubmitting = false);
     }
-  }
-
-  // yyyy-MM-dd
-  String _formatDateKey(DateTime dt) {
-    final y = dt.year.toString().padLeft(4, '0');
-    final m = dt.month.toString().padLeft(2, '0');
-    final d = dt.day.toString().padLeft(2, '0');
-    return '$y-$m-$d';
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -1364,9 +1405,7 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                     curve: Curves.easeOut,
                   );
                 },
-                style: _hasSpecialNote == false
-                    ? SimpleReportButtonStyles.primary()
-                    : SimpleReportButtonStyles.outlined(),
+                style: _hasSpecialNote == false ? SimpleReportButtonStyles.primary() : SimpleReportButtonStyles.outlined(),
                 child: const Text('특이사항 없음'),
               ),
             ),
@@ -1384,9 +1423,7 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                     curve: Curves.easeOut,
                   );
                 },
-                style: _hasSpecialNote == true
-                    ? SimpleReportButtonStyles.primary()
-                    : SimpleReportButtonStyles.outlined(),
+                style: _hasSpecialNote == true ? SimpleReportButtonStyles.primary() : SimpleReportButtonStyles.outlined(),
                 child: const Text('특이사항 있음'),
               ),
             ),
