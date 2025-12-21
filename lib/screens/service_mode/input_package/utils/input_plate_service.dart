@@ -17,6 +17,52 @@ import '../../../../states/area/area_state.dart';
 import '../../../../states/user/user_state.dart';
 
 class InputPlateService {
+  // ─────────────────────────────────────────
+  // 날짜/경로 유틸 (UTC 기준 통일 + 월 폴더 분리)
+  // ─────────────────────────────────────────
+  static String _twoDigits(int v) => v.toString().padLeft(2, '0');
+
+  /// yyyy-MM-dd (UTC)
+  static String _buildDateStrUtc(DateTime nowUtc) {
+    return '${nowUtc.year.toString().padLeft(4, '0')}-${_twoDigits(nowUtc.month)}-${_twoDigits(nowUtc.day)}';
+  }
+
+  /// yyyy-MM (UTC)
+  static String _buildMonthStrUtc(DateTime nowUtc) {
+    return '${nowUtc.year.toString().padLeft(4, '0')}-${_twoDigits(nowUtc.month)}';
+  }
+
+  static String _buildFileNameUtc({
+    required DateTime nowUtc,
+    required String plateNumber,
+    required String userName,
+  }) {
+    final dateStr = _buildDateStrUtc(nowUtc);
+    final timeStr = nowUtc.millisecondsSinceEpoch.toString();
+    return '${dateStr}_${timeStr}_${plateNumber}_$userName.jpg';
+  }
+
+  /// ✅ 변경된 업로드 경로 규칙:
+  ///   $division/$area/images/$yyyyMM/$fileName
+  static String _buildGcsPathUtc({
+    required String division,
+    required String area,
+    required DateTime nowUtc,
+    required String fileName,
+  }) {
+    final monthStr = _buildMonthStrUtc(nowUtc);
+    return '$division/$area/images/$monthStr/$fileName';
+  }
+
+  static String _sanitizeYearMonth(String raw) {
+    final ym = raw.trim();
+    final ok = RegExp(r'^\d{4}-\d{2}$').hasMatch(ym);
+    if (!ok) {
+      throw ArgumentError('yearMonth must be in yyyy-MM format. got="$raw"');
+    }
+    return ym;
+  }
+
   static Future<List<String>> uploadCapturedImages(
       List<XFile> images,
       String plateNumber,
@@ -40,12 +86,22 @@ class InputPlateService {
         continue;
       }
 
-      final now = DateTime.now();
-      final dateStr =
-          '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-      final timeStr = now.millisecondsSinceEpoch.toString();
-      final fileName = '${dateStr}_${timeStr}_${plateNumber}_$userName.jpg';
-      final gcsPath = '$division/$area/images/$fileName';
+      // ✅ 로컬 시간 대신 UTC로 통일
+      final nowUtc = DateTime.now().toUtc();
+
+      final fileName = _buildFileNameUtc(
+        nowUtc: nowUtc,
+        plateNumber: plateNumber,
+        userName: userName,
+      );
+
+      // ✅ images 하위에 yyyy-MM 월 폴더 1단계 추가
+      final gcsPath = _buildGcsPathUtc(
+        division: division,
+        area: area,
+        nowUtc: nowUtc,
+        fileName: fileName,
+      );
 
       String? gcsUrl;
       for (int attempt = 0; attempt < 3; attempt++) {
@@ -136,24 +192,37 @@ class InputPlateService {
   }
 
   // ─────────────────────────────────────────
-  // GCS 목록 조회 (중앙 세션 사용)
+  // GCS 목록 조회 (중앙 세션 사용) + 월 단위 조회 옵션
   // ─────────────────────────────────────────
   static Future<gcs.StorageApi> _storage() async {
     final client = await GoogleAuthSession.instance.safeClient();
     return gcs.StorageApi(client);
   }
 
-  /// ✅ 서비스계정/개별 OAuth 제거 → 중앙 OAuth로 GCS 객체 목록 조회
+  /// ✅ 중앙 OAuth로 GCS 객체 목록 조회
+  ///
+  /// ✅ yearMonth(yyyy-MM) 옵션:
+  /// - yearMonth 지정 시: images/yyyy-MM/ prefix만 list
+  /// - 미지정 시: images/ prefix 전체 list (기존 호환)
   static Future<List<String>> listPlateImages({
     required BuildContext context,
     required String plateNumber,
+    String? yearMonth, // ✅ 추가
   }) async {
     const bucketName = 'easydev-image';
     final area = context.read<AreaState>().currentArea;
-    final division = context.read<AreaState>().currentDivision; // ← ✅ 여기 오탈자 수정
+    final division = context.read<AreaState>().currentDivision;
 
     final storage = await _storage();
-    final prefix = '$division/$area/images/';
+
+    final String prefix;
+    if (yearMonth != null && yearMonth.trim().isNotEmpty) {
+      final ym = _sanitizeYearMonth(yearMonth);
+      prefix = '$division/$area/images/$ym/';
+    } else {
+      prefix = '$division/$area/images/';
+    }
+
     final urls = <String>[];
 
     // 페이지네이션 대응

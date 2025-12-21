@@ -131,11 +131,12 @@ class EndReportButtonStyles {
 /// 옮긴 버전입니다.
 ///
 /// 이제:
-///  - 2단계 "일일 차량 입고 대수"의 [1차 제출] 버튼 → 서버 보고(plates/GCS/Firestore/cleanup)
+///  - 2단계 "일일 차량 입고 대수"의 [1차 제출] 버튼 → 서버 보고(plates/GCS(logs)/Firestore/cleanup)
 ///  - 5단계 "제출" 버튼 → 메일(PDF) 전송만 수행
 ///
-/// 별도의 EndWorkReportService / Controller / Sheet 파일을 삭제해도
-/// 동일한 서버 로직을 그대로 활용할 수 있습니다.
+/// [GCS 업로드 변경]
+/// - ✅ /logs 업로드는 유지 (uploadEndLogJson)
+/// - ❌ /reports 업로드는 제거 (uploadEndWorkReportJson 및 관련 처리 전부 삭제)
 /// ─────────────────────────────────────────────────────────────
 
 dynamic _endReportJsonSafe(dynamic v) {
@@ -179,10 +180,11 @@ class SimpleEndWorkReportResult {
 
   final bool cleanupOk;
   final bool firestoreSaveOk;
-  final bool gcsReportUploadOk;
+
+  /// ✅ /logs 업로드 결과만 유지
   final bool gcsLogsUploadOk;
 
-  final String? reportUrl;
+  /// ✅ logsUrl만 유지
   final String? logsUrl;
 
   const SimpleEndWorkReportResult({
@@ -194,9 +196,7 @@ class SimpleEndWorkReportResult {
     required this.snapshotTotalLockedFee,
     required this.cleanupOk,
     required this.firestoreSaveOk,
-    required this.gcsReportUploadOk,
     required this.gcsLogsUploadOk,
-    required this.reportUrl,
     required this.logsUrl,
   });
 }
@@ -270,11 +270,11 @@ class SimpleEndWorkReportService {
       throw Exception('요금 합계 계산 실패: $e');
     }
 
-    // 3. 공통 리포트 로그 구성
+    // 3. 공통 리포트 로그 구성 (Firestore 저장에 사용)
     final now = DateTime.now();
     final dateStr = DateFormat('yyyy-MM-dd').format(now);
 
-    // ✅ (추가) 월 샤딩 키
+    // ✅ 월 샤딩 키
     final monthKey = DateFormat('yyyyMM').format(now);
 
     final reportLog = <String, dynamic>{
@@ -292,35 +292,9 @@ class SimpleEndWorkReportService {
       'uploadedBy': userName,
     };
 
-    // 4. GCS - report 업로드
-    String? reportUrl;
-    bool gcsReportUploadOk = true;
-    try {
-      dev.log('[END] upload report...', name: 'SimpleEndWorkReportService');
-      reportUrl = await uploadEndWorkReportJson(
-        report: reportLog,
-        division: division,
-        area: area,
-        userName: userName,
-      );
-      if (reportUrl == null) {
-        gcsReportUploadOk = false;
-        dev.log(
-          '[END] upload report returned null',
-          name: 'SimpleEndWorkReportService',
-        );
-      }
-    } catch (e, st) {
-      gcsReportUploadOk = false;
-      dev.log(
-        '[END] upload report exception',
-        name: 'SimpleEndWorkReportService',
-        error: e,
-        stackTrace: st,
-      );
-    }
+    // 4. ❌ GCS - /reports 업로드 로직 제거됨 (uploadEndWorkReportJson 관련 전부 삭제)
 
-    // 5. GCS - logs 업로드
+    // 5. ✅ GCS - /logs 업로드 (유지)
     String? logsUrl;
     bool gcsLogsUploadOk = true;
     try {
@@ -383,7 +357,6 @@ class SimpleEndWorkReportService {
         'uploadedBy': userName,
         'vehicleCount': reportLog['vehicleCount'],
         'metrics': reportLog['metrics'],
-        if (reportUrl != null) 'reportUrl': reportUrl,
         if (logsUrl != null) 'logsUrl': logsUrl,
       };
 
@@ -396,7 +369,6 @@ class SimpleEndWorkReportService {
         'metrics': reportLog['metrics'],
         'createdAt': reportLog['createdAt'],
         'uploadedBy': reportLog['uploadedBy'],
-        if (reportUrl != null) 'reportUrl': reportUrl,
         if (logsUrl != null) 'logsUrl': logsUrl,
         'updatedAt': FieldValue.serverTimestamp(),
         'history': FieldValue.arrayUnion(<Map<String, dynamic>>[historyEntry]),
@@ -491,9 +463,7 @@ class SimpleEndWorkReportService {
       snapshotTotalLockedFee: snapshotTotalLockedFee,
       cleanupOk: cleanupOk,
       firestoreSaveOk: firestoreSaveOk,
-      gcsReportUploadOk: gcsReportUploadOk,
       gcsLogsUploadOk: gcsLogsUploadOk,
-      reportUrl: reportUrl,
       logsUrl: logsUrl,
     );
   }
@@ -1054,8 +1024,7 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                                               _contentCtrl.text.trim().isEmpty ? '입력된 특이 사항이 없습니다.' : _contentCtrl.text,
                                               style: theme.textTheme.bodyMedium?.copyWith(
                                                 height: 1.4,
-                                                color:
-                                                _contentCtrl.text.trim().isEmpty ? Colors.grey[600] : Colors.black,
+                                                color: _contentCtrl.text.trim().isEmpty ? Colors.grey[600] : Colors.black,
                                               ),
                                             ),
                                           ),
@@ -1363,8 +1332,7 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
         '• 화면 일일 차량 입고 대수(사용자 입력): ${vehicleFieldValue}대',
         '• 서버 저장 입고 대수(입차+중복 입차): ${r.vehicleInputCount}대',
         '• 사용자 최종 출차 수(출차+중복 입차): ${r.vehicleOutputManual}대',
-        '• 스냅샷(plates: 정산 문서 수/합계요금): '
-            '${r.snapshotLockedVehicleCount} / ${r.snapshotTotalLockedFee}',
+        '• 스냅샷(plates: 정산 문서 수/합계요금): ${r.snapshotLockedVehicleCount} / ${r.snapshotTotalLockedFee}',
       ];
 
       if (!r.cleanupOk) {
@@ -1373,8 +1341,8 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
       if (!r.firestoreSaveOk) {
         lines.add('• Firestore(end_work_reports) 저장에 실패했습니다.');
       }
-      if (!r.gcsReportUploadOk || !r.gcsLogsUploadOk) {
-        lines.add('• GCS 보고/로그 파일 업로드에 일부 실패했습니다. 관리자에게 문의하세요.');
+      if (!r.gcsLogsUploadOk) {
+        lines.add('• GCS 로그 파일(/logs) 업로드에 실패했습니다. 관리자에게 문의하세요.');
       }
 
       showSuccessSnackbar(context, lines.join('\n'));

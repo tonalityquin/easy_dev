@@ -12,9 +12,17 @@ import '../../screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart'
 /// GCS(easydev-image 버킷)에서 번호판 로그 JSON을 조회하는 유틸.
 ///
 /// - 중앙 OAuth 세션(GoogleAuthSession)을 사용해 인증
-/// - 토큰 만료/invalid_token 시 ClockOutLogUploader와 동일하게
-///   1회 refreshIfNeeded() 후 재시도
+/// - 토큰 만료/invalid_token 시 1회 refreshIfNeeded() 후 재시도
 /// - 실패 시 빈 리스트 반환 + DebugApiLogger 로깅
+///
+/// [조회 경로 정책]
+/// - 신규 업로드 경로(월 샤딩):
+///   <division>/<area>/logs/<yyyyMM>/<ts>/<fileName>
+/// - 레거시 경로(월 디렉터리 없음):
+///   <division>/<area>/logs/<ts>/<fileName> 또는 <division>/<area>/logs/<fileName>
+///
+/// 조회는 `date`를 받으므로 기본적으로 logs/<yyyyMM>/ prefix로 탐색하고,
+/// 해당 월 prefix에서 파일이 없으면 레거시 logs/ prefix로 fallback 탐색합니다.
 class GcsJsonUploader {
   /// 기본 버킷명 (필요하면 생성자에서 override 가능)
   final String bucketName;
@@ -26,11 +34,14 @@ class GcsJsonUploader {
   /// 해당 번호판(plateNumber)에 해당하는 로그들을 시간순으로 정렬하여 반환.
   ///
   /// - 객체 이름 패턴:
-  ///   - prefix: `{division}/{area}/logs/`
+  ///   - prefix(신규 우선): `{division}/{area}/logs/{yyyyMM}/`
+  ///   - prefix(레거시): `{division}/{area}/logs/`
   ///   - suffix: `_ToDoLogs_{yyyy-MM-dd}.json`
-  /// - JSON 구조:
-  ///   - { "items": [ { "plateNumber": ..., "logs": [...] }, ... ] }
-  ///   - 또는 { "data": [ ... ] } 도 지원
+  ///
+  /// - JSON 구조 지원(호환 강화):
+  ///   1) { "items": [ { "plateNumber": "...", "logs": [ ... ] }, ... ] }
+  ///   2) { "data":  [ ... ] }
+  ///   3) { "items": [ { "docId": "...", "data": { ... , "logs":[...] } }, ... ] }  // ✅ 추가 지원
   ///
   /// - plateNumber 비교:
   ///   - 숫자만 추출 후, 마지막 4자리 일치 또는 전체 일치 조건으로 매칭
@@ -48,6 +59,7 @@ class GcsJsonUploader {
     String wantedSuffix = '';
     String needle = '';
     String needleTail4 = '';
+    String monthKey = '';
 
     // 내부 1회 실행 함수: invalid_token일 경우 rethrow 가능
     Future<List<Map<String, dynamic>>> runOnce({
@@ -85,47 +97,60 @@ class GcsJsonUploader {
         }
 
         // 1) 날짜/경로/검색 키워드 구성
-        dateStr = _yyyymmdd(DateTime(date.year, date.month, date.day));
+        final normalizedDate = DateTime(date.year, date.month, date.day);
+        dateStr = _yyyymmdd(normalizedDate);
+        monthKey = _yyyymm(normalizedDate);
+
         wantedSuffix = '_ToDoLogs_$dateStr.json';
-        prefix = '$division/$area/logs/';
 
         needle = _digitsOnly(trimmedPlate);
         needleTail4 = needle.length >= 4
             ? needle.substring(needle.length - 4)
             : needle;
 
+        // ✅ prefix: 월 샤딩 우선, 없으면 레거시 fallback
+        final prefixesToTry = <String>[
+          '$trimmedDivision/$trimmedArea/logs/$monthKey/',
+          '$trimmedDivision/$trimmedArea/logs/',
+        ];
+
         debugPrint(
           '🔍 [GcsJsonUploader] plate 로그 조회 시작: '
-              'bucket=$bucketName, prefix="$prefix", suffix="$wantedSuffix", plate="$needle"',
+              'bucket=$bucketName, prefixes="${prefixesToTry.join(' | ')}", '
+              'suffix="$wantedSuffix", plate="$needle"',
         );
 
         // 2) 중앙 OAuth 세션에서 AuthClient 획득
         final client = await GoogleAuthSession.instance.safeClient();
         final storage = gcs.StorageApi(client);
 
-        // 3) 객체 리스트 조회 (페이지네이션 대응)
-        final List<gcs.Object> allObjects = <gcs.Object>[];
-        String? pageToken;
-        do {
-          final res = await storage.objects.list(
-            bucketName,
-            prefix: prefix,
-            pageToken: pageToken,
-          );
-          if (res.items != null) {
-            allObjects.addAll(res.items!);
-          }
-          pageToken = res.nextPageToken;
-        } while (pageToken != null && pageToken.isNotEmpty);
+        // 3) 객체 리스트 조회 (prefix 후보 순서대로, 페이지네이션 대응)
+        List<gcs.Object> candidates = <gcs.Object>[];
+        final List<String> scannedPrefixes = <String>[];
 
-        // 4) 날짜 suffix 매칭 → 최신(updated) 선택
-        final candidates = allObjects
-            .where((o) => (o.name ?? '').endsWith(wantedSuffix))
-            .toList();
+        for (final pfx in prefixesToTry) {
+          prefix = pfx;
+          scannedPrefixes.add(prefix);
+
+          final allObjects = await _listAllObjects(
+            storage: storage,
+            bucketName: bucketName,
+            prefix: prefix,
+          );
+
+          candidates = allObjects
+              .where((o) => (o.name ?? '').endsWith(wantedSuffix))
+              .toList();
+
+          if (candidates.isNotEmpty) {
+            break;
+          }
+        }
 
         if (candidates.isEmpty) {
           final msg =
-              '해당 날짜에 매칭되는 로그 파일이 없습니다: prefix="$prefix", suffix="$wantedSuffix"';
+              '해당 날짜에 매칭되는 로그 파일이 없습니다: '
+              'prefixTried="${scannedPrefixes.join(' | ')}", suffix="$wantedSuffix"';
           debugPrint('⚠️ [GcsJsonUploader] $msg');
 
           // 이 케이스는 "정상적인 없음" 상황일 수 있으므로 error가 아닌 info 수준으로 로깅
@@ -135,12 +160,13 @@ class GcsJsonUploader {
               'message': '해당 날짜 로그 파일 없음',
               'reason': 'no_file_for_date',
               'bucketName': bucketName,
-              'prefix': prefix,
+              'prefixTried': scannedPrefixes,
               'suffix': wantedSuffix,
               'plateNumber': plateNumber,
               'division': division,
               'area': area,
               'date': date.toIso8601String(),
+              'monthKey': monthKey,
             },
             level: 'info',
             tags: const ['gcs', 'json', 'plate_logs', 'not_found'],
@@ -149,6 +175,7 @@ class GcsJsonUploader {
           return <Map<String, dynamic>>[];
         }
 
+        // 4) 날짜 suffix 매칭 → 최신(updated) 선택
         candidates.sort((a, b) {
           final au = a.updated ?? DateTime.fromMillisecondsSinceEpoch(0);
           final bu = b.updated ?? DateTime.fromMillisecondsSinceEpoch(0);
@@ -191,11 +218,13 @@ class GcsJsonUploader {
         final bytes = await media.stream.expand((e) => e).toList();
         final decoded = jsonDecode(utf8.decode(bytes));
 
-        // 6) items 또는 data 배열 지원
+        // 6) items 또는 data 배열 지원 (+ decoded가 List인 예외 케이스까지 방어)
         final List rootItems = (decoded is Map && decoded['items'] is List)
             ? decoded['items'] as List
             : (decoded is Map && decoded['data'] is List)
             ? decoded['data'] as List
+            : (decoded is List)
+            ? decoded
             : const [];
 
         if (rootItems.isEmpty) {
@@ -208,20 +237,31 @@ class GcsJsonUploader {
 
         for (final it in rootItems) {
           if (it is! Map) continue;
+
           final map = Map<String, dynamic>.from(it);
-          final p = (map['plateNumber'] ?? map['docId'] ?? '').toString();
-          final pd = _digitsOnly(p);
+
+          // ✅ { docId, data: {...} } 구조 지원
+          final Map<String, dynamic>? dataMap =
+          (map['data'] is Map) ? Map<String, dynamic>.from(map['data'] as Map) : null;
+
+          // plate 후보(루트/래핑 모두 고려)
+          final plateRaw = _pickPlateCandidate(map: map, dataMap: dataMap);
+          final pd = _digitsOnly(plateRaw);
 
           final matches = pd.isNotEmpty &&
               ((needle.length >= 4 && pd.endsWith(needleTail4)) ||
                   (needle.isNotEmpty && pd == needle));
           if (!matches) continue;
 
-          final logs = (map['logs'] as List?)
-              ?.whereType<Map>()
+          // ✅ logs 추출: map['logs'] 우선, 없으면 data.logs
+          final logsRaw = map['logs'] ?? dataMap?['logs'];
+
+          final logs = (logsRaw is List)
+              ? logsRaw
+              .whereType<Map>()
               .map((e) => Map<String, dynamic>.from(e))
-              .toList() ??
-              const <Map<String, dynamic>>[];
+              .toList()
+              : const <Map<String, dynamic>>[];
 
           aggregated.addAll(logs);
         }
@@ -258,6 +298,7 @@ class GcsJsonUploader {
             'division': division,
             'area': area,
             'date': date.toIso8601String(),
+            'monthKey': monthKey,
             'needle': needle,
             'needleTail4': needleTail4,
           },
@@ -324,13 +365,63 @@ class GcsJsonUploader {
   // 내부 헬퍼
   // ─────────────────────────────────────────
 
+  static Future<List<gcs.Object>> _listAllObjects({
+    required gcs.StorageApi storage,
+    required String bucketName,
+    required String prefix,
+  }) async {
+    final List<gcs.Object> allObjects = <gcs.Object>[];
+    String? pageToken;
+
+    do {
+      final res = await storage.objects.list(
+        bucketName,
+        prefix: prefix,
+        pageToken: pageToken,
+      );
+      if (res.items != null) {
+        allObjects.addAll(res.items!);
+      }
+      pageToken = res.nextPageToken;
+    } while (pageToken != null && pageToken.isNotEmpty);
+
+    return allObjects;
+  }
+
   static String _yyyymmdd(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-'
           '${d.month.toString().padLeft(2, '0')}-'
           '${d.day.toString().padLeft(2, '0')}';
 
-  static String _digitsOnly(String s) =>
-      s.replaceAll(RegExp(r'\D'), '');
+  static String _yyyymm(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}'
+          '${d.month.toString().padLeft(2, '0')}';
+
+  static String _digitsOnly(String s) => s.replaceAll(RegExp(r'\D'), '');
+
+  /// ✅ JSON 구조 호환성: 루트/래핑(data) 모두에서 plate 후보를 뽑아냅니다.
+  static String _pickPlateCandidate({
+    required Map<String, dynamic> map,
+    required Map<String, dynamic>? dataMap,
+  }) {
+    final candidates = <dynamic>[
+      map['plateNumber'],
+      dataMap?['plateNumber'],
+      dataMap?['plate'],
+      dataMap?['plateNo'],
+      dataMap?['plate_no'],
+      dataMap?['carNumber'],
+      dataMap?['carNo'],
+      map['docId'],
+      dataMap?['docId'],
+    ];
+
+    for (final c in candidates) {
+      final s = (c ?? '').toString().trim();
+      if (s.isNotEmpty) return s;
+    }
+    return '';
+  }
 
   /// Firestore Timestamp 타입을 흉내낸 다양한 timestamp 표현을 DateTime으로 변환
   static DateTime? _parseTs(dynamic ts) {

@@ -131,7 +131,7 @@ class EndReportButtonStyles {
 /// 옮긴 버전입니다.
 ///
 /// 이제:
-///  - 2단계 "일일 차량 입고 대수"의 [1차 제출] 버튼 → 서버 보고(plates/GCS/Firestore/cleanup)
+///  - 2단계 "일일 차량 입고 대수"의 [1차 제출] 버튼 → 서버 보고(plates/Firestore/cleanup + GCS logs 업로드)
 ///  - 5단계 "제출" 버튼 → 메일(PDF) 전송만 수행
 ///
 /// 별도의 EndWorkReportService / Controller / Sheet 파일을 삭제해도
@@ -146,6 +146,10 @@ class EndReportButtonStyles {
 ///   end_work_reports/area_<area>/months/<yyyyMM>/reports/<yyyy-MM-dd>
 /// - monthKey(yyyyMM) 저장
 /// - 레거시 dot-path(reports.<dateStr>.*) 저장 제거
+///
+/// [GCS 업로드 정책(리팩터링)]
+/// - /reports 경로 업로드(업무 종료 보고 JSON)는 제거
+/// - /logs 경로 업로드(출차 로그 묶음)는 유지
 /// ─────────────────────────────────────────────────────────────
 
 dynamic _endReportJsonSafe(dynamic v) {
@@ -189,10 +193,8 @@ class SimpleEndWorkReportResult {
 
   final bool cleanupOk;
   final bool firestoreSaveOk;
-  final bool gcsReportUploadOk;
   final bool gcsLogsUploadOk;
 
-  final String? reportUrl;
   final String? logsUrl;
 
   const SimpleEndWorkReportResult({
@@ -204,9 +206,7 @@ class SimpleEndWorkReportResult {
     required this.snapshotTotalLockedFee,
     required this.cleanupOk,
     required this.firestoreSaveOk,
-    required this.gcsReportUploadOk,
     required this.gcsLogsUploadOk,
-    required this.reportUrl,
     required this.logsUrl,
   });
 }
@@ -280,11 +280,11 @@ class SimpleEndWorkReportService {
       throw Exception('요금 합계 계산 실패: $e');
     }
 
-    // 3. 공통 리포트 로그 구성
+    // 3. 공통 리포트 로그 구성(서버 저장용)
     final now = DateTime.now();
     final dateStr = DateFormat('yyyy-MM-dd').format(now);
 
-    // (3) monthKey 추가: yyyyMM
+    // monthKey 추가: yyyyMM
     final monthKey = DateFormat('yyyyMM').format(now);
 
     final reportLog = <String, dynamic>{
@@ -300,37 +300,11 @@ class SimpleEndWorkReportService {
       },
       'createdAt': now.toIso8601String(),
       'uploadedBy': userName,
+      'monthKey': monthKey,
+      'date': dateStr,
     };
 
-    // 4. GCS - report 업로드
-    String? reportUrl;
-    bool gcsReportUploadOk = true;
-    try {
-      dev.log('[END] upload report...', name: 'SimpleEndWorkReportService');
-      reportUrl = await uploadEndWorkReportJson(
-        report: reportLog,
-        division: division,
-        area: area,
-        userName: userName,
-      );
-      if (reportUrl == null) {
-        gcsReportUploadOk = false;
-        dev.log(
-          '[END] upload report returned null',
-          name: 'SimpleEndWorkReportService',
-        );
-      }
-    } catch (e, st) {
-      gcsReportUploadOk = false;
-      dev.log(
-        '[END] upload report exception',
-        name: 'SimpleEndWorkReportService',
-        error: e,
-        stackTrace: st,
-      );
-    }
-
-    // 5. GCS - logs 업로드
+    // 4. GCS - logs 업로드 (유지)
     String? logsUrl;
     bool gcsLogsUploadOk = true;
     try {
@@ -348,6 +322,10 @@ class SimpleEndWorkReportService {
           'division': division,
           'area': area,
           'items': items,
+          'createdAt': reportLog['createdAt'],
+          'uploadedBy': userName,
+          'monthKey': monthKey,
+          'date': dateStr,
         },
         division: division,
         area: area,
@@ -370,7 +348,7 @@ class SimpleEndWorkReportService {
       );
     }
 
-    // 6. Firestore - 월 샤딩 경로로 저장 + 메타 문서 upsert (동일 batch 원자 커밋)
+    // 5. Firestore - 월 샤딩 경로로 저장 + 메타 문서 upsert (동일 batch 원자 커밋)
     bool firestoreSaveOk = true;
     try {
       dev.log(
@@ -394,7 +372,6 @@ class SimpleEndWorkReportService {
         'uploadedBy': userName,
         'vehicleCount': reportLog['vehicleCount'],
         'metrics': reportLog['metrics'],
-        if (reportUrl != null) 'reportUrl': reportUrl,
         if (logsUrl != null) 'logsUrl': logsUrl,
       };
 
@@ -403,17 +380,16 @@ class SimpleEndWorkReportService {
         'division': division,
         'area': area,
         'date': dateStr,
-        'monthKey': monthKey, // (3) monthKey 저장
+        'monthKey': monthKey,
         'vehicleCount': reportLog['vehicleCount'],
         'metrics': reportLog['metrics'],
         'createdAt': reportLog['createdAt'],
         'uploadedBy': reportLog['uploadedBy'],
-        if (reportUrl != null) 'reportUrl': reportUrl,
         if (logsUrl != null) 'logsUrl': logsUrl,
         'history': FieldValue.arrayUnion(<Map<String, dynamic>>[historyEntry]),
       };
 
-      // 메타 문서 upsert payload (필수 스키마가 명시되지 않아, 최소 정보 + 최신 키만 유지)
+      // 메타 문서 upsert payload
       final Map<String, dynamic> areaMetaPayload = <String, dynamic>{
         'division': division,
         'area': area,
@@ -429,7 +405,7 @@ class SimpleEndWorkReportService {
         'updatedAt': now.toIso8601String(),
       };
 
-      // (2) 동일 batch 안에서 3개 문서를 원자적으로 커밋
+      // 동일 batch 안에서 3개 문서를 원자적으로 커밋
       final batch = _firestore.batch();
 
       batch.set(areaDocRef, areaMetaPayload, SetOptions(merge: true));
@@ -447,7 +423,7 @@ class SimpleEndWorkReportService {
       );
     }
 
-    // 7. plates / plate_counters cleanup
+    // 6. plates / plate_counters cleanup
     bool cleanupOk = true;
     try {
       dev.log(
@@ -492,9 +468,7 @@ class SimpleEndWorkReportService {
       snapshotTotalLockedFee: snapshotTotalLockedFee,
       cleanupOk: cleanupOk,
       firestoreSaveOk: firestoreSaveOk,
-      gcsReportUploadOk: gcsReportUploadOk,
       gcsLogsUploadOk: gcsLogsUploadOk,
-      reportUrl: reportUrl,
       logsUrl: logsUrl,
     );
   }
@@ -1055,9 +1029,7 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                                               _contentCtrl.text.trim().isEmpty ? '입력된 특이 사항이 없습니다.' : _contentCtrl.text,
                                               style: theme.textTheme.bodyMedium?.copyWith(
                                                 height: 1.4,
-                                                color: _contentCtrl.text.trim().isEmpty
-                                                    ? Colors.grey[600]
-                                                    : Colors.black,
+                                                color: _contentCtrl.text.trim().isEmpty ? Colors.grey[600] : Colors.black,
                                               ),
                                             ),
                                           ),
@@ -1375,8 +1347,8 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
       if (!r.firestoreSaveOk) {
         lines.add('• Firestore(end_work_reports) 저장에 실패했습니다.');
       }
-      if (!r.gcsReportUploadOk || !r.gcsLogsUploadOk) {
-        lines.add('• GCS 보고/로그 파일 업로드에 일부 실패했습니다. 관리자에게 문의하세요.');
+      if (!r.gcsLogsUploadOk) {
+        lines.add('• GCS 로그 파일 업로드에 실패했습니다. 관리자에게 문의하세요.');
       }
 
       showSuccessSnackbar(context, lines.join('\n'));
