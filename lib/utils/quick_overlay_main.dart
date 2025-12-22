@@ -24,8 +24,13 @@ const String kLastBreakDatePrefsKey = 'last_break_date';
 /// 🔹 "휴게 이후 상단 50% 포그라운드 모드를 자동 해제한 마지막 날짜"
 ///    - 값 형식은 'YYYY-MM-DD'
 ///    - last_break_date 와 같으면: "이번 휴게에 대한 해제 기회는 이미 사용함"
-const String kLastTopHalfResetByBreakDateKey =
-    'last_tophalf_reset_by_break';
+const String kLastTopHalfResetByBreakDateKey = 'last_tophalf_reset_by_break';
+
+/// ✅ 앱 모드 SharedPreferences 키/값
+/// - 문자열 key: 'mode'
+/// - 값이 'simple'이면 topHalf를 금지하고 bubble만 사용
+const String kAppModePrefsKey = 'mode';
+const String kAppModeSimpleValue = 'simple';
 
 /// 오버레이에서 사용할 UI 모드
 /// - bubble  : 기존 플로팅 버블 + 글라스 패널
@@ -54,8 +59,7 @@ class QuickOverlayHome extends StatefulWidget {
   State<QuickOverlayHome> createState() => _QuickOverlayHomeState();
 }
 
-class _QuickOverlayHomeState extends State<QuickOverlayHome>
-    with TickerProviderStateMixin {
+class _QuickOverlayHomeState extends State<QuickOverlayHome> with TickerProviderStateMixin {
   String _status = '대기 중';
   bool _expanded = false;
   StreamSubscription<dynamic>? _sub;
@@ -79,13 +83,22 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
   // ───────────────────── UI 모드(버블 / 상단) ─────────────────────
   OverlayUIMode _uiMode = OverlayUIMode.bubble;
 
-  // ───────────────────── 오버레이 형태 선택 카드 활성화 조건 ─────────────────────
-  // division / selectedArea 가 비어 있지 않고, 두 값이 서로 같을 때만 true
-  bool _overlayModeCardEnabled = false;
+  // ───────────────────── 앱 모드(simple이면 topHalf 금지) ─────────────────────
+  bool _isSimpleMode = false;
+
+  bool get _topHalfAllowed => !_isSimpleMode;
+
+  // ───────────────────── "15초 쉬기" 타이머 ─────────────────────
+  Timer? _shortBreakTimer;
+  int _shortBreakSeq = 0;
+  bool _shortBreakActive = false;
 
   @override
   void initState() {
     super.initState();
+
+    // 앱 모드 로드 (mode == 'simple' 이면 topHalf 차단)
+    _loadAppMode();
 
     _overlayStartedAt = DateTime.now();
     _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -94,9 +107,6 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
         _elapsed = DateTime.now().difference(_overlayStartedAt);
       });
     });
-
-    // 🔹 division / selectedArea 기반으로 오버레이 형태 선택 카드 사용 가능 여부 로드
-    _initOverlayModeCardEnabled();
 
     // 숨쉬기(Scale) 애니메이션 (버블용)
     _breathController = AnimationController(
@@ -120,11 +130,9 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
     _nudgeOffset = Tween<Offset>(
       begin: Offset.zero,
       end: const Offset(0.08, 0), // X축으로 8% 정도 이동
-    )
-        .chain(
+    ).chain(
       CurveTween(curve: Curves.easeInOut),
-    )
-        .animate(_nudgeController);
+    ).animate(_nudgeController);
 
     // 1초마다 한 번씩, 접혀 있을 때만 넛지 동작
     _nudgeTimer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -133,28 +141,25 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
           if (mounted) {
             _nudgeController.reverse();
           }
-        }).catchError((_) {
-          // dispose 중 등 애니메이션 도중 에러는 무시
-        });
+        }).catchError((_) {});
       }
     });
 
     // 메인 ↔ 오버레이 데이터 수신
     _sub = FlutterOverlayWindow.overlayListener.listen((event) {
       if (!mounted) return;
+
       setState(() {
         // 모드 변경 메시지: "__mode:bubble__" 또는 "__mode:topHalf__"
         if (event is String && event.startsWith('__mode:')) {
+          // 외부 모드 변경이 들어오면 15초 쉬기 복귀 타이머는 취소(사용자/시스템 우선)
+          _cancelShortBreak();
+
           final raw = event.substring('__mode:'.length);
+
           if (raw.startsWith('topHalf')) {
-            // ✅ division / selectedArea 조건을 만족하는 경우에만
-            //    상단 50% 포그라운드 모드로 전환을 허용
-            if (_overlayModeCardEnabled) {
-              _uiMode = OverlayUIMode.topHalf;
-            } else {
-              // 조건을 만족하지 않으면 항상 버블 모드 유지
-              _uiMode = OverlayUIMode.bubble;
-            }
+            // ✅ simple 모드면 topHalf 차단 → 항상 bubble
+            _uiMode = _topHalfAllowed ? OverlayUIMode.topHalf : OverlayUIMode.bubble;
           } else {
             _uiMode = OverlayUIMode.bubble;
           }
@@ -163,6 +168,9 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
 
         // 메인에서 '__collapse__' 를 보내면 항상 초기 상태로 접기
         if (event == '__collapse__') {
+          // collapse가 들어오면 15초 쉬기 복귀 타이머도 취소
+          _cancelShortBreak();
+
           _expanded = false;
           _status = '대기 중';
           _overlayStartedAt = DateTime.now();
@@ -176,19 +184,71 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
     });
   }
 
-  /// SharedPreferences 에서 division / selectedArea 를 불러와
-  /// 오버레이 형태 선택 카드 사용 가능 여부를 판별
-  Future<void> _initOverlayModeCardEnabled() async {
+  /// ✅ SharedPreferences에서 mode를 읽어서 simple 여부를 결정
+  /// - mode == 'simple' 이면 topHalf를 강제 차단하고 bubble로 내립니다.
+  Future<void> _loadAppMode() async {
     final prefs = await SharedPreferences.getInstance();
-    final division = prefs.getString('division') ?? '';
-    final selectedArea = prefs.getString('selectedArea') ?? '';
-
-    final enabled =
-        division.isNotEmpty && selectedArea.isNotEmpty && division == selectedArea;
+    final mode = prefs.getString(kAppModePrefsKey); // 'simple' 등
+    final isSimple = (mode == kAppModeSimpleValue);
 
     if (!mounted) return;
     setState(() {
-      _overlayModeCardEnabled = enabled;
+      _isSimpleMode = isSimple;
+
+      if (_isSimpleMode) {
+        // simple 모드에서는 topHalf 자체가 금지이므로, 혹시라도 topHalf였으면 강제 bubble
+        _cancelShortBreak();
+        _uiMode = OverlayUIMode.bubble;
+      }
+    });
+  }
+
+  void _cancelShortBreak() {
+    _shortBreakTimer?.cancel();
+    _shortBreakTimer = null;
+    _shortBreakActive = false;
+  }
+
+  /// ✅ "15초 쉬기"
+  /// - topHalf UI를 숨기기 위해 bubble로 전환(=상단 50% 포그라운드 UI가 사라짐)
+  /// - 15초 후 자동으로 topHalf UI로 복귀 (단, simple 모드에서는 복귀 금지)
+  void _startShortBreak() {
+    // ✅ simple 모드에서는 topHalf가 금지이므로 즉시 무시
+    if (!_topHalfAllowed) return;
+
+    // topHalf에서 눌러야 의미가 명확하므로 방어
+    if (_uiMode != OverlayUIMode.topHalf) return;
+
+    _shortBreakSeq += 1;
+    final seq = _shortBreakSeq;
+
+    _shortBreakTimer?.cancel();
+    _shortBreakActive = true;
+
+    // "휴게 중입니다" 눌렀을 때처럼 topHalf → bubble 전환 + 상태/타이머 초기화
+    setState(() {
+      _expanded = false;
+      _status = '15초 휴게 중…';
+      _overlayStartedAt = DateTime.now();
+      _elapsed = Duration.zero;
+      _uiMode = OverlayUIMode.bubble;
+    });
+
+    _shortBreakTimer = Timer(const Duration(seconds: 15), () {
+      if (!mounted) return;
+      if (!_shortBreakActive) return;
+      if (seq != _shortBreakSeq) return; // 중복 클릭으로 갱신된 경우 무시
+
+      setState(() {
+        // ✅ 15초 후 자동 복귀: simple 모드면 topHalf 복귀 금지 → bubble 유지
+        _uiMode = _topHalfAllowed ? OverlayUIMode.topHalf : OverlayUIMode.bubble;
+
+        _shortBreakActive = false;
+
+        _status = '휴게 종료';
+        _overlayStartedAt = DateTime.now();
+        _elapsed = Duration.zero;
+      });
     });
   }
 
@@ -197,6 +257,7 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
     _sub?.cancel();
     _tickTimer?.cancel();
     _nudgeTimer?.cancel();
+    _shortBreakTimer?.cancel();
     _breathController.dispose();
     _nudgeController.dispose();
     super.dispose();
@@ -234,26 +295,18 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
     return '$y-$m-$d';
   }
 
-  /// 패널 상태/타이머 초기화 + SharedPreferences 기준 모드 전환
-  ///
-  /// 동작 규칙
-  /// 1) 오늘 휴게 기록 없음  -> 상단 해제 X, "먼저 휴게 사용" 안내
-  /// 2) 오늘 휴게 기록 있음 + 이번 휴게 기준 해제권 이미 사용 -> 안내만
-  /// 3) 오늘 휴게 기록 있음 + 해제권 아직 미사용 + 현재 topHalf 모드일 때
-  ///    -> topHalf → bubble 1회 전환 + 상태/타이머 초기화 + 해제권 사용 기록
   void _resetPanel() async {
+    // 사용자가 "휴게 중입니다"를 선택했으면 15초 쉬기 자동복귀는 취소(의도 충돌 방지)
+    _cancelShortBreak();
+
     final prefs = await SharedPreferences.getInstance();
 
-    // 메인 앱에서 휴게 버튼 성공 시 저장한 'YYYY-MM-DD' 문자열
     final String? lastBreakDate = prefs.getString(kLastBreakDatePrefsKey);
-    final String? lastTopHalfResetByBreakDate =
-    prefs.getString(kLastTopHalfResetByBreakDateKey);
+    final String? lastTopHalfResetByBreakDate = prefs.getString(kLastTopHalfResetByBreakDateKey);
 
     final String todayStr = _formatDate(DateTime.now());
-
     final bool hasRestPressedToday = (lastBreakDate == todayStr);
 
-    // 1) 오늘 휴게 기록이 없는 경우: 상단 자동 해제 X, 안내만
     if (!hasRestPressedToday) {
       if (!mounted) return;
       await showDialog<void>(
@@ -303,9 +356,7 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
       return;
     }
 
-    // 2) 오늘 휴게는 했는데, 이번 휴게 기준으로 상단 해제를 이미 한 번 쓴 경우
-    final bool alreadyResetOnceForToday =
-    (lastTopHalfResetByBreakDate == lastBreakDate);
+    final bool alreadyResetOnceForToday = (lastTopHalfResetByBreakDate == lastBreakDate);
 
     if (alreadyResetOnceForToday) {
       if (!mounted) return;
@@ -358,19 +409,15 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
       return;
     }
 
-    // 3) 오늘 휴게를 했고, 아직 그 휴게 기준으로 해제권을 안 썼고,
-    //    현재 모드가 topHalf 일 때만 → 1회 자동 해제 허용
+    // ✅ topHalf에서만 동작 (simple 모드에서는 topHalf가 사실상 불가능하지만 방어적으로 유지)
     if (_uiMode == OverlayUIMode.topHalf) {
       setState(() {
         _status = '대기 중';
         _overlayStartedAt = DateTime.now();
         _elapsed = Duration.zero;
-
-        // 상단 50% 포그라운드 → 플로팅 버블 모드로 전환
         _uiMode = OverlayUIMode.bubble;
       });
 
-      // 이번 휴게 기준의 해제 기회를 사용했다고 기록
       if (lastBreakDate != null && lastBreakDate.isNotEmpty) {
         await prefs.setString(
           kLastTopHalfResetByBreakDateKey,
@@ -379,8 +426,6 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
       }
       return;
     }
-
-    // 4) 이미 bubble 상태인데 누르는 경우 등 → 추가 동작 없음
   }
 
   String _formatElapsed(Duration d) {
@@ -402,12 +447,11 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
   // 🔹 버블 모드 UI
   // ─────────────────────────────────────────────────────────────
 
-  // 접힌 상태: 동그란 버블 + 타이머
   Widget _buildCollapsedBubble(BuildContext context) {
     return SlideTransition(
-      position: _nudgeOffset, // ← 넛지(좌우 살짝 이동)
+      position: _nudgeOffset,
       child: ScaleTransition(
-        scale: _breathScale, // ← 숨쉬기(살짝 커졌다 작아졌다)
+        scale: _breathScale,
         child: Container(
           key: const ValueKey('collapsed'),
           width: kBubbleSize,
@@ -415,8 +459,8 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
           decoration: BoxDecoration(
             gradient: const LinearGradient(
               colors: [
-                Color(0xFF4F46E5), // indigo
-                Color(0xFF06B6D4), // cyan
+                Color(0xFF4F46E5),
+                Color(0xFF06B6D4),
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
@@ -431,7 +475,6 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
             ],
           ),
           child: Center(
-            // 전체를 FittedBox로 감싸서 작은 버블 안에서도 오버플로우 없도록
             child: FittedBox(
               fit: BoxFit.scaleDown,
               child: Column(
@@ -463,7 +506,6 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
     );
   }
 
-  // 펼친 상태: 글라스 패널 + 타이머 + 앱 열기 버튼
   Widget _buildExpandedPanel(BuildContext context) {
     return ConstrainedBox(
       key: const ValueKey('expanded'),
@@ -473,8 +515,7 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
           child: Container(
-            padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(32),
               gradient: LinearGradient(
@@ -500,7 +541,6 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // ⬅ 접기
                 IconButton(
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
@@ -515,13 +555,10 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                   },
                 ),
                 const SizedBox(width: 8),
-
-                // 상태 + 타이머
                 Flexible(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         '근무 중 · ${_formatElapsed(_elapsed)}',
@@ -536,8 +573,7 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                       const SizedBox(height: 2),
                       AnimatedSwitcher(
                         duration: _switchDuration,
-                        transitionBuilder:
-                            (child, animation) {
+                        transitionBuilder: (child, animation) {
                           final curved = CurvedAnimation(
                             parent: animation,
                             curve: Curves.easeOutCubic,
@@ -558,8 +594,7 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                           _status,
                           key: ValueKey(_status),
                           style: TextStyle(
-                            color: Colors.white
-                                .withOpacity(0.78),
+                            color: Colors.white.withOpacity(0.78),
                             fontSize: 11,
                             height: 1.2,
                           ),
@@ -571,8 +606,6 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                   ),
                 ),
                 const SizedBox(width: 10),
-
-                // 🔸 앱 열기 버튼
                 Container(
                   width: 32,
                   height: 32,
@@ -588,8 +621,7 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFF22C55E)
-                            .withOpacity(0.55),
+                        color: const Color(0xFF22C55E).withOpacity(0.55),
                         blurRadius: 12,
                         offset: const Offset(0, 6),
                       ),
@@ -617,9 +649,6 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
 
   // ─────────────────────────────────────────────────────────────
   // 🔹 상단 포그라운드 모드 UI (밝은 테마, 배경 흰색)
-  //
-  //   - FittedBox(BoxFit.scaleDown) 로 전체 레이아웃을 비율 축소
-  //   - 작은 기기에서도 overflow 없이 전체 내용 표시
   // ─────────────────────────────────────────────────────────────
 
   Widget _buildTopHalfOverlay(BuildContext context) {
@@ -628,7 +657,7 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
         return Container(
           width: constraints.maxWidth,
           height: constraints.maxHeight,
-          color: Colors.white, // 전체 배경을 흰색으로
+          color: Colors.white,
           child: FittedBox(
             alignment: Alignment.topCenter,
             fit: BoxFit.scaleDown,
@@ -640,18 +669,14 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   mainAxisSize: MainAxisSize.max,
-                  crossAxisAlignment:
-                  CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ───── 상단 헤더: 안내 문구 + 경과 시간 뱃지 ─────
                     Row(
-                      crossAxisAlignment:
-                      CrossAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Expanded(
                           child: Column(
-                            crossAxisAlignment:
-                            CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
                                 '앱이 아직 실행 중입니다.',
@@ -669,41 +694,32 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                                     fontSize: 11,
                                   ),
                                   children: const [
-                                    TextSpan(
-                                      text: '당일 근무가 끝난 분들은 꼭 ',
-                                    ),
+                                    TextSpan(text: '당일 근무가 끝난 분들은 꼭 '),
                                     TextSpan(
                                       text: '퇴근',
                                       style: TextStyle(
-                                        fontWeight:
-                                        FontWeight.w700,
-                                        color:
-                                        Color(0xFFDC2626),
+                                        fontWeight: FontWeight.w700,
+                                        color: Color(0xFFDC2626),
                                       ),
                                     ),
-                                    TextSpan(
-                                      text: ' 버튼을\n눌러주시기 바랍니다.',
-                                    ),
+                                    TextSpan(text: ' 버튼을\n눌러주시기 바랍니다.'),
                                   ],
                                 ),
                                 maxLines: 2,
-                                overflow:
-                                TextOverflow.ellipsis,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(width: 8),
                         Container(
-                          padding:
-                          const EdgeInsets.symmetric(
+                          padding: const EdgeInsets.symmetric(
                             horizontal: 10,
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
                             color: const Color(0xFF1D4ED8),
-                            borderRadius:
-                            BorderRadius.circular(999),
+                            borderRadius: BorderRadius.circular(999),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -727,32 +743,26 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                         ),
                       ],
                     ),
-
                     const SizedBox(height: 16),
-
-                    // ───── 오늘 마무리 체크리스트 (밝은 카드) ─────
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        borderRadius:
-                        BorderRadius.circular(16),
+                        borderRadius: BorderRadius.circular(16),
                         color: const Color(0xFFF9FAFB),
                         border: Border.all(
                           color: const Color(0xFFE5E7EB),
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black
-                                .withOpacity(0.04),
+                            color: Colors.black.withOpacity(0.04),
                             blurRadius: 12,
                             offset: const Offset(0, 6),
                           ),
                         ],
                       ),
                       child: Column(
-                        crossAxisAlignment:
-                        CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: const [
@@ -772,8 +782,6 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                               ),
                             ],
                           ),
-
-                          // ─── 공통 체크 그룹 ───
                           const SizedBox(height: 8),
                           const Text(
                             '공통 체크',
@@ -786,30 +794,24 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                           const SizedBox(height: 4),
                           _buildChecklistItem(
                             icon: Icons.check_circle_outline,
-                            label:
-                            '오늘 하루 휴게시간 버튼은 눌렀는지',
+                            label: '오늘 하루 휴게시간 버튼은 눌렀는지',
                           ),
                           const SizedBox(height: 4),
                           _buildChecklistItem(
                             icon: Icons.check_circle_outline,
-                            label:
-                            '퇴근하기 전, 유니폼 및 근무지 정리는 했는지',
+                            label: '퇴근하기 전, 유니폼 및 근무지 정리는 했는지',
                           ),
                           const SizedBox(height: 4),
                           _buildChecklistItem(
                             icon: Icons.check_circle_outline,
-                            label:
-                            '입차 완료 테이블은 "비우기"를 했는지',
+                            label: '입차 완료 테이블은 "비우기"를 했는지',
                           ),
-
                           const SizedBox(height: 8),
                           const Divider(
                             color: Color(0xFFE5E7EB),
                             height: 16,
                             thickness: 1,
                           ),
-
-                          // ─── 인계/보고 체크 그룹 ───
                           const SizedBox(height: 4),
                           const Text(
                             '보고자 혹은 오픈조 체크',
@@ -822,14 +824,12 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                           const SizedBox(height: 4),
                           _buildChecklistItem(
                             icon: Icons.check_circle_outline,
-                            label:
-                            '오픈조는 퇴근조에게 업무 인수 인계를 했는지',
+                            label: '오픈조는 퇴근조에게 업무 인수 인계를 했는지',
                           ),
                           const SizedBox(height: 4),
                           _buildChecklistItem(
                             icon: Icons.check_circle_outline,
-                            label:
-                            '오픈조는 오늘 하루 업무 시작에 대해 보고 했는지',
+                            label: '오픈조는 오늘 하루 업무 시작에 대해 보고 했는지',
                           ),
                           const SizedBox(height: 8),
                           const Divider(
@@ -849,17 +849,13 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                           const SizedBox(height: 4),
                           _buildChecklistItem(
                             icon: Icons.check_circle_outline,
-                            label:
-                            '퇴근조는 오늘 하루 업무 결과에 대해 보고 했는지',
+                            label: '퇴근조는 오늘 하루 업무 결과에 대해 보고 했는지',
                           ),
                           const SizedBox(height: 4),
                           _buildChecklistItem(
                             icon: Icons.check_circle_outline,
-                            label:
-                            '퇴근조는 오늘 하루 업무 종료에 대한 마감을 했는지',
+                            label: '퇴근조는 오늘 하루 업무 종료에 대한 마감을 했는지',
                           ),
-
-                          // 🔸 체크리스트 강조 문구 (메인 앱 이동 유도)
                           const SizedBox(height: 10),
                           const Text(
                             '위 항목 중 하나라도 놓쳤다면,\n'
@@ -875,31 +871,21 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                         ],
                       ),
                     ),
-
                     const SizedBox(height: 16),
 
-                    // ───── 빠른 액션 버튼 두 개 ─────
+                    // ✅ 버튼 비율: 좌/중/우 = 4 : 3 : 4
                     Row(
                       children: [
-                        // 1) 메인 앱 이동 (Primary)
                         Expanded(
+                          flex: 4,
                           child: ElevatedButton.icon(
                             onPressed: _launchMainApp,
-                            style:
-                            ElevatedButton.styleFrom(
-                              backgroundColor:
-                              const Color(0xFF111827),
-                              foregroundColor:
-                              Colors.white,
-                              padding:
-                              const EdgeInsets.symmetric(
-                                vertical: 10,
-                              ),
-                              shape:
-                              RoundedRectangleBorder(
-                                borderRadius:
-                                BorderRadius.circular(
-                                    999),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF111827),
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(999),
                               ),
                             ),
                             icon: const Icon(
@@ -910,33 +896,52 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                               '앱으로 돌아가기',
                               style: TextStyle(
                                 fontSize: 13,
-                                fontWeight:
-                                FontWeight.w600,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
                         ),
                         const SizedBox(width: 8),
-                        // 2) 휴게시간 확인 버튼 (Secondary)
                         Expanded(
+                          flex: 3,
                           child: OutlinedButton.icon(
-                            onPressed: _resetPanel,
-                            style:
-                            OutlinedButton.styleFrom(
-                              foregroundColor:
-                              const Color(0xFF111827),
+                            onPressed: _startShortBreak,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF111827),
                               side: const BorderSide(
                                 color: Color(0xFF9CA3AF),
                               ),
-                              padding:
-                              const EdgeInsets.symmetric(
-                                vertical: 10,
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(999),
                               ),
-                              shape:
-                              RoundedRectangleBorder(
-                                borderRadius:
-                                BorderRadius.circular(
-                                    999),
+                            ),
+                            icon: const Icon(
+                              Icons.timer_rounded,
+                              size: 18,
+                            ),
+                            label: const Text(
+                              '15초 쉬기',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 4,
+                          child: OutlinedButton.icon(
+                            onPressed: _resetPanel,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF111827),
+                              side: const BorderSide(
+                                color: Color(0xFF9CA3AF),
+                              ),
+                              padding: const EdgeInsets.symmetric(vertical: 10),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(999),
                               ),
                             ),
                             icon: const Icon(
@@ -947,8 +952,7 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                               '휴게 중입니다',
                               style: TextStyle(
                                 fontSize: 13,
-                                fontWeight:
-                                FontWeight.w600,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -976,14 +980,14 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
         Icon(
           icon,
           size: 14,
-          color: const Color(0xFF4B5563), // 아이콘: 중간 회색
+          color: const Color(0xFF4B5563),
         ),
         const SizedBox(width: 6),
         Expanded(
           child: Text(
             label,
             style: const TextStyle(
-              color: Color(0xFF374151), // 텍스트: 진한 회색
+              color: Color(0xFF374151),
               fontSize: 11,
               height: 1.3,
             ),
@@ -999,15 +1003,18 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
 
   @override
   Widget build(BuildContext context) {
-    // 👉 상단 포그라운드 모드일 때: 밝은 테마의 전용 UI 사용
-    if (_uiMode == OverlayUIMode.topHalf) {
+    // ✅ 최종 표시 모드: simple 모드면 topHalf를 절대 표시하지 않음
+    final effectiveMode = (_uiMode == OverlayUIMode.topHalf && _topHalfAllowed)
+        ? OverlayUIMode.topHalf
+        : OverlayUIMode.bubble;
+
+    if (effectiveMode == OverlayUIMode.topHalf) {
       return Material(
         color: Colors.transparent,
         child: _buildTopHalfOverlay(context),
       );
     }
 
-    // 👉 기본 모드: 플로팅 버블 + 글라스 패널 (어두운 테마 유지)
     return Material(
       color: Colors.transparent,
       child: SafeArea(
@@ -1023,30 +1030,20 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
               },
               child: AnimatedContainer(
                 duration: _switchDuration,
-                padding: _expanded
-                    ? const EdgeInsets.all(6)
-                    : EdgeInsets.zero,
+                padding: _expanded ? const EdgeInsets.all(6) : EdgeInsets.zero,
                 decoration: BoxDecoration(
-                  color: _expanded
-                      ? kOverlayBackgroundColor
-                      .withOpacity(0.3)
-                      : Colors.transparent,
-                  borderRadius:
-                  BorderRadius.circular(32),
+                  color: _expanded ? kOverlayBackgroundColor.withOpacity(0.3) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(32),
                 ),
                 child: AnimatedSwitcher(
                   duration: _switchDuration,
-                  switchInCurve:
-                  Curves.easeOutCubic,
-                  switchOutCurve:
-                  Curves.easeInCubic,
-                  transitionBuilder:
-                      (child, animation) {
+                  switchInCurve: Curves.easeOutCubic,
+                  switchOutCurve: Curves.easeInCubic,
+                  transitionBuilder: (child, animation) {
                     final curved = CurvedAnimation(
                       parent: animation,
                       curve: Curves.easeOutCubic,
-                      reverseCurve:
-                      Curves.easeInCubic,
+                      reverseCurve: Curves.easeInCubic,
                     );
                     return FadeTransition(
                       opacity: curved,
@@ -1059,10 +1056,7 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                       ),
                     );
                   },
-                  child: _expanded
-                      ? _buildExpandedPanel(context)
-                      : _buildCollapsedBubble(
-                      context),
+                  child: _expanded ? _buildExpandedPanel(context) : _buildCollapsedBubble(context),
                 ),
               ),
             ),

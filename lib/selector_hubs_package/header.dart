@@ -61,7 +61,7 @@ class _HeaderState extends State<Header> {
   }
 }
 
-/// 상단 가로 레이아웃: [왼쪽 버튼(설정)] [배지(아이콘)] [오른쪽 버튼(앱 종료)]
+/// 상단 가로 레이아웃: [왼쪽 버튼(앱 설정)] [배지(아이콘)] [오른쪽 버튼(앱 종료)]
 class _TopRow extends StatelessWidget {
   const _TopRow({
     required this.expanded,
@@ -70,6 +70,151 @@ class _TopRow extends StatelessWidget {
 
   final bool expanded;
   final VoidCallback onToggle;
+
+  // ✅ 앱 설정 진입 비밀번호
+  static const String _kAppSettingsPassword = 'blsnc150119';
+
+  /// ✅ (신규) 앱 설정 진입 게이트: 비밀번호 입력 → 성공 시 설정 시트 오픈
+  Future<void> _openAppSettingsGate(BuildContext context) async {
+    // expanded가 false이면 버튼 자체가 안 보이지만, 방어적으로 가드
+    if (!expanded) return;
+
+    final controller = TextEditingController();
+    bool obscure = true;
+
+    final bool? ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final viewInsets = MediaQuery.of(ctx).viewInsets.bottom;
+
+        return StatefulBuilder(
+          builder: (ctx, setStateSheet) {
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  bottom: viewInsets + 16,
+                  top: 16,
+                ),
+                child: Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(.06),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.lock_outline_rounded,
+                                size: 20,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Text(
+                                '앱 설정 접근',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.black87,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: '닫기',
+                              onPressed: () => Navigator.of(ctx).pop(false),
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          '앱 설정에 진입하려면 비밀번호를 입력하세요.',
+                          style: TextStyle(fontSize: 13, color: Colors.black87),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: controller,
+                          autofocus: true,
+                          obscureText: obscure,
+                          textInputAction: TextInputAction.done,
+                          decoration: InputDecoration(
+                            labelText: '비밀번호',
+                            border: const OutlineInputBorder(),
+                            prefixIcon: const Icon(Icons.password_rounded),
+                            suffixIcon: IconButton(
+                              tooltip: obscure ? '표시' : '숨김',
+                              onPressed: () => setStateSheet(() => obscure = !obscure),
+                              icon: Icon(
+                                obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                              ),
+                            ),
+                          ),
+                          onSubmitted: (_) {
+                            Navigator.of(ctx).pop(true);
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.of(ctx).pop(false),
+                                child: const Text('취소'),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.black,
+                                  foregroundColor: Colors.white,
+                                ),
+                                onPressed: () => Navigator.of(ctx).pop(true),
+                                icon: const Icon(Icons.check_rounded),
+                                label: const Text('확인'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (ok != true) return;
+
+    final input = controller.text.trim();
+    if (input != _kAppSettingsPassword) {
+      showFailedSnackbar(context, '비밀번호가 올바르지 않습니다.');
+      return;
+    }
+
+    HapticFeedback.selectionClick();
+    showSuccessSnackbar(context, '앱 설정에 진입합니다.');
+    await _openSheetsLinkSheet(context);
+  }
 
   // 앱 종료 처리
   Future<void> _exitApp(BuildContext context) async {
@@ -376,9 +521,7 @@ class _TopRow extends StatelessWidget {
                                 if (!selected) return;
                                 currentOverlayMode = OverlayMode.bubble;
                                 setSheetState(() {});
-                                await OverlayModeConfig.setMode(
-                                  OverlayMode.bubble,
-                                );
+                                await OverlayModeConfig.setMode(OverlayMode.bubble);
 
                                 try {
                                   if (await FlutterOverlayWindow.isActive()) {
@@ -388,10 +531,7 @@ class _TopRow extends StatelessWidget {
                                 } catch (_) {}
 
                                 if (!ctx.mounted) return;
-                                showSuccessSnackbar(
-                                  context,
-                                  '플로팅 버블 모드가 선택되었습니다.',
-                                );
+                                showSuccessSnackbar(context, '플로팅 버블 모드가 선택되었습니다.');
                               },
                             ),
                             ChoiceChip(
@@ -401,9 +541,7 @@ class _TopRow extends StatelessWidget {
                                 if (!selected) return;
                                 currentOverlayMode = OverlayMode.topHalf;
                                 setSheetState(() {});
-                                await OverlayModeConfig.setMode(
-                                  OverlayMode.topHalf,
-                                );
+                                await OverlayModeConfig.setMode(OverlayMode.topHalf);
 
                                 try {
                                   if (await FlutterOverlayWindow.isActive()) {
@@ -413,10 +551,7 @@ class _TopRow extends StatelessWidget {
                                 } catch (_) {}
 
                                 if (!ctx.mounted) return;
-                                showSuccessSnackbar(
-                                  context,
-                                  '상단 50% 포그라운드 모드가 선택되었습니다.',
-                                );
+                                showSuccessSnackbar(context, '상단 50% 포그라운드 모드가 선택되었습니다.');
                               },
                             ),
                           ],
@@ -484,9 +619,7 @@ class _TopRow extends StatelessWidget {
                         const SizedBox(height: 10),
                         SwitchListTile(
                           contentPadding: EdgeInsets.zero,
-                          title: Text(
-                            commuteTrueFalseEnabled ? 'ON (기록함)' : 'OFF (기록 안 함)',
-                          ),
+                          title: Text(commuteTrueFalseEnabled ? 'ON (기록함)' : 'OFF (기록 안 함)'),
                           subtitle: Text(
                             commuteTrueFalseEnabled
                                 ? '출근 시 commute_true_false 업데이트가 실행됩니다.'
@@ -563,7 +696,9 @@ class _TopRow extends StatelessWidget {
                         SwitchListTile(
                           contentPadding: EdgeInsets.zero,
                           title: Text(
-                            parkingCompletedRealtimeTabEnabled ? 'ON (실시간 탭 사용)' : 'OFF (실시간 탭 숨김)',
+                            parkingCompletedRealtimeTabEnabled
+                                ? 'ON (실시간 탭 사용)'
+                                : 'OFF (실시간 탭 숨김)',
                           ),
                           subtitle: Text(
                             parkingCompletedRealtimeTabEnabled
@@ -790,13 +925,14 @@ class _TopRow extends StatelessWidget {
           show: expanded,
           axisAlignment: -1.0,
           child: FilledButton.icon(
-            onPressed: () => _openSheetsLinkSheet(context),
+            // ✅ “앱 설정” 버튼 → 비밀번호 게이트로 변경
+            onPressed: () => _openAppSettingsGate(context),
             style: FilledButton.styleFrom(
               minimumSize: const Size(0, 40),
               padding: const EdgeInsets.symmetric(horizontal: 12),
             ),
             icon: const Icon(Icons.settings_outlined),
-            label: const Text('설정'),
+            label: const Text('앱 설정'),
           ),
         ),
         const SizedBox(width: 12),
@@ -879,8 +1015,7 @@ class HeaderBadge extends StatelessWidget {
       duration: const Duration(milliseconds: 600),
       tween: Tween(begin: .92, end: 1),
       curve: Curves.easeOutBack,
-      builder: (context, scale, child) =>
-          Transform.scale(scale: scale, child: child),
+      builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
       child: SizedBox(
         width: size,
         height: size,

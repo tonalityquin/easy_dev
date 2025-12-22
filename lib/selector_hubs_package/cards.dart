@@ -367,12 +367,12 @@ class HeadquarterCard extends StatelessWidget {
   Future<void> _handleTap(BuildContext context) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final mode = prefs.getString('mode') ?? '';
+
+      // ✅ mode 조건 삭제 (요청 반영)
       final division = prefs.getString('division') ?? '';
       final selectedArea = prefs.getString('selectedArea') ?? '';
 
-      final allowed = mode == 'service' &&
-          division.isNotEmpty &&
+      final allowed = division.isNotEmpty &&
           selectedArea.isNotEmpty &&
           division == selectedArea;
 
