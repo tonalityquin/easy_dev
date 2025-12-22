@@ -1,3 +1,4 @@
+// lib/screens/headquarter_page.dart
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -12,11 +13,8 @@ import '../selector_hubs_package/dev_auth.dart';
 // ✅ SecondaryPage (좌 스와이프 시 이동)
 import 'secondary_page.dart';
 
-/// Headquarter 전용 팔레트
-class _HqPalette {
-  static const base = Color(0xFF1E88E5); // #1E88E5
-  static const dark = Color(0xFF1565C0); // #1565C0
-}
+// ✅ AppCardPalette ThemeExtension 사용
+import '../theme.dart';
 
 class HeadquarterPage extends StatelessWidget {
   const HeadquarterPage({super.key});
@@ -86,7 +84,7 @@ class _HqModeSwitchButton extends StatelessWidget {
         child: ElevatedButton.icon(
           icon: const Icon(Icons.swap_horiz),
           label: const Text('Lite 본사로 전환'),
-          style: _switchBtnStyle(),
+          style: _switchBtnStyle(context),
           onPressed: () {
             _replaceWithAnimatedRoute(
               context,
@@ -187,6 +185,8 @@ class _RefreshableBodyState extends State<RefreshableBody> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppCardPalette.of(context);
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       dragStartBehavior: DragStartBehavior.down,
@@ -213,13 +213,15 @@ class _RefreshableBodyState extends State<RefreshableBody> {
               if (state.isLoading)
                 Container(
                   color: Colors.white.withOpacity(.35),
-                  child: const Center(
+                  child: Center(
                     child: SizedBox(
                       width: 28,
                       height: 28,
                       child: CircularProgressIndicator(
                         strokeWidth: 3,
-                        valueColor: AlwaysStoppedAnimation<Color>(_HqPalette.base),
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          palette.headquarterBase,
+                        ),
                       ),
                     ),
                   ),
@@ -237,6 +239,8 @@ class PageBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppCardPalette.of(context);
+
     return Consumer<HqState>(
       builder: (context, state, child) {
         final pages = state.pages;
@@ -259,8 +263,8 @@ class PageBottomNavigation extends StatelessWidget {
             ),
           )
               .toList(),
-          selectedItemColor: _HqPalette.base,
-          unselectedItemColor: _HqPalette.dark.withOpacity(.55),
+          selectedItemColor: palette.headquarterBase,
+          unselectedItemColor: palette.headquarterDark.withOpacity(.55),
           backgroundColor: Colors.white,
           elevation: 0,
           showUnselectedLabels: true,
@@ -270,13 +274,20 @@ class PageBottomNavigation extends StatelessWidget {
   }
 }
 
-ButtonStyle _switchBtnStyle() {
+ButtonStyle _switchBtnStyle(BuildContext context) {
+  // 기존 구현은 “흰색 바탕 + 검정 글자 + 회색 보더”였으므로 UX는 유지하면서
+  // 색 계열만 Headquarter 팔레트로 정돈합니다.
+  final palette = AppCardPalette.of(context);
+
   return ElevatedButton.styleFrom(
     backgroundColor: Colors.white,
-    foregroundColor: Colors.black,
+    foregroundColor: palette.headquarterDark, // 기존 black → hq 톤
     minimumSize: const Size.fromHeight(48),
     padding: EdgeInsets.zero,
-    side: const BorderSide(color: Colors.grey, width: 1.0),
+    side: BorderSide(
+      color: palette.headquarterLight.withOpacity(.8), // 기존 grey → hq 라이트
+      width: 1.0,
+    ),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
   );
 }

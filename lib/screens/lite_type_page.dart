@@ -1,3 +1,4 @@
+// lib/screens/lite_type_page.dart
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -17,12 +18,8 @@ import '../utils/snackbar_helper.dart';
 import '../utils/tts/tts_manager.dart';
 import '../services/latest_message_service.dart';
 
-/// Deep Blue 팔레트(서비스 카드와 동일 계열)
-class _Palette {
-  static const base = Color(0xFF546E7A);
-  static const dark = Color(0xFF37474F);
-  static const fg = Color(0xFFB0BEC5);
-}
+// ✅ AppCardPalette ThemeExtension 사용
+import '../theme.dart';
 
 class LiteTypePage extends StatefulWidget {
   const LiteTypePage({super.key});
@@ -75,7 +72,8 @@ class _LiteTypePageState extends State<LiteTypePage> {
 
               final currentPage = pageState.pages[pageState.selectedIndex];
               final collection = currentPage.collectionKey;
-              final selectedPlate = plateState.getSelectedPlate(collection, userName);
+              final selectedPlate =
+              plateState.getSelectedPlate(collection, userName);
 
               if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
                 await plateState.togglePlateIsSelected(
@@ -116,7 +114,10 @@ class _LiteTypePageState extends State<LiteTypePage> {
 class _ChatDashboardBar extends StatelessWidget {
   const _ChatDashboardBar();
 
-  static Future<void> _replayLatestTts(BuildContext context, String area) async {
+  static Future<void> _replayLatestTts(
+      BuildContext context,
+      String area,
+      ) async {
     final text = (await LatestMessageService.instance.readFromPrefs()).trim();
     if (text.isEmpty) {
       showSelectedSnackbar(context, '최근 메시지가 없습니다.');
@@ -135,6 +136,7 @@ class _ChatDashboardBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppCardPalette.of(context);
     final area = context.read<AreaState>().currentArea.trim();
 
     return Padding(
@@ -147,11 +149,17 @@ class _ChatDashboardBar extends StatelessWidget {
               onPressed: null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
-                foregroundColor: _Palette.dark.withOpacity(.35),
+                foregroundColor: palette.liteDark.withOpacity(.35),
                 disabledBackgroundColor: Colors.white,
-                disabledForegroundColor: _Palette.dark.withOpacity(.35),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                disabledForegroundColor:
+                palette.liteDark.withOpacity(.35),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
               ),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -167,12 +175,18 @@ class _ChatDashboardBar extends StatelessWidget {
               builder: (context, latestData, _) {
                 final hasText = latestData.text.trim().isNotEmpty;
                 return ElevatedButton(
-                  onPressed: hasText ? () => _replayLatestTts(context, area) : null,
+                  onPressed:
+                  hasText ? () => _replayLatestTts(context, area) : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
-                    foregroundColor: _Palette.base,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    foregroundColor: palette.liteBase,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   child: const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -199,12 +213,17 @@ class _ChatDashboardBar extends StatelessWidget {
                 );
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: _Palette.base,
-                foregroundColor: _Palette.fg,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                backgroundColor: palette.liteBase,
+                foregroundColor: palette.liteLight,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 elevation: 2,
-                shadowColor: _Palette.dark.withOpacity(.25),
+                shadowColor: palette.liteDark.withOpacity(.25),
               ),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -227,6 +246,8 @@ class _SingleHomeTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppCardPalette.of(context);
+
     return Consumer<LitePageState>(
       builder: (context, pageState, _) {
         return SizedBox(
@@ -244,14 +265,14 @@ class _SingleHomeTabBar extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.home, color: _Palette.base),
+                  Icon(Icons.home, color: palette.liteBase),
                   const SizedBox(width: 8),
                   Text(
                     '홈',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
-                      color: _Palette.base,
+                      color: palette.liteBase,
                     ),
                   ),
                 ],
@@ -288,9 +309,12 @@ class _RefreshableBodyState extends State<RefreshableBody> {
 
   void _handleHorizontalDragEnd(BuildContext context, double velocity) {
     if (_dragDistance > _hDistanceThreshold && velocity > _hVelocityThreshold) {
-      Navigator.of(context).push(_slidePage(const LiteInputPlateScreen(), fromLeft: true));
-    } else if (_dragDistance < -_hDistanceThreshold && velocity < -_hVelocityThreshold) {
-      Navigator.of(context).push(_slidePage(const SecondaryPage(), fromLeft: false));
+      Navigator.of(context)
+          .push(_slidePage(const LiteInputPlateScreen(), fromLeft: true));
+    } else if (_dragDistance < -_hDistanceThreshold &&
+        velocity < -_hVelocityThreshold) {
+      Navigator.of(context)
+          .push(_slidePage(const SecondaryPage(), fromLeft: false));
     }
     _dragDistance = 0.0;
   }
@@ -301,11 +325,16 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     await showLiteParkingCompletedTableTopSheet(context);
   }
 
-  Future<void> _handleVerticalDragEnd(BuildContext context, DragEndDetails details) async {
+  Future<void> _handleVerticalDragEnd(
+      BuildContext context,
+      DragEndDetails details,
+      ) async {
     final vy = details.primaryVelocity ?? 0.0;
 
-    final firedUp = (_vDragDistance < -_vDistanceThresholdUp) || (vy < -_vVelocityThresholdUp);
-    final firedDown = (_vDragDistance > _vDistanceThresholdDown) || (vy > _vVelocityThresholdDown);
+    final firedUp =
+        (_vDragDistance < -_vDistanceThresholdUp) || (vy < -_vVelocityThresholdUp);
+    final firedDown =
+        (_vDragDistance > _vDistanceThresholdDown) || (vy > _vVelocityThresholdDown);
 
     if (firedUp && !_chatOpening) {
       _chatOpening = true;
@@ -328,7 +357,8 @@ class _RefreshableBodyState extends State<RefreshableBody> {
       transitionsBuilder: (_, animation, __, child) {
         final begin = Offset(fromLeft ? -1.0 : 1.0, 0);
         final end = Offset.zero;
-        final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
+        final tween =
+        Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
         return SlideTransition(position: animation.drive(tween), child: child);
       },
     );
@@ -336,11 +366,16 @@ class _RefreshableBodyState extends State<RefreshableBody> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppCardPalette.of(context);
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       dragStartBehavior: DragStartBehavior.down,
       onHorizontalDragUpdate: (details) => _dragDistance += details.delta.dx,
-      onHorizontalDragEnd: (details) => _handleHorizontalDragEnd(context, details.primaryVelocity ?? 0),
+      onHorizontalDragEnd: (details) => _handleHorizontalDragEnd(
+        context,
+        details.primaryVelocity ?? 0,
+      ),
       onVerticalDragStart: (_) => _vDragDistance = 0.0,
       onVerticalDragUpdate: (details) => _vDragDistance += details.delta.dy,
       onVerticalDragEnd: (details) => _handleVerticalDragEnd(context, details),
@@ -352,13 +387,14 @@ class _RefreshableBodyState extends State<RefreshableBody> {
               if (plateState.isLoading)
                 Container(
                   color: Colors.white.withOpacity(.35),
-                  child: const Center(
+                  child: Center(
                     child: SizedBox(
                       width: 28,
                       height: 28,
                       child: CircularProgressIndicator(
                         strokeWidth: 3,
-                        valueColor: AlwaysStoppedAnimation<Color>(_Palette.base),
+                        valueColor:
+                        AlwaysStoppedAnimation<Color>(palette.liteBase),
                       ),
                     ),
                   ),

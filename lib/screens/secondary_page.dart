@@ -1,16 +1,14 @@
+// lib/screens/secondary_page.dart
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../states/secondary/secondary_info.dart';
 import '../states/secondary/secondary_state.dart';
 
-/// Deep Blue 팔레트(서비스 카드와 동일 톤)
-class _Palette {
-  static const base = Color(0xFF0D47A1); // primary
-  static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
-  static const light = Color(0xFF5472D3); // 톤 변형/보더
-}
+// ✅ AppCardPalette ThemeExtension 사용
+import '../theme.dart';
 
 class SecondaryPage extends StatelessWidget {
   const SecondaryPage({super.key});
@@ -31,7 +29,7 @@ class _SecondaryScaffold extends StatelessWidget {
       builder: (context, state, _) {
         if (state.pages.isEmpty) {
           return Scaffold(
-            appBar: _appBar(),
+            appBar: _appBar(context),
             body: const Center(child: Text('표시할 탭이 없습니다')),
           );
         }
@@ -49,24 +47,29 @@ class _SecondaryScaffold extends StatelessWidget {
     );
   }
 
-  PreferredSizeWidget _appBar() {
+  PreferredSizeWidget _appBar(BuildContext context) {
+    final palette = AppCardPalette.of(context);
+
     return AppBar(
       automaticallyImplyLeading: false,
       backgroundColor: Colors.white,
-      foregroundColor: _Palette.dark,
+      foregroundColor: palette.serviceDark,
       elevation: 0,
       centerTitle: true,
-      title: const Text(
+      title: Text(
         '보조 페이지',
-        style: TextStyle(fontWeight: FontWeight.w600, color: _Palette.dark),
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          color: palette.serviceDark,
+        ),
       ),
-      iconTheme: const IconThemeData(color: _Palette.dark),
-      actionsIconTheme: const IconThemeData(color: _Palette.dark),
+      iconTheme: IconThemeData(color: palette.serviceDark),
+      actionsIconTheme: IconThemeData(color: palette.serviceDark),
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
         child: Container(
           height: 1,
-          color: _Palette.light.withOpacity(.18), // 헤어라인
+          color: palette.serviceLight.withOpacity(.18), // 헤어라인
         ),
       ),
     );
@@ -135,13 +138,15 @@ class _ChunkedTabsRootState extends State<_ChunkedTabsRoot> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppCardPalette.of(context);
+
     final tabLabelStyle = Theme.of(context)
         .textTheme
         .titleSmall
         ?.copyWith(fontWeight: FontWeight.w700);
 
     return Scaffold(
-      appBar: _appBar(),
+      appBar: _appBar(context),
       body: Stack(
         children: [
           PageView.builder(
@@ -178,7 +183,7 @@ class _ChunkedTabsRootState extends State<_ChunkedTabsRoot> {
                         decoration: BoxDecoration(
                           border: Border(
                             bottom: BorderSide(
-                              color: _Palette.light.withOpacity(.18),
+                              color: palette.serviceLight.withOpacity(.18),
                               width: 1,
                             ),
                           ),
@@ -191,12 +196,13 @@ class _ChunkedTabsRootState extends State<_ChunkedTabsRoot> {
                               widget.onSelect(globalIdx);
                             }
                           },
-                          labelColor: _Palette.base,
-                          unselectedLabelColor: _Palette.dark.withOpacity(.6),
+                          labelColor: palette.serviceBase,
+                          unselectedLabelColor:
+                          palette.serviceDark.withOpacity(.6),
                           labelStyle: tabLabelStyle,
                           indicator: UnderlineTabIndicator(
-                            borderSide: const BorderSide(
-                              color: _Palette.base,
+                            borderSide: BorderSide(
+                              color: palette.serviceBase,
                               width: 2.5,
                             ),
                           ),
@@ -213,7 +219,9 @@ class _ChunkedTabsRootState extends State<_ChunkedTabsRoot> {
                         children: [
                           for (var i = 0; i < items.length; i++)
                             KeyedSubtree(
-                              key: PageStorageKey<String>('secondary_${start + i}'),
+                              key: PageStorageKey<String>(
+                                'secondary_${start + i}',
+                              ),
                               child: items[i].page,
                             ),
                         ],
@@ -241,24 +249,29 @@ class _ChunkedTabsRootState extends State<_ChunkedTabsRoot> {
     );
   }
 
-  PreferredSizeWidget _appBar() {
+  PreferredSizeWidget _appBar(BuildContext context) {
+    final palette = AppCardPalette.of(context);
+
     return AppBar(
       automaticallyImplyLeading: false,
       backgroundColor: Colors.white,
-      foregroundColor: _Palette.dark,
+      foregroundColor: palette.serviceDark,
       elevation: 0,
       centerTitle: true,
-      title: const Text(
+      title: Text(
         '보조 페이지',
-        style: TextStyle(fontWeight: FontWeight.w600, color: _Palette.dark),
+        style: TextStyle(
+          fontWeight: FontWeight.w600,
+          color: palette.serviceDark,
+        ),
       ),
-      iconTheme: const IconThemeData(color: _Palette.dark),
-      actionsIconTheme: const IconThemeData(color: _Palette.dark),
+      iconTheme: IconThemeData(color: palette.serviceDark),
+      actionsIconTheme: IconThemeData(color: palette.serviceDark),
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
         child: Container(
           height: 1,
-          color: _Palette.light.withOpacity(.18),
+          color: palette.serviceLight.withOpacity(.18),
         ),
       ),
     );
@@ -270,15 +283,17 @@ class _LoadingOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppCardPalette.of(context);
+
     return Container(
       color: Colors.white.withOpacity(.35),
       alignment: Alignment.center,
-      child: const SizedBox(
+      child: SizedBox(
         width: 28,
         height: 28,
         child: CircularProgressIndicator(
           strokeWidth: 3,
-          valueColor: AlwaysStoppedAnimation<Color>(_Palette.base),
+          valueColor: AlwaysStoppedAnimation<Color>(palette.serviceBase),
         ),
       ),
     );

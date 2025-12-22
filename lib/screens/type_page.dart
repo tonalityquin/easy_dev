@@ -24,12 +24,8 @@ import '../services/latest_message_service.dart';
 
 import 'service_mode/type_package/common_widgets/reverse_sheet_package/parking_completed_table_sheet.dart';
 
-/// Deep Blue 팔레트(서비스 카드와 동일 계열)
-class _Palette {
-  static const base = Color(0xFF0D47A1); // primary
-  static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
-  static const fg = Color(0xFFFFFFFF); // 전경(흰색)
-}
+// ✅ AppCardPalette ThemeExtension 사용
+import '../theme.dart';
 
 class TypePage extends StatefulWidget {
   const TypePage({super.key});
@@ -75,7 +71,8 @@ class _TypePageState extends State<TypePage> {
 
               final currentPage = pageState.pages[pageState.selectedIndex];
               final collection = currentPage.collectionKey;
-              final selectedPlate = plateState.getSelectedPlate(collection, userName);
+              final selectedPlate =
+              plateState.getSelectedPlate(collection, userName);
 
               if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
                 await plateState.togglePlateIsSelected(
@@ -140,6 +137,7 @@ class _ChatDashboardBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppCardPalette.of(context);
     final area = context.read<AreaState>().currentArea.trim();
 
     return Padding(
@@ -153,9 +151,10 @@ class _ChatDashboardBar extends StatelessWidget {
               onPressed: null,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
-                foregroundColor: _Palette.dark.withOpacity(.35),
+                foregroundColor: palette.serviceDark.withOpacity(.35),
                 disabledBackgroundColor: Colors.white,
-                disabledForegroundColor: _Palette.dark.withOpacity(.35),
+                disabledForegroundColor:
+                palette.serviceDark.withOpacity(.35),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 12,
@@ -179,10 +178,11 @@ class _ChatDashboardBar extends StatelessWidget {
               builder: (context, latestData, _) {
                 final hasText = latestData.text.trim().isNotEmpty;
                 return ElevatedButton(
-                  onPressed: hasText ? () => _replayLatestTts(context, area) : null,
+                  onPressed:
+                  hasText ? () => _replayLatestTts(context, area) : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
-                    foregroundColor: _Palette.base,
+                    foregroundColor: palette.serviceBase,
                     padding: const EdgeInsets.symmetric(
                       horizontal: 12,
                       vertical: 12,
@@ -218,8 +218,8 @@ class _ChatDashboardBar extends StatelessWidget {
                 );
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: _Palette.base,
-                foregroundColor: _Palette.fg,
+                backgroundColor: palette.serviceBase,
+                foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 12,
@@ -228,7 +228,7 @@ class _ChatDashboardBar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 elevation: 2,
-                shadowColor: _Palette.dark.withOpacity(.25),
+                shadowColor: palette.serviceDark.withOpacity(.25),
               ),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -276,9 +276,12 @@ class _RefreshableBodyState extends State<RefreshableBody> {
 
   void _handleHorizontalDragEnd(BuildContext context, double velocity) {
     if (_dragDistance > _hDistanceThreshold && velocity > _hVelocityThreshold) {
-      Navigator.of(context).push(_slidePage(const InputPlateScreen(), fromLeft: true));
-    } else if (_dragDistance < -_hDistanceThreshold && velocity < -_hVelocityThreshold) {
-      Navigator.of(context).push(_slidePage(const SecondaryPage(), fromLeft: false));
+      Navigator.of(context)
+          .push(_slidePage(const InputPlateScreen(), fromLeft: true));
+    } else if (_dragDistance < -_hDistanceThreshold &&
+        velocity < -_hVelocityThreshold) {
+      Navigator.of(context)
+          .push(_slidePage(const SecondaryPage(), fromLeft: false));
     } else {
       debugPrint(
         '⏸[H] 거리(${_dragDistance.toStringAsFixed(1)})/속도($velocity) 부족 → 무시',
@@ -305,9 +308,11 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     final vy = details.primaryVelocity ?? 0.0; // 위로 스와이프는 음수, 아래로는 양수
 
     // 위로 빠르게 스와이프 → 채팅 (둘 중 하나만 만족해도 트리거)
-    final firedUp = (_vDragDistance < -_vDistanceThresholdUp) || (vy < -_vVelocityThresholdUp);
+    final firedUp =
+        (_vDragDistance < -_vDistanceThresholdUp) || (vy < -_vVelocityThresholdUp);
     // 아래로 빠르게 스와이프 → ParkingCompleted 테이블 Top Sheet (둘 중 하나만 만족해도 트리거)
-    final firedDown = (_vDragDistance > _vDistanceThresholdDown) || (vy > _vVelocityThresholdDown);
+    final firedDown =
+        (_vDragDistance > _vDistanceThresholdDown) || (vy > _vVelocityThresholdDown);
 
     if (firedUp && !_chatOpening) {
       _chatOpening = true;
@@ -342,7 +347,8 @@ class _RefreshableBodyState extends State<RefreshableBody> {
       transitionsBuilder: (_, animation, __, child) {
         final begin = Offset(fromLeft ? -1.0 : 1.0, 0);
         final end = Offset.zero;
-        final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
+        final tween = Tween(begin: begin, end: end)
+            .chain(CurveTween(curve: Curves.easeInOut));
         return SlideTransition(position: animation.drive(tween), child: child);
       },
     );
@@ -350,6 +356,8 @@ class _RefreshableBodyState extends State<RefreshableBody> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppCardPalette.of(context);
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       dragStartBehavior: DragStartBehavior.down,
@@ -377,13 +385,14 @@ class _RefreshableBodyState extends State<RefreshableBody> {
               if (state.isLoading)
                 Container(
                   color: Colors.white.withOpacity(.35),
-                  child: const Center(
+                  child: Center(
                     child: SizedBox(
                       width: 28,
                       height: 28,
                       child: CircularProgressIndicator(
                         strokeWidth: 3,
-                        valueColor: AlwaysStoppedAnimation<Color>(_Palette.base),
+                        valueColor:
+                        AlwaysStoppedAnimation<Color>(palette.serviceBase),
                       ),
                     ),
                   ),
@@ -401,7 +410,10 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     } else {
       return IndexedStack(
         index: index - 1,
-        children: defaultPages.sublist(1).map((pageInfo) => pageInfo.builder(context)).toList(),
+        children: defaultPages
+            .sublist(1)
+            .map((pageInfo) => pageInfo.builder(context))
+            .toList(),
       );
     }
   }
@@ -422,9 +434,11 @@ class _PageBottomNavigationState extends State<PageBottomNavigation> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppCardPalette.of(context);
+
     // 팔레트 기반 선택/비선택 색
-    final selectedColor = _Palette.base;
-    final unselectedColor = _Palette.dark.withOpacity(.55);
+    final selectedColor = palette.serviceBase;
+    final unselectedColor = palette.serviceDark.withOpacity(.55);
 
     return Consumer2<PageState, FieldSelectedDateState>(
       builder: (context, pageState, selectedDateState, child) {
@@ -491,7 +505,9 @@ class _PageBottomNavigationState extends State<PageBottomNavigation> {
                           ? selectedColor
                           : (isIn ? Colors.redAccent : Colors.indigoAccent);
                     } else {
-                      countColor = isSelected ? selectedColor : _Palette.dark.withOpacity(.75);
+                      countColor = isSelected
+                          ? selectedColor
+                          : palette.serviceDark.withOpacity(.75);
                     }
 
                     return Column(
