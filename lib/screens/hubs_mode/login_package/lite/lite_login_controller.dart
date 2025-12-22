@@ -24,6 +24,8 @@ class LiteLoginController {
         this.onLoginSucceeded,
       });
 
+  static const String _requiredMode = 'lite';
+
   final BuildContext context;
 
   // 성공 시 호출되는 콜백(없으면 기본 동작으로 /commute 이동)
@@ -40,22 +42,37 @@ class LiteLoginController {
   bool isLoading = false;
   bool obscurePassword = true;
 
+  bool _hasModeAccess(List<String> modes, String required) {
+    final req = required.trim().toLowerCase();
+    return modes.any((m) => m.trim().toLowerCase() == req);
+  }
+
   /// ✅ 자동 로그인 게이트(서비스와 동일)
   void initState() {
     Provider.of<UserState>(context, listen: false).loadUserToLogIn().then((_) {
-      final isLoggedIn = Provider.of<UserState>(context, listen: false).isLoggedIn;
+      final userState = Provider.of<UserState>(context, listen: false);
+      final isLoggedIn = userState.isLoggedIn;
       debugPrint('[LOGIN-LITE][${_ts()}] autoLogin check → isLoggedIn=$isLoggedIn');
 
-      if (isLoggedIn && context.mounted) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          debugPrint('[LOGIN-LITE][${_ts()}] autoLogin → onLoginSucceeded()');
-          if (onLoginSucceeded != null) {
-            onLoginSucceeded!();
-          } else {
-            Navigator.pushReplacementNamed(context, '/commute');
-          }
-        });
+      if (!isLoggedIn || !context.mounted) return;
+
+      // ✅ 추가: modes 권한 체크 (lite 권한 없으면 자동진입 차단)
+      final user = userState.user;
+      final allowed = user != null && _hasModeAccess(user.modes, _requiredMode);
+      if (!allowed) {
+        debugPrint('[LOGIN-LITE][${_ts()}] autoLogin blocked: modes missing "$_requiredMode"');
+        showFailedSnackbar(context, '이 계정은 lite 모드 사용 권한이 없습니다.');
+        return;
       }
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        debugPrint('[LOGIN-LITE][${_ts()}] autoLogin → onLoginSucceeded()');
+        if (onLoginSucceeded != null) {
+          onLoginSucceeded!();
+        } else {
+          Navigator.pushReplacementNamed(context, '/commute');
+        }
+      });
     });
   }
 
@@ -116,6 +133,16 @@ class LiteLoginController {
       }
 
       if (user != null && user.name == name && user.password == password) {
+        // ✅ 추가: modes 권한 체크 (lite 권한 없으면 로그인 차단)
+        final allowed = _hasModeAccess(user.modes, _requiredMode);
+        if (!allowed) {
+          debugPrint('[LOGIN-LITE][${_ts()}] login blocked: modes missing "$_requiredMode"');
+          if (context.mounted) {
+            showFailedSnackbar(context, '이 계정은 lite 모드 사용 권한이 없습니다.');
+          }
+          return;
+        }
+
         final userState = context.read<UserState>();
         final areaState = context.read<AreaState>();
 
@@ -132,7 +159,11 @@ class LiteLoginController {
         // ✅ endTime 저장 + 즉시 예약/갱신 (서비스와 동일)
         final endHHmm = _timeToString(updatedUser.endTime);
         await prefs.setString('endTime', endHHmm);
-        await EndTimeReminderService.instance.scheduleDailyOneHourBefore(endHHmm);
+        if (endHHmm.isNotEmpty) {
+          await EndTimeReminderService.instance.scheduleDailyOneHourBefore(endHHmm);
+        } else {
+          debugPrint('[LOGIN-LITE][${_ts()}] endTime is empty → skip schedule');
+        }
 
         await prefs.setString('role', updatedUser.role);
         await prefs.setString('position', updatedUser.position ?? '');

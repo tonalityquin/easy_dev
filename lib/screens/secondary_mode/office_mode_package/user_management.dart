@@ -8,8 +8,6 @@ import 'user_management_package/user_setting.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../states/area/area_state.dart';
 
-// ✅ AppCardPalette 정의가 있는 파일을 프로젝트 경로에 맞게 import 하세요.
-// 예) import 'package:your_app/theme/app_card_palette.dart';
 import '../../../../theme.dart';
 
 /// Iterable 안전 확장: 조건에 맞는 첫 원소를 찾되 없으면 null
@@ -110,6 +108,7 @@ class _UserManagementState extends State<UserManagement> {
         String phone,
         String email,
         String role,
+        List<String> modes, // ✅ 추가
         String password,
         String area,
         String division,
@@ -187,6 +186,7 @@ class _UserManagementState extends State<UserManagement> {
             phone,
             email,
             role,
+            modes, // ✅ 추가
             password,
             area,
             division,
@@ -209,6 +209,7 @@ class _UserManagementState extends State<UserManagement> {
               phone: phone,
               email: email,
               role: role,
+              modes: modes, // ✅ 추가
               password: password,
               position: position,
               areas: [area],
@@ -254,6 +255,7 @@ class _UserManagementState extends State<UserManagement> {
           phone,
           email,
           role,
+          modes, // ✅ 추가
           password,
           area,
           division,
@@ -275,6 +277,7 @@ class _UserManagementState extends State<UserManagement> {
             phone: phone,
             email: email,
             role: role,
+            modes: modes, // ✅ 추가
             password: password,
             position: position,
             areas: [area],
@@ -345,6 +348,8 @@ class _UserManagementState extends State<UserManagement> {
         ? Border.all(color: base, width: 1.25)
         : Border.all(color: Colors.black.withOpacity(.08));
 
+    final modesText = (user.modes.isNotEmpty) ? user.modes.join(', ') : '-';
+
     return Opacity(
       opacity: inactiveOpacity,
       child: Container(
@@ -356,8 +361,7 @@ class _UserManagementState extends State<UserManagement> {
         ),
         child: ListTile(
           key: ValueKey(user.id),
-          contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           leading: CircleAvatar(
             backgroundColor: light.withOpacity(.25),
             foregroundColor: dark,
@@ -385,6 +389,7 @@ class _UserManagementState extends State<UserManagement> {
                 Text('이메일: ${user.email}'),
                 Text('전화번호: ${user.phone}'),
                 if (user.position?.isNotEmpty == true) Text('직책: ${user.position!}'),
+                Text('허용 모드: $modesText'), // ✅ 표시 추가
               ],
             ),
           ),
@@ -503,7 +508,6 @@ class _UserManagementState extends State<UserManagement> {
           return _buildUserTile(context, userState, user);
         },
       ),
-
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: _FabStack(
         bottomGap: _fabBottomGap,

@@ -5,6 +5,11 @@ class UserModel {
   final List<String> areas;
   final String? currentArea;
   final List<String> divisions;
+
+  /// ✅ 추가: 계정이 허용하는 모드 목록
+  /// Firestore: modes: ["service","lite","simple", ...]
+  final List<String> modes;
+
   final String email;
   final TimeOfDay? endTime;
   final String? englishSelectedAreaName;
@@ -29,6 +34,10 @@ class UserModel {
     required this.areas,
     this.currentArea,
     required this.divisions,
+
+    /// ✅ 기존 생성 코드 영향 최소화를 위해 default []
+    this.modes = const [],
+
     required this.email,
     this.endTime,
     this.englishSelectedAreaName,
@@ -53,6 +62,7 @@ class UserModel {
     List<String>? areas,
     String? currentArea,
     List<String>? divisions,
+    List<String>? modes,
     String? email,
     TimeOfDay? endTime,
     String? englishSelectedAreaName,
@@ -74,9 +84,11 @@ class UserModel {
       areas: areas ?? this.areas,
       currentArea: currentArea ?? this.currentArea,
       divisions: divisions ?? this.divisions,
+      modes: modes ?? this.modes,
       email: email ?? this.email,
       endTime: endTime ?? this.endTime,
-      englishSelectedAreaName: englishSelectedAreaName ?? this.englishSelectedAreaName,
+      englishSelectedAreaName:
+      englishSelectedAreaName ?? this.englishSelectedAreaName,
       fixedHolidays: fixedHolidays ?? this.fixedHolidays,
       isSaved: isSaved ?? this.isSaved,
       isSelected: isSelected ?? this.isSelected,
@@ -98,6 +110,10 @@ class UserModel {
       areas: List<String>.from(data['areas'] ?? []),
       currentArea: data['currentArea'],
       divisions: List<String>.from(data['divisions'] ?? []),
+
+      /// ✅ 추가
+      modes: List<String>.from(data['modes'] ?? []),
+
       email: data['email'] ?? '',
       endTime: _parseTime(data['endTime']),
       englishSelectedAreaName: data['englishSelectedAreaName'],
@@ -123,6 +139,10 @@ class UserModel {
       'areas': areas,
       'currentArea': currentArea,
       'divisions': divisions,
+
+      /// ✅ 추가
+      'modes': modes,
+
       'email': email,
       'endTime': _timeToMap(endTime),
       'englishSelectedAreaName': englishSelectedAreaName,
@@ -149,6 +169,10 @@ class UserModel {
       areas: List<String>.from(json['areas'] ?? []),
       currentArea: json['currentArea'],
       divisions: List<String>.from(json['divisions'] ?? []),
+
+      /// ✅ 추가
+      modes: List<String>.from(json['modes'] ?? []),
+
       email: json['email'] ?? '',
       endTime: _parseTime(json['endTime']),
       englishSelectedAreaName: json['englishSelectedAreaName'],
@@ -175,6 +199,10 @@ class UserModel {
       'areas': areas,
       'currentArea': currentArea,
       'divisions': divisions,
+
+      /// ✅ 추가
+      'modes': modes,
+
       'email': email,
       'endTime': _timeToMap(endTime),
       'englishSelectedAreaName': englishSelectedAreaName,

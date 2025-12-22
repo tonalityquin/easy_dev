@@ -1,4 +1,3 @@
-// lib/screens/login/simple/simple_login_controller.dart
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -29,6 +28,8 @@ class SimpleLoginController {
         this.onLoginSucceeded, // ✅ 성공 시 화면에서 내비 처리(redirectAfterLogin 반영)
       });
 
+  static const String _requiredMode = 'simple';
+
   final BuildContext context;
 
   // 성공 시 호출되는 콜백(없으면 기본 동작으로 /simple_commute 이동)
@@ -45,6 +46,18 @@ class SimpleLoginController {
   bool isLoading = false;
   bool obscurePassword = true;
 
+  bool _hasModeAccessFromList(List<String> modes, String required) {
+    final req = required.trim().toLowerCase();
+    return modes.any((m) => m.trim().toLowerCase() == req);
+  }
+
+  List<String> _extractModes(dynamic raw) {
+    if (raw is List) {
+      return raw.map((e) => e.toString()).toList();
+    }
+    return const <String>[];
+  }
+
   /// ✅ 자동 로그인 게이트(기존 initState 역할)
   /// - 약식 로그인(Simple 모드)에서는 **항상 local-only** 경로만 사용
   ///   (UserState.loadUserToLogInLocalOnly → SharedPreferences 기반 복원)
@@ -53,20 +66,28 @@ class SimpleLoginController {
 
     userState.loadUserToLogInLocalOnly().then((_) {
       final isLoggedIn = userState.isLoggedIn;
-      debugPrint(
-          '[LOGIN-SIMPLE][${_ts()}] autoLogin(local-only) → isLoggedIn=$isLoggedIn');
-      if (isLoggedIn && context.mounted) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          debugPrint(
-              '[LOGIN-SIMPLE][${_ts()}] autoLogin → onLoginSucceeded()');
-          // 콜백이 없으면 기본값(/simple_commute)로 이동
-          if (onLoginSucceeded != null) {
-            onLoginSucceeded!();
-          } else {
-            Navigator.pushReplacementNamed(context, '/simple_commute');
-          }
-        });
+      debugPrint('[LOGIN-SIMPLE][${_ts()}] autoLogin(local-only) → isLoggedIn=$isLoggedIn');
+
+      if (!isLoggedIn || !context.mounted) return;
+
+      // ✅ 추가: modes 권한 체크 (simple 권한 없으면 자동진입 차단)
+      final user = userState.user;
+      final allowed = user != null && _hasModeAccessFromList(user.modes, _requiredMode);
+      if (!allowed) {
+        debugPrint('[LOGIN-SIMPLE][${_ts()}] autoLogin blocked: modes missing "$_requiredMode"');
+        showFailedSnackbar(context, '이 계정은 simple 모드 사용 권한이 없습니다.');
+        return;
       }
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        debugPrint('[LOGIN-SIMPLE][${_ts()}] autoLogin → onLoginSucceeded()');
+        // 콜백이 없으면 기본값(/simple_commute)로 이동
+        if (onLoginSucceeded != null) {
+          onLoginSucceeded!();
+        } else {
+          Navigator.pushReplacementNamed(context, '/simple_commute');
+        }
+      });
     });
   }
 
@@ -108,52 +129,51 @@ class SimpleLoginController {
       final cachedJson = prefs.getString(_prefsKeyCachedUser);
       if (cachedJson != null && cachedJson.isNotEmpty) {
         final decoded = jsonDecode(cachedJson) as Map<String, dynamic>;
-        final cachedName =
-            (decoded['name'] as String?)?.trim() ?? '';
-        final cachedPhoneRaw =
-            (decoded['phone'] as String?)?.trim() ?? '';
-        final cachedPhone =
-        cachedPhoneRaw.replaceAll(RegExp(r'\D'), '');
-        final cachedPassword =
-            (decoded['password'] as String?) ?? '';
+        final cachedName = (decoded['name'] as String?)?.trim() ?? '';
+        final cachedPhoneRaw = (decoded['phone'] as String?)?.trim() ?? '';
+        final cachedPhone = cachedPhoneRaw.replaceAll(RegExp(r'\D'), '');
+        final cachedPassword = (decoded['password'] as String?) ?? '';
 
-        if (cachedName == name &&
-            cachedPhone == phone &&
-            cachedPassword == password) {
-          debugPrint(
-              '[LOGIN-SIMPLE][${_ts()}] local-only login hit (cachedUserJson match)');
+        if (cachedName == name && cachedPhone == phone && cachedPassword == password) {
+          // ✅ 추가: local-only에서도 modes 권한 체크
+          final cachedModes = _extractModes(decoded['modes']);
+          final allowed = _hasModeAccessFromList(cachedModes, _requiredMode);
+          if (!allowed) {
+            debugPrint(
+              '[LOGIN-SIMPLE][${_ts()}] local-only blocked: modes missing "$_requiredMode" → fallback to Firestore',
+            );
+            // ✅ local-only 경로를 쓰지 않고 Firestore 로그인으로 폴백
+          } else {
+            debugPrint('[LOGIN-SIMPLE][${_ts()}] local-only login hit (cachedUserJson match)');
 
-          // 모드 표시를 simple 로 맞춰둔다 (허브 카드 등에서 사용)
-          await prefs.setString('mode', 'simple');
+            // 모드 표시를 simple 로 맞춰둔다 (허브 카드 등에서 사용)
+            await prefs.setString('mode', 'simple');
 
-          final userState = context.read<UserState>();
-          await userState.loadUserToLogInLocalOnly();
-          final isLoggedIn = userState.isLoggedIn;
-          debugPrint(
-              '[LOGIN-SIMPLE][${_ts()}] local-only login result → isLoggedIn=$isLoggedIn');
+            final userState = context.read<UserState>();
+            await userState.loadUserToLogInLocalOnly();
+            final isLoggedIn = userState.isLoggedIn;
+            debugPrint('[LOGIN-SIMPLE][${_ts()}] local-only login result → isLoggedIn=$isLoggedIn');
 
-          if (isLoggedIn && context.mounted) {
-            // 약식 로그인에서도 TTS 오너십은 포그라운드로 맞춰둠
-            await TtsOwnership.setOwner(TtsOwner.foreground);
+            if (isLoggedIn && context.mounted) {
+              // 약식 로그인에서도 TTS 오너십은 포그라운드로 맞춰둠
+              await TtsOwnership.setOwner(TtsOwner.foreground);
 
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              debugPrint(
-                  '[LOGIN-SIMPLE][${_ts()}] local-only login → onLoginSucceeded()');
-              if (onLoginSucceeded != null) {
-                onLoginSucceeded!();
-              } else {
-                Navigator.pushReplacementNamed(
-                    context, '/simple_commute');
-              }
-            });
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                debugPrint('[LOGIN-SIMPLE][${_ts()}] local-only login → onLoginSucceeded()');
+                if (onLoginSucceeded != null) {
+                  onLoginSucceeded!();
+                } else {
+                  Navigator.pushReplacementNamed(context, '/simple_commute');
+                }
+              });
+            }
+            // ✅ local-only 경로에서는 Firestore/네트워크 호출 없이 종료
+            return;
           }
-          // ✅ local-only 경로에서는 Firestore/네트워크 호출 없이 종료
-          return;
         }
       }
     } catch (e, st) {
-      debugPrint(
-          '[LOGIN-SIMPLE][${_ts()}] local-only login decode 실패: $e\n$st');
+      debugPrint('[LOGIN-SIMPLE][${_ts()}] local-only login decode 실패: $e\n$st');
       // local-only 실패 시에는 그냥 아래 Firestore 로그인으로 폴백
     }
 
@@ -177,91 +197,91 @@ class SimpleLoginController {
 
       if (context.mounted) {
         debugPrint(
-            "[LOGIN-SIMPLE][${_ts()}] 입력값 name=\"$name\" phone=\"$phone\" pwLen=${password.length}");
+          "[LOGIN-SIMPLE][${_ts()}] 입력값 name=\"$name\" phone=\"$phone\" pwLen=${password.length}",
+        );
         if (user != null) {
-          debugPrint(
-              "[LOGIN-SIMPLE][${_ts()}] DB 유저: name=${user.name}, phone=${user.phone}");
+          debugPrint("[LOGIN-SIMPLE][${_ts()}] DB 유저: name=${user.name}, phone=${user.phone}");
         } else {
           debugPrint("[LOGIN-SIMPLE][${_ts()}] DB에서 사용자 정보 없음");
         }
       }
 
       if (user != null && user.name == name && user.password == password) {
+        // ✅ 추가: modes 권한 체크 (simple 권한 없으면 로그인 차단)
+        final allowed = _hasModeAccessFromList(user.modes, _requiredMode);
+        if (!allowed) {
+          debugPrint('[LOGIN-SIMPLE][${_ts()}] login blocked: modes missing "$_requiredMode"');
+          if (context.mounted) {
+            showFailedSnackbar(context, '이 계정은 simple 모드 사용 권한이 없습니다.');
+          }
+          return;
+        }
+
         final userState = context.read<UserState>();
         final areaState = context.read<AreaState>();
         final updatedUser = user.copyWith(isSaved: true);
         userState.updateLoginUser(updatedUser);
-        debugPrint(
-            '[LOGIN-SIMPLE][${_ts()}] userState.updateLoginUser done');
+        debugPrint('[LOGIN-SIMPLE][${_ts()}] userState.updateLoginUser done');
 
         await prefs.setString('phone', updatedUser.phone);
-        await prefs.setString(
-            'selectedArea', updatedUser.selectedArea ?? '');
-        await prefs.setString(
-            'division', updatedUser.divisions.firstOrNull ?? '');
-        await prefs.setString(
-            'startTime', _timeToString(updatedUser.startTime));
+        await prefs.setString('selectedArea', updatedUser.selectedArea ?? '');
+        await prefs.setString('division', updatedUser.divisions.firstOrNull ?? '');
+        await prefs.setString('startTime', _timeToString(updatedUser.startTime));
 
         // ✅ endTime 저장 + 즉시 예약/갱신
         final endHHmm = _timeToString(updatedUser.endTime);
         await prefs.setString('endTime', endHHmm);
-        await EndTimeReminderService.instance
-            .scheduleDailyOneHourBefore(endHHmm);
+        if (endHHmm.isNotEmpty) {
+          await EndTimeReminderService.instance.scheduleDailyOneHourBefore(endHHmm);
+        } else {
+          debugPrint('[LOGIN-SIMPLE][${_ts()}] endTime is empty → skip schedule');
+        }
 
         await prefs.setString('role', updatedUser.role);
-        await prefs.setString(
-            'position', updatedUser.position ?? '');
-        await prefs.setStringList(
-            'fixedHolidays', updatedUser.fixedHolidays);
+        await prefs.setString('position', updatedUser.position ?? '');
+        await prefs.setStringList('fixedHolidays', updatedUser.fixedHolidays);
         await prefs.setString('mode', 'simple'); // ✅ 약식 로그인 모드 저장
 
         // ✅ 오너십: 포그라운드가 Plate TTS를 담당하도록 설정
         await TtsOwnership.setOwner(TtsOwner.foreground);
         debugPrint(
-            "[LOGIN-SIMPLE][${_ts()}] SharedPreferences 저장 완료: phone=${prefs.getString('phone')}");
+          "[LOGIN-SIMPLE][${_ts()}] SharedPreferences 저장 완료: phone=${prefs.getString('phone')}",
+        );
 
         // ✅ 현재 앱의 지역 컨텍스트 업데이트 (await로 보장)
         final areaToSet = updatedUser.areas.firstOrNull ?? '';
         await areaState.updateArea(areaToSet); // ← 반드시 await
-        debugPrint(
-            '[LOGIN-SIMPLE][${_ts()}] areaState.updateArea("$areaToSet")');
+        debugPrint('[LOGIN-SIMPLE][${_ts()}] areaState.updateArea("$areaToSet")');
 
         // ✅ 서비스 모드 때와 동일하게 currentArea 기준으로
         //    TTS 구독 영역 + 필터 전달 (네비게이션 전에)
         final a = context.read<AreaState>().currentArea; // ← '' 방지
-        debugPrint(
-            '[LOGIN-SIMPLE][${_ts()}] send area to FG (currentArea="$a")');
+        debugPrint('[LOGIN-SIMPLE][${_ts()}] send area to FG (currentArea="$a")');
         if (a.isNotEmpty) {
           final filters = await TtsUserFilters.load();
           FlutterForegroundTask.sendDataToTask({
             'area': a,
             'ttsFilters': filters.toMap(),
           });
-          debugPrint(
-              '[LOGIN-SIMPLE][${_ts()}] sendDataToTask ok (with filters ${filters.toMap()})');
+          debugPrint('[LOGIN-SIMPLE][${_ts()}] sendDataToTask ok (with filters ${filters.toMap()})');
         } else {
-          debugPrint(
-              '[LOGIN-SIMPLE][${_ts()}] currentArea is empty → skip send');
+          debugPrint('[LOGIN-SIMPLE][${_ts()}] currentArea is empty → skip send');
         }
 
         if (context.mounted) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            debugPrint(
-                '[LOGIN-SIMPLE][${_ts()}] login success → onLoginSucceeded()');
+            debugPrint('[LOGIN-SIMPLE][${_ts()}] login success → onLoginSucceeded()');
             if (onLoginSucceeded != null) {
               onLoginSucceeded!();
             } else {
-              Navigator.pushReplacementNamed(
-                  context, '/simple_commute'); // 하위 호환
+              Navigator.pushReplacementNamed(context, '/simple_commute'); // 하위 호환
             }
           });
         }
       } else {
         if (context.mounted) {
-          debugPrint(
-              '[LOGIN-SIMPLE][${_ts()}] auth failed (name/password mismatch or no user)');
-          showFailedSnackbar(
-              context, '이름 또는 비밀번호가 올바르지 않습니다.');
+          debugPrint('[LOGIN-SIMPLE][${_ts()}] auth failed (name/password mismatch or no user)');
+          showFailedSnackbar(context, '이름 또는 비밀번호가 올바르지 않습니다.');
         }
       }
     } catch (e, st) {
@@ -314,13 +334,11 @@ class SimpleLoginController {
       hintText: label,
       prefixIcon: icon != null ? Icon(icon) : null,
       suffixIcon: suffixIcon,
-      contentPadding:
-      const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+      contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
       filled: true,
       fillColor: Colors.grey.shade100,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-      focusedBorder:
-      OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
     );
   }
 
