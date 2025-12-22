@@ -1,4 +1,4 @@
-// lib/screens/head_package/hub_quick_actions.dart
+// lib/screens/hubs_mode/head_package/hub_quick_actions.dart
 import 'dart:math' as math;
 import 'dart:ui'; // BackdropFilter: ImageFilter
 import 'package:flutter/material.dart';
@@ -10,9 +10,15 @@ import '../head_package/head_memo.dart';
 import '../head_package/company_calendar_page.dart';
 import '../head_package/hr_package/attendance_calendar.dart' as hr_att;
 import '../head_package/hr_package/break_calendar.dart' as hr_break;
+import '../head_package/mgmt_package/field.dart' as mgmt;
+import '../head_package/mgmt_package/statistics.dart' as mgmt_stats;
+import '../head_package/roadmap_bottom_sheet.dart';
+import '../head_package/head_tutorials.dart';
 
 /// 본사 허브용 퀵 액션 플로팅 버블(오버레이)
-/// - 글래스 Dock(가로 일렬 아이콘), 자동 간격/방향, 스프링 모션, 접근성/툴팁
+/// - Dock: 버블 옆(가로) 위치에 붙이고, 아이콘은 세로로 쌓음(아이콘 많아도 안전)
+/// - 내부는 constraints 기반으로 스크롤 자동 전환(오버플로우 방지)
+/// - 단일 인스턴스 바텀시트 관리(연타/중복 오픈 방지)
 class HeadHubActions {
   HeadHubActions._();
 
@@ -43,6 +49,9 @@ class HeadHubActions {
     return overlayCtx ?? state?.context;
   }
 
+  /// overlay 기반에서 push가 필요할 때 사용
+  static BuildContext? currentContext() => _bestContext();
+
   /// (공용) 열려있는 바텀시트를 닫고, 실제로 닫힐 때까지 기다림 (있으면 닫고, 없으면 no-op)
   static Future<void> closeAnySheet() async {
     if (_closing) return;
@@ -67,7 +76,6 @@ class HeadHubActions {
       // 추적중인 시트가 없으면 1회 팝 시도(필요 없으면 no-op)
       final popped = await Navigator.of(ctx).maybePop();
       if (popped) {
-        // 일반 라우트/시트 애니메이션 여유
         await Future<void>.delayed(const Duration(milliseconds: 220));
       }
     } finally {
@@ -77,29 +85,27 @@ class HeadHubActions {
 
   /// (공용) 기존 시트를 닫은 뒤, 주어진 함수를 통해 “새 시트”를 연다.
   /// - 빠른 연타/연속 호출에 대비해 간단한 뮤텍스(_opening)로 직렬화
-  /// - openFn은 반드시 showModalBottomSheet가 반환하는 Future를 반환해야 함
-  static Future<void> openSheetExclusively(
-      Future<dynamic> Function(BuildContext ctx) openFn,
+  /// - openFn은 showModalBottomSheet가 반환하는 Future<T?>를 반환해야 함(권장)
+  static Future<T?> openSheetExclusively<T>(
+      Future<T?> Function(BuildContext ctx) openFn,
       ) async {
-    if (_opening) return;
+    if (_opening) return null;
     _opening = true;
     try {
       await closeAnySheet();
       final ctx = _bestContext();
-      if (ctx == null) return;
+      if (ctx == null) return null;
 
-      // openFn이 반환한 Future를 추적하여 완전 종료까지 기다림
-      final dynamic fut = openFn(ctx);
-      if (fut is Future) {
-        final Future<void> tracked = fut.then<void>((_) {});
-        _activeSheet = tracked;
-        try {
-          await tracked; // 시트가 닫힐 때까지 완료 대기
-        } finally {
-          _activeSheet = null;
-        }
-      } else {
-        // Future를 반환하지 않는 경우를 대비한 최소 대기
+      final Future<T?> fut = openFn(ctx);
+
+      final Future<void> tracked = fut.then<void>((_) {});
+      _activeSheet = tracked;
+
+      try {
+        final T? result = await fut; // 시트 종료까지 대기(결과값 수신)
+        return result;
+      } finally {
+        _activeSheet = null;
         await Future<void>.delayed(const Duration(milliseconds: 16));
       }
     } finally {
@@ -113,7 +119,6 @@ class HeadHubActions {
     _prefs ??= await SharedPreferences.getInstance();
     enabled.value = _prefs!.getBool(_kEnabledKey) ?? false;
 
-    // 토글 변경 → 저장 + 오버레이 토글
     enabled.addListener(() {
       _prefs?.setBool(_kEnabledKey, enabled.value);
       if (enabled.value) {
@@ -133,7 +138,6 @@ class HeadHubActions {
     if (enabled.value) _showOverlay();
   }
 
-  /// 외부에서 스위치로 토글할 때 사용할 공개 API
   static void setEnabled(bool value) => enabled.value = value;
   static void toggle() => enabled.value = !enabled.value;
 
@@ -184,21 +188,21 @@ class _HubBubble extends StatefulWidget {
 
 class _HubBubbleState extends State<_HubBubble> with SingleTickerProviderStateMixin {
   // ── 디자인 토큰 ─────────────────────────────────────────
-  static const double _bubbleSize = 56;   // 메인 FAB
-  static const double _iconSize = 22;     // Dock 안 아이콘
-  static const double _chip = 44;         // Dock 아이콘 터치 타깃(원칩)
-  static const double _dockHPad = 12;     // Dock 좌우 패딩
-  static const double _dockVPad = 8;      // Dock 상하 패딩
-  static const double _gapMax = 20;       // 아이콘 간 최대 간격
-  static const double _gapMin = 10;       // 아이콘 간 최소 간격
-  static const double _dockRadius = 18;   // Dock 코너
-  static const double _edgePad = 8;       // 버블-도크 사이 여백
+  static const double _bubbleSize = 56; // 메인 FAB
+  static const double _iconSize = 22; // Dock 안 아이콘
+  static const double _chip = 44; // Dock 아이콘 터치 타깃(원칩)
+  static const double _dockHPad = 12; // Dock 좌우 패딩
+  static const double _dockVPad = 8; // Dock 상하 패딩
+  static const double _vGap = 10; // 세로 간격
+  static const double _dockRadius = 18; // Dock 코너
+  static const double _edgePad = 8; // 버블-도크 사이 여백
+  static const double _screenPad = 8; // 화면 가장자리 안전 여백
 
   late Offset _pos;
   bool _clampedOnce = false;
 
   late final AnimationController _ctrl;
-  late final Animation<double> _t;    // 0→1 전개 비율(모션)
+  late final Animation<double> _t; // 0→1 전개 비율(모션)
   bool get _expanded => _ctrl.value > 0.001;
 
   @override
@@ -211,7 +215,7 @@ class _HubBubbleState extends State<_HubBubble> with SingleTickerProviderStateMi
     );
     _t = CurvedAnimation(
       parent: _ctrl,
-      curve: const SpringCurve(),          // 스프링 느낌의 이징
+      curve: const SpringCurve(),
       reverseCurve: Curves.easeInCubic,
     )..addListener(() => setState(() {}));
   }
@@ -227,10 +231,121 @@ class _HubBubbleState extends State<_HubBubble> with SingleTickerProviderStateMi
     HapticFeedback.lightImpact();
   }
 
+  List<_DockAction> _buildActions(ColorScheme cs) {
+    return <_DockAction>[
+      _DockAction(
+        icon: Icons.sticky_note_2_rounded,
+        label: '메모',
+        color: cs.secondaryContainer,
+        onTap: () async {
+          await _ctrl.reverse();
+          await HeadHubActions.openSheetExclusively<dynamic>((ctx) {
+            // 주의: HeadMemo.openPanel()이 "시트가 닫힐 때 완료되는 Future"를 반환하지 않으면
+            // 단일 인스턴스 추적이 약해질 수 있습니다(오버플로우와는 무관).
+            return HeadMemo.openPanel();
+          });
+        },
+      ),
+      _DockAction(
+        icon: Icons.calendar_month_rounded,
+        label: '본사 달력',
+        color: const Color(0xFF43A047),
+        onTap: () async {
+          await _ctrl.reverse();
+          await HeadHubActions.openSheetExclusively<dynamic>((ctx) {
+            return CompanyCalendarPage.showAsBottomSheet(ctx);
+          });
+        },
+      ),
+      _DockAction(
+        icon: Icons.how_to_reg_rounded,
+        label: '출·퇴근',
+        color: const Color(0xFF1565C0),
+        onTap: () async {
+          await _ctrl.reverse();
+          await HeadHubActions.openSheetExclusively<dynamic>((ctx) {
+            return hr_att.AttendanceCalendar.showAsBottomSheet(ctx);
+          });
+        },
+      ),
+      _DockAction(
+        icon: Icons.free_breakfast_rounded,
+        label: '휴게 관리',
+        color: const Color(0xFF3949AB),
+        onTap: () async {
+          await _ctrl.reverse();
+          await HeadHubActions.openSheetExclusively<dynamic>((ctx) {
+            return hr_break.BreakCalendar.showAsBottomSheet(ctx);
+          });
+        },
+      ),
+      _DockAction(
+        icon: Icons.map_rounded,
+        label: '근무지 현황',
+        color: const Color(0xFF00897B),
+        onTap: () async {
+          await _ctrl.reverse();
+          await HeadHubActions.openSheetExclusively<dynamic>((ctx) {
+            return mgmt.Field.showAsBottomSheet(ctx);
+          });
+        },
+      ),
+      _DockAction(
+        icon: Icons.stacked_line_chart_rounded,
+        label: '통계 비교',
+        color: const Color(0xFF6A1B9A),
+        onTap: () async {
+          await _ctrl.reverse();
+          await HeadHubActions.openSheetExclusively<dynamic>((ctx) {
+            return mgmt_stats.Statistics.showAsBottomSheet(ctx);
+          });
+        },
+      ),
+      _DockAction(
+        icon: Icons.edit_note_rounded,
+        label: '향후 로드맵',
+        color: const Color(0xFF7E57C2),
+        onTap: () async {
+          await _ctrl.reverse();
+          await HeadHubActions.openSheetExclusively<dynamic>((ctx) {
+            return showModalBottomSheet<dynamic>(
+              context: ctx,
+              isScrollControlled: true,
+              useSafeArea: true,
+              backgroundColor: Colors.transparent,
+              builder: (_) => const RoadmapBottomSheet(),
+            );
+          });
+        },
+      ),
+      _DockAction(
+        icon: Icons.menu_book_rounded,
+        label: '튜토리얼',
+        color: const Color(0xFF00695C),
+        onTap: () async {
+          await _ctrl.reverse();
+
+          // 1) 선택 바텀시트는 “시트”로 취급해 단일 인스턴스 관리
+          final TutorialItem? selected =
+          await HeadHubActions.openSheetExclusively<TutorialItem>((ctx) {
+            return HeadTutorials.showPickerBottomSheet(ctx);
+          });
+
+          // 2) 선택 후에는 PDF 뷰어(일반 push)
+          final ctx2 = HeadHubActions.currentContext();
+          if (selected != null && ctx2 != null) {
+            await TutorialPdfViewer.open(ctx2, selected);
+          }
+        },
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.maybeOf(context);
     final screen = media?.size ?? Size.zero;
+    final topInset = media?.padding.top ?? 0;
     final bottomInset = media?.padding.bottom ?? 0;
     final cs = Theme.of(context).colorScheme;
 
@@ -239,39 +354,52 @@ class _HubBubbleState extends State<_HubBubble> with SingleTickerProviderStateMi
       _pos = _clampToScreen(_pos, screen, bottomInset);
     }
 
+    final actions = _buildActions(cs);
+    final count = actions.length;
+
+    // Dock 폭: 한 칩(원형 버튼)이 안정적으로 들어가도록 여유를 둠(픽셀 라운딩 안전)
+    final dockWidth = (_dockHPad * 2 + _chip + 4);
+
+    // Dock 높이(자연 높이)
+    final naturalDockHeight = (_dockVPad * 2 + count * _chip + (count - 1) * _vGap);
+
+    // 화면 내에서 유지 가능한 최대 높이(넘으면 내부 스크롤로 처리)
+    final safeTop = topInset + _screenPad;
+    final safeBottom = bottomInset + _screenPad;
+    final maxDockHeight =
+    (screen.height - safeTop - safeBottom).clamp(0.0, double.infinity);
+
+    final dockHeight = math.min(naturalDockHeight, maxDockHeight);
+
     // 좌/우 가용폭 계산
-    final rightSpace = screen.width - (_pos.dx + _bubbleSize) - _edgePad;
-    final leftSpace  = _pos.dx - _edgePad;
+    final rightSpace = screen.width - (_pos.dx + _bubbleSize) - _edgePad - _screenPad;
+    final leftSpace = _pos.dx - _edgePad - _screenPad;
 
-    // Dock의 필요 폭(아이콘 5개 기준) 산정
-    const count = 5;
-    final minInnerWidth = count * _chip + (count - 1) * _gapMin;
-    final neededAtMin = _dockHPad * 2 + minInnerWidth;
-
-    // 어느 쪽에 펼칠지 결정 (넉넉한 쪽 우선)
     final preferRight = rightSpace >= leftSpace;
-    final canRight = rightSpace >= neededAtMin;
-    final canLeft  = leftSpace  >= neededAtMin;
+    final canRight = rightSpace >= dockWidth;
+    final canLeft = leftSpace >= dockWidth;
     final useRight = canRight || (!canLeft && preferRight);
 
-    // 실제 펼칠 방향과 가용 폭
-    final avail = (useRight ? rightSpace : leftSpace).clamp(0.0, double.infinity);
+    // Dock 위치 계산:
+    // - 첫 아이콘(리스트 0번째)이 버블 중앙 높이 근처에 오도록 top을 계산한 뒤 화면 내 clamp
+    final bubbleCenterY = _pos.dy + _bubbleSize / 2;
+    final dockTopCandidate = bubbleCenterY - (_dockVPad + _chip / 2);
 
-    // 실제 간격(gap) 계산(가용 폭에 맞춰 자동 보정)
-    final gap = _calcGap(avail: avail, count: count);
+    final maxTop = screen.height - safeBottom - dockHeight;
+    final dockTop = dockTopCandidate.clamp(
+      safeTop,
+      maxTop >= safeTop ? maxTop : safeTop,
+    );
 
-    // Dock 내부 컨텐츠 폭(패딩 제외)
-    final innerWidth = (count * _chip + (count - 1) * gap).ceilToDouble();
-
-    // Dock 치수 계산(반올림으로 안전 보정)
-    final dockWidth = (_dockHPad * 2 + innerWidth).ceilToDouble();
-    final dockHeight = (_dockVPad * 2 + _chip).ceilToDouble();
-
-    // Dock 위치 계산 (버블 중앙 기준 수직 정렬)
-    final dockLeft = useRight
+    double dockLeft = useRight
         ? (_pos.dx + _bubbleSize + _edgePad)
         : (_pos.dx - dockWidth - _edgePad);
-    final dockTop = _pos.dy + (_bubbleSize - dockHeight) / 2;
+
+    // 화면 밖으로 나가지 않도록 최종 clamp
+    dockLeft = dockLeft.clamp(
+      _screenPad,
+      (screen.width - dockWidth - _screenPad).clamp(_screenPad, double.infinity),
+    );
 
     return Stack(
       children: [
@@ -282,22 +410,22 @@ class _HubBubbleState extends State<_HubBubble> with SingleTickerProviderStateMi
               onTap: _toggleMenu,
               behavior: HitTestBehavior.opaque,
               child: AnimatedOpacity(
-                opacity: 0.04 * _t.value, // 아주 옅은 딤
+                opacity: 0.04 * _t.value,
                 duration: const Duration(milliseconds: 120),
                 child: const ColoredBox(color: Colors.black),
               ),
             ),
           ),
 
-        // ── 글래스 Dock (가로 일렬 아이콘) ─────────────────
+        // ── 글래스 Dock (세로 리스트, constraints 기반 자동 스크롤) ─────
         Positioned(
           left: dockLeft,
           top: dockTop,
           child: IgnorePointer(
             ignoring: !_expanded,
             child: Transform.scale(
-              scale: 0.96 + 0.04 * _t.value, // 살짝 튀어나오는 스케일
-              alignment: useRight ? Alignment.centerLeft : Alignment.centerRight,
+              scale: 0.96 + 0.04 * _t.value,
+              alignment: useRight ? Alignment.topLeft : Alignment.topRight,
               child: Opacity(
                 opacity: _t.value,
                 child: _GlassDock(
@@ -306,57 +434,11 @@ class _HubBubbleState extends State<_HubBubble> with SingleTickerProviderStateMi
                   radius: _dockRadius,
                   hPad: _dockHPad,
                   vPad: _dockVPad,
-                  child: _DockRow(
-                    innerWidth: innerWidth,
+                  child: _DockColumn(
                     chip: _chip,
                     iconSize: _iconSize,
-                    actions: [
-                      _DockAction(
-                        icon: Icons.sticky_note_2_rounded,
-                        label: '메모',
-                        color: cs.secondaryContainer,
-                        onTap: () async {
-                          await _ctrl.reverse();
-                          // ★ 기존 시트를 닫은 뒤 메모 시트 열기 (Future 반환/대기)
-                          await HeadHubActions.openSheetExclusively((ctx) async {
-                            return HeadMemo.openPanel(); // 내부에서 showModalBottomSheet 반환해야 함
-                          });
-                        },
-                      ),
-                      _DockAction(
-                        icon: Icons.calendar_month_rounded,
-                        label: '본사 달력',
-                        color: const Color(0xFF43A047),
-                        onTap: () async {
-                          await _ctrl.reverse();
-                          await HeadHubActions.openSheetExclusively((ctx) async {
-                            return CompanyCalendarPage.showAsBottomSheet(ctx);
-                          });
-                        },
-                      ),
-                      _DockAction(
-                        icon: Icons.how_to_reg_rounded,
-                        label: '출·퇴근',
-                        color: const Color(0xFF1565C0),
-                        onTap: () async {
-                          await _ctrl.reverse();
-                          await HeadHubActions.openSheetExclusively((ctx) async {
-                            return hr_att.AttendanceCalendar.showAsBottomSheet(ctx);
-                          });
-                        },
-                      ),
-                      _DockAction(
-                        icon: Icons.free_breakfast_rounded,
-                        label: '휴게 관리',
-                        color: const Color(0xFF3949AB),
-                        onTap: () async {
-                          await _ctrl.reverse();
-                          await HeadHubActions.openSheetExclusively((ctx) async {
-                            return hr_break.BreakCalendar.showAsBottomSheet(ctx);
-                          });
-                        },
-                      ),
-                    ],
+                    gap: _vGap,
+                    actions: actions,
                   ),
                 ),
               ),
@@ -364,10 +446,10 @@ class _HubBubbleState extends State<_HubBubble> with SingleTickerProviderStateMi
           ),
         ),
 
-        // ── 메인 버블 (글래스 링 + 회전 아이콘) ─────────────
+        // ── 메인 버블 ────────────────────────────────────
         Positioned(
           left: _pos.dx,
-          top:  _pos.dy,
+          top: _pos.dy,
           child: GestureDetector(
             onPanUpdate: (d) {
               setState(() {
@@ -394,23 +476,10 @@ class _HubBubbleState extends State<_HubBubble> with SingleTickerProviderStateMi
     );
   }
 
-  double _calcGap({required double avail, required int count}) {
-    // avail: Dock 전체에 할당 가능한 폭(패딩 포함 X)
-    // (avail - 좌우패딩 - 칩폭 합)을 간격으로 분배
-    final minWidth = _dockHPad * 2 + count * _chip + (count - 1) * _gapMin;
-    if (avail <= minWidth) return _gapMin;
-
-    final maxWidth = _dockHPad * 2 + count * _chip + (count - 1) * _gapMax;
-    if (avail >= maxWidth) return _gapMax;
-
-    // 선형 보간
-    final t = (avail - minWidth) / (maxWidth - minWidth);
-    return _gapMin + (_gapMax - _gapMin) * t.clamp(0, 1);
-  }
-
   Offset _clampToScreen(Offset raw, Size screen, double bottomInset) {
-    final maxX = (screen.width  - _bubbleSize).clamp(0.0, double.infinity);
-    final maxY = (screen.height - _bubbleSize - bottomInset).clamp(0.0, double.infinity);
+    final maxX = (screen.width - _bubbleSize).clamp(0.0, double.infinity);
+    final maxY =
+    (screen.height - _bubbleSize - bottomInset).clamp(0.0, double.infinity);
     final dx = raw.dx.clamp(0.0, maxX);
     final dy = raw.dy.clamp(0.0, maxY);
     return Offset(dx, dy);
@@ -460,26 +529,36 @@ class _GlassBubble extends StatelessWidget {
                 color: Colors.white.withOpacity(0.35),
                 width: 1,
               ),
-              boxShadow: const [BoxShadow(blurRadius: 18, color: Colors.black26, offset: Offset(0, 6))],
+              boxShadow: const [
+                BoxShadow(
+                  blurRadius: 18,
+                  color: Colors.black26,
+                  offset: Offset(0, 6),
+                )
+              ],
             ),
             child: Stack(
               fit: StackFit.expand,
               children: [
-                // 내측 글로우 링
                 Padding(
                   padding: const EdgeInsets.all(4),
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white.withOpacity(0.15), width: 1),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.15),
+                        width: 1,
+                      ),
                     ),
                   ),
                 ),
-                // 아이콘 (반바퀴 회전)
                 Center(
                   child: Transform.rotate(
                     angle: progress * math.pi,
-                    child: Icon(Icons.settings_rounded, color: cs.onSurface.withOpacity(0.9)),
+                    child: Icon(
+                      Icons.settings_rounded,
+                      color: cs.onSurface.withOpacity(0.9),
+                    ),
                   ),
                 ),
               ],
@@ -492,7 +571,7 @@ class _GlassBubble extends StatelessWidget {
 }
 
 // ───────────────────────────────────────────────────────────────
-// 글래스 Dock 컨테이너 + 아이콘 Row
+// 글래스 Dock 컨테이너 + 아이콘 Column/List
 // ───────────────────────────────────────────────────────────────
 class _GlassDock extends StatelessWidget {
   final double width;
@@ -525,7 +604,7 @@ class _GlassDock extends StatelessWidget {
           padding: EdgeInsets.symmetric(horizontal: hPad, vertical: vPad),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(radius),
-            color: cs.surface.withOpacity(0.60), // 반투명 글래스
+            color: cs.surface.withOpacity(0.60),
             border: Border.all(color: Colors.white.withOpacity(0.35), width: 1),
             boxShadow: const [
               BoxShadow(blurRadius: 16, color: Colors.black26, offset: Offset(0, 8)),
@@ -538,39 +617,71 @@ class _GlassDock extends StatelessWidget {
   }
 }
 
-class _DockRow extends StatelessWidget {
-  final double innerWidth; // 패딩 제외한 Row의 가용 폭
+/// 핵심 수정 포인트:
+/// - 부모가 "스크롤 여부"를 계산하지 않음(라운딩/패딩 때문에 1~2px 오차 발생 가능)
+/// - LayoutBuilder로 실제 constraints.maxHeight를 받고, 필요한 높이와 비교해
+///   넘치면 ListView(스크롤), 아니면 Column(고정)으로 안전하게 전환
+class _DockColumn extends StatelessWidget {
   final double chip;
   final double iconSize;
+  final double gap;
   final List<_DockAction> actions;
 
-  const _DockRow({
-    required this.innerWidth,
+  const _DockColumn({
     required this.chip,
     required this.iconSize,
+    required this.gap,
     required this.actions,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Row가 정확히 innerWidth를 차지하도록 SizedBox로 감싸고,
-    // 간격은 spaceBetween으로 균등 분배(반올림 오차로 인한 overflow 방지)
-    return SizedBox(
-      width: innerWidth,
-      height: chip,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: actions
-            .map((a) => _DockIconButton(
-          size: chip,
-          icon: a.icon,
-          iconSize: iconSize,
-          bg: a.color,
-          tooltip: a.label,
-          onTap: a.onTap,
-        ))
-            .toList(),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final maxH = constraints.maxHeight;
+        final neededH =
+            actions.length * chip + (actions.length - 1) * gap;
+
+        // 1~2px 라운딩 오차까지 흡수하기 위해 여유를 둠
+        final useScroll = neededH > (maxH - 1.0);
+
+        if (useScroll) {
+          return ListView.separated(
+            padding: EdgeInsets.zero,
+            physics: const ClampingScrollPhysics(),
+            itemCount: actions.length,
+            separatorBuilder: (_, __) => SizedBox(height: gap),
+            itemBuilder: (_, i) {
+              final a = actions[i];
+              return _DockIconButton(
+                size: chip,
+                icon: a.icon,
+                iconSize: iconSize,
+                bg: a.color,
+                tooltip: a.label,
+                onTap: a.onTap,
+              );
+            },
+          );
+        }
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (int i = 0; i < actions.length; i++) ...[
+              _DockIconButton(
+                size: chip,
+                icon: actions[i].icon,
+                iconSize: iconSize,
+                bg: actions[i].color,
+                tooltip: actions[i].label,
+                onTap: actions[i].onTap,
+              ),
+              if (i != actions.length - 1) SizedBox(height: gap),
+            ],
+          ],
+        );
+      },
     );
   }
 }
@@ -579,7 +690,8 @@ class _DockAction {
   final IconData icon;
   final String label;
   final Color color;
-  final Future<void> Function() onTap; // ★ async 콜백을 안전하게 받기 위해 Future<void>로 명시
+  final Future<void> Function() onTap;
+
   _DockAction({
     required this.icon,
     required this.label,
@@ -594,7 +706,7 @@ class _DockIconButton extends StatelessWidget {
   final double iconSize;
   final Color bg;
   final String tooltip;
-  final Future<void> Function() onTap; // ★ async 콜백
+  final Future<void> Function() onTap;
 
   const _DockIconButton({
     required this.size,
@@ -615,9 +727,7 @@ class _DockIconButton extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: () {
-            // 여기서 Haptic 1회만, onTap 내부에선 중복 제거
             HapticFeedback.selectionClick();
-            // 콜백은 async지만 InkWell 시그니처는 void Function() 이므로 그냥 실행만 하고 기다리진 않음
             onTap();
           },
           customBorder: const CircleBorder(),
@@ -630,7 +740,9 @@ class _DockIconButton extends StatelessWidget {
                 color: bg,
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white.withOpacity(0.25), width: 1),
-                boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black26, offset: Offset(0, 4))],
+                boxShadow: const [
+                  BoxShadow(blurRadius: 10, color: Colors.black26, offset: Offset(0, 4))
+                ],
               ),
               alignment: Alignment.center,
               child: Icon(icon, color: on, size: iconSize),
@@ -649,9 +761,6 @@ class SpringCurve extends Curve {
   const SpringCurve();
   @override
   double transform(double t) {
-    // 살짝 튀는 질감: overshoot을 억제한 감쇠 진동 형태
-    // 0~1 입력 -> 0~1 출력
-    // y = 1 - e^{-6t} * cos(10t)
     final e = math.exp(-6 * t);
     final c = math.cos(10 * t);
     final y = 1 - e * c;
