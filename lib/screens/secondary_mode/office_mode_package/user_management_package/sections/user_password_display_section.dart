@@ -4,12 +4,9 @@ import 'package:flutter/services.dart';
 // snackbar_helper 경로는 현재 파일(…/sections/…) 기준으로 계산
 import '../../../../../../utils/snackbar_helper.dart';
 
-/// 서비스 로그인 카드와 동일 톤의 팔레트
-class _SvcColors {
-  static const base = Color(0xFF0D47A1); // primary
-  static const dark = Color(0xFF09367D); // 진한 텍스트/아이콘
-  static const light = Color(0xFF5472D3); // 라이트 톤/보더
-}
+// ✅ AppCardPalette 정의 파일을 프로젝트 경로에 맞게 import 하세요.
+// 예) import 'package:your_app/theme/app_card_palette.dart';
+import '../../../../../../theme.dart';
 
 class UserPasswordDisplaySection extends StatelessWidget {
   final TextEditingController controller;
@@ -39,6 +36,11 @@ class UserPasswordDisplaySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppCardPalette.of(context);
+    final base = palette.serviceBase;
+    final dark = palette.serviceDark;
+    final light = palette.serviceLight;
+
     return TextField(
       controller: controller,
       readOnly: true, // 읽기 전용 유지
@@ -52,33 +54,30 @@ class UserPasswordDisplaySection extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         helperText: '읽기 전용(자동 생성). 복사해서 전달하세요.',
-        floatingLabelStyle: const TextStyle(
-          color: _SvcColors.dark,
+        floatingLabelStyle: TextStyle(
+          color: dark,
           fontWeight: FontWeight.w700,
         ),
-        prefixIcon: const Icon(Icons.lock, color: _SvcColors.dark),
+        prefixIcon: Icon(Icons.lock, color: dark),
         suffixIcon: allowCopy
             ? IconButton(
           tooltip: '복사',
           onPressed: () => _copyToClipboard(context),
-          icon: const Icon(Icons.copy, color: _SvcColors.dark),
+          icon: Icon(Icons.copy, color: dark),
         )
             : null,
-
         filled: true,
-        fillColor: _SvcColors.light.withOpacity(.06),
-
+        fillColor: light.withOpacity(.06),
         isDense: true,
         contentPadding:
         const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: _SvcColors.light.withOpacity(.45)),
+          borderSide: BorderSide(color: light.withOpacity(.45)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: _SvcColors.base, width: 1.2),
+          borderSide: BorderSide(color: base, width: 1.2),
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),

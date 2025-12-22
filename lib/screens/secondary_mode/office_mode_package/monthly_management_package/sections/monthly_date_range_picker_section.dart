@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-class _SvcColors {
-  static const base = Color(0xFF0D47A1);
-  static const dark = Color(0xFF09367D);
-  static const light = Color(0xFF5472D3);
-  static const fg = Color(0xFFFFFFFF);
-}
+// ✅ AppCardPalette 사용 (프로젝트 경로에 맞게 수정)
+// 예: import 'package:your_app/theme/app_card_palette.dart';
+import '../../../../../theme.dart';
 
 class MonthlyDateRangePickerSection extends StatefulWidget {
   final TextEditingController startDateController;
@@ -23,8 +20,7 @@ class MonthlyDateRangePickerSection extends StatefulWidget {
   });
 
   @override
-  State<MonthlyDateRangePickerSection> createState() =>
-      _MonthlyDateRangePickerSectionState();
+  State<MonthlyDateRangePickerSection> createState() => _MonthlyDateRangePickerSectionState();
 }
 
 class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSection> {
@@ -86,27 +82,28 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
         String? errorText,
       }) {
     final cs = Theme.of(context).colorScheme;
+    final palette = AppCardPalette.of(context);
 
     return InputDecoration(
       labelText: label,
       helperText: helperText,
       errorText: errorText,
-      floatingLabelStyle: const TextStyle(
-        color: _SvcColors.dark,
+      floatingLabelStyle: TextStyle(
+        color: palette.serviceDark,
         fontWeight: FontWeight.w700,
       ),
       suffixIcon: suffixIcon,
       filled: true,
-      fillColor: _SvcColors.light.withOpacity(.06),
+      fillColor: palette.serviceLight.withOpacity(.06),
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: _SvcColors.light.withOpacity(.45)),
+        borderSide: BorderSide(color: palette.serviceLight.withOpacity(.45)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _SvcColors.base, width: 1.2),
+        borderSide: BorderSide(color: palette.serviceBase, width: 1.2),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -135,6 +132,7 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
       backgroundColor: Colors.transparent,
       builder: (sheetCtx) {
         final cs = Theme.of(sheetCtx).colorScheme;
+        final palette = AppCardPalette.of(sheetCtx);
         final insets = MediaQuery.of(sheetCtx).viewInsets;
 
         return SafeArea(
@@ -179,20 +177,20 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
                               width: 36,
                               height: 36,
                               decoration: BoxDecoration(
-                                color: _SvcColors.light.withOpacity(.18),
+                                color: palette.serviceLight.withOpacity(.18),
                                 borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: _SvcColors.light.withOpacity(.40)),
+                                border: Border.all(color: palette.serviceLight.withOpacity(.40)),
                               ),
-                              child: const Icon(Icons.event_outlined, color: _SvcColors.dark),
+                              child: Icon(Icons.event_outlined, color: palette.serviceDark),
                             ),
                             const SizedBox(width: 10),
-                            const Expanded(
+                            Expanded(
                               child: Text(
                                 '날짜 입력',
                                 style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w900,
-                                  color: _SvcColors.dark,
+                                  color: palette.serviceDark,
                                 ),
                               ),
                             ),
@@ -200,7 +198,7 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
                               tooltip: '닫기',
                               onPressed: () => Navigator.of(sheetCtx).pop(),
                               icon: const Icon(Icons.close),
-                              color: _SvcColors.dark,
+                              color: palette.serviceDark,
                             ),
                           ],
                         ),
@@ -210,14 +208,14 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
                           width: double.infinity,
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: _SvcColors.light.withOpacity(.08),
+                            color: palette.serviceLight.withOpacity(.08),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: _SvcColors.light.withOpacity(.25)),
+                            border: Border.all(color: palette.serviceLight.withOpacity(.25)),
                           ),
-                          child: const Text(
+                          child: Text(
                             '년/월/일을 숫자로 입력하세요.',
                             style: TextStyle(
-                              color: _SvcColors.dark,
+                              color: palette.serviceDark,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -264,8 +262,8 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
                                 style: OutlinedButton.styleFrom(
                                   minimumSize: const Size.fromHeight(48),
                                   shape: const StadiumBorder(),
-                                  side: BorderSide(color: _SvcColors.light.withOpacity(.75)),
-                                  foregroundColor: _SvcColors.dark,
+                                  side: BorderSide(color: palette.serviceLight.withOpacity(.75)),
+                                  foregroundColor: palette.serviceDark,
                                 ),
                                 child: const Text('취소'),
                               ),
@@ -292,8 +290,8 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
                                 },
                                 style: ElevatedButton.styleFrom(
                                   minimumSize: const Size.fromHeight(48),
-                                  backgroundColor: _SvcColors.base,
-                                  foregroundColor: _SvcColors.fg,
+                                  backgroundColor: palette.serviceBase,
+                                  foregroundColor: Colors.white,
                                   shape: const StadiumBorder(),
                                   elevation: 0,
                                 ),
@@ -355,6 +353,7 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+    final palette = AppCardPalette.of(context);
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -379,11 +378,11 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: _SvcColors.light.withOpacity(.18),
+                  color: palette.serviceLight.withOpacity(.18),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _SvcColors.light.withOpacity(.40)),
+                  border: Border.all(color: palette.serviceLight.withOpacity(.40)),
                 ),
-                child: const Icon(Icons.date_range_outlined, color: _SvcColors.dark),
+                child: Icon(Icons.date_range_outlined, color: palette.serviceDark),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -391,7 +390,7 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
                   '정기 정산 기간 (${widget.duration}${widget.periodUnit})',
                   style: text.titleMedium?.copyWith(
                     fontWeight: FontWeight.w900,
-                    color: _SvcColors.dark,
+                    color: palette.serviceDark,
                   ),
                 ),
               ),
@@ -410,7 +409,7 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
                     context,
                     label: '시작일',
                     helperText: '탭하여 날짜 선택',
-                    suffixIcon: const Icon(Icons.edit_calendar_outlined, color: _SvcColors.dark),
+                    suffixIcon: Icon(Icons.edit_calendar_outlined, color: palette.serviceDark),
                     errorText: null,
                   ),
                 ),
@@ -425,7 +424,7 @@ class _MonthlyDateRangePickerSectionState extends State<MonthlyDateRangePickerSe
                     context,
                     label: '종료일',
                     helperText: '탭하여 날짜 선택',
-                    suffixIcon: const Icon(Icons.edit_calendar_outlined, color: _SvcColors.dark),
+                    suffixIcon: Icon(Icons.edit_calendar_outlined, color: palette.serviceDark),
                     errorText: null,
                   ),
                 ),

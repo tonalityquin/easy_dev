@@ -2,12 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// 서비스 로그인 카드 팔레트(리팩터링 공통 색)
-const serviceCardBase  = Color(0xFF0D47A1);
-const serviceCardDark  = Color(0xFF09367D);
-const serviceCardLight = Color(0xFF5472D3);
-const serviceCardFg    = Colors.white; // 버튼/아이콘 전경
-const serviceCardBg    = Colors.white; // 카드/시트 배경
+import '../../../../../../theme.dart'; // ✅ AppCardPalette 사용 (프로젝트 경로에 맞게 조정)
 
 class BillTypeInputSection extends StatelessWidget {
   final TextEditingController controller;
@@ -37,6 +32,11 @@ class BillTypeInputSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ Service 팔레트: ThemeExtension(AppCardPalette)에서 획득
+    final palette = AppCardPalette.of(context);
+    final serviceBase = palette.serviceBase;
+    final serviceDark = palette.serviceDark;
+
     return TextFormField(
       controller: controller,
       enabled: enabled,
@@ -46,7 +46,7 @@ class BillTypeInputSection extends StatelessWidget {
       autocorrect: false,
       enableSuggestions: false,
       inputFormatters: [
-        // 줄바꿈 차단 + 앞뒤 공백 유입 최소화
+        // ✅ const 제거: FilteringTextInputFormatter/RegExp는 const가 아님
         FilteringTextInputFormatter.deny(RegExp(r'[\n\r]')),
       ],
       decoration: InputDecoration(
@@ -58,11 +58,14 @@ class BillTypeInputSection extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide(color: Colors.black.withOpacity(0.12)),
         ),
-        focusedBorder: const OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(8)),
-          borderSide: BorderSide(color: serviceCardBase, width: 2),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: const BorderRadius.all(Radius.circular(8)),
+          borderSide: BorderSide(color: serviceBase, width: 2),
         ),
-        floatingLabelStyle: const TextStyle(color: serviceCardDark, fontWeight: FontWeight.w600),
+        floatingLabelStyle: TextStyle(
+          color: serviceDark,
+          fontWeight: FontWeight.w600,
+        ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       ),
       onChanged: onChanged,

@@ -1,3 +1,4 @@
+// lib/screens/secondary_package/office_mode_package/tablet_management_package/tablet_setting.dart
 import 'dart:math';
 import 'package:flutter/material.dart';
 
@@ -8,13 +9,10 @@ import 'sections/tablet_input_section.dart';
 import 'sections/tablet_role_dropdown_section.dart';
 import 'sections/tablet_validation_helpers.dart';
 
-/// 서비스(로그인 카드)와 동일 계열 팔레트
-class _SvcColors {
-  static const base = Color(0xFF0D47A1); // primary
-  static const dark = Color(0xFF09367D); // 진한 텍스트/아이콘
-  static const light = Color(0xFF5472D3); // 라이트 톤/보더
-  static const fg = Color(0xFFFFFFFF);
-}
+// ✅ AppCardPalette 정의가 있는 파일을 프로젝트 경로에 맞게 import 하세요.
+// 예) import 'package:your_app/theme/app_theme.dart';
+// 예) import 'package:your_app/theme/app_card_palette.dart';
+import '../../../../../../theme.dart';
 
 class TabletSettingBottomSheet extends StatefulWidget {
   /// onSave 시그니처 유지
@@ -241,6 +239,9 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
   }
 
   Widget _buildPanelHeader({
+    required Color base,
+    required Color dark,
+    required Color light,
     required int step,
     required String title,
     required String summary,
@@ -253,33 +254,29 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
         width: 34,
         height: 34,
         decoration: BoxDecoration(
-          color: isExpanded
-              ? _SvcColors.base.withOpacity(.12)
-              : _SvcColors.light.withOpacity(.10),
+          color: isExpanded ? base.withOpacity(.12) : light.withOpacity(.10),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isExpanded
-                ? _SvcColors.base.withOpacity(.35)
-                : _SvcColors.light.withOpacity(.35),
+            color: isExpanded ? base.withOpacity(.35) : light.withOpacity(.35),
           ),
         ),
         child: Center(
           child: isDone
-              ? const Icon(Icons.check, color: _SvcColors.dark, size: 20)
+              ? Icon(Icons.check, color: dark, size: 20)
               : Text(
             '$step',
-            style: const TextStyle(
+            style: TextStyle(
               fontWeight: FontWeight.w900,
-              color: _SvcColors.dark,
+              color: dark,
             ),
           ),
         ),
       ),
       title: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.w900,
-          color: _SvcColors.dark,
+          color: dark,
         ),
       ),
       subtitle: Text(
@@ -291,12 +288,17 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
       ),
       trailing: Icon(
         isExpanded ? Icons.expand_less : Icons.expand_more,
-        color: _SvcColors.dark,
+        color: dark,
       ),
     );
   }
 
-  Widget _buildPanelBody({required Widget child, int? nextPanel}) {
+  Widget _buildPanelBody({
+    required Color dark,
+    required Color light,
+    required Widget child,
+    int? nextPanel,
+  }) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
       child: Column(
@@ -310,8 +312,8 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
               icon: const Icon(Icons.arrow_forward),
               label: const Text('다음 단계로 이동'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: _SvcColors.dark,
-                side: BorderSide(color: _SvcColors.light.withOpacity(.75)),
+                foregroundColor: dark,
+                side: BorderSide(color: light.withOpacity(.75)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -331,6 +333,13 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+
+    final palette = AppCardPalette.of(context);
+    final base = palette.serviceBase;
+    final dark = palette.serviceDark;
+    final light = palette.serviceLight;
+    const fg = Colors.white;
+
     final isEditMode = widget.isEditMode || (widget.initialUser != null);
 
     // 최상단까지 차오르도록 높이 고정 + 키보드 여백 반영
@@ -347,9 +356,10 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
               height: effectiveHeight,
               child: Container(
                 padding: const EdgeInsets.all(16),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(24)),
                 ),
                 child: Column(
                   children: [
@@ -373,25 +383,25 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
                           width: 36,
                           height: 36,
                           decoration: BoxDecoration(
-                            color: _SvcColors.light.withOpacity(.20),
+                            color: light.withOpacity(.20),
                             borderRadius: BorderRadius.circular(10),
                             border: Border.all(
-                              color: _SvcColors.light.withOpacity(.45),
+                              color: light.withOpacity(.45),
                             ),
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.tablet_mac_rounded,
-                            color: _SvcColors.dark,
+                            color: dark,
                           ),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             isEditMode ? '태블릿 사용자 수정' : '태블릿 사용자 생성',
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w900,
-                              color: _SvcColors.dark,
+                              color: dark,
                             ),
                           ),
                         ),
@@ -401,16 +411,16 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
                             vertical: 6,
                           ),
                           decoration: BoxDecoration(
-                            color: _SvcColors.light.withOpacity(.18),
+                            color: light.withOpacity(.18),
                             borderRadius: BorderRadius.circular(999),
                             border: Border.all(
-                              color: _SvcColors.light.withOpacity(.35),
+                              color: light.withOpacity(.35),
                             ),
                           ),
                           child: Text(
                             widget.areaValue,
-                            style: const TextStyle(
-                              color: _SvcColors.dark,
+                            style: TextStyle(
+                              color: dark,
                               fontWeight: FontWeight.w800,
                               fontSize: 12,
                             ),
@@ -425,14 +435,14 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: _SvcColors.light.withOpacity(.08),
+                        color: light.withOpacity(.08),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: _SvcColors.light.withOpacity(.25)),
+                        border: Border.all(color: light.withOpacity(.25)),
                       ),
-                      child: const Text(
+                      child: Text(
                         '단계별로 하나씩 입력하세요. 완료된 단계는 체크 표시로 바뀝니다.',
                         style: TextStyle(
-                          color: _SvcColors.dark,
+                          color: dark,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -448,7 +458,8 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
                             _clearErrorIfAny();
                             setState(() {
                               for (int i = 0; i < _expanded.length; i++) {
-                                _expanded[i] = (i == index) ? !isExpanded : false;
+                                _expanded[i] =
+                                (i == index) ? !isExpanded : false;
                               }
                             });
                           },
@@ -460,6 +471,9 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
                               headerBuilder: (ctx, _) => KeyedSubtree(
                                 key: _keyBasic,
                                 child: _buildPanelHeader(
+                                  base: base,
+                                  dark: dark,
+                                  light: light,
                                   step: 1,
                                   title: '기본 정보',
                                   summary: _basicSummary,
@@ -468,6 +482,8 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
                                 ),
                               ),
                               body: _buildPanelBody(
+                                dark: dark,
+                                light: light,
                                 nextPanel: _panelRole,
                                 child: TabletInputSection(
                                   nameController: _nameController,
@@ -478,7 +494,8 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
                                   emailFocus: _emailFocus,
                                   errorMessage: _errorMessage,
                                   onEdited: _clearErrorIfAny,
-                                  emailLocalPartValidator: _isValidEmailLocalPart,
+                                  emailLocalPartValidator:
+                                  _isValidEmailLocalPart,
                                 ),
                               ),
                             ),
@@ -490,6 +507,9 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
                               headerBuilder: (ctx, _) => KeyedSubtree(
                                 key: _keyRole,
                                 child: _buildPanelHeader(
+                                  base: base,
+                                  dark: dark,
+                                  light: light,
                                   step: 2,
                                   title: '권한',
                                   summary: _roleSummary,
@@ -498,14 +518,16 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
                                 ),
                               ),
                               body: _buildPanelBody(
+                                dark: dark,
+                                light: light,
                                 nextPanel: _panelPassword,
                                 child: Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(
-                                    color: _SvcColors.light.withOpacity(.06),
+                                    color: light.withOpacity(.06),
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(
-                                      color: _SvcColors.light.withOpacity(.35),
+                                      color: light.withOpacity(.35),
                                     ),
                                   ),
                                   child: TabletRoleDropdownSection(
@@ -526,16 +548,24 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
                               headerBuilder: (ctx, _) => KeyedSubtree(
                                 key: _keyPassword,
                                 child: _buildPanelHeader(
+                                  base: base,
+                                  dark: dark,
+                                  light: light,
                                   step: 3,
                                   title: '비밀번호',
                                   summary: '자동 생성/복사 가능',
-                                  isDone: _passwordController.text.trim().isNotEmpty,
+                                  isDone: _passwordController.text
+                                      .trim()
+                                      .isNotEmpty,
                                   isExpanded: _expanded[_panelPassword],
                                 ),
                               ),
                               body: _buildPanelBody(
+                                dark: dark,
+                                light: light,
                                 child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  crossAxisAlignment:
+                                  CrossAxisAlignment.stretch,
                                   children: [
                                     TabletPasswordDisplay(
                                       controller: _passwordController,
@@ -545,16 +575,16 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
                                     Container(
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
-                                        color: _SvcColors.light.withOpacity(.06),
+                                        color: light.withOpacity(.06),
                                         borderRadius: BorderRadius.circular(12),
                                         border: Border.all(
-                                          color: _SvcColors.light.withOpacity(.25),
+                                          color: light.withOpacity(.25),
                                         ),
                                       ),
-                                      child: const Text(
+                                      child: Text(
                                         '비밀번호는 읽기 전용입니다. 우측 복사 버튼으로 전달하세요.',
                                         style: TextStyle(
-                                          color: _SvcColors.dark,
+                                          color: dark,
                                           fontWeight: FontWeight.w700,
                                         ),
                                       ),
@@ -598,12 +628,11 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
                           child: OutlinedButton(
                             onPressed: () => Navigator.pop(context),
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: _SvcColors.dark,
-                              side: BorderSide(
-                                color: _SvcColors.light.withOpacity(.75),
-                              ),
+                              foregroundColor: dark,
+                              side: BorderSide(color: light.withOpacity(.75)),
                               shape: const StadiumBorder(),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              padding:
+                              const EdgeInsets.symmetric(vertical: 14),
                             ),
                             child: const Text('취소'),
                           ),
@@ -621,13 +650,15 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
                               }
 
                               // 2) 이메일 로컬파트 추가 검증 (로직 유지)
-                              if (!_isValidEmailLocalPart(_emailController.text)) {
+                              if (!_isValidEmailLocalPart(
+                                  _emailController.text)) {
                                 _setErrorMessage('이메일을 다시 확인하세요');
                                 _openPanelAndScroll(_panelBasic);
                                 return;
                               }
 
-                              final fullEmail = '${_emailController.text}@gmail.com';
+                              final fullEmail =
+                                  '${_emailController.text}@gmail.com';
 
                               // 3) 저장 콜백 (로직 유지)
                               widget.onSave(
@@ -643,10 +674,12 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
                               Navigator.pop(context);
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: _SvcColors.base,
-                              foregroundColor: _SvcColors.fg,
+                              backgroundColor: base,
+                              foregroundColor: fg,
                               shape: const StadiumBorder(),
-                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              padding:
+                              const EdgeInsets.symmetric(vertical: 14),
+                              elevation: 0,
                             ),
                             child: Text(isEditMode ? '수정' : '생성'),
                           ),

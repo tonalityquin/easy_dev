@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../../../../routes.dart'; // ✅ AppRoutes 사용 (경로는 현재 파일 위치 기준)
+import '../../../../../routes.dart';
+import '../../../../../theme.dart';
 import '../lite_login_controller.dart';
 
 class LiteLoginForm extends StatefulWidget {
@@ -13,11 +14,6 @@ class LiteLoginForm extends StatefulWidget {
 
 class _LiteLoginFormState extends State<LiteLoginForm> {
   late final LiteLoginController _controller;
-
-  // ✅ Lite(경량) 전용 팔레트 (요청하신 BlueGrey 기준)
-  static const Color _base = Color(0xFF546E7A); // BlueGrey 600
-  static const Color _dark = Color(0xFF37474F); // BlueGrey 800
-  static const Color _light = Color(0xFFB0BEC5); // BlueGrey 200
 
   @override
   void initState() {
@@ -39,21 +35,27 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
   Widget build(BuildContext context) {
     final baseTheme = Theme.of(context);
 
+    // ✅ theme.dart(AppCardPalette)에서 Lite 팔레트 획득
+    final palette = AppCardPalette.of(context);
+    final base = palette.liteBase; // 기존 _base
+    final dark = palette.liteDark; // 기존 _dark
+    final light = palette.liteLight; // 기존 _light
+
     return Material(
       color: Colors.transparent,
       child: SafeArea(
         child: Theme(
-          // ✅ 서비스 로그인 폼과 동일한 UI 구조 + Lite 팔레트만 적용
+          // ✅ 서비스 로그인 폼과 동일한 UI 구조 + Lite 팔레트만 theme.dart 기반으로 적용
           data: baseTheme.copyWith(
             colorScheme: baseTheme.colorScheme.copyWith(
-              primary: _base,
+              primary: base,
               onPrimary: Colors.white,
-              primaryContainer: _light,
-              onPrimaryContainer: _dark,
+              primaryContainer: light,
+              onPrimaryContainer: dark,
             ),
             elevatedButtonTheme: ElevatedButtonThemeData(
               style: ElevatedButton.styleFrom(
-                backgroundColor: _base,
+                backgroundColor: base,
                 foregroundColor: Colors.white,
                 minimumSize: const Size.fromHeight(55),
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -61,18 +63,18 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 elevation: 1.5,
-                shadowColor: _base.withOpacity(0.25),
+                shadowColor: base.withOpacity(0.25),
               ),
             ),
             iconButtonTheme: IconButtonThemeData(
               style: IconButton.styleFrom(
-                foregroundColor: _base,
+                foregroundColor: base,
                 splashFactory: InkRipple.splashFactory,
               ),
             ),
             inputDecorationTheme: InputDecorationTheme(
               focusedBorder: OutlineInputBorder(
-                borderSide: const BorderSide(color: _base, width: 1.6),
+                borderSide: BorderSide(color: base, width: 1.6),
                 borderRadius: BorderRadius.circular(10),
               ),
               enabledBorder: OutlineInputBorder(
@@ -80,17 +82,17 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
                 borderRadius: BorderRadius.circular(10),
               ),
               prefixIconColor: MaterialStateColor.resolveWith(
-                    (states) => states.contains(MaterialState.focused) ? _base : Colors.black54,
+                    (states) => states.contains(MaterialState.focused) ? base : Colors.black54,
               ),
               suffixIconColor: MaterialStateColor.resolveWith(
-                    (states) => states.contains(MaterialState.focused) ? _base : Colors.black54,
+                    (states) => states.contains(MaterialState.focused) ? base : Colors.black54,
               ),
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             ),
             textSelectionTheme: TextSelectionThemeData(
-              cursorColor: _base,
-              selectionColor: _light.withOpacity(.35),
-              selectionHandleColor: _base,
+              cursorColor: base,
+              selectionColor: light.withOpacity(.35),
+              selectionHandleColor: base,
             ),
           ),
           child: SingleChildScrollView(
@@ -111,7 +113,7 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: _dark.withOpacity(0.75),
+                          color: dark.withOpacity(0.75),
                           letterSpacing: 0.2,
                         ),
                       ),

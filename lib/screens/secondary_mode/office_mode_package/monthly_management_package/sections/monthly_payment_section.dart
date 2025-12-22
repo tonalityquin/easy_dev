@@ -2,12 +2,9 @@ import 'package:flutter/material.dart';
 import '../../../../../../utils/snackbar_helper.dart';
 import '../monthly_plate_controller.dart';
 
-class _SvcColors {
-  static const base = Color(0xFF0D47A1);
-  static const dark = Color(0xFF09367D);
-  static const light = Color(0xFF5472D3);
-  static const fg = Color(0xFFFFFFFF);
-}
+// ✅ AppCardPalette 사용 (프로젝트 경로에 맞게 수정)
+// 예: import 'package:your_app/theme/app_card_palette.dart';
+import '../../../../../theme.dart';
 
 /// 결제 섹션(결제 전용)
 /// - 결제 저장/연장 여부/메모
@@ -101,23 +98,25 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
 
   InputDecoration _svcInputDecoration(BuildContext context, {required String label}) {
     final cs = Theme.of(context).colorScheme;
+    final palette = AppCardPalette.of(context);
+
     return InputDecoration(
       labelText: label,
-      floatingLabelStyle: const TextStyle(
-        color: _SvcColors.dark,
+      floatingLabelStyle: TextStyle(
+        color: palette.serviceDark,
         fontWeight: FontWeight.w700,
       ),
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       filled: true,
-      fillColor: _SvcColors.light.withOpacity(.06),
+      fillColor: palette.serviceLight.withOpacity(.06),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: _SvcColors.light.withOpacity(.45)),
+        borderSide: BorderSide(color: palette.serviceLight.withOpacity(.45)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _SvcColors.base, width: 1.2),
+        borderSide: BorderSide(color: palette.serviceBase, width: 1.2),
       ),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       errorBorder: OutlineInputBorder(
@@ -135,6 +134,7 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+    final palette = AppCardPalette.of(context);
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -160,11 +160,11 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: _SvcColors.light.withOpacity(.18),
+                  color: palette.serviceLight.withOpacity(.18),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _SvcColors.light.withOpacity(.40)),
+                  border: Border.all(color: palette.serviceLight.withOpacity(.40)),
                 ),
-                child: const Icon(Icons.payment_outlined, color: _SvcColors.dark),
+                child: Icon(Icons.payment_outlined, color: palette.serviceDark),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -172,7 +172,7 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
                   '결제',
                   style: text.titleMedium?.copyWith(
                     fontWeight: FontWeight.w900,
-                    color: _SvcColors.dark,
+                    color: palette.serviceDark,
                   ),
                 ),
               ),
@@ -194,8 +194,8 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
                 child: ElevatedButton.icon(
                   onPressed: _isPaying ? null : _handlePayment,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _SvcColors.base,
-                    foregroundColor: _SvcColors.fg,
+                    backgroundColor: palette.serviceBase,
+                    foregroundColor: Colors.white,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     shape: const StadiumBorder(),
@@ -207,7 +207,7 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
                     height: 18,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(_SvcColors.fg),
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                     ),
                   )
                       : const Icon(Icons.payment),
@@ -218,9 +218,9 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: _SvcColors.light.withOpacity(.06),
+                    color: palette.serviceLight.withOpacity(.06),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _SvcColors.light.withOpacity(.35)),
+                    border: Border.all(color: palette.serviceLight.withOpacity(.35)),
                   ),
                   child: CheckboxListTile(
                     dense: true,
@@ -237,10 +237,10 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
                       '연장 여부',
                       style: text.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w800,
-                        color: _SvcColors.dark,
+                        color: palette.serviceDark,
                       ),
                     ),
-                    activeColor: _SvcColors.base,
+                    activeColor: palette.serviceBase,
                   ),
                 ),
               ),
@@ -251,7 +251,7 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
 
           Row(
             children: [
-              const Icon(Icons.history, color: _SvcColors.dark, size: 18),
+              Icon(Icons.history, color: palette.serviceDark, size: 18),
               const SizedBox(width: 8),
               Text(
                 '최근 결제 내역(로컬)',
@@ -286,7 +286,7 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
                         width: 8,
                         height: 8,
                         decoration: BoxDecoration(
-                          color: _SvcColors.base.withOpacity(.85),
+                          color: palette.serviceBase.withOpacity(.85),
                           borderRadius: BorderRadius.circular(99),
                         ),
                       ),

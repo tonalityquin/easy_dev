@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'tablet_role_type.dart';
 
-/// 서비스 로그인 카드와 같은 계열 팔레트
-class _SvcColors {
-  static const base = Color(0xFF0D47A1);
-  static const dark = Color(0xFF09367D);
-  static const light = Color(0xFF5472D3);
-}
+// ✅ AppCardPalette 정의가 있는 파일을 프로젝트 경로에 맞게 import 하세요.
+// 예) import 'package:your_app/theme/app_theme.dart';
+// 예) import 'package:your_app/theme/app_card_palette.dart';
+import '../../../../../../theme.dart';
 
 class TabletRoleDropdownSection extends StatelessWidget {
   final TabletRoleType selectedRole;
@@ -38,6 +36,12 @@ class TabletRoleDropdownSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    final palette = AppCardPalette.of(context);
+    final base = palette.serviceBase;
+    final dark = palette.serviceDark;
+    final light = palette.serviceLight;
 
     final TabletRoleType safeValue =
     allowedRoles.contains(selectedRole) ? selectedRole : allowedRoles.first;
@@ -49,25 +53,32 @@ class TabletRoleDropdownSection extends StatelessWidget {
       validator: validator,
       dropdownColor: _resolveDropdownBg(context),
       menuMaxHeight: 360,
-      iconEnabledColor: _SvcColors.base,
+      iconEnabledColor: base,
       decoration: InputDecoration(
         labelText: label,
-        floatingLabelStyle: const TextStyle(
-          color: _SvcColors.dark,
+        floatingLabelStyle: TextStyle(
+          color: dark,
           fontWeight: FontWeight.w700,
         ),
         filled: true,
-        fillColor: _SvcColors.light.withOpacity(.06),
+        fillColor: light.withOpacity(.06),
         isDense: true,
-        contentPadding:
-        const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+        contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: _SvcColors.light.withOpacity(.45)),
+          borderSide: BorderSide(color: light.withOpacity(.45)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: _SvcColors.base, width: 1.2),
+          borderSide: BorderSide(color: base, width: 1.2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: cs.error.withOpacity(.85)),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: cs.error, width: 1.3),
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
@@ -81,7 +92,7 @@ class TabletRoleDropdownSection extends StatelessWidget {
             role.label,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: _SvcColors.dark,
+              color: dark,
               fontWeight: FontWeight.w600,
             ),
           ),

@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// 서비스 로그인 카드 팔레트(브랜드 톤)
-class _SvcColors {
-  static const base = Color(0xFF0D47A1); // primary
-  static const dark = Color(0xFF09367D); // 진한 텍스트/아이콘
-  static const light = Color(0xFF5472D3); // 라이트 톤/보더
-}
+// ✅ AppCardPalette 정의 파일을 프로젝트 경로에 맞게 import 하세요.
+// 예) import 'package:your_app/theme/app_card_palette.dart';
+import '../../../../../theme.dart';
 
 class UserInputSection extends StatelessWidget {
   final TextEditingController nameController;
@@ -26,7 +23,7 @@ class UserInputSection extends StatelessWidget {
   /// 이메일 로컬파트 유효성 검사(선택)
   final bool Function(String input)? emailLocalPartValidator;
 
-  /// ✅ 추가: 수정 모드에서 이름/전화번호 잠금
+  /// ✅ 수정 모드에서 이름/전화번호 잠금
   final bool lockNameAndPhone;
 
   const UserInputSection({
@@ -44,7 +41,6 @@ class UserInputSection extends StatelessWidget {
   });
 
   bool _isNameOk(String v) => v.trim().isNotEmpty;
-
   bool _isPhoneOk(String v) => RegExp(r'^\d{9,}$').hasMatch(v.trim());
 
   bool _isEmailOk(String v) {
@@ -56,6 +52,9 @@ class UserInputSection extends StatelessWidget {
 
   InputDecoration _decoration(
       BuildContext context, {
+        required Color base,
+        required Color dark,
+        required Color light,
         required String label,
         required String helperText,
         String? errorText,
@@ -67,37 +66,34 @@ class UserInputSection extends StatelessWidget {
     return InputDecoration(
       labelText: label,
       helperText: helperText,
-      floatingLabelStyle: const TextStyle(
-        color: _SvcColors.dark,
+      floatingLabelStyle: TextStyle(
+        color: dark,
         fontWeight: FontWeight.w700,
       ),
       suffixText: suffixText,
-      suffixStyle: const TextStyle(
-        color: _SvcColors.dark,
+      suffixStyle: TextStyle(
+        color: dark,
         fontWeight: FontWeight.w600,
       ),
       suffixIcon: locked
-          ? const Icon(Icons.lock, color: _SvcColors.dark)
+          ? Icon(Icons.lock, color: dark)
           : (showDoneIcon
           ? Icon(
         done ? Icons.check_circle : Icons.radio_button_unchecked,
-        color:
-        done ? _SvcColors.dark : _SvcColors.light.withOpacity(.70),
+        color: done ? dark : light.withOpacity(.70),
       )
           : null),
       isDense: true,
       filled: true,
-      fillColor: locked
-          ? _SvcColors.light.withOpacity(.04)
-          : _SvcColors.light.withOpacity(.06),
+      fillColor: locked ? light.withOpacity(.04) : light.withOpacity(.06),
       contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: _SvcColors.light.withOpacity(.45)),
+        borderSide: BorderSide(color: light.withOpacity(.45)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: _SvcColors.base, width: 1.2),
+        borderSide: BorderSide(color: base, width: 1.2),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
@@ -113,6 +109,11 @@ class UserInputSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppCardPalette.of(context);
+    final base = palette.serviceBase;
+    final dark = palette.serviceDark;
+    final light = palette.serviceLight;
+
     // 기존 호환: 문자열 비교로 필드별 에러 분기 유지
     final nameError = errorMessage == '이름을 다시 입력하세요' ? errorMessage : null;
     final phoneError =
@@ -122,8 +123,7 @@ class UserInputSection extends StatelessWidget {
         ? errorMessage
         : null;
 
-    final lockedHelper =
-        '수정 모드에서는 변경할 수 없습니다.';
+    const lockedHelper = '수정 모드에서는 변경할 수 없습니다.';
 
     return Column(
       children: [
@@ -140,6 +140,9 @@ class UserInputSection extends StatelessWidget {
           autofillHints: const [AutofillHints.name],
           decoration: _decoration(
             context,
+            base: base,
+            dark: dark,
+            light: light,
             label: '이름',
             helperText: lockNameAndPhone ? lockedHelper : '예: 홍길동',
             errorText: nameError,
@@ -169,8 +172,12 @@ class UserInputSection extends StatelessWidget {
           ],
           decoration: _decoration(
             context,
+            base: base,
+            dark: dark,
+            light: light,
             label: '전화번호',
-            helperText: lockNameAndPhone ? lockedHelper : '숫자만 입력 (최소 9자리)',
+            helperText:
+            lockNameAndPhone ? lockedHelper : '숫자만 입력 (최소 9자리)',
             errorText: phoneError,
             showDoneIcon: !lockNameAndPhone,
             done: _isPhoneOk(phoneController.text),
@@ -179,7 +186,7 @@ class UserInputSection extends StatelessWidget {
         ),
         const SizedBox(height: 16),
 
-        // 이메일(로컬파트) - 수정 모드에서도 편집 허용(요구사항: 이름/전화만 잠금)
+        // 이메일(로컬파트) - 수정 모드에서도 편집 허용(이름/전화만 잠금)
         TextField(
           controller: emailController,
           focusNode: emailFocus,
@@ -189,6 +196,9 @@ class UserInputSection extends StatelessWidget {
           autofillHints: const [AutofillHints.username],
           decoration: _decoration(
             context,
+            base: base,
+            dark: dark,
+            light: light,
             label: '이메일(구글)',
             helperText: '영문/숫자/._- 만 입력 가능',
             suffixText: '@gmail.com',

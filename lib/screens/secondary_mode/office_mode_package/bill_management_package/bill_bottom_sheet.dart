@@ -2,18 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // 숫자만 입력
 import 'package:provider/provider.dart';
 
+import '../../../../../theme.dart'; // ✅ AppCardPalette 사용 (경로는 프로젝트 구조에 맞게 조정)
 import '../../../../../states/area/area_state.dart';
 import 'sections/bill_type_input_section.dart';
 import 'sections/bill_standard_and_amount_row_section.dart';
 import 'sections/bill_error_message_text_section.dart';
 import 'sections/bill_bottom_buttons_section.dart';
-
-/// 서비스 카드 팔레트(일관 색상 적용)
-const serviceCardBase = Color(0xFF0D47A1);
-const serviceCardDark = Color(0xFF09367D);
-const serviceCardLight = Color(0xFF5472D3);
-const serviceCardFg = Colors.white; // 버튼/아이콘 전경
-const serviceCardBg = Colors.white; // 카드/시트 배경
 
 class BillSettingBottomSheet extends StatefulWidget {
   final Function(Map<String, dynamic> billData) onSave;
@@ -136,6 +130,16 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
     final screenHeight = MediaQuery.of(context).size.height;
     final effectiveHeight = screenHeight - bottomInset;
 
+    // ✅ AppCardPalette에서 Service 팔레트(Deep Blue) 사용
+    final palette = AppCardPalette.of(context);
+    final serviceBase = palette.serviceBase;
+    final serviceDark = palette.serviceDark;
+    final serviceLight = palette.serviceLight;
+
+    // 기존 코드의 의미 유지(시트/카드 배경, 전경)
+    const sheetBg = Colors.white;
+    const fg = Colors.white;
+
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(bottom: bottomInset), // 키보드 여백
@@ -145,7 +149,7 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
             children: [
               Container(
                 decoration: const BoxDecoration(
-                  color: serviceCardBg,
+                  color: sheetBg,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                 ),
                 child: Column(
@@ -214,20 +218,20 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                       child: Theme(
-                        // 하단 공용 섹션 버튼들도 팔레트 느낌 살리기
+                        // ✅ 하단 공용 섹션 버튼들도 Service 팔레트로 통일
                         data: Theme.of(context).copyWith(
                           elevatedButtonTheme: ElevatedButtonThemeData(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: serviceCardBase,
-                              foregroundColor: serviceCardFg,
+                              backgroundColor: serviceBase,
+                              foregroundColor: fg,
                               shape: const StadiumBorder(),
                             ),
                           ),
                           outlinedButtonTheme: OutlinedButtonThemeData(
                             style: OutlinedButton.styleFrom(
                               shape: const StadiumBorder(),
-                              side: const BorderSide(color: serviceCardLight),
-                              foregroundColor: serviceCardDark,
+                              side: BorderSide(color: serviceLight),
+                              foregroundColor: serviceDark,
                             ),
                           ),
                         ),

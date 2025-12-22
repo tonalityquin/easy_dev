@@ -1,7 +1,6 @@
-// lib/screens/login/tablet/sections/tablet_login_form.dart
-// ─────────────────────────────────────────────────────────────────────────────
 import 'package:flutter/material.dart';
 import '../../../../../routes.dart';
+import '../../../../../theme.dart'; // ✅ AppCardPalette 사용 (theme.dart 연결)
 import '../tablet_login_controller.dart';
 
 class TabletLoginForm extends StatefulWidget {
@@ -15,10 +14,6 @@ class TabletLoginForm extends StatefulWidget {
 
 class _TabletLoginFormState extends State<TabletLoginForm> {
   late final TabletLoginController _controller;
-
-  // Cyan 팔레트
-  static const Color _base  = Color(0xFF00ACC1); // 버튼/배지/포커스
-  static const Color _dark  = Color(0xFF00838F); // 타이틀/라벨(떠있을 때)
 
   @override
   void initState() {
@@ -38,19 +33,24 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ theme.dart(AppCardPalette)에서 Tablet 팔레트 획득
+    final palette = AppCardPalette.of(context);
+    final base = palette.tabletBase; // 기존 _base
+    final dark = palette.tabletDark; // 기존 _dark
+
     // 이 폼 하위에만 적용되는 테마(입력창/아이콘/라벨 컬러 조정)
     final themed = Theme.of(context).copyWith(
       inputDecorationTheme: InputDecorationTheme(
         // 라벨
         labelStyle: const TextStyle(color: Colors.black87),
-        floatingLabelStyle: const TextStyle(
-          color: _dark,
+        floatingLabelStyle: TextStyle(
+          color: dark,
           fontWeight: FontWeight.w700,
         ),
         // 아이콘 컬러(Decoration의 icon / prefix/suffix)
-        iconColor: _base,
-        prefixIconColor: _base,
-        suffixIconColor: _base,
+        iconColor: base,
+        prefixIconColor: base,
+        suffixIconColor: base,
         // 보더
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
@@ -58,7 +58,7 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: _base, width: 1.8),
+          borderSide: BorderSide(color: base, width: 1.8),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
@@ -72,11 +72,11 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       ),
       // 버튼 계열 대비(아이콘 버튼 등) 미세 톤
-      iconTheme: const IconThemeData(color: _base),
+      iconTheme: IconThemeData(color: base),
       // 버튼 배경/전경 기본
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: _base,
+          backgroundColor: base,
           foregroundColor: Colors.white,
           minimumSize: const Size.fromHeight(55),
           padding: EdgeInsets.zero,
@@ -150,8 +150,7 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
                   autocorrect: false, // ← 자동 교정 끔
                   enableSuggestions: false, // ← 추천 끔
                   textInputAction: TextInputAction.next,
-                  onChanged: (value) =>
-                      _controller.formatPhoneNumber(value, setState),
+                  onChanged: (value) => _controller.formatPhoneNumber(value, setState),
                   onSubmitted: (_) => FocusScope.of(context)
                       .requestFocus(_controller.passwordFocus),
                   decoration: _controller.inputDecoration(
@@ -172,15 +171,14 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
                     icon: Icons.lock,
                     suffixIcon: IconButton(
                       style: IconButton.styleFrom(
-                        foregroundColor: _base, // 눈아이콘 컬러 톤 맞춤
+                        foregroundColor: base, // ✅ tabletBase로 톤 맞춤
                       ),
                       icon: Icon(
                         _controller.obscurePassword
                             ? Icons.visibility_off
                             : Icons.visibility,
                       ),
-                      onPressed: () =>
-                          setState(() => _controller.togglePassword()),
+                      onPressed: () => setState(() => _controller.togglePassword()),
                     ),
                   ),
                 ),

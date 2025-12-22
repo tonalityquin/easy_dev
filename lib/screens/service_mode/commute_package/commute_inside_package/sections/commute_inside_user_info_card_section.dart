@@ -1,15 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../../theme.dart'; // ✅ AppCardPalette 사용 (theme.dart 연결) - 경로 필요 시 조정
 import '../../../../../states/user/user_state.dart';
-
-/// Deep Blue Palette
-class _Palette {
-  static const base = Color(0xFF0D47A1); // primary
-  static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
-  static const light = Color(0xFF5472D3); // 톤 변형/보더
-  static const fg = Color(0xFFFFFFFF);   // 전경(아이콘/텍스트)
-}
 
 class CommuteInsideUserInfoCardSection extends StatelessWidget {
   const CommuteInsideUserInfoCardSection({super.key});
@@ -17,6 +10,15 @@ class CommuteInsideUserInfoCardSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final userState = context.watch<UserState>();
+
+    // ✅ theme.dart(AppCardPalette)에서 Service(Deep Blue) 팔레트 획득
+    final palette = AppCardPalette.of(context);
+    final base = palette.serviceBase;   // 기존 _Palette.base
+    final dark = palette.serviceDark;   // 기존 _Palette.dark
+    final light = palette.serviceLight; // 기존 _Palette.light
+
+    // 전경(아이콘/텍스트) - 기존 코드 유지(화이트)
+    const fg = Colors.white;
 
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -28,7 +30,7 @@ class CommuteInsideUserInfoCardSection extends StatelessWidget {
         color: Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: _Palette.light.withOpacity(.45)),
+          side: BorderSide(color: light.withOpacity(.45)),
         ),
         margin: const EdgeInsets.symmetric(vertical: 12),
         child: Padding(
@@ -38,13 +40,13 @@ class CommuteInsideUserInfoCardSection extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(Icons.badge, size: 14, color: _Palette.dark.withOpacity(.7)),
+                  Icon(Icons.badge, size: 14, color: dark.withOpacity(.7)),
                   const SizedBox(width: 4),
                   Text(
                     '근무자 카드',
                     style: TextStyle(
                       fontSize: 12,
-                      color: _Palette.dark.withOpacity(.7),
+                      color: dark.withOpacity(.7),
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -56,8 +58,8 @@ class CommuteInsideUserInfoCardSection extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 24,
-                    backgroundColor: _Palette.base,
-                    child: const Icon(Icons.person, color: _Palette.fg),
+                    backgroundColor: base,
+                    child: const Icon(Icons.person, color: fg),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -76,21 +78,21 @@ class CommuteInsideUserInfoCardSection extends StatelessWidget {
                           userState.position,
                           style: TextStyle(
                             fontSize: 13,
-                            color: _Palette.dark.withOpacity(.7),
+                            color: dark.withOpacity(.7),
                           ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Icon(Icons.qr_code, color: _Palette.dark.withOpacity(.7)),
+                  Icon(Icons.qr_code, color: dark.withOpacity(.7)),
                 ],
               ),
               const SizedBox(height: 16),
-              Divider(color: _Palette.light.withOpacity(.35), height: 1),
+              Divider(color: light.withOpacity(.35), height: 1),
               const SizedBox(height: 12),
-              _infoRow(Icons.phone, 'Tel.', formatPhoneNumber(userState.phone)),
-              _infoRow(Icons.location_on, 'Sector.', userState.area),
+              _infoRow(dark: dark, icon: Icons.phone, label: 'Tel.', value: formatPhoneNumber(userState.phone)),
+              _infoRow(dark: dark, icon: Icons.location_on, label: 'Sector.', value: userState.area),
             ],
           ),
         ),
@@ -98,18 +100,23 @@ class CommuteInsideUserInfoCardSection extends StatelessWidget {
     );
   }
 
-  Widget _infoRow(IconData icon, String label, String value) {
+  Widget _infoRow({
+    required Color dark,
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: _Palette.dark.withOpacity(.7)),
+          Icon(icon, size: 18, color: dark.withOpacity(.7)),
           const SizedBox(width: 8),
           Text(
             label,
             style: TextStyle(
               fontSize: 13,
-              color: _Palette.dark.withOpacity(.6),
+              color: dark.withOpacity(.6),
               fontWeight: FontWeight.w600,
             ),
           ),

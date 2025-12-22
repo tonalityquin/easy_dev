@@ -18,11 +18,7 @@ import 'offline_live_ocr_page.dart';
 // ✅ TTS
 import '../../offlines/tts/offline_tts.dart';
 
-class _Palette {
-  static const base  = Color(0xFFF4511E);
-  static const dark  = Color(0xFFD84315);
-  static const light = Color(0xFFFFAB91);
-}
+import '../../theme.dart';
 
 enum _DockField { front, mid, back }
 
@@ -116,27 +112,27 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
 
     if (m != null) {
       final front = m.group(1)!;
-      final mid   = m.group(2)!;
-      final back  = m.group(3)!;
+      final mid = m.group(2)!;
+      final back = m.group(3)!;
 
       setState(() {
         controller.setFrontDigitMode(front.length == 3);
         controller.controllerFrontDigit.text = front;
-        controller.controllerMidDigit.text   = mid;
-        controller.controllerBackDigit.text  = back;
+        controller.controllerMidDigit.text = mid;
+        controller.controllerBackDigit.text = back;
         controller.showKeypad = false;
         _dockEditing = null;
       });
       return;
     } else if (m2 != null) {
       final front = m2.group(1)!;
-      final back  = m2.group(2)!;
+      final back = m2.group(2)!;
 
       setState(() {
         controller.setFrontDigitMode(front.length == 3);
         controller.controllerFrontDigit.text = front;
-        controller.controllerMidDigit.text   = '';
-        controller.controllerBackDigit.text  = back;
+        controller.controllerMidDigit.text = '';
+        controller.controllerBackDigit.text = back;
         controller.showKeypad = true;
         _dockEditing = null;
       });
@@ -236,8 +232,8 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
     return _PlateDock(
       controller: controller,
       onActivateFront: () => _beginDockEdit(_DockField.front),
-      onActivateMid:   () => _beginDockEdit(_DockField.mid),
-      onActivateBack:  () => _beginDockEdit(_DockField.back),
+      onActivateMid: () => _beginDockEdit(_DockField.mid),
+      onActivateBack: () => _beginDockEdit(_DockField.back),
     );
   }
 
@@ -298,6 +294,10 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final pal = AppCardPalette.of(context);
+    final base = pal.parkingBase;
+    final dark = pal.parkingDark;
+
     final viewInset = MediaQuery.of(context).viewInsets.bottom;
     final sysBottom = MediaQuery.of(context).padding.bottom;
     final bottomSafePadding = (controller.showKeypad ? 280.0 : 140.0) + viewInset + sysBottom;
@@ -326,7 +326,7 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
             IconButton(
               tooltip: '실시간 OCR 스캔',
               onPressed: _openLiveScanner,
-              icon: const Icon(Icons.auto_awesome_motion, color: _Palette.base),
+              icon: Icon(Icons.auto_awesome_motion, color: base),
             ),
           ],
         ),
@@ -386,7 +386,7 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
                     return Material(
                       color: Colors.white,
                       elevation: 4,
-                      shadowColor: _Palette.dark.withOpacity(.18),
+                      shadowColor: dark.withOpacity(.18),
                       shape: const RoundedRectangleBorder(
                         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                       ),
@@ -412,7 +412,8 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
                                 child: Column(
                                   children: [
                                     Container(
-                                      width: 40, height: 4,
+                                      width: 40,
+                                      height: 4,
                                       decoration: BoxDecoration(
                                         color: Colors.black38,
                                         borderRadius: BorderRadius.circular(2),
@@ -422,10 +423,14 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
                                     Row(
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
-                                        const Text('정산 유형 / 메모 카드',
-                                            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                                        Text(controller.buildPlateNumber(),
-                                            style: const TextStyle(color: Colors.black54)),
+                                        const Text(
+                                          '정산 유형 / 메모 카드',
+                                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                                        ),
+                                        Text(
+                                          controller.buildPlateNumber(),
+                                          style: const TextStyle(color: Colors.black54),
+                                        ),
                                       ],
                                     ),
                                   ],
@@ -471,7 +476,10 @@ class _OfflineInputPlateScreenState extends State<OfflineInputPlateScreen> {
           },
         ),
         bottomNavigationBar: SafeArea(
-          top: false, left: false, right: false, bottom: true,
+          top: false,
+          left: false,
+          right: false,
+          bottom: true,
           child: _buildBottomBar(),
         ),
       ),
@@ -492,29 +500,38 @@ class _PlateDock extends StatelessWidget {
     required this.onActivateBack,
   });
 
-  InputDecoration _dec(BuildContext context, bool active) {
+  InputDecoration _dec(
+      BuildContext context,
+      bool active, {
+        required Color base,
+        required Color light,
+      }) {
     return InputDecoration(
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       filled: true,
-      fillColor: active ? _Palette.light.withOpacity(.22) : Colors.white,
+      fillColor: active ? light.withOpacity(.22) : Colors.white,
       counterText: '',
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(color: Colors.grey.shade300, width: 1),
       ),
-      focusedBorder: const OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(10)),
-        borderSide: BorderSide(color: _Palette.base, width: 2),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: const BorderRadius.all(Radius.circular(10)),
+        borderSide: BorderSide(color: base, width: 2),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final pal = AppCardPalette.of(context);
+    final base = pal.parkingBase;
+    final light = pal.parkingLight;
+
     final isFrontActive = controller.activeController == controller.controllerFrontDigit;
-    final isMidActive   = controller.activeController == controller.controllerMidDigit;
-    final isBackActive  = controller.activeController == controller.controllerBackDigit;
+    final isMidActive = controller.activeController == controller.controllerMidDigit;
+    final isBackActive = controller.activeController == controller.controllerBackDigit;
 
     return Container(
       decoration: const BoxDecoration(color: Colors.transparent),
@@ -531,7 +548,7 @@ class _PlateDock extends StatelessWidget {
                   maxLength: controller.isThreeDigit ? 3 : 2,
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-                  decoration: _dec(context, isFrontActive),
+                  decoration: _dec(context, isFrontActive, base: base, light: light),
                 ),
               ),
             ),
@@ -548,7 +565,7 @@ class _PlateDock extends StatelessWidget {
                   maxLength: 1,
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-                  decoration: _dec(context, isMidActive),
+                  decoration: _dec(context, isMidActive, base: base, light: light),
                 ),
               ),
             ),
@@ -565,7 +582,7 @@ class _PlateDock extends StatelessWidget {
                   maxLength: 4,
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-                  decoration: _dec(context, isBackActive),
+                  decoration: _dec(context, isBackActive, base: base, light: light),
                 ),
               ),
             ),

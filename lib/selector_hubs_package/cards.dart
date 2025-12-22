@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../routes.dart';
+import '../routes.dart';
+import '../theme.dart';
 
 class CardBody extends StatefulWidget {
   const CardBody({
@@ -128,38 +129,37 @@ class LeadingIcon extends StatelessWidget {
   }
 }
 
-/// 개별 카드들 (기존 색 팔레트 유지)
+/// 개별 카드들 (팔레트는 theme.dart(AppCardPalette)에서 주입)
 class ServiceCard extends StatelessWidget {
   const ServiceCard({super.key, this.enabled = true});
 
   final bool enabled;
 
-  static const Color _base = Color(0xFF0D47A1);
-  static const Color _dark = Color(0xFF09367D);
-  static const Color _light = Color(0xFF5472D3);
-
   @override
   Widget build(BuildContext context) {
+    final p = AppCardPalette.of(context);
+    final onBase = Theme.of(context).colorScheme.onPrimary;
+
     final title = Text(
       '서비스 로그인',
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
         fontWeight: FontWeight.w700,
-        color: _dark,
+        color: p.serviceDark,
       ),
     );
 
     return Card(
-      color: Colors.white,
+      color: Theme.of(context).cardColor,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: _light,
+      surfaceTintColor: p.serviceLight,
       child: CardBody(
         icon: Icons.local_parking,
-        bg: _base,
-        iconColor: Colors.white,
+        bg: p.serviceBase,
+        iconColor: onBase,
         titleWidget: title,
-        buttonBg: _base,
-        buttonFg: Colors.white,
+        buttonBg: p.serviceBase,
+        buttonFg: onBase,
         onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.serviceLogin),
         enabled: enabled,
         disabledHint: '저장된 모드가 service일 때만 선택할 수 있어요',
@@ -173,32 +173,31 @@ class SimpleLoginCard extends StatelessWidget {
 
   final bool enabled;
 
-  static const Color _base = Color(0xFF00897B);
-  static const Color _dark = Color(0xFF00695C);
-  static const Color _light = Color(0xFF80CBC4);
-
   @override
   Widget build(BuildContext context) {
+    final p = AppCardPalette.of(context);
+    final onBase = Theme.of(context).colorScheme.onPrimary;
+
     final title = Text(
       '약식 로그인',
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
         fontWeight: FontWeight.w700,
-        color: _dark,
+        color: p.simpleDark,
       ),
     );
 
     return Card(
-      color: Colors.white,
+      color: Theme.of(context).cardColor,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: _light,
+      surfaceTintColor: p.simpleLight,
       child: CardBody(
         icon: Icons.access_time_filled_rounded,
-        bg: _base,
-        iconColor: Colors.white,
+        bg: p.simpleBase,
+        iconColor: onBase,
         titleWidget: title,
-        buttonBg: _base,
-        buttonFg: Colors.white,
+        buttonBg: p.simpleBase,
+        buttonFg: onBase,
         onPressed: () => Navigator.of(context).pushReplacementNamed(
           AppRoutes.simpleLogin,
           arguments: {
@@ -218,35 +217,32 @@ class LiteLoginCard extends StatelessWidget {
 
   final bool enabled;
 
-  // ✅ 경량(Lite) 로그인 고유 팔레트 (BlueGrey 계열로 기존 카드들과 충돌 최소화)
-  static const Color _base = Color(0xFF546E7A); // BlueGrey 600
-  static const Color _dark = Color(0xFF37474F); // BlueGrey 800
-  static const Color _light = Color(0xFFB0BEC5); // BlueGrey 200
-
   @override
   Widget build(BuildContext context) {
+    final p = AppCardPalette.of(context);
+    final onBase = Theme.of(context).colorScheme.onPrimary;
+
     final title = Text(
       '경량 로그인',
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
         fontWeight: FontWeight.w700,
-        color: _dark,
+        color: p.liteDark,
       ),
     );
 
     return Card(
-      color: Colors.white,
+      color: Theme.of(context).cardColor,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: _light,
+      surfaceTintColor: p.liteLight,
       child: CardBody(
         icon: Icons.bolt_rounded,
-        bg: _base,
-        iconColor: Colors.white,
+        bg: p.liteBase,
+        iconColor: onBase,
         titleWidget: title,
-        buttonBg: _base,
-        buttonFg: Colors.white,
+        buttonBg: p.liteBase,
+        buttonFg: onBase,
         onPressed: () => Navigator.of(context).pushReplacementNamed(
-          // ✅ routes.dart에 AppRoutes.liteLogin이 있어야 합니다(아래 참고).
           AppRoutes.liteLogin,
           arguments: {
             'requiredMode': 'lite',
@@ -264,32 +260,31 @@ class TabletCard extends StatelessWidget {
 
   final bool enabled;
 
-  static const Color _base = Color(0xFF00ACC1);
-  static const Color _dark = Color(0xFF00838F);
-  static const Color _light = Color(0xFF4DD0E1);
-
   @override
   Widget build(BuildContext context) {
+    final p = AppCardPalette.of(context);
+    final onBase = Theme.of(context).colorScheme.onPrimary;
+
     final title = Text(
       '태블릿 로그인',
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
         fontWeight: FontWeight.w700,
-        color: _dark,
+        color: p.tabletDark,
       ),
     );
 
     return Card(
-      color: Colors.white,
+      color: Theme.of(context).cardColor,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: _light,
+      surfaceTintColor: p.tabletLight,
       child: CardBody(
         icon: Icons.tablet_mac_rounded,
-        bg: _base,
-        iconColor: Colors.white,
+        bg: p.tabletBase,
+        iconColor: onBase,
         titleWidget: title,
-        buttonBg: _base,
-        buttonFg: Colors.white,
+        buttonBg: p.tabletBase,
+        buttonFg: onBase,
         onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.tabletLogin),
         enabled: enabled,
         disabledHint: '저장된 모드가 tablet일 때만 선택할 수 있어요',
@@ -301,32 +296,31 @@ class TabletCard extends StatelessWidget {
 class CommunityCard extends StatelessWidget {
   const CommunityCard({super.key});
 
-  static const Color _base = Color(0xFF26A69A);
-  static const Color _dark = Color(0xFF1E8077);
-  static const Color _light = Color(0xFF64D8CB);
-
   @override
   Widget build(BuildContext context) {
+    final p = AppCardPalette.of(context);
+    final onBase = Theme.of(context).colorScheme.onPrimary;
+
     final title = Text(
       '커뮤니티',
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
         fontWeight: FontWeight.w700,
-        color: _dark,
+        color: p.communityDark,
       ),
     );
 
     return Card(
-      color: Colors.white,
+      color: Theme.of(context).cardColor,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: _light,
+      surfaceTintColor: p.communityLight,
       child: CardBody(
         icon: Icons.groups_rounded,
-        bg: _base,
-        iconColor: Colors.white,
+        bg: p.communityBase,
+        iconColor: onBase,
         titleWidget: title,
-        buttonBg: _base,
-        buttonFg: Colors.white,
+        buttonBg: p.communityBase,
+        buttonFg: onBase,
         onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.communityStub),
       ),
     );
@@ -336,32 +330,31 @@ class CommunityCard extends StatelessWidget {
 class FaqCard extends StatelessWidget {
   const FaqCard({super.key});
 
-  static const Color _base = Color(0xFF3949AB);
-  static const Color _dark = Color(0xFF283593);
-  static const Color _light = Color(0xFF7986CB);
-
   @override
   Widget build(BuildContext context) {
+    final p = AppCardPalette.of(context);
+    final onBase = Theme.of(context).colorScheme.onPrimary;
+
     final title = Text(
       'FAQ / 문의',
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
         fontWeight: FontWeight.w700,
-        color: _dark,
+        color: p.faqDark,
       ),
     );
 
     return Card(
-      color: Colors.white,
+      color: Theme.of(context).cardColor,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: _light,
+      surfaceTintColor: p.faqLight,
       child: CardBody(
         icon: Icons.help_center_rounded,
-        bg: _base,
-        iconColor: Colors.white,
+        bg: p.faqBase,
+        iconColor: onBase,
         titleWidget: title,
-        buttonBg: _base,
-        buttonFg: Colors.white,
+        buttonBg: p.faqBase,
+        buttonFg: onBase,
         onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.faq),
       ),
     );
@@ -370,10 +363,6 @@ class FaqCard extends StatelessWidget {
 
 class HeadquarterCard extends StatelessWidget {
   const HeadquarterCard({super.key});
-
-  static const Color _base = Color(0xFF1E88E5);
-  static const Color _dark = Color(0xFF1565C0);
-  static const Color _light = Color(0xFF64B5F6);
 
   Future<void> _handleTap(BuildContext context) async {
     try {
@@ -407,26 +396,29 @@ class HeadquarterCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = AppCardPalette.of(context);
+    final onBase = Theme.of(context).colorScheme.onPrimary;
+
     final title = Text(
       '본사',
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
         fontWeight: FontWeight.w700,
-        color: _dark,
+        color: p.headquarterDark,
       ),
     );
 
     return Card(
-      color: Colors.white,
+      color: Theme.of(context).cardColor,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: _light,
+      surfaceTintColor: p.headquarterLight,
       child: CardBody(
         icon: Icons.apartment_rounded,
-        bg: _base,
-        iconColor: Colors.white,
+        bg: p.headquarterBase,
+        iconColor: onBase,
         titleWidget: title,
-        buttonBg: _base,
-        buttonFg: Colors.white,
+        buttonBg: p.headquarterBase,
+        buttonFg: onBase,
         onPressed: () => _handleTap(context),
       ),
     );
@@ -438,32 +430,31 @@ class DevCard extends StatelessWidget {
 
   final VoidCallback onTap;
 
-  static const Color _base = Color(0xFF6A1B9A);
-  static const Color _dark = Color(0xFF4A148C);
-  static const Color _light = Color(0xFFCE93D8);
-
   @override
   Widget build(BuildContext context) {
+    final p = AppCardPalette.of(context);
+    final onBase = Theme.of(context).colorScheme.onPrimary;
+
     final title = Text(
       '개발',
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
         fontWeight: FontWeight.w700,
-        color: _dark,
+        color: p.devDark,
       ),
     );
 
     return Card(
-      color: Colors.white,
+      color: Theme.of(context).cardColor,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: _light,
+      surfaceTintColor: p.devLight,
       child: CardBody(
         icon: Icons.developer_mode_rounded,
-        bg: _base,
-        iconColor: Colors.white,
+        bg: p.devBase,
+        iconColor: onBase,
         titleWidget: title,
-        buttonBg: _base,
-        buttonFg: Colors.white,
+        buttonBg: p.devBase,
+        buttonFg: onBase,
         onPressed: onTap,
       ),
     );
@@ -473,32 +464,31 @@ class DevCard extends StatelessWidget {
 class ParkingCard extends StatelessWidget {
   const ParkingCard({super.key});
 
-  static const Color _base = Color(0xFFF4511E);
-  static const Color _dark = Color(0xFFD84315);
-  static const Color _light = Color(0xFFFFAB91);
-
   @override
   Widget build(BuildContext context) {
+    final p = AppCardPalette.of(context);
+    final onBase = Theme.of(context).colorScheme.onPrimary;
+
     final title = Text(
       '오프라인 서비스',
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
         fontWeight: FontWeight.w700,
-        color: _dark,
+        color: p.parkingDark,
       ),
     );
 
     return Card(
-      color: Colors.white,
+      color: Theme.of(context).cardColor,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: _light,
+      surfaceTintColor: p.parkingLight,
       child: CardBody(
         icon: Icons.location_city,
-        bg: _base,
-        iconColor: Colors.white,
+        bg: p.parkingBase,
+        iconColor: onBase,
         titleWidget: title,
-        buttonBg: _base,
-        buttonFg: Colors.white,
+        buttonBg: p.parkingBase,
+        buttonFg: onBase,
         onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.offlineLogin),
       ),
     );

@@ -1,12 +1,7 @@
 // lib/screens/secondary_package/office_mode_package/bill_management_package/sections/bill_bottom_buttons_section.dart
 import 'package:flutter/material.dart';
 
-/// 서비스 로그인 카드 팔레트(리팩터링 공통 색)
-const serviceCardBase  = Color(0xFF0D47A1);
-const serviceCardDark  = Color(0xFF09367D);
-const serviceCardLight = Color(0xFF5472D3);
-const serviceCardFg    = Colors.white; // 버튼/아이콘 전경
-const serviceCardBg    = Colors.white; // 카드/시트 배경
+import '../../../../../../theme.dart'; // ✅ AppCardPalette 사용 (프로젝트 경로에 맞게 조정)
 
 class BillBottomButtonsSection extends StatelessWidget {
   final VoidCallback onCancel;
@@ -34,6 +29,15 @@ class BillBottomButtonsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ✅ Service 팔레트: ThemeExtension(AppCardPalette)에서 획득
+    final palette = AppCardPalette.of(context);
+    final serviceBase = palette.serviceBase;
+    final serviceDark = palette.serviceDark;
+    final serviceLight = palette.serviceLight;
+
+    // 기존 상수의 의미 유지(전경/배경)
+    const fg = Colors.white;
+
     return SafeArea(
       top: false,
       child: Row(
@@ -41,22 +45,23 @@ class BillBottomButtonsSection extends StatelessWidget {
           Expanded(
             child: OutlinedButton.icon(
               onPressed: isBusy ? null : onCancel,
-              icon: Icon(cancelIcon ?? Icons.close, color: serviceCardBase),
+              icon: Icon(cancelIcon ?? Icons.close, color: serviceBase),
               label: Text(
                 cancelLabel,
-                style: const TextStyle(fontWeight: FontWeight.w600, color: serviceCardBase),
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: serviceBase,
+                ),
               ),
-              style: OutlinedButton
-                  .styleFrom(
+              style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
-                foregroundColor: serviceCardBase,
-                side: const BorderSide(color: serviceCardBase, width: 1.2),
+                foregroundColor: serviceBase,
+                side: BorderSide(color: serviceBase, width: 1.2),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              )
-                  .copyWith(
+              ).copyWith(
                 // ↓ overlay는 styleFrom이 아닌 copyWith로 지정
                 overlayColor: WidgetStatePropertyAll(
-                  serviceCardLight.withOpacity(0.08),
+                  serviceLight.withOpacity(0.08),
                 ),
               ),
             ),
@@ -66,29 +71,30 @@ class BillBottomButtonsSection extends StatelessWidget {
             child: ElevatedButton.icon(
               onPressed: (!isSaveEnabled || isBusy) ? null : onSave,
               icon: isBusy
-                  ? SizedBox(
+                  ? const SizedBox(
                 width: 18,
                 height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2, color: serviceCardFg),
+                child: CircularProgressIndicator(strokeWidth: 2, color: fg),
               )
-                  : Icon(saveIcon ?? Icons.check, color: serviceCardFg),
+                  : Icon(saveIcon ?? Icons.check, color: fg),
               label: Text(
                 isBusy ? '저장 중...' : saveLabel,
-                style: const TextStyle(fontWeight: FontWeight.w700, color: serviceCardFg),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: fg,
+                ),
               ),
-              style: ElevatedButton
-                  .styleFrom(
+              style: ElevatedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
-                backgroundColor: serviceCardBase,
-                foregroundColor: serviceCardFg,
+                backgroundColor: serviceBase,
+                foregroundColor: fg,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 elevation: 2,
-                shadowColor: serviceCardDark.withOpacity(0.25),
-              )
-                  .copyWith(
+                shadowColor: serviceDark.withOpacity(0.25),
+              ).copyWith(
                 // ↓ overlay는 styleFrom이 아닌 copyWith로 지정
                 overlayColor: WidgetStatePropertyAll(
-                  serviceCardLight.withOpacity(0.08),
+                  serviceLight.withOpacity(0.08),
                 ),
               ),
             ),

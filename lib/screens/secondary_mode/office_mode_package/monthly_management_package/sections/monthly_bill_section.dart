@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 
-class _SvcColors {
-  static const base = Color(0xFF0D47A1);
-  static const dark = Color(0xFF09367D);
-  static const light = Color(0xFF5472D3);
-}
+// ✅ AppCardPalette 사용 (프로젝트 경로에 맞게 수정)
+// 예: import 'package:easydev/theme/app_card_palette.dart';
+import '../../../../../theme.dart';
 
 class MonthlyBillSection extends StatelessWidget {
   final TextEditingController nameController;
@@ -39,29 +37,30 @@ class MonthlyBillSection extends StatelessWidget {
         bool disabledTone = false,
       }) {
     final cs = Theme.of(context).colorScheme;
+    final palette = AppCardPalette.of(context);
 
     return InputDecoration(
       labelText: label,
       hintText: hint,
       suffixText: suffixText,
       suffixIcon: suffixIcon,
-      floatingLabelStyle: const TextStyle(
-        color: _SvcColors.dark,
+      floatingLabelStyle: TextStyle(
+        color: palette.serviceDark,
         fontWeight: FontWeight.w700,
       ),
       filled: true,
       fillColor: disabledTone
           ? cs.surfaceVariant.withOpacity(.55)
-          : _SvcColors.light.withOpacity(.06),
+          : palette.serviceLight.withOpacity(.06),
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: _SvcColors.light.withOpacity(.45)),
+        borderSide: BorderSide(color: palette.serviceLight.withOpacity(.45)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: _SvcColors.base, width: 1.2),
+        borderSide: BorderSide(color: palette.serviceBase, width: 1.2),
       ),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       errorBorder: OutlineInputBorder(
@@ -79,6 +78,7 @@ class MonthlyBillSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+    final palette = AppCardPalette.of(context);
 
     final regularTypeOptions = ['월 주차', '주간권', '야간권', '주말권'];
     final periodUnitOptions = ['일', '주', '월'];
@@ -107,11 +107,14 @@ class MonthlyBillSection extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: _SvcColors.light.withOpacity(.18),
+                  color: palette.serviceLight.withOpacity(.18),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _SvcColors.light.withOpacity(.40)),
+                  border: Border.all(color: palette.serviceLight.withOpacity(.40)),
                 ),
-                child: const Icon(Icons.receipt_long_outlined, color: _SvcColors.dark),
+                child: Icon(
+                  Icons.receipt_long_outlined,
+                  color: palette.serviceDark,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -119,7 +122,7 @@ class MonthlyBillSection extends StatelessWidget {
                   '정기 정산 입력',
                   style: text.titleMedium?.copyWith(
                     fontWeight: FontWeight.w900,
-                    color: _SvcColors.dark,
+                    color: palette.serviceDark,
                   ),
                 ),
               ),
@@ -154,7 +157,7 @@ class MonthlyBillSection extends StatelessWidget {
               hint: '예: 월 정기권',
               disabledTone: isEditMode,
               suffixIcon: isEditMode
-                  ? const Icon(Icons.lock_outline, color: _SvcColors.dark)
+                  ? Icon(Icons.lock_outline, color: palette.serviceDark)
                   : null,
             ),
           ),
@@ -168,7 +171,7 @@ class MonthlyBillSection extends StatelessWidget {
                 .map((type) => DropdownMenuItem(value: type, child: Text(type)))
                 .toList(),
             onChanged: onTypeChanged,
-            iconEnabledColor: _SvcColors.base,
+            iconEnabledColor: palette.serviceBase,
             dropdownColor: cs.surface,
           ),
           const SizedBox(height: 12),
@@ -181,7 +184,7 @@ class MonthlyBillSection extends StatelessWidget {
                 .map((unit) => DropdownMenuItem(value: unit, child: Text(unit)))
                 .toList(),
             onChanged: onPeriodUnitChanged,
-            iconEnabledColor: _SvcColors.base,
+            iconEnabledColor: palette.serviceBase,
             dropdownColor: cs.surface,
           ),
           const SizedBox(height: 12),

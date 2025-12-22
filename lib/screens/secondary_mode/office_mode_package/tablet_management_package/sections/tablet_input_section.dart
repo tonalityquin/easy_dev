@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// 서비스(로그인 카드)와 동일 계열 팔레트
-class _SvcColors {
-  static const base = Color(0xFF0D47A1);
-  static const dark = Color(0xFF09367D);
-  static const light = Color(0xFF5472D3);
-}
+// ✅ AppCardPalette 정의가 있는 파일을 프로젝트 경로에 맞게 import 하세요.
+// 예) import 'package:your_app/theme/app_card_palette.dart';
+// 예) import 'package:your_app/theme/app_theme.dart';
+import '../../../../../../theme.dart';
 
 /// 대문자 입력 시 자동으로 소문자로 변환
 class LowercaseTextFormatter extends TextInputFormatter {
@@ -68,54 +66,62 @@ class TabletInputSection extends StatelessWidget {
     return fn == null ? true : fn(t);
   }
 
-  InputDecoration _decoration({
-    required String label,
-    required String helperText,
-    String? errorText,
-    String? suffixText,
-    IconData? prefixIcon,
-    bool showDoneIcon = false,
-    bool done = false,
-  }) {
+  InputDecoration _decoration(
+      BuildContext context, {
+        required String label,
+        required String helperText,
+        String? errorText,
+        String? suffixText,
+        IconData? prefixIcon,
+        bool showDoneIcon = false,
+        bool done = false,
+      }) {
+    final cs = Theme.of(context).colorScheme;
+    final palette = AppCardPalette.of(context);
+
+    final base = palette.serviceBase;
+    final dark = palette.serviceDark;
+    final light = palette.serviceLight;
+
     return InputDecoration(
       labelText: label,
       helperText: helperText,
-      floatingLabelStyle: const TextStyle(
-        color: _SvcColors.dark,
+      floatingLabelStyle: TextStyle(
+        color: dark,
         fontWeight: FontWeight.w700,
       ),
       prefixIcon: prefixIcon == null ? null : Icon(prefixIcon),
-      prefixIconColor: _SvcColors.dark,
+      prefixIconColor: dark,
       suffixText: suffixText,
-      suffixStyle: const TextStyle(
-        color: _SvcColors.dark,
+      suffixStyle: TextStyle(
+        color: dark,
         fontWeight: FontWeight.w600,
       ),
       suffixIcon: showDoneIcon
           ? Icon(
         done ? Icons.check_circle : Icons.radio_button_unchecked,
-        color: done ? _SvcColors.dark : _SvcColors.light.withOpacity(.70),
+        color: done ? dark : light.withOpacity(.70),
       )
           : null,
       filled: true,
-      fillColor: _SvcColors.light.withOpacity(.06),
+      fillColor: light.withOpacity(.06),
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: _SvcColors.light.withOpacity(.45)),
+        borderSide: BorderSide(color: light.withOpacity(.45)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: const BorderSide(color: _SvcColors.base, width: 1.2),
+        borderSide: BorderSide(color: base, width: 1.2),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: Colors.red.shade300),
+        borderSide: BorderSide(color: cs.error.withOpacity(.85)),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: Colors.red.shade400, width: 1.2),
+        borderSide: BorderSide(color: cs.error, width: 1.2),
       ),
       errorText: errorText,
     );
@@ -133,8 +139,8 @@ class TabletInputSection extends StatelessWidget {
         ? errorMessage
         : null;
 
-    final emailError = (errorMessage == '이메일을 입력하세요' ||
-        errorMessage == '이메일을 다시 확인하세요')
+    final emailError =
+    (errorMessage == '이메일을 입력하세요' || errorMessage == '이메일을 다시 확인하세요')
         ? errorMessage
         : null;
 
@@ -150,6 +156,7 @@ class TabletInputSection extends StatelessWidget {
           textCapitalization: TextCapitalization.words,
           autofillHints: const [AutofillHints.name],
           decoration: _decoration(
+            context,
             label: '이름',
             helperText: '예: 태블릿A, 로비태블릿 등',
             errorText: nameError,
@@ -175,6 +182,7 @@ class TabletInputSection extends StatelessWidget {
             LengthLimitingTextInputFormatter(20),
           ],
           decoration: _decoration(
+            context,
             label: '아이디(소문자 영문)',
             helperText: '소문자 a~z, 3~20자',
             errorText: handleError,
@@ -194,6 +202,7 @@ class TabletInputSection extends StatelessWidget {
           keyboardType: TextInputType.emailAddress,
           autofillHints: const [AutofillHints.username],
           decoration: _decoration(
+            context,
             label: '이메일(구글)',
             helperText: '영문/숫자/._- 만 입력 가능',
             suffixText: '@gmail.com',

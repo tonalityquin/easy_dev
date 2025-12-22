@@ -11,12 +11,9 @@ import 'tablet_management_package/tablet_setting.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../states/area/area_state.dart';
 
-/// 서비스 로그인 카드와 동일 톤의 팔레트
-class _SvcColors {
-  static const base = Color(0xFF0D47A1);  // primary
-  static const dark = Color(0xFF09367D);  // 텍스트/아이콘 진한 톤
-  static const light = Color(0xFF5472D3); // 라이트 톤/수면 강조
-}
+// ✅ AppCardPalette 사용 (프로젝트 경로에 맞게 수정)
+// 예: import 'package:your_app/theme/app_card_palette.dart';
+import '../../../theme.dart';
 
 /// Iterable 안전 확장: 조건에 맞는 첫 원소를 찾되 없으면 null
 extension IterableX<T> on Iterable<T> {
@@ -68,7 +65,8 @@ class _TabletManagementState extends State<TabletManagement> {
     );
 
     return SafeArea(
-      child: IgnorePointer( // 제스처 간섭 방지
+      child: IgnorePointer(
+        // 제스처 간섭 방지
         child: Align(
           alignment: Alignment.topLeft,
           child: Padding(
@@ -310,6 +308,8 @@ class _TabletManagementState extends State<TabletManagement> {
     final currentArea = areaState.currentArea;
     final currentDivision = areaState.currentDivision;
 
+    final palette = AppCardPalette.of(context);
+
     bool matches(UserModel u) {
       final areas = u.areas;
       final divisions = u.divisions;
@@ -330,7 +330,8 @@ class _TabletManagementState extends State<TabletManagement> {
         foregroundColor: Colors.black87,
         // ⬇️ 좌측 상단(11시)에 'tablet management' 텍스트 고정
         flexibleSpace: _buildScreenTag(context),
-        title: const Text('태블릿 계정 관리', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('태블릿 계정 관리',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
@@ -372,13 +373,13 @@ class _TabletManagementState extends State<TabletManagement> {
           return Card(
             color: Colors.white,
             elevation: 1,
-            surfaceTintColor: _SvcColors.light,
+            surfaceTintColor: palette.serviceLight,
             margin: const EdgeInsets.symmetric(vertical: 6),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
               side: BorderSide(
                 color: isSelected
-                    ? _SvcColors.base.withOpacity(.25)
+                    ? palette.serviceBase.withOpacity(.25)
                     : Colors.black.withOpacity(.06),
               ),
             ),
@@ -386,15 +387,18 @@ class _TabletManagementState extends State<TabletManagement> {
               key: ValueKey(user.id),
               leading: CircleAvatar(
                 radius: 18,
-                backgroundColor: _SvcColors.base,
-                child: const Icon(Icons.tablet_mac_rounded,
-                    size: 18, color: Colors.white),
+                backgroundColor: palette.serviceBase,
+                child: const Icon(
+                  Icons.tablet_mac_rounded,
+                  size: 18,
+                  color: Colors.white,
+                ),
               ),
               title: Text(
                 user.name,
-                style: const TextStyle(
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: _SvcColors.dark,
+                  color: palette.serviceDark,
                 ),
               ),
               subtitle: Padding(
@@ -404,7 +408,8 @@ class _TabletManagementState extends State<TabletManagement> {
                   children: [
                     Text('이메일: ${user.email}'),
                     Text(
-                        '출근: ${formatTime(user.startTime)} / 퇴근: ${formatTime(user.endTime)}'),
+                      '출근: ${formatTime(user.startTime)} / 퇴근: ${formatTime(user.endTime)}',
+                    ),
                     Text('역할: ${user.role}'),
                     if (user.position?.isNotEmpty == true)
                       Text('직책: ${user.position!}'),
@@ -412,12 +417,10 @@ class _TabletManagementState extends State<TabletManagement> {
                 ),
               ),
               trailing: isSelected
-                  ? const Icon(Icons.check_circle,
-                  color: _SvcColors.base)
+                  ? Icon(Icons.check_circle, color: palette.serviceBase)
                   : null,
               selected: isSelected,
-              selectedTileColor:
-              _SvcColors.light.withOpacity(.06), // 토널 하이라이트
+              selectedTileColor: palette.serviceLight.withOpacity(.06),
               onTap: () => userState.toggleUserCard(user.id),
             ),
           );
@@ -456,10 +459,11 @@ class _FabStack extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final palette = AppCardPalette.of(context);
 
     final ButtonStyle primaryStyle = ElevatedButton.styleFrom(
-      backgroundColor: _SvcColors.base,     // 서비스 톤
-      foregroundColor: Colors.white,        // 가독성 확보
+      backgroundColor: palette.serviceBase, // ✅ AppCardPalette
+      foregroundColor: Colors.white,
       elevation: 3,
       shadowColor: cs.shadow.withOpacity(0.25),
       shape: const StadiumBorder(),

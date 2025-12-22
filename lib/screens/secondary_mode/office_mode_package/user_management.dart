@@ -1,26 +1,3 @@
-// lib/screens/secondary_mode/office_mode_package/user_management.dart
-//
-// 색 반영(UI/UX 리팩터링):
-// - '서비스 로그인' 카드 팔레트(#0D47A1 base / #09367D dark / #5472D3 light) 통일 적용
-// - 상단 그라디언트 헤더 배너
-// - 선택된 항목은 브랜드 톤으로 또렷하게 하이라이트(보더/배경/체크 아이콘)
-// - FAB(추가/수정/활성/비활성) 라운드 필 버튼 일관 스타일
-// - 스낵바는 snackbar_helper 사용 (변경 없음)
-// - 기능/로직은 기존과 동일
-// - ⬅️ 11시 라벨 추가: "user management"
-//
-// [변경 사항]
-// - 요구사항 반영: user_management에서 표시 정보는 이름/이메일/직책/전화번호만 노출
-// - ✅ 삭제 버튼 제거 → 활성화/비활성화 토글로 변경(soft disable)
-//
-// ✅ 중요:
-// - isActive는 user_accounts_show에서만 관리하므로,
-//   초기 로딩은 refreshUsersBySelectedAreaAndCache()를 사용(가능한 경우 show 기반 갱신)
-//
-// ✅ 추가 요구사항 반영:
-// - 활성화 계정은 상단, 비활성화 계정은 하단
-// - 두 그룹 사이에 Divider 삽입
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -31,13 +8,9 @@ import 'user_management_package/user_setting.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../states/area/area_state.dart';
 
-/// 서비스 로그인 카드 팔레트 (일관된 브랜드 톤)
-class _SvcColors {
-  static const base = Color(0xFF0D47A1); // primary
-  static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
-  static const light = Color(0xFF5472D3); // 톤 변형/보더
-  static const fg = Color(0xFFFFFFFF);
-}
+// ✅ AppCardPalette 정의가 있는 파일을 프로젝트 경로에 맞게 import 하세요.
+// 예) import 'package:your_app/theme/app_card_palette.dart';
+import '../../../../theme.dart';
 
 /// Iterable 안전 확장: 조건에 맞는 첫 원소를 찾되 없으면 null
 extension IterableX<T> on Iterable<T> {
@@ -58,14 +31,13 @@ class UserManagement extends StatefulWidget {
 
 class _UserManagementState extends State<UserManagement> {
   // ▼ 버튼을 아래에서 얼마나 띄울지 조절(요구사항: 버튼 하단에 SizedBox로 높이 조절)
-  static const double _fabBottomGap = 48.0; // 필요시 값만 바꿔 간편 조절
-  static const double _fabSpacing = 10.0; // 버튼간 간격
+  static const double _fabBottomGap = 48.0;
+  static const double _fabSpacing = 10.0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // ✅ isActive는 show에서만 존재하므로, 가능한 경우 show 기반 갱신을 우선 사용
       context.read<UserState>().refreshUsersBySelectedAreaAndCache();
     });
   }
@@ -101,7 +73,6 @@ class _UserManagementState extends State<UserManagement> {
     );
   }
 
-  // ▼ 각 파일에 동일하게 두는 갱신 로직 (복제본)
   Future<void> _refreshUsersForCurrentArea(BuildContext context) async {
     try {
       final userState = context.read<UserState>();
@@ -175,9 +146,11 @@ class _UserManagementState extends State<UserManagement> {
   }
 
   /// ✅ 삭제 대신: 활성/비활성 확인 다이얼로그
-  Future<bool> _confirmToggleActive(BuildContext context, {required bool toActive}) async {
+  Future<bool> _confirmToggleActive(BuildContext context,
+      {required bool toActive}) async {
     final title = toActive ? '활성화 확인' : '비활성화 확인';
-    final content = toActive ? '선택한 계정을 활성화하시겠습니까?' : '선택한 계정을 비활성화하시겠습니까?';
+    final content =
+    toActive ? '선택한 계정을 활성화하시겠습니까?' : '선택한 계정을 비활성화하시겠습니까?';
     final actionLabel = toActive ? '활성화' : '비활성화';
 
     return await showDialog<bool>(
@@ -200,14 +173,12 @@ class _UserManagementState extends State<UserManagement> {
         false;
   }
 
-  /// ▼ 기존 onIconTapped() 로직을 FAB로 그대로 매핑
   /// - 선택 없음: index 0 → 추가
   /// - 선택 있음: index 0 → 수정
   Future<void> _handlePrimaryAction(BuildContext context) async {
     final userState = context.read<UserState>();
     final selectedId = userState.selectedUserId;
 
-    // index 0: 추가 (선택 없음)
     if (selectedId == null) {
       buildUserBottomSheet(
         context: context,
@@ -228,7 +199,9 @@ class _UserManagementState extends State<UserManagement> {
             position,
             ) async {
           try {
-            final englishName = await context.read<UserRepository>().getEnglishNameByArea(selectedArea, division);
+            final englishName = await context
+                .read<UserRepository>()
+                .getEnglishNameByArea(selectedArea, division);
 
             final newUser = UserModel(
               id: '$phone-$area',
@@ -249,7 +222,6 @@ class _UserManagementState extends State<UserManagement> {
               startTime: _stringToTimeOfDay(startTime),
               endTime: _stringToTimeOfDay(endTime),
               fixedHolidays: fixedHolidays,
-              // isActive는 show에서 관리(권장: 모델 default true 또는 show mirror 생성 시 true)
             );
 
             await userState.addUserCard(
@@ -267,8 +239,8 @@ class _UserManagementState extends State<UserManagement> {
       return;
     }
 
-    // index 0: 수정 (선택 있음)
-    final selectedUser = userState.users.firstWhereOrNull((u) => u.id == selectedId);
+    final selectedUser =
+    userState.users.firstWhereOrNull((u) => u.id == selectedId);
     if (selectedUser == null) {
       showFailedSnackbar(context, '선택된 계정을 찾지 못했습니다.');
       return;
@@ -294,7 +266,9 @@ class _UserManagementState extends State<UserManagement> {
           position,
           ) async {
         try {
-          final englishName = await context.read<UserRepository>().getEnglishNameByArea(selectedArea, division);
+          final englishName = await context
+              .read<UserRepository>()
+              .getEnglishNameByArea(selectedArea, division);
 
           final updatedUser = selectedUser.copyWith(
             name: name,
@@ -313,7 +287,6 @@ class _UserManagementState extends State<UserManagement> {
             startTime: _stringToTimeOfDay(startTime),
             endTime: _stringToTimeOfDay(endTime),
             fixedHolidays: fixedHolidays,
-            // isActive는 유지(copyWith 기본 유지)
           );
 
           await userState.updateLoginUser(updatedUser);
@@ -336,7 +309,8 @@ class _UserManagementState extends State<UserManagement> {
       return;
     }
 
-    final selectedUser = userState.users.firstWhereOrNull((u) => u.id == selectedId);
+    final selectedUser =
+    userState.users.firstWhereOrNull((u) => u.id == selectedId);
     if (selectedUser == null) {
       showFailedSnackbar(context, '선택된 계정을 찾지 못했습니다.');
       return;
@@ -356,15 +330,19 @@ class _UserManagementState extends State<UserManagement> {
   }
 
   Widget _buildUserTile(BuildContext context, UserState userState, UserModel user) {
+    final palette = AppCardPalette.of(context);
+    final base = palette.serviceBase;
+    final dark = palette.serviceDark;
+    final light = palette.serviceLight;
+
     final isSelected = userState.selectedUserId == user.id;
 
-    // ✅ 비활성 계정은 시각적으로만 약간 낮춤(표시 정보 추가 노출 없음)
+    // ✅ 비활성 계정은 시각적으로만 약간 낮춤
     final double inactiveOpacity = user.isActive ? 1.0 : 0.55;
 
-    // 선택 시 브랜드 톤 하이라이트
-    final bg = isSelected ? _SvcColors.light.withOpacity(.10) : Colors.white;
+    final bg = isSelected ? light.withOpacity(.10) : Colors.white;
     final border = isSelected
-        ? Border.all(color: _SvcColors.base, width: 1.25)
+        ? Border.all(color: base, width: 1.25)
         : Border.all(color: Colors.black.withOpacity(.08));
 
     return Opacity(
@@ -378,10 +356,11 @@ class _UserManagementState extends State<UserManagement> {
         ),
         child: ListTile(
           key: ValueKey(user.id),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          contentPadding:
+          const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           leading: CircleAvatar(
-            backgroundColor: _SvcColors.light.withOpacity(.25),
-            foregroundColor: _SvcColors.dark,
+            backgroundColor: light.withOpacity(.25),
+            foregroundColor: dark,
             child: const Icon(Icons.person_outline),
           ),
           title: Row(
@@ -395,7 +374,7 @@ class _UserManagementState extends State<UserManagement> {
                   ),
                 ),
               ),
-              if (isSelected) const Icon(Icons.check_circle, color: _SvcColors.base),
+              if (isSelected) Icon(Icons.check_circle, color: base),
             ],
           ),
           subtitle: Padding(
@@ -418,20 +397,21 @@ class _UserManagementState extends State<UserManagement> {
   Widget _buildActiveInactiveDivider(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(2, 10, 2, 6),
-      child: Column(
-        children: [
-          Divider(
-            height: 18,
-            thickness: 1.2,
-            color: Colors.black.withOpacity(0.10),
-          ),
-        ],
+      child: Divider(
+        height: 18,
+        thickness: 1.2,
+        color: Colors.black.withOpacity(0.10),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppCardPalette.of(context);
+    final base = palette.serviceBase;
+    final dark = palette.serviceDark;
+    final light = palette.serviceLight;
+
     final userState = context.watch<UserState>();
     final areaState = context.watch<AreaState>();
     final currentArea = areaState.currentArea;
@@ -454,9 +434,9 @@ class _UserManagementState extends State<UserManagement> {
 
     final bool hasSelection = userState.selectedUserId != null;
 
-    // ✅ 토글 버튼 라벨/아이콘 결정(선택된 유저 기반)
-    final selectedUser =
-    hasSelection ? userState.users.firstWhereOrNull((u) => u.id == userState.selectedUserId) : null;
+    final selectedUser = hasSelection
+        ? userState.users.firstWhereOrNull((u) => u.id == userState.selectedUserId)
+        : null;
     final bool selectedIsActive = selectedUser?.isActive ?? true;
     final String toggleLabel = selectedIsActive ? '비활성화' : '활성화';
     final IconData toggleIcon = selectedIsActive ? Icons.pause_circle : Icons.play_circle;
@@ -492,16 +472,19 @@ class _UserManagementState extends State<UserManagement> {
       )
           : ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        itemCount: 1 + activeUsers.length + (needDivider ? 1 : 0) + inactiveUsers.length,
+        itemCount: 1 +
+            activeUsers.length +
+            (needDivider ? 1 : 0) +
+            inactiveUsers.length,
         itemBuilder: (context, index) {
           if (index == 0) {
-            return const _HeaderBanner();
+            return _HeaderBanner(
+              base: base,
+              dark: dark,
+              light: light,
+            );
           }
 
-          // index 매핑:
-          // [1 .. activeUsers.length] => 활성
-          // [divider] (optional)
-          // [inactive] => 비활성
           var cursor = index - 1;
 
           if (cursor < activeUsers.length) {
@@ -512,9 +495,7 @@ class _UserManagementState extends State<UserManagement> {
           cursor -= activeUsers.length;
 
           if (needDivider) {
-            if (cursor == 0) {
-              return _buildActiveInactiveDivider(context);
-            }
+            if (cursor == 0) return _buildActiveInactiveDivider(context);
             cursor -= 1;
           }
 
@@ -523,25 +504,32 @@ class _UserManagementState extends State<UserManagement> {
         },
       ),
 
-      // ▼ 현대적인 FAB 세트(필 팁/그라운드 강조, StadiumBorder, 살짝 떠있는 느낌)
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: _FabStack(
         bottomGap: _fabBottomGap,
         spacing: _fabSpacing,
         hasSelection: hasSelection,
-        onPrimary: () => _handlePrimaryAction(context), // 추가/수정
-        onSecondary: hasSelection ? () => _handleToggleActive(context) : null, // 활성/비활성
+        onPrimary: () => _handlePrimaryAction(context),
+        onSecondary: hasSelection ? () => _handleToggleActive(context) : null,
         secondaryLabel: toggleLabel,
         secondaryIcon: toggleIcon,
-        secondaryIsDanger: selectedIsActive, // 비활성화(=내리는 동작)일 때만 경고 톤
+        secondaryIsDanger: selectedIsActive,
       ),
     );
   }
 }
 
-/// 상단 그라디언트 배너(브랜드 톤)
+/// 상단 그라디언트 배너(브랜드 톤) - ✅ AppCardPalette 기반으로 주입
 class _HeaderBanner extends StatelessWidget {
-  const _HeaderBanner();
+  const _HeaderBanner({
+    required this.base,
+    required this.dark,
+    required this.light,
+  });
+
+  final Color base;
+  final Color dark;
+  final Color light;
 
   @override
   Widget build(BuildContext context) {
@@ -551,24 +539,24 @@ class _HeaderBanner extends StatelessWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            _SvcColors.light.withOpacity(.95),
-            _SvcColors.base.withOpacity(.95),
+            light.withOpacity(.95),
+            base.withOpacity(.95),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _SvcColors.dark.withOpacity(.16)),
+        border: Border.all(color: dark.withOpacity(.16)),
       ),
       child: Row(
-        children: const [
-          Icon(Icons.manage_accounts_rounded, color: _SvcColors.fg),
-          SizedBox(width: 10),
-          Expanded(
+        children: [
+          const Icon(Icons.manage_accounts_rounded, color: Colors.white),
+          const SizedBox(width: 10),
+          const Expanded(
             child: Text(
               '계정을 추가/수정/활성/비활성할 수 있습니다.\n선택 시 항목이 강조 표시됩니다.',
               style: TextStyle(
-                color: _SvcColors.fg,
+                color: Colors.white,
                 fontWeight: FontWeight.w700,
                 height: 1.25,
               ),
@@ -597,8 +585,8 @@ class _FabStack extends StatelessWidget {
   final double spacing;
   final bool hasSelection;
 
-  final VoidCallback onPrimary; // 선택 없음: 추가 / 선택 있음: 수정
-  final VoidCallback? onSecondary; // 선택 있음: 활성/비활성
+  final VoidCallback onPrimary;
+  final VoidCallback? onSecondary;
 
   final String secondaryLabel;
   final IconData secondaryIcon;
@@ -606,22 +594,29 @@ class _FabStack extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppCardPalette.of(context);
+    final base = palette.serviceBase;
+    final fg = Theme.of(context).colorScheme.onPrimary; // 일반적으로 white
+    final cs = Theme.of(context).colorScheme;
+
     final ButtonStyle primaryStyle = ElevatedButton.styleFrom(
-      backgroundColor: _SvcColors.base,
-      foregroundColor: _SvcColors.fg,
+      backgroundColor: base,
+      foregroundColor: fg,
       elevation: 3,
-      shadowColor: _SvcColors.base.withOpacity(0.25),
+      shadowColor: base.withOpacity(0.25),
       shape: const StadiumBorder(),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       textStyle: const TextStyle(fontWeight: FontWeight.w700),
     );
 
+    final Color secondaryBg = secondaryIsDanger ? cs.error : base;
+    final Color secondaryFg = secondaryIsDanger ? cs.onError : fg;
+
     final ButtonStyle secondaryStyle = ElevatedButton.styleFrom(
-      backgroundColor: secondaryIsDanger ? Theme.of(context).colorScheme.error : _SvcColors.base,
-      foregroundColor: secondaryIsDanger ? Theme.of(context).colorScheme.onError : _SvcColors.fg,
+      backgroundColor: secondaryBg,
+      foregroundColor: secondaryFg,
       elevation: 3,
-      shadowColor:
-      (secondaryIsDanger ? Theme.of(context).colorScheme.error : _SvcColors.base).withOpacity(0.35),
+      shadowColor: secondaryBg.withOpacity(0.35),
       shape: const StadiumBorder(),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       textStyle: const TextStyle(fontWeight: FontWeight.w700),

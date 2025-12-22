@@ -3,17 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../theme.dart'; // ✅ AppCardPalette 사용 (경로 필요 시 조정)
 import '../../../../utils/snackbar_helper.dart';
 import '../../../../states/bill/bill_state.dart';
 import '../../../../states/area/area_state.dart';
 import 'bill_management_package/bill_bottom_sheet.dart';
-
-/// 서비스 로그인 카드 팔레트(공통 활용)
-const serviceCardBase = Color(0xFF0D47A1);
-const serviceCardDark = Color(0xFF09367D);
-const serviceCardLight = Color(0xFF5472D3);
-const serviceCardFg = Colors.white; // 버튼/아이콘 전경
-const serviceCardBg = Colors.white; // 카드/시트 배경
 
 class BillManagement extends StatefulWidget {
   const BillManagement({super.key});
@@ -88,7 +82,8 @@ class _BillManagementState extends State<BillManagement> {
           ),
         ],
       ),
-    ) ?? false;
+    ) ??
+        false;
   }
 
   Future<void> _deleteSelectedBill(BuildContext context) async {
@@ -132,7 +127,8 @@ class _BillManagementState extends State<BillManagement> {
           fontSize: 11,
           color: Colors.black54,
           fontWeight: FontWeight.w600,
-        )).copyWith(
+        ))
+        .copyWith(
       color: Colors.black54,
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
@@ -162,9 +158,19 @@ class _BillManagementState extends State<BillManagement> {
     final won = NumberFormat.decimalPattern();
     final cs = Theme.of(context).colorScheme;
 
+    // ✅ AppCardPalette에서 Service 팔레트(Deep Blue) 사용
+    final palette = AppCardPalette.of(context);
+    final serviceBase = palette.serviceBase;
+    final serviceDark = palette.serviceDark;
+    final serviceLight = palette.serviceLight;
+
+    // 기존과 동일하게 white 고정 사용(원하면 Theme 기반으로 교체 가능)
+    const cardFg = Colors.white;
+    const cardBg = Colors.white;
+
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: serviceCardBg, // 화이트 고정
+        backgroundColor: cardBg, // 화이트 고정
         elevation: 0,
         foregroundColor: Colors.black87,
         flexibleSpace: _buildScreenTag(context), // ◀️ 11시 라벨 (AppBar에 배치)
@@ -193,7 +199,17 @@ class _BillManagementState extends State<BillManagement> {
                   child: Text('변동 정산', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
                 const Divider(height: 1.0),
-                ...generalBills.map((bill) => _buildGeneralBillTile(context, state, bill, won)),
+                ...generalBills.map(
+                      (bill) => _buildGeneralBillTile(
+                    context,
+                    state,
+                    bill,
+                    won,
+                    serviceBase: serviceBase,
+                    serviceLight: serviceLight,
+                    tileBg: cardBg,
+                  ),
+                ),
               ],
               const SizedBox(height: 12),
             ],
@@ -211,6 +227,10 @@ class _BillManagementState extends State<BillManagement> {
         onEdit: hasSelection ? () => _handleEdit(context) : null,
         onDelete: hasSelection ? () => _deleteSelectedBill(context) : null,
         cs: cs,
+        serviceBase: serviceBase,
+        serviceDark: serviceDark,
+        serviceLight: serviceLight,
+        fg: cardFg,
       ),
     );
   }
@@ -219,16 +239,19 @@ class _BillManagementState extends State<BillManagement> {
       BuildContext context,
       BillState state,
       dynamic bill,
-      NumberFormat won,
-      ) {
+      NumberFormat won, {
+        required Color serviceBase,
+        required Color serviceLight,
+        required Color tileBg,
+      }) {
     final isSelected = state.selectedBillId == bill.id;
-    final selectedBg = serviceCardLight.withOpacity(0.12);
+    final selectedBg = serviceLight.withOpacity(0.12);
 
     return ListTile(
       key: ValueKey(bill.id),
       selected: isSelected,
       selectedTileColor: selectedBg,
-      tileColor: isSelected ? selectedBg : serviceCardBg,
+      tileColor: isSelected ? selectedBg : tileBg,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       title: Text(
         bill.countType,
@@ -243,7 +266,7 @@ class _BillManagementState extends State<BillManagement> {
           Text('추가 기준: ${bill.addStandard}, 추가 금액: ₩${won.format(bill.addAmount)}'),
         ],
       ),
-      trailing: isSelected ? const Icon(Icons.check_circle, color: serviceCardBase) : null,
+      trailing: isSelected ? Icon(Icons.check_circle, color: serviceBase) : null,
       onTap: () => state.toggleBillSelection(bill.id),
     );
   }
@@ -259,6 +282,10 @@ class _FabStack extends StatelessWidget {
     required this.onEdit,
     required this.onDelete,
     required this.cs,
+    required this.serviceBase,
+    required this.serviceDark,
+    required this.serviceLight,
+    required this.fg,
   });
 
   final double bottomGap;
@@ -269,23 +296,28 @@ class _FabStack extends StatelessWidget {
   final VoidCallback? onDelete;
   final ColorScheme cs;
 
+  final Color serviceBase;
+  final Color serviceDark;
+  final Color serviceLight;
+  final Color fg;
+
   @override
   Widget build(BuildContext context) {
     final ButtonStyle primaryStyle = ElevatedButton.styleFrom(
-      backgroundColor: serviceCardBase,
-      foregroundColor: serviceCardFg,
+      backgroundColor: serviceBase,
+      foregroundColor: fg,
       elevation: 3,
-      shadowColor: serviceCardDark.withOpacity(0.28),
+      shadowColor: serviceDark.withOpacity(0.28),
       shape: const StadiumBorder(),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       textStyle: const TextStyle(fontWeight: FontWeight.w700),
     );
 
     final ButtonStyle editStyle = ElevatedButton.styleFrom(
-      backgroundColor: serviceCardLight,
-      foregroundColor: serviceCardFg,
+      backgroundColor: serviceLight,
+      foregroundColor: fg,
       elevation: 3,
-      shadowColor: serviceCardLight.withOpacity(0.35),
+      shadowColor: serviceLight.withOpacity(0.35),
       shape: const StadiumBorder(),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       textStyle: const TextStyle(fontWeight: FontWeight.w700),
@@ -302,7 +334,7 @@ class _FabStack extends StatelessWidget {
     );
 
     return Column(
-      mainAxisSize: MainAxisSize.min, // ✅ 소문자 min
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
         // 선택 없음 → '추가'만 표시

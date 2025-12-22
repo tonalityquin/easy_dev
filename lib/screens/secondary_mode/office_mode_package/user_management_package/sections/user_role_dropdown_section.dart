@@ -5,12 +5,9 @@ import '../../../../../../models/capability.dart';
 import '../../../../../../states/area/area_state.dart';
 import 'user_role_type_section.dart'; // RoleType 정의
 
-/// 서비스 로그인 카드와 동일 톤의 팔레트
-class _SvcColors {
-  static const base = Color(0xFF0D47A1); // primary
-  static const dark = Color(0xFF09367D); // 진한 텍스트/아이콘
-  static const light = Color(0xFF5472D3); // 라이트 톤/보더
-}
+// ✅ AppCardPalette 정의 파일을 프로젝트 경로에 맞게 import 하세요.
+// 예) import 'package:your_app/theme/app_card_palette.dart';
+import '../../../../../../theme.dart';
 
 class UserRoleDropdownSection extends StatelessWidget {
   /// 현재 선택된 역할(부모 상태)
@@ -83,6 +80,11 @@ class UserRoleDropdownSection extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    final palette = AppCardPalette.of(context);
+    final base = palette.serviceBase;
+    final dark = palette.serviceDark;
+    final light = palette.serviceLight;
+
     // 현재 지역 capability 조회
     final CapSet areaCaps =
     context.select<AreaState, CapSet>((s) => s.capabilitiesOfCurrentArea);
@@ -117,8 +119,8 @@ class UserRoleDropdownSection extends StatelessWidget {
       return InputDecorator(
         decoration: InputDecoration(
           labelText: label,
-          floatingLabelStyle: const TextStyle(
-            color: _SvcColors.dark,
+          floatingLabelStyle: TextStyle(
+            color: dark,
             fontWeight: FontWeight.w700,
           ),
           helperText: showAreaCapabilityHint ? helper : null,
@@ -127,14 +129,14 @@ class UserRoleDropdownSection extends StatelessWidget {
           contentPadding:
           const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
           filled: true,
-          fillColor: _SvcColors.light.withOpacity(.06),
+          fillColor: light.withOpacity(.06),
           enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: _SvcColors.light.withOpacity(.45)),
+            borderSide: BorderSide(color: light.withOpacity(.45)),
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: _SvcColors.base, width: 1.2),
+            borderSide: BorderSide(color: base, width: 1.2),
           ),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
@@ -152,32 +154,29 @@ class UserRoleDropdownSection extends StatelessWidget {
       isExpanded: true,
       autovalidateMode: autovalidateMode,
       validator: validator,
-      iconEnabledColor: _SvcColors.base,
+      iconEnabledColor: base,
       dropdownColor: dropdownBgColor,
       menuMaxHeight: 360,
       decoration: InputDecoration(
         labelText: label,
-        floatingLabelStyle: const TextStyle(
-          color: _SvcColors.dark,
+        floatingLabelStyle: TextStyle(
+          color: dark,
           fontWeight: FontWeight.w700,
         ),
         helperText: showAreaCapabilityHint ? helper : null,
         helperMaxLines: 2,
-
         filled: true,
-        fillColor: _SvcColors.light.withOpacity(.06),
-
+        fillColor: light.withOpacity(.06),
         isDense: true,
         contentPadding:
         const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: _SvcColors.light.withOpacity(.45)),
+          borderSide: BorderSide(color: light.withOpacity(.45)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: _SvcColors.base, width: 1.2),
+          borderSide: BorderSide(color: base, width: 1.2),
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
@@ -190,7 +189,7 @@ class UserRoleDropdownSection extends StatelessWidget {
           child: Text(
             role.label,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: _SvcColors.dark),
+            style: TextStyle(color: dark),
           ),
         ),
       )

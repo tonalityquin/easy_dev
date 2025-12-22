@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../../../../../../utils/snackbar_helper.dart';
 import '../monthly_plate_controller.dart';
 
-class _SvcColors {
-  static const base = Color(0xFF0D47A1);
-  static const dark = Color(0xFF09367D);
-  static const light = Color(0xFF5472D3);
-}
+// ✅ AppCardPalette 사용 (프로젝트 경로에 맞게 수정)
+// 예: import 'package:easydev/theme/app_card_palette.dart';
+import '../../../../../theme.dart';
 
 class MonthlyCustomStatusSection extends StatefulWidget {
   final MonthlyPlateController controller;
@@ -42,24 +41,25 @@ class _MonthlyCustomStatusSectionState extends State<MonthlyCustomStatusSection>
 
   InputDecoration _svcInputDecoration(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final palette = AppCardPalette.of(context);
 
     return InputDecoration(
       hintText: '예: 뒷범퍼 손상',
-      floatingLabelStyle: const TextStyle(
-        color: _SvcColors.dark,
+      floatingLabelStyle: TextStyle(
+        color: palette.serviceDark,
         fontWeight: FontWeight.w700,
       ),
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       filled: true,
-      fillColor: _SvcColors.light.withOpacity(.06),
+      fillColor: palette.serviceLight.withOpacity(.06),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       enabledBorder: OutlineInputBorder(
-        borderSide: BorderSide(color: _SvcColors.light.withOpacity(.45)),
+        borderSide: BorderSide(color: palette.serviceLight.withOpacity(.45)),
         borderRadius: BorderRadius.circular(12),
       ),
       focusedBorder: OutlineInputBorder(
-        borderSide: const BorderSide(color: _SvcColors.base, width: 1.2),
+        borderSide: BorderSide(color: palette.serviceBase, width: 1.2),
         borderRadius: BorderRadius.circular(12),
       ),
       errorBorder: OutlineInputBorder(
@@ -83,6 +83,7 @@ class _MonthlyCustomStatusSectionState extends State<MonthlyCustomStatusSection>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final palette = AppCardPalette.of(context);
 
     return KeyedSubtree(
       key: widget.statusSectionKey,
@@ -110,11 +111,15 @@ class _MonthlyCustomStatusSectionState extends State<MonthlyCustomStatusSection>
                   width: 34,
                   height: 34,
                   decoration: BoxDecoration(
-                    color: _SvcColors.light.withOpacity(.18),
+                    color: palette.serviceLight.withOpacity(.18),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: _SvcColors.light.withOpacity(.40)),
+                    border: Border.all(color: palette.serviceLight.withOpacity(.40)),
                   ),
-                  child: const Icon(Icons.sticky_note_2_outlined, color: _SvcColors.dark, size: 18),
+                  child: Icon(
+                    Icons.sticky_note_2_outlined,
+                    color: palette.serviceDark,
+                    size: 18,
+                  ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
@@ -122,7 +127,7 @@ class _MonthlyCustomStatusSectionState extends State<MonthlyCustomStatusSection>
                     '추가 상태 메모',
                     style: textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w900,
-                      color: _SvcColors.dark,
+                      color: palette.serviceDark,
                     ),
                   ),
                 ),
@@ -162,21 +167,25 @@ class _MonthlyCustomStatusSectionState extends State<MonthlyCustomStatusSection>
                 padding: const EdgeInsets.only(top: 12),
                 child: Container(
                   decoration: BoxDecoration(
-                    color: _SvcColors.light.withOpacity(.10),
+                    color: palette.serviceLight.withOpacity(.10),
                     border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   padding: const EdgeInsets.all(12),
                   child: Row(
                     children: [
-                      const Icon(Icons.info_outline_rounded, size: 20, color: _SvcColors.dark),
+                      Icon(
+                        Icons.info_outline_rounded,
+                        size: 20,
+                        color: palette.serviceDark,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           '자동 저장된 메모: "${widget.fetchedCustomStatus}"',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
-                            color: _SvcColors.dark,
+                            color: palette.serviceDark,
                             fontWeight: FontWeight.w700,
                           ),
                           overflow: TextOverflow.ellipsis,
@@ -200,7 +209,8 @@ class _MonthlyCustomStatusSectionState extends State<MonthlyCustomStatusSection>
                           FocusScope.of(context).unfocus();
                           setState(() => _deleting = true);
                           try {
-                            await widget.controller.deleteCustomStatusFromFirestore(context);
+                            await widget.controller
+                                .deleteCustomStatusFromFirestore(context);
 
                             widget.onDeleted();
                             widget.onStatusCleared();

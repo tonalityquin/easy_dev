@@ -1,7 +1,6 @@
-// lib/screens/login/service/sections/service_login_form.dart
-// ─────────────────────────────────────────────────────────────────────────────
 import 'package:flutter/material.dart';
 import '../../../../../routes.dart'; // ✅ AppRoutes 사용 (경로는 현재 파일 위치 기준)
+import '../../../../../theme.dart'; // ✅ AppCardPalette 사용 (theme.dart 연결)
 import '../service_login_controller.dart';
 
 class ServiceLoginForm extends StatefulWidget {
@@ -15,10 +14,6 @@ class ServiceLoginForm extends StatefulWidget {
 
 class _ServiceLoginFormState extends State<ServiceLoginForm> {
   late final ServiceLoginController _controller;
-
-  // Deep Blue 팔레트
-  static const Color _base = Color(0xFF0D47A1); // 버튼/포커스/배지
-  static const Color _light = Color(0xFF5472D3); // 서피스 틴트/선택
 
   @override
   void initState() {
@@ -40,21 +35,26 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
   Widget build(BuildContext context) {
     final baseTheme = Theme.of(context);
 
+    // ✅ theme.dart(AppCardPalette)에서 Service 팔레트 획득
+    final palette = AppCardPalette.of(context);
+    final base = palette.serviceBase; // 기존 _base
+    final light = palette.serviceLight; // 기존 _light
+
     return Material(
       color: Colors.transparent,
       child: SafeArea(
         child: Theme(
-          // ✅ 서비스 로그인 폼에만 팔레트 적용
+          // ✅ 서비스 로그인 폼에만 팔레트 적용 (theme.dart 기반)
           data: baseTheme.copyWith(
             colorScheme: baseTheme.colorScheme.copyWith(
-              primary: _base,
+              primary: base,
               onPrimary: Colors.white,
-              primaryContainer: _light,
+              primaryContainer: light,
               onPrimaryContainer: Colors.white,
             ),
             elevatedButtonTheme: ElevatedButtonThemeData(
               style: ElevatedButton.styleFrom(
-                backgroundColor: _base,
+                backgroundColor: base,
                 foregroundColor: Colors.white,
                 minimumSize: const Size.fromHeight(55),
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -62,19 +62,19 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 elevation: 1.5,
-                shadowColor: _base.withOpacity(0.25),
+                shadowColor: base.withOpacity(0.25),
               ),
             ),
             iconButtonTheme: IconButtonThemeData(
               style: IconButton.styleFrom(
-                foregroundColor: _base,
+                foregroundColor: base,
                 splashFactory: InkRipple.splashFactory,
               ),
             ),
             inputDecorationTheme: InputDecorationTheme(
               // 라벨/힌트 기본은 테마 그대로 두고, 포커스/아이콘 색만 액센트
               focusedBorder: OutlineInputBorder(
-                borderSide: const BorderSide(color: _base, width: 1.6),
+                borderSide: BorderSide(color: base, width: 1.6),
                 borderRadius: BorderRadius.circular(10),
               ),
               enabledBorder: OutlineInputBorder(
@@ -82,17 +82,17 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                 borderRadius: BorderRadius.circular(10),
               ),
               prefixIconColor: MaterialStateColor.resolveWith(
-                    (states) => states.contains(MaterialState.focused) ? _base : Colors.black54,
+                    (states) => states.contains(MaterialState.focused) ? base : Colors.black54,
               ),
               suffixIconColor: MaterialStateColor.resolveWith(
-                    (states) => states.contains(MaterialState.focused) ? _base : Colors.black54,
+                    (states) => states.contains(MaterialState.focused) ? base : Colors.black54,
               ),
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             ),
             textSelectionTheme: TextSelectionThemeData(
-              cursorColor: _base,
-              selectionColor: _light.withOpacity(.35),
-              selectionHandleColor: _base,
+              cursorColor: base,
+              selectionColor: light.withOpacity(.35),
+              selectionHandleColor: base,
             ),
           ),
           child: SingleChildScrollView(

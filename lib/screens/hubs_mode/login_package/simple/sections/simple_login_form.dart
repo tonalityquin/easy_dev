@@ -1,7 +1,6 @@
-// lib/screens/login/simple/sections/simple_login_form.dart
-// ─────────────────────────────────────────────────────────────────────────────
 import 'package:flutter/material.dart';
 import '../../../../../routes.dart'; // ✅ AppRoutes 사용 (경로는 현재 파일 위치 기준)
+import '../../../../../theme.dart'; // ✅ AppCardPalette 사용 (theme.dart 연결)
 import '../simple_login_controller.dart';
 
 class SimpleLoginForm extends StatefulWidget {
@@ -15,10 +14,6 @@ class SimpleLoginForm extends StatefulWidget {
 
 class _SimpleLoginFormState extends State<SimpleLoginForm> {
   late final SimpleLoginController _controller;
-
-  // Teal 팔레트 (SimpleLoginCard와 동일 계열)
-  static const Color _base = Color(0xFF00897B); // 버튼/포커스/배지
-  static const Color _light = Color(0xFF80CBC4); // 서피스 틴트/선택
 
   @override
   void initState() {
@@ -40,6 +35,11 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
   Widget build(BuildContext context) {
     final baseTheme = Theme.of(context);
 
+    // ✅ theme.dart(AppCardPalette)에서 Simple 팔레트 획득
+    final palette = AppCardPalette.of(context);
+    final base = palette.simpleBase; // 기존 _base
+    final light = palette.simpleLight; // 기존 _light
+
     return Material(
       color: Colors.transparent,
       child: SafeArea(
@@ -47,14 +47,14 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
           // ✅ 약식 로그인 폼에만 팔레트 적용 (SimpleLoginCard와 톤 맞춤)
           data: baseTheme.copyWith(
             colorScheme: baseTheme.colorScheme.copyWith(
-              primary: _base,
+              primary: base,
               onPrimary: Colors.white,
-              primaryContainer: _light,
+              primaryContainer: light,
               onPrimaryContainer: Colors.white,
             ),
             elevatedButtonTheme: ElevatedButtonThemeData(
               style: ElevatedButton.styleFrom(
-                backgroundColor: _base,
+                backgroundColor: base,
                 foregroundColor: Colors.white,
                 minimumSize: const Size.fromHeight(55),
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -62,19 +62,19 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 elevation: 1.5,
-                shadowColor: _base.withOpacity(0.25),
+                shadowColor: base.withOpacity(0.25),
               ),
             ),
             iconButtonTheme: IconButtonThemeData(
               style: IconButton.styleFrom(
-                foregroundColor: _base,
+                foregroundColor: base,
                 splashFactory: InkRipple.splashFactory,
               ),
             ),
             inputDecorationTheme: InputDecorationTheme(
               // 라벨/힌트 기본은 테마 그대로 두고, 포커스/아이콘 색만 액센트
               focusedBorder: OutlineInputBorder(
-                borderSide: const BorderSide(color: _base, width: 1.6),
+                borderSide: BorderSide(color: base, width: 1.6),
                 borderRadius: BorderRadius.circular(10),
               ),
               enabledBorder: OutlineInputBorder(
@@ -82,20 +82,17 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
                 borderRadius: BorderRadius.circular(10),
               ),
               prefixIconColor: MaterialStateColor.resolveWith(
-                    (states) =>
-                states.contains(MaterialState.focused) ? _base : Colors.black54,
+                    (states) => states.contains(MaterialState.focused) ? base : Colors.black54,
               ),
               suffixIconColor: MaterialStateColor.resolveWith(
-                    (states) =>
-                states.contains(MaterialState.focused) ? _base : Colors.black54,
+                    (states) => states.contains(MaterialState.focused) ? base : Colors.black54,
               ),
-              contentPadding:
-              const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             ),
             textSelectionTheme: TextSelectionThemeData(
-              cursorColor: _base,
-              selectionColor: _light.withOpacity(.35),
-              selectionHandleColor: _base,
+              cursorColor: base,
+              selectionColor: light.withOpacity(.35),
+              selectionHandleColor: base,
             ),
           ),
           child: SingleChildScrollView(
@@ -140,8 +137,7 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
                   controller: _controller.nameController,
                   focusNode: _controller.nameFocus,
                   textInputAction: TextInputAction.next,
-                  onSubmitted: (_) =>
-                      FocusScope.of(context).requestFocus(_controller.phoneFocus),
+                  onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.phoneFocus),
                   decoration: _controller.inputDecoration(
                     label: "이름",
                     icon: Icons.person,
@@ -155,10 +151,8 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
                   focusNode: _controller.phoneFocus,
                   keyboardType: TextInputType.phone,
                   textInputAction: TextInputAction.next,
-                  onChanged: (value) =>
-                      _controller.formatPhoneNumber(value, setState),
-                  onSubmitted: (_) => FocusScope.of(context)
-                      .requestFocus(_controller.passwordFocus),
+                  onChanged: (value) => _controller.formatPhoneNumber(value, setState),
+                  onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.passwordFocus),
                   decoration: _controller.inputDecoration(
                     label: "전화번호",
                     icon: Icons.phone,
@@ -177,11 +171,8 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
                     label: "비밀번호(5자리 이상)",
                     icon: Icons.lock,
                     suffixIcon: IconButton(
-                      icon: Icon(_controller.obscurePassword
-                          ? Icons.visibility_off
-                          : Icons.visibility),
-                      onPressed: () =>
-                          setState(() => _controller.togglePassword()),
+                      icon: Icon(_controller.obscurePassword ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setState(() => _controller.togglePassword()),
                       tooltip: _controller.obscurePassword ? '표시' : '숨기기',
                     ),
                   ),
@@ -202,8 +193,7 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
                         letterSpacing: 1.1,
                       ),
                     ),
-                    onPressed:
-                    _controller.isLoading ? null : _onLoginButtonPressed,
+                    onPressed: _controller.isLoading ? null : _onLoginButtonPressed,
                   ),
                 ),
 

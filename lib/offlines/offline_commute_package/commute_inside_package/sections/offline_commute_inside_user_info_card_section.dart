@@ -3,18 +3,25 @@ import 'package:flutter/material.dart';
 import 'package:easydev/offlines/sql/offline_auth_service.dart';
 import 'package:easydev/offlines/sql/offline_session_model.dart';
 
-class _Palette {
-  static const base = Color(0xFFF4511E);
-  static const dark = Color(0xFFD84315);
-  static const light = Color(0xFFFFAB91);
-  static const fg = Color(0xFFFFFFFF);
-}
+// ✅ AppCardPalette 정의 파일을 프로젝트 경로에 맞게 import 하세요.
+// 예) import 'package:easydev/theme/app_card_palette.dart';
+import '../../../../theme.dart';
 
+/// ✅ _Palette 제거
+/// ✅ AppCardPalette(parking*)를 오프라인(=Offline Service) 톤으로 사용
 class OfflineCommuteInsideUserInfoCardSection extends StatelessWidget {
   const OfflineCommuteInsideUserInfoCardSection({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final palette = AppCardPalette.of(context);
+
+    // 오프라인 서비스 컬러 매핑
+    final base = palette.parkingBase;
+    final dark = palette.parkingDark;
+    final light = palette.parkingLight;
+    const fg = Colors.white;
+
     return FutureBuilder<OfflineSession?>(
       future: OfflineAuthService.instance.currentSession(),
       builder: (context, snap) {
@@ -25,7 +32,7 @@ class OfflineCommuteInsideUserInfoCardSection extends StatelessWidget {
             color: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: _Palette.light.withOpacity(.45)),
+              side: BorderSide(color: light.withOpacity(.45)),
             ),
             margin: const EdgeInsets.symmetric(vertical: 12),
             child: const Padding(
@@ -51,14 +58,14 @@ class OfflineCommuteInsideUserInfoCardSection extends StatelessWidget {
             color: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: _Palette.light.withOpacity(.45)),
+              side: BorderSide(color: light.withOpacity(.45)),
             ),
             margin: const EdgeInsets.symmetric(vertical: 12),
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Row(
                 children: [
-                  Icon(Icons.info_outline, color: _Palette.dark.withOpacity(.7)),
+                  Icon(Icons.info_outline, color: dark.withOpacity(.7)),
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
@@ -88,7 +95,7 @@ class OfflineCommuteInsideUserInfoCardSection extends StatelessWidget {
             color: Colors.white,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
-              side: BorderSide(color: _Palette.light.withOpacity(.45)),
+              side: BorderSide(color: light.withOpacity(.45)),
             ),
             margin: const EdgeInsets.symmetric(vertical: 12),
             child: Padding(
@@ -98,13 +105,13 @@ class OfflineCommuteInsideUserInfoCardSection extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.badge, size: 14, color: _Palette.dark.withOpacity(.7)),
+                      Icon(Icons.badge, size: 14, color: dark.withOpacity(.7)),
                       const SizedBox(width: 4),
                       Text(
                         '근무자 카드',
                         style: TextStyle(
                           fontSize: 12,
-                          color: _Palette.dark.withOpacity(.7),
+                          color: dark.withOpacity(.7),
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -116,8 +123,8 @@ class OfflineCommuteInsideUserInfoCardSection extends StatelessWidget {
                     children: [
                       CircleAvatar(
                         radius: 24,
-                        backgroundColor: _Palette.base,
-                        child: const Icon(Icons.person, color: _Palette.fg),
+                        backgroundColor: base,
+                        child: const Icon(Icons.person, color: fg),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -137,7 +144,7 @@ class OfflineCommuteInsideUserInfoCardSection extends StatelessWidget {
                               position,
                               style: TextStyle(
                                 fontSize: 13,
-                                color: _Palette.dark.withOpacity(.7),
+                                color: dark.withOpacity(.7),
                               ),
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -145,14 +152,24 @@ class OfflineCommuteInsideUserInfoCardSection extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Icon(Icons.qr_code, color: _Palette.dark.withOpacity(.7)),
+                      Icon(Icons.qr_code, color: dark.withOpacity(.7)),
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Divider(color: _Palette.light.withOpacity(.35), height: 1),
+                  Divider(color: light.withOpacity(.35), height: 1),
                   const SizedBox(height: 12),
-                  _infoRow(Icons.phone, 'Tel.', formatPhoneNumber(phone)),
-                  _infoRow(Icons.location_on, 'Sector.', area),
+                  _infoRow(
+                    icon: Icons.phone,
+                    label: 'Tel.',
+                    value: formatPhoneNumber(phone),
+                    dark: dark,
+                  ),
+                  _infoRow(
+                    icon: Icons.location_on,
+                    label: 'Sector.',
+                    value: area,
+                    dark: dark,
+                  ),
                 ],
               ),
             ),
@@ -162,18 +179,23 @@ class OfflineCommuteInsideUserInfoCardSection extends StatelessWidget {
     );
   }
 
-  Widget _infoRow(IconData icon, String label, String value) {
+  Widget _infoRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color dark,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: _Palette.dark.withOpacity(.7)),
+          Icon(icon, size: 18, color: dark.withOpacity(.7)),
           const SizedBox(width: 8),
           Text(
             label,
             style: TextStyle(
               fontSize: 13,
-              color: _Palette.dark.withOpacity(.6),
+              color: dark.withOpacity(.6),
               fontWeight: FontWeight.w600,
             ),
           ),
