@@ -1,4 +1,3 @@
-// lib/screens/hubs_mode/head_package/hub_quick_actions.dart
 import 'dart:math' as math;
 import 'dart:ui'; // BackdropFilter: ImageFilter
 import 'package:flutter/material.dart';
@@ -6,14 +5,20 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../utils/app_navigator.dart';
-import '../head_package/head_memo.dart';
-import '../head_package/company_calendar_page.dart';
-import '../head_package/hr_package/attendance_calendar.dart' as hr_att;
-import '../head_package/hr_package/break_calendar.dart' as hr_break;
-import '../head_package/mgmt_package/field.dart' as mgmt;
-import '../head_package/mgmt_package/statistics.dart' as mgmt_stats;
-import '../head_package/roadmap_bottom_sheet.dart';
-import '../head_package/head_tutorials.dart';
+import '../noti_package/notice_editor_bottom_sheet.dart';
+import '../noti_package/shared_spreadsheet_registry.dart';
+import '../noti_package/spreadsheet_registry_bottom_sheet.dart';
+import 'head_memo.dart';
+import 'company_calendar_page.dart';
+import 'hr_package/attendance_calendar.dart' as hr_att;
+import 'hr_package/break_calendar.dart' as hr_break;
+import 'mgmt_package/field.dart' as mgmt;
+import 'mgmt_package/statistics.dart' as mgmt_stats;
+import 'roadmap_bottom_sheet.dart';
+import 'head_tutorials.dart';
+
+// ✅ 채팅
+import 'chat_package/chat_bottom_sheet.dart' as head_chat;
 
 /// 본사 허브용 퀵 액션 플로팅 버블(오버레이)
 /// - Dock: 버블 옆(가로) 위치에 붙이고, 아이콘은 세로로 쌓음(아이콘 많아도 안전)
@@ -66,9 +71,7 @@ class HeadHubActions {
         Navigator.of(ctx).maybePop(); // dismiss 요청
         try {
           await tracked; // 완전 종료까지 대기
-        } catch (_) {
-          // dismiss 중 pop이 이미 되었거나, 라우트가 사라지는 경우 등을 묵살
-        }
+        } catch (_) {}
         await Future<void>.delayed(const Duration(milliseconds: 16)); // 한 프레임 여유
         return;
       }
@@ -102,7 +105,7 @@ class HeadHubActions {
       _activeSheet = tracked;
 
       try {
-        final T? result = await fut; // 시트 종료까지 대기(결과값 수신)
+        final T? result = await fut;
         return result;
       } finally {
         _activeSheet = null;
@@ -233,6 +236,53 @@ class _HubBubbleState extends State<_HubBubble> with SingleTickerProviderStateMi
 
   List<_DockAction> _buildActions(ColorScheme cs) {
     return <_DockAction>[
+      // ✅ 채팅
+      _DockAction(
+        icon: Icons.forum_rounded,
+        label: '채팅',
+        color: const Color(0xFF455A64),
+        onTap: () async {
+          await _ctrl.reverse();
+          await HeadHubActions.openSheetExclusively<dynamic>((ctx) async {
+            await head_chat.chatBottomSheet(ctx);
+            return null;
+          });
+        },
+      ),
+
+      // ✅ 공지(편집)
+      _DockAction(
+        icon: Icons.campaign_rounded,
+        label: '공지',
+        color: const Color(0xFFF57C00),
+        onTap: () async {
+          await _ctrl.reverse();
+          await HeadHubActions.openSheetExclusively<dynamic>((ctx) {
+            return NoticeEditorBottomSheet.showAsBottomSheet(ctx);
+          });
+        },
+      ),
+
+      // ✅ 공지 설정(공용 레지스트리: 별명+ID)
+      _DockAction(
+        icon: Icons.settings_outlined,
+        label: '공지 설정',
+        color: const Color(0xFFE65100),
+        onTap: () async {
+          await _ctrl.reverse();
+          await HeadHubActions.openSheetExclusively<dynamic>((ctx) {
+            return SpreadsheetRegistryBottomSheet.showAsBottomSheet(
+              context: ctx,
+              feature: HeadSheetFeature.notice,
+              title: '공지 스프레드시트 목록/선택',
+              themeBase: const Color(0xFFF57C00),
+              themeDark: const Color(0xFFE65100),
+              themeLight: const Color(0xFFFFE0B2),
+            );
+          });
+        },
+      ),
+
       _DockAction(
         icon: Icons.sticky_note_2_rounded,
         label: '메모',
@@ -240,8 +290,6 @@ class _HubBubbleState extends State<_HubBubble> with SingleTickerProviderStateMi
         onTap: () async {
           await _ctrl.reverse();
           await HeadHubActions.openSheetExclusively<dynamic>((ctx) {
-            // 주의: HeadMemo.openPanel()이 "시트가 닫힐 때 완료되는 Future"를 반환하지 않으면
-            // 단일 인스턴스 추적이 약해질 수 있습니다(오버플로우와는 무관).
             return HeadMemo.openPanel();
           });
         },
@@ -324,14 +372,11 @@ class _HubBubbleState extends State<_HubBubble> with SingleTickerProviderStateMi
         color: const Color(0xFF00695C),
         onTap: () async {
           await _ctrl.reverse();
-
-          // 1) 선택 바텀시트는 “시트”로 취급해 단일 인스턴스 관리
           final TutorialItem? selected =
           await HeadHubActions.openSheetExclusively<TutorialItem>((ctx) {
             return HeadTutorials.showPickerBottomSheet(ctx);
           });
 
-          // 2) 선택 후에는 PDF 뷰어(일반 push)
           final ctx2 = HeadHubActions.currentContext();
           if (selected != null && ctx2 != null) {
             await TutorialPdfViewer.open(ctx2, selected);
@@ -357,21 +402,15 @@ class _HubBubbleState extends State<_HubBubble> with SingleTickerProviderStateMi
     final actions = _buildActions(cs);
     final count = actions.length;
 
-    // Dock 폭: 한 칩(원형 버튼)이 안정적으로 들어가도록 여유를 둠(픽셀 라운딩 안전)
     final dockWidth = (_dockHPad * 2 + _chip + 4);
-
-    // Dock 높이(자연 높이)
     final naturalDockHeight = (_dockVPad * 2 + count * _chip + (count - 1) * _vGap);
 
-    // 화면 내에서 유지 가능한 최대 높이(넘으면 내부 스크롤로 처리)
     final safeTop = topInset + _screenPad;
     final safeBottom = bottomInset + _screenPad;
-    final maxDockHeight =
-    (screen.height - safeTop - safeBottom).clamp(0.0, double.infinity);
+    final maxDockHeight = (screen.height - safeTop - safeBottom).clamp(0.0, double.infinity);
 
     final dockHeight = math.min(naturalDockHeight, maxDockHeight);
 
-    // 좌/우 가용폭 계산
     final rightSpace = screen.width - (_pos.dx + _bubbleSize) - _edgePad - _screenPad;
     final leftSpace = _pos.dx - _edgePad - _screenPad;
 
@@ -380,8 +419,6 @@ class _HubBubbleState extends State<_HubBubble> with SingleTickerProviderStateMi
     final canLeft = leftSpace >= dockWidth;
     final useRight = canRight || (!canLeft && preferRight);
 
-    // Dock 위치 계산:
-    // - 첫 아이콘(리스트 0번째)이 버블 중앙 높이 근처에 오도록 top을 계산한 뒤 화면 내 clamp
     final bubbleCenterY = _pos.dy + _bubbleSize / 2;
     final dockTopCandidate = bubbleCenterY - (_dockVPad + _chip / 2);
 
@@ -391,11 +428,9 @@ class _HubBubbleState extends State<_HubBubble> with SingleTickerProviderStateMi
       maxTop >= safeTop ? maxTop : safeTop,
     );
 
-    double dockLeft = useRight
-        ? (_pos.dx + _bubbleSize + _edgePad)
-        : (_pos.dx - dockWidth - _edgePad);
+    double dockLeft =
+    useRight ? (_pos.dx + _bubbleSize + _edgePad) : (_pos.dx - dockWidth - _edgePad);
 
-    // 화면 밖으로 나가지 않도록 최종 clamp
     dockLeft = dockLeft.clamp(
       _screenPad,
       (screen.width - dockWidth - _screenPad).clamp(_screenPad, double.infinity),
@@ -403,7 +438,6 @@ class _HubBubbleState extends State<_HubBubble> with SingleTickerProviderStateMi
 
     return Stack(
       children: [
-        // ── Dim/Scrim + 터치 닫기 ─────────────────────────
         if (_expanded)
           Positioned.fill(
             child: GestureDetector(
@@ -416,8 +450,6 @@ class _HubBubbleState extends State<_HubBubble> with SingleTickerProviderStateMi
               ),
             ),
           ),
-
-        // ── 글래스 Dock (세로 리스트, constraints 기반 자동 스크롤) ─────
         Positioned(
           left: dockLeft,
           top: dockTop,
@@ -445,8 +477,6 @@ class _HubBubbleState extends State<_HubBubble> with SingleTickerProviderStateMi
             ),
           ),
         ),
-
-        // ── 메인 버블 ────────────────────────────────────
         Positioned(
           left: _pos.dx,
           top: _pos.dy,
@@ -458,7 +488,6 @@ class _HubBubbleState extends State<_HubBubble> with SingleTickerProviderStateMi
               });
             },
             onPanEnd: (_) async {
-              // 좌/우 엣지 스냅
               final snapX = (_pos.dx + _bubbleSize / 2) < screen.width / 2
                   ? 8.0
                   : screen.width - _bubbleSize - 8.0;
@@ -478,8 +507,7 @@ class _HubBubbleState extends State<_HubBubble> with SingleTickerProviderStateMi
 
   Offset _clampToScreen(Offset raw, Size screen, double bottomInset) {
     final maxX = (screen.width - _bubbleSize).clamp(0.0, double.infinity);
-    final maxY =
-    (screen.height - _bubbleSize - bottomInset).clamp(0.0, double.infinity);
+    final maxY = (screen.height - _bubbleSize - bottomInset).clamp(0.0, double.infinity);
     final dx = raw.dx.clamp(0.0, maxX);
     final dy = raw.dy.clamp(0.0, maxY);
     return Offset(dx, dy);
@@ -617,10 +645,6 @@ class _GlassDock extends StatelessWidget {
   }
 }
 
-/// 핵심 수정 포인트:
-/// - 부모가 "스크롤 여부"를 계산하지 않음(라운딩/패딩 때문에 1~2px 오차 발생 가능)
-/// - LayoutBuilder로 실제 constraints.maxHeight를 받고, 필요한 높이와 비교해
-///   넘치면 ListView(스크롤), 아니면 Column(고정)으로 안전하게 전환
 class _DockColumn extends StatelessWidget {
   final double chip;
   final double iconSize;
@@ -639,10 +663,8 @@ class _DockColumn extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final maxH = constraints.maxHeight;
-        final neededH =
-            actions.length * chip + (actions.length - 1) * gap;
+        final neededH = actions.length * chip + (actions.length - 1) * gap;
 
-        // 1~2px 라운딩 오차까지 흡수하기 위해 여유를 둠
         final useScroll = neededH > (maxH - 1.0);
 
         if (useScroll) {
@@ -754,9 +776,6 @@ class _DockIconButton extends StatelessWidget {
   }
 }
 
-// ───────────────────────────────────────────────────────────────
-// 스프링 감쇠 곡선 (짧고 탄력 있게)
-// ───────────────────────────────────────────────────────────────
 class SpringCurve extends Curve {
   const SpringCurve();
   @override

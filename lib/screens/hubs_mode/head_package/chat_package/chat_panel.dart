@@ -3,20 +3,21 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../../utils/snackbar_helper.dart';
-import '../../../../../services/sheet_chat_service.dart';
+import '../../../../utils/snackbar_helper.dart';
+import '../../../../services/sheet_chat_service.dart';
+import 'chat_runtime.dart';
 
-class LiteChatPanel extends StatefulWidget {
-  /// 영역 전환 감지/쇼트컷 키 구분용 (시트 내부 roomId는 사용하지 않음)
+class ChatPanel extends StatefulWidget {
+  /// scopeKey는 (기존처럼) currentArea 변경 시 UI/로컬키(쇼트컷) 분리 용도로만 사용.
   final String scopeKey;
 
-  const LiteChatPanel({super.key, required this.scopeKey});
+  const ChatPanel({super.key, required this.scopeKey});
 
   @override
-  State<LiteChatPanel> createState() => _LiteChatPanelState();
+  State<ChatPanel> createState() => _ChatPanelState();
 }
 
-class _LiteChatPanelState extends State<LiteChatPanel> {
+class _ChatPanelState extends State<ChatPanel> {
   static const int _maxShortcuts = 20;
 
   final TextEditingController _controller = TextEditingController();
@@ -31,20 +32,55 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
 
   String get _prefsKey => 'chat_shortcuts_${widget.scopeKey}';
 
+  @override
+  void initState() {
+    super.initState();
+
+    // ✅ 현재 scopeKey로 런타임 시작 (모드는 바텀시트 토글에 따름)
+    ChatRuntime.instance.start(widget.scopeKey);
+
+    _loadShortcuts();
+    _controller.addListener(_handleTextChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant ChatPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.scopeKey != widget.scopeKey) {
+      // ✅ scopeKey 변경 시 재시작 + 로컬쇼트컷 키 변경
+      ChatRuntime.instance.start(widget.scopeKey);
+
+      _loadShortcuts();
+      _controller.clear();
+      _exitMultiSelectIfNeeded();
+    }
+  }
+
+  void _handleTextChanged() {
+    final enabled = _controller.text.trim().isNotEmpty;
+    if (_canSend != enabled) {
+      setState(() => _canSend = enabled);
+    }
+  }
+
   Future<void> _sendMessage() async {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
 
     try {
-      await SheetChatService.instance.sendMessage(text);
+      await ChatRuntime.instance.sendMessage(text);
+
       _controller.clear();
       _focusNode.requestFocus();
-    } catch (e) {
+    } catch (e, st) {
       if (!mounted) return;
+      debugPrint('sendMessage error: $e\n$st');
       showFailedSnackbar(context, '전송 실패: $e');
     }
   }
 
+  /// 로컬(SharedPreferences)
   Future<void> _loadShortcuts() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
@@ -158,7 +194,7 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
     setState(() {
       _shortcuts.add(value);
       if (_shortcuts.length > _maxShortcuts) {
-        _shortcuts.removeAt(0);
+        _shortcuts.removeAt(0); // FIFO
       }
     });
     await _saveShortcuts();
@@ -188,13 +224,6 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
 
     setState(() => _shortcuts.remove(value));
     await _saveShortcuts();
-  }
-
-  void _handleTextChanged() {
-    final enabled = _controller.text.trim().isNotEmpty;
-    if (_canSend != enabled) {
-      setState(() => _canSend = enabled);
-    }
   }
 
   void _insertAtCursor(String insert) {
@@ -261,26 +290,7 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
     final parts = _selectedShortcutIdx.toList()..sort();
     final text = parts.map((i) => _shortcuts[i]).join(' ');
     _insertAtCursor(text);
-    _toggleMultiSelect();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    SheetChatService.instance.start(widget.scopeKey);
-    _loadShortcuts();
-    _controller.addListener(_handleTextChanged);
-  }
-
-  @override
-  void didUpdateWidget(covariant LiteChatPanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.scopeKey != widget.scopeKey) {
-      SheetChatService.instance.start(widget.scopeKey);
-      _loadShortcuts();
-      _controller.clear();
-      _exitMultiSelectIfNeeded();
-    }
+    _toggleMultiSelect(); // 삽입 후 종료
   }
 
   @override
@@ -294,13 +304,14 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
   @override
   Widget build(BuildContext context) {
     return ValueListenableBuilder<SheetChatState>(
-      valueListenable: SheetChatService.instance.state,
+      valueListenable: ChatRuntime.instance.state,
       builder: (context, st, _) {
         final messages = st.messages;
 
         return Column(
           mainAxisSize: MainAxisSize.max,
           children: [
+            // 상단 액션 바
             Row(
               children: [
                 if (_shortcuts.isNotEmpty) ...[
@@ -325,9 +336,11 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
                   const Spacer(),
                 ] else
                   const Spacer(),
+
+                // ✅ 새로고침 (모드에 따라 로컬/Sheets)
                 IconButton(
                   tooltip: '새로고침',
-                  onPressed: () => SheetChatService.instance.start(widget.scopeKey),
+                  onPressed: () => ChatRuntime.instance.refresh(),
                   icon: st.loading
                       ? const SizedBox(
                     width: 18,
@@ -336,7 +349,8 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
                   )
                       : const Icon(Icons.refresh_rounded),
                 ),
-                const SizedBox(width: 6),
+
+                const SizedBox(width: 4),
                 TextButton.icon(
                   onPressed: _addShortcut,
                   icon: const Icon(Icons.add),
@@ -346,9 +360,11 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
             ),
             const SizedBox(height: 8),
 
+            // ✅ 에러 표시(토큰 만료/권한/에뮬레이터 API 제한 등)
             if (st.error != null) ...[
               Container(
                 width: double.infinity,
+                margin: const EdgeInsets.symmetric(horizontal: 12),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: Colors.red.withOpacity(0.06),
@@ -364,9 +380,10 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
                   ),
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
             ],
 
+            // 메시지 리스트 + 쇼트컷
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.only(bottom: 8),
@@ -375,6 +392,7 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
                   children: [
                     if (messages.isEmpty && !st.loading && st.error == null)
                       Container(
+                        width: double.infinity,
                         margin: const EdgeInsets.all(12),
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -401,7 +419,7 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
                         return Container(
                           width: double.infinity,
                           margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-                          padding: const EdgeInsets.all(14),
+                          padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
                             color: Colors.grey[100],
                             borderRadius: BorderRadius.circular(12),
@@ -424,7 +442,7 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
                       }),
 
                     if (_shortcuts.isNotEmpty) ...[
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 10),
                       SizedBox(
                         height: 40,
                         child: SingleChildScrollView(
@@ -446,7 +464,7 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
                                       if (_isMultiSelect) {
                                         _toggleShortcutSelection(i);
                                       } else {
-                                        _insertAtCursor(s);
+                                        _insertAtCursor(s); // 즉시 삽입
                                       }
                                     },
                                     shape: RoundedRectangleBorder(
@@ -466,6 +484,7 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
               ),
             ),
 
+            // 입력 + 지우기 + 전송
             Row(
               children: [
                 Expanded(

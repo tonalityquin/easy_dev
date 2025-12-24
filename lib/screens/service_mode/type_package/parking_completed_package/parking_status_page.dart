@@ -1,9 +1,17 @@
 // lib/screens/type_pages/parking_completed_pages/widgets/parking_status_page.dart
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+// ✅ Sheets API + 캐시
+import 'package:googleapis/sheets/v4.dart' as sheets;
+import 'package:shared_preferences/shared_preferences.dart';
+
+// ✅ Header와 동일한 인증 세션
+import '../../../../utils/google_auth_session.dart';
 
 import '../../../../states/location/location_state.dart';
 import '../../../../states/area/area_state.dart';
@@ -39,18 +47,30 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
   // 에러 상태 플래그
   bool _hadError = false;
 
+  // ✅ 상단 알림바(관리자 공지) 상태
+  String _noticeMessage = '';
+  bool _isNoticeLoading = true;
+  bool _didNoticeRun = false;
+  String? _lastNoticeArea;
+
   @override
   void initState() {
     super.initState();
-    // 첫 프레임 이후에 라우트 가시성 확인 → 표시 중일 때만 집계
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRunCount());
+    // 첫 프레임 이후에 라우트 가시성 확인 → 표시 중일 때만 집계/공지 호출
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeRunCount();
+      _maybeRunNotice();
+    });
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     // 라우트 바인딩이 늦게 잡히는 경우를 대비해 한 번 더 시도
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRunCount());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeRunCount();
+      _maybeRunNotice();
+    });
   }
 
   void _maybeRunCount() {
@@ -61,6 +81,16 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
     if (!isVisible) return;
     _didCountRun = true;
     _runAggregateCount();
+  }
+
+  void _maybeRunNotice() {
+    if (_didNoticeRun) return;
+    // 현재 라우트가 실제로 화면에 표시될 때만 실행
+    final route = ModalRoute.of(context);
+    final isVisible = route == null ? true : (route.isCurrent || route.isActive);
+    if (!isVisible) return;
+    _didNoticeRun = true;
+    _runNoticeFetch(forceRefresh: false);
   }
 
   Future<void> _runAggregateCount() async {
@@ -120,18 +150,49 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
     }
   }
 
+  Future<void> _runNoticeFetch({required bool forceRefresh}) async {
+    if (!mounted) return;
+
+    final area = context.read<AreaState>().currentArea.trim();
+    _lastNoticeArea = area;
+
+    setState(() {
+      _isNoticeLoading = true;
+    });
+
+    final result = await ParkingNoticeService.fetchNoticeMessage(
+      area: area,
+      forceRefresh: forceRefresh,
+    );
+
+    if (!mounted) return;
+    setState(() {
+      _noticeMessage = result;
+      _isNoticeLoading = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     // 빌드 후에도 가시성 변화가 있으면 한 번 더 시도(이미 실행되었으면 무시됨)
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRunCount());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeRunCount();
+      _maybeRunNotice();
+    });
 
     // Area 변경 감지 → 재집계 트리거
     final currentArea = context.select<AreaState, String>((s) => s.currentArea.trim());
     if (_lastArea != null && _lastArea != currentArea) {
-      // 같은 위젯 인스턴스지만 area가 바뀐 경우에 한해 다시 1회 돌리도록 플래그를 내리고 트리거
       _didCountRun = false;
       _lastArea = currentArea;
       WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRunCount());
+    }
+
+    // ✅ Area 변경 감지 → 공지 재호출 트리거
+    if (_lastNoticeArea != null && _lastNoticeArea != currentArea) {
+      _didNoticeRun = false;
+      _lastNoticeArea = currentArea;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRunNotice());
     }
 
     return Scaffold(
@@ -146,7 +207,8 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
               }
 
               // capacity 합계는 로컬 state로 계산 (요청: 유지)
-              final totalCapacity = locationState.locations.fold<int>(0, (sum, l) => sum + l.capacity);
+              final totalCapacity =
+              locationState.locations.fold<int>(0, (sum, l) => sum + l.capacity);
               final occupiedCount = _occupiedCount;
 
               final double usageRatio = totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
@@ -191,6 +253,18 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
               return ListView(
                 padding: const EdgeInsets.all(20),
                 children: [
+                  // ✅ 추가: '📊 현재 주차 현황' 상단 공지 알림바
+                  _ParkingNoticeBar(
+                    isLoading: _isNoticeLoading,
+                    message: _noticeMessage,
+                    onRefresh: () {
+                      _didNoticeRun = false;
+                      _runNoticeFetch(forceRefresh: true);
+                    },
+                  ),
+                  if (_noticeMessage.trim().isNotEmpty || _isNoticeLoading)
+                    const SizedBox(height: 12),
+
                   const Text(
                     '📊 현재 주차 현황',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
@@ -245,6 +319,179 @@ class _ParkingStatusPageState extends State<ParkingStatusPage> {
         ],
       ),
     );
+  }
+}
+
+/// ✅ 상단 알림바(관리자 공지)
+/// - Google Sheets(not i 시트)에서 읽어온 공지 메시지를 표시
+/// - message가 비어있으면 숨김
+/// - 로딩 중이면 간단한 로딩 상태 표시(텍스트)
+class _ParkingNoticeBar extends StatelessWidget {
+  final bool isLoading;
+  final String message;
+  final VoidCallback onRefresh;
+
+  const _ParkingNoticeBar({
+    required this.isLoading,
+    required this.message,
+    required this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final text = message.trim();
+    if (!isLoading && text.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.04),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.black.withOpacity(0.08)),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.info_outline, size: 18),
+            const SizedBox(width: 10),
+            Expanded(
+              child: isLoading
+                  ? const Text(
+                '공지 불러오는 중...',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              )
+                  : Text(
+                text,
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+            ),
+            const SizedBox(width: 8),
+            InkWell(
+              onTap: onRefresh,
+              child: const Padding(
+                padding: EdgeInsets.all(4),
+                child: Icon(Icons.refresh, size: 18),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// ✅ Google Sheets API 기반 공지 서비스 — Header 방식으로 교체
+/// - SharedPreferences('notice_spreadsheet_id_v1')에서 스프레드시트 ID를 읽음
+/// - noti 시트의 A1:A50을 values.get으로 직접 읽어옴
+/// - 캐시: SharedPreferences (기본 TTL 10분)
+/// - “갱신 후 공지바가 사라짐” 완화: 시트에서 빈 값/오류가 나면 캐시를 우선 반환
+class ParkingNoticeService {
+  ParkingNoticeService._();
+
+  /// ✅ Header와 동일한 저장 키
+  static const String kNoticeSpreadsheetIdKey = 'notice_spreadsheet_id_v1';
+
+  /// ✅ Header와 동일한 공지 시트/레인지
+  static const String kNoticeSheetName = 'noti';
+  static const String kNoticeRange = '$kNoticeSheetName!A1:A50';
+
+  /// 캐시 TTL: 10분
+  static const Duration cacheTtl = Duration(minutes: 10);
+
+  static Future<sheets.SheetsApi> _sheetsApi() async {
+    final client = await GoogleAuthSession.instance.safeClient();
+    return sheets.SheetsApi(client);
+  }
+
+  static Future<String> _loadSpreadsheetId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return (prefs.getString(kNoticeSpreadsheetIdKey) ?? '').trim();
+  }
+
+  static Future<String> fetchNoticeMessage({
+    required String area,
+    required bool forceRefresh,
+  }) async {
+    final trimmedArea = area.trim();
+    final prefs = await SharedPreferences.getInstance();
+
+    // ✅ 기존 호출부 호환: area 단위로 캐시를 분리(데이터 소스는 noti 단일이지만 키 충돌 방지)
+    final areaKey = _areaKey(trimmedArea);
+    final cacheKey = 'parking_notice_cache_v2_$areaKey';
+    final cacheAtKey = 'parking_notice_cache_at_v2_$areaKey';
+    final cacheSidKey = 'parking_notice_cache_sid_v2_$areaKey';
+
+    final nowMs = DateTime.now().millisecondsSinceEpoch;
+
+    final spreadsheetId = await _loadSpreadsheetId();
+
+    // 0) 스프레드시트 ID가 없으면 캐시 우선(없으면 빈 값)
+    if (spreadsheetId.isEmpty) {
+      return _fallbackCache(prefs, cacheKey);
+    }
+
+    // 1) 캐시 사용(강제 갱신이 아니고 TTL 유효 + 같은 spreadsheetId이면)
+    if (!forceRefresh) {
+      final cached = (prefs.getString(cacheKey) ?? '').trim();
+      final cachedAt = prefs.getInt(cacheAtKey) ?? 0;
+      final cachedSid = (prefs.getString(cacheSidKey) ?? '').trim();
+
+      final isFresh = cachedAt > 0 && (nowMs - cachedAt) <= cacheTtl.inMilliseconds;
+      final isSameSid = cachedSid == spreadsheetId;
+
+      if (cached.isNotEmpty && isFresh && isSameSid) {
+        return cached;
+      }
+    }
+
+    // 2) Sheets API로 noti!A1:A50 직접 읽기
+    try {
+      final api = await _sheetsApi();
+
+      final resp = await api.spreadsheets.values
+          .get(spreadsheetId, kNoticeRange)
+          .timeout(const Duration(seconds: 6));
+
+      final values = resp.values ?? <List<Object>>[];
+
+      final lines = <String>[];
+      for (final row in values) {
+        final parts = row.map((c) => c.toString().trim()).where((s) => s.isNotEmpty).toList();
+        final joined = parts.join(' ');
+        if (joined.isNotEmpty) lines.add(joined);
+      }
+
+      final msg = lines.join('\n').trim();
+
+      // 3) 정상 메시지는 캐시에 저장
+      if (msg.isNotEmpty) {
+        await prefs.setString(cacheKey, msg);
+        await prefs.setInt(cacheAtKey, nowMs);
+        await prefs.setString(cacheSidKey, spreadsheetId);
+        return msg;
+      }
+
+      // 4) 시트가 비어있으면: 캐시가 있으면 캐시를 반환(공지바가 갑자기 사라지는 현상 완화)
+      return _fallbackCache(prefs, cacheKey);
+    } catch (_) {
+      // 토큰 만료/권한/네트워크 문제 등은 캐시 반환
+      return _fallbackCache(prefs, cacheKey);
+    }
+  }
+
+  static String _fallbackCache(SharedPreferences prefs, String cacheKey) {
+    return (prefs.getString(cacheKey) ?? '').trim();
+  }
+
+  static String _areaKey(String area) {
+    // SharedPreferences 키 안전성 확보(한글/특수문자 포함 가능)
+    // base64Url(utf8)로 축약
+    if (area.isEmpty) return 'empty';
+    return base64Url.encode(utf8.encode(area));
   }
 }
 

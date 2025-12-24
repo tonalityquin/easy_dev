@@ -1,4 +1,3 @@
-// lib/screens/hubs_mode/head_stub_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -24,6 +23,10 @@ import '../hubs_mode/head_package/hub_quick_actions.dart';
 
 // ✅ (분리) 튜토리얼 공용
 import '../hubs_mode/head_package/head_tutorials.dart';
+
+// ✅ (신규) 채팅 패키지: 바텀시트/패널
+import '../hubs_mode/head_package/chat_package/chat_bottom_sheet.dart';
+import 'noti_package/notice_editor_bottom_sheet.dart';
 
 class HeadStubPage extends StatelessWidget {
   const HeadStubPage({super.key});
@@ -87,8 +90,9 @@ class HeadStubPage extends StatelessWidget {
                           : 2;
 
                       const spacing = 12.0;
-                      final textScale =
-                      MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
+                      final textScale = MediaQuery.of(context)
+                          .textScaleFactor
+                          .clamp(1.0, 1.3);
 
                       final tileWidth =
                           (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
@@ -122,6 +126,16 @@ class HeadStubPage extends StatelessWidget {
                       const hrDark = Color(0xFF0D47A1); // blue 900
                       const hrLight = Color(0xFF90CAF9); // blue 200
 
+                      // ✅ Chat — Blue Grey
+                      const chatBase = Color(0xFF455A64); // blue grey 700
+                      const chatDark = Color(0xFF263238); // blue grey 900
+                      const chatLight = Color(0xFFB0BEC5); // blue grey 200
+
+                      // ✅ Notice — Orange
+                      const noticeBase = Color(0xFFF57C00); // orange 700
+                      const noticeDark = Color(0xFFE65100); // orange 900
+                      const noticeLight = Color(0xFFFFE0B2); // orange 100~200
+
                       final cards = <Widget>[
                         _ActionCard(
                           icon: Icons.calendar_month_rounded,
@@ -136,7 +150,6 @@ class HeadStubPage extends StatelessWidget {
                           },
                         ),
 
-                        // ▼ 출/퇴근 → 출석 캘린더: ✅ “바텀시트(92%)”로 열기
                         _ActionCard(
                           icon: Icons.how_to_reg_rounded,
                           title: '출/퇴근',
@@ -150,7 +163,6 @@ class HeadStubPage extends StatelessWidget {
                           },
                         ),
 
-                        // ▼ 휴게 관리 → 휴식 캘린더(BreakCalendar) : ✅ 바텀시트(92%)로 열기
                         _ActionCard(
                           icon: Icons.free_breakfast_rounded,
                           title: '휴게 관리',
@@ -164,7 +176,6 @@ class HeadStubPage extends StatelessWidget {
                           },
                         ),
 
-                        // ▼ 로드맵
                         _ActionCard(
                           icon: Icons.edit_note_rounded,
                           title: '향후 로드맵',
@@ -183,7 +194,6 @@ class HeadStubPage extends StatelessWidget {
                           },
                         ),
 
-                        // ▼ 메모
                         _ActionCard(
                           icon: Icons.sticky_note_2_rounded,
                           title: '메모',
@@ -197,7 +207,6 @@ class HeadStubPage extends StatelessWidget {
                           },
                         ),
 
-                        // ▼ 튜토리얼 (분리된 공용 헬퍼 호출)
                         _ActionCard(
                           icon: Icons.menu_book_rounded,
                           title: '튜토리얼',
@@ -211,7 +220,33 @@ class HeadStubPage extends StatelessWidget {
                           },
                         ),
 
-                        // ▼ 근무지 현황 (mgmt.Field)
+                        _ActionCard(
+                          icon: Icons.chat_bubble_rounded,
+                          title: '채팅',
+                          subtitle: '구역 채팅 (Sheets)',
+                          bg: chatBase,
+                          fg: Colors.white,
+                          tintColor: chatLight,
+                          titleColor: chatDark,
+                          onTap: () {
+                            chatBottomSheet(context);
+                          },
+                        ),
+
+                        // ✅ 공지 카드: 탭 시 공지 편집 바텀시트 오픈
+                        _ActionCard(
+                          icon: Icons.campaign_rounded,
+                          title: '공지',
+                          subtitle: '휴대폰에서 공지 작성/수정',
+                          bg: noticeBase,
+                          fg: Colors.white,
+                          tintColor: noticeLight,
+                          titleColor: noticeDark,
+                          onTap: () async {
+                            await NoticeEditorBottomSheet.showAsBottomSheet(context);
+                          },
+                        ),
+
                         _ActionCard(
                           icon: Icons.map_rounded,
                           title: '근무지 현황',
@@ -225,7 +260,6 @@ class HeadStubPage extends StatelessWidget {
                           },
                         ),
 
-                        // ▼ 통계 비교 (mgmt_stats.Statistics)
                         _ActionCard(
                           icon: Icons.stacked_line_chart_rounded,
                           title: '통계 비교',

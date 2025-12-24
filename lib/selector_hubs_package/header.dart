@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
+import 'package:googleapis/sheets/v4.dart' as sheets;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../utils/snackbar_helper.dart';
@@ -19,6 +20,29 @@ import '../../utils/commute_true_false_mode_config.dart';
 // ✅ (추가) 입차 완료 테이블 "실시간 탭" On/Off(기기별, 기본 OFF + 유지)
 import '../../utils/parking_completed_realtime_tab_mode_config.dart';
 
+// ✅ (추가) 스프레드시트 ID/URL에서 ID 추출 헬퍼
+import '../../utils/api/sheets_config.dart';
+
+// ✅ (추가) Google Sheets API 인증 세션
+import '../../utils/google_auth_session.dart';
+
+/// ✅ 공지 스프레드시트 저장 키 (SharedPreferences)
+const String _kNoticeSpreadsheetIdKey = 'notice_spreadsheet_id_v1';
+
+/// ✅ (중요) 공지 시트명 고정: noti
+const String _kNoticeSheetName = 'noti';
+
+/// ✅ (중요) 공지 Range (noti 시트 A열 1~50행)
+const String _kNoticeSpreadsheetRange = '$_kNoticeSheetName!A1:A50';
+
+/// ✅ 공지 시트 ID 변경을 Header와 Settings Sheet 사이에 공유하기 위한 노티파이어
+final ValueNotifier<String> _noticeSheetIdNotifier = ValueNotifier<String>('');
+
+Future<sheets.SheetsApi> _sheetsApi() async {
+  final client = await GoogleAuthSession.instance.safeClient();
+  return sheets.SheetsApi(client);
+}
+
 class Header extends StatefulWidget {
   const Header({super.key});
 
@@ -29,8 +53,231 @@ class Header extends StatefulWidget {
 class _HeaderState extends State<Header> {
   bool _expanded = false;
 
+  // ✅ 공지 로딩 상태
+  bool _noticeLoading = false;
+  String? _noticeError;
+  List<String> _noticeLines = const [];
+  String _noticeSheetId = '';
+
+  final ScrollController _noticeScroll = ScrollController();
+
   void _toggleExpanded() {
     setState(() => _expanded = !_expanded);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _noticeSheetIdNotifier.addListener(_onNoticeSheetIdChanged);
+    _bootstrapNoticeSheetId();
+  }
+
+  @override
+  void dispose() {
+    _noticeSheetIdNotifier.removeListener(_onNoticeSheetIdChanged);
+    _noticeScroll.dispose();
+    super.dispose();
+  }
+
+  Future<void> _bootstrapNoticeSheetId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final saved = (prefs.getString(_kNoticeSpreadsheetIdKey) ?? '').trim();
+      _noticeSheetIdNotifier.value = saved;
+    } catch (_) {
+      // 부트스트랩 실패는 공지 영역에만 영향을 주므로 조용히 무시
+    }
+  }
+
+  void _onNoticeSheetIdChanged() {
+    final id = _noticeSheetIdNotifier.value.trim();
+    if (_noticeSheetId == id) return;
+
+    setState(() {
+      _noticeSheetId = id;
+      _noticeError = null;
+      _noticeLines = const [];
+    });
+
+    // ID가 비어있으면 공지 영역은 안내만 표시
+    if (_noticeSheetId.isEmpty) return;
+
+    _loadNotice();
+  }
+
+  Future<void> _loadNotice() async {
+    final id = _noticeSheetId.trim();
+    if (id.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _noticeLoading = false;
+        _noticeError = null;
+        _noticeLines = const [];
+      });
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _noticeLoading = true;
+      _noticeError = null;
+    });
+
+    try {
+      final api = await _sheetsApi();
+
+      // ✅ noti 시트에서 읽음
+      final resp = await api.spreadsheets.values.get(id, _kNoticeSpreadsheetRange);
+
+      final values = resp.values ?? const [];
+
+      // rows -> text lines
+      // - A열 기준이지만, 혹시 다중열이 오면 행 단위로 join
+      final lines = <String>[];
+      for (final row in values) {
+        final rowStrings = row.map((c) => (c ?? '').toString().trim()).toList();
+        final joined = rowStrings.where((s) => s.isNotEmpty).join(' ');
+        if (joined.isNotEmpty) lines.add(joined);
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _noticeLines = lines;
+        _noticeLoading = false;
+        _noticeError = null;
+      });
+    } catch (e) {
+      final msg = GoogleAuthSession.isInvalidTokenError(e)
+          ? '구글 계정 연결이 만료되었습니다. 다시 로그인 후 시도하세요.'
+          : '공지 불러오기 실패: $e';
+
+      if (!mounted) return;
+      setState(() {
+        _noticeLoading = false;
+        _noticeError = msg;
+        _noticeLines = const [];
+      });
+    }
+  }
+
+  Widget _buildNoticeSection(BuildContext context) {
+    final hasId = _noticeSheetId.trim().isNotEmpty;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black.withOpacity(.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(.06),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.campaign_outlined,
+                  size: 18,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  '공지',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: Colors.black87,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: '새로고침',
+                onPressed: hasId ? _loadNotice : null,
+                icon: _noticeLoading
+                    ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+                    : const Icon(Icons.refresh_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (!hasId)
+            const Text(
+              '공지 스프레드시트 ID가 설정되어 있지 않습니다.\n앱 설정에서 스프레드시트 ID를 입력하세요.',
+              style: TextStyle(fontSize: 13, color: Colors.black87),
+            )
+          else if (_noticeError != null)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  _noticeError!,
+                  style: const TextStyle(fontSize: 13, color: Colors.redAccent),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _loadNotice,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: const Text('다시 불러오기'),
+                ),
+                const SizedBox(height: 2),
+              ],
+            )
+          else if (_noticeLoading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_noticeLines.isEmpty)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      '공지 내용이 없습니다.',
+                      style: TextStyle(fontSize: 13, color: Colors.black87),
+                    ),
+                  ],
+                )
+              else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 160),
+                      child: Scrollbar(
+                        controller: _noticeScroll,
+                        thumbVisibility: true,
+                        child: SingleChildScrollView(
+                          controller: _noticeScroll,
+                          child: Text(
+                            _noticeLines.map((e) => '• $e').join('\n'),
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Colors.black87,
+                              height: 1.35,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                  ],
+                ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -56,6 +303,11 @@ class _HeaderState extends State<Header> {
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 12),
+
+        // ✅ 공지란(스프레드시트 기반 / noti 시트)
+        _buildNoticeSection(context),
+
+        const SizedBox(height: 12),
       ],
     );
   }
@@ -74,7 +326,7 @@ class _TopRow extends StatelessWidget {
   // ✅ 앱 설정 진입 비밀번호
   static const String _kAppSettingsPassword = 'blsnc150119';
 
-  /// ✅ (신규) 앱 설정 진입 게이트: 비밀번호 입력 → 성공 시 설정 시트 오픈
+  /// ✅ 앱 설정 진입 게이트: 비밀번호 입력 → 성공 시 설정 시트 오픈
   Future<void> _openAppSettingsGate(BuildContext context) async {
     // expanded가 false이면 버튼 자체가 안 보이지만, 방어적으로 가드
     if (!expanded) return;
@@ -265,6 +517,7 @@ class _TopRow extends StatelessWidget {
 
   // “설정” 바텀시트 — Gmail(수신자만) + QuickOverlay 오버레이 권한 + 오버레이 모드(항상 노출)
   // + commute_true_false 토글 + parking_completed 실시간 탭 토글
+  // + ✅ 공지 스프레드시트 ID 설정(not i 시트)
   Future<void> _openSheetsLinkSheet(BuildContext context) async {
     // Gmail 수신자 로드 (To 만)
     final emailCfg = await EmailConfig.load();
@@ -290,6 +543,11 @@ class _TopRow extends StatelessWidget {
     // ✅ (추가) 입차 완료 테이블 "실시간 탭" 토글 로드 (기본 OFF)
     bool parkingCompletedRealtimeTabEnabled =
     await ParkingCompletedRealtimeTabModeConfig.isEnabled();
+
+    // ✅ (추가) 공지 스프레드시트 ID 로드
+    final noticeIdCtrl = TextEditingController(
+      text: (prefs.getString(_kNoticeSpreadsheetIdKey) ?? '').trim(),
+    );
 
     await showModalBottomSheet(
       context: context,
@@ -725,6 +983,128 @@ class _TopRow extends StatelessWidget {
                   );
                 }
 
+                // ✅ 공지 스프레드시트 ID 섹션
+                Widget buildNoticeSpreadsheetSection() {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.black.withOpacity(.08)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(.06),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.campaign_outlined,
+                                size: 20,
+                                color: Colors.black87,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            const Expanded(
+                              child: Text(
+                                '공지 스프레드시트 설정',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: '초기화(삭제)',
+                              onPressed: () async {
+                                await prefs.remove(_kNoticeSpreadsheetIdKey);
+                                noticeIdCtrl.text = '';
+                                _noticeSheetIdNotifier.value = '';
+                                if (!ctx.mounted) return;
+                                showSelectedSnackbar(context, '공지 스프레드시트 설정을 초기화했습니다.');
+                                setSheetState(() {});
+                              },
+                              icon: const Icon(Icons.restore, color: Colors.black87),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          '공지 내용을 불러올 스프레드시트 ID를 입력하세요.\n'
+                              '스프레드시트 URL을 그대로 붙여넣어도 자동으로 ID를 추출합니다.\n'
+                              '공지 내용은 “$_kNoticeSheetName” 시트의 A열(A1:A50)을 읽어옵니다.',
+                          style: const TextStyle(fontSize: 13, color: Colors.black87),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: noticeIdCtrl,
+                          textInputAction: TextInputAction.done,
+                          decoration: const InputDecoration(
+                            labelText: '공지 스프레드시트 ID (또는 URL)',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.grid_on_outlined),
+                            helperText: '예) https://docs.google.com/spreadsheets/d/<ID>/edit',
+                          ),
+                          onSubmitted: (_) => FocusScope.of(ctx).unfocus(),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                icon: const Icon(Icons.check_circle_outline),
+                                onPressed: () async {
+                                  final raw = noticeIdCtrl.text.trim();
+                                  final id = SheetsConfig.extractSpreadsheetId(raw).trim();
+
+                                  if (id.isEmpty) {
+                                    if (!ctx.mounted) return;
+                                    showFailedSnackbar(context, '스프레드시트 ID를 입력하세요.');
+                                    return;
+                                  }
+
+                                  await prefs.setString(_kNoticeSpreadsheetIdKey, id);
+                                  _noticeSheetIdNotifier.value = id;
+
+                                  if (!ctx.mounted) return;
+                                  showSuccessSnackbar(context, '공지 스프레드시트 ID를 저장했습니다.');
+                                  setSheetState(() {});
+                                },
+                                label: const Text('저장'),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                icon: const Icon(Icons.copy_all_outlined),
+                                onPressed: () async {
+                                  final raw = '공지 Sheet ID: ${noticeIdCtrl.text.trim()}';
+                                  await Clipboard.setData(ClipboardData(text: raw));
+                                  if (!ctx.mounted) return;
+                                  showSuccessSnackbar(context, '공지 스프레드시트 설정을 복사했습니다.');
+                                },
+                                label: const Text('설정 복사'),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '저장 키: $_kNoticeSpreadsheetIdKey',
+                          style: const TextStyle(fontSize: 11, color: Colors.black54),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
                 // Gmail 수신자 섹션(To 만)
                 Widget buildGmailSection() {
                   return Container(
@@ -899,8 +1279,11 @@ class _TopRow extends StatelessWidget {
                         // commute_true_false 토글
                         buildCommuteTrueFalseToggleSection(),
 
-                        // ✅ (추가) 입차 완료 테이블 실시간 탭 토글
+                        // ✅ 입차 완료 테이블 실시간 탭 토글
                         buildParkingCompletedRealtimeTabToggleSection(),
+
+                        // ✅ 공지 스프레드시트 ID 설정 (noti 시트)
+                        buildNoticeSpreadsheetSection(),
 
                         // Gmail 수신자(To) 설정
                         buildGmailSection(),
@@ -925,7 +1308,6 @@ class _TopRow extends StatelessWidget {
           show: expanded,
           axisAlignment: -1.0,
           child: FilledButton.icon(
-            // ✅ “앱 설정” 버튼 → 비밀번호 게이트로 변경
             onPressed: () => _openAppSettingsGate(context),
             style: FilledButton.styleFrom(
               minimumSize: const Size(0, 40),

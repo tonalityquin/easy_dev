@@ -1,18 +1,19 @@
-import 'dart:async';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../utils/snackbar_helper.dart';
-// import '../../../../utils/usage_reporter.dart';
-import '../../../../../services/latest_message_service.dart'; // ★ 추가
+
+// ✅ Google Sheets 기반 채팅 서비스
+import '../../../../../services/sheet_chat_service.dart';
 
 class ChatPanel extends StatefulWidget {
-  final String roomId;
+  /// roomId는 더 이상 “채팅 저장/필터링”에 쓰지 않음.
+  /// scopeKey는 (기존처럼) currentArea 변경 시 UI/로컬키(쇼트컷) 분리 용도로만 사용.
+  final String scopeKey;
 
-  const ChatPanel({super.key, required this.roomId});
+  const ChatPanel({super.key, required this.scopeKey});
 
   @override
   State<ChatPanel> createState() => _ChatPanelState();
@@ -23,13 +24,6 @@ class _ChatPanelState extends State<ChatPanel> {
 
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
-  // ★ 전역 서비스 사용: 개별 구독 제거
-  // StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _chatSubscription;
-
-  // (로컬 상태는 제거하고, 서비스 캐시만 사용)
-  // String latestMessage = '';
-  // Timestamp? latestTimestamp;
-  // bool _hasPendingWrites = false;
 
   List<String> _shortcuts = [];
   bool _canSend = false;
@@ -38,26 +32,14 @@ class _ChatPanelState extends State<ChatPanel> {
   bool _isMultiSelect = false;
   final Set<int> _selectedShortcutIdx = {};
 
-  String get _prefsKey => 'chat_shortcuts_${widget.roomId}';
-
-  /// ────────────────────────────────────────────────────────────────────────────
-  /// UsageReporter 헬퍼 (파이어베이스 작업만 호출)
-  /// ────────────────────────────────────────────────────────────────────────────
-  // ignore: unused_element_parameter
-  Future<void> _report(String action, {int n = 1, required String source}) async {
-    try {
-      /*await UsageReporter.instance
-          .report(area: widget.roomId, action: action, n: n, source: source);*/
-    } catch (_) {
-      // 계측 실패는 기능에 영향 주지 않음
-    }
-  }
+  String get _prefsKey => 'chat_shortcuts_${widget.scopeKey}';
 
   @override
   void initState() {
     super.initState();
-    // ★ 개별 리스너 제거 — 전역 서비스가 이미 start(area)로 구독 중
-    // _listenToLatestMessage();
+
+    // ✅ Sheets 채팅 폴링 시작(idempotent)
+    SheetChatService.instance.start(widget.scopeKey);
 
     _loadShortcuts();
     _controller.addListener(_handleTextChanged);
@@ -66,10 +48,13 @@ class _ChatPanelState extends State<ChatPanel> {
   @override
   void didUpdateWidget(covariant ChatPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.roomId != widget.roomId) {
-      // ★ 구독 전환 불필요(전역 서비스가 처리)
+
+    if (oldWidget.scopeKey != widget.scopeKey) {
+      // ✅ scopeKey 변경 시(구역 전환 등) polling 재시작 + 로컬쇼트컷 키 변경
+      SheetChatService.instance.start(widget.scopeKey);
+
       _loadShortcuts();
-      _controller.clear(); // 방 변경 시 혼동 방지
+      _controller.clear();
       _exitMultiSelectIfNeeded();
     }
   }
@@ -81,24 +66,13 @@ class _ChatPanelState extends State<ChatPanel> {
     }
   }
 
-  /// Firestore WRITE 지점
+  /// ✅ Sheets WRITE 지점
   Future<void> _sendMessage() async {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
 
     try {
-      await FirebaseFirestore.instance
-          .collection('chats')
-          .doc(widget.roomId)
-          .collection('state')
-          .doc('latest_message')
-          .set({
-        'message': text,
-        'timestamp': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-
-      // 📝 Firestore WRITE
-      _report('write', source: 'chat.latest_message.set');
+      await SheetChatService.instance.sendMessage(text);
 
       _controller.clear();
       _focusNode.requestFocus();
@@ -109,7 +83,7 @@ class _ChatPanelState extends State<ChatPanel> {
     }
   }
 
-  /// 로컬(SharedPreferences) — 파이어베이스 아님 → 계측 제외
+  /// 로컬(SharedPreferences)
   Future<void> _loadShortcuts() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
@@ -118,13 +92,11 @@ class _ChatPanelState extends State<ChatPanel> {
     });
   }
 
-  /// 로컬(SharedPreferences) — 파이어베이스 아님 → 계측 제외
   Future<void> _saveShortcuts() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(_prefsKey, _shortcuts);
   }
 
-  /// 로컬(SharedPreferences) — 파이어베이스 아님 → 계측 제외
   Future<void> _addShortcut() async {
     final textCtrl = TextEditingController();
 
@@ -231,7 +203,6 @@ class _ChatPanelState extends State<ChatPanel> {
     await _saveShortcuts();
   }
 
-  /// 로컬(SharedPreferences) — 파이어베이스 아님 → 계측 제외
   Future<void> _removeShortcut(String value) async {
     final ok = await showCupertinoDialog<bool>(
       context: context,
@@ -258,7 +229,6 @@ class _ChatPanelState extends State<ChatPanel> {
     await _saveShortcuts();
   }
 
-  // ── 커서 위치/선택영역 삽입 & 공백 보정
   void _insertAtCursor(String insert) {
     final text = _controller.text;
     final sel = _controller.selection;
@@ -286,15 +256,12 @@ class _ChatPanelState extends State<ChatPanel> {
     _focusNode.requestFocus();
   }
 
-  // 입력창 한 번에 지우기
   void _clearInput() {
     if (_controller.text.isEmpty) return;
     _controller.clear();
-    // listener에서 _canSend=false로 반영됨
     _focusNode.requestFocus();
   }
 
-  // 멀티선택 모드 토글
   void _toggleMultiSelect() {
     setState(() {
       _isMultiSelect = !_isMultiSelect;
@@ -331,7 +298,6 @@ class _ChatPanelState extends State<ChatPanel> {
 
   @override
   void dispose() {
-    // _chatSubscription?.cancel(); // 개별 구독 없음
     _controller.removeListener(_handleTextChanged);
     _controller.dispose();
     _focusNode.dispose();
@@ -340,22 +306,10 @@ class _ChatPanelState extends State<ChatPanel> {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<LatestMessageData>(
-      valueListenable: LatestMessageService.instance.latest,
-      builder: (context, data, _) {
-        // 시간 문자열 구성
-        String timeText = '';
-        final ts = data.timestamp;
-        if (ts != null) {
-          try {
-            final dt = ts.toDate();
-            if (dt.millisecondsSinceEpoch > 0) {
-              timeText = DateFormat('yyyy-MM-dd HH:mm').format(dt.toLocal());
-            }
-          } catch (_) {}
-        }
-        final subtitle =
-        (data.hasPendingWrites || ts == null) ? '동기화 중...' : (timeText.isNotEmpty ? '🕒 $timeText' : '');
+    return ValueListenableBuilder<SheetChatState>(
+      valueListenable: SheetChatService.instance.state,
+      builder: (context, st, _) {
+        final messages = st.messages;
 
         return Column(
           mainAxisSize: MainAxisSize.max,
@@ -385,6 +339,21 @@ class _ChatPanelState extends State<ChatPanel> {
                   const Spacer(),
                 ] else
                   const Spacer(),
+
+                // ✅ 새로고침(즉시 1회 로드 트리거)
+                IconButton(
+                  tooltip: '새로고침',
+                  onPressed: () => SheetChatService.instance.start(widget.scopeKey),
+                  icon: st.loading
+                      ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                      : const Icon(Icons.refresh_rounded),
+                ),
+
+                const SizedBox(width: 4),
                 TextButton.icon(
                   onPressed: _addShortcut,
                   icon: const Icon(Icons.add),
@@ -394,37 +363,89 @@ class _ChatPanelState extends State<ChatPanel> {
             ),
             const SizedBox(height: 8),
 
-            // 최근 메시지 + 쇼트컷
+            // ✅ 에러 표시(스프레드시트 ID 미설정/권한 만료 등)
+            if (st.error != null) ...[
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.06),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.red.withOpacity(0.2)),
+                ),
+                child: Text(
+                  st.error!,
+                  style: const TextStyle(
+                    color: Colors.redAccent,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+
+            // 메시지 리스트 + 쇼트컷
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.all(12),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('[익명]', style: TextStyle(fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 6),
-                          Text(data.text),
-                          const SizedBox(height: 8),
-                          if (subtitle.isNotEmpty)
-                            Text(
-                              subtitle,
-                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                            ),
-                        ],
-                      ),
-                    ),
+                    if (messages.isEmpty && !st.loading && st.error == null)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Text(
+                          '아직 메시지가 없습니다.',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      )
+                    else
+                      ...messages.map((m) {
+                        String timeText = '';
+                        final t = m.time;
+                        if (t != null) {
+                          try {
+                            timeText = DateFormat('yyyy-MM-dd HH:mm').format(t.toLocal());
+                          } catch (_) {}
+                        }
+
+                        final subtitle = timeText.isNotEmpty ? '🕒 $timeText' : '';
+
+                        return Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('[익명]', style: TextStyle(fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 6),
+                              Text(m.text),
+                              const SizedBox(height: 8),
+                              if (subtitle.isNotEmpty)
+                                Text(
+                                  subtitle,
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                ),
+                            ],
+                          ),
+                        );
+                      }),
+
                     if (_shortcuts.isNotEmpty) ...[
+                      const SizedBox(height: 10),
                       SizedBox(
                         height: 40,
                         child: SingleChildScrollView(
@@ -442,7 +463,7 @@ class _ChatPanelState extends State<ChatPanel> {
                                   child: FilterChip(
                                     selected: selected,
                                     label: Text(s, overflow: TextOverflow.ellipsis),
-                                    onSelected: (val) {
+                                    onSelected: (_) {
                                       if (_isMultiSelect) {
                                         _toggleShortcutSelection(i);
                                       } else {
@@ -484,7 +505,6 @@ class _ChatPanelState extends State<ChatPanel> {
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
                       ),
-                      // 입력 전체 지우기 버튼
                       suffixIcon: IconButton(
                         tooltip: '입력 지우기',
                         icon: const Icon(Icons.clear),
