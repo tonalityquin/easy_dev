@@ -9,13 +9,12 @@ import '../states/plate/lite_plate_state.dart';
 import '../states/user/user_state.dart';
 
 import 'lite_mode/lite_input_package/lite_input_plate_screen.dart';
-import 'lite_mode/lite_type_package/lite_common_widgets/chats/lite_chat_bottom_sheet.dart';
+import 'lite_mode/lite_type_package/lite_common_widgets/chats/lite_chat_bottom_sheet.dart'; // ✅ ChatOpenButtonLite + liteChatBottomSheet 제공
 import 'lite_mode/lite_type_package/lite_common_widgets/dashboard_bottom_sheet/lite_home_dash_board_bottom_sheet.dart';
 import 'lite_mode/lite_type_package/lite_common_widgets/reverse_sheet_package/lite_parking_completed_table_sheet.dart';
 import 'secondary_page.dart';
 import '../utils/snackbar_helper.dart';
 
-import '../utils/tts/tts_manager.dart';
 import '../services/latest_message_service.dart';
 
 // ✅ AppCardPalette ThemeExtension 사용
@@ -52,7 +51,7 @@ class _LiteTypePageState extends State<LiteTypePage> {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => LitePageState(), // ✅ defaultPages 주입 제거(순환 참조 방지)
+      create: (_) => LitePageState(),
       child: Builder(
         builder: (context) {
           final plateState = context.read<LitePlateState>();
@@ -72,8 +71,7 @@ class _LiteTypePageState extends State<LiteTypePage> {
 
               final currentPage = pageState.pages[pageState.selectedIndex];
               final collection = currentPage.collectionKey;
-              final selectedPlate =
-              plateState.getSelectedPlate(collection, userName);
+              final selectedPlate = plateState.getSelectedPlate(collection, userName);
 
               if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
                 await plateState.togglePlateIsSelected(
@@ -114,93 +112,21 @@ class _LiteTypePageState extends State<LiteTypePage> {
 class _ChatDashboardBar extends StatelessWidget {
   const _ChatDashboardBar();
 
-  static Future<void> _replayLatestTts(
-      BuildContext context,
-      String area,
-      ) async {
-    final text = (await LatestMessageService.instance.readFromPrefs()).trim();
-    if (text.isEmpty) {
-      showSelectedSnackbar(context, '최근 메시지가 없습니다.');
-      return;
-    }
-    await TtsManager.speak(
-      text,
-      language: 'ko-KR',
-      rate: 0.4,
-      volume: 1.0,
-      pitch: 1.0,
-      preferGoogleOnAndroid: true,
-      openPlayStoreIfMissing: false,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final palette = AppCardPalette.of(context);
-    final area = context.read<AreaState>().currentArea.trim();
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
       child: Row(
         children: [
-          Expanded(
-            child: area.isEmpty
-                ? ElevatedButton(
-              onPressed: null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: palette.liteDark.withOpacity(.35),
-                disabledBackgroundColor: Colors.white,
-                disabledForegroundColor:
-                palette.liteDark.withOpacity(.35),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.volume_up, size: 20),
-                  SizedBox(width: 6),
-                  Text('다시 듣기'),
-                ],
-              ),
-            )
-                : ValueListenableBuilder<LatestMessageData>(
-              valueListenable: LatestMessageService.instance.latest,
-              builder: (context, latestData, _) {
-                final hasText = latestData.text.trim().isNotEmpty;
-                return ElevatedButton(
-                  onPressed:
-                  hasText ? () => _replayLatestTts(context, area) : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: palette.liteBase,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.volume_up, size: 20),
-                      SizedBox(width: 6),
-                      Text('다시 듣기', overflow: TextOverflow.ellipsis),
-                    ],
-                  ),
-                );
-              },
-            ),
+          // ✅ 좌측: “채팅 열기” 버튼(말풍선 팝오버, 읽기 전용, 화면 경계 클램프)
+          const Expanded(
+            child: ChatOpenButtonLite(),
           ),
           const SizedBox(width: 8),
+
+          // ── 대시보드(기존)
           Expanded(
             child: ElevatedButton(
               onPressed: () {
@@ -215,10 +141,7 @@ class _ChatDashboardBar extends StatelessWidget {
               style: ElevatedButton.styleFrom(
                 backgroundColor: palette.liteBase,
                 foregroundColor: palette.liteLight,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8),
                 ),
@@ -309,12 +232,9 @@ class _RefreshableBodyState extends State<RefreshableBody> {
 
   void _handleHorizontalDragEnd(BuildContext context, double velocity) {
     if (_dragDistance > _hDistanceThreshold && velocity > _hVelocityThreshold) {
-      Navigator.of(context)
-          .push(_slidePage(const LiteInputPlateScreen(), fromLeft: true));
-    } else if (_dragDistance < -_hDistanceThreshold &&
-        velocity < -_hVelocityThreshold) {
-      Navigator.of(context)
-          .push(_slidePage(const SecondaryPage(), fromLeft: false));
+      Navigator.of(context).push(_slidePage(const LiteInputPlateScreen(), fromLeft: true));
+    } else if (_dragDistance < -_hDistanceThreshold && velocity < -_hVelocityThreshold) {
+      Navigator.of(context).push(_slidePage(const SecondaryPage(), fromLeft: false));
     }
     _dragDistance = 0.0;
   }
@@ -325,21 +245,17 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     await showLiteParkingCompletedTableTopSheet(context);
   }
 
-  Future<void> _handleVerticalDragEnd(
-      BuildContext context,
-      DragEndDetails details,
-      ) async {
+  Future<void> _handleVerticalDragEnd(BuildContext context, DragEndDetails details) async {
     final vy = details.primaryVelocity ?? 0.0;
 
-    final firedUp =
-        (_vDragDistance < -_vDistanceThresholdUp) || (vy < -_vVelocityThresholdUp);
+    final firedUp = (_vDragDistance < -_vDistanceThresholdUp) || (vy < -_vVelocityThresholdUp);
     final firedDown =
         (_vDragDistance > _vDistanceThresholdDown) || (vy > _vVelocityThresholdDown);
 
     if (firedUp && !_chatOpening) {
       _chatOpening = true;
       await Future<void>.delayed(const Duration(milliseconds: 10));
-      if (mounted) liteChatBottomSheet(context);
+      if (mounted) liteChatBottomSheet(context); // ✅ Lite: 스와이프는 기존대로 풀시트(읽기 전용)
       _chatOpening = false;
     } else if (firedDown && !_topOpening) {
       _topOpening = true;
@@ -372,10 +288,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
       behavior: HitTestBehavior.opaque,
       dragStartBehavior: DragStartBehavior.down,
       onHorizontalDragUpdate: (details) => _dragDistance += details.delta.dx,
-      onHorizontalDragEnd: (details) => _handleHorizontalDragEnd(
-        context,
-        details.primaryVelocity ?? 0,
-      ),
+      onHorizontalDragEnd: (details) => _handleHorizontalDragEnd(context, details.primaryVelocity ?? 0),
       onVerticalDragStart: (_) => _vDragDistance = 0.0,
       onVerticalDragUpdate: (details) => _vDragDistance += details.delta.dy,
       onVerticalDragEnd: (details) => _handleVerticalDragEnd(context, details),
@@ -393,8 +306,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
                       height: 28,
                       child: CircularProgressIndicator(
                         strokeWidth: 3,
-                        valueColor:
-                        AlwaysStoppedAnimation<Color>(palette.liteBase),
+                        valueColor: AlwaysStoppedAnimation<Color>(palette.liteBase),
                       ),
                     ),
                   ),

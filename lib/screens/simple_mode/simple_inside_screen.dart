@@ -12,6 +12,7 @@ import '../../../utils/google_auth_session.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../utils/init/logout_helper.dart';
 import '../../services/endTime_reminder_service.dart';
+import 'chat/simple_chat_bottom_sheet.dart';
 import 'sections/simple_inside_header_widget_section.dart';
 import 'sections/widgets/simple_inside_punch_recorder_section.dart';
 import 'sections/simple_inside_document_box_button_section.dart';
@@ -128,14 +129,16 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
       final api = await _sheetsApi();
 
       // ✅ noti 시트에서 읽음
-      final resp = await api.spreadsheets.values.get(id, _kNoticeSpreadsheetRange);
+      final resp =
+      await api.spreadsheets.values.get(id, _kNoticeSpreadsheetRange);
 
       final values = resp.values ?? const [];
 
       // rows -> text lines
       final lines = <String>[];
       for (final row in values) {
-        final rowStrings = row.map((c) => (c ?? '').toString().trim()).toList();
+        final rowStrings =
+        row.map((c) => (c ?? '').toString().trim()).toList();
         final joined = rowStrings.where((s) => s.isNotEmpty).join(' ');
         if (joined.isNotEmpty) lines.add(joined);
       }
@@ -342,6 +345,8 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
     return PopScope(
       canPop: false,
       child: Scaffold(
+        // ✅ 하단 고정 채팅 버튼(누르기 쉬운 위치)
+        bottomNavigationBar: const _SimpleInsideChatDock(),
         body: Consumer<UserState>(
           builder: (context, userState, _) {
             final mode = _resolveMode(userState);
@@ -404,6 +409,9 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
                                 ),
                               ),
                             ),
+
+                            // ✅ 하단 고정 바와 겹치지 않도록 여유
+                            const SizedBox(height: 24),
                           ],
                         ),
                       ),
@@ -437,6 +445,33 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
               ),
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+/// ✅ SimpleInsideScreen 전용: 하단 고정 채팅 도크
+/// - ChatOpenButtonLite는 내부에서 UserState.currentArea를 사용하여 scopeKey를 결정
+/// - 눌렀을 때 lite_chat_bottom_sheet.dart(팝오버/풀시트 fallback)로 열림
+class _SimpleInsideChatDock extends StatelessWidget {
+  const _SimpleInsideChatDock();
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      left: false,
+      right: false,
+      bottom: true,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: SizedBox(
+          height: 48,
+          child: ChatOpenButtonSimple(
+            // ✅ 모든 기능 사용: 입력/전송/쇼트컷 등 가능
+            readOnly: false,
+          ),
         ),
       ),
     );

@@ -8,12 +8,12 @@ import '../../../../../states/user/user_state.dart';
 import '../../../../../utils/snackbar_helper.dart';
 
 import '../../../../../services/sheet_chat_service.dart';
-import 'lite_chat_panel.dart';
+import 'simple_chat_panel.dart';
 
 /// 좌측 상단(11시) 라벨 텍스트
 const String _screenTag = 'chat';
 
-/// ✅ Lite 읽기 전용 마스킹 높이(입력/전송 영역 가림)
+/// ✅ ReadOnly 마스킹 높이(입력/전송 영역 가림)
 const double _kBottomMaskHeight = 78.0;
 
 Widget _buildScreenTag(BuildContext context) {
@@ -50,7 +50,20 @@ Widget _buildScreenTag(BuildContext context) {
   );
 }
 
-/// ✅ Lite: 읽기 전용 마스킹(입력/전송 UI 가림 + 터치 차단)
+class _SimpleChatBody extends StatelessWidget {
+  const _SimpleChatBody({
+    required this.scopeKey,
+  });
+
+  final String scopeKey;
+
+  @override
+  Widget build(BuildContext context) {
+    return SimpleChatPanel(scopeKey: scopeKey);
+  }
+}
+
+/// - 필요 시 readOnly=true로 사용
 class _ReadOnlyLiteChatBody extends StatelessWidget {
   const _ReadOnlyLiteChatBody({
     required this.scopeKey,
@@ -66,7 +79,7 @@ class _ReadOnlyLiteChatBody extends StatelessWidget {
       children: [
         Padding(
           padding: EdgeInsets.only(bottom: bottomMaskHeight),
-          child: LiteChatPanel(scopeKey: scopeKey),
+          child: SimpleChatPanel(scopeKey: scopeKey),
         ),
         Positioned(
           left: 0,
@@ -110,8 +123,13 @@ class _ReadOnlyLiteChatBody extends StatelessWidget {
   }
 }
 
-/// ✅ Lite: 풀시트 바텀시트(읽기 전용)
-void liteChatBottomSheet(BuildContext context) {
+/// ✅ Lite: 풀시트 바텀시트
+/// - readOnly=false(기본): LiteChatPanel 모든 기능 사용 가능
+/// - readOnly=true: 입력/전송 마스킹(보기만 가능)
+void simpleChatBottomSheet(
+    BuildContext context, {
+      bool readOnly = false,
+    }) {
   final currentUser = context.read<UserState>().user;
   final String? scopeKey = currentUser?.currentArea?.trim();
 
@@ -164,7 +182,7 @@ void liteChatBottomSheet(BuildContext context) {
                   top: true,
                   left: false,
                   right: false,
-                  bottom: false,
+                  bottom: true,
                   child: Stack(
                     children: [
                       _buildScreenTag(ctx),
@@ -201,25 +219,27 @@ void liteChatBottomSheet(BuildContext context) {
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 10, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFF2F4F7),
-                                        borderRadius:
-                                        BorderRadius.circular(999),
-                                        border: Border.all(
-                                            color: Colors.black
-                                                .withOpacity(.06)),
+                                    if (readOnly) ...[
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF2F4F7),
+                                          borderRadius:
+                                          BorderRadius.circular(999),
+                                          border: Border.all(
+                                            color: Colors.black.withOpacity(.06),
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          '읽기 전용',
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w800),
+                                        ),
                                       ),
-                                      child: const Text(
-                                        '읽기 전용',
-                                        style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w800),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
+                                      const SizedBox(width: 6),
+                                    ],
                                     IconButton(
                                       tooltip: '닫기',
                                       icon: const Icon(Icons.close),
@@ -239,11 +259,163 @@ void liteChatBottomSheet(BuildContext context) {
                             child: Padding(
                               padding:
                               const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                              child: _ReadOnlyLiteChatBody(
+                              child: readOnly
+                                  ? const _ReadOnlyLiteChatBody(
+                                scopeKey: '',
+                              )
+                                  : const _SimpleChatBody(scopeKey: ''),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  ).then((_) {
+    // no-op
+  });
+}
+
+/// 위 builder에서 const로 만들기 위해 scopeKey를 나중에 주입하는 방식은 불가하므로,
+/// 실제로는 아래와 같이 "비-const"로 바꿔 scopeKey를 전달합니다.
+void _showLiteChatBottomSheetInternal(
+    BuildContext context, {
+      required String scopeKey,
+      bool readOnly = false,
+    }) {
+  SheetChatService.instance.start(scopeKey);
+  FocusScope.of(context).unfocus();
+
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: false,
+    backgroundColor: Colors.transparent,
+    elevation: 0,
+    barrierColor: Colors.black.withOpacity(0.25),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    clipBehavior: Clip.antiAlias,
+    builder: (ctx) {
+      final inset = MediaQuery.of(ctx).viewInsets.bottom;
+      final size = MediaQuery.of(ctx).size;
+
+      return AnimatedPadding(
+        duration: const Duration(milliseconds: 150),
+        padding: EdgeInsets.only(bottom: inset),
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: SizedBox(
+            height: size.height,
+            width: double.infinity,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Color(0x1F000000),
+                      blurRadius: 16,
+                      offset: Offset(0, -2),
+                    ),
+                  ],
+                ),
+                child: SafeArea(
+                  top: true,
+                  left: false,
+                  right: false,
+                  bottom: true,
+                  child: Stack(
+                    children: [
+                      _buildScreenTag(ctx),
+                      Column(
+                        mainAxisSize: MainAxisSize.max,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
+                            child: Column(
+                              children: [
+                                Container(
+                                  width: 40,
+                                  height: 4,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[300],
+                                    borderRadius: BorderRadius.circular(2),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    const SizedBox(width: 4),
+                                    const Icon(Icons.forum,
+                                        size: 20, color: Colors.black87),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        '구역 채팅 (${scopeKey.trim()})',
+                                        style: const TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.black87,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (readOnly) ...[
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF2F4F7),
+                                          borderRadius:
+                                          BorderRadius.circular(999),
+                                          border: Border.all(
+                                            color: Colors.black.withOpacity(.06),
+                                          ),
+                                        ),
+                                        child: const Text(
+                                          '읽기 전용',
+                                          style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w800),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                    ],
+                                    IconButton(
+                                      tooltip: '닫기',
+                                      icon: const Icon(Icons.close),
+                                      onPressed: () => Navigator.of(ctx).pop(),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Divider(
+                              height: 1,
+                              thickness: 1,
+                              color: Color(0xFFEAEAEA)),
+                          Expanded(
+                            child: Padding(
+                              padding:
+                              const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                              child: readOnly
+                                  ? _ReadOnlyLiteChatBody(
                                 scopeKey: scopeKey,
-                                // ✅ 경고 제거: 호출부에서 실제로 값을 전달
                                 bottomMaskHeight: _kBottomMaskHeight,
-                              ),
+                              )
+                                  : _SimpleChatBody(scopeKey: scopeKey),
                             ),
                           ),
                         ],
@@ -262,27 +434,32 @@ void liteChatBottomSheet(BuildContext context) {
 
 /// ─────────────────────────────────────────────────────────────
 /// ✅ Lite: 말풍선 팝오버(꼬리 포함) + 화면 밖 침범 방지(clamp)
+/// - readOnly=false(기본): 모든 기능 사용 가능
+/// - readOnly=true: 입력/전송 마스킹
 /// ─────────────────────────────────────────────────────────────
 
 enum _TailDirection { up, down }
 
-Future<void> _showChatReadOnlyPopoverLite({
+Future<void> _showChatPopoverLite({
   required BuildContext rootContext,
   required GlobalKey targetKey,
   required String scopeKey,
+  bool readOnly = false,
 }) async {
   FocusScope.of(rootContext).unfocus();
   SheetChatService.instance.start(scopeKey);
 
   final targetCtx = targetKey.currentContext;
   if (targetCtx == null) {
-    liteChatBottomSheet(rootContext);
+    _showLiteChatBottomSheetInternal(rootContext,
+        scopeKey: scopeKey, readOnly: readOnly);
     return;
   }
 
   final ro = targetCtx.findRenderObject();
   if (ro is! RenderBox) {
-    liteChatBottomSheet(rootContext);
+    _showLiteChatBottomSheetInternal(rootContext,
+        scopeKey: scopeKey, readOnly: readOnly);
     return;
   }
 
@@ -328,7 +505,8 @@ Future<void> _showChatReadOnlyPopoverLite({
     dir = _TailDirection.up; // 말풍선이 버튼 아래 / 꼬리 위
     height = heightBelow;
   } else {
-    liteChatBottomSheet(rootContext);
+    _showLiteChatBottomSheetInternal(rootContext,
+        scopeKey: scopeKey, readOnly: readOnly);
     return;
   }
 
@@ -381,6 +559,7 @@ Future<void> _showChatReadOnlyPopoverLite({
                     tailWidth: tailW,
                     tailCenterX: tailCenterX,
                     tailDirection: dir,
+                    readOnly: readOnly,
                   ),
                 ),
               ),
@@ -395,9 +574,8 @@ Future<void> _showChatReadOnlyPopoverLite({
         opacity: curved,
         child: ScaleTransition(
           scale: Tween<double>(begin: 0.92, end: 1.0).animate(curved),
-          alignment: dir == _TailDirection.down
-              ? Alignment.bottomCenter
-              : Alignment.topCenter,
+          alignment:
+          dir == _TailDirection.down ? Alignment.bottomCenter : Alignment.topCenter,
           child: child,
         ),
       );
@@ -416,6 +594,7 @@ class _ChatPopoverShellLite extends StatelessWidget {
     required this.tailWidth,
     required this.tailCenterX,
     required this.tailDirection,
+    required this.readOnly,
   });
 
   final double width;
@@ -428,6 +607,8 @@ class _ChatPopoverShellLite extends StatelessWidget {
   final double tailWidth;
   final double tailCenterX;
   final _TailDirection tailDirection;
+
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -460,20 +641,23 @@ class _ChatPopoverShellLite extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                Container(
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF2F4F7),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: Colors.black.withOpacity(.06)),
+                if (readOnly) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF2F4F7),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: Colors.black.withOpacity(.06)),
+                    ),
+                    child: const Text(
+                      '읽기 전용',
+                      style:
+                      TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+                    ),
                   ),
-                  child: const Text(
-                    '읽기 전용',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
-                  ),
-                ),
-                const SizedBox(width: 4),
+                  const SizedBox(width: 4),
+                ],
                 IconButton(
                   tooltip: '닫기',
                   icon: const Icon(Icons.close),
@@ -486,11 +670,12 @@ class _ChatPopoverShellLite extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-              child: _ReadOnlyLiteChatBody(
+              child: readOnly
+                  ? _ReadOnlyLiteChatBody(
                 scopeKey: scopeKey,
-                // ✅ 경고 제거: 호출부에서 실제로 값을 전달
                 bottomMaskHeight: _kBottomMaskHeight,
-              ),
+              )
+                  : _SimpleChatBody(scopeKey: scopeKey),
             ),
           ),
         ],
@@ -750,15 +935,20 @@ class _SpeechBubblePath {
   }
 }
 
-/// ✅ Lite: 채팅 열기 버튼(말풍선 팝오버, 읽기 전용)
-class ChatOpenButtonLite extends StatefulWidget {
-  const ChatOpenButtonLite({super.key});
+/// ✅ Lite: 채팅 열기 버튼(팝오버 우선, 공간 부족 시 풀시트로 fallback)
+class ChatOpenButtonSimple extends StatefulWidget {
+  const ChatOpenButtonSimple({
+    super.key,
+    this.readOnly = false,
+  });
+
+  final bool readOnly;
 
   @override
-  State<ChatOpenButtonLite> createState() => _ChatOpenButtonLiteState();
+  State<ChatOpenButtonSimple> createState() => _ChatOpenButtonSimpleState();
 }
 
-class _ChatOpenButtonLiteState extends State<ChatOpenButtonLite> {
+class _ChatOpenButtonSimpleState extends State<ChatOpenButtonSimple> {
   final GlobalKey _targetKey = GlobalKey();
 
   @override
@@ -787,8 +977,11 @@ class _ChatOpenButtonLiteState extends State<ChatOpenButtonLite> {
             Icon(Icons.forum, size: 18),
             SizedBox(width: 6),
             Flexible(
-              child: Text('채팅 열기',
-                  overflow: TextOverflow.ellipsis, maxLines: 1),
+              child: Text(
+                '채팅 열기',
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
             ),
           ],
         ),
@@ -801,18 +994,18 @@ class _ChatOpenButtonLiteState extends State<ChatOpenButtonLite> {
       valueListenable: SheetChatService.instance.state,
       builder: (context, st, _) {
         final latest = st.latest?.text ?? '';
-        final text =
-        latest.length > 20 ? '${latest.substring(0, 20)}...' : latest;
+        final text = latest.length > 20 ? '${latest.substring(0, 20)}...' : latest;
         final label = latest.isEmpty ? '채팅 열기' : text;
 
         return Container(
           key: _targetKey,
           child: ElevatedButton(
             onPressed: () async {
-              await _showChatReadOnlyPopoverLite(
+              await _showChatPopoverLite(
                 rootContext: context,
                 targetKey: _targetKey,
                 scopeKey: scopeKey,
+                readOnly: widget.readOnly,
               );
             },
             style: ElevatedButton.styleFrom(

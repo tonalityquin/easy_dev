@@ -8,19 +8,14 @@ import '../enums/plate_type.dart';
 import '../states/calendar/field_calendar_state.dart';
 import '../states/page/page_state.dart';
 import '../states/page/page_info.dart';
-import '../states/area/area_state.dart';
 import '../states/plate/plate_state.dart';
 import '../states/user/user_state.dart';
 
 import '../screens/service_mode/input_package/input_plate_screen.dart';
 import '../screens/service_mode/type_package/common_widgets/dashboard_bottom_sheet/home_dash_board_bottom_sheet.dart';
-import 'service_mode/type_package/common_widgets/chats/chat_bottom_sheet.dart';
+import 'service_mode/type_package/common_widgets/chats/chat_bottom_sheet.dart'; // ✅ ChatOpenButton + chatBottomSheet 제공
 import 'secondary_page.dart';
 import '../utils/snackbar_helper.dart';
-
-import '../utils/tts/tts_manager.dart';
-
-import '../services/latest_message_service.dart';
 
 import 'service_mode/type_package/common_widgets/reverse_sheet_package/parking_completed_table_sheet.dart';
 
@@ -55,12 +50,6 @@ class _TypePageState extends State<TypePage> {
           final plateState = context.read<PlateState>();
           final pageState = context.read<PageState>();
           final userName = context.read<UserState>().name;
-
-          // ★ 현재 area 기반으로 전역 리스너(실시간 READ) 시작 — idempotent
-          final currentArea = context.read<AreaState>().currentArea.trim();
-          if (currentArea.isNotEmpty) {
-            LatestMessageService.instance.start(currentArea);
-          }
 
           return PopScope(
             // ✅ 이 화면에서만 뒤로가기(pop) 차단 → 앱 종료 방지
@@ -114,94 +103,17 @@ class _TypePageState extends State<TypePage> {
 class _ChatDashboardBar extends StatelessWidget {
   const _ChatDashboardBar();
 
-  static Future<void> _replayLatestTts(
-      BuildContext context,
-      String area,
-      ) async {
-    // ★ Firestore 접근 없음: 서비스가 저장해 둔 로컬 캐시만 사용 → READ 0
-    final text = (await LatestMessageService.instance.readFromPrefs()).trim();
-    if (text.isEmpty) {
-      showSelectedSnackbar(context, '최근 메시지가 없습니다.');
-      return;
-    }
-    await TtsManager.speak(
-      text,
-      language: 'ko-KR',
-      rate: 0.4,
-      volume: 1.0,
-      pitch: 1.0,
-      preferGoogleOnAndroid: true,
-      openPlayStoreIfMissing: false,
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final palette = AppCardPalette.of(context);
-    final area = context.read<AreaState>().currentArea.trim();
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
       child: Row(
         children: [
-          // ── 채팅: 최근 메시지 표시 + "다시 듣기" (Firestore 구독 없음)
-          Expanded(
-            child: area.isEmpty
-                ? ElevatedButton(
-              onPressed: null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: palette.serviceDark.withOpacity(.35),
-                disabledBackgroundColor: Colors.white,
-                disabledForegroundColor:
-                palette.serviceDark.withOpacity(.35),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 12,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.volume_up, size: 20),
-                  SizedBox(width: 6),
-                  Text('다시 듣기'),
-                ],
-              ),
-            )
-                : ValueListenableBuilder<LatestMessageData>(
-              // ★ 전역 서비스의 메모리 캐시를 구독 → Firestore 접근 없음
-              valueListenable: LatestMessageService.instance.latest,
-              builder: (context, latestData, _) {
-                final hasText = latestData.text.trim().isNotEmpty;
-                return ElevatedButton(
-                  onPressed:
-                  hasText ? () => _replayLatestTts(context, area) : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: palette.serviceBase,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.volume_up, size: 20),
-                      SizedBox(width: 6),
-                      Text('다시 듣기', overflow: TextOverflow.ellipsis),
-                    ],
-                  ),
-                );
-              },
-            ),
+          // ✅ 좌측: “채팅 열기” 버튼(말풍선 팝오버, 읽기 전용)
+          const Expanded(
+            child: ChatOpenButton(),
           ),
           const SizedBox(width: 8),
 
@@ -258,7 +170,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   double _dragDistance = 0.0;
 
   // ── 세로 스와이프
-  //   - 아래→위: 채팅 바텀시트
+  //   - 아래→위: 채팅 바텀시트(읽기 전용)
   //   - 위→아래: ParkingCompleted 로컬 테이블 Top Sheet
   double _vDragDistance = 0.0;
   bool _chatOpening = false; // 중복 오픈 방지(채팅)
@@ -321,7 +233,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
             '(need dist<-${_vDistanceThresholdUp} OR vy<-${_vVelocityThresholdUp})',
       );
       await Future<void>.delayed(const Duration(milliseconds: 10));
-      if (mounted) chatBottomSheet(context);
+      if (mounted) chatBottomSheet(context); // ✅ 읽기 전용 바텀시트(아래 파일에서 구현)
       _chatOpening = false;
     } else if (firedDown && !_topOpening) {
       _topOpening = true;
