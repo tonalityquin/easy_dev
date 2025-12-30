@@ -6,6 +6,7 @@
 // - 복사/전체삭제(회전 포함)
 // - 리스트 스크롤 성능 및 예외 처리
 // - 헤더는 UpdateBottomSheet 스타일(아이콘 + 제목 + 닫기)
+// - 헤더 같은 행 우측: 구글 세션 시도 차단 On/Off (SharedPreferences 영구 저장)
 // - 소스 선택 칩/액션 버튼은 2줄로 세로 배치 & 중앙 정렬
 //
 
@@ -54,11 +55,16 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
   // 현재 소스 (UI 필터용)
   _LogSource _source = _LogSource.database;
 
+  // 구글 세션(로그인) 시도 차단 여부 (SharedPreferences로 영구 저장)
+  bool _blockGoogleSessionAttempts = false;
+  bool _blockFlagLoaded = false;
+
   final DateFormat _fmt = DateFormat('yyyy-MM-dd HH:mm:ss');
 
   @override
   void initState() {
     super.initState();
+    _loadGoogleSessionBlockFlag();
     _loadTail();
   }
 
@@ -67,6 +73,44 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
     _searchCtrl.dispose();
     _listCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadGoogleSessionBlockFlag() async {
+    try {
+      await GoogleAuthSession.instance.warmUpBlockFlag();
+      if (!mounted) return;
+      setState(() {
+        _blockGoogleSessionAttempts = GoogleAuthSession.instance.isSessionBlocked;
+        _blockFlagLoaded = true;
+      });
+    } catch (_) {
+      // prefs 로딩 실패 시에도 기본값(OFF)으로 동작
+      if (!mounted) return;
+      setState(() {
+        _blockGoogleSessionAttempts = false;
+        _blockFlagLoaded = true;
+      });
+    }
+  }
+
+  Future<void> _setGoogleSessionBlock(bool v) async {
+    setState(() {
+      _blockGoogleSessionAttempts = v;
+    });
+
+    try {
+      await GoogleAuthSession.instance.setSessionBlocked(v);
+      if (!mounted) return;
+
+      // UX: 상태 변경 안내 (원치 않으면 제거 가능)
+      showSuccessSnackbar(
+        context,
+        v ? '구글 세션 시도 차단: ON' : '구글 세션 시도 차단: OFF',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showFailedSnackbar(context, '구글 세션 차단 설정 저장 실패: $e');
+    }
   }
 
   // ------- 로딩 -------
@@ -179,6 +223,13 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
   // pelicangnc1@gmail.com 으로 .md 첨부 이메일 전송 후, 로그 자동 삭제
   Future<void> _sendLogsByEmail() async {
     if (_sendingEmail) return;
+
+    // 구글 세션 차단(ON) 상태에서는 Gmail API를 사용할 수 없으므로 즉시 차단
+    if (_blockGoogleSessionAttempts) {
+      if (!mounted) return;
+      showSelectedSnackbar(context, '구글 세션 시도 차단(ON) 상태입니다. 전송을 위해 OFF로 변경해 주세요.');
+      return;
+    }
 
     setState(() => _sendingEmail = true);
 
@@ -409,11 +460,40 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                     children: [
                       Icon(Icons.bug_report_rounded, color: cs.primary),
                       const SizedBox(width: 8),
-                      Text(
-                        '디버그 로그',
-                        style: text.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                      Expanded(
+                        child: Text(
+                          '디버그 로그',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                        ),
                       ),
-                      const Spacer(),
+
+                      // ✅ 같은 행 우측: 구글 세션 차단 On/Off
+                      Tooltip(
+                        message: '에뮬레이터 테스트 시 구글 로그인/세션 시도를 앱 전체에서 차단합니다.',
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '구글 세션 차단',
+                              style: (text.labelMedium ?? const TextStyle()).copyWith(
+                                color: Colors.black87,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Transform.scale(
+                              scale: 0.9,
+                              child: Switch.adaptive(
+                                value: _blockGoogleSessionAttempts,
+                                onChanged: _blockFlagLoaded ? _setGoogleSessionBlock : null,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
                       IconButton(
                         tooltip: '닫기',
                         onPressed: () => Navigator.of(context).maybePop(),

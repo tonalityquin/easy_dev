@@ -10,6 +10,7 @@ import '../../../states/area/area_state.dart';
 
 import '../../../repositories/plate_repo_services/firestore_plate_repository.dart';
 
+import '../../../theme.dart';
 import 'lite_input_plate_controller.dart';
 import 'sections/lite_input_bill_section.dart';
 import 'sections/lite_input_location_section.dart';
@@ -18,7 +19,6 @@ import 'sections/lite_input_plate_section.dart';
 import 'sections/lite_input_bottom_action_section.dart';
 import 'sections/lite_input_custom_status_section.dart';
 
-import 'widgets/lite_input_custom_status_bottom_sheet.dart';
 import 'keypad/num_keypad.dart';
 import 'keypad/kor_keypad.dart';
 import 'widgets/lite_input_bottom_navigation.dart';
@@ -87,7 +87,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
   String? _resolvedMonthlyDocId;
 
   // ─────────────────────────────
-  // ✅ 도커 내부 페이지(정산 유형 / 추가 상태·메모) 스와이프 전환
+  // ✅ 도커 내부 페이지(정산 유형 / 추가 상태·메모) 전환
+  //    - 헤더 탭 선택 + (기존) 스와이프 전환 유지
   // ─────────────────────────────
   static const int _dockPageBill = 0;
   static const int _dockPageMemo = 1;
@@ -95,7 +96,12 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
   int _dockPageIndex = _dockPageBill;
   bool _dockSlideFromRight = true;
 
-  String get _pageIndicatorText => (_dockPageIndex == _dockPageBill) ? '●○' : '○●';
+  // ─────────────────────────────
+  // ✅ (리팩터링) plate_status get 성공 시 사용자 인지용 다이얼로그 제어
+  //    - 동일 plate/area로 연속 호출될 때 중복 표시 방지
+  // ─────────────────────────────
+  String? _lastPlateStatusDialogKey;
+  bool _plateStatusDialogShowing = false;
 
   // ─────────────────────────────
   // ✅ 문서명 정책 유틸
@@ -277,6 +283,61 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
 
   void _toggleSheet() => _animateSheet(open: !_sheetOpen);
 
+  Future<void> _openSheetToMemoPage() async {
+    if (!_sheetOpen) {
+      await _animateSheet(open: true); // open 시 bill로 리셋됨
+    }
+    if (!mounted) return;
+    _setDockPage(_dockPageMemo);
+  }
+
+  /// ✅ (UI/UX 리팩터링) plate_status get 성공 시 사용자 인지용 Modern Dialog
+  /// - 요구사항: Dialog에서는 countType/statusList를 보여주지 않음
+  /// - 표시: area, plate, customStatus(메모)만 표시
+  /// - CTA: "상태 메모 보기" → 시트 열고 메모 탭 이동
+  Future<void> _showPlateStatusLoadedDialog({
+    required String plateNumber,
+    required String area,
+    String? customStatus,
+  }) async {
+    if (!mounted) return;
+
+    final safeArea = _safeArea(area);
+    final customStatusText = (customStatus ?? '').trim().isEmpty ? '-' : customStatus!.trim();
+
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'plate_status_loaded',
+      barrierColor: Colors.black.withOpacity(0.55),
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (ctx, a1, a2) {
+        return Center(
+          child: _PlateStatusLoadedDialog(
+            safeArea: safeArea,
+            plateNumber: plateNumber,
+            customStatusText: customStatusText,
+            onClose: () => Navigator.of(ctx).pop(),
+            onGoMemo: () async {
+              Navigator.of(ctx).pop();
+              await _openSheetToMemoPage();
+            },
+          ),
+        );
+      },
+      transitionBuilder: (ctx, animation, secondary, child) {
+        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.96, end: 1.0).animate(curved),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -332,39 +393,51 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
         // ✅ 입력 완료 시에는 "plate_status" 조회 (월샤딩 + 후보 docId 폴백)
         final data = await _fetchPlateStatus(plateNumber, area);
 
-        if (mounted && data != null) {
-          final fetchedStatus = (data['customStatus'] as String?)?.trim();
-          final fetchedList =
-              (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
-          final String? fetchedCountType = (data['countType'] as String?)?.trim();
+        if (!mounted || data == null) return;
 
-          setState(() {
-            controller.fetchedCustomStatus = fetchedStatus;
-            controller.customStatusController.text = fetchedStatus ?? '';
-            selectedStatusNames = fetchedList;
-            statusSectionKey = UniqueKey();
+        final fetchedStatus = (data['customStatus'] as String?)?.trim();
+        final fetchedList =
+            (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+        final String? fetchedCountType = (data['countType'] as String?)?.trim();
 
-            // ✅ plate_status에 countType이 있으면 정기 상태로 전환 + countType 표시
-            if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
-              controller.countTypeController.text = fetchedCountType;
-              controller.selectedBillType = '정기';
-              controller.selectedBill = fetchedCountType;
+        setState(() {
+          controller.fetchedCustomStatus = fetchedStatus;
+          controller.customStatusController.text = fetchedStatus ?? '';
+          selectedStatusNames = fetchedList;
+          statusSectionKey = UniqueKey();
 
-              // monthly 문서 존재 여부는 "정기 불러오기"로 확정
-              _monthlyDocExists = false;
-              _resolvedMonthlyDocId = null;
-            } else {
-              _monthlyDocExists = false;
-              _resolvedMonthlyDocId = null;
-            }
-          });
+          // ✅ plate_status에 countType이 있으면 정기 상태로 전환 + countType 표시
+          if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
+            controller.countTypeController.text = fetchedCountType;
+            controller.selectedBillType = '정기';
+            controller.selectedBill = fetchedCountType;
 
-          await liteInputCustomStatusBottomSheet(
-            context,
-            plateNumber,
-            area,
-            selectedBillType: controller.selectedBillType,
+            // monthly 문서 존재 여부는 "정기 불러오기"로 확정
+            _monthlyDocExists = false;
+            _resolvedMonthlyDocId = null;
+          } else {
+            _monthlyDocExists = false;
+            _resolvedMonthlyDocId = null;
+          }
+        });
+
+        // ✅ Dialog 중복 표시 방지
+        final dialogKey = '${plateNumber}_${_safeArea(area)}';
+        if (_plateStatusDialogShowing) return;
+        if (_lastPlateStatusDialogKey == dialogKey) return;
+
+        _plateStatusDialogShowing = true;
+        _lastPlateStatusDialogKey = dialogKey;
+
+        try {
+          // ✅ Dialog에는 customStatus(메모)만 전달/표시
+          await _showPlateStatusLoadedDialog(
+            plateNumber: plateNumber,
+            area: area,
+            customStatus: fetchedStatus,
           );
+        } finally {
+          _plateStatusDialogShowing = false;
         }
       }
     });
@@ -545,8 +618,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
       debugPrint('[_fetchPlateStatus] error: $e');
       return null;
     } finally {
-      // Lite의 기존 지표 정책이 n=1 고정이면 1로 두십시오.
-      // 문제 분석/정확 계측이 필요하면 reads 기반으로 보고하는 편이 유리합니다.
       final nToReport = (reads <= 0) ? 1 : reads;
 
       try {
@@ -563,9 +634,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     }
   }
 
-  /// monthly_plate_status 단건 조회
-  /// ✅ (핵심) docId 정책 통일 + 하이픈/비하이픈 후보 조회
-  /// ✅ 실제로 찾은 docId를 _resolvedMonthlyDocId에 저장하여 "반영" 업데이트 대상 일치 보장
   Future<Map<String, dynamic>?> _fetchMonthlyPlateStatus(String plateNumber, String area) async {
     final safeArea = _safeArea(area);
     final docIds = _plateDocIdCandidates(plateNumber, safeArea);
@@ -586,7 +654,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
       debugPrint('[_fetchMonthlyPlateStatus] error: $e');
       return null;
     } finally {
-      // 월정기는 기존 정책대로 read 1회 고정 보고 유지
       try {
         await UsageReporter.instance.report(
           area: safeArea,
@@ -601,7 +668,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     }
   }
 
-  /// '정기' 선택 시 monthly_plate_status에서 불러와 화면에 반영
   Future<void> _handleMonthlySelectedFetchAndApply() async {
     if (!controller.isInputValid()) {
       if (!mounted) return;
@@ -661,8 +727,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     );
   }
 
-  /// 월정기(monthly_plate_status)에 "메모/상태"만 반영(update)
-  /// - 실제 로드된 docId(_resolvedMonthlyDocId)에 반영하여 문서 분기(하이픈 차이)로 인한 미반영 방지
   Future<void> _applyMonthlyMemoAndStatusOnly() async {
     if (_monthlyApplying) return;
 
@@ -691,7 +755,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     setState(() => _monthlyApplying = true);
 
     try {
-      // ✅ Repository로 통일 + update() 기반(문서 생성 방지)
       await _plateRepo.setMonthlyMemoAndStatusOnly(
         plateNumber: plateNumber,
         area: area,
@@ -699,12 +762,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
         customStatus: customStatus,
         statusList: statusList,
         skipIfDocMissing: false,
-        // repo 내부가 "{plateNumber}_{area}"를 강제 생성한다면,
-        // _resolvedMonthlyDocId 기반 update가 더 안전합니다.
-        // repo에 docId override가 없다면, 아래 직접 update 방식으로 전환하십시오.
       );
 
-      // ✅ UsageReporter: write 1회
       try {
         await UsageReporter.instance.report(
           area: _safeArea(area),
@@ -738,7 +797,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     }
   }
 
-  /// "반영" 버튼(추가 상태/메모 섹션 하단) - 정기일 때만 노출
   Widget _buildMonthlyApplyButton() {
     if (controller.selectedBillType != '정기') {
       return const SizedBox.shrink();
@@ -895,6 +953,9 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
       _monthlyDocExists = false;
       _resolvedMonthlyDocId = null;
 
+      // ✅ 번호판이 새로 채워졌으므로 안내 다이얼로그 중복 키 초기화
+      _lastPlateStatusDialogKey = null;
+
       if (promptMid || mid.isEmpty) {
         controller.showKeypad = true;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -915,14 +976,15 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     _applyPlateWithFallback(plate);
   }
 
-  /// 도크에서 특정 칸 편집 시작
   void _beginDockEdit(_DockField field) {
     setState(() {
       _dockEditing = field;
 
-      // ✅ 번호판 수정 시작이면 월정기 로딩 확정 상태는 초기화
       _monthlyDocExists = false;
       _resolvedMonthlyDocId = null;
+
+      // ✅ 편집 시작 → 안내 다이얼로그 중복 키 초기화
+      _lastPlateStatusDialogKey = null;
 
       switch (field) {
         case _DockField.front:
@@ -998,6 +1060,9 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
           _dockEditing = null;
           _monthlyDocExists = false;
           _resolvedMonthlyDocId = null;
+
+          // ✅ 입력 초기화 → 안내 다이얼로그 중복 키 초기화
+          _lastPlateStatusDialogKey = null;
         });
       },
     );
@@ -1119,7 +1184,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
         ? Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // ✅ (선택) 정기 제한 안내 배너
         if (_hasMonthlyLoaded && !_hasMonthlyParking)
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
@@ -1141,7 +1205,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
           onChanged: (value) => setState(() => controller.selectedBill = value),
           selectedBillType: controller.selectedBillType,
           onTypeChanged: (newType) {
-            // ✅ 핵심: has_monthly_parking=false면 정기 선택 시도를 차단
             if (newType == '정기' && _hasMonthlyLoaded && !_hasMonthlyParking) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('현재 지역에서는 정기(월주차) 기능을 사용할 수 없습니다.')),
@@ -1207,7 +1270,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
       ),
     );
 
-    // ✅ 완전 닫힘(canSwipe=false)에서는 가로 스와이프 전환 완전 비활성화
     if (!canSwipe) return content;
 
     return GestureDetector(
@@ -1306,6 +1368,9 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
                               _dockEditing = null;
                               _monthlyDocExists = false;
                               _resolvedMonthlyDocId = null;
+
+                              // ✅ 입력 초기화 → 안내 다이얼로그 중복 키 초기화
+                              _lastPlateStatusDialogKey = null;
                             });
                           },
                           onRegionChanged: (region) {
@@ -1328,7 +1393,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
                   ),
                 ),
 
-                // ✅ 카드 영역: 내부 세로 스크롤 + 헤더 고정 + 닫힘(_sheetClosed)에서는 스크롤 완전 비활성화
                 DraggableScrollableSheet(
                   controller: _sheetController,
                   initialChildSize: _sheetClosed,
@@ -1339,13 +1403,11 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
                   builder: (context, scrollController) {
                     const sheetBg = Color(0xFFF6F8FF);
 
-                    // ✅ 최신 스크롤 컨트롤러 보관
                     _sheetScrollController = scrollController;
 
                     final bool lockScroll = _isSheetFullyClosed();
                     final bool canSwipe = !lockScroll;
 
-                    // ✅ bottom padding: 시스템 키보드(viewInset)만 대응
                     final sheetBottomPadding = 16.0 + viewInset;
 
                     return Container(
@@ -1396,7 +1458,9 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
                                       sheetOpen: _sheetOpen,
                                       plateText: controller.buildPlateNumber(),
                                       onToggle: _toggleSheet,
-                                      pageIndicatorText: _pageIndicatorText,
+                                      currentPageIndex: _dockPageIndex,
+                                      onSelectBill: () => _setDockPage(_dockPageBill),
+                                      onSelectMemo: () => _setDockPage(_dockPageMemo),
                                     ),
                                   ),
                                   SliverPadding(
@@ -1434,31 +1498,329 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
   }
 }
 
-/// ✅ 카드 헤더(핸들/타이틀/번호판) 고정 + 탭으로 열기/닫기
-/// ✅ 헤더 우측에 페이지 인디케이터(●○) 표시
+/// ✅ Modern Dialog (Material 3 스타일)
+/// - 요구사항: countType/statusList는 "Dialog에서 표시하지 않음"
+/// - Lite 테마 색상(AppCardPalette.liteBase/liteDark/liteLight) 사용
+class _PlateStatusLoadedDialog extends StatelessWidget {
+  final String safeArea;
+  final String plateNumber;
+  final String customStatusText;
+  final VoidCallback onClose;
+  final VoidCallback onGoMemo;
+
+  const _PlateStatusLoadedDialog({
+    required this.safeArea,
+    required this.plateNumber,
+    required this.customStatusText,
+    required this.onClose,
+    required this.onGoMemo,
+  });
+
+  Color _onColorFor(Color bg, {Color fallback = Colors.white}) {
+    // 단순 대비(명도 기준)
+    return bg.computeLuminance() > 0.55 ? Colors.black : fallback;
+  }
+
+  Widget _infoCard({
+    required BuildContext context,
+    required IconData icon,
+    required String label,
+    required Widget value,
+  }) {
+    final palette = AppCardPalette.of(context);
+    final base = palette.liteBase;
+    final dark = palette.liteDark;
+    final light = palette.liteLight;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: light.withOpacity(0.35),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: dark.withOpacity(0.25)),
+      ),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: base.withOpacity(0.14),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: base.withOpacity(0.22)),
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, size: 18, color: dark),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: dark.withOpacity(0.78),
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                value,
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final palette = AppCardPalette.of(context);
+    final base = palette.liteBase;
+    final dark = palette.liteDark;
+    final light = palette.liteLight;
+
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Top bar: leading status + close
+              Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: light.withOpacity(0.55),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: base.withOpacity(0.18)),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(Icons.check_rounded, color: dark, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '불러오기 완료',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.2,
+                        color: Colors.black,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '닫기',
+                    onPressed: onClose,
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '저장된 메모를 화면에 반영했습니다.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.black.withOpacity(0.70),
+                    height: 1.35,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // Meta row
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: light.withOpacity(0.20),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: dark.withOpacity(0.18)),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '지역: $safeArea',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black.withOpacity(0.88),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Flexible(
+                      child: Text(
+                        '번호판: $plateNumber',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.black.withOpacity(0.78),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // ✅ 메모만 표시
+              _infoCard(
+                context: context,
+                icon: Icons.note_alt_rounded,
+                label: '메모',
+                value: Text(
+                  customStatusText,
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.35,
+                    color: Colors.black.withOpacity(0.86),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Actions
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: onClose,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        side: BorderSide(color: base.withOpacity(0.45)),
+                        foregroundColor: Colors.black,
+                      ),
+                      child: const Text('닫기', style: TextStyle(fontWeight: FontWeight.w800)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: onGoMemo,
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        backgroundColor: base,
+                        foregroundColor: _onColorFor(base, fallback: Colors.white),
+                      ),
+                      child: const Text('상태 메모 보기', style: TextStyle(fontWeight: FontWeight.w900)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// ✅ 카드 헤더(핸들/세그먼트 탭) 고정
+/// - 닫힘(sheetOpen=false): 헤더 전체가 "하나의 도커"로 동작(탭하면 열기), 페이지 선택 불가
+/// - 열림(sheetOpen=true): 좌/우 반분 세그먼트로 "정산 유형 / 상태 메모" 선택 가능, 닫기는 핸들 탭으로 수행
 class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
   final Color backgroundColor;
   final bool sheetOpen;
   final String plateText;
-  final String pageIndicatorText;
+
+  final int currentPageIndex;
   final VoidCallback onToggle;
+  final VoidCallback onSelectBill;
+  final VoidCallback onSelectMemo;
 
   _SheetHeaderDelegate({
     required this.backgroundColor,
     required this.sheetOpen,
     required this.plateText,
     required this.onToggle,
-    required this.pageIndicatorText,
+    required this.currentPageIndex,
+    required this.onSelectBill,
+    required this.onSelectMemo,
   });
 
+  // ✅ FIX: BOTTOM OVERFLOWED 방지 위해 헤더 높이 상향(여유치 확보)
   @override
-  double get minExtent => 86;
+  double get minExtent => 104;
 
   @override
-  double get maxExtent => 86;
+  double get maxExtent => 104;
+
+  Widget _segmentButton({
+    required BuildContext context,
+    required String label,
+    required bool selected,
+    required VoidCallback? onTap,
+  }) {
+    final selectedBg = Colors.white;
+    final normalBg = Colors.transparent;
+
+    final border = Border.all(
+      color: selected ? Colors.black87 : Colors.black26,
+      width: selected ? 1.4 : 1.0,
+    );
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOutCubic,
+          height: 36,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: selected ? selectedBg : normalBg,
+            borderRadius: BorderRadius.circular(10),
+            border: border,
+          ),
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+              color: selected ? Colors.black : Colors.black54,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    final VoidCallback? outerTap = sheetOpen ? null : onToggle;
+
+    final bool billSelected = currentPageIndex == _LiteInputPlateScreenState._dockPageBill;
+    final bool memoSelected = currentPageIndex == _LiteInputPlateScreenState._dockPageMemo;
+
     return Material(
       color: backgroundColor,
       shape: const RoundedRectangleBorder(
@@ -1466,51 +1828,74 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: onToggle,
+        onTap: outerTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+          // ✅ FIX: 패딩은 유지하되, 내부 간격을 줄이고 하단 Row를 안정화
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
           child: Column(
             children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.black38,
-                  borderRadius: BorderRadius.circular(2),
+              InkWell(
+                onTap: sheetOpen ? onToggle : null,
+                borderRadius: BorderRadius.circular(12),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 3),
+                  child: Center(
+                    child: _SheetHandle(),
+                  ),
                 ),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8), // ✅ FIX: 10 → 8
+
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    sheetOpen ? '정산 유형 / 메모 카드 닫기' : '정산 유형 / 메모 카드 열기',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
+                  Expanded(
+                    child: _segmentButton(
+                      context: context,
+                      label: '정산 유형',
+                      selected: billSelected,
+                      onTap: sheetOpen ? onSelectBill : null,
                     ),
                   ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        plateText,
-                        style: const TextStyle(color: Colors.black54),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _segmentButton(
+                      context: context,
+                      label: '상태 메모',
+                      selected: memoSelected,
+                      onTap: sheetOpen ? onSelectMemo : null,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4), // ✅ FIX: 6 → 4
+
+              // ✅ FIX: 하단 Row를 Expanded+ellipsis로 안전 처리(폰트 스케일에서도 안정)
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      sheetOpen ? '핸들을 탭하면 닫힙니다' : '탭하면 카드가 열립니다',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black.withOpacity(0.55),
                       ),
-                      const SizedBox(width: 10),
-                      Semantics(
-                        label: 'dock_page_indicator: $pageIndicatorText',
-                        child: Text(
-                          pageIndicatorText,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.black87,
-                            letterSpacing: 1.0,
-                          ),
-                        ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      plateText,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.black54,
                       ),
-                    ],
+                    ),
                   ),
                 ],
               ),
@@ -1526,7 +1911,25 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
     return oldDelegate.sheetOpen != sheetOpen ||
         oldDelegate.plateText != plateText ||
         oldDelegate.backgroundColor != backgroundColor ||
-        oldDelegate.pageIndicatorText != pageIndicatorText;
+        oldDelegate.currentPageIndex != currentPageIndex;
+  }
+}
+
+class _SheetHandle extends StatelessWidget {
+  const _SheetHandle();
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 40,
+      height: 4,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.black38,
+          borderRadius: BorderRadius.circular(2),
+        ),
+      ),
+    );
   }
 }
 
