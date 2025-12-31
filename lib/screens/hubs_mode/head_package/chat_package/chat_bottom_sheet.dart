@@ -58,7 +58,8 @@ Widget _buildScreenTag(BuildContext context) {
 
 /// ✅ (공용 레지스트리 기반) 채팅용 스프레드시트 선택을 Runtime에 반영
 Future<void> _applyActiveChatSheetToRuntime() async {
-  final id = SharedSpreadsheetRegistry.activeSpreadsheetIdOf(HeadSheetFeature.chat);
+  final id =
+  SharedSpreadsheetRegistry.activeSpreadsheetIdOf(HeadSheetFeature.chat);
   if (id != null && id.trim().isNotEmpty) {
     await ChatRuntime.instance.selectSheetAndRestart(id.trim());
   }
@@ -114,7 +115,8 @@ Widget _buildSheetSelectorBar(BuildContext context) {
                                     selected: e.alias == selectedAlias,
                                     onSelected: (_) async {
                                       // 1) 채팅 활성 별명 설정
-                                      await SharedSpreadsheetRegistry.setActiveAlias(
+                                      await SharedSpreadsheetRegistry
+                                          .setActiveAlias(
                                         HeadSheetFeature.chat,
                                         e.alias,
                                       );
@@ -146,187 +148,290 @@ Widget _buildSheetSelectorBar(BuildContext context) {
   );
 }
 
+/// ─────────────────────────────────────────────────────────────
+/// ✅ 핵심 리팩터링 포인트:
+/// - Lite 팝오버와 동일하게, 바텀시트가 "실제로 보이는 동안만"
+///   ChatRuntime.start()를 유지하고,
+///   닫히면 dispose에서 ChatRuntime.stop()으로 즉시 release.
+/// - Sheets 모드일 때만 알림 억제 플래그(chatUiVisible) ON.
+/// ─────────────────────────────────────────────────────────────
+
+class _ChatBottomSheetHost extends StatefulWidget {
+  final String scopeKey;
+
+  const _ChatBottomSheetHost({
+    required this.scopeKey,
+  });
+
+  @override
+  State<_ChatBottomSheetHost> createState() => _ChatBottomSheetHostState();
+}
+
+class _ChatBottomSheetHostState extends State<_ChatBottomSheetHost> {
+  bool _booted = false;
+
+  /// Sheets 모드에서만 chatUiVisible을 true로 유지
+  bool _chatUiVisibleHeld = false;
+
+  VoidCallback? _useSheetsListener;
+
+  @override
+  void initState() {
+    super.initState();
+    _boot();
+
+    // ✅ 모드 토글(ON/OFF)에 따라 chatUiVisible 정합성 유지
+    _useSheetsListener = () {
+      _syncChatUiVisibleWithMode();
+    };
+    ChatRuntime.instance.useSheetsApi.addListener(_useSheetsListener!);
+  }
+
+  Future<void> _boot() async {
+    await ChatRuntime.instance.ensureInitialized();
+    await SharedSpreadsheetRegistry.ensureBootstrapped();
+
+    // 초기 진입 시에도 현재 선택을 Runtime에 반영
+    await _applyActiveChatSheetToRuntime();
+
+    // ✅ 바텀시트 "표시 중" 상태로 시작 (Sheets면 acquire)
+    await ChatRuntime.instance.start(widget.scopeKey);
+
+    // ✅ Sheets 모드면 알림 억제 ON
+    _syncChatUiVisibleWithMode();
+
+    if (!mounted) return;
+    setState(() {
+      _booted = true;
+    });
+  }
+
+  void _syncChatUiVisibleWithMode() {
+    final sheetsOn = ChatRuntime.instance.useSheetsApi.value;
+
+    if (sheetsOn) {
+      if (!_chatUiVisibleHeld) {
+        SheetChatService.instance.setChatUiVisible(true);
+        _chatUiVisibleHeld = true;
+      }
+    } else {
+      if (_chatUiVisibleHeld) {
+        SheetChatService.instance.setChatUiVisible(false);
+        _chatUiVisibleHeld = false;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_useSheetsListener != null) {
+      ChatRuntime.instance.useSheetsApi.removeListener(_useSheetsListener!);
+    }
+
+    // ✅ 바텀시트 종료 시 알림 억제 해제
+    if (_chatUiVisibleHeld) {
+      SheetChatService.instance.setChatUiVisible(false);
+      _chatUiVisibleHeld = false;
+    }
+
+    // ✅ (핵심) 바텀시트가 닫히면 즉시 stop → Sheets 모드면 release로 폴링 완전 중단
+    unawaited(ChatRuntime.instance.stop());
+
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
+    return Stack(
+      children: [
+        _buildScreenTag(context),
+        Column(
+          mainAxisSize: MainAxisSize.max,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
+              child: Column(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      const SizedBox(width: 4),
+                      const Icon(Icons.forum,
+                          size: 20, color: Colors.black87),
+                      const SizedBox(width: 8),
+                      const Expanded(
+                        child: Text(
+                          '구역 채팅',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.black87,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+
+                      // ✅ 채팅 로그 PDF 메일 전송
+                      IconButton(
+                        tooltip: '채팅 로그를 PDF로 메일 전송',
+                        icon: const Icon(Icons.picture_as_pdf_outlined),
+                        onPressed: () async {
+                          await ChatLogMailer.open(context);
+                        },
+                      ),
+
+                      // ✅ Sheets API ON/OFF 토글 (기본 OFF)
+                      ValueListenableBuilder<bool>(
+                        valueListenable: ChatRuntime.instance.useSheetsApi,
+                        builder: (context, on, _) {
+                          return Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                on ? 'API ON' : 'API OFF',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: on ? Colors.blueGrey : Colors.black54,
+                                ),
+                              ),
+                              Switch.adaptive(
+                                value: on,
+                                onChanged: (v) async {
+                                  await ChatRuntime.instance.setUseSheetsApi(v);
+
+                                  // ✅ UI가 열려있는 동안은 start 유지
+                                  await ChatRuntime.instance
+                                      .start(ChatRuntime.instance.scopeKey);
+
+                                  // ✅ 모드 변경 즉시 chatUiVisible 정합성 반영
+                                  _syncChatUiVisibleWithMode();
+                                },
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+
+                      IconButton(
+                        tooltip: '닫기',
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.of(context).pop(),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            // ✅ 선택된 스프레드시트(별명) 전환 바 (API ON일 때만 표시)
+            _buildSheetSelectorBar(context),
+
+            const SizedBox(height: 6),
+            const Divider(
+              height: 1,
+              thickness: 1,
+              color: Color(0xFFEAEAEA),
+            ),
+
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                // ✅ ChatPanel은 start/stop을 직접 하지 않음(=LiteChatPanel과 동일한 역할 분리)
+                child: ChatPanel(scopeKey: widget.scopeKey),
+              ),
+            ),
+          ],
+        ),
+
+        // 부트 중 시각적 안정성(선택 사항)
+        if (!_booted)
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: true,
+              child: Container(
+                width: size.width,
+                height: size.height,
+                color: Colors.transparent,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 /// 공개 채팅 바텀시트 열기
 /// ✅ 기본: Sheets API OFF(로컬 모드)
 Future<void> chatBottomSheet(BuildContext context) async {
   final String scopeKey = _resolveScopeKey(context);
 
+  // 기본 준비(초기 렌더 안정성)
   await ChatRuntime.instance.ensureInitialized();
   await SharedSpreadsheetRegistry.ensureBootstrapped();
 
-  // ✅ 채팅 활성 별명 변화 → Runtime에 반영 (외부에서 바뀌는 경우 대비)
-  void aliasListener() {
-    // listener는 sync void가 요구되므로 microtask로 처리
-    scheduleMicrotask(() async {
-      await _applyActiveChatSheetToRuntime();
-    });
-  }
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: false,
+    backgroundColor: Colors.transparent,
+    elevation: 0,
+    barrierColor: Colors.black.withOpacity(0.25),
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    ),
+    clipBehavior: Clip.antiAlias,
+    builder: (ctx) {
+      final inset = MediaQuery.of(ctx).viewInsets.bottom;
+      final size = MediaQuery.of(ctx).size;
 
-  SharedSpreadsheetRegistry.activeChatAliasNotifier.addListener(aliasListener);
-
-  try {
-    // 초기 진입 시에도 현재 선택을 Runtime에 반영
-    await _applyActiveChatSheetToRuntime();
-
-    // scopeKey로 채팅 세션 시작
-    await ChatRuntime.instance.start(scopeKey);
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: false,
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      barrierColor: Colors.black.withOpacity(0.25),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      builder: (ctx) {
-        final inset = MediaQuery.of(ctx).viewInsets.bottom;
-        final size = MediaQuery.of(ctx).size;
-
-        return AnimatedPadding(
-          duration: const Duration(milliseconds: 150),
-          padding: EdgeInsets.only(bottom: inset),
-          child: Align(
-            alignment: Alignment.bottomCenter,
-            child: SizedBox(
-              height: size.height,
-              width: double.infinity,
-              child: Material(
-                color: Colors.transparent,
-                child: Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Color(0x1F000000),
-                        blurRadius: 16,
-                        offset: Offset(0, -2),
-                      ),
-                    ],
-                  ),
-                  child: SafeArea(
-                    top: true,
-                    left: false,
-                    right: false,
-                    bottom: false,
-                    child: Stack(
-                      children: [
-                        _buildScreenTag(ctx),
-                        Column(
-                          mainAxisSize: MainAxisSize.max,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
-                              child: Column(
-                                children: [
-                                  Container(
-                                    width: 40,
-                                    height: 4,
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[300],
-                                      borderRadius: BorderRadius.circular(2),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Row(
-                                    children: [
-                                      const SizedBox(width: 4),
-                                      const Icon(Icons.forum, size: 20, color: Colors.black87),
-                                      const SizedBox(width: 8),
-                                      const Expanded(
-                                        child: Text(
-                                          '구역 채팅',
-                                          style: TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.black87,
-                                          ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-
-                                      // ✅ 채팅 로그 PDF 메일 전송
-                                      IconButton(
-                                        tooltip: '채팅 로그를 PDF로 메일 전송',
-                                        icon: const Icon(Icons.picture_as_pdf_outlined),
-                                        onPressed: () async {
-                                          await ChatLogMailer.open(ctx);
-                                        },
-                                      ),
-
-                                      // ✅ Sheets API ON/OFF 토글 (기본 OFF)
-                                      ValueListenableBuilder<bool>(
-                                        valueListenable: ChatRuntime.instance.useSheetsApi,
-                                        builder: (context, on, _) {
-                                          return Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                on ? 'API ON' : 'API OFF',
-                                                style: TextStyle(
-                                                  fontSize: 12,
-                                                  fontWeight: FontWeight.w700,
-                                                  color: on ? Colors.blueGrey : Colors.black54,
-                                                ),
-                                              ),
-                                              Switch.adaptive(
-                                                value: on,
-                                                onChanged: (v) async {
-                                                  await ChatRuntime.instance.setUseSheetsApi(v);
-                                                  await ChatRuntime.instance.start(ChatRuntime.instance.scopeKey);
-                                                },
-                                              ),
-                                            ],
-                                          );
-                                        },
-                                      ),
-
-                                      IconButton(
-                                        tooltip: '닫기',
-                                        icon: const Icon(Icons.close),
-                                        onPressed: () => Navigator.of(ctx).pop(),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-
-                            // ✅ 선택된 스프레드시트(별명) 전환 바 (API ON일 때만 표시)
-                            _buildSheetSelectorBar(ctx),
-
-                            const SizedBox(height: 6),
-                            const Divider(
-                              height: 1,
-                              thickness: 1,
-                              color: Color(0xFFEAEAEA),
-                            ),
-
-                            Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                                child: ChatPanel(scopeKey: scopeKey),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+      return AnimatedPadding(
+        duration: const Duration(milliseconds: 150),
+        padding: EdgeInsets.only(bottom: inset),
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: SizedBox(
+            height: size.height,
+            width: double.infinity,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Color(0x1F000000),
+                      blurRadius: 16,
+                      offset: Offset(0, -2),
                     ),
-                  ),
+                  ],
+                ),
+                child: SafeArea(
+                  top: true,
+                  left: false,
+                  right: false,
+                  bottom: false,
+                  // ✅ 라이프사이클은 Host 위젯이 책임
+                  child: _ChatBottomSheetHost(scopeKey: scopeKey),
                 ),
               ),
             ),
           ),
-        );
-      },
-    );
-  } finally {
-    SharedSpreadsheetRegistry.activeChatAliasNotifier.removeListener(aliasListener);
-  }
+        ),
+      );
+    },
+  );
 }
 
 /// 채팅 열기 버튼
@@ -339,7 +444,8 @@ class ChatOpenButton extends StatelessWidget {
       valueListenable: ChatRuntime.instance.state,
       builder: (context, st, _) {
         final latestMsg = st.latest?.text ?? '';
-        final text = latestMsg.length > 20 ? '${latestMsg.substring(0, 20)}...' : latestMsg;
+        final text =
+        latestMsg.length > 20 ? '${latestMsg.substring(0, 20)}...' : latestMsg;
         final label = latestMsg.isEmpty ? '채팅 열기' : text;
 
         return ElevatedButton(

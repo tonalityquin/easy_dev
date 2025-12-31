@@ -8,8 +8,8 @@ import '../states/area/area_state.dart';
 import '../states/plate/lite_plate_state.dart';
 import '../states/user/user_state.dart';
 
+import 'common_package/chat_package//lite_chat_bottom_sheet.dart';
 import 'lite_mode/lite_input_package/lite_input_plate_screen.dart';
-import 'lite_mode/lite_type_package/lite_common_widgets/chats/lite_chat_bottom_sheet.dart';
 import 'lite_mode/lite_type_package/lite_common_widgets/dashboard_bottom_sheet/lite_home_dash_board_bottom_sheet.dart';
 import 'lite_mode/lite_type_package/lite_common_widgets/reverse_sheet_package/lite_parking_completed_table_sheet.dart';
 import 'secondary_page.dart';

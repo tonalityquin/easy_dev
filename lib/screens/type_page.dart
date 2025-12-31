@@ -13,7 +13,7 @@ import '../states/user/user_state.dart';
 
 import '../screens/service_mode/input_package/input_plate_screen.dart';
 import '../screens/service_mode/type_package/common_widgets/dashboard_bottom_sheet/home_dash_board_bottom_sheet.dart';
-import 'service_mode/type_package/common_widgets/chats/chat_bottom_sheet.dart'; // ✅ ChatOpenButton + chatBottomSheet 제공
+import 'common_package/chat_package/lite_chat_bottom_sheet.dart';
 import 'secondary_page.dart';
 import '../utils/snackbar_helper.dart';
 
@@ -110,7 +110,7 @@ class _ChatDashboardBar extends StatelessWidget {
         children: [
           // ✅ 좌측: “채팅 열기” 버튼(말풍선 팝오버, 읽기 전용)
           const Expanded(
-            child: ChatOpenButton(),
+            child: ChatOpenButtonLite(),
           ),
           const SizedBox(width: 8),
 

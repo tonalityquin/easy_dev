@@ -6,17 +6,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../../utils/snackbar_helper.dart';
 import '../../../../../services/sheet_chat_service.dart';
 
-class SimpleChatPanel extends StatefulWidget {
+class LiteChatPanel extends StatefulWidget {
   /// 영역 전환 감지/쇼트컷 키 구분용 (시트 내부 roomId는 사용하지 않음)
   final String scopeKey;
 
-  const SimpleChatPanel({super.key, required this.scopeKey});
+  const LiteChatPanel({super.key, required this.scopeKey});
 
   @override
-  State<SimpleChatPanel> createState() => _SimpleChatPanelState();
+  State<LiteChatPanel> createState() => _LiteChatPanelState();
 }
 
-class _SimpleChatPanelState extends State<SimpleChatPanel> {
+class _LiteChatPanelState extends State<LiteChatPanel> {
   static const int _maxShortcuts = 20;
 
   final TextEditingController _controller = TextEditingController();
@@ -24,6 +24,9 @@ class _SimpleChatPanelState extends State<SimpleChatPanel> {
 
   List<String> _shortcuts = [];
   bool _canSend = false;
+
+  // ✅ 공백만 입력한 경우에도 "지우기" 버튼 활성화를 위해 별도 플래그 유지
+  bool _hasAnyText = false;
 
   // 멀티선택
   bool _isMultiSelect = false;
@@ -102,7 +105,10 @@ class _SimpleChatPanelState extends State<SimpleChatPanel> {
                       children: [
                         const Text(
                           '쇼트컷 추가',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
                         ),
                         const SizedBox(height: 12),
                         TextField(
@@ -191,9 +197,14 @@ class _SimpleChatPanelState extends State<SimpleChatPanel> {
   }
 
   void _handleTextChanged() {
-    final enabled = _controller.text.trim().isNotEmpty;
-    if (_canSend != enabled) {
-      setState(() => _canSend = enabled);
+    final hasAny = _controller.text.isNotEmpty;
+    final canSend = _controller.text.trim().isNotEmpty;
+
+    if (_hasAnyText != hasAny || _canSend != canSend) {
+      setState(() {
+        _hasAnyText = hasAny;
+        _canSend = canSend;
+      });
     }
   }
 
@@ -211,8 +222,7 @@ class _SimpleChatPanelState extends State<SimpleChatPanel> {
     final needsSpaceBefore = before.isNotEmpty && !before.endsWith(' ');
     final needsSpaceAfter = after.isNotEmpty && !insert.endsWith(' ');
 
-    final toInsert =
-        '${needsSpaceBefore ? ' ' : ''}$insert${needsSpaceAfter ? ' ' : ''}';
+    final toInsert = '${needsSpaceBefore ? ' ' : ''}$insert${needsSpaceAfter ? ' ' : ''}';
 
     final newText = '$before$toInsert$after';
     final newOffset = before.length + toInsert.length;
@@ -268,16 +278,15 @@ class _SimpleChatPanelState extends State<SimpleChatPanel> {
   @override
   void initState() {
     super.initState();
-    SheetChatService.instance.start(widget.scopeKey);
     _loadShortcuts();
     _controller.addListener(_handleTextChanged);
   }
 
   @override
-  void didUpdateWidget(covariant SimpleChatPanel oldWidget) {
+  void didUpdateWidget(covariant LiteChatPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.scopeKey != widget.scopeKey) {
-      SheetChatService.instance.start(widget.scopeKey);
+      // ✅ scope 변경 시 UI 입력/선택 상태만 정리 (서비스 acquire/release는 팝오버에서 관리)
       _loadShortcuts();
       _controller.clear();
       _exitMultiSelectIfNeeded();
@@ -328,7 +337,9 @@ class _SimpleChatPanelState extends State<SimpleChatPanel> {
                   const Spacer(),
                 IconButton(
                   tooltip: '새로고침',
-                  onPressed: () => SheetChatService.instance.start(widget.scopeKey),
+                  onPressed: () => SheetChatService.instance.refresh(
+                    scopeKey: widget.scopeKey,
+                  ),
                   icon: st.loading
                       ? const SizedBox(
                     width: 18,
@@ -346,7 +357,6 @@ class _SimpleChatPanelState extends State<SimpleChatPanel> {
               ],
             ),
             const SizedBox(height: 8),
-
             if (st.error != null) ...[
               Container(
                 width: double.infinity,
@@ -367,7 +377,6 @@ class _SimpleChatPanelState extends State<SimpleChatPanel> {
               ),
               const SizedBox(height: 10),
             ],
-
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.only(bottom: 8),
@@ -410,7 +419,10 @@ class _SimpleChatPanelState extends State<SimpleChatPanel> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('[익명]', style: TextStyle(fontWeight: FontWeight.bold)),
+                              const Text(
+                                '[익명]',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
                               const SizedBox(height: 6),
                               Text(m.text),
                               const SizedBox(height: 8),
@@ -423,7 +435,6 @@ class _SimpleChatPanelState extends State<SimpleChatPanel> {
                           ),
                         );
                       }),
-
                     if (_shortcuts.isNotEmpty) ...[
                       const SizedBox(height: 12),
                       SizedBox(
@@ -466,7 +477,6 @@ class _SimpleChatPanelState extends State<SimpleChatPanel> {
                 ),
               ),
             ),
-
             Row(
               children: [
                 Expanded(
@@ -487,7 +497,8 @@ class _SimpleChatPanelState extends State<SimpleChatPanel> {
                       suffixIcon: IconButton(
                         tooltip: '입력 지우기',
                         icon: const Icon(Icons.clear),
-                        onPressed: _controller.text.isNotEmpty ? _clearInput : null,
+                        // ✅ 공백만 있는 경우에도 활성화되도록 _hasAnyText 사용
+                        onPressed: _hasAnyText ? _clearInput : null,
                       ),
                     ),
                   ),

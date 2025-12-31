@@ -8,7 +8,8 @@ import '../../../../services/sheet_chat_service.dart';
 import 'chat_runtime.dart';
 
 class ChatPanel extends StatefulWidget {
-  /// scopeKey는 (기존처럼) currentArea 변경 시 UI/로컬키(쇼트컷) 분리 용도로만 사용.
+  /// scopeKey는 currentArea 변경 시 UI/로컬키(쇼트컷) 분리 용도로만 사용.
+  /// (데이터 경계는 모드/선택된 spreadsheetId에 의해 결정)
   final String scopeKey;
 
   const ChatPanel({super.key, required this.scopeKey});
@@ -26,6 +27,9 @@ class _ChatPanelState extends State<ChatPanel> {
   List<String> _shortcuts = [];
   bool _canSend = false;
 
+  // ✅ 공백만 입력한 경우에도 "지우기" 버튼 활성화를 위해 별도 플래그 유지
+  bool _hasAnyText = false;
+
   // 멀티선택
   bool _isMultiSelect = false;
   final Set<int> _selectedShortcutIdx = {};
@@ -36,8 +40,8 @@ class _ChatPanelState extends State<ChatPanel> {
   void initState() {
     super.initState();
 
-    // ✅ 현재 scopeKey로 런타임 시작 (모드는 바텀시트 토글에 따름)
-    ChatRuntime.instance.start(widget.scopeKey);
+    // ✅ (중요) 여기서 ChatRuntime.start()를 호출하지 않음.
+    // start/stop(acquire/release)는 바텀시트 Host가 책임진다. (LiteChatPanel과 동일한 역할 분리)
 
     _loadShortcuts();
     _controller.addListener(_handleTextChanged);
@@ -48,9 +52,7 @@ class _ChatPanelState extends State<ChatPanel> {
     super.didUpdateWidget(oldWidget);
 
     if (oldWidget.scopeKey != widget.scopeKey) {
-      // ✅ scopeKey 변경 시 재시작 + 로컬쇼트컷 키 변경
-      ChatRuntime.instance.start(widget.scopeKey);
-
+      // ✅ scopeKey 변경 시 UI/로컬쇼트컷 키 변경
       _loadShortcuts();
       _controller.clear();
       _exitMultiSelectIfNeeded();
@@ -58,9 +60,14 @@ class _ChatPanelState extends State<ChatPanel> {
   }
 
   void _handleTextChanged() {
-    final enabled = _controller.text.trim().isNotEmpty;
-    if (_canSend != enabled) {
-      setState(() => _canSend = enabled);
+    final hasAny = _controller.text.isNotEmpty;
+    final canSend = _controller.text.trim().isNotEmpty;
+
+    if (_hasAnyText != hasAny || _canSend != canSend) {
+      setState(() {
+        _hasAnyText = hasAny;
+        _canSend = canSend;
+      });
     }
   }
 
@@ -138,7 +145,8 @@ class _ChatPanelState extends State<ChatPanel> {
                       children: [
                         const Text(
                           '쇼트컷 추가',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 18),
                         ),
                         const SizedBox(height: 12),
                         TextField(
@@ -152,7 +160,8 @@ class _ChatPanelState extends State<ChatPanel> {
                           decoration: InputDecoration(
                             hintText: '자주 쓰는 문구를 입력하세요',
                             border: const OutlineInputBorder(),
-                            helperText: isDuplicate ? '이미 같은 쇼트컷이 있습니다.' : '최대 80자',
+                            helperText:
+                            isDuplicate ? '이미 같은 쇼트컷이 있습니다.' : '최대 80자',
                             errorText: overLimit ? '최대 80자까지 입력 가능합니다.' : null,
                           ),
                         ),
@@ -240,7 +249,8 @@ class _ChatPanelState extends State<ChatPanel> {
     final needsSpaceBefore = before.isNotEmpty && !before.endsWith(' ');
     final needsSpaceAfter = after.isNotEmpty && !insert.endsWith(' ');
 
-    final toInsert = '${needsSpaceBefore ? ' ' : ''}$insert${needsSpaceAfter ? ' ' : ''}';
+    final toInsert =
+        '${needsSpaceBefore ? ' ' : ''}$insert${needsSpaceAfter ? ' ' : ''}';
 
     final newText = '$before$toInsert$after';
     final newOffset = before.length + toInsert.length;
@@ -323,7 +333,9 @@ class _ChatPanelState extends State<ChatPanel> {
                     )
                   else ...[
                     FilledButton.icon(
-                      onPressed: _selectedShortcutIdx.isNotEmpty ? _insertSelectedShortcuts : null,
+                      onPressed: _selectedShortcutIdx.isNotEmpty
+                          ? _insertSelectedShortcuts
+                          : null,
                       icon: const Icon(Icons.input),
                       label: Text('삽입(${_selectedShortcutIdx.length})'),
                     ),
@@ -410,11 +422,13 @@ class _ChatPanelState extends State<ChatPanel> {
                         final t = m.time;
                         if (t != null) {
                           try {
-                            timeText = DateFormat('yyyy-MM-dd HH:mm').format(t.toLocal());
+                            timeText = DateFormat('yyyy-MM-dd HH:mm')
+                                .format(t.toLocal());
                           } catch (_) {}
                         }
 
-                        final subtitle = timeText.isNotEmpty ? '🕒 $timeText' : '';
+                        final subtitle =
+                        timeText.isNotEmpty ? '🕒 $timeText' : '';
 
                         return Container(
                           width: double.infinity,
@@ -427,14 +441,17 @@ class _ChatPanelState extends State<ChatPanel> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('[익명]', style: TextStyle(fontWeight: FontWeight.bold)),
+                              const Text('[익명]',
+                                  style:
+                                  TextStyle(fontWeight: FontWeight.bold)),
                               const SizedBox(height: 6),
                               Text(m.text),
                               const SizedBox(height: 8),
                               if (subtitle.isNotEmpty)
                                 Text(
                                   subtitle,
-                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                  style: TextStyle(
+                                      fontSize: 12, color: Colors.grey[600]),
                                 ),
                             ],
                           ),
@@ -451,15 +468,19 @@ class _ChatPanelState extends State<ChatPanel> {
                           child: Row(
                             children: List.generate(_shortcuts.length, (i) {
                               final s = _shortcuts[i];
-                              final selected = _selectedShortcutIdx.contains(i);
+                              final selected =
+                              _selectedShortcutIdx.contains(i);
 
                               return Padding(
                                 padding: const EdgeInsets.only(right: 8),
                                 child: GestureDetector(
-                                  onLongPress: !_isMultiSelect ? () => _removeShortcut(s) : null,
+                                  onLongPress: !_isMultiSelect
+                                      ? () => _removeShortcut(s)
+                                      : null,
                                   child: FilterChip(
                                     selected: selected,
-                                    label: Text(s, overflow: TextOverflow.ellipsis),
+                                    label: Text(s,
+                                        overflow: TextOverflow.ellipsis),
                                     onSelected: (_) {
                                       if (_isMultiSelect) {
                                         _toggleShortcutSelection(i);
@@ -497,7 +518,8 @@ class _ChatPanelState extends State<ChatPanel> {
                       hintText: '메시지를 입력하세요...',
                       filled: true,
                       fillColor: Colors.grey[200],
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,
@@ -505,7 +527,8 @@ class _ChatPanelState extends State<ChatPanel> {
                       suffixIcon: IconButton(
                         tooltip: '입력 지우기',
                         icon: const Icon(Icons.clear),
-                        onPressed: _controller.text.isNotEmpty ? _clearInput : null,
+                        // ✅ 공백만 있어도 활성화 (LiteChatPanel과 동일)
+                        onPressed: _hasAnyText ? _clearInput : null,
                       ),
                     ),
                   ),
@@ -516,7 +539,9 @@ class _ChatPanelState extends State<ChatPanel> {
                   label: '메시지 보내기',
                   child: Container(
                     decoration: BoxDecoration(
-                      color: _canSend ? Colors.blue : Colors.blue.withOpacity(0.4),
+                      color: _canSend
+                          ? Colors.blue
+                          : Colors.blue.withOpacity(0.4),
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(

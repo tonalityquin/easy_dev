@@ -1,4 +1,4 @@
-// lib/screens/lite_mode/lite_type_package/lite_common_widgets/chats/lite_chat_bottom_sheet.dart
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -6,14 +6,14 @@ import 'package:provider/provider.dart';
 
 import '../../../../../states/user/user_state.dart';
 import '../../../../../utils/snackbar_helper.dart';
-
 import '../../../../../services/sheet_chat_service.dart';
-import '../../../../../services/chat_local_notification_service.dart';
 
 import 'lite_chat_panel.dart';
 
 /// ─────────────────────────────────────────────────────────────
 /// ✅ Lite: 말풍선 팝오버(키보드 대응 + 화면 밖 침범 방지)
+/// - 팝오버 열림: acquire + chatUiVisible=true → 고빈도 폴링(3초)
+/// - 팝오버 닫힘: (버튼 lease가 남아있으면) chatUiVisible=false → 저빈도 폴링(12초)
 /// ─────────────────────────────────────────────────────────────
 
 enum _TailDirection { up, down }
@@ -24,7 +24,6 @@ Future<void> _showChatPopoverLite({
   required String scopeKey,
   required ValueNotifier<bool> popoverOpen,
 }) async {
-  SheetChatService.instance.start(scopeKey);
   FocusScope.of(rootContext).unfocus();
 
   final targetCtx = targetKey.currentContext;
@@ -53,6 +52,19 @@ Future<void> _showChatPopoverLite({
   const double hardMin = 180;
 
   popoverOpen.value = true;
+
+  // ✅ 팝오버가 열려있는 동안만 (추가) acquire (고빈도 모드)
+  try {
+    await SheetChatService.instance.acquire(scopeKey, forceFetch: true);
+  } catch (e) {
+    popoverOpen.value = false;
+    showFailedSnackbar(rootContext, '채팅 초기화 실패: $e');
+    return;
+  }
+
+  // ✅ 채팅 UI가 열려있는 동안 알림 억제 + 고빈도 폴링
+  SheetChatService.instance.setChatUiVisible(true);
+
   try {
     await showGeneralDialog<void>(
       context: rootContext,
@@ -75,18 +87,24 @@ Future<void> _showChatPopoverLite({
                 final bool keyboardVisible = keyboard > 0;
 
                 final double safeTop = media.padding.top + margin;
-                final double safeBottom = screen.height - (media.padding.bottom + keyboard + margin);
+                final double safeBottom =
+                    screen.height - (media.padding.bottom + keyboard + margin);
 
-                final double usableHeight = (safeBottom - safeTop - gap).clamp(0.0, double.infinity);
+                final double usableHeight =
+                (safeBottom - safeTop - gap).clamp(0.0, double.infinity);
 
-                final double maxWidth = (screen.width - margin * 2).clamp(260.0, double.infinity);
+                final double maxWidth =
+                (screen.width - margin * 2).clamp(260.0, double.infinity);
                 final double width = math.min(640.0, maxWidth);
 
-                final double desiredHeight = (screen.height * 0.65).clamp(260.0, 560.0);
+                final double desiredHeight =
+                (screen.height * 0.65).clamp(260.0, 560.0);
                 final double cappedDesired = math.min(desiredHeight, usableHeight);
 
-                final double availableAbove = (btnRect.top - safeTop - gap).clamp(0.0, double.infinity);
-                final double availableBelow = (safeBottom - btnRect.bottom - gap).clamp(0.0, double.infinity);
+                final double availableAbove =
+                (btnRect.top - safeTop - gap).clamp(0.0, double.infinity);
+                final double availableBelow =
+                (safeBottom - btnRect.bottom - gap).clamp(0.0, double.infinity);
 
                 final double heightAbove = math.min(cappedDesired, availableAbove);
                 final double heightBelow = math.min(cappedDesired, availableBelow);
@@ -183,6 +201,12 @@ Future<void> _showChatPopoverLite({
     );
   } finally {
     popoverOpen.value = false;
+
+    // ✅ 팝오버 종료 시: 알림 억제 해제 + 저빈도 폴링로 전환(버튼 lease가 남아있으면)
+    SheetChatService.instance.setChatUiVisible(false);
+
+    // ✅ 팝오버 acquire 해제(버튼 lease가 있으면 refCount=1로 유지)
+    SheetChatService.instance.release();
   }
 }
 
@@ -511,7 +535,8 @@ class _SpeechBubblePath {
 }
 
 /// ─────────────────────────────────────────────────────────────
-/// ✅ Lite: 채팅 열기 버튼(팝오버만) + 새 메시지 로컬 알림
+/// ✅ Lite: 채팅 열기 버튼
+/// - 변경 포인트: 버튼이 화면에 존재하는 동안 "알림 감시용 acquire(저빈도 폴링)" 1개 유지
 /// ─────────────────────────────────────────────────────────────
 
 class ChatOpenButtonLite extends StatefulWidget {
@@ -525,78 +550,65 @@ class _ChatOpenButtonLiteState extends State<ChatOpenButtonLite> {
   final GlobalKey _targetKey = GlobalKey();
   final ValueNotifier<bool> _popoverOpen = ValueNotifier<bool>(false);
 
-  String? _lastScopeKey;
-  String? _lastSeenMsgKey;
+  // ✅ 알림 감시용 lease 상태
+  bool _watchLeaseHeld = false;
+  String _watchScopeKey = '';
 
-  VoidCallback? _stateListener;
+  // ✅ build 재진입/스코프 변경에서 acquire 호출이 겹치지 않도록 직렬화
+  Future<void> _watchLeaseOp = Future.value();
 
-  String _msgKey(dynamic m) {
-    final text = (m.text ?? '').toString();
-    final time = m.time;
-    final t = time is DateTime ? time.millisecondsSinceEpoch : 0;
-    return '$t::${text.hashCode}::${text.length}';
-  }
-
-  void _attachStateListenerIfNeeded() {
-    if (_stateListener != null) return;
-
-    _stateListener = () async {
+  void _syncWatchLease({required String? scopeKey}) {
+    _watchLeaseOp = _watchLeaseOp.then((_) async {
       if (!mounted) return;
 
-      final scopeKey = context.read<UserState>().user?.currentArea?.trim() ?? '';
-      if (scopeKey.isEmpty) return;
+      final next = (scopeKey ?? '').trim();
 
-      final st = SheetChatService.instance.state.value;
-      if (st.error != null) return;
-
-      final latest = st.latest;
-      if (latest == null) return;
-
-      final key = _msgKey(latest);
-
-      if (_lastSeenMsgKey == null) {
-        _lastSeenMsgKey = key;
+      // scopeKey가 비었으면 lease 해제
+      if (next.isEmpty) {
+        if (_watchLeaseHeld) {
+          _watchLeaseHeld = false;
+          _watchScopeKey = '';
+          SheetChatService.instance.release();
+        }
         return;
       }
-      if (key == _lastSeenMsgKey) return;
-      _lastSeenMsgKey = key;
 
-      if (_popoverOpen.value) return;
+      // 동일 scope면 유지
+      if (_watchLeaseHeld && _watchScopeKey == next) {
+        return;
+      }
 
-      if (ChatLocalNotificationService.instance.isLikelySelfSent(latest.text)) return;
+      // scope 변경/최초 시작:
+      // "새 scope acquire 성공 → 그 다음 기존 lease release" 순서로 refCount=0 갭을 방지
+      try {
+        await SheetChatService.instance.acquire(next, forceFetch: true);
 
-      await ChatLocalNotificationService.instance.showChatMessage(
-        scopeKey: scopeKey,
-        message: latest.text,
-      );
-    };
+        if (!mounted) {
+          // dispose 후에 acquire가 완료된 경우 누수 방지
+          SheetChatService.instance.release();
+          return;
+        }
 
-    SheetChatService.instance.state.addListener(_stateListener!);
-  }
+        if (_watchLeaseHeld) {
+          SheetChatService.instance.release();
+        } else {
+          _watchLeaseHeld = true;
+        }
 
-  @override
-  void initState() {
-    super.initState();
-    ChatLocalNotificationService.instance.ensureInitialized();
-    _attachStateListenerIfNeeded();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-
-    final scopeKey = context.read<UserState>().user?.currentArea?.trim();
-    if (scopeKey != null && scopeKey.isNotEmpty && scopeKey != _lastScopeKey) {
-      _lastScopeKey = scopeKey;
-      _lastSeenMsgKey = null;
-      SheetChatService.instance.start(scopeKey);
-    }
+        _watchScopeKey = next;
+      } catch (_) {
+        // 감시용 acquire 실패 시에는 조용히 유지/무시 (팝오버 오픈 시에는 기존처럼 snackbar 노출)
+      }
+    });
   }
 
   @override
   void dispose() {
-    if (_stateListener != null) {
-      SheetChatService.instance.state.removeListener(_stateListener!);
+    // ✅ 버튼이 사라지면 감시 lease 해제 (in-flight acquire는 위에서 누수 방지 처리)
+    if (_watchLeaseHeld) {
+      _watchLeaseHeld = false;
+      _watchScopeKey = '';
+      SheetChatService.instance.release();
     }
     _popoverOpen.dispose();
     super.dispose();
@@ -605,6 +617,12 @@ class _ChatOpenButtonLiteState extends State<ChatOpenButtonLite> {
   @override
   Widget build(BuildContext context) {
     final scopeKey = context.select<UserState, String?>((s) => s.user?.currentArea?.trim());
+
+    // ✅ 프레임 이후에 watch lease 동기화 (build에서 await 금지)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _syncWatchLease(scopeKey: scopeKey);
+    });
 
     if (scopeKey == null || scopeKey.isEmpty) {
       return ElevatedButton(
@@ -634,6 +652,7 @@ class _ChatOpenButtonLiteState extends State<ChatOpenButtonLite> {
       );
     }
 
+    // ✅ 버튼 프리뷰는 state 기반 (팝오버 닫힘 상태에서는 12초 폴링으로 갱신됨)
     return ValueListenableBuilder<SheetChatState>(
       valueListenable: SheetChatService.instance.state,
       builder: (context, st, _) {

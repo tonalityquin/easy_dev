@@ -12,7 +12,7 @@ import '../../../utils/google_auth_session.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../utils/init/logout_helper.dart';
 import '../../services/endTime_reminder_service.dart';
-import 'chat/simple_chat_bottom_sheet.dart';
+import '../common_package/chat_package/lite_chat_bottom_sheet.dart';
 import 'sections/simple_inside_header_widget_section.dart';
 import 'sections/widgets/simple_inside_punch_recorder_section.dart';
 import 'sections/simple_inside_document_box_button_section.dart';
@@ -468,9 +468,7 @@ class _SimpleInsideChatDock extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
         child: SizedBox(
           height: 48,
-          child: ChatOpenButtonSimple(
-            // ✅ 모든 기능 사용: 입력/전송/쇼트컷 등 가능
-            readOnly: false,
+          child: ChatOpenButtonLite(
           ),
         ),
       ),
