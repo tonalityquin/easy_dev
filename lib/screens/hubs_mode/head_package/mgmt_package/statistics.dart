@@ -1472,9 +1472,7 @@ class _StatisticsState extends State<Statistics> {
             _hasLocalCache
                 ? '표시할 데이터가 없습니다.'
                 : '저장된 데이터(로컬 캐시)가 없습니다.\n'
-                '우측 상단 새로고침으로 데이터를 가져오세요.\n\n'
-                'schema: end_work_reports/area_<area>/months/<yyyyMM>/reports/<yyyy-MM-dd>\n'
-                'division: ${division.trim()}',
+                '우측 상단 새로고침으로 데이터를 가져오세요.\n\n',
             textAlign: TextAlign.center,
           ),
         ),

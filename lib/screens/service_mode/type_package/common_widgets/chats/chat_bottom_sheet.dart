@@ -7,417 +7,183 @@ import 'package:provider/provider.dart';
 import '../../../../../states/user/user_state.dart';
 import '../../../../../utils/snackbar_helper.dart';
 
-// ✅ Google Sheets 기반 채팅 서비스
 import '../../../../../services/sheet_chat_service.dart';
+import '../../../../../services/chat_local_notification_service.dart';
 
 import 'chat_panel.dart';
 
-/// 좌측 상단(11시) 라벨 텍스트
-const String _screenTag = 'chat';
-
-/// ✅ 읽기 전용 마스킹 높이(입력/전송 영역 가림)
-const double _kBottomMaskHeight = 78.0;
-
-Widget _buildScreenTag(BuildContext context) {
-  final base = Theme.of(context).textTheme.labelSmall;
-  final style = (base ??
-      const TextStyle(
-        fontSize: 11,
-        color: Colors.black54,
-        fontWeight: FontWeight.w600,
-      ))
-      .copyWith(
-    color: Colors.black54,
-    fontWeight: FontWeight.w600,
-    letterSpacing: 0.2,
-  );
-
-  return SafeArea(
-    top: true,
-    bottom: false,
-    left: false,
-    right: false,
-    child: IgnorePointer(
-      child: Align(
-        alignment: Alignment.topLeft,
-        child: Padding(
-          padding: const EdgeInsets.only(left: 12, top: 4),
-          child: Semantics(
-            label: 'screen_tag: $_screenTag',
-            child: Text(_screenTag, style: style),
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
-/// ✅ 읽기 전용 마스킹(입력/전송 UI를 가리고 터치까지 차단)
-class _ReadOnlyChatBody extends StatelessWidget {
-  const _ReadOnlyChatBody({
-    required this.scopeKey,
-    this.bottomMaskHeight = _kBottomMaskHeight,
-  });
-
-  final String scopeKey;
-  final double bottomMaskHeight;
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        // ✅ 목록이 입력영역에 가리지 않도록 bottom padding 확보
-        Padding(
-          padding: EdgeInsets.only(bottom: bottomMaskHeight),
-          child: ChatPanel(scopeKey: scopeKey),
-        ),
-
-        // ✅ 입력/전송 영역을 “가림 + 터치 차단”
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: AbsorbPointer(
-            absorbing: true,
-            child: Container(
-              height: bottomMaskHeight,
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(
-                  top: BorderSide(color: Color(0xFFEAEAEA), width: 1),
-                ),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Row(
-                children: [
-                  const Icon(Icons.lock_outline,
-                      size: 18, color: Colors.black54),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '읽기 전용 - 입력/전송은 허용되지 않습니다.',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.black.withOpacity(.65),
-                        fontWeight: FontWeight.w600,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// (기존) 풀시트 바텀시트 - ✅ 읽기 전용
-void chatBottomSheet(BuildContext context) {
-  final currentUser = context.read<UserState>().user;
-  final String? scopeKey = currentUser?.currentArea?.trim();
-
-  if (scopeKey == null || scopeKey.isEmpty) {
-    showSelectedSnackbar(context, '채팅을 위해 currentArea가 설정되어야 합니다.');
-    return;
-  }
-
-  SheetChatService.instance.start(scopeKey);
-  FocusScope.of(context).unfocus();
-
-  showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: false,
-    backgroundColor: Colors.transparent,
-    elevation: 0,
-    barrierColor: Colors.black.withOpacity(0.25),
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-    ),
-    clipBehavior: Clip.antiAlias,
-    builder: (ctx) {
-      final inset = MediaQuery.of(ctx).viewInsets.bottom;
-      final size = MediaQuery.of(ctx).size;
-
-      return AnimatedPadding(
-        duration: const Duration(milliseconds: 150),
-        padding: EdgeInsets.only(bottom: inset),
-        child: Align(
-          alignment: Alignment.bottomCenter,
-          child: SizedBox(
-            height: size.height,
-            width: double.infinity,
-            child: Material(
-              color: Colors.transparent,
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Color(0x1F000000),
-                      blurRadius: 16,
-                      offset: Offset(0, -2),
-                    ),
-                  ],
-                ),
-                child: SafeArea(
-                  top: true,
-                  left: false,
-                  right: false,
-                  bottom: false,
-                  child: Stack(
-                    children: [
-                      _buildScreenTag(ctx),
-                      Column(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 10, 8, 0),
-                            child: Column(
-                              children: [
-                                Container(
-                                  width: 40,
-                                  height: 4,
-                                  decoration: BoxDecoration(
-                                    color: Colors.grey[300],
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                Row(
-                                  children: [
-                                    const SizedBox(width: 4),
-                                    const Icon(Icons.forum,
-                                        size: 20, color: Colors.black87),
-                                    const SizedBox(width: 8),
-                                    const Expanded(
-                                      child: Text(
-                                        '구역 채팅',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.black87,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 10, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFF2F4F7),
-                                        borderRadius:
-                                        BorderRadius.circular(999),
-                                        border: Border.all(
-                                            color: Colors.black
-                                                .withOpacity(.06)),
-                                      ),
-                                      child: const Text(
-                                        '읽기 전용',
-                                        style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w800),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 6),
-                                    IconButton(
-                                      tooltip: '닫기',
-                                      icon: const Icon(Icons.close),
-                                      onPressed: () => Navigator.of(ctx).pop(),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          const Divider(
-                              height: 1,
-                              thickness: 1,
-                              color: Color(0xFFEAEAEA)),
-                          Expanded(
-                            child: Padding(
-                              padding:
-                              const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                              child: _ReadOnlyChatBody(
-                                scopeKey: scopeKey,
-                                // ✅ 경고 제거: 호출부에서 실제로 값을 전달
-                                bottomMaskHeight: _kBottomMaskHeight,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    },
-  );
-}
-
 /// ─────────────────────────────────────────────────────────────
-/// ✅ 말풍선 팝오버(화면 밖 침범 방지: left/top clamp + 꼬리 위치 동기화)
+/// ✅ Service: 말풍선 팝오버(키보드 대응 + 화면 밖 침범 방지)
 /// ─────────────────────────────────────────────────────────────
 
 enum _TailDirection { up, down }
 
-Future<void> _showChatReadOnlyPopover({
+Future<void> _showChatPopover({
   required BuildContext rootContext,
   required GlobalKey targetKey,
   required String scopeKey,
+  required ValueNotifier<bool> popoverOpen,
 }) async {
-  FocusScope.of(rootContext).unfocus();
   SheetChatService.instance.start(scopeKey);
+  FocusScope.of(rootContext).unfocus();
 
   final targetCtx = targetKey.currentContext;
   if (targetCtx == null) {
-    chatBottomSheet(rootContext);
+    showFailedSnackbar(rootContext, '채팅 버튼 위치를 찾지 못해 팝오버를 열 수 없습니다.');
     return;
   }
 
   final ro = targetCtx.findRenderObject();
   if (ro is! RenderBox) {
-    chatBottomSheet(rootContext);
+    showFailedSnackbar(rootContext, '채팅 버튼 렌더 정보를 찾지 못해 팝오버를 열 수 없습니다.');
     return;
   }
 
-  final media = MediaQuery.of(rootContext);
-  final screen = media.size;
-
-  // ✅ 안전 여백(상/하: safe area + margin)
-  const double margin = 12;
-  final double safeTop = media.padding.top + margin;
-  final double safeBottom = screen.height - (media.padding.bottom + margin);
-
-  // ✅ 버튼 Rect(전역 좌표)
   final Offset btnTopLeft = ro.localToGlobal(Offset.zero);
   final Size btnSize = ro.size;
   final Rect btnRect = btnTopLeft & btnSize;
 
-  // ✅ 말풍선 기본 토큰
+  const double margin = 12;
   const double radius = 16;
   const double tailH = 12;
   const double tailW = 22;
-
-  // ✅ 폭/높이 산정(화면에 맞게 제한)
-  final double maxWidth =
-  (screen.width - margin * 2).clamp(260.0, double.infinity);
-  final double width = math.min(640.0, maxWidth); // 상한
-  final double desiredHeight =
-  (screen.height * 0.65).clamp(260.0, 560.0);
-
-  // 위/아래 여유 공간 계산(꼬리+간격 포함)
   const double gap = 10;
-  final double availableAbove =
-  (btnRect.top - safeTop - gap).clamp(0.0, double.infinity);
-  final double availableBelow =
-  (safeBottom - btnRect.bottom - gap).clamp(0.0, double.infinity);
 
-  // 우선 “위로” 열되, 부족하면 “아래로” fallback
-  final double heightAbove = math.min(desiredHeight, availableAbove);
-  final double heightBelow = math.min(desiredHeight, availableBelow);
-
-  _TailDirection dir;
-  double height;
-
-  // 최소 가독 높이(너무 작으면 풀시트)
   const double minReadable = 220;
+  const double hardMin = 180;
 
-  if (heightAbove >= minReadable) {
-    dir = _TailDirection.down; // 말풍선이 버튼 위에 있으므로 꼬리는 아래로
-    height = heightAbove;
-  } else if (heightBelow >= minReadable) {
-    dir = _TailDirection.up; // 말풍선이 버튼 아래에 있으므로 꼬리는 위로
-    height = heightBelow;
-  } else {
-    chatBottomSheet(rootContext);
-    return;
-  }
+  popoverOpen.value = true;
+  try {
+    await showGeneralDialog<void>(
+      context: rootContext,
+      barrierDismissible: true,
+      barrierLabel: 'chat_popover_service',
+      barrierColor: Colors.black.withOpacity(0.18),
+      transitionDuration: const Duration(milliseconds: 180),
+      pageBuilder: (dialogCtx, __, ___) {
+        return GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => Navigator.of(dialogCtx).pop(),
+          child: Material(
+            type: MaterialType.transparency,
+            child: LayoutBuilder(
+              builder: (ctx, constraints) {
+                final media = MediaQuery.of(ctx);
+                final screen = media.size;
 
-  // ✅ left/top 계산 후 화면 경계로 clamp
-  double left = (btnRect.center.dx - width / 2);
-  left = left.clamp(margin, screen.width - width - margin);
+                final double keyboard = media.viewInsets.bottom;
+                final bool keyboardVisible = keyboard > 0;
 
-  double top;
-  if (dir == _TailDirection.down) {
-    // 위에 뜨는 말풍선: 버튼 top 기준으로 위쪽 배치
-    top = (btnRect.top - gap - height);
-    top = top.clamp(safeTop, safeBottom - height);
-  } else {
-    // 아래에 뜨는 말풍선: 버튼 bottom 기준으로 아래쪽 배치
-    top = (btnRect.bottom + gap);
-    top = top.clamp(safeTop, safeBottom - height);
-  }
+                final double safeTop = media.padding.top + margin;
+                final double safeBottom = screen.height - (media.padding.bottom + keyboard + margin);
 
-  // ✅ 꼬리가 버튼을 향하도록 tailCenterX(말풍선 내부 좌표) 계산
-  double tailCenterX = (btnRect.center.dx - left);
-  final double minTailX = radius + tailW / 2 + 2;
-  final double maxTailX = width - radius - tailW / 2 - 2;
-  tailCenterX = tailCenterX.clamp(minTailX, maxTailX);
+                final double usableHeight = (safeBottom - safeTop - gap).clamp(0.0, double.infinity);
 
-  await showGeneralDialog<void>(
-    context: rootContext,
-    barrierDismissible: true,
-    barrierLabel: 'chat_popover',
-    barrierColor: Colors.black.withOpacity(0.18),
-    transitionDuration: const Duration(milliseconds: 180),
-    pageBuilder: (dialogCtx, __, ___) {
-      return GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => Navigator.of(dialogCtx).pop(),
-        child: Material(
-          type: MaterialType.transparency,
-          child: Stack(
-            children: [
-              Positioned(
-                left: left,
-                top: top,
-                width: width,
-                height: height,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  onTap: () {}, // 내부 탭은 dismiss 방지
-                  child: _ChatPopoverShell(
-                    width: width,
-                    height: height,
-                    scopeKey: scopeKey,
-                    onClose: () => Navigator.of(dialogCtx).pop(),
-                    radius: radius,
-                    tailHeight: tailH,
-                    tailWidth: tailW,
-                    tailCenterX: tailCenterX,
-                    tailDirection: dir,
-                  ),
-                ),
-              ),
-            ],
+                final double maxWidth = (screen.width - margin * 2).clamp(260.0, double.infinity);
+                final double width = math.min(640.0, maxWidth);
+
+                final double desiredHeight = (screen.height * 0.65).clamp(260.0, 560.0);
+                final double cappedDesired = math.min(desiredHeight, usableHeight);
+
+                final double availableAbove = (btnRect.top - safeTop - gap).clamp(0.0, double.infinity);
+                final double availableBelow = (safeBottom - btnRect.bottom - gap).clamp(0.0, double.infinity);
+
+                final double heightAbove = math.min(cappedDesired, availableAbove);
+                final double heightBelow = math.min(cappedDesired, availableBelow);
+
+                _TailDirection dir;
+                double height;
+
+                if (keyboardVisible) {
+                  if (heightAbove >= hardMin) {
+                    dir = _TailDirection.down; // 팝오버가 버튼 위 / 꼬리 아래
+                    height = heightAbove;
+                  } else {
+                    dir = _TailDirection.up; // 팝오버가 버튼 아래 / 꼬리 위
+                    height = heightBelow;
+                  }
+                } else {
+                  if (heightAbove >= minReadable) {
+                    dir = _TailDirection.down;
+                    height = heightAbove;
+                  } else if (heightBelow >= minReadable) {
+                    dir = _TailDirection.up;
+                    height = heightBelow;
+                  } else {
+                    if (heightAbove >= heightBelow) {
+                      dir = _TailDirection.down;
+                      height = heightAbove;
+                    } else {
+                      dir = _TailDirection.up;
+                      height = heightBelow;
+                    }
+                  }
+                }
+
+                height = height.clamp(hardMin, math.max(hardMin, usableHeight));
+
+                double left = (btnRect.center.dx - width / 2);
+                left = left.clamp(margin, screen.width - width - margin);
+
+                double top;
+                if (dir == _TailDirection.down) {
+                  top = (btnRect.top - gap - height);
+                  top = top.clamp(safeTop, safeBottom - height);
+                } else {
+                  top = (btnRect.bottom + gap);
+                  top = top.clamp(safeTop, safeBottom - height);
+                }
+
+                double tailCenterX = (btnRect.center.dx - left);
+                final double minTailX = radius + tailW / 2 + 2;
+                final double maxTailX = width - radius - tailW / 2 - 2;
+                tailCenterX = tailCenterX.clamp(minTailX, maxTailX);
+
+                return Stack(
+                  children: [
+                    Positioned(
+                      left: left,
+                      top: top,
+                      width: width,
+                      height: height,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onTap: () {}, // 내부 탭은 dismiss 방지
+                        child: _ChatPopoverShell(
+                          width: width,
+                          height: height,
+                          scopeKey: scopeKey,
+                          onClose: () => Navigator.of(ctx).pop(),
+                          radius: radius,
+                          tailHeight: tailH,
+                          tailWidth: tailW,
+                          tailCenterX: tailCenterX,
+                          tailDirection: dir,
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
           ),
-        ),
-      );
-    },
-    transitionBuilder: (ctx, anim, __, child) {
-      final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
-      return FadeTransition(
-        opacity: curved,
-        child: ScaleTransition(
-          scale: Tween<double>(begin: 0.92, end: 1.0).animate(curved),
-          alignment: dir == _TailDirection.down
-              ? Alignment.bottomCenter
-              : Alignment.topCenter,
-          child: child,
-        ),
-      );
-    },
-  );
+        );
+      },
+      transitionBuilder: (ctx, anim, __, child) {
+        final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+        return FadeTransition(
+          opacity: curved,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.92, end: 1.0).animate(curved),
+            alignment: Alignment.center,
+            child: child,
+          ),
+        );
+      },
+    );
+  } finally {
+    popoverOpen.value = false;
+  }
 }
 
 class _ChatPopoverShell extends StatelessWidget {
@@ -467,24 +233,11 @@ class _ChatPopoverShell extends StatelessWidget {
               children: [
                 const Icon(Icons.forum, size: 18, color: Colors.black87),
                 const SizedBox(width: 8),
-                const Expanded(
+                Expanded(
                   child: Text(
-                    '구역 채팅',
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                    '구역 채팅 (${scopeKey.trim()})',
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
                     overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Container(
-                  padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF2F4F7),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: Colors.black.withOpacity(.06)),
-                  ),
-                  child: const Text(
-                    '읽기 전용',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
                   ),
                 ),
                 const SizedBox(width: 4),
@@ -500,11 +253,7 @@ class _ChatPopoverShell extends StatelessWidget {
           Expanded(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-              child: _ReadOnlyChatBody(
-                scopeKey: scopeKey,
-                // ✅ 경고 제거: 호출부에서 실제로 값을 전달
-                bottomMaskHeight: _kBottomMaskHeight,
-              ),
+              child: ChatPanel(scopeKey: scopeKey),
             ),
           ),
         ],
@@ -514,7 +263,7 @@ class _ChatPopoverShell extends StatelessWidget {
 }
 
 /// ─────────────────────────────────────────────────────────────
-/// ✅ CustomPainter 기반 말풍선(꼬리 포함) 컨테이너
+/// ✅ CustomPainter 기반 말풍선(꼬리 포함)
 /// ─────────────────────────────────────────────────────────────
 
 class _SpeechBubble extends StatelessWidget {
@@ -577,10 +326,7 @@ class _SpeechBubble extends StatelessWidget {
         child: SizedBox(
           width: width,
           height: height,
-          child: Material(
-            color: Colors.transparent,
-            child: child,
-          ),
+          child: Material(color: Colors.transparent, child: child),
         ),
       ),
     );
@@ -706,7 +452,6 @@ class _SpeechBubblePath {
 
     final double halfTailW = tailWidth / 2;
 
-    // 꼬리 base가 라운드 코너에 침범하지 않도록 tailCenterX를 안전 범위로 clamp
     final double minX = r + halfTailW + 2;
     final double maxX = w - r - halfTailW - 2;
     final double tcx = tailCenterX.clamp(minX, maxX);
@@ -717,7 +462,6 @@ class _SpeechBubblePath {
     final Path p = Path();
 
     if (tailDirection == _TailDirection.down) {
-      // ── 꼬리: 아래
       final double bodyBottom = h - tailHeight;
 
       p.moveTo(r, 0);
@@ -740,7 +484,6 @@ class _SpeechBubblePath {
       p.close();
       return p;
     } else {
-      // ── 꼬리: 위
       final double bodyTop = tailHeight;
 
       p.moveTo(r, bodyTop);
@@ -767,10 +510,10 @@ class _SpeechBubblePath {
   }
 }
 
-/// 채팅 열기 버튼 (Sheets 기반)
-/// - currentArea 변화 감지: select 유지
-/// - 최신 메시지 미리보기 표시
-/// - 클릭 시 “말풍선(팝오버)”로 열기(화면 밖 침범 방지)
+/// ─────────────────────────────────────────────────────────────
+/// ✅ Service: 채팅 열기 버튼(팝오버만) + 새 메시지 로컬 알림
+/// ─────────────────────────────────────────────────────────────
+
 class ChatOpenButton extends StatefulWidget {
   const ChatOpenButton({super.key});
 
@@ -780,11 +523,96 @@ class ChatOpenButton extends StatefulWidget {
 
 class _ChatOpenButtonState extends State<ChatOpenButton> {
   final GlobalKey _targetKey = GlobalKey();
+  final ValueNotifier<bool> _popoverOpen = ValueNotifier<bool>(false);
+
+  String? _lastScopeKey;
+  String? _lastSeenMsgKey; // 최초 동기화에서 기존 메시지로 알림 뜨는 것 방지
+
+  VoidCallback? _stateListener;
+
+  String _msgKey(dynamic m) {
+    // SheetChatMessage에 id가 없고 text/time만 있다고 가정
+    final text = (m.text ?? '').toString();
+    final time = m.time;
+    final t = time is DateTime ? time.millisecondsSinceEpoch : 0;
+    return '$t::${text.hashCode}::${text.length}';
+  }
+
+  void _attachStateListenerIfNeeded() {
+    if (_stateListener != null) return;
+
+    _stateListener = () async {
+      if (!mounted) return;
+
+      final scopeKey = context.read<UserState>().user?.currentArea?.trim() ?? '';
+      if (scopeKey.isEmpty) return;
+
+      final st = SheetChatService.instance.state.value;
+      if (st.error != null) return;
+
+      final latest = st.latest;
+      if (latest == null) return;
+
+      final key = _msgKey(latest);
+
+      // 최초 1회는 '현재 최신'을 기준점으로만 삼고 알림은 띄우지 않음
+      if (_lastSeenMsgKey == null) {
+        _lastSeenMsgKey = key;
+        return;
+      }
+
+      if (key == _lastSeenMsgKey) return;
+      _lastSeenMsgKey = key;
+
+      // 팝오버 열려있으면 알림 억제(원하면 제거 가능)
+      if (_popoverOpen.value) return;
+
+      // (선택) 내가 방금 보낸 텍스트면 알림 억제
+      if (ChatLocalNotificationService.instance.isLikelySelfSent(latest.text)) return;
+
+      await ChatLocalNotificationService.instance.showChatMessage(
+        scopeKey: scopeKey,
+        message: latest.text,
+      );
+    };
+
+    SheetChatService.instance.state.addListener(_stateListener!);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // 초기화/권한 요청 (버튼이 있는 화면이면 항상 수행)
+    ChatLocalNotificationService.instance.ensureInitialized();
+    _attachStateListenerIfNeeded();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final scopeKey = context.read<UserState>().user?.currentArea?.trim();
+    if (scopeKey != null && scopeKey.isNotEmpty && scopeKey != _lastScopeKey) {
+      _lastScopeKey = scopeKey;
+      // 구역 바뀌면 폴링 재시작 + seen 기준 리셋(원하면 유지 가능)
+      _lastSeenMsgKey = null;
+      SheetChatService.instance.start(scopeKey);
+    }
+  }
+
+  @override
+  void dispose() {
+    if (_stateListener != null) {
+      SheetChatService.instance.state.removeListener(_stateListener!);
+    }
+    _popoverOpen.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final scopeKey = context.select<UserState, String?>(
-          (s) => s.user?.currentArea?.trim(),
+      (s) => s.user?.currentArea?.trim(),
     );
 
     if (scopeKey == null || scopeKey.isEmpty) {
@@ -819,24 +647,22 @@ class _ChatOpenButtonState extends State<ChatOpenButton> {
       );
     }
 
-    SheetChatService.instance.start(scopeKey);
-
     return ValueListenableBuilder<SheetChatState>(
       valueListenable: SheetChatService.instance.state,
       builder: (context, st, _) {
         final latestMsg = st.latest?.text ?? '';
-        final text =
-        latestMsg.length > 20 ? '${latestMsg.substring(0, 20)}...' : latestMsg;
+        final text = latestMsg.length > 20 ? '${latestMsg.substring(0, 20)}...' : latestMsg;
         final label = latestMsg.isEmpty ? '채팅 열기' : text;
 
         return Container(
           key: _targetKey,
           child: ElevatedButton(
             onPressed: () async {
-              await _showChatReadOnlyPopover(
+              await _showChatPopover(
                 rootContext: context,
                 targetKey: _targetKey,
                 scopeKey: scopeKey,
+                popoverOpen: _popoverOpen,
               );
             },
             style: ElevatedButton.styleFrom(

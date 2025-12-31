@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+/// ✅ 하단 고정 버튼바 높이(대략치) + 여유를 위한 예약 값
+/// - SafeArea + 버튼 높이 + 패딩을 고려해 충분히 크게 잡습니다.
+/// - ListView bottom padding 및 TextField scrollPadding에 같이 사용합니다.
+const double _kEditorBottomActionBarReserve = 96.0;
+
 /// 호출 헬퍼
 Future<EditResult?> showEventEditorBottomSheet(
     BuildContext context, {
@@ -236,12 +241,13 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
       child: AnimatedPadding(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
+        // ✅ 키보드가 올라오면 시트 전체를 위로 밀어 올림(하단 고정 바도 함께 올라가서 키보드에 가리지 않게 됨)
         padding: EdgeInsets.only(bottom: viewInsets.bottom),
         child: DraggableScrollableSheet(
           expand: false,
           initialChildSize: 1.0, // ★ 처음부터 끝까지
           minChildSize: 0.5,
-          maxChildSize: 1.0,     // ★ 최댓값도 끝까지
+          maxChildSize: 1.0, // ★ 최댓값도 끝까지
           builder: (context, scrollController) {
             return Container(
               decoration: const BoxDecoration(
@@ -333,7 +339,14 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                     child: ListView(
                       controller: scrollController,
                       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                      // ✅ 하단 고정 버튼바(취소/저장) 영역만큼 bottom padding을 확보
+                      //    -> 마지막 입력칸/컨텐츠가 버튼 뒤로 숨어서 터치 불가가 되는 문제를 방지
+                      padding: const EdgeInsets.fromLTRB(
+                        16,
+                        12,
+                        16,
+                        16 + _kEditorBottomActionBarReserve,
+                      ),
                       children: [
                         // 날짜(종일)
                         Row(
@@ -491,37 +504,44 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                           ),
                         ),
 
-                        const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text('취소'),
-                              ),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: FilledButton(
-                                onPressed: () {
-                                  if (_summary.text.trim().isEmpty) return;
-                                  Navigator.pop(
-                                    context,
-                                    EditResult(
-                                      summary: _summary.text.trim(),
-                                      description: _desc.text.trim(),
-                                      start: _start,
-                                      end: _end,
-                                      allDay: _allDay,
-                                      colorId: _colorId,
-                                      progress: _progress,
-                                    ),
-                                  );
-                                },
-                                child: const Text('저장'),
-                              ),
-                            ),
-                          ],
+                        const SizedBox(height: 8),
+                      ],
+                    ),
+                  ),
+
+                  // ✅ 하단 고정 액션바(취소/저장) — SafeArea로 홈 인디케이터/제스처 바 회피
+                  const Divider(height: 1),
+                  SafeArea(
+                    top: false,
+                    minimum: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('취소'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: () {
+                              if (_summary.text.trim().isEmpty) return;
+                              Navigator.pop(
+                                context,
+                                EditResult(
+                                  summary: _summary.text.trim(),
+                                  description: _desc.text.trim(),
+                                  start: _start,
+                                  end: _end,
+                                  allDay: _allDay,
+                                  colorId: _colorId,
+                                  progress: _progress,
+                                ),
+                              );
+                            },
+                            child: const Text('저장'),
+                          ),
                         ),
                       ],
                     ),
@@ -540,20 +560,20 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
 
 /// 각 탭을 데이터/로직 단위로 독립시키는 추상 클래스
 abstract class EventTemplate {
-  String get id;        // 내부 아이디 (예: 'apply', 'hire', 'free', 'checkin')
-  String get label;     // 탭 라벨 (예: '지원', '입사', '출근', '자율')
+  String get id; // 내부 아이디 (예: 'apply', 'hire', 'free', 'checkin')
+  String get label; // 탭 라벨 (예: '지원', '입사', '출근', '자율')
   Widget buildForm(BuildContext context, VoidCallback onChanged);
   void computePreview(TextEditingController summary, TextEditingController desc);
-  void dispose();       // 내부 컨트롤러 정리
+  void dispose(); // 내부 컨트롤러 정리
 }
 
 /// 지원 템플릿
 class ApplyTemplate implements EventTemplate {
   final worker = TextEditingController(); // 업무자
   final region = TextEditingController();
-  final name   = TextEditingController();
+  final name = TextEditingController();
   final reason = TextEditingController();
-  final time   = TextEditingController();
+  final time = TextEditingController();
 
   @override
   String get id => 'apply';
@@ -564,10 +584,15 @@ class ApplyTemplate implements EventTemplate {
   Widget buildForm(BuildContext context, VoidCallback onChanged) {
     return Column(children: [
       _LabeledField(label: '업무자', controller: worker, onChanged: (_) => onChanged()),
-      _LabeledField(label: '지역',   controller: region, onChanged: (_) => onChanged()),
-      _LabeledField(label: '이름',   controller: name,   onChanged: (_) => onChanged()),
-      _LabeledField(label: '사유',   controller: reason, onChanged: (_) => onChanged()),
-      _LabeledField(label: '시간',   controller: time,   hint: '예: 10:00~12:00', onChanged: (_) => onChanged()),
+      _LabeledField(label: '지역', controller: region, onChanged: (_) => onChanged()),
+      _LabeledField(label: '이름', controller: name, onChanged: (_) => onChanged()),
+      _LabeledField(label: '사유', controller: reason, onChanged: (_) => onChanged()),
+      _LabeledField(
+        label: '시간',
+        controller: time,
+        hint: '예: 10:00~12:00',
+        onChanged: (_) => onChanged(),
+      ),
     ]);
   }
 
@@ -575,39 +600,43 @@ class ApplyTemplate implements EventTemplate {
   void computePreview(TextEditingController summary, TextEditingController desc) {
     final t = [
       if (region.text.trim().isNotEmpty) region.text.trim(),
-      if (name.text.trim().isNotEmpty)   name.text.trim(),
+      if (name.text.trim().isNotEmpty) name.text.trim(),
       if (worker.text.trim().isNotEmpty) worker.text.trim(),
       '지원',
     ].join(' ').trim();
 
     final lines = <String>[];
     if (reason.text.trim().isNotEmpty) lines.add('사유: ${reason.text.trim()}');
-    if (time.text.trim().isNotEmpty)   lines.add('시간: ${time.text.trim()}');
+    if (time.text.trim().isNotEmpty) lines.add('시간: ${time.text.trim()}');
 
     summary.text = t.isEmpty ? '지원' : t;
-    desc.text    = lines.join('\n');
+    desc.text = lines.join('\n');
   }
 
   @override
   void dispose() {
-    worker.dispose(); region.dispose(); name.dispose(); reason.dispose(); time.dispose();
+    worker.dispose();
+    region.dispose();
+    name.dispose();
+    reason.dispose();
+    time.dispose();
   }
 }
 
 /// 입사 템플릿 (★ 날짜 입력을 텍스트 필드로)
 class HireTemplate implements EventTemplate {
   final region = TextEditingController();
-  final name   = TextEditingController();
-  final phone  = TextEditingController();
-  final gmail  = TextEditingController();
-  final bank   = TextEditingController();
-  final accountNo    = TextEditingController();
-  final salary       = TextEditingController();
+  final name = TextEditingController();
+  final phone = TextEditingController();
+  final gmail = TextEditingController();
+  final bank = TextEditingController();
+  final accountNo = TextEditingController();
+  final salary = TextEditingController();
   final contractType = TextEditingController();
 
   // ★ 텍스트 입력용 컨트롤러 추가
   final workStartDateText = TextEditingController();
-  final firstEndDateText  = TextEditingController();
+  final firstEndDateText = TextEditingController();
 
   DateTime? workStartDate;
   DateTime? firstEndDate;
@@ -637,13 +666,40 @@ class HireTemplate implements EventTemplate {
   Widget buildForm(BuildContext context, VoidCallback onChanged) {
     return Column(children: [
       _LabeledField(label: '지역', controller: region, onChanged: (_) => onChanged()),
-      _LabeledField(label: '이름', controller: name,   onChanged: (_) => onChanged()),
-      _LabeledField(label: '전화번호', controller: phone, keyboardType: TextInputType.phone, onChanged: (_) => onChanged()),
-      _LabeledField(label: '지메일', controller: gmail, keyboardType: TextInputType.emailAddress, hint: '예: name@gmail.com', onChanged: (_) => onChanged()),
+      _LabeledField(label: '이름', controller: name, onChanged: (_) => onChanged()),
+      _LabeledField(
+        label: '전화번호',
+        controller: phone,
+        keyboardType: TextInputType.phone,
+        onChanged: (_) => onChanged(),
+      ),
+      _LabeledField(
+        label: '지메일',
+        controller: gmail,
+        keyboardType: TextInputType.emailAddress,
+        hint: '예: name@gmail.com',
+        onChanged: (_) => onChanged(),
+      ),
       _LabeledField(label: '은행계좌', controller: bank, hint: '예: 우리은행', onChanged: (_) => onChanged()),
-      _LabeledField(label: '계좌번호', controller: accountNo, keyboardType: TextInputType.number, onChanged: (_) => onChanged()),
-      _LabeledField(label: '총 급여', controller: salary, hint: '예: 3,000,000원', keyboardType: TextInputType.number, onChanged: (_) => onChanged()),
-      _LabeledField(label: '계약 형태', controller: contractType, hint: '예: 정규직/계약직', onChanged: (_) => onChanged()),
+      _LabeledField(
+        label: '계좌번호',
+        controller: accountNo,
+        keyboardType: TextInputType.number,
+        onChanged: (_) => onChanged(),
+      ),
+      _LabeledField(
+        label: '총 급여',
+        controller: salary,
+        hint: '예: 3,000,000원',
+        keyboardType: TextInputType.number,
+        onChanged: (_) => onChanged(),
+      ),
+      _LabeledField(
+        label: '계약 형태',
+        controller: contractType,
+        hint: '예: 정규직/계약직',
+        onChanged: (_) => onChanged(),
+      ),
 
       // ★ 숫자 입력 텍스트 필드 (YYYY-MM-DD / YYYYMMDD)
       _LabeledField(
@@ -674,7 +730,7 @@ class HireTemplate implements EventTemplate {
     final fmt = DateFormat('yyyy-MM-dd');
     final t = [
       if (region.text.trim().isNotEmpty) region.text.trim(),
-      if (name.text.trim().isNotEmpty)   name.text.trim(),
+      if (name.text.trim().isNotEmpty) name.text.trim(),
       '입사',
     ].join(' ').trim();
 
@@ -682,6 +738,7 @@ class HireTemplate implements EventTemplate {
     void add(String k, String v) {
       if (v.trim().isNotEmpty) lines.add('$k: ${v.trim()}');
     }
+
     add('전화번호', phone.text);
     add('지메일', gmail.text);
     add('은행계좌', bank.text);
@@ -689,10 +746,10 @@ class HireTemplate implements EventTemplate {
     add('총 급여', salary.text);
     add('계약 형태', contractType.text);
     if (workStartDate != null) lines.add('근무 시작일: ${fmt.format(workStartDate!)}');
-    if (firstEndDate != null)  lines.add('첫 계약 종료일: ${fmt.format(firstEndDate!)}');
+    if (firstEndDate != null) lines.add('첫 계약 종료일: ${fmt.format(firstEndDate!)}');
 
     summary.text = t.isEmpty ? '입사' : t;
-    desc.text    = lines.join('\n');
+    desc.text = lines.join('\n');
   }
 
   @override
@@ -712,12 +769,12 @@ class HireTemplate implements EventTemplate {
 
 /// 출근 템플릿
 class CheckInTemplate implements EventTemplate {
-  final name = TextEditingController();            // 이름
-  final contractAmount = TextEditingController();  // 계약액
-  final contractType = TextEditingController();    // 계약 형태
-  final requestedDocs = TextEditingController();   // 요청 문서(쉼표/줄바꿈 구분)
-  final workDateText = TextEditingController();    // ★ 출근일(텍스트 입력)
-  DateTime? workDate;                              // 출근일(파싱된 값)
+  final name = TextEditingController(); // 이름
+  final contractAmount = TextEditingController(); // 계약액
+  final contractType = TextEditingController(); // 계약 형태
+  final requestedDocs = TextEditingController(); // 요청 문서(쉼표/줄바꿈 구분)
+  final workDateText = TextEditingController(); // ★ 출근일(텍스트 입력)
+  DateTime? workDate; // 출근일(파싱된 값)
 
   @override
   String get id => 'checkin';
@@ -742,6 +799,8 @@ class CheckInTemplate implements EventTemplate {
 
   @override
   Widget buildForm(BuildContext context, VoidCallback onChanged) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
     return Column(children: [
       _LabeledField(label: '이름', controller: name, onChanged: (_) => onChanged()),
       _LabeledField(
@@ -775,6 +834,8 @@ class CheckInTemplate implements EventTemplate {
           maxLines: 6,
           textInputAction: TextInputAction.newline,
           onChanged: (_) => onChanged(),
+          // ✅ 멀티라인 TextField도 키보드/하단 고정바 위로 충분히 올라오도록 scrollPadding 적용
+          scrollPadding: EdgeInsets.only(bottom: bottomInset + _kEditorBottomActionBarReserve + 24),
           decoration: const InputDecoration(
             labelText: '요청 문서',
             hintText: '쉼표(,) 또는 줄바꿈으로 구분해 입력',
@@ -795,9 +856,9 @@ class CheckInTemplate implements EventTemplate {
     ].join(' ').trim();
 
     final lines = <String>[];
-    if (workDate != null)                       lines.add('출근일: ${fmt.format(workDate!)}');
-    if (contractAmount.text.trim().isNotEmpty)  lines.add('계약액: ${contractAmount.text.trim()}');
-    if (contractType.text.trim().isNotEmpty)    lines.add('계약 형태: ${contractType.text.trim()}');
+    if (workDate != null) lines.add('출근일: ${fmt.format(workDate!)}');
+    if (contractAmount.text.trim().isNotEmpty) lines.add('계약액: ${contractAmount.text.trim()}');
+    if (contractType.text.trim().isNotEmpty) lines.add('계약 형태: ${contractType.text.trim()}');
 
     final docs = requestedDocs.text
         .split(RegExp(r'[,\n]'))
@@ -810,7 +871,7 @@ class CheckInTemplate implements EventTemplate {
     }
 
     summary.text = t.isEmpty ? '출근' : t;
-    desc.text    = lines.join('\n');
+    desc.text = lines.join('\n');
   }
 
   @override
@@ -826,11 +887,11 @@ class CheckInTemplate implements EventTemplate {
 /// 자율 템플릿
 class FreeTemplate implements EventTemplate {
   final TextEditingController title = TextEditingController();
-  final TextEditingController body  = TextEditingController();
+  final TextEditingController body = TextEditingController();
 
   FreeTemplate({String? initialTitle, String? initialBody}) {
     if (initialTitle != null) title.text = initialTitle;
-    if (initialBody  != null) body.text  = initialBody;
+    if (initialBody != null) body.text = initialBody;
   }
 
   @override
@@ -840,6 +901,8 @@ class FreeTemplate implements EventTemplate {
 
   @override
   Widget buildForm(BuildContext context, VoidCallback onChanged) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
     return Column(children: [
       _LabeledField(
         label: '제목',
@@ -855,6 +918,8 @@ class FreeTemplate implements EventTemplate {
           minLines: 3,
           maxLines: 8,
           textInputAction: TextInputAction.newline,
+          // ✅ 멀티라인 TextField도 키보드/하단 고정바 위로 충분히 올라오도록 scrollPadding 적용
+          scrollPadding: EdgeInsets.only(bottom: bottomInset + _kEditorBottomActionBarReserve + 24),
           decoration: const InputDecoration(
             labelText: '설명',
             hintText: '자유롭게 설명을 입력하세요',
@@ -868,7 +933,7 @@ class FreeTemplate implements EventTemplate {
   @override
   void computePreview(TextEditingController summary, TextEditingController desc) {
     summary.text = title.text.trim();
-    desc.text    = body.text;
+    desc.text = body.text;
   }
 
   @override
@@ -929,6 +994,8 @@ class _LabeledField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: TextField(
@@ -936,6 +1003,9 @@ class _LabeledField extends StatelessWidget {
         keyboardType: keyboardType,
         textInputAction: TextInputAction.next,
         onChanged: onChanged,
+        // ✅ 포커스 시 키보드 위로 충분히 자동 스크롤되도록
+        //    키보드 높이 + 하단 고정바 영역 + 여유를 확보
+        scrollPadding: EdgeInsets.only(bottom: bottomInset + _kEditorBottomActionBarReserve + 24),
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,

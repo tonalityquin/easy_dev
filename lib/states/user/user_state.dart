@@ -9,7 +9,6 @@ import '../../models/tablet_model.dart';
 import '../../repositories/user_repo_services/user_repository.dart';
 import '../../models/user_model.dart';
 import '../../utils/tts/plate_tts_listener_service.dart';
-import '../../utils/tts/chat_tts_listener_service.dart';
 import '../area/area_state.dart';
 import '../../services/latest_message_service.dart';
 import '../../repositories/commute_log_repository.dart';
@@ -166,15 +165,12 @@ class UserState extends ChangeNotifier {
 
   String? _tryParseActiveLimitError(Object e) {
     final s = e.toString();
-    // StateError('ACTIVE_LIMIT_REACHED:$limit') -> "Bad state: ACTIVE_LIMIT_REACHED:50"
     const key = 'ACTIVE_LIMIT_REACHED:';
     final idx = s.indexOf(key);
     if (idx < 0) return null;
     return s.substring(idx + key.length).trim();
   }
 
-  /// ✅ 추가: 선택된 사용자 계정 활성/비활성(삭제 대체)
-  /// ✅ 활성화 제한(activeLimit) 초과 시 사용자 메시지로 변환
   Future<void> setSelectedUserActiveStatus(
       bool isActive, {
         void Function(String)? onError,
@@ -188,7 +184,6 @@ class UserState extends ChangeNotifier {
     try {
       await _repository.setUserActiveStatus(selectedId, isActive: isActive);
 
-      // 로컬 리스트 반영 + 캐시 갱신(네트워크 재조회 없음)
       final area = _areaState.currentArea.trim();
       final idx = _userList.indexWhere((u) => u.id == selectedId);
       if (idx >= 0) {
@@ -208,18 +203,15 @@ class UserState extends ChangeNotifier {
     }
   }
 
-  // 🔥 오늘 출근 여부를 Firestore에서 "유저 × 날짜" 당 1번만 조회하는 메서드
   Future<void> ensureTodayClockInStatus() async {
     if (_user == null) return;
 
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-    // 1) 메모리 캐시: 이미 오늘 기준으로 체크했다면 Firestore read 스킵
     if (_hasClockInTodayForDate == today) {
       return;
     }
 
-    // 2) SharedPreferences 캐시 확인
     try {
       final dateKey = _clockInCacheDateKey;
       final flagKey = _clockInCacheFlagKey;
@@ -240,7 +232,6 @@ class UserState extends ChangeNotifier {
       debugPrint('ensureTodayClockInStatus prefs 캐시 읽기 실패: $e\n$st');
     }
 
-    // 3) 캐시가 없거나 날짜가 바뀐 경우에만 Firestore 조회
     try {
       final repo = CommuteLogRepository();
       final exists = await repo.hasLogForDate(
@@ -252,7 +243,6 @@ class UserState extends ChangeNotifier {
       _hasClockInToday = exists;
       _hasClockInTodayForDate = today;
 
-      // Firestore 결과를 SharedPreferences에도 캐시
       final dateKey = _clockInCacheDateKey;
       final flagKey = _clockInCacheFlagKey;
       if (dateKey != null && flagKey != null) {
@@ -271,7 +261,6 @@ class UserState extends ChangeNotifier {
     }
   }
 
-  /// 출근 성공 직후, Firestore를 다시 읽지 않고 캐시만 true 로 맞추는 헬퍼
   void markClockInToday() {
     if (_user == null) return;
 
@@ -280,7 +269,6 @@ class UserState extends ChangeNotifier {
     _hasClockInTodayForDate = today;
     notifyListeners();
 
-    // SharedPreferences 캐시도 비동기로 동기화
     final dateKey = _clockInCacheDateKey;
     final flagKey = _clockInCacheFlagKey;
     if (dateKey != null && flagKey != null) {
@@ -302,7 +290,6 @@ class UserState extends ChangeNotifier {
 
     await _repository.updateUser(updatedUser);
 
-    // 로컬 리스트 교체 및 캐시 갱신(네트워크 호출 없음)
     final area = _areaState.currentArea.trim();
     _userList = _replaceItem(_userList, updatedUser);
     await _repository.updateUsersCache(area, _userList);
@@ -385,7 +372,6 @@ class UserState extends ChangeNotifier {
         );
       }
 
-      // 🔹 이 유저의 "오늘 출근 여부" SharedPreferences 캐시 제거
       try {
         final prefs = await SharedPreferences.getInstance();
         final dateKey = _clockInCacheDateKey;
@@ -407,9 +393,9 @@ class UserState extends ChangeNotifier {
       try {
         PlateTtsListenerService.stop();
       } catch (_) {}
-      try {
-        ChatTtsListenerService.stop();
-      } catch (_) {}
+
+      // ✅ ChatTtsListenerService.stop() 제거
+
       try {
         await LatestMessageService.instance.stop();
       } catch (_) {}
@@ -541,8 +527,7 @@ class UserState extends ChangeNotifier {
   Future<void> _saveTabletPrefsFromUser(UserModel asUser) async {
     final prefs = await SharedPreferences.getInstance();
     final handle = asUser.phone.trim().toLowerCase();
-    final areaName =
-    (asUser.selectedArea ?? asUser.currentArea ?? asUser.areas.firstOrNull ?? '').trim();
+    final areaName = (asUser.selectedArea ?? asUser.currentArea ?? asUser.areas.firstOrNull ?? '').trim();
 
     await prefs.setString('handle', handle);
     await prefs.setString('selectedArea', areaName);
@@ -601,7 +586,10 @@ class UserState extends ChangeNotifier {
       _areaState.setAreaLocalOnly(trimmedArea, division: division);
 
       PlateTtsListenerService.start(trimmedArea);
-      ChatTtsListenerService.start(trimmedArea);
+
+      // ✅ ChatTtsListenerService.start 제거
+      // ✅ 대신 LatestMessageService를 명시적으로 시작(채팅 최신 캐시/구독 유지 목적)
+      LatestMessageService.instance.start(trimmedArea);
     } catch (e, st) {
       debugPrint("loadUserToLogInLocalOnly, 오류: $e\n$st");
     }
@@ -650,7 +638,9 @@ class UserState extends ChangeNotifier {
       await _areaState.initializeArea(trimmedArea);
 
       PlateTtsListenerService.start(trimmedArea);
-      ChatTtsListenerService.start(trimmedArea);
+
+      // ✅ ChatTtsListenerService.start 제거
+      LatestMessageService.instance.start(trimmedArea);
     } catch (e) {
       debugPrint("loadUserToLogIn, 오류: $e");
     }
@@ -700,7 +690,9 @@ class UserState extends ChangeNotifier {
       await _areaState.initializeArea(selectedArea);
 
       PlateTtsListenerService.start(selectedArea);
-      ChatTtsListenerService.start(selectedArea);
+
+      // ✅ ChatTtsListenerService.start 제거
+      LatestMessageService.instance.start(selectedArea);
     } catch (e) {
       debugPrint("loadTabletToLogIn, 오류: $e");
     }
@@ -733,7 +725,9 @@ class UserState extends ChangeNotifier {
     await _areaState.updateArea(newArea, isSyncing: true);
 
     PlateTtsListenerService.start(newArea);
-    ChatTtsListenerService.start(newArea);
+
+    // ✅ ChatTtsListenerService.start 제거
+    LatestMessageService.instance.start(newArea);
   }
 
   // ========== 내부 로드 ==========

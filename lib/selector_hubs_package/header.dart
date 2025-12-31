@@ -2,14 +2,15 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:googleapis/sheets/v4.dart' as sheets;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../utils/snackbar_helper.dart';
 import '../../utils/api/email_config.dart';
-import '../../utils/app_exit_flag.dart';
+
+// ✅ NEW: 공용 앱 종료 서비스
+import '../../utils/app_exit_service.dart';
 
 // ⬅️ 오버레이 모드 설정
 import '../../utils/overlay_mode_config.dart';
@@ -468,56 +469,14 @@ class _TopRow extends StatelessWidget {
     await _openSheetsLinkSheet(context);
   }
 
-  // 앱 종료 처리
+  // ✅ 앱 종료 처리 (공용 서비스로 위임)
   Future<void> _exitApp(BuildContext context) async {
-    AppExitFlag.beginExit();
-
-    try {
-      if (Platform.isAndroid) {
-        try {
-          if (await FlutterOverlayWindow.isActive()) {
-            await FlutterOverlayWindow.closeOverlay();
-          }
-        } catch (_) {}
-
-        bool running = false;
-        try {
-          running = await FlutterForegroundTask.isRunningService;
-        } catch (_) {}
-
-        if (running) {
-          try {
-            final stopped = await FlutterForegroundTask.stopService();
-            if (stopped != true) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('포그라운드 중지 실패(플러그인 반환값 false)'),
-                ),
-              );
-            }
-          } catch (e) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('포그라운드 중지 실패: $e')),
-            );
-          }
-          await Future.delayed(const Duration(milliseconds: 150));
-        }
-
-        await SystemNavigator.pop();
-      } else {
-        await SystemNavigator.pop();
-      }
-    } catch (e) {
-      AppExitFlag.reset();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('앱 종료 실패: $e')),
-      );
-    }
+    await AppExitService.exitApp(context);
   }
 
   // “설정” 바텀시트 — Gmail(수신자만) + QuickOverlay 오버레이 권한 + 오버레이 모드(항상 노출)
   // + commute_true_false 토글 + parking_completed 실시간 탭 토글
-  // + ✅ 공지 스프레드시트 ID 설정(not i 시트)
+  // + ✅ 공지 스프레드시트 ID 설정(noti 시트)
   Future<void> _openSheetsLinkSheet(BuildContext context) async {
     // Gmail 수신자 로드 (To 만)
     final emailCfg = await EmailConfig.load();
@@ -625,8 +584,7 @@ class _TopRow extends StatelessWidget {
                                     return;
                                   }
                                   try {
-                                    final granted =
-                                    await FlutterOverlayWindow.isPermissionGranted();
+                                    final granted = await FlutterOverlayWindow.isPermissionGranted();
                                     if (!ctx.mounted) return;
                                     if (granted) {
                                       showSelectedSnackbar(
@@ -664,8 +622,7 @@ class _TopRow extends StatelessWidget {
                                     return;
                                   }
                                   try {
-                                    final already =
-                                    await FlutterOverlayWindow.isPermissionGranted();
+                                    final already = await FlutterOverlayWindow.isPermissionGranted();
                                     if (already) {
                                       if (!ctx.mounted) return;
                                       showSelectedSnackbar(
@@ -675,8 +632,7 @@ class _TopRow extends StatelessWidget {
                                       return;
                                     }
 
-                                    final result =
-                                    await FlutterOverlayWindow.requestPermission();
+                                    final result = await FlutterOverlayWindow.requestPermission();
 
                                     if (!ctx.mounted) return;
                                     if (result == true) {
@@ -858,7 +814,7 @@ class _TopRow extends StatelessWidget {
                             const SizedBox(width: 10),
                             const Expanded(
                               child: Text(
-                                '출근 시각 Firestore 기록(commute_true_false)',
+                                '출근 시각 DB에 기록',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w800,
                                   color: Colors.black87,
@@ -870,8 +826,8 @@ class _TopRow extends StatelessWidget {
                         const SizedBox(height: 10),
                         const Text(
                           '이 설정은 “기기별(로컬)”로 저장됩니다.\n'
-                              'ON이면 출근 버튼을 누를 때 commute_true_false 컬렉션에 출근 시각(Timestamp)을 기록합니다.\n'
-                              'OFF이면 해당 Firestore 업데이트는 모두 건너뛰고, 로컬(SQLite) 기록만 수행합니다.',
+                              'ON이면 출근 버튼을 누를 때 DB에 출근 시각(Timestamp)을 기록합니다.\n'
+                              'OFF이면 해당 DB 내 업데이트는 모두 건너뛰고, 로컬(SQLite) 기록만 수행합니다.',
                           style: TextStyle(fontSize: 13, color: Colors.black87),
                         ),
                         const SizedBox(height: 10),
@@ -880,8 +836,8 @@ class _TopRow extends StatelessWidget {
                           title: Text(commuteTrueFalseEnabled ? 'ON (기록함)' : 'OFF (기록 안 함)'),
                           subtitle: Text(
                             commuteTrueFalseEnabled
-                                ? '출근 시 commute_true_false 업데이트가 실행됩니다.'
-                                : '출근 시 commute_true_false 업데이트를 스킵합니다.',
+                                ? '출근 시 최근 출근 날짜 업데이트가 실행됩니다.'
+                                : '출근 시 최근 출근 날짜 업데이트를 스킵합니다.',
                           ),
                           value: commuteTrueFalseEnabled,
                           onChanged: (v) async {
@@ -893,8 +849,8 @@ class _TopRow extends StatelessWidget {
                             showSuccessSnackbar(
                               context,
                               v
-                                  ? '이 기기에서 commute_true_false 기록을 ON으로 설정했습니다.'
-                                  : '이 기기에서 commute_true_false 기록을 OFF로 설정했습니다.',
+                                  ? '이 기기에서 출근 날짜 DB 기록을 ON으로 설정했습니다.'
+                                  : '이 기기에서 출근 날짜 DB 기록을 OFF로 설정했습니다.',
                             );
                           },
                         ),
@@ -1038,8 +994,7 @@ class _TopRow extends StatelessWidget {
                         const SizedBox(height: 10),
                         Text(
                           '공지 내용을 불러올 스프레드시트 ID를 입력하세요.\n'
-                              '스프레드시트 URL을 그대로 붙여넣어도 자동으로 ID를 추출합니다.\n'
-                              '공지 내용은 “$_kNoticeSheetName” 시트의 A열(A1:A50)을 읽어옵니다.',
+                              '스프레드시트 URL을 그대로 붙여넣어도 자동으로 ID를 추출합니다.\n',
                           style: const TextStyle(fontSize: 13, color: Colors.black87),
                         ),
                         const SizedBox(height: 10),
@@ -1425,8 +1380,7 @@ class _HeaderBadgeInner extends StatefulWidget {
   State<_HeaderBadgeInner> createState() => _HeaderBadgeInnerState();
 }
 
-class _HeaderBadgeInnerState extends State<_HeaderBadgeInner>
-    with SingleTickerProviderStateMixin {
+class _HeaderBadgeInnerState extends State<_HeaderBadgeInner> with SingleTickerProviderStateMixin {
   late final AnimationController _rotCtrl;
 
   @override

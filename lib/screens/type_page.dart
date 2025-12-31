@@ -18,8 +18,6 @@ import 'secondary_page.dart';
 import '../utils/snackbar_helper.dart';
 
 import 'service_mode/type_package/common_widgets/reverse_sheet_package/parking_completed_table_sheet.dart';
-
-// ✅ AppCardPalette ThemeExtension 사용
 import '../theme.dart';
 
 class TypePage extends StatefulWidget {
@@ -60,8 +58,7 @@ class _TypePageState extends State<TypePage> {
 
               final currentPage = pageState.pages[pageState.selectedIndex];
               final collection = currentPage.collectionKey;
-              final selectedPlate =
-              plateState.getSelectedPlate(collection, userName);
+              final selectedPlate = plateState.getSelectedPlate(collection, userName);
 
               if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
                 await plateState.togglePlateIsSelected(
@@ -170,30 +167,24 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   double _dragDistance = 0.0;
 
   // ── 세로 스와이프
-  //   - 아래→위: 채팅 바텀시트(읽기 전용)
+  //   - (변경) 아래→위: 채팅 오픈 로직 삭제
   //   - 위→아래: ParkingCompleted 로컬 테이블 Top Sheet
   double _vDragDistance = 0.0;
-  bool _chatOpening = false; // 중복 오픈 방지(채팅)
   bool _topOpening = false; // 중복 오픈 방지(테이블 시트)
 
   // 임계값
   static const double _hDistanceThreshold = 80.0;
   static const double _hVelocityThreshold = 1000.0;
 
-  // ⬇️ 민감도 상향(더 널널)
-  static const double _vDistanceThresholdUp = 70.0;
-  static const double _vVelocityThresholdUp = 900.0;
+  // (변경) 아래로 스와이프만 유지
   static const double _vDistanceThresholdDown = 50.0;
   static const double _vVelocityThresholdDown = 700.0;
 
   void _handleHorizontalDragEnd(BuildContext context, double velocity) {
     if (_dragDistance > _hDistanceThreshold && velocity > _hVelocityThreshold) {
-      Navigator.of(context)
-          .push(_slidePage(const InputPlateScreen(), fromLeft: true));
-    } else if (_dragDistance < -_hDistanceThreshold &&
-        velocity < -_hVelocityThreshold) {
-      Navigator.of(context)
-          .push(_slidePage(const SecondaryPage(), fromLeft: false));
+      Navigator.of(context).push(_slidePage(const InputPlateScreen(), fromLeft: true));
+    } else if (_dragDistance < -_hDistanceThreshold && velocity < -_hVelocityThreshold) {
+      Navigator.of(context).push(_slidePage(const SecondaryPage(), fromLeft: false));
     } else {
       debugPrint(
         '⏸[H] 거리(${_dragDistance.toStringAsFixed(1)})/속도($velocity) 부족 → 무시',
@@ -219,23 +210,10 @@ class _RefreshableBodyState extends State<RefreshableBody> {
       ) async {
     final vy = details.primaryVelocity ?? 0.0; // 위로 스와이프는 음수, 아래로는 양수
 
-    // 위로 빠르게 스와이프 → 채팅 (둘 중 하나만 만족해도 트리거)
-    final firedUp =
-        (_vDragDistance < -_vDistanceThresholdUp) || (vy < -_vVelocityThresholdUp);
-    // 아래로 빠르게 스와이프 → ParkingCompleted 테이블 Top Sheet (둘 중 하나만 만족해도 트리거)
-    final firedDown =
-        (_vDragDistance > _vDistanceThresholdDown) || (vy > _vVelocityThresholdDown);
+    // (변경) 위로 스와이프 트리거 제거
+    final firedDown = (_vDragDistance > _vDistanceThresholdDown) || (vy > _vVelocityThresholdDown);
 
-    if (firedUp && !_chatOpening) {
-      _chatOpening = true;
-      debugPrint(
-        '✅[V-UP] 채팅 오픈: 거리=${_vDragDistance.toStringAsFixed(1)} / 속도=$vy '
-            '(need dist<-${_vDistanceThresholdUp} OR vy<-${_vVelocityThresholdUp})',
-      );
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-      if (mounted) chatBottomSheet(context); // ✅ 읽기 전용 바텀시트(아래 파일에서 구현)
-      _chatOpening = false;
-    } else if (firedDown && !_topOpening) {
+    if (firedDown && !_topOpening) {
       _topOpening = true;
       debugPrint(
         '✅[V-DOWN] ParkingCompleted 테이블 Top Sheet 오픈: 거리=${_vDragDistance.toStringAsFixed(1)} / 속도=$vy '
@@ -259,8 +237,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
       transitionsBuilder: (_, animation, __, child) {
         final begin = Offset(fromLeft ? -1.0 : 1.0, 0);
         final end = Offset.zero;
-        final tween = Tween(begin: begin, end: end)
-            .chain(CurveTween(curve: Curves.easeInOut));
+        final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
         return SlideTransition(position: animation.drive(tween), child: child);
       },
     );
@@ -281,12 +258,11 @@ class _RefreshableBodyState extends State<RefreshableBody> {
         details.primaryVelocity ?? 0,
       ),
 
-      // ── 세로 스와이프(아래→위: 채팅 / 위→아래: ParkingCompleted 테이블 Top Sheet)
+      // ── 세로 스와이프(변경: 위로 스와이프 채팅 제거 / 아래로 스와이프만 유지)
       onVerticalDragStart: (_) {
         _vDragDistance = 0.0; // 시작 시 리셋
       },
       onVerticalDragUpdate: (details) => _vDragDistance += details.delta.dy,
-      // 위로 음수, 아래로 양수
       onVerticalDragEnd: (details) => _handleVerticalDragEnd(context, details),
 
       child: Consumer<PageState>(
@@ -303,8 +279,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
                       height: 28,
                       child: CircularProgressIndicator(
                         strokeWidth: 3,
-                        valueColor:
-                        AlwaysStoppedAnimation<Color>(palette.serviceBase),
+                        valueColor: AlwaysStoppedAnimation<Color>(palette.serviceBase),
                       ),
                     ),
                   ),
@@ -322,10 +297,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     } else {
       return IndexedStack(
         index: index - 1,
-        children: defaultPages
-            .sublist(1)
-            .map((pageInfo) => pageInfo.builder(context))
-            .toList(),
+        children: defaultPages.sublist(1).map((pageInfo) => pageInfo.builder(context)).toList(),
       );
     }
   }
@@ -413,13 +385,9 @@ class _PageBottomNavigationState extends State<PageBottomNavigation> {
                     final bool isOut = pageInfo.title == '출차 요청';
                     Color countColor;
                     if (isIn || isOut) {
-                      countColor = isSelected
-                          ? selectedColor
-                          : (isIn ? Colors.redAccent : Colors.indigoAccent);
+                      countColor = isSelected ? selectedColor : (isIn ? Colors.redAccent : Colors.indigoAccent);
                     } else {
-                      countColor = isSelected
-                          ? selectedColor
-                          : palette.serviceDark.withOpacity(.75);
+                      countColor = isSelected ? selectedColor : palette.serviceDark.withOpacity(.75);
                     }
 
                     return Column(

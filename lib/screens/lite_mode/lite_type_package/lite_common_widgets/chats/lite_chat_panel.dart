@@ -102,7 +102,10 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
                       children: [
                         const Text(
                           '쇼트컷 추가',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
                         ),
                         const SizedBox(height: 12),
                         TextField(
@@ -116,7 +119,8 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
                           decoration: InputDecoration(
                             hintText: '자주 쓰는 문구를 입력하세요',
                             border: const OutlineInputBorder(),
-                            helperText: isDuplicate ? '이미 같은 쇼트컷이 있습니다.' : '최대 80자',
+                            helperText:
+                            isDuplicate ? '이미 같은 쇼트컷이 있습니다.' : '최대 80자',
                             errorText: overLimit ? '최대 80자까지 입력 가능합니다.' : null,
                           ),
                         ),
@@ -211,7 +215,8 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
     final needsSpaceBefore = before.isNotEmpty && !before.endsWith(' ');
     final needsSpaceAfter = after.isNotEmpty && !insert.endsWith(' ');
 
-    final toInsert = '${needsSpaceBefore ? ' ' : ''}$insert${needsSpaceAfter ? ' ' : ''}';
+    final toInsert =
+        '${needsSpaceBefore ? ' ' : ''}$insert${needsSpaceAfter ? ' ' : ''}';
 
     final newText = '$before$toInsert$after';
     final newOffset = before.length + toInsert.length;
@@ -312,7 +317,9 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
                     )
                   else ...[
                     FilledButton.icon(
-                      onPressed: _selectedShortcutIdx.isNotEmpty ? _insertSelectedShortcuts : null,
+                      onPressed: _selectedShortcutIdx.isNotEmpty
+                          ? _insertSelectedShortcuts
+                          : null,
                       icon: const Icon(Icons.input),
                       label: Text('삽입(${_selectedShortcutIdx.length})'),
                     ),
@@ -327,7 +334,8 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
                   const Spacer(),
                 IconButton(
                   tooltip: '새로고침',
-                  onPressed: () => SheetChatService.instance.start(widget.scopeKey),
+                  onPressed: () =>
+                      SheetChatService.instance.start(widget.scopeKey),
                   icon: st.loading
                       ? const SizedBox(
                     width: 18,
@@ -392,7 +400,8 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
                         final t = m.time;
                         if (t != null) {
                           try {
-                            timeText = DateFormat('yyyy-MM-dd HH:mm').format(t.toLocal());
+                            timeText =
+                                DateFormat('yyyy-MM-dd HH:mm').format(t.toLocal());
                           } catch (_) {}
                         }
 
@@ -409,14 +418,16 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text('[익명]', style: TextStyle(fontWeight: FontWeight.bold)),
+                              const Text('[익명]',
+                                  style: TextStyle(fontWeight: FontWeight.bold)),
                               const SizedBox(height: 6),
                               Text(m.text),
                               const SizedBox(height: 8),
                               if (subtitle.isNotEmpty)
                                 Text(
                                   subtitle,
-                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                  style: TextStyle(
+                                      fontSize: 12, color: Colors.grey[600]),
                                 ),
                             ],
                           ),
@@ -438,7 +449,8 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
                               return Padding(
                                 padding: const EdgeInsets.only(right: 8),
                                 child: GestureDetector(
-                                  onLongPress: !_isMultiSelect ? () => _removeShortcut(s) : null,
+                                  onLongPress:
+                                  !_isMultiSelect ? () => _removeShortcut(s) : null,
                                   child: FilterChip(
                                     selected: selected,
                                     label: Text(s, overflow: TextOverflow.ellipsis),
@@ -478,7 +490,8 @@ class _LiteChatPanelState extends State<LiteChatPanel> {
                       hintText: '메시지를 입력하세요...',
                       filled: true,
                       fillColor: Colors.grey[200],
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
                         borderSide: BorderSide.none,

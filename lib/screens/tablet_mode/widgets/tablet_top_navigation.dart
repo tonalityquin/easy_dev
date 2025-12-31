@@ -12,8 +12,7 @@ import '../../../utils/tts/tts_user_filters.dart';
 // ⬇️ 로그아웃 공통 헬퍼
 import '../../../utils/init/logout_helper.dart';
 
-// ✅ 앱 isolate/Chat/Plate TTS 동기화
-import '../../../utils/tts/chat_tts_listener_service.dart';
+// ✅ 앱 isolate Plate TTS 동기화
 import '../../../utils/tts/plate_tts_listener_service.dart';
 
 // ✅ 출차 요청 구독 토글을 위해 PlateState/PlateType/스낵바
@@ -34,7 +33,7 @@ class TabletTopNavigation extends StatelessWidget {
     final selectedArea = context.watch<AreaState>().currentArea;
 
     return Material(
-      color: Colors.white, // 네비게이션 배경 흰색
+      color: Colors.white,
       child: InkWell(
         onTap: isAreaSelectable ? () => _openTopNavDialog(context) : null,
         splashColor: Colors.grey.withOpacity(0.12),
@@ -75,7 +74,7 @@ class TabletTopNavigation extends StatelessWidget {
       required String title,
       required String subtitle,
       required IconData icon,
-      required Color background, // 각 버튼 고유 배경색
+      required Color background,
     }) {
       final bool selected = padMode == target;
       return SizedBox(
@@ -129,7 +128,6 @@ class TabletTopNavigation extends StatelessWidget {
       );
     }
 
-    // ✅ Busy 상태를 안전하게 유지하기 위한 Notifier (StatefulBuilder 리빌드에도 보존)
     final depBusy = ValueNotifier<bool>(false);
 
     await showDialog<void>(
@@ -139,7 +137,7 @@ class TabletTopNavigation extends StatelessWidget {
         return Dialog(
           insetPadding: const EdgeInsets.all(16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          backgroundColor: Colors.white, // 다이얼로그 배경 흰색
+          backgroundColor: Colors.white,
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxWidth: 520,
@@ -147,7 +145,6 @@ class TabletTopNavigation extends StatelessWidget {
             ),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-              // ✅ 오버플로 방지: 머리/꼬리는 고정, 본문은 Expanded+Scroll
               child: StatefulBuilder(
                 builder: (innerCtx, setSB) {
                   final plateState = innerCtx.watch<PlateState>();
@@ -158,7 +155,6 @@ class TabletTopNavigation extends StatelessWidget {
                     try {
                       final isSubscribedDeparture = plateState.isSubscribed(PlateType.departureRequests);
                       if (!isSubscribedDeparture) {
-                        // 📱 태블릿 전용 전용 메서드 사용
                         await Future.sync(() => plateState.tabletSubscribeDeparture());
                         final currentArea = plateState.currentArea;
                         showSuccessSnackbar(
@@ -184,7 +180,6 @@ class TabletTopNavigation extends StatelessWidget {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // ---------- 헤더(고정) ----------
                       Row(
                         children: [
                           const Icon(CupertinoIcons.car, color: Colors.blueAccent),
@@ -202,14 +197,12 @@ class TabletTopNavigation extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
 
-                      // ---------- 본문(스크롤 가능) ----------
                       Expanded(
                         child: SingleChildScrollView(
                           padding: const EdgeInsets.only(bottom: 12),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              // 현재 지역 표시
                               Container(
                                 width: double.infinity,
                                 padding: const EdgeInsets.all(12),
@@ -235,7 +228,6 @@ class TabletTopNavigation extends StatelessWidget {
 
                               const SizedBox(height: 20),
 
-                              // 화면 모드 섹션 타이틀
                               Align(
                                 alignment: Alignment.centerLeft,
                                 child: Text(
@@ -249,7 +241,6 @@ class TabletTopNavigation extends StatelessWidget {
                               ),
                               const SizedBox(height: 8),
 
-                              // ▶ 각 버튼 다른 배경색
                               modeButton(
                                 target: PadMode.big,
                                 title: 'Big Pad (기본)',
@@ -276,7 +267,6 @@ class TabletTopNavigation extends StatelessWidget {
 
                               const SizedBox(height: 20),
 
-                              // 🔊 음성 알림(TTS) 설정 섹션
                               Align(
                                 alignment: Alignment.centerLeft,
                                 child: Text(
@@ -290,7 +280,6 @@ class TabletTopNavigation extends StatelessWidget {
                               ),
                               const SizedBox(height: 8),
 
-                              // ✅ [출차 요청 구독] 토글 버튼 (TTS 설정 버튼 상단)
                               Selector<PlateState, bool>(
                                 selector: (_, s) => s.isSubscribed(PlateType.departureRequests),
                                 builder: (ctx, isSubscribedDeparture, __) {
@@ -359,30 +348,24 @@ class TabletTopNavigation extends StatelessWidget {
                                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                   ),
                                   onPressed: () async {
-                                    // 먼저 현재 다이얼로그 닫기
                                     Navigator.of(dialogCtx).pop();
-
-                                    // 시트 열기
                                     await _openTtsFilterSheet(context);
 
-                                    // ✅ 시트에서 저장된 최신 필터를 앱/FG 둘 다에 즉시 동기화
+                                    // ✅ 저장된 최신 필터를 앱/FG에 동기화
                                     final currentArea = context.read<AreaState>().currentArea;
                                     final filters = await TtsUserFilters.load();
 
-                                    // ✅ Chat TTS 마스터 on/off 반영
-                                    try {
-                                      await ChatTtsListenerService.setEnabled(filters.chat);
-                                    } catch (_) {}
+                                    // ✅ ChatTtsListenerService 호출 제거
+                                    // - chat 토글은 저장 및 FG isolate(tssFilters) 전달로만 반영
 
                                     // ✅ Plate TTS 마스터 on/off + 앱 isolate 필터 즉시 반영
                                     try {
-                                      final masterOn =
-                                          filters.parking || filters.departure || filters.completed;
+                                      final masterOn = filters.parking || filters.departure || filters.completed;
                                       await PlateTtsListenerService.setEnabled(masterOn);
-                                      PlateTtsListenerService.updateFilters(filters); // (앱 isolate)
+                                      PlateTtsListenerService.updateFilters(filters);
                                     } catch (_) {}
 
-                                    // ✅ FG isolate에도 최신 필터 전달
+                                    // ✅ FG isolate에도 최신 필터 전달 (chat 포함 map 전달 가능)
                                     if (currentArea.isNotEmpty) {
                                       FlutterForegroundTask.sendDataToTask({
                                         'area': currentArea,
@@ -395,7 +378,6 @@ class TabletTopNavigation extends StatelessWidget {
 
                               const SizedBox(height: 20),
 
-                              // 로그아웃 버튼 (기존 스타일 유지)
                               SizedBox(
                                 width: double.infinity,
                                 child: ElevatedButton.icon(
@@ -422,7 +404,6 @@ class TabletTopNavigation extends StatelessWidget {
 
                       const SizedBox(height: 8),
 
-                      // ---------- 푸터(고정) ----------
                       Align(
                         alignment: Alignment.centerRight,
                         child: TextButton(
@@ -442,7 +423,6 @@ class TabletTopNavigation extends StatelessWidget {
   }
 
   Future<void> _openTtsFilterSheet(BuildContext context) async {
-    // 바텀시트 열기 (SafeArea & 둥근 모서리)
     await showModalBottomSheet<void>(
       context: context,
       useRootNavigator: true,
@@ -450,7 +430,6 @@ class TabletTopNavigation extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (ctx) => const TtsFilterSheet(),
     );
-    // 저장은 시트 내부에서 하도록 가정
   }
 
   Future<void> _logout(BuildContext context) async {
@@ -458,7 +437,6 @@ class TabletTopNavigation extends StatelessWidget {
       context,
       checkWorking: true,
       delay: const Duration(seconds: 1),
-      // 목적지 미지정 → 기본(허브 선택)으로 이동
     );
   }
 }

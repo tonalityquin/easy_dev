@@ -16,18 +16,21 @@
 // - 데이터 새로고침 시 monthly_plate_status 컬렉션에서 "현재 지역(area) 문서가 하나라도 존재하는지" 확인
 // - SharedPreferences에는 지역별로 저장하지 않고, 단일 boolean 키(has_monthly_parking)만 저장
 // - 문서가 없으면 false로 갱신됨(조회 성공 기준). 조회 실패 시에는 기존 값 유지(덮어쓰기 방지).
+//
+// ✅ 추가 변경(요청 반영):
+// - ChatTtsListenerService 관련 로직(직접 setEnabled 호출) 제거
+// - Chat 관련 토글은 저장 및 FG isolate 전달(ttsFilters)만 수행
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ 추가: 월주차 문서 존재 여부 확인
+import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ 월주차 문서 존재 여부 확인
 
 import '../../../../states/area/area_state.dart';
 import '../../../../../states/location/location_state.dart';
 import '../../../../states/bill/bill_state.dart';
 import '../../../../utils/tts/tts_user_filters.dart';
-import '../../../../utils/tts/chat_tts_listener_service.dart';
 import '../../../../utils/tts/plate_tts_listener_service.dart'; // ✅ PlateTTS setEnabled / updateFilters
 import '../../../../utils/snackbar_helper.dart';
 import '../../../../utils/init/logout_helper.dart';
@@ -96,13 +99,6 @@ class _DashboardSettingState extends State<DashboardSetting> {
   Future<void> _load() async {
     final loaded = await TtsUserFilters.load();
 
-    // 시작 시 Chat TTS on/off도 즉시 반영
-    try {
-      await ChatTtsListenerService.setEnabled(loaded.chat);
-    } catch (e) {
-      debugPrint('ChatTtsListenerService.setEnabled 초기화 실패: $e');
-    }
-
     // ✅ PlateTTS: parking/departure/completed 중 하나라도 켜져 있으면 전체 활성화
     try {
       final masterOn = loaded.parking || loaded.departure || loaded.completed;
@@ -139,8 +135,8 @@ class _DashboardSettingState extends State<DashboardSetting> {
     try {
       await _filters.save();
 
-      // Chat TTS on/off 즉시 반영
-      await ChatTtsListenerService.setEnabled(_filters.chat);
+      // ✅ ChatTtsListenerService 호출 제거
+      // - chat 토글은 저장 + FG isolate 전달(ttsFilters)로만 반영됨
 
       // ✅ PlateTTS: parking/departure/completed 합성하여 마스터 on/off 즉시 반영
       final masterOn = _filters.parking || _filters.departure || _filters.completed;
@@ -187,12 +183,12 @@ class _DashboardSettingState extends State<DashboardSetting> {
   /// - 기준: monthly_plate_status where('area' == currentArea) limit(1)
   /// - 결과:
   ///   - 조회 성공 + 문서 존재 -> true 저장
-  ///   - 조회 성공 + 문서 없음 -> false 저장 (요청사항)
+  ///   - 조회 성공 + 문서 없음 -> false 저장
   ///   - 조회 실패 -> null 반환, SharedPreferences 값은 "기존 값 유지"(덮어쓰기 방지)
   Future<bool?> _syncHasMonthlyParkingFlag() async {
     final area = context.read<AreaState>().currentArea.trim();
 
-    // 지역이 비어있으면 "없음"으로 저장(정책: 단일 값 유지 목적)
+    // 지역이 비어있으면 "없음"으로 저장
     if (area.isEmpty) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_prefsHasMonthlyKey, false);
@@ -230,8 +226,6 @@ class _DashboardSettingState extends State<DashboardSetting> {
       await billState.manualBillRefresh();
 
       // ✅ 추가: 새로고침 시점에 월주차 문서 존재 여부를 SharedPreferences 단일 bool로 갱신
-      // - 문서가 없으면 false로 저장됨(조회 성공 기준)
-      // - 조회 실패 시에는 기존 값 유지(null 반환)
       await _syncHasMonthlyParkingFlag();
 
       if (mounted) {
@@ -254,7 +248,6 @@ class _DashboardSettingState extends State<DashboardSetting> {
       context,
       checkWorking: false,
       delay: const Duration(seconds: 1),
-      // 목적지 미지정 → 기본(허브 선택)으로 이동
     );
   }
 
@@ -303,7 +296,6 @@ class _DashboardSettingState extends State<DashboardSetting> {
       const _HeaderBanner(),
       const SizedBox(height: 12),
 
-      // 안내 카드(지역 비어있음)
       if ((currentArea).isEmpty)
         _Section(
           title: '지역 설정 필요',
@@ -315,13 +307,13 @@ class _DashboardSettingState extends State<DashboardSetting> {
           ),
         ),
 
-      // TTS 설정
       _Section(
         title: 'TTS 알림 설정',
         icon: Icons.record_voice_over_rounded,
         subtitle: '스위치를 변경하면 즉시 저장되고 FG 서비스에 적용됩니다.',
-        trailing:
-        _applying ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : null,
+        trailing: _applying
+            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+            : null,
         child: Column(
           children: [
             _SwitchTile(
@@ -356,7 +348,6 @@ class _DashboardSettingState extends State<DashboardSetting> {
         ),
       ),
 
-      // 현재 지역
       _Section(
         title: '현재 지역',
         icon: Icons.place_outlined,
@@ -382,7 +373,6 @@ class _DashboardSettingState extends State<DashboardSetting> {
         ),
       ),
 
-      // 데이터 새로고침
       _Section(
         title: '데이터 새로고침',
         icon: Icons.refresh_rounded,
@@ -416,7 +406,6 @@ class _DashboardSettingState extends State<DashboardSetting> {
         ),
       ),
 
-      // 로그아웃
       _Section(
         title: '로그아웃',
         icon: Icons.logout_rounded,
@@ -462,7 +451,6 @@ class _DashboardSettingState extends State<DashboardSetting> {
         elevation: 0,
         centerTitle: true,
         automaticallyImplyLeading: false,
-        // ⬇️ 11시 라벨을 AppBar 영역에 고정
         flexibleSpace: _buildScreenTag(context),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
@@ -476,7 +464,7 @@ class _DashboardSettingState extends State<DashboardSetting> {
                 Icon(_locked ? Icons.lock : Icons.lock_open, color: _SvcColors.dark),
                 Switch.adaptive(
                   activeColor: _SvcColors.base,
-                  value: _locked, // true면 잠금
+                  value: _locked,
                   onChanged: (v) async {
                     setState(() => _locked = v);
                     await _saveLockState(v);
@@ -489,10 +477,7 @@ class _DashboardSettingState extends State<DashboardSetting> {
       ),
       body: Stack(
         children: [
-          // 잠금 시 입력 차단
           IgnorePointer(ignoring: _locked, child: listView),
-
-          // 잠금 상태 시 시각적 오버레이
           if (_locked)
             Positioned.fill(
               child: Container(
@@ -598,7 +583,7 @@ class _SectionHeader extends StatelessWidget {
             color: _SvcColors.light.withOpacity(0.20),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: const Icon(iconDataPlaceholder, size: 20), // placeholder replaced below
+          child: const Icon(iconDataPlaceholder, size: 20),
         ).withIcon(icon),
         const SizedBox(width: 10),
         Expanded(
@@ -629,7 +614,7 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-/// 작은 헬퍼: 위젯의 아이콘을 교체하기 위한 확장 (위에서 Container에 아이콘 주입)
+/// 작은 헬퍼: 위젯의 아이콘을 교체하기 위한 확장
 extension _WithIcon on Widget {
   Widget withIcon(IconData icon) {
     return Stack(
@@ -645,7 +630,7 @@ extension _WithIcon on Widget {
   }
 }
 
-// 더미 상수(컴파일 편의) — _SectionHeader에서 withIcon으로 즉시 대체됨
+// 더미 상수(컴파일 편의)
 const IconData iconDataPlaceholder = Icons.circle;
 
 class _SwitchTile extends StatelessWidget {

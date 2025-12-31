@@ -1,3 +1,4 @@
+// lib/services/sheet_chat_service.dart
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -5,6 +6,7 @@ import 'package:googleapis/sheets/v4.dart' as sheets;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../utils/google_auth_session.dart';
+import 'chat_local_notification_service.dart';
 
 /// ✅ Header에서 저장한 "스프레드시트 ID" SharedPreferences 키와 동일해야 함.
 const String kSharedSpreadsheetIdKey = 'notice_spreadsheet_id_v1';
@@ -17,6 +19,18 @@ const String kChatReadRange = '$kChatSheetName!A:C';
 
 /// ✅ 채팅 시트의 헤더 감지용(1행 확인)
 const String kChatHeaderProbeRange = '$kChatSheetName!A1:C1';
+
+/// ✅ (추가) "마지막으로 본 메시지" signature 저장 키 prefix
+const String kChatLastSeenSigPrefix = 'chat_last_seen_sig_v2';
+
+/// ✅ 새 메시지 알림 모드
+enum ChatNotifyMode {
+  /// 새 메시지가 여러 개여도 요약 알림 1개(기본)
+  summaryOne,
+
+  /// 최대 N개까지 개별 알림
+  individualUpToN,
+}
 
 /// ✅ 시트 기반 채팅 메시지(익명)
 class SheetChatMessage {
@@ -58,18 +72,27 @@ class SheetChatState {
   static const empty = SheetChatState(loading: false, error: null, messages: []);
 }
 
+/// ✅ 내부용: signature 포함(새 메시지 델타 판정용)
+class _ParsedRow {
+  final SheetChatMessage msg;
+  final String signature;
+
+  const _ParsedRow({
+    required this.msg,
+    required this.signature,
+  });
+}
+
 /// ✅ Google Sheets 기반 공개(익명) 채팅 서비스
-/// - Header에서 저장한 Spreadsheet ID를 SharedPreferences에서 읽음
-/// - `chat` 시트에 [timestamp, message] 형태로 기록
-/// - polling으로 주기적 갱신(실시간 스트림 대체)
+/// - polling으로 주기적 갱신
+/// - (핵심) lastSeen signature 기반 델타 판정으로 "새 메시지"만 알림
 ///
-/// ✅ 하위호환:
-/// - 과거 포맷 [timestamp, roomId, message] (A,B,C) 존재 시 message는 C를 사용
-///
-/// ✅ 중요 변경점:
-/// - 기존 `values.append()`는 "시트가 기억하는 마지막 사용영역" 다음에 계속 붙는 경우가 있어,
-///   사용자가 시트에서 값을 삭제해도 다음 행부터 입력되는 문제가 발생할 수 있음.
-/// - 이를 방지하기 위해, 전송 시 "첫 빈 행"을 찾아 해당 행에 `values.update()`로 기록하도록 변경.
+/// ✅ 추가 요구 반영:
+/// 1) "채팅 팝오버가 열려 있는 동안에는 알림 억제" 플래그 제공
+///    - setChatUiVisible(true/false)
+/// 2) 새 메시지 다건 처리:
+///    - summaryOne: 요약 1개
+///    - individualUpToN: 최대 N개 개별 알림
 class SheetChatService {
   SheetChatService._();
 
@@ -79,7 +102,6 @@ class SheetChatService {
   final ValueNotifier<SheetChatState> state =
   ValueNotifier<SheetChatState>(SheetChatState.empty);
 
-  // (이제 시트 내부 roomId는 쓰지 않지만)
   // 화면/영역 전환 시 polling 재시작 용도로만 scopeKey 유지
   String _scopeKey = '';
 
@@ -99,21 +121,119 @@ class SheetChatService {
   /// 한 번에 표시할 최대 메시지 수(뷰 성능)
   static const int maxMessagesInUi = 80;
 
-  /// 서비스 시작(여러 번 호출되어도 안전)
-  /// - scopeKey는 "영역 전환 시 재시작" 용도로만 사용
+  // ─────────────────────────────────────────────────────────────
+  // ✅ 알림 UX 플래그/정책
+  // ─────────────────────────────────────────────────────────────
+
+  bool _chatUiVisible = false; // 팝오버가 열려 있는 동안 true로 설정(알림 억제 목적)
+  bool _suppressWhenChatVisible = true;
+
+  ChatNotifyMode _notifyMode = ChatNotifyMode.summaryOne;
+
+  /// individualUpToN 모드에서 최대 알림 개수
+  int _maxIndividualNotifications = 3;
+
+  /// 알림 정책 설정(원하는 곳에서 호출)
+  void configureNotifications({
+    bool? suppressWhenChatVisible,
+    ChatNotifyMode? mode,
+    int? maxIndividualNotifications,
+  }) {
+    if (suppressWhenChatVisible != null) {
+      _suppressWhenChatVisible = suppressWhenChatVisible;
+    }
+    if (mode != null) {
+      _notifyMode = mode;
+    }
+    if (maxIndividualNotifications != null) {
+      _maxIndividualNotifications =
+          maxIndividualNotifications.clamp(1, 20);
+    }
+  }
+
+  /// ✅ 팝오버(채팅 UI)가 열려 있는 동안 true로 설정
+  /// - true인 동안 알림 억제(기본 on)
+  void setChatUiVisible(bool visible) {
+    _chatUiVisible = visible;
+  }
+
+  bool get isChatUiVisible => _chatUiVisible;
+
+  bool get shouldSuppressNotifications =>
+      _suppressWhenChatVisible && _chatUiVisible;
+
+  // ─────────────────────────────────────────────────────────────
+  // ✅ 새 메시지 델타 판정/저장용 캐시
+  // ─────────────────────────────────────────────────────────────
+
+  bool _lastSeenLoaded = false;
+  String _lastSeenSig = '';
+  String _lastSeenCacheKey = '';
+
+  bool _headerChecked = false;
+  bool _hasHeaderCached = false;
+
+  String _sanitizeKey(String s) {
+    final trimmed = s.trim();
+    final safe = trimmed.replaceAll(RegExp(r'[^a-zA-Z0-9_\-\.]'), '_');
+    return safe.isEmpty ? 'na' : safe;
+  }
+
+  String _makeLastSeenPrefsKey(String sid, String scopeKey) {
+    final a = _sanitizeKey(sid);
+    final b = _sanitizeKey(scopeKey);
+    return '${kChatLastSeenSigPrefix}__${a}__${b}';
+  }
+
+  Future<void> _loadLastSeenIfNeeded(String sid) async {
+    final key = _makeLastSeenPrefsKey(sid, _scopeKey);
+    if (_lastSeenLoaded && _lastSeenCacheKey == key) return;
+
+    _lastSeenCacheKey = key;
+    _lastSeenLoaded = true;
+
+    final prefs = await SharedPreferences.getInstance();
+    _lastSeenSig = (prefs.getString(key) ?? '').trim();
+  }
+
+  Future<void> _saveLastSeen(String sid, String sig) async {
+    final key = _makeLastSeenPrefsKey(sid, _scopeKey);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(key, sig);
+
+    _lastSeenCacheKey = key;
+    _lastSeenSig = sig;
+    _lastSeenLoaded = true;
+  }
+
+  void _resetDeltaCachesOnContextChange() {
+    _lastSeenLoaded = false;
+    _lastSeenSig = '';
+    _lastSeenCacheKey = '';
+
+    _headerChecked = false;
+    _hasHeaderCached = false;
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // ✅ 시작/정지
+  // ─────────────────────────────────────────────────────────────
+
   Future<void> start(String scopeKey) async {
     final key = scopeKey.trim();
 
-    // 같은 scope이면 idempotent
     final sameScope = _scopeKey == key;
     _scopeKey = key;
+
+    if (!sameScope) {
+      _resetDeltaCachesOnContextChange();
+    }
 
     if (sameScope && _timer != null) return;
 
     _timer?.cancel();
     _timer = Timer.periodic(pollInterval, (_) => _fetchLatest());
 
-    // 즉시 1회 로드
     await _fetchLatest(force: true);
   }
 
@@ -145,13 +265,16 @@ class SheetChatService {
     }
   }
 
-  /// ✅ 헤더 유무 판정(휴리스틱)
-  /// - A1이 timestamp로 파싱되지 않고,
-  /// - 헤더스러운 키워드(time/date/timestamp/message)가 있으면 헤더로 간주
+  // ─────────────────────────────────────────────────────────────
+  // ✅ 헤더 감지 / 빈 행 찾기 / 전송 / 삭제
+  // ─────────────────────────────────────────────────────────────
+
   Future<bool> _hasHeaderRow(sheets.SheetsApi api, String sid) async {
     try {
-      final headResp = await api.spreadsheets.values.get(sid, kChatHeaderProbeRange);
-      final headRow = (headResp.values != null && headResp.values!.isNotEmpty)
+      final headResp =
+      await api.spreadsheets.values.get(sid, kChatHeaderProbeRange);
+      final headRow =
+      (headResp.values != null && headResp.values!.isNotEmpty)
           ? headResp.values!.first
           : null;
 
@@ -162,7 +285,7 @@ class SheetChatService {
       final c = (headRow.length > 2 ? (headRow[2] ?? '') : '').toString().trim();
 
       final dt = DateTime.tryParse(a);
-      if (dt != null) return false; // A1이 timestamp면 헤더 아님(데이터 1행)
+      if (dt != null) return false;
 
       final aL = a.toLowerCase();
       final bL = b.toLowerCase();
@@ -181,32 +304,34 @@ class SheetChatService {
     }
   }
 
-  /// ✅ A열 기준 "첫 빈 행" 찾기
-  /// - 헤더가 있으면 2행부터, 없으면 1행부터 검색
+  Future<void> _ensureHeaderCached(sheets.SheetsApi api, String sid) async {
+    if (_headerChecked) return;
+    _hasHeaderCached = await _hasHeaderRow(api, sid);
+    _headerChecked = true;
+  }
+
   Future<int> _findFirstEmptyRowIndex(sheets.SheetsApi api, String sid) async {
     final hasHeader = await _hasHeaderRow(api, sid);
     final startRow = hasHeader ? 2 : 1;
 
-    // A열 전체를 읽어 첫 빈 행을 찾음
-    // (데이터가 커질 경우 A1:A5000 같은 제한으로 바꾸는 것도 가능)
-    final colResp = await api.spreadsheets.values.get(sid, '$kChatSheetName!A:A');
+    final colResp =
+    await api.spreadsheets.values.get(sid, '$kChatSheetName!A:A');
     final rows = colResp.values ?? const <List<Object?>>[];
 
-    // rows는 1행부터 순서대로 반환
     for (int i = startRow - 1; i < rows.length; i++) {
       final row = rows[i];
       final a = row.isNotEmpty ? (row[0] ?? '').toString().trim() : '';
       if (a.isEmpty) {
-        return i + 1; // 0-based → 1-based row index
+        return i + 1;
       }
     }
 
-    // 빈 행이 없으면 마지막 다음 행
     final next = rows.length + 1;
     return next < startRow ? startRow : next;
   }
 
-  Future<bool> _isRowEmptyAB(sheets.SheetsApi api, String sid, int rowIndex) async {
+  Future<bool> _isRowEmptyAB(
+      sheets.SheetsApi api, String sid, int rowIndex) async {
     final range = '$kChatSheetName!A$rowIndex:B$rowIndex';
     final resp = await api.spreadsheets.values.get(sid, range);
     final values = resp.values;
@@ -221,13 +346,6 @@ class SheetChatService {
     return true;
   }
 
-  /// ✅ 메시지 전송: "첫 빈 행"에 update로 기록
-  /// - 작성자 없음(익명 통일)
-  /// - row(신형): [timestamp(ISO UTC), message]
-  ///
-  /// ✅ 변경 효과:
-  /// - 사용자가 스프레드시트에서 값을 삭제하더라도,
-  ///   다음 전송이 "그 다음 행"으로 밀리지 않고 "첫 빈 행"부터 다시 채워짐.
   Future<void> sendMessage(String message) async {
     final msg = message.trim();
     if (msg.isEmpty) return;
@@ -242,7 +360,7 @@ class SheetChatService {
         return;
       }
 
-      try {
+      Future<void> doSendOnce() async {
         final api = await _sheetsApi();
         final nowUtc = DateTime.now().toUtc().toIso8601String();
 
@@ -250,14 +368,11 @@ class SheetChatService {
           [nowUtc, msg],
         ]);
 
-        // 동시 전송(다중 기기/다중 사용자) 경합을 완화하기 위한 재시도
         const int maxRetry = 6;
         bool wrote = false;
 
         for (int attempt = 0; attempt < maxRetry; attempt++) {
           final rowIndex = await _findFirstEmptyRowIndex(api, spreadsheetId);
-
-          // 선택한 행이 진짜 비어있는지 A:B 재확인(경합 완화)
           final empty = await _isRowEmptyAB(api, spreadsheetId, rowIndex);
           if (!empty) continue;
 
@@ -275,7 +390,6 @@ class SheetChatService {
         }
 
         if (!wrote) {
-          // 매우 드문 케이스(지속 경합 등): 실패로 끝내기보다 에러 표기
           state.value = state.value.copyWith(
             loading: false,
             error: '채팅 전송 실패: 저장 위치(빈 행) 확보에 실패했습니다. 잠시 후 다시 시도하세요.',
@@ -283,24 +397,34 @@ class SheetChatService {
           return;
         }
 
-        // 전송 직후 즉시 반영
-        await _fetchLatest(force: true);
-      } catch (e) {
-        final msg = GoogleAuthSession.isInvalidTokenError(e)
-            ? '구글 계정 연결이 만료되었습니다. 다시 로그인 후 시도하세요.'
-            : '채팅 전송 실패: $e';
+        // ✅ 자기 알림 억제(전송 직후 폴링 반영 시)
+        ChatLocalNotificationService.instance.markSelfSent(msg);
 
-        state.value = state.value.copyWith(loading: false, error: msg);
+        await _fetchLatest(force: true);
+      }
+
+      try {
+        await doSendOnce();
+      } catch (e) {
+        if (GoogleAuthSession.isInvalidTokenError(e)) {
+          try {
+            await GoogleAuthSession.instance.refreshIfNeeded();
+            await doSendOnce();
+            return;
+          } catch (e2) {
+            final msg2 = GoogleAuthSession.isInvalidTokenError(e2)
+                ? '구글 계정 연결이 만료되었습니다. 다시 로그인 후 시도하세요.'
+                : '채팅 전송 실패: $e2';
+            state.value = state.value.copyWith(loading: false, error: msg2);
+            return;
+          }
+        }
+
+        state.value = state.value.copyWith(loading: false, error: '채팅 전송 실패: $e');
       }
     });
   }
 
-  /// ✅ 채팅 시트 내용 전부 삭제
-  /// - 기본: 헤더가 있으면 2행부터, 없으면 전체(A:C) 삭제
-  ///
-  /// 참고:
-  /// - values.clear는 "값만" 지우므로, 예전 append 기준에서는 다음 행으로 밀리는 현상이 있을 수 있었음.
-  /// - 본 서비스는 sendMessage가 update 기반이므로, clear 후에도 첫 빈 행부터 다시 기록됨.
   Future<void> clearAllMessages({String? spreadsheetIdOverride}) async {
     await _runLocked(() async {
       final sid = (spreadsheetIdOverride?.trim().isNotEmpty == true)
@@ -315,7 +439,7 @@ class SheetChatService {
         return;
       }
 
-      try {
+      Future<void> doClearOnce() async {
         state.value = state.value.copyWith(loading: true, error: null);
 
         final api = await _sheetsApi();
@@ -329,24 +453,43 @@ class SheetChatService {
           rangeToClear,
         );
 
-        // UI 즉시 반영
         state.value = const SheetChatState(loading: false, error: null, messages: []);
-      } catch (e) {
-        final msg = GoogleAuthSession.isInvalidTokenError(e)
-            ? '구글 계정 연결이 만료되었습니다. 다시 로그인 후 시도하세요.'
-            : '채팅 삭제 실패: $e';
 
-        state.value = state.value.copyWith(loading: false, error: msg);
+        // ✅ clear 시 lastSeen도 초기화(스팸 방지)
+        await _saveLastSeen(sid, '');
+      }
+
+      try {
+        await doClearOnce();
+      } catch (e) {
+        if (GoogleAuthSession.isInvalidTokenError(e)) {
+          try {
+            await GoogleAuthSession.instance.refreshIfNeeded();
+            await doClearOnce();
+            return;
+          } catch (e2) {
+            final msg2 = GoogleAuthSession.isInvalidTokenError(e2)
+                ? '구글 계정 연결이 만료되었습니다. 다시 로그인 후 시도하세요.'
+                : '채팅 삭제 실패: $e2';
+            state.value = state.value.copyWith(loading: false, error: msg2);
+            return;
+          }
+        }
+
+        state.value = state.value.copyWith(loading: false, error: '채팅 삭제 실패: $e');
       }
     });
   }
 
-  /// ✅ 최신 메시지/목록 로드 (polling)
+  // ─────────────────────────────────────────────────────────────
+  // ✅ 최신 로드 + "새 메시지" 델타 판정 + 알림(정책/억제 반영)
+  // ─────────────────────────────────────────────────────────────
+
   Future<void> _fetchLatest({bool force = false}) async {
     if (_isFetching) return;
     _isFetching = true;
 
-    try {
+    Future<void> doFetchOnce() async {
       final sid = await _loadSpreadsheetIdFromPrefs();
       if (sid.isEmpty) {
         state.value = const SheetChatState(
@@ -361,28 +504,38 @@ class SheetChatService {
       final spreadsheetChanged = _spreadsheetId != sid;
       _spreadsheetId = sid;
 
+      if (spreadsheetChanged) {
+        _resetDeltaCachesOnContextChange();
+      }
+
+      await _loadLastSeenIfNeeded(sid);
+
       if (force || spreadsheetChanged || state.value.messages.isEmpty) {
         state.value = state.value.copyWith(loading: true, error: null);
       }
 
       final api = await _sheetsApi();
+
+      await _ensureHeaderCached(api, sid);
+
       final resp = await api.spreadsheets.values.get(sid, kChatReadRange);
-
       final rows = resp.values ?? const <List<Object?>>[];
-      final parsed = <SheetChatMessage>[];
 
-      for (final row in rows) {
-        // 신형 기대: [timestamp, message]
-        // 구형 기대: [timestamp, roomId, message]
+      // ✅ 헤더가 있으면 1행 스킵
+      final startIndex = _hasHeaderCached ? 1 : 0;
+
+      final parsed = <_ParsedRow>[];
+
+      for (int i = startIndex; i < rows.length; i++) {
+        final row = rows[i];
+
         final tsRaw = row.isNotEmpty ? (row[0] ?? '').toString().trim() : '';
 
         String msgRaw = '';
         if (row.length >= 3) {
-          // 구형: C열이 메시지
-          msgRaw = (row[2] ?? '').toString().trim();
+          msgRaw = (row[2] ?? '').toString().trim(); // 구형: C열
         } else if (row.length >= 2) {
-          // 신형: B열이 메시지
-          msgRaw = (row[1] ?? '').toString().trim();
+          msgRaw = (row[1] ?? '').toString().trim(); // 신형: B열
         }
 
         if (msgRaw.isEmpty) continue;
@@ -392,24 +545,122 @@ class SheetChatService {
           t = DateTime.tryParse(tsRaw);
         }
 
-        parsed.add(SheetChatMessage(time: t, text: msgRaw));
+        // ✅ signature: timestamp + message + rowIndex(변동성/충돌 최소화)
+        final sig = '${tsRaw}|${msgRaw}|row${i + 1}';
+
+        parsed.add(
+          _ParsedRow(
+            msg: SheetChatMessage(time: t, text: msgRaw),
+            signature: sig,
+          ),
+        );
       }
 
-      final trimmed = parsed.length <= maxMessagesInUi
-          ? parsed
-          : parsed.sublist(parsed.length - maxMessagesInUi);
+      // UI 메시지(trim)
+      final uiMessages = parsed.length <= maxMessagesInUi
+          ? parsed.map((e) => e.msg).toList()
+          : parsed
+          .sublist(parsed.length - maxMessagesInUi)
+          .map((e) => e.msg)
+          .toList();
+
+      // ─────────────────────────────────────────
+      // ✅ 새 메시지 델타 판정
+      // ─────────────────────────────────────────
+
+      final latestSig = parsed.isEmpty ? '' : parsed.last.signature;
+      final prevSig = _lastSeenSig.trim();
+
+      List<_ParsedRow> newRows = const [];
+
+      if (prevSig.isEmpty) {
+        // 첫 동기화: 알림 없이 lastSeen만 갱신
+        if (latestSig.isNotEmpty) {
+          await _saveLastSeen(sid, latestSig);
+        }
+      } else {
+        final idx = parsed.indexWhere((e) => e.signature == prevSig);
+        if (idx >= 0) {
+          if (idx + 1 <= parsed.length - 1) {
+            newRows = parsed.sublist(idx + 1);
+          }
+          if (latestSig.isNotEmpty && latestSig != prevSig) {
+            await _saveLastSeen(sid, latestSig);
+          }
+        } else {
+          // lastSeenSig를 찾지 못함: 시트 clear/정렬/대량편집 가능성
+          // 스팸 방지: 알림 없이 lastSeen만 최신으로 리셋
+          await _saveLastSeen(sid, latestSig);
+        }
+      }
+
+      // ─────────────────────────────────────────
+      // ✅ 알림 발송(억제/다건 정책 반영)
+      // ─────────────────────────────────────────
+      if (newRows.isNotEmpty) {
+        final suppressed = shouldSuppressNotifications;
+
+        if (!suppressed) {
+          // 자기 메시지(전송 직후 폴링으로 재유입) 제거
+          final nonSelf = <_ParsedRow>[];
+          for (final r in newRows) {
+            if (!ChatLocalNotificationService.instance.isLikelySelfSent(r.msg.text)) {
+              nonSelf.add(r);
+            }
+          }
+
+          if (nonSelf.isNotEmpty) {
+            if (_notifyMode == ChatNotifyMode.summaryOne) {
+              // 요약 1개: 마지막 메시지 내용을 body로, countHint로 다건 표시
+              final last = nonSelf.last.msg;
+              await ChatLocalNotificationService.instance.showChatMessage(
+                scopeKey: _scopeKey,
+                message: last.text,
+                countHint: nonSelf.length,
+              );
+            } else {
+              // 개별 알림: 최신부터 최대 N개
+              final n = _maxIndividualNotifications.clamp(1, 20);
+              final slice = (nonSelf.length <= n)
+                  ? nonSelf
+                  : nonSelf.sublist(nonSelf.length - n);
+
+              for (final r in slice) {
+                await ChatLocalNotificationService.instance.showChatMessage(
+                  scopeKey: _scopeKey,
+                  message: r.msg.text,
+                );
+              }
+            }
+          }
+        }
+      }
 
       state.value = SheetChatState(
         loading: false,
         error: null,
-        messages: trimmed,
+        messages: uiMessages,
       );
-    } catch (e) {
-      final msg = GoogleAuthSession.isInvalidTokenError(e)
-          ? '구글 계정 연결이 만료되었습니다. 다시 로그인 후 시도하세요.'
-          : '채팅 불러오기 실패: $e';
+    }
 
-      state.value = state.value.copyWith(loading: false, error: msg);
+    try {
+      await doFetchOnce();
+    } catch (e) {
+      if (GoogleAuthSession.isInvalidTokenError(e)) {
+        try {
+          await GoogleAuthSession.instance.refreshIfNeeded();
+          await doFetchOnce();
+          return;
+        } catch (e2) {
+          final msg2 = GoogleAuthSession.isInvalidTokenError(e2)
+              ? '구글 계정 연결이 만료되었습니다. 다시 로그인 후 시도하세요.'
+              : '채팅 불러오기 실패: $e2';
+          state.value = state.value.copyWith(loading: false, error: msg2);
+          return;
+        }
+      }
+
+      state.value = state.value.copyWith(loading: false, error: '채팅 불러오기 실패: $e');
     } finally {
       _isFetching = false;
     }

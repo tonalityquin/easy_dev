@@ -9,7 +9,7 @@ import '../states/plate/lite_plate_state.dart';
 import '../states/user/user_state.dart';
 
 import 'lite_mode/lite_input_package/lite_input_plate_screen.dart';
-import 'lite_mode/lite_type_package/lite_common_widgets/chats/lite_chat_bottom_sheet.dart'; // ✅ ChatOpenButtonLite + liteChatBottomSheet 제공
+import 'lite_mode/lite_type_package/lite_common_widgets/chats/lite_chat_bottom_sheet.dart';
 import 'lite_mode/lite_type_package/lite_common_widgets/dashboard_bottom_sheet/lite_home_dash_board_bottom_sheet.dart';
 import 'lite_mode/lite_type_package/lite_common_widgets/reverse_sheet_package/lite_parking_completed_table_sheet.dart';
 import 'secondary_page.dart';
@@ -120,7 +120,7 @@ class _ChatDashboardBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
       child: Row(
         children: [
-          // ✅ 좌측: “채팅 열기” 버튼(말풍선 팝오버, 읽기 전용, 화면 경계 클램프)
+          // ✅ 좌측: “채팅 열기” 버튼(말풍선 팝오버)
           const Expanded(
             child: ChatOpenButtonLite(),
           ),
@@ -219,14 +219,12 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   double _dragDistance = 0.0;
 
   double _vDragDistance = 0.0;
-  bool _chatOpening = false;
   bool _topOpening = false;
 
   static const double _hDistanceThreshold = 80.0;
   static const double _hVelocityThreshold = 1000.0;
 
-  static const double _vDistanceThresholdUp = 70.0;
-  static const double _vVelocityThresholdUp = 900.0;
+  // ✅ 아래로 스와이프(TopSheet)만 유지
   static const double _vDistanceThresholdDown = 50.0;
   static const double _vVelocityThresholdDown = 700.0;
 
@@ -248,16 +246,11 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   Future<void> _handleVerticalDragEnd(BuildContext context, DragEndDetails details) async {
     final vy = details.primaryVelocity ?? 0.0;
 
-    final firedUp = (_vDragDistance < -_vDistanceThresholdUp) || (vy < -_vVelocityThresholdUp);
-    final firedDown =
-        (_vDragDistance > _vDistanceThresholdDown) || (vy > _vVelocityThresholdDown);
+    // ✅ (변경) 위로 스와이프하여 채팅 열기 로직 삭제
+    // ✅ 아래로 스와이프(TopSheet)만 유지
+    final firedDown = (_vDragDistance > _vDistanceThresholdDown) || (vy > _vVelocityThresholdDown);
 
-    if (firedUp && !_chatOpening) {
-      _chatOpening = true;
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-      if (mounted) liteChatBottomSheet(context); // ✅ Lite: 스와이프는 기존대로 풀시트(읽기 전용)
-      _chatOpening = false;
-    } else if (firedDown && !_topOpening) {
+    if (firedDown && !_topOpening) {
       _topOpening = true;
       await _openParkingCompletedTableSheet(context);
       _topOpening = false;
@@ -273,8 +266,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
       transitionsBuilder: (_, animation, __, child) {
         final begin = Offset(fromLeft ? -1.0 : 1.0, 0);
         final end = Offset.zero;
-        final tween =
-        Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
+        final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
         return SlideTransition(position: animation.drive(tween), child: child);
       },
     );
