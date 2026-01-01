@@ -19,6 +19,7 @@ class UpdateBottomSheet extends StatelessWidget {
         '약식 로그인 모드 추가',
         '지역 별 근무자 출퇴근 현황 기능 추가',
         '지역 별 통계 카드 기능 개선',
+        '사진 전송 기능 추가',
       ],
     ),
     UpdateEntry(

@@ -65,7 +65,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
 
   bool _openedScannerOnce = false;
 
-  final DraggableScrollableController _sheetController = DraggableScrollableController();
+  final DraggableScrollableController _sheetController =
+  DraggableScrollableController();
   bool _sheetOpen = false; // 현재 열림 상태
 
   // ✅ 시트 내부 스크롤 컨트롤러(닫힘에서 스크롤 잠금/원복을 위해 보관)
@@ -83,7 +84,7 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
   // ✅ monthly_plate_status "메모/상태 반영" 처리 중 플래그(중복 클릭 방지)
   bool _monthlyApplying = false;
 
-  // ✅ 월정기 로드 시 실제로 찾은 docId를 저장 (하이픈/비하이픈 불일치 시 update 대상 docId 보장)
+  // ✅ 월정기 로드 시 실제로 사용한 단일 docId 저장 (후속 update 대상 docId 보장)
   String? _resolvedMonthlyDocId;
 
   // ─────────────────────────────
@@ -104,7 +105,7 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
   bool _plateStatusDialogShowing = false;
 
   // ─────────────────────────────
-  // ✅ 문서명 정책 유틸
+  // ✅ 문서명 정책 유틸 (후보/레거시 제거, 단일 docId만 사용)
   // ─────────────────────────────
 
   /// area가 비어있으면 Firestore doc('') 불가/정책 일관성 깨짐 → 안전 처리
@@ -113,56 +114,27 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     return a.isEmpty ? 'unknown' : a;
   }
 
-  /// ✅ 레거시(읽기 폴백용): 과거 하이픈 제거 docId로 저장된 데이터 대응
-  /// - docId에는 더 이상 사용하지 않지만, 마이그레이션 전까지 조회는 지원(읽기만)
-  String _legacyPlatePk(String plateNumber) {
-    return plateNumber.replaceAll('-', '').replaceAll(' ', '').trim();
-  }
-
   /// yyyyMM
-  String _monthKey(DateTime dt) => '${dt.year}${dt.month.toString().padLeft(2, '0')}';
+  String _monthKey(DateTime dt) =>
+      '${dt.year}${dt.month.toString().padLeft(2, '0')}';
 
-  /// ✅ plateNumber의 표기 차이(하이픈 유무)를 흡수하기 위한 후보 생성
-  /// - "72로6085" ↔ "72-로-6085" 모두 생성
-  List<String> _plateNumberVariants(String plateNumber) {
+  /// ✅ 번호판 문자열을 정책 형태로 정규화: "59-라-3974" 형태(하이픈 포함)
+  /// - 입력이 이미 "59-라-3974"면 그대로 유지
+  /// - 입력이 "59라3974"처럼 들어오면 "59-라-3974"로 변환
+  /// - 정규식에 맞지 않으면 원문(trim/공백 제거) 사용
+  String _canonicalPlateNumber(String plateNumber) {
     final t = plateNumber.trim().replaceAll(' ', '');
     final raw = t.replaceAll('-', '');
-
     final m = RegExp(r'^(\d{2,3})([가-힣])(\d{4})$').firstMatch(raw);
-    if (m == null) {
-      return [t]; // 파싱 불가면 원문만
-    }
-
-    final noHyphen = '${m.group(1)}${m.group(2)}${m.group(3)}';
-    final withHyphen = '${m.group(1)}-${m.group(2)}-${m.group(3)}';
-
-    final res = <String>[];
-    void add(String s) {
-      if (s.isNotEmpty && !res.contains(s)) res.add(s);
-    }
-
-    // 원문 우선
-    add(t);
-    add(noHyphen);
-    add(withHyphen);
-
-    return res;
+    if (m == null) return t;
+    return '${m.group(1)}-${m.group(2)}-${m.group(3)}';
   }
 
-  /// ✅ "{plateNumber}_{area}" docId 후보 리스트(하이픈/비하이픈 둘 다)
-  List<String> _plateDocIdCandidates(String plateNumber, String area) {
+  /// ✅ 단일 docId 규칙: "{plate(하이픈 포함)}_{area}"
+  String _plateDocId(String plateNumber, String area) {
     final a = _safeArea(area);
-    return _plateNumberVariants(plateNumber).map((p) => '${p}_$a').toList();
-  }
-
-  /// ✅ 레거시 docId 후보(하이픈 제거 pk)도 여러 변형에서 생성
-  List<String> _legacyPkCandidates(String plateNumber) {
-    final res = <String>[];
-    for (final p in _plateNumberVariants(plateNumber)) {
-      final legacy = _legacyPlatePk(p);
-      if (legacy.isNotEmpty && !res.contains(legacy)) res.add(legacy);
-    }
-    return res;
+    final p = _canonicalPlateNumber(plateNumber);
+    return '${p}_$a';
   }
 
   // ✅ SharedPreferences에서 has_monthly_parking 로드
@@ -224,7 +196,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     _jumpSheetScrollToTop();
   }
 
-  void _handleDockHorizontalSwipe(DragEndDetails details, {required bool canSwipe}) {
+  void _handleDockHorizontalSwipe(DragEndDetails details,
+      {required bool canSwipe}) {
     if (!canSwipe) return;
 
     final v = details.primaryVelocity ?? 0.0;
@@ -303,7 +276,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     if (!mounted) return;
 
     final safeArea = _safeArea(area);
-    final customStatusText = (customStatus ?? '').trim().isEmpty ? '-' : customStatus!.trim();
+    final customStatusText =
+    (customStatus ?? '').trim().isEmpty ? '-' : customStatus!.trim();
 
     await showGeneralDialog<void>(
       context: context,
@@ -326,7 +300,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
         );
       },
       transitionBuilder: (ctx, animation, secondary, child) {
-        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+        final curved =
+        CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
         return FadeTransition(
           opacity: curved,
           child: ScaleTransition(
@@ -346,7 +321,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     _loadHasMonthlyParkingFlag();
 
     // '고정' 제거 이후: 과거 값이 남아있으면 '변동'으로 정규화
-    if (controller.selectedBillType == '고정' || controller.selectedBillType.trim().isEmpty) {
+    if (controller.selectedBillType == '고정' ||
+        controller.selectedBillType.trim().isEmpty) {
       controller.selectedBillType = '변동';
     }
 
@@ -390,14 +366,16 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
         final plateNumber = controller.buildPlateNumber();
         final area = context.read<AreaState>().currentArea;
 
-        // ✅ 입력 완료 시에는 "plate_status" 조회 (월샤딩 + 후보 docId 폴백)
+        // ✅ 입력 완료 시에는 "plate_status" 조회 (월샤딩 + 단일 docId)
         final data = await _fetchPlateStatus(plateNumber, area);
 
         if (!mounted || data == null) return;
 
         final fetchedStatus = (data['customStatus'] as String?)?.trim();
-        final fetchedList =
-            (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+        final fetchedList = (data['statusList'] as List<dynamic>?)
+            ?.map((e) => e.toString())
+            .toList() ??
+            [];
         final String? fetchedCountType = (data['countType'] as String?)?.trim();
 
         setState(() {
@@ -421,8 +399,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
           }
         });
 
-        // ✅ Dialog 중복 표시 방지
-        final dialogKey = '${plateNumber}_${_safeArea(area)}';
+        // ✅ Dialog 중복 표시 방지 (단일 docId 기반 키)
+        final dialogKey = _plateDocId(plateNumber, area);
         if (_plateStatusDialogShowing) return;
         if (_lastPlateStatusDialogKey == dialogKey) return;
 
@@ -448,11 +426,12 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
       await billState.loadFromBillCache();
       if (!mounted) return;
       setState(() {
-        controller.isLocationSelected = controller.locationController.text.isNotEmpty;
+        controller.isLocationSelected =
+            controller.locationController.text.isNotEmpty;
       });
     });
 
-    // ⬇️ 첫 빌드 직후 한 번만 자동으로 LiveOcrPage 열기
+    // ⬇️ 첫 빌드 직후 한 번만 자동으로 LiteLiveOcrPage 열기
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (_openedScannerOnce) return;
       _openedScannerOnce = true;
@@ -474,27 +453,23 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     super.dispose();
   }
 
-  /// plate_status 단건 조회 (월 단위 샤딩 구조 + 레거시/하이픈 폴백)
+  /// plate_status 단건 조회 (월 단위 샤딩 구조 + 단일 docId)
   ///
   /// ✅ 저장 구조:
   ///   plate_status/{area}/months/{yyyyMM}/plates/{plateDocId}
   ///
-  /// ✅ (핵심) plateDocId 정책:
-  ///   plateDocId = "{plateNumber}_{area}"
+  /// ✅ (핵심) plateDocId 정책(단일):
+  ///   plateDocId = "{plate(하이픈 포함)}_{area}"
   ///
   /// ✅ 조회 정책:
   ///   - 현재월 → 직전월(최대 2개월) 우선
-  ///   - 실패 시 collectionGroup('plates')로 전체월 폴백(규칙/인덱스 제한 시 자동 무시)
-  ///
-  /// ✅ 레거시 폴백(읽기만):
-  ///   - 과거 하이픈 제거 docId 지원
-  Future<Map<String, dynamic>?> _fetchPlateStatus(String plateNumber, String area) async {
+  ///   - 실패 시 collectionGroup('plates')로 전체월 폴백(단일 docId로만, 규칙/인덱스 제한 시 자동 무시)
+  Future<Map<String, dynamic>?> _fetchPlateStatus(
+      String plateNumber, String area) async {
     int reads = 0;
 
     final safeArea = _safeArea(area);
-
-    final docIdCandidates = _plateDocIdCandidates(plateNumber, safeArea);
-    final legacyCandidates = _legacyPkCandidates(plateNumber);
+    final docId = _plateDocId(plateNumber, safeArea);
 
     final now = DateTime.now();
     final monthsToTry = <DateTime>[
@@ -503,48 +478,29 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     ];
 
     try {
-      // 1) 빠른 경로: 현재월/전월
+      // 1) 빠른 경로: 현재월/전월 (단일 docId만 get)
       for (final m in monthsToTry) {
         final mk = _monthKey(m);
 
-        // (A) 신규 docId 후보들
-        for (final docId in docIdCandidates) {
-          final doc = await _firestore
-              .collection(_plateStatusRoot)
-              .doc(safeArea)
-              .collection(_monthsSub)
-              .doc(mk)
-              .collection(_platesSub)
-              .doc(docId)
-              .get();
-          reads += 1;
+        final doc = await _firestore
+            .collection(_plateStatusRoot)
+            .doc(safeArea)
+            .collection(_monthsSub)
+            .doc(mk)
+            .collection(_platesSub)
+            .doc(docId)
+            .get();
+        reads += 1;
 
-          if (doc.exists) return doc.data();
-        }
-
-        // (B) 레거시 후보들(하이픈 제거 pk)
-        for (final legacyId in legacyCandidates) {
-          final legacyDoc = await _firestore
-              .collection(_plateStatusRoot)
-              .doc(safeArea)
-              .collection(_monthsSub)
-              .doc(mk)
-              .collection(_platesSub)
-              .doc(legacyId)
-              .get();
-          reads += 1;
-
-          if (legacyDoc.exists) return legacyDoc.data();
-        }
+        if (doc.exists) return doc.data();
       }
 
-      // 2) 느린 경로: 2개월에 없으면 전체 월에서 검색(collectionGroup)
+      // 2) 느린 경로: 최근 2개월에 없으면 전체 월에서 검색(collectionGroup)
       //    - 규칙/인덱스 미지원이면 FirebaseException 발생 가능 → 캐치 후 무시
       try {
-        // 신규 docId 후보로 먼저
         final qs = await _firestore
             .collectionGroup(_platesSub)
-            .where(FieldPath.documentId, whereIn: docIdCandidates.take(10).toList())
+            .where(FieldPath.documentId, isEqualTo: docId)
             .get();
         reads += 1;
 
@@ -554,7 +510,9 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
 
           for (final d in qs.docs) {
             final path = d.reference.path; // plate_status/{area}/months/{yyyyMM}/plates/{docId}
-            if (!path.contains('$_plateStatusRoot/$safeArea/$_monthsSub/')) continue;
+            if (!path.contains('$_plateStatusRoot/$safeArea/$_monthsSub/')) {
+              continue;
+            }
 
             final parts = path.split('/');
             final monthsIndex = parts.indexOf(_monthsSub);
@@ -571,40 +529,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
 
           if (best != null) return best.data();
           return qs.docs.first.data();
-        }
-
-        // 레거시 후보
-        if (legacyCandidates.isNotEmpty) {
-          final qsLegacy = await _firestore
-              .collectionGroup(_platesSub)
-              .where(FieldPath.documentId, whereIn: legacyCandidates.take(10).toList())
-              .get();
-          reads += 1;
-
-          if (qsLegacy.docs.isNotEmpty) {
-            QueryDocumentSnapshot<Map<String, dynamic>>? best;
-            int bestMonth = -1;
-
-            for (final d in qsLegacy.docs) {
-              final path = d.reference.path;
-              if (!path.contains('$_plateStatusRoot/$safeArea/$_monthsSub/')) continue;
-
-              final parts = path.split('/');
-              final monthsIndex = parts.indexOf(_monthsSub);
-              if (monthsIndex < 0 || monthsIndex + 1 >= parts.length) continue;
-
-              final mk = parts[monthsIndex + 1];
-              final mkInt = int.tryParse(mk) ?? -1;
-
-              if (mkInt > bestMonth) {
-                bestMonth = mkInt;
-                best = d;
-              }
-            }
-
-            if (best != null) return best.data();
-            return qsLegacy.docs.first.data();
-          }
         }
       } on FirebaseException catch (e) {
         debugPrint('[collectionGroup fallback blocked] ${e.code} ${e.message}');
@@ -627,6 +551,7 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
           n: nToReport,
           source: 'LiteInputPlateScreen._fetchPlateStatus/plate_status.lookup',
           useSourceOnlyKey: true,
+          sourceShardCount: 10, // ✅ 추가: source-only 집계를 유지하면서 핫스팟 완화
         );
       } catch (e) {
         debugPrint('[UsageReporter] report failed in _fetchPlateStatus: $e');
@@ -634,21 +559,22 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     }
   }
 
-  Future<Map<String, dynamic>?> _fetchMonthlyPlateStatus(String plateNumber, String area) async {
+  Future<Map<String, dynamic>?> _fetchMonthlyPlateStatus(
+      String plateNumber, String area) async {
     final safeArea = _safeArea(area);
-    final docIds = _plateDocIdCandidates(plateNumber, safeArea);
+    final docId = _plateDocId(plateNumber, safeArea);
 
     try {
-      for (final docId in docIds) {
-        final doc = await _firestore.collection(_monthlyPlateStatusRoot).doc(docId).get();
-        if (doc.exists) {
-          _resolvedMonthlyDocId = docId;
-          return doc.data();
-        }
+      final doc =
+      await _firestore.collection(_monthlyPlateStatusRoot).doc(docId).get();
+      if (doc.exists) {
+        _resolvedMonthlyDocId = docId; // ✅ 단일 docId 확정
+        return doc.data();
       }
       return null;
     } on FirebaseException catch (e) {
-      debugPrint('[_fetchMonthlyPlateStatus] FirebaseException: ${e.code} ${e.message}');
+      debugPrint(
+          '[_fetchMonthlyPlateStatus] FirebaseException: ${e.code} ${e.message}');
       return null;
     } catch (e) {
       debugPrint('[_fetchMonthlyPlateStatus] error: $e');
@@ -659,11 +585,14 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
           area: safeArea,
           action: 'read',
           n: 1,
-          source: 'LiteInputPlateScreen._fetchMonthlyPlateStatus/monthly_plate_status.lookup',
+          source:
+          'LiteInputPlateScreen._fetchMonthlyPlateStatus/monthly_plate_status.lookup',
           useSourceOnlyKey: true,
+          sourceShardCount: 10, // ✅ 추가
         );
       } catch (e) {
-        debugPrint('[UsageReporter] report failed in _fetchMonthlyPlateStatus: $e');
+        debugPrint(
+            '[UsageReporter] report failed in _fetchMonthlyPlateStatus: $e');
       }
     }
   }
@@ -699,8 +628,10 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     }
 
     final fetchedStatus = (data['customStatus'] as String?)?.trim();
-    final fetchedList =
-        (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
+    final fetchedList = (data['statusList'] as List<dynamic>?)
+        ?.map((e) => e.toString())
+        .toList() ??
+        [];
     final fetchedCountType = (data['countType'] as String?)?.trim();
 
     setState(() {
@@ -738,10 +669,12 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
       return;
     }
 
-    if (!_monthlyDocExists || (_resolvedMonthlyDocId == null || _resolvedMonthlyDocId!.trim().isEmpty)) {
+    if (!_monthlyDocExists ||
+        (_resolvedMonthlyDocId == null || _resolvedMonthlyDocId!.trim().isEmpty)) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('정기(월정기) 문서가 없습니다. 먼저 정기 정보를 불러오거나 등록해 주세요.')),
+        const SnackBar(
+            content: Text('정기(월정기) 문서가 없습니다. 먼저 정기 정보를 불러오거나 등록해 주세요.')),
       );
       return;
     }
@@ -769,11 +702,14 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
           area: _safeArea(area),
           action: 'write',
           n: 1,
-          source: 'LiteInputPlateScreen._applyMonthlyMemoAndStatusOnly/monthly_plate_status.doc.update',
+          source:
+          'LiteInputPlateScreen._applyMonthlyMemoAndStatusOnly/monthly_plate_status.doc.update',
           useSourceOnlyKey: true,
+          sourceShardCount: 10, // ✅ 추가
         );
       } catch (e) {
-        debugPrint('[UsageReporter] report failed in _applyMonthlyMemoAndStatusOnly: $e');
+        debugPrint(
+            '[UsageReporter] report failed in _applyMonthlyMemoAndStatusOnly: $e');
       }
 
       if (!mounted) return;
@@ -781,7 +717,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
         const SnackBar(content: Text('월정기(정기) 메모/상태가 반영되었습니다.')),
       );
     } on FirebaseException catch (e) {
-      debugPrint('[_applyMonthlyMemoAndStatusOnly] FirebaseException: ${e.code} ${e.message}');
+      debugPrint(
+          '[_applyMonthlyMemoAndStatusOnly] FirebaseException: ${e.code} ${e.message}');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('반영 실패: ${e.message ?? e.code}')),
@@ -802,7 +739,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
       return const SizedBox.shrink();
     }
 
-    final enabled = !_monthlyApplying && _monthlyDocExists && (_resolvedMonthlyDocId != null);
+    final enabled =
+        !_monthlyApplying && _monthlyDocExists && (_resolvedMonthlyDocId != null);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -826,7 +764,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
                 ? const SizedBox(
               width: 18,
               height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              child: CircularProgressIndicator(
+                  strokeWidth: 2, color: Colors.white),
             )
                 : const Text(
               '반영',
@@ -838,7 +777,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
           const SizedBox(height: 8),
           Text(
             '정기(월정기) 문서를 불러온 경우에만 반영할 수 있습니다.',
-            style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+            style:
+            TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
           ),
         ],
       ],
@@ -849,7 +789,42 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
   // 🔽 가운데 임의문자/누락 허용 파서 + 폴백
   // ─────────────────────────────
   static const List<String> _allowedKoreanMids = [
-    '가','나','다','라','마','거','너','더','러','머','버','서','어','저','고','노','도','로','모','보','소','오','조','구','누','두','루','무','부','수','우','주','하','허','호','배'
+    '가',
+    '나',
+    '다',
+    '라',
+    '마',
+    '거',
+    '너',
+    '더',
+    '러',
+    '머',
+    '버',
+    '서',
+    '어',
+    '저',
+    '고',
+    '노',
+    '도',
+    '로',
+    '모',
+    '보',
+    '소',
+    '오',
+    '조',
+    '구',
+    '누',
+    '두',
+    '루',
+    '무',
+    '부',
+    '수',
+    '우',
+    '주',
+    '하',
+    '허',
+    '호',
+    '배'
   ];
 
   static const Map<String, String> _charMap = {
@@ -959,7 +934,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
       if (promptMid || mid.isEmpty) {
         controller.showKeypad = true;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('가운데 글자가 누락되었습니다. 가운데 한 글자를 입력해 주세요.')),
+          const SnackBar(
+              content: Text('가운데 글자가 누락되었습니다. 가운데 한 글자를 입력해 주세요.')),
         );
       } else {
         controller.showKeypad = false;
@@ -1127,7 +1103,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-            padding: const EdgeInsets.only(left: 12, right: 12, top: 6, bottom: 8),
+            padding: const EdgeInsets.only(
+                left: 12, right: 12, top: 6, bottom: 8),
             child: _buildDock(),
           ),
           LiteInputBottomNavigation(
@@ -1188,7 +1165,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
                 color: const Color(0xFFFFF8E1),
                 borderRadius: BorderRadius.circular(10),
@@ -1202,12 +1180,17 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
           ),
         LiteInputBillSection(
           selectedBill: controller.selectedBill,
-          onChanged: (value) => setState(() => controller.selectedBill = value),
+          onChanged: (value) =>
+              setState(() => controller.selectedBill = value),
           selectedBillType: controller.selectedBillType,
           onTypeChanged: (newType) {
-            if (newType == '정기' && _hasMonthlyLoaded && !_hasMonthlyParking) {
+            if (newType == '정기' &&
+                _hasMonthlyLoaded &&
+                !_hasMonthlyParking) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('현재 지역에서는 정기(월주차) 기능을 사용할 수 없습니다.')),
+                const SnackBar(
+                    content:
+                    Text('현재 지역에서는 정기(월주차) 기능을 사용할 수 없습니다.')),
               );
               return;
             }
@@ -1257,8 +1240,11 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
       transitionBuilder: (child, animation) {
-        final begin = _dockSlideFromRight ? const Offset(0.10, 0) : const Offset(-0.10, 0);
-        final offsetAnim = Tween<Offset>(begin: begin, end: Offset.zero).animate(animation);
+        final begin = _dockSlideFromRight
+            ? const Offset(0.10, 0)
+            : const Offset(-0.10, 0);
+        final offsetAnim =
+        Tween<Offset>(begin: begin, end: Offset.zero).animate(animation);
         return SlideTransition(
           position: offsetAnim,
           child: FadeTransition(opacity: animation, child: child),
@@ -1274,7 +1260,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onHorizontalDragEnd: (d) => _handleDockHorizontalSwipe(d, canSwipe: canSwipe),
+      onHorizontalDragEnd: (d) =>
+          _handleDockHorizontalSwipe(d, canSwipe: canSwipe),
       child: content,
     );
   }
@@ -1283,14 +1270,19 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
   Widget build(BuildContext context) {
     final viewInset = MediaQuery.of(context).viewInsets.bottom;
     final sysBottom = MediaQuery.of(context).padding.bottom;
-    final bottomSafePadding = (controller.showKeypad ? 280.0 : 140.0) + viewInset + sysBottom;
+    final bottomSafePadding =
+        (controller.showKeypad ? 280.0 : 140.0) + viewInset + sysBottom;
 
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) async {
+        // ✅ FIX: 시스템/제스처 back도 동일하게 동작하도록 처리
         if (_sheetOpen) {
           await _animateSheet(open: false);
           return;
+        }
+        if (mounted) {
+          Navigator.of(context).pop(false);
         }
       },
       child: Scaffold(
@@ -1327,7 +1319,9 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리',
+                          controller.isThreeDigit
+                              ? '현재 앞자리: 세자리'
+                              : '현재 앞자리: 두자리',
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
@@ -1349,8 +1343,10 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
                 Positioned.fill(
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding: EdgeInsets.fromLTRB(16, 16, 16, bottomSafePadding),
+                    keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding:
+                    EdgeInsets.fromLTRB(16, 16, 16, bottomSafePadding),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1364,7 +1360,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
                           onKeypadStateChanged: (_) {
                             setState(() {
                               controller.clearInput();
-                              controller.setActiveController(controller.controllerFrontDigit);
+                              controller.setActiveController(
+                                  controller.controllerFrontDigit);
                               _dockEditing = null;
                               _monthlyDocExists = false;
                               _resolvedMonthlyDocId = null;
@@ -1381,7 +1378,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
                           isThreeDigit: controller.isThreeDigit,
                         ),
                         const SizedBox(height: 16),
-                        LiteInputLocationSection(locationController: controller.locationController),
+                        LiteInputLocationSection(
+                            locationController: controller.locationController),
                         const SizedBox(height: 16),
                         LiteInputPhotoSection(
                           capturedImages: controller.capturedImages,
@@ -1412,7 +1410,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
 
                     return Container(
                       decoration: const BoxDecoration(
-                        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                        borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(16)),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black26,
@@ -1422,7 +1421,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
                         ],
                       ),
                       child: ClipRRect(
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                        borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(16)),
                         clipBehavior: Clip.antiAlias,
                         child: ColoredBox(
                           color: sheetBg,
@@ -1437,7 +1437,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
                                     notification is OverscrollNotification ||
                                     notification is UserScrollNotification) {
                                   try {
-                                    if (scrollController.hasClients && scrollController.offset != 0) {
+                                    if (scrollController.hasClients &&
+                                        scrollController.offset != 0) {
                                       scrollController.jumpTo(0);
                                     }
                                   } catch (_) {
@@ -1459,16 +1460,20 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
                                       plateText: controller.buildPlateNumber(),
                                       onToggle: _toggleSheet,
                                       currentPageIndex: _dockPageIndex,
-                                      onSelectBill: () => _setDockPage(_dockPageBill),
-                                      onSelectMemo: () => _setDockPage(_dockPageMemo),
+                                      onSelectBill: () =>
+                                          _setDockPage(_dockPageBill),
+                                      onSelectMemo: () =>
+                                          _setDockPage(_dockPageMemo),
                                     ),
                                   ),
                                   SliverPadding(
-                                    padding: EdgeInsets.fromLTRB(16, 12, 16, sheetBottomPadding),
+                                    padding: EdgeInsets.fromLTRB(
+                                        16, 12, 16, sheetBottomPadding),
                                     sliver: SliverList(
                                       delegate: SliverChildListDelegate(
                                         [
-                                          _buildDockPagedBody(canSwipe: canSwipe),
+                                          _buildDockPagedBody(
+                                              canSwipe: canSwipe),
                                         ],
                                       ),
                                     ),
@@ -1644,7 +1649,8 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
               // Meta row
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
                   color: light.withOpacity(0.20),
                   borderRadius: BorderRadius.circular(14),
@@ -1709,11 +1715,13 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
                       onPressed: onClose,
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
                         side: BorderSide(color: base.withOpacity(0.45)),
                         foregroundColor: Colors.black,
                       ),
-                      child: const Text('닫기', style: TextStyle(fontWeight: FontWeight.w800)),
+                      child: const Text('닫기',
+                          style: TextStyle(fontWeight: FontWeight.w800)),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -1722,11 +1730,14 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
                       onPressed: onGoMemo,
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14)),
                         backgroundColor: base,
-                        foregroundColor: _onColorFor(base, fallback: Colors.white),
+                        foregroundColor:
+                        _onColorFor(base, fallback: Colors.white),
                       ),
-                      child: const Text('상태 메모 보기', style: TextStyle(fontWeight: FontWeight.w900)),
+                      child: const Text('상태 메모 보기',
+                          style: TextStyle(fontWeight: FontWeight.w900)),
                     ),
                   ),
                 ],
@@ -1818,8 +1829,10 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
     final VoidCallback? outerTap = sheetOpen ? null : onToggle;
 
-    final bool billSelected = currentPageIndex == _LiteInputPlateScreenState._dockPageBill;
-    final bool memoSelected = currentPageIndex == _LiteInputPlateScreenState._dockPageMemo;
+    final bool billSelected =
+        currentPageIndex == _LiteInputPlateScreenState._dockPageBill;
+    final bool memoSelected =
+        currentPageIndex == _LiteInputPlateScreenState._dockPageMemo;
 
     return Material(
       color: backgroundColor,
@@ -1997,7 +2010,8 @@ class _PlateDock extends StatelessWidget {
               right: 8,
               top: 8,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
                   color: chipColor.withOpacity(isActive ? 0.18 : 0.10),
                   borderRadius: BorderRadius.circular(10),
@@ -2031,9 +2045,12 @@ class _PlateDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isFrontActive = controller.activeController == controller.controllerFrontDigit;
-    final isMidActive = controller.activeController == controller.controllerMidDigit;
-    final isBackActive = controller.activeController == controller.controllerBackDigit;
+    final isFrontActive =
+        controller.activeController == controller.controllerFrontDigit;
+    final isMidActive =
+        controller.activeController == controller.controllerMidDigit;
+    final isBackActive =
+        controller.activeController == controller.controllerBackDigit;
 
     final labelStyle = TextStyle(
       fontSize: 11,

@@ -1,5 +1,3 @@
-// lib/screens/.../home_dash_board_bottom_sheet.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -12,6 +10,9 @@ import 'documents/leader_document_box_sheet.dart';
 import 'documents/fielder_document_box_sheet.dart';
 
 import 'memo/dash_memo.dart';
+
+// ✅ [추가] 사진 전송(공용) 페이지
+import 'package:easydev/screens/common_package/camera_package/photo_transfer_mail_page.dart';
 
 class HomeDashBoardBottomSheet extends StatefulWidget {
   const HomeDashBoardBottomSheet({super.key});
@@ -28,11 +29,11 @@ class _HomeDashBoardBottomSheetState extends State<HomeDashBoardBottomSheet> {
   Widget _buildScreenTag(BuildContext context) {
     final base = Theme.of(context).textTheme.labelSmall;
     final style = (base ??
-            const TextStyle(
-              fontSize: 11,
-              color: Colors.black54,
-              fontWeight: FontWeight.w600,
-            ))
+        const TextStyle(
+          fontSize: 11,
+          color: Colors.black54,
+          fontWeight: FontWeight.w600,
+        ))
         .copyWith(
       color: Colors.black54,
       fontWeight: FontWeight.w600,
@@ -53,6 +54,28 @@ class _HomeDashBoardBottomSheetState extends State<HomeDashBoardBottomSheet> {
     );
   }
 
+  bool _isFieldCommon(UserState userState) {
+    final dynamic rawRole = userState.user?.role;
+    final String role = rawRole is String ? rawRole.trim() : (rawRole?.toString().trim() ?? '');
+    return role == 'fieldCommon';
+  }
+
+  void _onPhotoTransferPressed(BuildContext context) {
+    // ✅ 바텀시트가 모달로 떠있는 경우 닫고, 루트 네비게이터로 페이지 push
+    final rootNav = Navigator.of(context, rootNavigator: true);
+
+    final nav = Navigator.of(context);
+    if (nav.canPop()) {
+      nav.pop();
+    }
+
+    rootNav.push(
+      MaterialPageRoute(
+        builder: (_) => const PhotoTransferMailPage(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
@@ -69,11 +92,7 @@ class _HomeDashBoardBottomSheetState extends State<HomeDashBoardBottomSheet> {
           child: Consumer<UserState>(
             builder: (context, userState, _) {
               final areaState = context.read<AreaState>();
-
-              // ✅ 로그인한 유저의 role 기반으로 fieldCommon 여부 판단
-              final dynamic rawRole = userState.user?.role;
-              final String role = rawRole is String ? rawRole.trim() : (rawRole?.toString().trim() ?? '');
-              final bool isFieldCommon = role == 'fieldCommon';
+              final bool isFieldCommon = _isFieldCommon(userState);
 
               return SingleChildScrollView(
                 controller: scrollController,
@@ -111,7 +130,7 @@ class _HomeDashBoardBottomSheetState extends State<HomeDashBoardBottomSheet> {
                         label: Text(
                           _layerHidden ? '작업 버튼 펼치기' : '작업 버튼 숨기기',
                         ),
-                        style: _layerToggleBtnStyle(),
+                        style: _outlinedWhiteBtnStyle(height: 48),
                         onPressed: () => setState(() => _layerHidden = !_layerHidden),
                       ),
                     ),
@@ -127,7 +146,7 @@ class _HomeDashBoardBottomSheetState extends State<HomeDashBoardBottomSheet> {
                             child: ElevatedButton.icon(
                               icon: const Icon(Icons.sticky_note_2_rounded),
                               label: const Text('메모'),
-                              style: _memoBtnStyle(),
+                              style: _outlinedWhiteBtnStyle(height: 55),
                               onPressed: () async {
                                 await DashMemo.init();
                                 DashMemo.mountIfNeeded();
@@ -136,12 +155,25 @@ class _HomeDashBoardBottomSheetState extends State<HomeDashBoardBottomSheet> {
                             ),
                           ),
                           const SizedBox(height: 16),
+
+                          // ✅ 사진 전송 버튼 (메모와 서류함 열기 사이)
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.photo_camera_back_rounded),
+                              label: const Text('사진 전송'),
+                              style: _outlinedWhiteBtnStyle(height: 55),
+                              onPressed: () => _onPhotoTransferPressed(context),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
                               icon: const Icon(Icons.folder_open),
                               label: const Text('서류함 열기'),
-                              style: _docBoxBtnStyle(),
+                              style: _outlinedWhiteBtnStyle(height: 55),
                               onPressed: () {
                                 // ✅ role 이 fieldCommon 이면 필드 전용 문서철
                                 //    그 외에는 리더 전용 문서철
@@ -170,33 +202,11 @@ class _HomeDashBoardBottomSheetState extends State<HomeDashBoardBottomSheet> {
   }
 }
 
-ButtonStyle _layerToggleBtnStyle() {
+ButtonStyle _outlinedWhiteBtnStyle({double height = 55}) {
   return ElevatedButton.styleFrom(
     backgroundColor: Colors.white,
     foregroundColor: Colors.black,
-    minimumSize: const Size.fromHeight(48),
-    padding: EdgeInsets.zero,
-    side: const BorderSide(color: Colors.grey, width: 1.0),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-  );
-}
-
-ButtonStyle _memoBtnStyle() {
-  return ElevatedButton.styleFrom(
-    backgroundColor: Colors.white,
-    foregroundColor: Colors.black,
-    minimumSize: const Size.fromHeight(55),
-    padding: EdgeInsets.zero,
-    side: const BorderSide(color: Colors.grey, width: 1.0),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-  );
-}
-
-ButtonStyle _docBoxBtnStyle() {
-  return ElevatedButton.styleFrom(
-    backgroundColor: Colors.white,
-    foregroundColor: Colors.black,
-    minimumSize: const Size.fromHeight(55),
+    minimumSize: Size.fromHeight(height),
     padding: EdgeInsets.zero,
     side: const BorderSide(color: Colors.grey, width: 1.0),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
