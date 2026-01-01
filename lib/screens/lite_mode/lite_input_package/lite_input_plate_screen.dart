@@ -313,6 +313,46 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     );
   }
 
+  // ─────────────────────────────
+  // ✅ (FIX) Navigator pop 재진입 방지
+  // - PopScope.onPopInvoked 안에서 즉시 pop()을 호출하면 _debugLocked 크래시 가능
+  // - pop 경로를 단일화하고, 필요 시 다음 프레임으로 defer하여 안전하게 pop 수행
+  // ─────────────────────────────
+  bool _exitInProgress = false;
+  bool _exitPostFrameScheduled = false;
+
+  void _requestExit({bool defer = false}) {
+    if (_exitInProgress) return;
+
+    void doPop() {
+      if (!mounted) return;
+      if (_exitInProgress) return;
+
+      _exitInProgress = true;
+      try {
+        Navigator.of(context).pop(false);
+      } catch (e) {
+        // pop이 실패하면 플래그를 되돌려 다음 시도를 가능하게 함
+        _exitInProgress = false;
+        debugPrint('[LiteInputPlateScreen] pop failed: $e');
+      }
+    }
+
+    if (!defer) {
+      doPop();
+      return;
+    }
+
+    // 이미 예약되어 있으면 중복 예약 방지
+    if (_exitPostFrameScheduled) return;
+    _exitPostFrameScheduled = true;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _exitPostFrameScheduled = false;
+      doPop();
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -464,10 +504,11 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
   /// ✅ 조회 정책:
   ///   - 현재월 → 직전월(최대 2개월) 우선
   ///   - 실패 시 collectionGroup('plates')로 전체월 폴백(단일 docId로만, 규칙/인덱스 제한 시 자동 무시)
+  ///
+  /// ✅ 계측 정책(요구사항 반영):
+  ///   - 실제 Firestore get 횟수와 무관하게 UsageReporter에는 항상 n=1로 보고
   Future<Map<String, dynamic>?> _fetchPlateStatus(
       String plateNumber, String area) async {
-    int reads = 0;
-
     final safeArea = _safeArea(area);
     final docId = _plateDocId(plateNumber, safeArea);
 
@@ -490,7 +531,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
             .collection(_platesSub)
             .doc(docId)
             .get();
-        reads += 1;
 
         if (doc.exists) return doc.data();
       }
@@ -502,14 +542,14 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
             .collectionGroup(_platesSub)
             .where(FieldPath.documentId, isEqualTo: docId)
             .get();
-        reads += 1;
 
         if (qs.docs.isNotEmpty) {
           QueryDocumentSnapshot<Map<String, dynamic>>? best;
           int bestMonth = -1;
 
           for (final d in qs.docs) {
-            final path = d.reference.path; // plate_status/{area}/months/{yyyyMM}/plates/{docId}
+            final path = d.reference
+                .path; // plate_status/{area}/months/{yyyyMM}/plates/{docId}
             if (!path.contains('$_plateStatusRoot/$safeArea/$_monthsSub/')) {
               continue;
             }
@@ -542,16 +582,15 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
       debugPrint('[_fetchPlateStatus] error: $e');
       return null;
     } finally {
-      final nToReport = (reads <= 0) ? 1 : reads;
-
+      // ✅ 요구사항: 계측은 무조건 1 read
       try {
         await UsageReporter.instance.report(
           area: safeArea,
           action: 'read',
-          n: nToReport,
+          n: 1,
           source: 'LiteInputPlateScreen._fetchPlateStatus/plate_status.lookup',
           useSourceOnlyKey: true,
-          sourceShardCount: 10, // ✅ 추가: source-only 집계를 유지하면서 핫스팟 완화
+          sourceShardCount: 10, // ✅ source-only 집계를 유지하면서 핫스팟 완화
         );
       } catch (e) {
         debugPrint('[UsageReporter] report failed in _fetchPlateStatus: $e');
@@ -777,8 +816,7 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
           const SizedBox(height: 8),
           Text(
             '정기(월정기) 문서를 불러온 경우에만 반영할 수 있습니다.',
-            style:
-            TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+            style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
           ),
         ],
       ],
@@ -1103,8 +1141,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-            padding: const EdgeInsets.only(
-                left: 12, right: 12, top: 6, bottom: 8),
+            padding:
+            const EdgeInsets.only(left: 12, right: 12, top: 6, bottom: 8),
             child: _buildDock(),
           ),
           LiteInputBottomNavigation(
@@ -1153,7 +1191,8 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
       _animateSheet(open: false);
       return;
     }
-    Navigator.of(context).pop(false);
+    // ✅ FIX: exit 경로를 단일화(중복 pop 방지)
+    _requestExit(defer: false);
   }
 
   Widget _buildDockPagedBody({required bool canSwipe}) {
@@ -1189,8 +1228,7 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
                 !_hasMonthlyParking) {
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
-                    content:
-                    Text('현재 지역에서는 정기(월주차) 기능을 사용할 수 없습니다.')),
+                    content: Text('현재 지역에서는 정기(월주차) 기능을 사용할 수 없습니다.')),
               );
               return;
             }
@@ -1276,13 +1314,19 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) async {
-        // ✅ FIX: 시스템/제스처 back도 동일하게 동작하도록 처리
+        // ✅ FIX 1) 이미 pop이 완료된(또는 진행된) 콜백이면 재진입 금지
+        if (didPop) return;
+
+        // ✅ FIX 2) 시트가 열려 있으면 먼저 닫기
         if (_sheetOpen) {
           await _animateSheet(open: false);
           return;
         }
+
+        // ✅ FIX 3) PopScope 콜스택(=Navigator pop 처리 중)에서 즉시 pop 호출하면
+        //          _debugLocked로 터질 수 있으므로 다음 프레임으로 defer
         if (mounted) {
-          Navigator.of(context).pop(false);
+          _requestExit(defer: true);
         }
       },
       child: Scaffold(
@@ -1345,8 +1389,7 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
                     physics: const AlwaysScrollableScrollPhysics(),
                     keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.onDrag,
-                    padding:
-                    EdgeInsets.fromLTRB(16, 16, 16, bottomSafePadding),
+                    padding: EdgeInsets.fromLTRB(16, 16, 16, bottomSafePadding),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -1390,7 +1433,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
                     ),
                   ),
                 ),
-
                 DraggableScrollableSheet(
                   controller: _sheetController,
                   initialChildSize: _sheetClosed,
@@ -1733,8 +1775,7 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14)),
                         backgroundColor: base,
-                        foregroundColor:
-                        _onColorFor(base, fallback: Colors.white),
+                        foregroundColor: _onColorFor(base, fallback: Colors.white),
                       ),
                       child: const Text('상태 메모 보기',
                           style: TextStyle(fontWeight: FontWeight.w900)),
@@ -1773,7 +1814,6 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
     required this.onSelectMemo,
   });
 
-  // ✅ FIX: BOTTOM OVERFLOWED 방지 위해 헤더 높이 상향(여유치 확보)
   @override
   double get minExtent => 104;
 
@@ -1843,7 +1883,6 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
       child: InkWell(
         onTap: outerTap,
         child: Padding(
-          // ✅ FIX: 패딩은 유지하되, 내부 간격을 줄이고 하단 Row를 안정화
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
           child: Column(
             children: [
@@ -1857,7 +1896,7 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
                   ),
                 ),
               ),
-              const SizedBox(height: 8), // ✅ FIX: 10 → 8
+              const SizedBox(height: 8),
 
               Row(
                 children: [
@@ -1880,9 +1919,8 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
                   ),
                 ],
               ),
-              const SizedBox(height: 4), // ✅ FIX: 6 → 4
+              const SizedBox(height: 4),
 
-              // ✅ FIX: 하단 Row를 Expanded+ellipsis로 안전 처리(폰트 스케일에서도 안정)
               Row(
                 children: [
                   Expanded(
