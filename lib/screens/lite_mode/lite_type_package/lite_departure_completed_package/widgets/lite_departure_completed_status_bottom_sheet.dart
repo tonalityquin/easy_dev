@@ -4,9 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../../../models/plate_model.dart';
 import '../../../../../utils/snackbar_helper.dart';
 import '../../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
-
-// ✅ 로그 뷰어 import (라이트 모드)
-import '../../../lite_log_package/lite_log_viewer_bottom_sheet.dart';
+import '../../../../common_package/log_package/lite_log_viewer_bottom_sheet.dart';
 
 Future<PlateModel?> showLiteDepartureCompletedStatusBottomSheet({
   required BuildContext context,

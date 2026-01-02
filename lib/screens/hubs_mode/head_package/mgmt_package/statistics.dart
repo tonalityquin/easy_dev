@@ -45,15 +45,28 @@ class Statistics extends StatefulWidget {
 }
 
 /// ─────────────────────────────────────────────────────────────
-/// [Schema 변경 대응: 월 샤딩 + 일별 report 문서]
+/// [Schema 변경 대응: 월 문서 1개 + reports(Map) 누적]
 ///
-/// 신규 저장 경로(일별 문서):
-/// end_work_reports/area_<area>/months/<yyyyMM>/reports/<yyyy-MM-dd>
+/// ✅ 신규 저장 경로(월 문서 1개 유지):
+/// end_work_reports/area_<area>/months/<yyyyMM>  (month document)
+///
+/// month document 예시 필드:
+/// - division, area, monthKey, updatedAt, lastReportDate
+/// - reports: {
+///     "yyyy-MM-dd": {
+///       date, monthKey, division, area,
+///       vehicleCount: {...},
+///       metrics: {...},
+///       createdAt, uploadedBy,
+///       history: [ ... ]   // (선택) arrayUnion 누적
+///     },
+///     ...
+///   }
 ///
 /// Refresh(조회) 시:
-/// 1) 우선 collectionGroup('reports')로 일별 문서 전체를 조회(division 필터)
-/// 2) 실패(인덱스 미구성 등) 시, area 문서 → months → reports 순회 폴백
-/// 3) 마이그레이션 기간 동안 레거시 구조도 보조 추출(선택적으로 유지)
+/// 1) 우선 collectionGroup('months')로 월 문서 전체를 조회(division 필터)
+/// 2) 실패(인덱스 미구성 등) 시, end_work_reports → months 순회 폴백
+/// 3) 마이그레이션 기간 동안 레거시 구조(embedded reports/map, dot-path) 보조 추출 유지(선택)
 ///
 /// 캐시는 동일하게:
 /// area -> dateStr -> dayMap 구조로 저장
@@ -63,8 +76,8 @@ class _StatisticsState extends State<Statistics> {
   static const String _kDivisionPrefsKey = 'division';
 
   // ✅ 통계 캐시 키(prefix) - division 단위로 전체 area 데이터를 저장
-  // (스키마 전환으로 혼선을 줄이기 위해 v2로 버전업)
-  static const String _kCachePrefix = 'end_work_reports_cache_v2:';
+  // 스키마 변경으로 혼선 방지: v3
+  static const String _kCachePrefix = 'end_work_reports_cache_v3:';
 
   // ✅ 마지막 선택 UI 상태 저장
   static const String _kLastAreaKey = 'statistics_last_area_v1';
@@ -235,8 +248,11 @@ class _StatisticsState extends State<Statistics> {
 
   /// ---------------------------
   /// 오픈 시: division + 로컬 캐시만 로드 (Firestore 금지)
+  ///
+  /// [리팩터링]
+  /// - Refresh 중 호출될 때는 _refreshLoading/_refreshError를 건드리지 않도록 옵션 제공
   /// ---------------------------
-  Future<void> _loadDivisionAndLocalCache() async {
+  Future<void> _loadDivisionAndLocalCache({bool keepRefreshFlags = false}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final div = (prefs.getString(_kDivisionPrefsKey) ?? '').trim();
@@ -334,8 +350,10 @@ class _StatisticsState extends State<Statistics> {
           _range = restoredRange;
         }
 
-        _refreshLoading = false;
-        _refreshError = null;
+        if (!keepRefreshFlags) {
+          _refreshLoading = false;
+          _refreshError = null;
+        }
 
         _pageIndex = 0;
       });
@@ -360,8 +378,10 @@ class _StatisticsState extends State<Statistics> {
         _selectedDates = <DateTime>{};
         _range = null;
 
-        _refreshLoading = false;
-        _refreshError = null;
+        if (!keepRefreshFlags) {
+          _refreshLoading = false;
+          _refreshError = null;
+        }
 
         _pageIndex = 0;
       });
@@ -424,7 +444,8 @@ class _StatisticsState extends State<Statistics> {
 
     try {
       // division이 변경되었을 수도 있으므로, 먼저 division + local cache 다시 로드
-      await _loadDivisionAndLocalCache();
+      // [리팩터링] Refresh 중에는 refresh 플래그를 건드리지 않게 함
+      await _loadDivisionAndLocalCache(keepRefreshFlags: true);
 
       final div = (_division ?? '').trim();
 
@@ -432,43 +453,39 @@ class _StatisticsState extends State<Statistics> {
       final Map<String, Map<String, Map<String, dynamic>>> rebuilt = {};
       final Map<String, Map<String, DateTime>> bestAt = {};
 
-      // 1) ✅ 신규 구조(월 샤딩): collectionGroup('reports') 우선 조회
+      // 1) ✅ 신규 구조(월 문서 + reports map): collectionGroup('months') 우선 조회
       //    - 실패(인덱스 미구성/정책 등) 시 폴백으로 계층 조회 수행
-      bool newLoaded = false;
-
       try {
-        Query<Map<String, dynamic>> q = _firestore.collectionGroup('reports');
+        Query<Map<String, dynamic>> q = _firestore.collectionGroup('months');
         if (div.isNotEmpty) {
           q = q.where('division', isEqualTo: div);
         }
 
         final snap = await q.get();
-        for (final doc in snap.docs) {
-          _mergeOneReportDocIntoCache(
+        for (final monthDoc in snap.docs) {
+          _mergeOneMonthDocIntoCache(
             rebuilt: rebuilt,
             bestAt: bestAt,
             division: div,
-            doc: doc,
+            monthDoc: monthDoc,
           );
         }
 
-        newLoaded = true;
-        dev.log('[STAT] new schema: collectionGroup(reports) docs=${snap.size}', name: 'Statistics');
+        dev.log('[STAT] new schema: collectionGroup(months) docs=${snap.size}', name: 'Statistics');
       } catch (e, st) {
         // 인덱스 미구성(FAILED_PRECONDITION) 등으로 실패할 수 있음
         dev.log(
-          '[STAT] collectionGroup(reports) failed -> fallback hierarchical scan. error=$e',
+          '[STAT] collectionGroup(months) failed -> fallback hierarchical scan. error=$e',
           name: 'Statistics',
           error: e,
           stackTrace: st,
         );
 
-        await _appendReportsByHierarchicalScan(
+        await _appendMonthsByHierarchicalScan(
           division: div,
           rebuilt: rebuilt,
           bestAt: bestAt,
         );
-        newLoaded = true; // 폴백 성공 시도도 신규로 간주
       }
 
       // 2) ✅ 레거시(embedded reports/map 또는 dot-path) 보조 추출
@@ -512,8 +529,7 @@ class _StatisticsState extends State<Statistics> {
         if (_pageCtrl.hasClients) _pageCtrl.jumpToPage(0);
       });
 
-      final msg = newLoaded ? '✅ 데이터가 갱신되었습니다.' : '✅ 데이터가 갱신되었습니다.';
-      showSuccessSnackbar(context, msg);
+      showSuccessSnackbar(context, '✅ 데이터가 갱신되었습니다.');
     } catch (e, st) {
       dev.log('[STAT] refresh failed', name: 'Statistics', error: e, stackTrace: st);
       if (!mounted) return;
@@ -526,81 +542,82 @@ class _StatisticsState extends State<Statistics> {
   }
 
   /// ─────────────────────────────────────────────────────────────
-  /// [신규] report 일별 문서 1건을 cache에 merge
+  /// [신규] month 문서 1건을 cache에 merge
   /// - 문서 경로:
-  ///   end_work_reports/area_<area>/months/<yyyyMM>/reports/<yyyy-MM-dd>
+  ///   end_work_reports/area_<area>/months/<yyyyMM>
+  /// - monthDoc.reports(Map) 내 "yyyy-MM-dd" 키별로 dayMap을 추출하여 cache에 병합
   /// - dayMap에 최소한 area/division/date/monthKey를 보장
   /// - history가 있으면 최신 항목을 상단 필드로 승격
   /// - 동일 area+date 중복 시 createdAt 기준 최신만 유지
   /// ─────────────────────────────────────────────────────────────
-  void _mergeOneReportDocIntoCache({
+  void _mergeOneMonthDocIntoCache({
     required Map<String, Map<String, Map<String, dynamic>>> rebuilt,
     required Map<String, Map<String, DateTime>> bestAt,
     required String division,
-    required QueryDocumentSnapshot<Map<String, dynamic>> doc,
+    required QueryDocumentSnapshot<Map<String, dynamic>> monthDoc,
   }) {
-    final data = doc.data();
+    final data = monthDoc.data();
 
     // 1) area
     final area = (data['area']?.toString().trim().isNotEmpty == true)
         ? data['area']!.toString().trim()
-        : _inferAreaFromReportDocRef(doc).trim();
+        : _inferAreaFromMonthDocRef(monthDoc).trim();
     if (area.isEmpty) return;
 
-    // 2) dateStr
-    final dateStr = (data['date']?.toString().trim().isNotEmpty == true)
-        ? data['date']!.toString().trim()
-        : doc.id.trim();
-    if (dateStr.isEmpty) return;
-
-    // 3) monthKey
+    // 2) monthKey
     final monthKey = (data['monthKey']?.toString().trim().isNotEmpty == true)
         ? data['monthKey']!.toString().trim()
-        : _inferMonthKeyFromReportDocRef(doc).trim();
+        : monthDoc.id.trim();
 
-    final day = Map<String, dynamic>.from(data);
+    // 3) reports map
+    final reportsMap = _asMap(data['reports']);
+    if (reportsMap == null || reportsMap.isEmpty) return;
 
-    // 최신 history 승격
-    _applyLatestHistoryIfAny(day);
+    // month 문서 단위 디버그
+    final monthPath = monthDoc.reference.path;
 
-    day['date'] = day['date'] ?? dateStr;
-    day['area'] = day['area'] ?? area;
-    day['division'] = day['division'] ?? (division.isNotEmpty ? division : null);
-    day['monthKey'] = day['monthKey'] ?? (monthKey.isNotEmpty ? monthKey : null);
+    for (final entry in reportsMap.entries) {
+      final dateStr = entry.key.toString().trim();
+      if (dateStr.isEmpty) continue;
 
-    // 디버그/추적용
-    day['_docPath'] = doc.reference.path;
+      final dayMap = _asMap(entry.value);
+      if (dayMap == null) continue;
 
-    final at = _tryParseCreatedAt(day) ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final day = Map<String, dynamic>.from(dayMap);
 
-    bestAt.putIfAbsent(area, () => {});
-    rebuilt.putIfAbsent(area, () => {});
+      // 최신 history 승격
+      _applyLatestHistoryIfAny(day);
 
-    final prevAt = bestAt[area]![dateStr];
-    if (prevAt == null || at.isAfter(prevAt)) {
-      bestAt[area]![dateStr] = at;
-      rebuilt[area]![dateStr] = day;
+      // 필수 보정
+      day['date'] = day['date'] ?? dateStr;
+      day['area'] = day['area'] ?? area;
+      day['division'] = day['division'] ?? (division.isNotEmpty ? division : null);
+      day['monthKey'] = day['monthKey'] ?? (monthKey.isNotEmpty ? monthKey : null);
+
+      // 디버그/추적용
+      day['_monthDocPath'] = monthPath;
+      day['_docPath'] = '$monthPath::reports.$dateStr';
+
+      final at = _tryParseCreatedAt(day) ?? DateTime.fromMillisecondsSinceEpoch(0);
+
+      bestAt.putIfAbsent(area, () => {});
+      rebuilt.putIfAbsent(area, () => {});
+
+      final prevAt = bestAt[area]![dateStr];
+      if (prevAt == null || at.isAfter(prevAt)) {
+        bestAt[area]![dateStr] = at;
+        rebuilt[area]![dateStr] = day;
+      }
     }
   }
 
-  /// 신규 report doc reference에서 area 추론
-  /// path: .../end_work_reports/area_<area>/months/<yyyyMM>/reports/<yyyy-MM-dd>
-  String _inferAreaFromReportDocRef(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
+  /// month doc reference에서 area 추론
+  /// path: .../end_work_reports/area_<area>/months/<yyyyMM>
+  String _inferAreaFromMonthDocRef(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
     try {
-      final monthDoc = doc.reference.parent.parent; // months/<yyyyMM>
-      final areaDoc = monthDoc?.parent.parent; // end_work_reports/area_<area>
+      final areaDoc = doc.reference.parent.parent; // end_work_reports/area_<area>
       final areaDocId = areaDoc?.id ?? '';
       return _areaFromAreaDocId(areaDocId);
-    } catch (_) {
-      return '';
-    }
-  }
-
-  /// 신규 report doc reference에서 monthKey(yyyyMM) 추론
-  String _inferMonthKeyFromReportDocRef(QueryDocumentSnapshot<Map<String, dynamic>> doc) {
-    try {
-      final monthDoc = doc.reference.parent.parent; // months/<yyyyMM>
-      return monthDoc?.id ?? '';
     } catch (_) {
       return '';
     }
@@ -615,10 +632,9 @@ class _StatisticsState extends State<Statistics> {
 
   /// ─────────────────────────────────────────────────────────────
   /// [폴백] collectionGroup 실패 시 계층 순회로 신규 구조 조회
-  /// - end_work_reports (division 필터) → months → reports
-  /// - 인덱스 구성 없이도 동작하지만, area/월 수가 많으면 쿼리 횟수가 증가
+  /// - end_work_reports (division 필터) → months(월 문서) → reports(map) 파싱
   /// ─────────────────────────────────────────────────────────────
-  Future<void> _appendReportsByHierarchicalScan({
+  Future<void> _appendMonthsByHierarchicalScan({
     required String division,
     required Map<String, Map<String, Map<String, dynamic>>> rebuilt,
     required Map<String, Map<String, DateTime>> bestAt,
@@ -632,86 +648,18 @@ class _StatisticsState extends State<Statistics> {
     dev.log('[STAT] fallback scan: areaDocs=${areaSnap.size}', name: 'Statistics');
 
     for (final areaDoc in areaSnap.docs) {
-      final areaData = areaDoc.data();
-
-      final area = (areaData['area']?.toString().trim().isNotEmpty == true)
-          ? areaData['area']!.toString().trim()
-          : _tryParseAreaFromDocId(areaDoc.id).trim();
-      if (area.isEmpty) continue;
-
-      // months 하위 문서들
+      // months 하위 문서들 (월 문서)
       final monthsSnap = await areaDoc.reference.collection('months').get();
 
       for (final monthDoc in monthsSnap.docs) {
-        final monthKey = monthDoc.id.trim();
-
-        final reportsSnap = await monthDoc.reference.collection('reports').get();
-        for (final reportDoc in reportsSnap.docs) {
-          final data = reportDoc.data();
-
-          // reportDoc는 DocumentSnapshot<Map<String,dynamic>> 타입이지만,
-          // merge 로직은 QueryDocumentSnapshot 전용이므로 동일 필드로 직접 구성
-          final fake = _FakeQueryDocSnapshot(
-            data: data,
-            path: reportDoc.reference.path,
-            id: reportDoc.id,
-            areaDocId: areaDoc.id,
-            monthKey: monthKey,
-          );
-
-          _mergeOneReportDocIntoCacheFromFake(
-            rebuilt: rebuilt,
-            bestAt: bestAt,
-            division: division,
-            fake: fake,
-            explicitArea: area,
-            explicitMonthKey: monthKey,
-          );
-        }
+        // QueryDocumentSnapshot으로 타입이 동일하므로 그대로 merge 함수 사용 가능
+        _mergeOneMonthDocIntoCache(
+          rebuilt: rebuilt,
+          bestAt: bestAt,
+          division: division,
+          monthDoc: monthDoc,
+        );
       }
-    }
-  }
-
-  void _mergeOneReportDocIntoCacheFromFake({
-    required Map<String, Map<String, Map<String, dynamic>>> rebuilt,
-    required Map<String, Map<String, DateTime>> bestAt,
-    required String division,
-    required _FakeQueryDocSnapshot fake,
-    required String explicitArea,
-    required String explicitMonthKey,
-  }) {
-    final data = fake.data;
-
-    final area = (data['area']?.toString().trim().isNotEmpty == true) ? data['area']!.toString().trim() : explicitArea;
-    if (area.trim().isEmpty) return;
-
-    final dateStr = (data['date']?.toString().trim().isNotEmpty == true) ? data['date']!.toString().trim() : fake.id;
-    if (dateStr.trim().isEmpty) return;
-
-    final monthKey = (data['monthKey']?.toString().trim().isNotEmpty == true)
-        ? data['monthKey']!.toString().trim()
-        : explicitMonthKey;
-
-    final day = Map<String, dynamic>.from(data);
-
-    _applyLatestHistoryIfAny(day);
-
-    day['date'] = day['date'] ?? dateStr;
-    day['area'] = day['area'] ?? area;
-    day['division'] = day['division'] ?? (division.isNotEmpty ? division : null);
-    day['monthKey'] = day['monthKey'] ?? (monthKey.isNotEmpty ? monthKey : null);
-
-    day['_docPath'] = fake.path;
-
-    final at = _tryParseCreatedAt(day) ?? DateTime.fromMillisecondsSinceEpoch(0);
-
-    bestAt.putIfAbsent(area, () => {});
-    rebuilt.putIfAbsent(area, () => {});
-
-    final prevAt = bestAt[area]![dateStr];
-    if (prevAt == null || at.isAfter(prevAt)) {
-      bestAt[area]![dateStr] = at;
-      rebuilt[area]![dateStr] = day;
     }
   }
 
@@ -1552,10 +1500,6 @@ class _StatisticsState extends State<Statistics> {
   }
 
   /// ✅ FIX: “보관” 클릭 후 오버플로우 방지
-  /// - 줄바꿈으로 인한 미세 높이 증가 방어(maxLines/ellipsis)
-  /// - 가용 높이 감소(스낵바/키보드/바텀시트 등)에도 안전하도록
-  ///   SingleChildScrollView + ConstrainedBox(minHeight) + IntrinsicHeight로 스크롤 허용
-  /// - 여유 공간이 있을 때는 Spacer로 하단 버튼 고정
   Widget _buildReportCard(Map<String, dynamic> day) {
     final vc = _asMap(day['vehicleCount']);
     final metrics = _asMap(day['metrics']);
@@ -1955,9 +1899,6 @@ class _MultiDatePickerDialogState extends State<_MultiDatePickerDialog> {
 
 /// ─────────────────────────────────────────────
 /// ✅ 기간 모드 “동일한 커스텀 달력 디자인” 다이얼로그
-/// - 첫 탭: 시작일
-/// - 두 번째 탭: 종료일(시작보다 빠르면 시작일 재설정)
-/// - 시작만 선택 후 적용하면 start=end 로 처리(1일 범위)
 /// ─────────────────────────────────────────────
 class _RangePickerDialog extends StatefulWidget {
   const _RangePickerDialog({
@@ -2109,7 +2050,7 @@ class _RangePickerDialogState extends State<_RangePickerDialog> {
               ),
               const SizedBox(height: 8),
 
-              // 월 헤더(이전/다음) - 단일과 동일 디자인
+              // 월 헤더(이전/다음)
               Row(
                 children: [
                   IconButton(
@@ -2216,7 +2157,6 @@ class _RangePickerDialogState extends State<_RangePickerDialog> {
               ),
               const SizedBox(height: 6),
 
-              // 선택값 칩 표시(단일과 동일한 느낌)
               SizedBox(
                 height: 40,
                 child: (!canApply)
@@ -2397,7 +2337,6 @@ class _InfoBanner extends StatelessWidget {
 }
 
 /// ===== 상단 바(오늘/갱신/일괄보관) =====
-/// 요구사항: 아이콘만 사용
 class _TopBar extends StatelessWidget {
   const _TopBar({
     required this.today,
@@ -2579,23 +2518,4 @@ class _SheetScaffold extends StatelessWidget {
       ],
     );
   }
-}
-
-/// ─────────────────────────────────────────────────────────────
-/// 폴백 스캔용: QueryDocumentSnapshot 대체 최소 구조
-/// ─────────────────────────────────────────────────────────────
-class _FakeQueryDocSnapshot {
-  const _FakeQueryDocSnapshot({
-    required this.data,
-    required this.path,
-    required this.id,
-    required this.areaDocId,
-    required this.monthKey,
-  });
-
-  final Map<String, dynamic> data;
-  final String path;
-  final String id;
-  final String areaDocId;
-  final String monthKey;
 }

@@ -10,15 +10,14 @@ import '../../../../../../states/area/area_state.dart';
 import '../../../../../../repositories/commute_log_repository.dart';
 import '../../../../../../utils/block_dialogs/break_duration_blocking_dialog.dart';
 import '../../../../../../utils/block_dialogs/work_end_duration_blocking_dialog.dart';
-import '../../../../../hubs_mode/dev_package/debug_package/debug_database_logger.dart';
-import '../../../../../simple_mode/utils/simple_mode/simple_mode_db.dart';
-import '../backup/backup_form_page.dart';
-import '../work_start_report/sections/dashboard_end_report_form_page.dart';
-import '../work_start_report/sections/dashboard_start_report_form_page.dart';
+import '../../hubs_mode/dev_package/debug_package/debug_database_logger.dart';
+import '../../simple_mode/utils/simple_mode/simple_mode_db.dart';
+import '../document_package/backup/backup_form_page.dart';
+import '../document_package/user_statement/user_statement_form_page.dart';
+import '../document_package/work_end_report/dashboard_end_report_form_page.dart';
+import '../document_package/work_start_report/dashboard_start_report_form_page.dart';
 import 'leader_document_inventory_repository.dart';
-import 'user_statement_form_page.dart';
 import 'document_item.dart';
-import '../shares/parking_handover_share_page.dart';
 
 Future<void> openLeaderDocumentBox(BuildContext context) async {
   await showModalBottomSheet<void>(
@@ -142,15 +141,6 @@ class _LeaderDocumentBoxSheet extends StatelessWidget {
                                                   ),
                                                 );
                                               }
-                                              break;
-
-                                            case DocumentType.handoverForm:
-                                              Navigator.of(context).push(
-                                                MaterialPageRoute(
-                                                  builder: (_) => const ParkingHandoverSharePage(),
-                                                  fullscreenDialog: true,
-                                                ),
-                                              );
                                               break;
 
                                             case DocumentType.workEndReportForm:
@@ -615,7 +605,7 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
     }
   }
 
-  // 2) 휴게 (simple_break_attendance)
+  // 2) 휴게 (simple_break_attendance, type = "start")
   final needBreak = statuses.contains('휴게');
   if (needBreak) {
     final breakRows = await db.query(
@@ -650,10 +640,10 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
 }
 
 /// 업로드(또는 서버 중복으로 간주)된 로컬 행을 삭제합니다.
+///
 /// - (date, type) PK 기반으로 1건 삭제
 Future<int> _deleteLocalAttendanceRow(LocalCommuteRecord record) async {
   final db = await SimpleModeDb.instance.database;
-
   return db.delete(
     record.localTable,
     where: 'date = ? AND type = ?',
@@ -664,7 +654,6 @@ Future<int> _deleteLocalAttendanceRow(LocalCommuteRecord record) async {
 /// 출퇴근 기록 제출:
 /// - SQLite(simple_work_attendance)에 있는 출근/퇴근 전체 →
 ///   Firestore(commute_user_logs)의 "출근"/"퇴근" 로그로 업로드
-/// - 업로드 완료(또는 서버 중복)된 데이터는 SQLite에서 삭제(리팩터링 반영)
 Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
   final messenger = ScaffoldMessenger.of(context);
 
@@ -712,10 +701,10 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
 
     var successCount = 0;
     var skippedCount = 0;
-    var failedCount = 0;
     var deletedCount = 0;
+    var failedCount = 0;
 
-    // 2) Firestore commute_user_logs 에 업로드 + 로컬 삭제
+    // 2) Firestore commute_user_logs 에 업로드
     for (final record in records) {
       final status = record.status; // "출근" 또는 "퇴근"
       final eventDateTime = record.dateTime;
@@ -730,12 +719,15 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
       );
 
       if (alreadyExists) {
-        // 서버 중복: 업로드 없이 스킵하되, 로컬은 정리(삭제)
         skippedCount++;
+        // 서버에 이미 존재하는 경우, 로컬은 "제출 완료"로 간주하고 정리합니다.
         deletedCount += await _deleteLocalAttendanceRow(record);
         continue;
       }
 
+      // ✅ Firestore 업로드 성공 시에만 로컬 데이터를 삭제합니다.
+      //    (CommuteLogRepository.addLog는 내부에서 예외를 흡수할 수 있으므로,
+      //     업로드 여부를 hasLogForDate로 재검증합니다.)
       await repo.addLog(
         status: status,
         userId: userId,
@@ -747,8 +739,6 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
         dateTime: eventDateTime,
       );
 
-      // addLog 내부 구현에 따라 예외를 외부로 throw하지 않을 수 있으므로,
-      // 업로드 여부를 재검증한 후에만 로컬 삭제합니다.
       final nowExists = await repo.hasLogForDate(
         status: status,
         userId: userId,
@@ -766,11 +756,11 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          '출퇴근 기록 제출 완료: '
+          '출퇴근 기록 제출 결과: '
               '$successCount건 업로드, '
-              '중복 $skippedCount건, '
+              '서버 중복 $skippedCount건, '
               '실패 $failedCount건, '
-              '로컬 삭제 $deletedCount건.',
+              '로컬 정리 $deletedCount건.',
         ),
       ),
     );
@@ -804,7 +794,6 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
 /// 휴게시간 기록 제출:
 /// - SQLite(simple_break_attendance)에 있는 휴게 로그 전체 →
 ///   Firestore(commute_user_logs)의 "휴게" 로그로 업로드
-/// - 업로드 완료(또는 서버 중복)된 데이터는 SQLite에서 삭제(리팩터링 반영)
 Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
   final messenger = ScaffoldMessenger.of(context);
 
@@ -851,8 +840,8 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
 
     var successCount = 0;
     var skippedCount = 0;
-    var failedCount = 0;
     var deletedCount = 0;
+    var failedCount = 0;
 
     for (final record in records) {
       final eventDateTime = record.dateTime;
@@ -867,6 +856,7 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
 
       if (alreadyExists) {
         skippedCount++;
+        // 서버에 이미 존재하는 경우, 로컬은 "제출 완료"로 간주하고 정리합니다.
         deletedCount += await _deleteLocalAttendanceRow(record);
         continue;
       }
@@ -899,11 +889,11 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
     messenger.showSnackBar(
       SnackBar(
         content: Text(
-          '휴게시간 기록 제출 완료: '
+          '휴게시간 기록 제출 결과: '
               '$successCount건 업로드, '
-              '중복 $skippedCount건, '
+              '서버 중복 $skippedCount건, '
               '실패 $failedCount건, '
-              '로컬 삭제 $deletedCount건.',
+              '로컬 정리 $deletedCount건.',
         ),
       ),
     );
@@ -922,7 +912,6 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
         tags: const ['database', 'firestore', 'break', 'migration'],
       );
     } catch (_) {}
-
     messenger.showSnackBar(
       const SnackBar(
         content: Text(
@@ -959,8 +948,6 @@ Color _accentColorForType(DocumentType type) {
       return const Color(0xFF4F9A94); // 청록
     case DocumentType.workEndReportForm:
       return const Color(0xFFEF6C53); // 기본 오렌지/레드
-    case DocumentType.handoverForm:
-      return const Color(0xFF8D6E63); // 브라운
     case DocumentType.statementForm:
       return const Color(0xFF5C6BC0); // 블루
     case DocumentType.generic:
@@ -989,8 +976,6 @@ IconData _iconForType(DocumentType type) {
       return Icons.wb_sunny_outlined;
     case DocumentType.workEndReportForm:
       return Icons.nights_stay_outlined;
-    case DocumentType.handoverForm:
-      return Icons.swap_horiz;
     case DocumentType.statementForm:
       return Icons.description_outlined;
     case DocumentType.generic:
@@ -1029,10 +1014,7 @@ String _typeLabelForType(DocumentType type) {
     case DocumentType.workStartReportForm:
       return '업무 시작 보고';
     case DocumentType.workEndReportForm:
-    // 기본값(위에서 id별로 override 가능)
       return '퇴근/업무 종료';
-    case DocumentType.handoverForm:
-      return '업무 인수인계';
     case DocumentType.statementForm:
       return '경위서';
     case DocumentType.generic:

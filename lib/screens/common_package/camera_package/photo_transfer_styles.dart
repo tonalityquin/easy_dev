@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 
 /// 경위서 화면 전용 컬러 팔레트
-class DashboardReportColors {
+class PhotoTransferColors {
   static const Color base = Color(0xFF00897B); // primary
   static const Color dark = Color(0xFF00695C); // 강조 텍스트/아이콘
   static const Color light = Color(0xFF80CBC4); // 톤 변형/보더
@@ -11,18 +11,18 @@ class DashboardReportColors {
 }
 
 /// 경위서 화면에서 공통으로 사용하는 버튼 스타일 모음
-class DashboardReportButtonStyles {
+class PhotoTransferButtonStyles {
   static const double _radius = 8.0;
 
   /// 메인 액션 버튼
   static ButtonStyle primary({double minHeight = 55}) {
     return ElevatedButton.styleFrom(
-      backgroundColor: DashboardReportColors.base,
-      foregroundColor: DashboardReportColors.fg,
+      backgroundColor: PhotoTransferColors.base,
+      foregroundColor: PhotoTransferColors.fg,
       minimumSize: Size(0, minHeight),
       padding: EdgeInsets.zero,
       side: const BorderSide(
-        color: DashboardReportColors.dark,
+        color: PhotoTransferColors.dark,
         width: 1.0,
       ),
       shape: RoundedRectangleBorder(
@@ -31,7 +31,7 @@ class DashboardReportButtonStyles {
       elevation: 0,
     ).copyWith(
       overlayColor: MaterialStateProperty.resolveWith<Color?>(
-            (states) => states.contains(MaterialState.pressed) ? DashboardReportColors.dark.withOpacity(.10) : null,
+            (states) => states.contains(MaterialState.pressed) ? PhotoTransferColors.dark.withOpacity(.10) : null,
       ),
     );
   }
@@ -39,10 +39,10 @@ class DashboardReportButtonStyles {
   /// 서브/보조 액션 버튼
   static ButtonStyle outlined({double minHeight = 55}) {
     return OutlinedButton.styleFrom(
-      foregroundColor: DashboardReportColors.dark,
+      foregroundColor: PhotoTransferColors.dark,
       backgroundColor: Colors.white,
       side: const BorderSide(
-        color: DashboardReportColors.light,
+        color: PhotoTransferColors.light,
         width: 1.0,
       ),
       minimumSize: Size(0, minHeight),
@@ -51,7 +51,7 @@ class DashboardReportButtonStyles {
       ),
     ).copyWith(
       overlayColor: MaterialStateProperty.resolveWith<Color?>(
-            (states) => states.contains(MaterialState.pressed) ? DashboardReportColors.light.withOpacity(.16) : null,
+            (states) => states.contains(MaterialState.pressed) ? PhotoTransferColors.light.withOpacity(.16) : null,
       ),
     );
   }

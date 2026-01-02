@@ -6,7 +6,6 @@ import 'package:provider/provider.dart';
 
 import '../../../../../models/plate_model.dart';
 import '../../../../../screens/service_mode/modify_package/modify_plate_screen.dart';
-import '../../../../../screens/service_mode/log_package/log_viewer_bottom_sheet.dart';
 import '../../../../../states/area/area_state.dart';
 import '../../../../../states/plate/movement_plate.dart';
 import '../../../../../states/user/user_state.dart';
@@ -20,6 +19,7 @@ import '../../../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 
 // ✅ TTS (오프라인 TTS 사용)
 import '../../../../../offlines/tts/offline_tts.dart';
+import '../../../../common_package/log_package/lite_log_viewer_bottom_sheet.dart';
 
 Future<void> showParkingCompletedStatusBottomSheet({
   required BuildContext context,
@@ -717,7 +717,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                               ],
                             ),
                             const SizedBox(height: 12),
-
                             _PrimaryCtaButton(
                               icon: Icons.exit_to_app,
                               title: '출차 요청으로 이동',
@@ -795,7 +794,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                                     Navigator.push(
                                       rootContext,
                                       MaterialPageRoute(
-                                        builder: (_) => LogViewerBottomSheet(
+                                        builder: (_) => LiteLogViewerBottomSheet(
                                           initialPlateNumber: widget.plateNumber,
                                           division: widget.division,
                                           area: widget.area,
@@ -926,7 +925,7 @@ class _PlateSummaryCard extends StatelessWidget {
     final badgeText = isLocked ? '사전정산 잠김' : '사전정산 없음';
 
     final feeText =
-    (isLocked && lockedFee != null) ? '₩$lockedFee${paymentMethod.isNotEmpty ? " ($paymentMethod)" : ""}' : '—';
+        (isLocked && lockedFee != null) ? '₩$lockedFee${paymentMethod.isNotEmpty ? " ($paymentMethod)" : ""}' : '—';
 
     final billingText = billingType.isNotEmpty ? billingType : '미지정';
 
@@ -1003,9 +1002,7 @@ class _PlateSummaryCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      isFree
-                          ? '무료 차량입니다. 출차 요청 시 자동으로 정산 처리됩니다.'
-                          : '정산이 필요합니다. 정산 후 출차 요청으로 이동할 수 있습니다.',
+                      isFree ? '무료 차량입니다. 출차 요청 시 자동으로 정산 처리됩니다.' : '정산이 필요합니다. 정산 후 출차 요청으로 이동할 수 있습니다.',
                       style: TextStyle(
                         color: Colors.orange.shade800,
                         fontWeight: FontWeight.w800,
@@ -1376,10 +1373,10 @@ void _reportDbSafe({
 }
 
 Future<void> handleEntryParkingRequest(
-    BuildContext context,
-    String plateNumber,
-    String area,
-    ) async {
+  BuildContext context,
+  String plateNumber,
+  String area,
+) async {
   final movementPlate = context.read<MovementPlate>();
   await movementPlate.goBackToParkingRequest(
     fromType: PlateType.parkingCompleted,

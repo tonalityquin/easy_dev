@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../../models/plate_model.dart';
 import '../../../../../screens/service_mode/modify_package/modify_plate_screen.dart';
-import '../../../../../screens/service_mode/log_package/log_viewer_bottom_sheet.dart';
+import '../../../../../screens/common_package/log_package/lite_log_viewer_bottom_sheet.dart';
 import '../../../../../states/area/area_state.dart';
 import '../../../../../enums/plate_type.dart';
 import '../../../../../states/user/user_state.dart';
@@ -24,8 +24,10 @@ Future<void> showParkingRequestStatusBottomSheet({
   await showModalBottomSheet(
     context: context,
     isScrollControlled: true,
-    useSafeArea: true, // 시스템 인셋을 고려
-    backgroundColor: Colors.transparent, // 외곽 투명
+    useSafeArea: true,
+    // 시스템 인셋을 고려
+    backgroundColor: Colors.transparent,
+    // 외곽 투명
     builder: (_) {
       return FractionallySizedBox(
         heightFactor: 1, // ⬆️ 최상단까지
@@ -125,7 +127,7 @@ class _FullHeightSheet extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => LogViewerBottomSheet(
+                              builder: (_) => LiteLogViewerBottomSheet(
                                 initialPlateNumber: plateNumber,
                                 division: division,
                                 area: area,

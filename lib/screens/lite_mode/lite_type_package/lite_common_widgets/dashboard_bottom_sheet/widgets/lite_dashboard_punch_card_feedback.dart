@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../simple_mode/utils/simple_mode/simple_mode_attendance_repository.dart';
+import '../../../../../simple_mode/utils/simple_mode/simple_mode_attendance_repository.dart';
 
 /// 타임카드 펀칭 느낌의 짧은 피드백 시트를 띄우는 헬퍼
 ///

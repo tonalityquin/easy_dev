@@ -1,5 +1,3 @@
-// lib/screens/simple_package/simple_inside_package/sections/user_statement_form_page.dart
-
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -12,8 +10,8 @@ import 'package:googleapis/gmail/v1.dart' as gmail;
 
 import '../../../../../../utils/google_auth_v7.dart';
 import '../../../../../../utils/api/email_config.dart';
-import 'sections/user_statement_styles.dart';
-import 'sections/user_statement_signature_dialog.dart';
+import 'user_statement_styles.dart';
+import 'user_statement_signature_dialog.dart';
 
 class UserStatementFormPage extends StatefulWidget {
   const UserStatementFormPage({super.key});

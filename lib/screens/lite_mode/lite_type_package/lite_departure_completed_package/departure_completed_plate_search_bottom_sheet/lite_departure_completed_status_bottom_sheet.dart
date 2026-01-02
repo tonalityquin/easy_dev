@@ -11,8 +11,7 @@ import '../../../../../enums/plate_type.dart';
 import '../../../../../repositories/plate_repo_services/plate_repository.dart';
 import '../../../../../utils/snackbar_helper.dart';
 import '../../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
-
-import '../../../lite_log_package/lite_log_viewer_bottom_sheet.dart';
+import '../../../../common_package/log_package/lite_log_viewer_bottom_sheet.dart';
 
 Future<PlateModel?> showLiteDepartureCompletedStatusBottomSheet({
   required BuildContext context,

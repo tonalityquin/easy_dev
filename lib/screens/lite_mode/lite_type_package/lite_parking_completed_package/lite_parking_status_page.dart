@@ -16,8 +16,7 @@ import '../../../../states/area/area_state.dart';
 
 // import '../../../../utils/usage_reporter.dart';;
 
-// ⬇️ 지역별 리마인더 콘텐츠 파일 import
-import '../lite_common_widgets/dashboard_bottom_sheet/memo/lite_dash_memo.dart';
+import '../../../common_package/memo_package/lite_dash_memo.dart';
 import 'lite_parking_reminder_contents.dart';
 
 class LiteParkingStatusPage extends StatefulWidget {

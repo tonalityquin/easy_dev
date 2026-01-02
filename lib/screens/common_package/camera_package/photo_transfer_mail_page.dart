@@ -11,8 +11,7 @@ import 'package:mime/mime.dart';
 import 'package:easydev/utils/api/email_config.dart';
 import 'package:easydev/utils/google_auth_v7.dart';
 
-import '../../service_mode/type_package/common_widgets/dashboard_bottom_sheet/work_start_report/sections/dashboard_start_report_styles.dart';
-
+import 'photo_transfer_styles.dart';
 class PhotoTransferMailPage extends StatefulWidget {
   const PhotoTransferMailPage({super.key});
 
@@ -85,7 +84,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(
-          color: DashboardReportColors.base,
+          color: PhotoTransferColors.base,
           width: 1.6,
         ),
       ),
@@ -383,7 +382,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                 _sending ? '전송 중…' : '전송',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-              style: DashboardReportButtonStyles.primary(),
+              style: PhotoTransferButtonStyles.primary(),
             ),
           ),
         ),
@@ -425,7 +424,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: DashboardReportColors.light.withOpacity(0.8),
+                            color: PhotoTransferColors.light.withOpacity(0.8),
                             width: 1,
                           ),
                         ),
@@ -438,14 +437,14 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                                 const Icon(
                                   Icons.photo_outlined,
                                   size: 22,
-                                  color: DashboardReportColors.dark,
+                                  color: PhotoTransferColors.dark,
                                 ),
                                 const SizedBox(width: 8),
                                 Text(
                                   '메일로 사진 첨부 전송',
                                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.w600,
-                                    color: DashboardReportColors.dark,
+                                    color: PhotoTransferColors.dark,
                                   ),
                                 ),
                                 const Spacer(),
@@ -462,10 +461,10 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                             const SizedBox(height: 4),
                             Container(
                               decoration: BoxDecoration(
-                                color: DashboardReportColors.light.withOpacity(0.12),
+                                color: PhotoTransferColors.light.withOpacity(0.12),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: DashboardReportColors.light.withOpacity(0.8),
+                                  color: PhotoTransferColors.light.withOpacity(0.8),
                                 ),
                               ),
                               padding: const EdgeInsets.all(12),
@@ -475,7 +474,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                                   const Icon(
                                     Icons.info_outline,
                                     size: 18,
-                                    color: DashboardReportColors.dark,
+                                    color: PhotoTransferColors.dark,
                                   ),
                                   const SizedBox(width: 8),
                                   Expanded(
@@ -501,7 +500,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                                           onPressed: _sending ? null : () => _pickPhotos(append: true),
                                           icon: const Icon(Icons.photo_library_outlined),
                                           label: const Text('사진 선택/추가'),
-                                          style: DashboardReportButtonStyles.primary(),
+                                          style: PhotoTransferButtonStyles.primary(),
                                         ),
                                       ),
                                       const SizedBox(width: 10),
@@ -509,7 +508,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                                         onPressed: (_sending || _attachments.isEmpty) ? null : _clearAllAttachments,
                                         icon: const Icon(Icons.delete_outline),
                                         label: const Text('전체 삭제'),
-                                        style: DashboardReportButtonStyles.outlined(minHeight: 55),
+                                        style: PhotoTransferButtonStyles.outlined(minHeight: 55),
                                       ),
                                     ],
                                   ),

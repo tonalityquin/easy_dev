@@ -15,12 +15,10 @@ import '../../../../utils/google_auth_session.dart';
 
 import '../../../../states/location/location_state.dart';
 import '../../../../states/area/area_state.dart';
-
-// ⬇️ DashMemo 메모 import
-import '../../type_package/common_widgets/dashboard_bottom_sheet/memo/dash_memo.dart';
 // import '../../../../utils/usage_reporter.dart';;
 
 // ⬇️ 지역별 리마인더 콘텐츠 파일 import
+import '../../../common_package/memo_package/lite_dash_memo.dart';
 import 'parking_reminder_contents.dart';
 
 class ParkingStatusPage extends StatefulWidget {
@@ -704,7 +702,7 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
     _timer?.cancel();
     _timer = Timer.periodic(cycleInterval, (_) {
       if (!mounted) return;
-      final list = DashMemo.notes.value;
+      final list = LiteDashMemo.notes.value;
       if (list.length <= 1) return; // 0/1개면 넘기지 않음
       final next = (_currentIndex + 1) % list.length;
       _animateToPage(next);
@@ -715,7 +713,7 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
     _currentIndex = index;
     if (!mounted) return;
     // itemCount가 줄어든 경우를 대비해 안전 처리
-    final total = DashMemo.notes.value.length;
+    final total = LiteDashMemo.notes.value.length;
     if (total == 0) return;
     if (_currentIndex >= total) _currentIndex = 0;
 
@@ -741,7 +739,7 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
     return SizedBox(
       height: 170,
       child: ValueListenableBuilder<List<String>>(
-        valueListenable: DashMemo.notes,
+        valueListenable: LiteDashMemo.notes,
         builder: (context, list, _) {
           // 페이지 수가 바뀌면 현재 인덱스 보정
           if (list.isNotEmpty && _currentIndex >= list.length) {

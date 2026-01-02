@@ -19,7 +19,7 @@ import '../../../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 
 // ✅ TTS (오프라인 TTS 사용)
 import '../../../../../offlines/tts/offline_tts.dart';
-import '../../../lite_log_package/lite_log_viewer_bottom_sheet.dart';
+import '../../../../common_package/log_package/lite_log_viewer_bottom_sheet.dart';
 import '../../../lite_modify_package/lite_modify_plate_screen.dart';
 
 Future<void> showLiteParkingCompletedStatusBottomSheet({

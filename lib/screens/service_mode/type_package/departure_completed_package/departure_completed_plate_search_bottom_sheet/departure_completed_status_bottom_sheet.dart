@@ -6,7 +6,7 @@ import '../../../../../utils/snackbar_helper.dart';
 import '../../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 
 // ✅ 로그 뷰어 import (서비스 모드)
-import '../../../../service_mode/log_package/log_viewer_bottom_sheet.dart';
+import '../../../../common_package/log_package/lite_log_viewer_bottom_sheet.dart';
 
 Future<PlateModel?> showDepartureCompletedStatusBottomSheet({
   required BuildContext context,
@@ -101,18 +101,18 @@ class _DepartureCompletedFullHeightSheet extends StatelessWidget {
               onPressed: _isLocked
                   ? null
                   : () async {
-                final updated = await _settlePlate(
-                  context: context,
-                  plate: plate,
-                  performedBy: performedBy,
-                );
+                      final updated = await _settlePlate(
+                        context: context,
+                        plate: plate,
+                        performedBy: performedBy,
+                      );
 
-                if (!context.mounted) return;
+                      if (!context.mounted) return;
 
-                if (updated != null) {
-                  Navigator.pop(context, updated);
-                }
-              },
+                      if (updated != null) {
+                        Navigator.pop(context, updated);
+                      }
+                    },
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 52),
                 backgroundColor: _isLocked ? Colors.grey.shade200 : Colors.blueAccent,
@@ -133,21 +133,21 @@ class _DepartureCompletedFullHeightSheet extends StatelessWidget {
               onPressed: !_isLocked
                   ? null
                   : () async {
-                final bool ok = await _confirmCancelSettlement(context);
-                if (!ok) return;
+                      final bool ok = await _confirmCancelSettlement(context);
+                      if (!ok) return;
 
-                final updated = await _cancelSettlement(
-                  context: context,
-                  plate: plate,
-                  performedBy: performedBy,
-                );
+                      final updated = await _cancelSettlement(
+                        context: context,
+                        plate: plate,
+                        performedBy: performedBy,
+                      );
 
-                if (!context.mounted) return;
+                      if (!context.mounted) return;
 
-                if (updated != null) {
-                  Navigator.pop(context, updated);
-                }
-              },
+                      if (updated != null) {
+                        Navigator.pop(context, updated);
+                      }
+                    },
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 52),
                 backgroundColor: _isLocked ? Colors.orange.shade400 : Colors.grey.shade100,
@@ -167,9 +167,10 @@ class _DepartureCompletedFullHeightSheet extends StatelessWidget {
               icon: const Icon(Icons.history),
               label: const Text('로그 확인'),
               onPressed: () async {
-                await LogViewerBottomSheet.show(
+                await LiteLogViewerBottomSheet.show(
                   hostContext,
-                  division: '-', // LogViewerBottomSheet는 조회에 사용하지 않지만 required
+                  division: '-',
+                  // LogViewerBottomSheet는 조회에 사용하지 않지만 required
                   area: plate.area,
                   requestTime: plate.requestTime,
                   initialPlateNumber: plate.plateNumber,
@@ -224,6 +225,7 @@ class _DepartureCompletedFullHeightSheet extends StatelessWidget {
 
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({required this.plate});
+
   final PlateModel plate;
 
   @override
@@ -232,8 +234,7 @@ class _SummaryCard extends StatelessWidget {
 
     final String area = (plate.area).trim();
     final String location = (plate.location).trim().isEmpty ? '미지정' : plate.location.trim();
-    final String billingType =
-    (plate.billingType ?? '').trim().isEmpty ? '미지정' : (plate.billingType ?? '').trim();
+    final String billingType = (plate.billingType ?? '').trim().isEmpty ? '미지정' : (plate.billingType ?? '').trim();
 
     return Container(
       width: double.infinity,

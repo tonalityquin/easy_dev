@@ -3,11 +3,11 @@ import 'package:provider/provider.dart';
 
 import '../../../../../models/plate_model.dart';
 import '../../../../../screens/service_mode/modify_package/modify_plate_screen.dart';
-import '../../../../../screens/service_mode/log_package/log_viewer_bottom_sheet.dart';
 import '../../../../../states/plate/movement_plate.dart';
 import '../../../../../states/user/user_state.dart';
 import '../../../../../utils/snackbar_helper.dart';
 import '../../../../../enums/plate_type.dart';
+import '../../../../common_package/log_package/lite_log_viewer_bottom_sheet.dart';
 
 Future<void> showDepartureRequestStatusBottomSheet({
   required BuildContext context,
@@ -23,13 +23,13 @@ Future<void> showDepartureRequestStatusBottomSheet({
   final rootContext = context;
 
   ButtonStyle whiteSheetButtonStyle(BuildContext ctx) => ElevatedButton.styleFrom(
-    minimumSize: const Size(double.infinity, 52),
-    backgroundColor: Colors.white,
-    foregroundColor: Colors.black87,
-    elevation: 0,
-    side: BorderSide(color: Theme.of(ctx).dividerColor),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-  );
+        minimumSize: const Size(double.infinity, 52),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        elevation: 0,
+        side: BorderSide(color: Theme.of(ctx).dividerColor),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      );
 
   await showModalBottomSheet(
     context: context,
@@ -77,7 +77,6 @@ Future<void> showDepartureRequestStatusBottomSheet({
                       ],
                     ),
                     const SizedBox(height: 24),
-
                     ElevatedButton.icon(
                       icon: const Icon(Icons.edit_note_outlined),
                       label: const Text("정보 수정"),
@@ -99,7 +98,6 @@ Future<void> showDepartureRequestStatusBottomSheet({
                       style: whiteSheetButtonStyle(sheetCtx),
                     ),
                     const SizedBox(height: 12),
-
                     ElevatedButton.icon(
                       icon: const Icon(Icons.history),
                       label: const Text("로그 확인"),
@@ -110,7 +108,7 @@ Future<void> showDepartureRequestStatusBottomSheet({
                           Navigator.push(
                             rootContext,
                             MaterialPageRoute(
-                              builder: (_) => LogViewerBottomSheet(
+                              builder: (_) => LiteLogViewerBottomSheet(
                                 initialPlateNumber: plateNumber,
                                 division: division,
                                 area: area,
@@ -123,7 +121,6 @@ Future<void> showDepartureRequestStatusBottomSheet({
                       style: whiteSheetButtonStyle(sheetCtx),
                     ),
                     const SizedBox(height: 12),
-
                     ElevatedButton.icon(
                       icon: const Icon(Icons.assignment_return),
                       label: const Text("입차 요청으로 되돌리기"),
@@ -139,7 +136,6 @@ Future<void> showDepartureRequestStatusBottomSheet({
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     ElevatedButton.icon(
                       icon: const Icon(Icons.check_circle_outline),
                       label: const Text("입차 완료 처리"),
@@ -155,7 +151,6 @@ Future<void> showDepartureRequestStatusBottomSheet({
                       ),
                     ),
                     const SizedBox(height: 12),
-
                     TextButton.icon(
                       icon: const Icon(Icons.delete_forever, color: Colors.red),
                       label: const Text("삭제", style: TextStyle(color: Colors.red)),
@@ -176,10 +171,10 @@ Future<void> showDepartureRequestStatusBottomSheet({
 }
 
 Future<void> handleEntryParkingRequest(
-    BuildContext context,
-    String plateNumber,
-    String area,
-    ) async {
+  BuildContext context,
+  String plateNumber,
+  String area,
+) async {
   final movementPlate = context.read<MovementPlate>();
   try {
     await movementPlate.goBackToParkingRequest(
@@ -199,11 +194,11 @@ Future<void> handleEntryParkingRequest(
 }
 
 Future<void> handleEntryParkingCompleted(
-    BuildContext context,
-    String plateNumber,
-    String area,
-    String location,
-    ) async {
+  BuildContext context,
+  String plateNumber,
+  String area,
+  String location,
+) async {
   final movementPlate = context.read<MovementPlate>();
 
   try {

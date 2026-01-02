@@ -6,8 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
-import 'lite_user_statement_styles.dart';
-import 'lite_user_statement_signature_painter.dart';
+import 'user_statement_styles.dart';
+import 'user_statement_signature_painter.dart';
 
 class UserStatementSignatureResult {
   UserStatementSignatureResult({

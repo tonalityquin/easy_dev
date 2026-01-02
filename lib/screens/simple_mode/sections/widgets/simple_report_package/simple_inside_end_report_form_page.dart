@@ -27,8 +27,17 @@ class SimpleInsideEndReportFormPage extends StatefulWidget {
 /// ─────────────────────────────────────────────────────────────
 /// [요구사항 반영] Firestore 조회(get/query) 없음.
 /// - insert(set/merge)만 수행하여 end_work_reports 스키마에 맞게 저장.
-/// - [추가 요구사항] 월 샤딩(months/yyyyMM/reports/yyyy-MM-dd) 구조로 저장
-/// - [추가 요구사항] 동일 batch 내 3개 문서 원자 upsert
+///
+/// [변경 요구사항]
+/// - ✅ 월 문서 1개 유지 + reports 맵에 일자별 데이터 누적
+///   end_work_reports/area_<area>/months/<yyyyMM>
+///     └ reports: { "<yyyy-MM-dd>": { ...payload... }, ... }
+///
+/// - ✅ 동일 batch 내 원자 upsert:
+///     - end_work_reports/area_<area>           (area meta)
+///     - end_work_reports/area_<area>/months/<yyyyMM> (month meta + reports map 누적)
+///
+/// - ⚠️ 일자 서브컬렉션(reports/<yyyy-MM-dd>) 문서 생성은 제거
 /// ─────────────────────────────────────────────────────────────
 class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFormPage> {
   final _formKey = GlobalKey<FormState>();
@@ -791,21 +800,19 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
   // ─────────────────────────────────────────────────────────────
   // [핵심] 2단계 "1차 제출" (Firestore write only)
   //
-  // 요구사항 반영:
-  //  1) 월 샤딩 저장:
-  //     end_work_reports/area_<area>/months/<yyyyMM>/reports/<yyyy-MM-dd>
-  //     history는 일별 report 문서 필드로 유지(arrayUnion)
-  //  2) 메타 문서 upsert:
-  //     동일 batch에
+  // 변경 사항(요구사항 반영):
+  //  1) ✅ 월 문서 1개 유지 + reports 맵 필드 누적
+  //     end_work_reports/area_<area>/months/<yyyyMM>
+  //       reports: { "<yyyy-MM-dd>": { ...dayPayload... }, ... }
+  //
+  //  2) ✅ 동일 batch 원자 upsert:
   //       - end_work_reports/area_<area>
   //       - end_work_reports/area_<area>/months/<yyyyMM>
-  //       - end_work_reports/area_<area>/months/<yyyyMM>/reports/<yyyy-MM-dd>
-  //     를 원자적으로 commit
-  //  3) monthKey(yyyyMM) 추가:
+  //
+  //  3) ✅ monthKey(yyyyMM) 저장
   //     DateFormat('yyyyMM').format(now)
-  //     일별 report 문서에도 monthKey 저장
-  //  4) 레거시 dot-path 저장 제거:
-  //     reports.<dateStr>.* payload 구성 삭제
+  //
+  //  4) ✅ Firestore 조회(get/query) 없음 (set/merge만 사용)
   // ─────────────────────────────────────────────────────────────
   Future<void> _submitFirstEndReport() async {
     if (_firstSubmitting) return;
@@ -860,7 +867,7 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
 
       final now = DateTime.now();
 
-      // yyyy-MM-dd (일별 doc id)
+      // yyyy-MM-dd (일자 키)
       final dateStr = DateFormat('yyyy-MM-dd').format(now);
 
       // yyyyMM (월 샤딩 key)
@@ -871,9 +878,8 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
       // refs
       final areaRef = _firestore.collection('end_work_reports').doc('area_$area');
       final monthRef = areaRef.collection('months').doc(monthKey);
-      final reportRef = monthRef.collection('reports').doc(dateStr);
 
-      // history entry (일별 report 문서 필드)
+      // history entry (일자 payload 내부 history 배열에 누적)
       final historyEntry = <String, dynamic>{
         'date': dateStr,
         'monthKey': monthKey,
@@ -893,22 +899,17 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
       final areaMetaPayload = <String, dynamic>{
         'division': division,
         'area': area,
+        // 서버 타임스탬프를 써도 무방하지만(조회 없음), 기존 파일 스타일 유지(ISO 문자열)
         'updatedAt': createdAtIso,
         'lastReportDate': dateStr,
         'lastMonthKey': monthKey,
       };
 
-      // 2) month meta upsert
-      final monthMetaPayload = <String, dynamic>{
-        'division': division,
-        'area': area,
-        'monthKey': monthKey,
-        'updatedAt': createdAtIso,
-        'lastReportDate': dateStr,
-      };
-
-      // 3) daily report upsert (신규 문서 기반 payload)
-      final dailyReportPayload = <String, dynamic>{
+      // 2) 월 문서 payload (meta + reports 맵 누적)
+      //
+      // reports: { "<yyyy-MM-dd>": { ...dayPayload... } }
+      // - merge: true 이므로 동일 월 문서 1개를 유지하면서 일자 키만 추가/갱신됨
+      final dayPayload = <String, dynamic>{
         'division': division,
         'area': area,
         'date': dateStr,
@@ -924,8 +925,22 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
         'createdAt': createdAtIso,
         'uploadedBy': userName,
 
-        // history는 "일별 report 문서"의 필드로 유지
+        // ✅ 월 문서 내부의 reports.<dateStr>.history 로 누적
+        // (Firestore 조회 없이도 arrayUnion 가능)
         'history': FieldValue.arrayUnion(<Map<String, dynamic>>[historyEntry]),
+      };
+
+      final monthPayload = <String, dynamic>{
+        'division': division,
+        'area': area,
+        'monthKey': monthKey,
+        'updatedAt': createdAtIso,
+        'lastReportDate': dateStr,
+
+        // ✅ 핵심: 일자별 보고를 reports 맵에 누적
+        'reports': <String, dynamic>{
+          dateStr: dayPayload,
+        },
       };
 
       await _runWithBlockingDialog(
@@ -935,8 +950,7 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
           final batch = _firestore.batch();
 
           batch.set(areaRef, areaMetaPayload, SetOptions(merge: true));
-          batch.set(monthRef, monthMetaPayload, SetOptions(merge: true));
-          batch.set(reportRef, dailyReportPayload, SetOptions(merge: true));
+          batch.set(monthRef, monthPayload, SetOptions(merge: true));
 
           await batch.commit();
         },
@@ -954,7 +968,8 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
           '• area: $area',
           '• division: $division',
           '• monthKey: $monthKey',
-          '• 저장 경로: end_work_reports/area_$area/months/$monthKey/reports/$dateStr',
+          '• 저장 문서: end_work_reports/area_$area/months/$monthKey',
+          '• 저장 필드: reports.$dateStr',
           '• 서버 저장 입고 대수(vehicleInput): ${vehicleInputCount}대',
           '• 서버 저장 출고 대수(vehicleOutput): ${vehicleOutputManual}대 (조회 없음 → 0)',
           '• metrics 스냅샷: ${snapshotLockedVehicleCount} / ${snapshotTotalLockedFee} (조회 없음 → 0)',

@@ -6,7 +6,6 @@ enum DocumentType {
   statementForm,
   workStartReportForm,
   workEndReportForm,
-  handoverForm,
 }
 
 @immutable

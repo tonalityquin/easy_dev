@@ -5,11 +5,10 @@ import '../../../../../../states/user/user_state.dart';
 import '../../../../../../states/area/area_state.dart';
 
 // ✅ 역할별로 다른 문서철 바텀시트를 사용하기 위해 두 파일 모두 import
-import 'dashboard_punch_recorder_section.dart';
-import 'documents/leader_document_box_sheet.dart';
-import 'documents/fielder_document_box_sheet.dart';
-
-import 'memo/dash_memo.dart';
+import '../../../../common_package/memo_package/lite_dash_memo.dart';
+import '../../../../common_package/sheet_tool/fielder_document_box_sheet.dart';
+import '../../../../common_package/sheet_tool/leader_document_box_sheet.dart';
+import 'widgets/dashboard_punch_recorder_section.dart';
 
 // ✅ [추가] 사진 전송(공용) 페이지
 import 'package:easydev/screens/common_package/camera_package/photo_transfer_mail_page.dart';
@@ -29,11 +28,11 @@ class _HomeDashBoardBottomSheetState extends State<HomeDashBoardBottomSheet> {
   Widget _buildScreenTag(BuildContext context) {
     final base = Theme.of(context).textTheme.labelSmall;
     final style = (base ??
-        const TextStyle(
-          fontSize: 11,
-          color: Colors.black54,
-          fontWeight: FontWeight.w600,
-        ))
+            const TextStyle(
+              fontSize: 11,
+              color: Colors.black54,
+              fontWeight: FontWeight.w600,
+            ))
         .copyWith(
       color: Colors.black54,
       fontWeight: FontWeight.w600,
@@ -148,9 +147,9 @@ class _HomeDashBoardBottomSheetState extends State<HomeDashBoardBottomSheet> {
                               label: const Text('메모'),
                               style: _outlinedWhiteBtnStyle(height: 55),
                               onPressed: () async {
-                                await DashMemo.init();
-                                DashMemo.mountIfNeeded();
-                                await DashMemo.togglePanel();
+                                await LiteDashMemo.init();
+                                LiteDashMemo.mountIfNeeded();
+                                await LiteDashMemo.togglePanel();
                               },
                             ),
                           ),

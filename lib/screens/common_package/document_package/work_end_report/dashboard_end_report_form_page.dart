@@ -1,71 +1,547 @@
 import 'dart:convert';
+import 'dart:developer' as dev;
 import 'dart:typed_data';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:googleapis/gmail/v1.dart' as gmail;
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../../../utils/google_auth_v7.dart';
-import '../../../../../../utils/api/email_config.dart';
-import 'lite_backup_styles.dart';
-import 'lite_backup_signature_dialog.dart';
+import '../../../../../../../repositories/plate_repo_services/plate_count_service.dart';
+import '../../../../../../../states/area/area_state.dart';
+import '../../../../../../../states/user/user_state.dart';
+import '../../../../../../../utils/gcs/gcs_uploader.dart';
+import '../../../../../../../utils/google_auth_v7.dart';
+import '../../../../../../../utils/api/email_config.dart';
+import '../../../../../../../utils/snackbar_helper.dart';
+import '../../../../../../../utils/block_dialogs/blocking_dialog.dart';
+import '../../../../../../../utils/block_dialogs/duration_blocking_dialog.dart';
+import '../../../simple_mode/sections/widgets/simple_backup/backup_signature_dialog.dart';
 
-/// 계약 형태
-enum ContractType {
-  contract, // 계약직
-  freelancer, // 프리랜서
+/// end-report 전용 컬러 팔레트
+/// DocumentType.handoverForm 의 기본 색상(0xFFEF6C53)을 기준으로
+/// 명암/채도를 추론하여 구성
+class EndReportColors {
+  EndReportColors._();
+
+  /// 기본 오렌지/레드 (handoverForm 기준 색)
+  static const Color primary = Color(0xFFEF6C53);
+
+  /// primary 보다 약간 어두운 톤 (아이콘/텍스트 강조)
+  static const Color primaryDark = Color(0xFFE15233);
+
+  /// primary 를 옅게 사용한 톤 (보더/칩/강조 배경)
+  static const Color primaryLight = Color(0xFFFFD2BC);
+
+  /// 아주 옅은 톤 (정보/알림 박스 배경)
+  static const Color primarySoft = Color(0xFFFFF3EC);
+
+  /// 페이지 전체 배경 톤
+  static const Color pageBackground = Color(0xFFF6F2EF);
 }
 
-class BackupFormPage extends StatefulWidget {
-  const BackupFormPage({super.key});
+/// end-report 전용 버튼 스타일
+class EndReportButtonStyles {
+  EndReportButtonStyles._();
+
+  /// 기본 메인 버튼 (Elevated)
+  static ButtonStyle primary() {
+    return ElevatedButton.styleFrom(
+      backgroundColor: EndReportColors.primary,
+      foregroundColor: Colors.white,
+      disabledBackgroundColor: EndReportColors.primaryLight,
+      disabledForegroundColor: Colors.white70,
+      elevation: 0,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+    );
+  }
+
+  /// 아웃라인 톤 버튼 (Elevated/Outlined 공용)
+  static ButtonStyle outlined() {
+    return ElevatedButton.styleFrom(
+      backgroundColor: Colors.white,
+      foregroundColor: EndReportColors.primaryDark,
+      disabledForegroundColor: Colors.black38,
+      elevation: 0,
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      side: const BorderSide(
+        color: EndReportColors.primaryLight,
+        width: 1,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+    );
+  }
+
+  /// 상단 AppBar, 작은 주요 버튼
+  static ButtonStyle smallPrimary() {
+    return ElevatedButton.styleFrom(
+      backgroundColor: EndReportColors.primary,
+      foregroundColor: Colors.white,
+      disabledBackgroundColor: EndReportColors.primaryLight,
+      disabledForegroundColor: Colors.white70,
+      elevation: 0,
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+      minimumSize: const Size(0, 32),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(999),
+      ),
+      textStyle: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+      ),
+    );
+  }
+
+  /// 작은 아웃라인 버튼 (서명 삭제 등)
+  static ButtonStyle smallOutlined() {
+    return OutlinedButton.styleFrom(
+      foregroundColor: EndReportColors.primaryDark,
+      disabledForegroundColor: Colors.black38,
+      side: const BorderSide(
+        color: EndReportColors.primaryLight,
+        width: 1,
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+      minimumSize: const Size(0, 32),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(999),
+      ),
+      textStyle: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w500,
+      ),
+    );
+  }
+}
+
+/// ─────────────────────────────────────────────────────────────
+/// EndWorkReportService / EndWorkReportController / Sheet 에 있던
+/// "업무 종료 서버 보고" 로직을 이 파일 안(SimpleEndWorkReportService)으로
+/// 옮긴 버전입니다.
+///
+/// 이제:
+///  - 2단계 "일일 차량 입고 대수"의 [1차 제출] 버튼 → 서버 보고(plates/GCS(logs)/Firestore/cleanup)
+///  - 5단계 "제출" 버튼 → 메일(PDF) 전송만 수행
+///
+/// [GCS 업로드 변경]
+/// - ✅ /logs 업로드는 유지 (uploadEndLogJson)
+/// - ❌ /reports 업로드는 제거 (uploadEndWorkReportJson 및 관련 처리 전부 삭제)
+///
+/// [Firestore 저장 변경(리팩터링)]
+/// - 기존: end_work_reports/area_<area>/months/<yyyyMM>/reports/<yyyy-MM-dd> (일자별 문서 생성)
+/// - 변경: end_work_reports/area_<area>/months/<yyyyMM> (월 단위 문서 1개)
+///          └ month 문서의 필드 "reports" 에 Map 형태로 일자별 엔트리를 추가
+///
+///   예) /end_work_reports/area_가로수길(캔버스랩)/months/202512
+///       {
+///         division: ...,
+///         area: ...,
+///         monthKey: "202512",
+///         updatedAt: serverTimestamp,
+///         lastReportDate: "2025-12-31",
+///         reports: {
+///           "2025-12-01": { ...dayPayload... },
+///           "2025-12-02": { ...dayPayload... },
+///           ...
+///         }
+///       }
+/// ─────────────────────────────────────────────────────────────
+
+dynamic _endReportJsonSafe(dynamic v) {
+  if (v == null) return null;
+
+  if (v is Timestamp) return v.toDate().toIso8601String();
+  if (v is DateTime) return v.toIso8601String();
+
+  if (v is GeoPoint) {
+    return <String, dynamic>{
+      '_type': 'GeoPoint',
+      'lat': v.latitude,
+      'lng': v.longitude,
+    };
+  }
+
+  if (v is DocumentReference) {
+    return <String, dynamic>{
+      '_type': 'DocumentReference',
+      'path': v.path,
+    };
+  }
+
+  if (v is num || v is String || v is bool) return v;
+
+  if (v is List) return v.map(_endReportJsonSafe).toList();
+  if (v is Map) {
+    return v.map((key, value) => MapEntry(key.toString(), _endReportJsonSafe(value)));
+  }
+
+  return v.toString();
+}
+
+class SimpleEndWorkReportResult {
+  final String division;
+  final String area;
+  final int vehicleInputCount;
+  final int vehicleOutputManual;
+  final int snapshotLockedVehicleCount;
+  final num snapshotTotalLockedFee;
+
+  final bool cleanupOk;
+  final bool firestoreSaveOk;
+
+  /// ✅ /logs 업로드 결과만 유지
+  final bool gcsLogsUploadOk;
+
+  /// ✅ logsUrl만 유지
+  final String? logsUrl;
+
+  const SimpleEndWorkReportResult({
+    required this.division,
+    required this.area,
+    required this.vehicleInputCount,
+    required this.vehicleOutputManual,
+    required this.snapshotLockedVehicleCount,
+    required this.snapshotTotalLockedFee,
+    required this.cleanupOk,
+    required this.firestoreSaveOk,
+    required this.gcsLogsUploadOk,
+    required this.logsUrl,
+  });
+}
+
+class SimpleEndWorkReportService {
+  final FirebaseFirestore _firestore;
+
+  SimpleEndWorkReportService({FirebaseFirestore? firestore}) : _firestore = firestore ?? FirebaseFirestore.instance;
+
+  Future<SimpleEndWorkReportResult> submitEndReport({
+    required String division,
+    required String area,
+    required String userName,
+    required int vehicleInputCount,
+    required int vehicleOutputManual,
+  }) async {
+    dev.log(
+      '[END] submitEndReport start: division=$division, area=$area, user=$userName',
+      name: 'SimpleEndWorkReportService',
+    );
+
+    // 1. plates 스냅샷 조회
+    QuerySnapshot<Map<String, dynamic>> platesSnap;
+    try {
+      dev.log('[END] query plates...', name: 'SimpleEndWorkReportService');
+      platesSnap = await _firestore
+          .collection('plates')
+          .where('type', isEqualTo: 'departure_completed')
+          .where('area', isEqualTo: area)
+          .where('isLockedFee', isEqualTo: true)
+          .get();
+    } catch (e, st) {
+      dev.log(
+        '[END] plates query failed',
+        name: 'SimpleEndWorkReportService',
+        error: e,
+        stackTrace: st,
+      );
+      throw Exception('출차 스냅샷 조회 실패: $e');
+    }
+
+    final int snapshotLockedVehicleCount = platesSnap.docs.length;
+
+    // 2. 잠금 요금 합계 계산
+    num snapshotTotalLockedFee = 0;
+    try {
+      for (final d in platesSnap.docs) {
+        final data = d.data();
+        num? fee = (data['lockedFeeAmount'] is num) ? data['lockedFeeAmount'] as num : null;
+
+        if (fee == null) {
+          final logs = data['logs'];
+          if (logs is List) {
+            for (final log in logs) {
+              if (log is Map && log['lockedFee'] is num) {
+                fee = log['lockedFee'] as num;
+              }
+            }
+          }
+        }
+
+        snapshotTotalLockedFee += (fee ?? 0);
+      }
+    } catch (e, st) {
+      dev.log(
+        '[END] fee sum failed',
+        name: 'SimpleEndWorkReportService',
+        error: e,
+        stackTrace: st,
+      );
+      throw Exception('요금 합계 계산 실패: $e');
+    }
+
+    // 3. 공통 리포트 로그 구성 (Firestore 저장에 사용)
+    final now = DateTime.now();
+    final dateStr = DateFormat('yyyy-MM-dd').format(now);
+
+    // ✅ 월 샤딩 키
+    final monthKey = DateFormat('yyyyMM').format(now);
+
+    final reportLog = <String, dynamic>{
+      'division': division,
+      'area': area,
+      'vehicleCount': <String, dynamic>{
+        'vehicleInput': vehicleInputCount,
+        'vehicleOutput': vehicleOutputManual,
+      },
+      'metrics': <String, dynamic>{
+        'snapshot_lockedVehicleCount': snapshotLockedVehicleCount,
+        'snapshot_totalLockedFee': snapshotTotalLockedFee,
+      },
+      'createdAt': now.toIso8601String(),
+      'uploadedBy': userName,
+    };
+
+    // 4. ❌ GCS - /reports 업로드 로직 제거됨 (uploadEndWorkReportJson 관련 전부 삭제)
+
+    // 5. ✅ GCS - /logs 업로드 (유지)
+    String? logsUrl;
+    bool gcsLogsUploadOk = true;
+    try {
+      dev.log('[END] upload logs...', name: 'SimpleEndWorkReportService');
+      final items = <Map<String, dynamic>>[
+        for (final d in platesSnap.docs)
+          <String, dynamic>{
+            'docId': d.id,
+            'data': _endReportJsonSafe(d.data()),
+          },
+      ];
+
+      logsUrl = await uploadEndLogJson(
+        report: <String, dynamic>{
+          'division': division,
+          'area': area,
+          'items': items,
+        },
+        division: division,
+        area: area,
+        userName: userName,
+      );
+      if (logsUrl == null) {
+        gcsLogsUploadOk = false;
+        dev.log(
+          '[END] upload logs returned null',
+          name: 'SimpleEndWorkReportService',
+        );
+      }
+    } catch (e, st) {
+      gcsLogsUploadOk = false;
+      dev.log(
+        '[END] upload logs exception',
+        name: 'SimpleEndWorkReportService',
+        error: e,
+        stackTrace: st,
+      );
+    }
+
+    // 6. Firestore - end_work_reports 저장 (✅ 월 단위 문서 + reports 맵 필드에 일자별 엔트리 추가)
+    bool firestoreSaveOk = true;
+    try {
+      dev.log(
+        '[END] save report to Firestore (monthly document + reports map)...',
+        name: 'SimpleEndWorkReportService',
+      );
+
+      // 스키마(리팩터링):
+      // end_work_reports/area_<area>
+      //   └ months/<yyyyMM>   (월 단위 문서 1개)
+      //       ├ division, area, monthKey, updatedAt, lastReportDate ...
+      //       └ reports: {
+      //            "<yyyy-MM-dd>": { ...dayPayload... },
+      //            ...
+      //          }
+      final areaRef = _firestore.collection('end_work_reports').doc('area_$area');
+      final monthRef = areaRef.collection('months').doc(monthKey);
+
+      final historyEntry = <String, dynamic>{
+        'date': dateStr,
+        'monthKey': monthKey,
+        'createdAt': reportLog['createdAt'],
+        'uploadedBy': userName,
+        'vehicleCount': reportLog['vehicleCount'],
+        'metrics': reportLog['metrics'],
+        if (logsUrl != null) 'logsUrl': logsUrl,
+      };
+
+      final dayPayload = <String, dynamic>{
+        'division': division,
+        'area': area,
+        'monthKey': monthKey,
+        'date': dateStr,
+        'vehicleCount': reportLog['vehicleCount'],
+        'metrics': reportLog['metrics'],
+        'createdAt': reportLog['createdAt'],
+        'uploadedBy': reportLog['uploadedBy'],
+        if (logsUrl != null) 'logsUrl': logsUrl,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'history': FieldValue.arrayUnion(<Map<String, dynamic>>[historyEntry]),
+      };
+
+      // ✅ 원자적 커밋(메타 + 월 문서 reports 맵 추가)
+      final batch = _firestore.batch();
+
+      // 6-1) area 메타(유지)
+      batch.set(
+        areaRef,
+        <String, dynamic>{
+          'division': division,
+          'area': area,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'lastMonthKey': monthKey,
+          'lastReportDate': dateStr,
+        },
+        SetOptions(merge: true),
+      );
+
+      // 6-2) month 문서(월 단위 1개) + reports 맵에 dateStr 엔트리 추가
+      //
+      // merge:true 로 set하면,
+      // - month 문서가 없으면 생성
+      // - 있으면 기존 필드는 유지하면서 reports 맵에 dateStr 키를 추가/갱신
+      // - reports.<dateStr>.history 는 arrayUnion 변환으로 누적
+      batch.set(
+        monthRef,
+        <String, dynamic>{
+          'division': division,
+          'area': area,
+          'monthKey': monthKey,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'lastReportDate': dateStr,
+          'reports': <String, dynamic>{
+            dateStr: dayPayload,
+          },
+        },
+        SetOptions(merge: true),
+      );
+
+      await batch.commit();
+    } catch (e, st) {
+      firestoreSaveOk = false;
+      dev.log(
+        '[END] Firestore save failed (end_work_reports monthly doc + reports map)',
+        name: 'SimpleEndWorkReportService',
+        error: e,
+        stackTrace: st,
+      );
+    }
+
+    // 7. plates / plate_counters cleanup
+    bool cleanupOk = true;
+    try {
+      dev.log(
+        '[END] cleanup plates & plate_counters...',
+        name: 'SimpleEndWorkReportService',
+      );
+
+      final batch = _firestore.batch();
+
+      for (final d in platesSnap.docs) {
+        batch.delete(d.reference);
+      }
+
+      final countersRef = _firestore.collection('plate_counters').doc('area_$area');
+      batch.set(
+        countersRef,
+        <String, dynamic>{
+          'departureCompletedEvents': 0,
+        },
+        SetOptions(merge: true),
+      );
+
+      await batch.commit();
+    } catch (e, st) {
+      cleanupOk = false;
+      dev.log(
+        '[END] cleanup failed',
+        name: 'SimpleEndWorkReportService',
+        error: e,
+        stackTrace: st,
+      );
+    }
+
+    dev.log('[END] submitEndReport done', name: 'SimpleEndWorkReportService');
+
+    return SimpleEndWorkReportResult(
+      division: division,
+      area: area,
+      vehicleInputCount: vehicleInputCount,
+      vehicleOutputManual: vehicleOutputManual,
+      snapshotLockedVehicleCount: snapshotLockedVehicleCount,
+      snapshotTotalLockedFee: snapshotTotalLockedFee,
+      cleanupOk: cleanupOk,
+      firestoreSaveOk: firestoreSaveOk,
+      gcsLogsUploadOk: gcsLogsUploadOk,
+      logsUrl: logsUrl,
+    );
+  }
+}
+
+/// ─────────────────────────────────────────────────────────────
+/// 여기부터 DashboardEndReportFormPage (UI)
+/// ─────────────────────────────────────────────────────────────
+
+class DashboardEndReportFormPage extends StatefulWidget {
+  const DashboardEndReportFormPage({super.key});
 
   @override
-  State<BackupFormPage> createState() => _BackupFormPageState();
+  State<DashboardEndReportFormPage> createState() => _DashboardEndReportFormPageState();
 }
 
-class _BackupFormPageState extends State<BackupFormPage> {
+class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage> {
   final _formKey = GlobalKey<FormState>();
 
-  // 기본 정보 컨트롤러
-  final _nameCtrl = TextEditingController();
-  final _rrnCtrl = TextEditingController();
-  final _positionCtrl = TextEditingController();
+  // 기본 정보 컨트롤러 (현재 UI에서는 사용하지 않지만, 향후 확장 고려해 유지)
   final _deptCtrl = TextEditingController();
+  final _nameCtrl = TextEditingController();
+  final _positionCtrl = TextEditingController();
 
-  // 3번 카드: 괄호 안 입력용 컨트롤러
-  // (   )으로 인해 (    )의 (   ) 시간 대의 업무에 공백이 발생했습니다.
-  // ... 향후 이에 대해서는 (    )로 처리됨을 인지합니다.
-  final _reasonCtrl = TextEditingController(); // 첫 번째 괄호
-  final _targetCtrl = TextEditingController(); // 두 번째 괄호
-  final _timeCtrl = TextEditingController(); // 세 번째 괄호 (시간대)
-  final _processCtrl = TextEditingController(); // 네 번째 괄호 (처리 방식)
+  final _contentCtrl = TextEditingController();
+  final _vehicleCountCtrl = TextEditingController(); // 차량 대수 입력
 
-  // 메일 제목/본문 컨트롤러
   final _mailSubjectCtrl = TextEditingController();
   final _mailBodyCtrl = TextEditingController();
 
-  // 포커스 노드
-  final _nameNode = FocusNode();
-  final _rrnNode = FocusNode();
-  final _positionNode = FocusNode();
   final _deptNode = FocusNode();
+  final _nameNode = FocusNode();
+  final _positionNode = FocusNode();
+  final _contentNode = FocusNode();
 
   Uint8List? _signaturePngBytes;
   DateTime? _signDateTime;
 
-  // 계약 형태: null = 미선택
-  ContractType? _contractType;
+  // 특이사항 여부: null = 미선택, true = 있음, false = 없음
+  bool? _hasSpecialNote;
 
-  // SharedPreferences에서 불러오는 선택 영역 (업무명)
+  // SharedPreferences에서 불러오는 선택 영역(업무명)
   String? _selectedArea;
 
   String get _signerName => _nameCtrl.text.trim();
 
-  bool _sending = false;
+  bool _sending = false; // 최종 메일 제출 중 여부
+  bool _firstSubmitting = false; // 1차 서버 보고 중 여부
+  bool _firstSubmittedCompleted = false; // 1차 서버 보고 성공 여부
+
+  // "일일 차량 입고 대수" 필드 입력/유효 여부
+  bool _isVehicleCountValid = false;
 
   // 페이지 컨트롤러 (섹션별 좌우 스와이프)
   final PageController _pageController = PageController();
@@ -73,12 +549,36 @@ class _BackupFormPageState extends State<BackupFormPage> {
   // 현재 페이지 인덱스 (0~4)
   int _currentPageIndex = 0;
 
+  // 키보드가 필드를 가리지 않도록 하기 위한 키
+  final GlobalKey _vehicleFieldKey = GlobalKey();
+  final GlobalKey _contentFieldKey = GlobalKey();
+
+  // 오늘 집계값 로드를 위한 PlateCountService
+  final PlateCountService _plateCountService = PlateCountService();
+
+  // 시스템 집계값(오늘 기준)
+  int _sysVehicleInput = 0; // 입차 집계
+  int _sysVehicleOutput = 0; // 출차 집계
+  int _sysDepartureExtra = 0; // 중복 입차 집계
+
+  int get _sysDepartureTotal => _sysVehicleOutput + _sysDepartureExtra;
+
+  /// "일일 차량 입고 대수" 참고용 시스템 기본 값
+  /// = 입차 + 출차 + 중복 입차
+  int get _sysVehicleFieldTotal => _sysVehicleInput + _sysVehicleOutput + _sysDepartureExtra;
+
   @override
   void initState() {
     super.initState();
     _nameCtrl.addListener(() => setState(() {}));
+    _vehicleCountCtrl.addListener(_onVehicleCountChanged);
     _updateMailBody(); // 메일 본문 자동 생성
     _loadSelectedArea();
+
+    // context 를 안전하게 쓰기 위해 frame 이후에 시스템 집계값 로드
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadSystemVehicleCount();
+    });
   }
 
   Future<void> _loadSelectedArea() async {
@@ -95,25 +595,61 @@ class _BackupFormPageState extends State<BackupFormPage> {
     }
   }
 
+  /// EndWorkReportController.loadInitialCounts 의
+  /// "입차/출차/중복 입차 집계값" 부분을 이 페이지로 옮긴 메서드.
+  ///
+  /// - AreaState.currentArea 기준으로
+  ///   PlateCountService.getParkingCompletedAggCount(area),
+  ///   PlateCountService.getDepartureCompletedAggCount(area),
+  ///   PlateCountService.getDepartureCompletedExtraCount(area)
+  ///   를 모두 호출해서 상태에 보관한다.
+  /// - "일일 차량 입고 대수" 필드는 항상 비어 있는 상태에서 시작하며
+  ///   시스템 집계값은 UI 카드로만 안내한다.
+  Future<void> _loadSystemVehicleCount() async {
+    try {
+      final areaState = context.read<AreaState>();
+      final area = areaState.currentArea.trim();
+      if (area.isEmpty) return;
+
+      final results = await Future.wait<int>([
+        _plateCountService.getParkingCompletedAggCount(area),
+        _plateCountService.getDepartureCompletedAggCount(area),
+        _plateCountService.getDepartureCompletedExtraCount(area),
+      ]);
+
+      if (!mounted) return;
+
+      setState(() {
+        _sysVehicleInput = results[0];
+        _sysVehicleOutput = results[1];
+        _sysDepartureExtra = results[2];
+      });
+
+      _updateMailSubject();
+    } catch (e, st) {
+      dev.log(
+        '[END][Dashboard] loadSystemVehicleCount failed',
+        name: 'DashboardEndReportFormPage',
+        error: e,
+        stackTrace: st,
+      );
+    }
+  }
+
   @override
   void dispose() {
-    _nameCtrl.dispose();
-    _rrnCtrl.dispose();
-    _positionCtrl.dispose();
     _deptCtrl.dispose();
-
-    _reasonCtrl.dispose();
-    _targetCtrl.dispose();
-    _timeCtrl.dispose();
-    _processCtrl.dispose();
-
+    _nameCtrl.dispose();
+    _positionCtrl.dispose();
+    _contentCtrl.dispose();
+    _vehicleCountCtrl.dispose();
     _mailSubjectCtrl.dispose();
     _mailBodyCtrl.dispose();
 
-    _nameNode.dispose();
-    _rrnNode.dispose();
-    _positionNode.dispose();
     _deptNode.dispose();
+    _nameNode.dispose();
+    _positionNode.dispose();
+    _contentNode.dispose();
 
     _pageController.dispose();
 
@@ -147,77 +683,51 @@ class _BackupFormPageState extends State<BackupFormPage> {
     return '$y$m$d';
   }
 
-  String _contractTypeText(ContractType? value) {
-    if (value == null) return '미선택';
-    switch (value) {
-      case ContractType.contract:
-        return '계약직';
-      case ContractType.freelancer:
-        return '프리랜서';
-    }
-  }
-
-  /// 3번 카드: 괄호 4개를 합쳐 실제 문장을 만들어주는 함수
-  String _buildBodySentence() {
-    final reason = _reasonCtrl.text.trim();
-    final target = _targetCtrl.text.trim();
-    final time = _timeCtrl.text.trim();
-    final process = _processCtrl.text.trim();
-
-    return '$reason으로 인해 $target의 $time 시간 대의 업무에 공백이 발생했습니다. '
-        '본 문서를 통해 해당 공백에 대한 인적 지원을 받고자 하오며 향후 이에 대해서는 $process로 처리됨을 인지합니다.';
-  }
-
   void _reset() {
     HapticFeedback.lightImpact();
     _formKey.currentState?.reset();
-
-    _nameCtrl.clear();
-    _rrnCtrl.clear();
-    _positionCtrl.clear();
     _deptCtrl.clear();
-
-    _reasonCtrl.clear();
-    _targetCtrl.clear();
-    _timeCtrl.clear();
-    _processCtrl.clear();
-
+    _nameCtrl.clear();
+    _positionCtrl.clear();
+    _contentCtrl.clear();
+    _vehicleCountCtrl.clear();
     _mailSubjectCtrl.clear();
     _mailBodyCtrl.clear();
-
     setState(() {
       _signaturePngBytes = null;
       _signDateTime = null;
-      _contractType = null;
+      _hasSpecialNote = null;
       _currentPageIndex = 0;
+      _isVehicleCountValid = false;
     });
-
-    // 리셋 후에도 제목/본문은 기본값으로 자동 생성
     _updateMailSubject();
     _updateMailBody(force: true);
-
-    // 페이지도 첫 페이지로
     _pageController.jumpToPage(0);
   }
 
-  /// 계약 형태 + SharedPreferences 선택 영역에 따라 메일 제목 자동 생성
+  /// 특이사항 선택 값 + SharedPreferences 선택 영역 + 차량 대수에 따라 메일 제목 자동 생성
   void _updateMailSubject() {
     final now = DateTime.now();
     final month = now.month;
     final day = now.day;
 
-    // 계약 형태 텍스트
-    String suffixType = '';
-    if (_contractType != null) {
-      suffixType = ' - ${_contractTypeText(_contractType)}';
+    String suffixSpecial = '';
+    if (_hasSpecialNote != null) {
+      suffixSpecial = _hasSpecialNote! ? ' - 특이사항 있음' : ' - 특이사항 없음';
     }
 
-    // SharedPreferences에 저장된 selectedArea 사용 (없으면 '업무' 기본값)
-    final area =
-    (_selectedArea != null && _selectedArea!.trim().isNotEmpty) ? _selectedArea!.trim() : '업무';
+    String vehiclePart = '';
+    final vehicleRaw = _vehicleCountCtrl.text.trim();
+    if (vehicleRaw.isNotEmpty) {
+      final count = int.tryParse(vehicleRaw);
+      if (count != null) {
+        vehiclePart = ' ${count}대';
+      }
+    }
 
-    // 예: 콜센터 연차(결근) 지원 신청서 – 11월 25일자 - 계약직
-    _mailSubjectCtrl.text = '$area 연차(결근) 지원 신청서 – ${month}월 ${day}일자$suffixType';
+    final area = (_selectedArea != null && _selectedArea!.trim().isNotEmpty) ? _selectedArea!.trim() : '업무';
+
+    _mailSubjectCtrl.text = '$area 업무 종료 보고서 – ${month}월 ${day}일자$vehiclePart$suffixSpecial';
   }
 
   /// 메일 본문 자동 생성 (작성 일시 포함)
@@ -229,7 +739,21 @@ class _BackupFormPageState extends State<BackupFormPage> {
     final d = now.day;
     final hh = now.hour.toString().padLeft(2, '0');
     final mm = now.minute.toString().padLeft(2, '0');
-    _mailBodyCtrl.text = '본 신청서는 ${y}년 ${m}월 ${d}일 ${hh}시 ${mm}분 기준으로 작성된 연차(결근) 지원 신청서입니다.';
+    _mailBodyCtrl.text = '본 보고서는 ${y}년 ${m}월 ${d}일 ${hh}시 ${mm}분 기준으로 작성된 업무 종료 보고서입니다.';
+  }
+
+  /// 일일 차량 입고 대수 필드 변경 시:
+  ///  - 숫자만 입력되었는지 검증
+  ///  - 비어 있지 않고 숫자만이면 1차 제출 버튼 활성화
+  void _onVehicleCountChanged() {
+    final raw = _vehicleCountCtrl.text.trim();
+    final isValid = raw.isNotEmpty && RegExp(r'^\d+$').hasMatch(raw);
+    if (_isVehicleCountValid != isValid) {
+      setState(() {
+        _isVehicleCountValid = isValid;
+      });
+    }
+    _updateMailSubject();
   }
 
   String _buildPreviewText(BuildContext context) {
@@ -238,25 +762,19 @@ class _BackupFormPageState extends State<BackupFormPage> {
         '${_signDateTime != null ? _fmtCompact(_signDateTime!) : "저장 시각 미기록"}'
         : '전자서명: (미첨부)';
 
-    final contractText = _contractTypeText(_contractType);
-    final name = _nameCtrl.text.trim().isEmpty ? '(성명 미입력)' : _nameCtrl.text.trim();
-    final rrn = _rrnCtrl.text.trim().isEmpty ? '(주민등록번호 미입력)' : _rrnCtrl.text.trim();
-    final position = _positionCtrl.text.trim().isEmpty ? '(직위 미입력)' : _positionCtrl.text.trim();
-    final dept = _deptCtrl.text.trim().isEmpty ? '(부서명 미입력)' : _deptCtrl.text.trim();
+    final specialText = _hasSpecialNote == null ? '미선택' : (_hasSpecialNote! ? '있음' : '없음');
 
-    final bodySentence = _buildBodySentence();
+    final vehicleRaw = _vehicleCountCtrl.text.trim();
+    final vehicleText = vehicleRaw.isEmpty ? '입력 안 됨' : '$vehicleRaw대';
 
     return [
-      '— 연차(결근) 지원 신청서 —',
+      '— 업무 종료 보고서 —',
       '',
-      '계약 형태: $contractText',
-      '성명: $name',
-      '주민등록번호: $rrn',
-      '직위: $position',
-      '부서명: $dept',
+      '특이사항: $specialText',
+      '일일 차량 입고 대수: $vehicleText',
       '',
-      '[업무 공백 및 인력 지원 요청]',
-      bodySentence,
+      '[업무 내용]',
+      _contentCtrl.text,
       '',
       signInfo,
       '작성일: ${_fmtDT(context, DateTime.now())}',
@@ -268,14 +786,15 @@ class _BackupFormPageState extends State<BackupFormPage> {
 
   Future<void> _showPreview() async {
     HapticFeedback.lightImpact();
-    _updateMailBody(); // 미리보기 전에 본문이 비어있으면 자동 생성
+    _updateMailBody();
     final text = _buildPreviewText(context);
 
-    final contractText = _contractTypeText(_contractType);
+    final specialText = _hasSpecialNote == null ? '미선택' : (_hasSpecialNote! ? '있음' : '없음');
+    final vehicleRaw = _vehicleCountCtrl.text.trim();
+    final vehicleText = vehicleRaw.isEmpty ? '입력 안 됨' : '$vehicleRaw대';
     final signName = _signerName.isEmpty ? '이름 미입력' : _signerName;
     final signTimeText = _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
     final createdAtText = _fmtDT(context, DateTime.now());
-    final bodySentence = _buildBodySentence();
 
     Widget _infoPill(IconData icon, String label, String value) {
       return Container(
@@ -337,12 +856,11 @@ class _BackupFormPageState extends State<BackupFormPage> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // 상단 헤더 바
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.fromLTRB(20, 14, 16, 12),
                             decoration: const BoxDecoration(
-                              color: BackupColors.dark,
+                              color: EndReportColors.primaryDark,
                             ),
                             child: Row(
                               children: [
@@ -356,7 +874,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        '연차(결근) 지원 신청서 미리보기',
+                                        '업무 종료 보고서 미리보기',
                                         style: theme.textTheme.titleMedium?.copyWith(
                                           color: Colors.white,
                                           fontWeight: FontWeight.w600,
@@ -364,7 +882,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
-                                        '전송 전 신청서 내용을 한 번 더 확인해 주세요.',
+                                        '전송 전 보고서 내용을 한 번 더 확인해 주세요.',
                                         style: theme.textTheme.bodySmall?.copyWith(
                                           color: Colors.white.withOpacity(0.8),
                                         ),
@@ -383,8 +901,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
                               ],
                             ),
                           ),
-
-                          // 본문 스크롤 영역
                           Flexible(
                             child: Scrollbar(
                               child: SingleChildScrollView(
@@ -392,7 +908,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
-                                    // 상단 요약 배지들
                                     Wrap(
                                       spacing: 8,
                                       runSpacing: 8,
@@ -403,15 +918,18 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                           createdAtText,
                                         ),
                                         _infoPill(
-                                          Icons.work_outline,
-                                          '계약 형태',
-                                          contractText,
+                                          Icons.label_important_outline,
+                                          '특이사항',
+                                          specialText,
+                                        ),
+                                        _infoPill(
+                                          Icons.directions_car_outlined,
+                                          '일일 차량 입고 대수',
+                                          vehicleText,
                                         ),
                                       ],
                                     ),
                                     const SizedBox(height: 16),
-
-                                    // 메일 정보 카드
                                     Container(
                                       decoration: BoxDecoration(
                                         color: const Color(0xFFF9FAFB),
@@ -429,14 +947,14 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                               const Icon(
                                                 Icons.email_outlined,
                                                 size: 18,
-                                                color: BackupColors.dark,
+                                                color: EndReportColors.primaryDark,
                                               ),
                                               const SizedBox(width: 6),
                                               Text(
                                                 '메일 전송 정보',
                                                 style: theme.textTheme.bodyMedium?.copyWith(
                                                   fontWeight: FontWeight.w600,
-                                                  color: BackupColors.dark,
+                                                  color: EndReportColors.primaryDark,
                                                 ),
                                               ),
                                             ],
@@ -485,10 +1003,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                         ],
                                       ),
                                     ),
-
                                     const SizedBox(height: 16),
-
-                                    // 신청 사유(고정 문장) 카드
                                     Container(
                                       decoration: BoxDecoration(
                                         color: Colors.white,
@@ -504,16 +1019,16 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                           Row(
                                             children: [
                                               const Icon(
-                                                Icons.description_outlined,
+                                                Icons.report_problem_outlined,
                                                 size: 18,
-                                                color: BackupColors.dark,
+                                                color: EndReportColors.primaryDark,
                                               ),
                                               const SizedBox(width: 6),
                                               Text(
-                                                '업무 공백 및 인력 지원 문장',
+                                                '특이 사항 상세 내용',
                                                 style: theme.textTheme.bodyMedium?.copyWith(
                                                   fontWeight: FontWeight.w600,
-                                                  color: BackupColors.dark,
+                                                  color: EndReportColors.primaryDark,
                                                 ),
                                               ),
                                             ],
@@ -532,24 +1047,17 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                               ),
                                             ),
                                             child: Text(
-                                              bodySentence.trim().isEmpty
-                                                  ? '입력된 문장이 없습니다.'
-                                                  : bodySentence,
+                                              _contentCtrl.text.trim().isEmpty ? '입력된 특이 사항이 없습니다.' : _contentCtrl.text,
                                               style: theme.textTheme.bodyMedium?.copyWith(
                                                 height: 1.4,
-                                                color: bodySentence.trim().isEmpty
-                                                    ? Colors.grey[600]
-                                                    : Colors.black,
+                                                color: _contentCtrl.text.trim().isEmpty ? Colors.grey[600] : Colors.black,
                                               ),
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
-
                                     const SizedBox(height: 16),
-
-                                    // 서명 정보 + 이미지
                                     Container(
                                       decoration: BoxDecoration(
                                         color: Colors.white,
@@ -567,14 +1075,14 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                               const Icon(
                                                 Icons.edit_outlined,
                                                 size: 18,
-                                                color: BackupColors.dark,
+                                                color: EndReportColors.primaryDark,
                                               ),
                                               const SizedBox(width: 6),
                                               Text(
                                                 '전자서명 정보',
                                                 style: theme.textTheme.bodyMedium?.copyWith(
                                                   fontWeight: FontWeight.w600,
-                                                  color: BackupColors.dark,
+                                                  color: EndReportColors.primaryDark,
                                                 ),
                                               ),
                                             ],
@@ -661,15 +1169,15 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                         ],
                                       ),
                                     ),
-
                                     const SizedBox(height: 12),
-
-                                    // 원본 텍스트 안내
                                     Container(
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFFEEF2FF),
+                                        color: EndReportColors.primarySoft,
                                         borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: EndReportColors.primaryLight,
+                                        ),
                                       ),
                                       child: Row(
                                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -677,7 +1185,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                           const Icon(
                                             Icons.info_outline,
                                             size: 18,
-                                            color: Color(0xFF4F46E5),
+                                            color: EndReportColors.primaryDark,
                                           ),
                                           const SizedBox(width: 8),
                                           Expanded(
@@ -698,8 +1206,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
                               ),
                             ),
                           ),
-
-                          // 하단 액션 영역
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
@@ -716,9 +1222,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                 TextButton.icon(
                                   onPressed: () async {
                                     HapticFeedback.selectionClick();
-                                    await Clipboard.setData(
-                                      ClipboardData(text: text),
-                                    );
+                                    await Clipboard.setData(ClipboardData(text: text));
                                     if (!mounted) return;
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       const SnackBar(
@@ -750,15 +1254,155 @@ class _BackupFormPageState extends State<BackupFormPage> {
     );
   }
 
+  /// 2단계 "일일 차량 입고 대수"에서 사용하는 1차 제출 버튼 핸들러.
+  Future<void> _submitFirstEndReport() async {
+    if (_firstSubmitting) return;
+
+    final raw = _vehicleCountCtrl.text.trim();
+
+    // 필수 입력 + 숫자 검증
+    if (raw.isEmpty) {
+      showFailedSnackbar(context, '일일 차량 입고 대수를 입력해 주세요.');
+      return;
+    }
+    if (!RegExp(r'^\d+$').hasMatch(raw)) {
+      showFailedSnackbar(context, '일일 차량 입고 대수에는 숫자만 입력해 주세요.');
+      return;
+    }
+
+    final areaState = context.read<AreaState>();
+    final userState = context.read<UserState>();
+
+    final area = areaState.currentArea.trim();
+    final division = areaState.currentDivision.trim();
+    final userName = userState.name.trim();
+
+    if (area.isEmpty || division.isEmpty || userName.isEmpty) {
+      showFailedSnackbar(
+        context,
+        '근무 지역/부문/사용자 정보가 없어 1차 업무 종료 보고를 진행할 수 없습니다.\n'
+            '설정 화면에서 정보를 확인해 주세요.',
+      );
+      return;
+    }
+
+    HapticFeedback.lightImpact();
+
+    // 1단계: 15초간 취소 가능 다이얼로그
+    final proceed = await showDurationBlockingDialog(
+      context,
+      message: '일일 차량 입고 대수를 기준으로 1차 업무 종료 보고를 서버에 전송합니다.\n'
+          '약 15초 가량 소요되며, 취소하려면 아래 [취소] 버튼을 눌러 주세요.\n'
+          '중간에 화면을 이탈하지 마세요.',
+      duration: const Duration(seconds: 15),
+    );
+
+    if (!proceed) {
+      if (!mounted) return;
+      showFailedSnackbar(context, '1차 업무 종료 보고가 취소되었습니다.');
+      return;
+    }
+
+    setState(() => _firstSubmitting = true);
+
+    try {
+      // 화면에 표시된 "일일 차량 입고 대수" 값은 사용자가 직접 입력한 값이며,
+      // 서버에 저장되는 vehicleInputCount 는 "입차 + 중복 입차"만 사용한다.
+      final inputFromText = int.tryParse(raw);
+      final vehicleFieldValue = inputFromText ?? _sysVehicleFieldTotal;
+
+      // 백엔드용: 입차(plates: parking_completed) + 중복 입차(plate_counters.departureCompletedEvents)
+      final vehicleInputCount = _sysVehicleInput + _sysDepartureExtra;
+
+      // 백엔드용: 최종 출차 수 = 출차(plates: departure_completed & isLockedFee=true) + 중복 입차
+      final vehicleOutputManual = _sysDepartureTotal;
+
+      dev.log(
+        '[END][Dashboard] first submit counts (area=$area, division=$division, user=$userName) '
+            'sysParking=$_sysVehicleInput, sysDeparture=$_sysVehicleOutput, sysExtra=$_sysDepartureExtra, '
+            'uiField=$vehicleFieldValue, vehicleInput(parking+extra)=$vehicleInputCount, '
+            'vehicleOutput(departure+extra)=$vehicleOutputManual',
+        name: 'DashboardEndReportFormPage',
+      );
+
+      final service = SimpleEndWorkReportService();
+      SimpleEndWorkReportResult? result;
+
+      await runWithBlockingDialog(
+        context: context,
+        message: '1차 업무 종료 보고를 처리 중입니다. 잠시만 기다려 주세요...',
+        task: () async {
+          result = await service.submitEndReport(
+            division: division,
+            area: area,
+            userName: userName,
+            vehicleInputCount: vehicleInputCount,
+            vehicleOutputManual: vehicleOutputManual,
+          );
+        },
+      );
+
+      if (!mounted) return;
+
+      if (result == null) {
+        showFailedSnackbar(
+          context,
+          '1차 업무 종료 보고 처리 결과를 가져오지 못했습니다. 네트워크 상태를 확인 후 다시 시도해 주세요.',
+        );
+        return;
+      }
+
+      final r = result!;
+      final lines = <String>[
+        '1차 업무 종료 보고 완료',
+        '• 화면 일일 차량 입고 대수(사용자 입력): ${vehicleFieldValue}대',
+        '• 서버 저장 입고 대수(입차+중복 입차): ${r.vehicleInputCount}대',
+        '• 사용자 최종 출차 수(출차+중복 입차): ${r.vehicleOutputManual}대',
+        '• 스냅샷(plates: 정산 문서 수/합계요금): ${r.snapshotLockedVehicleCount} / ${r.snapshotTotalLockedFee}',
+      ];
+
+      if (!r.cleanupOk) {
+        lines.add('• 주의: plates/plate_counters 정리가 일부 실패했습니다. 관리자에게 문의하세요.');
+      }
+      if (!r.firestoreSaveOk) {
+        lines.add('• Firestore(end_work_reports) 저장에 실패했습니다.');
+      }
+      if (!r.gcsLogsUploadOk) {
+        lines.add('• GCS 로그 파일(/logs) 업로드에 실패했습니다. 관리자에게 문의하세요.');
+      }
+
+      showSuccessSnackbar(context, lines.join('\n'));
+
+      // 1차 제출을 성공적으로 마친 경우 이후 페이지로 스와이프 가능
+      setState(() {
+        _firstSubmittedCompleted = true;
+      });
+    } catch (e, st) {
+      dev.log(
+        '[END][Dashboard] first submit error',
+        name: 'DashboardEndReportFormPage',
+        error: e,
+        stackTrace: st,
+      );
+      if (!mounted) return;
+      showFailedSnackbar(
+        context,
+        '예기치 못한 오류로 1차 업무 종료 보고에 실패했습니다: $e',
+      );
+    } finally {
+      if (mounted) setState(() => _firstSubmitting = false);
+    }
+  }
+
+  /// 최종 "제출" 버튼:
+  ///  - 메일(PDF) 전송만 수행
   Future<void> _submit() async {
-    // 1) 폼 필드 검증
     if (!_formKey.currentState!.validate()) return;
 
-    // 2) 계약 형태 필수 선택
-    if (_contractType == null) {
+    if (_hasSpecialNote == null) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('계약 형태(계약직/프리랜서)를 선택해 주세요.')),
+        const SnackBar(content: Text('특이사항 여부를 선택해 주세요.')),
       );
       _pageController.animateToPage(
         0,
@@ -786,7 +1430,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
       final toCsv = cfg.to.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).join(', ');
 
       final subject = _mailSubjectCtrl.text.trim();
-      // 제출 시점 기준으로 본문 시간 강제 갱신
       _updateMailBody(force: true);
       final body = _mailBodyCtrl.text.trim();
       if (subject.isEmpty) {
@@ -800,8 +1443,9 @@ class _BackupFormPageState extends State<BackupFormPage> {
       final pdfBytes = await _buildPdfBytes();
       final now = DateTime.now();
       final nameForFile = _nameCtrl.text.trim().isEmpty ? '무기명' : _nameCtrl.text.trim();
-      final filename = _safeFileName('연차결근지원신청서_${nameForFile}_${_dateTag(now)}');
+      final filename = _safeFileName('업무종료보고서_${nameForFile}_${_dateTag(now)}');
 
+      // 메일 전송
       await _sendEmailViaGmail(
         pdfBytes: pdfBytes,
         filename: '$filename.pdf',
@@ -811,13 +1455,26 @@ class _BackupFormPageState extends State<BackupFormPage> {
       );
 
       if (!mounted) return;
+
+      final lines = <String>[
+        '메일 전송 완료',
+        '• 제목: $subject',
+        '• 수신자: $toCsv',
+      ];
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('메일 전송 완료')),
+        SnackBar(content: Text(lines.join('\n'))),
       );
-    } catch (e) {
+    } catch (e, st) {
+      dev.log(
+        '[END][Dashboard] submit error',
+        name: 'DashboardEndReportFormPage',
+        error: e,
+        stackTrace: st,
+      );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('메일 전송 실패: $e')),
+        SnackBar(content: Text('메일 전송 중 오류: $e')),
       );
     } finally {
       if (mounted) setState(() => _sending = false);
@@ -825,7 +1482,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
   }
 
   String _safeFileName(String raw) {
-    final s = raw.trim().isEmpty ? '연차결근지원신청서' : raw.trim();
+    final s = raw.trim().isEmpty ? '업무종료보고서' : raw.trim();
     return s.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
   }
 
@@ -856,20 +1513,14 @@ class _BackupFormPageState extends State<BackupFormPage> {
 
     final doc = pw.Document();
 
-    final contractText = _contractTypeText(_contractType);
-    final name = _nameCtrl.text.trim().isEmpty ? '-' : _nameCtrl.text.trim();
-    final rrn = _rrnCtrl.text.trim().isEmpty ? '-' : _rrnCtrl.text.trim();
-    final position = _positionCtrl.text.trim().isEmpty ? '-' : _positionCtrl.text.trim();
-    final dept = _deptCtrl.text.trim().isEmpty ? '-' : _deptCtrl.text.trim();
-    final bodySentence = _buildBodySentence();
+    final specialText = _hasSpecialNote == null ? '미선택' : (_hasSpecialNote! ? '있음' : '없음');
 
-    // 상단 간단 필드
+    final vehicleRaw = _vehicleCountCtrl.text.trim();
+    final vehicleText = vehicleRaw.isEmpty ? '입력 안 됨' : '$vehicleRaw대';
+
     final fields = <MapEntry<String, String>>[
-      MapEntry('계약 형태', contractText),
-      MapEntry('성명', name),
-      MapEntry('주민등록번호', rrn),
-      MapEntry('직위', position),
-      MapEntry('부서명', dept),
+      MapEntry('특이사항', specialText),
+      MapEntry('일일 차량 입고 대수', vehicleText),
     ];
 
     pw.Widget buildFieldTable() => pw.Table(
@@ -998,7 +1649,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
         build: (context) => [
           pw.Center(
             child: pw.Text(
-              '연차(결근) 지원 신청서',
+              '업무 종료 보고서',
               style: pw.TextStyle(
                 fontSize: 20,
                 fontWeight: pw.FontWeight.bold,
@@ -1007,7 +1658,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
           ),
           pw.SizedBox(height: 12),
           buildFieldTable(),
-          buildSection('[업무 공백 및 인력 지원 요청]', bodySentence),
+          buildSection('[업무 내용]', _contentCtrl.text),
           buildSignature(),
         ],
         footer: (context) => pw.Align(
@@ -1083,7 +1734,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(
-          color: BackupColors.base,
+          color: EndReportColors.primary,
           width: 1.6,
         ),
       ),
@@ -1129,6 +1780,35 @@ class _BackupFormPageState extends State<BackupFormPage> {
 
   Widget _gap(double h) => SizedBox(height: h);
 
+  /// 시스템 집계 수치를 한 줄로 표시하는 small row 위젯
+  Widget _buildMetricRow(
+      String label,
+      String value, {
+        bool isEmphasis = false,
+      }) {
+    final textTheme = Theme.of(context).textTheme;
+
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            style: textTheme.bodySmall?.copyWith(
+              color: Colors.black54,
+            ),
+          ),
+        ),
+        Text(
+          value,
+          style: textTheme.bodySmall?.copyWith(
+            fontWeight: isEmphasis ? FontWeight.w700 : FontWeight.w600,
+            color: isEmphasis ? EndReportColors.primaryDark : Colors.black87,
+          ),
+        ),
+      ],
+    );
+  }
+
   Future<void> _openSignatureDialog() async {
     HapticFeedback.selectionClick();
     final result = await showGeneralDialog<SignatureResult>(
@@ -1161,16 +1841,13 @@ class _BackupFormPageState extends State<BackupFormPage> {
     }
   }
 
-  // ===== 섹션별 본문 위젯들 =====
-
-  /// 1. 계약 형태 선택 (계약직 / 프리랜서)
-  Widget _buildContractTypeBody() {
+  Widget _buildSpecialNoteBody() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '지원 신청자의 계약 형태를 선택해 주세요.\n'
-              '계약직 또는 프리랜서 중 하나를 선택합니다.',
+          '오늘 업무 진행 중 특이사항이 있었는지 선택해 주세요.\n'
+              '(예: 장애, 클레임, 일정 지연, 긴급 지원 등)',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             height: 1.4,
           ),
@@ -1183,7 +1860,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
                 onPressed: () {
                   HapticFeedback.selectionClick();
                   setState(() {
-                    _contractType = ContractType.contract;
+                    _hasSpecialNote = false;
                     _updateMailSubject();
                   });
                   _pageController.nextPage(
@@ -1191,10 +1868,8 @@ class _BackupFormPageState extends State<BackupFormPage> {
                     curve: Curves.easeOut,
                   );
                 },
-                style: _contractType == ContractType.contract
-                    ? BackupButtonStyles.primary()
-                    : BackupButtonStyles.outlined(),
-                child: const Text('계약직'),
+                style: _hasSpecialNote == false ? EndReportButtonStyles.primary() : EndReportButtonStyles.outlined(),
+                child: const Text('특이사항 없음'),
               ),
             ),
             const SizedBox(width: 12),
@@ -1203,7 +1878,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
                 onPressed: () {
                   HapticFeedback.selectionClick();
                   setState(() {
-                    _contractType = ContractType.freelancer;
+                    _hasSpecialNote = true;
                     _updateMailSubject();
                   });
                   _pageController.nextPage(
@@ -1211,10 +1886,8 @@ class _BackupFormPageState extends State<BackupFormPage> {
                     curve: Curves.easeOut,
                   );
                 },
-                style: _contractType == ContractType.freelancer
-                    ? BackupButtonStyles.primary()
-                    : BackupButtonStyles.outlined(),
-                child: const Text('프리랜서'),
+                style: _hasSpecialNote == true ? EndReportButtonStyles.primary() : EndReportButtonStyles.outlined(),
+                child: const Text('특이사항 있음'),
               ),
             ),
           ],
@@ -1230,232 +1903,197 @@ class _BackupFormPageState extends State<BackupFormPage> {
     );
   }
 
-  /// 2. 성명 / 주민번호 / 직위 / 부서명
-  Widget _buildBasicInfoBody() {
-    final theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '성명, 주민등록번호, 직위, 부서명을 입력해 주세요.\n'
-              '입력한 정보는 PDF 신청서 및 메일 본문에 함께 포함됩니다.',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            height: 1.4,
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextFormField(
-          controller: _nameCtrl,
-          focusNode: _nameNode,
-          decoration: _inputDec(
-            labelText: '성명 (필수)',
-            hintText: '예: 홍길동',
-          ),
-          validator: (v) {
-            if (v == null || v.trim().isEmpty) {
-              return '성명을 입력해 주세요.';
-            }
-            return null;
-          },
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: _rrnCtrl,
-          focusNode: _rrnNode,
-          decoration: _inputDec(
-            labelText: '주민등록번호 (필수)',
-            hintText: '예: 900101-1******',
-          ),
-          validator: (v) {
-            if (v == null || v.trim().isEmpty) {
-              return '주민등록번호를 입력해 주세요.';
-            }
-            return null;
-          },
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: _positionCtrl,
-          focusNode: _positionNode,
-          decoration: _inputDec(
-            labelText: '직위 (필수)',
-            hintText: '예: 매니저, 사원',
-          ),
-          validator: (v) {
-            if (v == null || v.trim().isEmpty) {
-              return '직위를 입력해 주세요.';
-            }
-            return null;
-          },
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: _deptCtrl,
-          focusNode: _deptNode,
-          decoration: _inputDec(
-            labelText: '부서명 (필수)',
-            hintText: '예: 콜센터팀, 운영팀',
-          ),
-          validator: (v) {
-            if (v == null || v.trim().isEmpty) {
-              return '부서명을 입력해 주세요.';
-            }
-            return null;
-          },
-        ),
-        const SizedBox(height: 6),
-        Text(
-          '※ 위 정보는 인사/관리 부서에서 근태 및 지원 내역 확인 시 참고됩니다.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: Colors.black54,
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// 3. 고정 본문 + 괄호 4개 입력
-  /// (   )으로 인해 (    )의 (   ) 시간 대의 업무에 공백이 발생했습니다.
-  /// 본 문서를 통해 ... (    )로 처리됨을 인지합니다.
-  Widget _buildBlankSentenceBody() {
-    final theme = Theme.of(context);
-    final sentencePreview = _buildBodySentence();
+  /// "일일 차량 입고 대수" 섹션
+  Widget _buildVehicleBody() {
+    final textTheme = Theme.of(context).textTheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '다음 고정 문장을 기준으로 괄호 안의 내용만 입력해 주세요.\n'
-              '문장 구조(조사, 어미 등)는 수정할 수 없고, 괄호 안 텍스트만 변경 가능합니다.',
-          style: theme.textTheme.bodyMedium?.copyWith(
+          '오늘 하루 동안 해당 업무로 입고된 차량 대수를 입력해 주세요.',
+          style: textTheme.bodyMedium?.copyWith(
             height: 1.4,
           ),
         ),
         const SizedBox(height: 12),
-
-        // 고정 문장 예시 (read-only)
+        TextFormField(
+          key: _vehicleFieldKey,
+          controller: _vehicleCountCtrl,
+          decoration: _inputDec(
+            labelText: '일일 차량 입고 대수',
+            hintText: '예: 12',
+          ),
+          keyboardType: TextInputType.number,
+          onTap: () {
+            Future.delayed(const Duration(milliseconds: 150), () {
+              final ctx = _vehicleFieldKey.currentContext;
+              if (ctx != null) {
+                Scrollable.ensureVisible(
+                  ctx,
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOut,
+                );
+              }
+            });
+          },
+          validator: (v) {
+            final value = v?.trim() ?? '';
+            if (value.isEmpty) {
+              return '일일 차량 입고 대수를 입력하세요.';
+            }
+            if (!RegExp(r'^\d+$').hasMatch(value)) {
+              return '숫자만 입력하세요.';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 8),
+        // 시스템 집계 안내 카드
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(10),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: const Color(0xFFFBFBFB),
-            borderRadius: BorderRadius.circular(10),
+            color: EndReportColors.primarySoft,
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: Colors.grey.withOpacity(0.2),
+              color: EndReportColors.primaryLight,
             ),
           ),
-          child: Text(
-            '(①   )으로 인해 (②    )의 (③   ) 시간 대의 업무에 공백이 발생했습니다. '
-                '본 문서를 통해 해당 공백에 대한 인적 지원을 받고자 하오며 향후 이에 대해서는 (④    )로 처리됨을 인지합니다.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: Colors.black54,
-              height: 1.4,
-            ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.info_outline,
+                    size: 18,
+                    color: EndReportColors.primaryDark,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '시스템 집계 기준 (참고용)',
+                    style: textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: EndReportColors.primaryDark,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '아래 수치는 시스템에서 집계한 값이며, 실제 보고용 "일일 차량 입고 대수"는 반드시 직접 입력해 주세요.',
+                style: textTheme.bodySmall?.copyWith(
+                  color: Colors.black87,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildMetricRow('시스템 입차', '$_sysVehicleInput대'),
+                    const SizedBox(height: 4),
+                    _buildMetricRow('출차', '$_sysVehicleOutput대'),
+                    const SizedBox(height: 4),
+                    _buildMetricRow('중복 입차', '$_sysDepartureExtra대'),
+                    const Divider(height: 16),
+                    _buildMetricRow(
+                      '시스템 합산(입차+출차+중복 입차)',
+                      '${_sysVehicleFieldTotal}대',
+                      isEmphasis: true,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '※ 위 값은 참고용이며, "일일 차량 입고 대수" 입력란에는 자동으로 채워지지 않습니다.',
+                style: textTheme.bodySmall?.copyWith(
+                  color: Colors.black54,
+                  height: 1.3,
+                ),
+              ),
+            ],
           ),
         ),
-
-        const SizedBox(height: 16),
-
-        // 괄호별 입력 필드
-        TextFormField(
-          controller: _reasonCtrl,
-          decoration: _inputDec(
-            labelText: '① (   ) 에 들어갈 내용 (필수)',
-            hintText: '예: 개인 사정, 병원 진료, 고객사 교육 등',
-          ),
-          onChanged: (_) => setState(() {}),
-          validator: (v) {
-            if (v == null || v.trim().isEmpty) {
-              return '첫 번째 괄호의 내용을 입력해 주세요.';
-            }
-            return null;
-          },
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: _targetCtrl,
-          decoration: _inputDec(
-            labelText: '② (    ) 에 들어갈 내용 (필수)',
-            hintText: '예: 2025년 11월 26일, 11월 3주차, 주간 야간근무 등',
-          ),
-          onChanged: (_) => setState(() {}),
-          validator: (v) {
-            if (v == null || v.trim().isEmpty) {
-              return '두 번째 괄호의 내용을 입력해 주세요.';
-            }
-            return null;
-          },
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: _timeCtrl,
-          decoration: _inputDec(
-            labelText: '③ (   ) 시간대에 들어갈 내용 (필수)',
-            hintText: '예: 09:00~18:00, 야간, 오전, 오후 등',
-          ),
-          onChanged: (_) => setState(() {}),
-          validator: (v) {
-            if (v == null || v.trim().isEmpty) {
-              return '세 번째 괄호의 내용을 입력해 주세요.';
-            }
-            return null;
-          },
-        ),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: _processCtrl,
-          decoration: _inputDec(
-            labelText: '④ (    ) 로 처리됨을 에 들어갈 내용 (필수)',
-            hintText: '예: 연차, 결근, 반차 등',
-          ),
-          onChanged: (_) => setState(() {}),
-          validator: (v) {
-            if (v == null || v.trim().isEmpty) {
-              return '네 번째 괄호의 내용을 입력해 주세요.';
-            }
-            return null;
-          },
-        ),
-
         const SizedBox(height: 12),
-
-        // 실제 문장 미리보기 (read-only)
-        Text(
-          '실제 문장 미리보기',
-          style: theme.textTheme.bodySmall?.copyWith(
-            fontWeight: FontWeight.w600,
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: (_firstSubmitting || !_isVehicleCountValid) ? null : _submitFirstEndReport,
+            style: EndReportButtonStyles.primary(),
+            icon: _firstSubmitting
+                ? const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            )
+                : const Icon(Icons.cloud_upload_outlined),
+            label: Text(
+              _firstSubmitting ? '1차 제출 중…' : '1차 제출',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
         ),
         const SizedBox(height: 4),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: Colors.grey.withOpacity(0.3),
-            ),
-          ),
-          child: Text(
-            sentencePreview,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              height: 1.4,
-            ),
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          '※ 이 미리보기 문장은 위 4개 필드의 값으로만 구성되며, 문장 구조는 수정되지 않습니다.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: Colors.black54,
-          ),
-        ),
       ],
     );
   }
 
-  /// 4. 메일 제목/본문
+  Widget _buildWorkContentBody() {
+    return TextFormField(
+      key: _contentFieldKey,
+      controller: _contentCtrl,
+      focusNode: _contentNode,
+      decoration: _inputDec(
+        labelText: '특이 사항',
+        hintText: '예)\n'
+            '- 육하원칙에 맞춰서 작성하세요.\n'
+            '- 컴플레인, 사고, 인사 갈등, 고객사와의 소통 발생 여부 및 내용\n'
+            '- 업무 프로세스, 업무 환경, 물품 파손 등 문제\n'
+            '- 발생 과정 및 조치 사항\n',
+      ),
+      keyboardType: TextInputType.multiline,
+      minLines: 8,
+      maxLines: 16,
+      onTap: () {
+        Future.delayed(const Duration(milliseconds: 150), () {
+          final ctx = _contentFieldKey.currentContext;
+          if (ctx != null) {
+            Scrollable.ensureVisible(
+              ctx,
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+            );
+          }
+        });
+      },
+      validator: (v) {
+        if (_hasSpecialNote == true) {
+          if (v == null || v.trim().isEmpty) {
+            return '업무 내용을 입력하세요.';
+          }
+        }
+        return null;
+      },
+    );
+  }
+
   Widget _buildMailBody() {
     return Column(
       children: [
@@ -1465,7 +2103,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
           enableInteractiveSelection: true,
           decoration: _inputDec(
             labelText: '메일 제목(자동 생성)',
-            hintText: '예: 콜센터 연차(결근) 지원 신청서 – 11월 25일자 - 계약직',
+            hintText: '예: 콜센터 업무 종료 보고서 – 11월 25일자 12대 - 특이사항 있음',
           ),
           validator: (v) => (v == null || v.trim().isEmpty) ? '메일 제목이 자동 생성되지 않았습니다.' : null,
         ),
@@ -1476,7 +2114,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
           enableInteractiveSelection: true,
           decoration: _inputDec(
             labelText: '메일 본문(자동 생성)',
-            hintText: '연차(결근) 신청 일시 정보가 자동으로 입력됩니다.',
+            hintText: '작성 시각 정보가 자동으로 입력됩니다.',
           ),
           minLines: 3,
           maxLines: 8,
@@ -1485,7 +2123,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
     );
   }
 
-  /// 5. 전자서명
   Widget _buildSignatureBody() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1510,10 +2147,12 @@ class _BackupFormPageState extends State<BackupFormPage> {
                 children: [
                   const Icon(Icons.person_outline, size: 18),
                   const SizedBox(width: 6),
-                  Text(
-                    '서명자: ${_signerName.isEmpty ? "이름 미입력" : _signerName}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w500,
+                  Expanded(
+                    child: Text(
+                      '서명자: ${_signerName.isEmpty ? "이름 미입력" : _signerName}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: false,
                     ),
                   ),
                 ],
@@ -1523,10 +2162,12 @@ class _BackupFormPageState extends State<BackupFormPage> {
                 children: [
                   const Icon(Icons.access_time, size: 18),
                   const SizedBox(width: 6),
-                  Text(
-                    '서명 일시: ${_signDateTime == null ? "저장 시 자동" : _fmtCompact(_signDateTime!)}',
-                    style: const TextStyle(
-                      color: Colors.black87,
+                  Expanded(
+                    child: Text(
+                      '서명 일시: ${_signDateTime == null ? "저장 시 자동" : _fmtCompact(_signDateTime!)}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      softWrap: false,
                     ),
                   ),
                 ],
@@ -1535,7 +2176,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
                 onPressed: _openSignatureDialog,
                 icon: const Icon(Icons.border_color),
                 label: const Text('서명하기'),
-                style: BackupButtonStyles.smallPrimary(),
+                style: EndReportButtonStyles.smallPrimary(),
               ),
               if (_signaturePngBytes != null)
                 OutlinedButton.icon(
@@ -1548,7 +2189,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
                   },
                   icon: const Icon(Icons.delete_outline),
                   label: const Text('서명 삭제'),
-                  style: BackupButtonStyles.smallOutlined(),
+                  style: EndReportButtonStyles.smallOutlined(),
                 ),
             ],
           ),
@@ -1577,7 +2218,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
     );
   }
 
-  /// 공통 페이지 래퍼: 문서 헤더 + 안내문 + 섹션 카드 + 하단 (초기화/미리보기)
   Widget _buildReportPage({
     required String sectionTitle,
     required Widget sectionBody,
@@ -1591,7 +2231,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
           16,
           16,
           16,
-          16 + bottomInset, // 키보드 높이만큼 추가 패딩
+          16 + bottomInset,
         ),
         child: Align(
           alignment: Alignment.topCenter,
@@ -1600,9 +2240,8 @@ class _BackupFormPageState extends State<BackupFormPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 상단 문서 헤더
                 Text(
-                  '연차(결근) 지원 신청서',
+                  '업무 종료 보고서',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w700,
@@ -1611,7 +2250,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'LEAVE / ABSENCE APPLICATION',
+                  'WORK COMPLETION REPORT',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     color: Colors.black54,
@@ -1619,14 +2258,12 @@ class _BackupFormPageState extends State<BackupFormPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // 실제 "종이" 느낌의 신청서 카드
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: BackupColors.light.withOpacity(0.8),
+                      color: EndReportColors.primaryLight.withOpacity(0.8),
                       width: 1,
                     ),
                   ),
@@ -1634,27 +2271,22 @@ class _BackupFormPageState extends State<BackupFormPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // 상단 메타 정보 라인
                       Row(
                         children: [
                           const Icon(
                             Icons.edit_note_rounded,
                             size: 22,
-                            color: BackupColors.dark,
+                            color: EndReportColors.primaryDark,
                           ),
                           const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '연차(결근) 지원 신청서 양식',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: BackupColors.dark,
-                              ),
+                          Text(
+                            '업무 종료 보고서 양식',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: EndReportColors.primaryDark,
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const Spacer(),
                           Text(
                             '작성일 ${_fmtCompact(DateTime.now())}',
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -1666,14 +2298,12 @@ class _BackupFormPageState extends State<BackupFormPage> {
                       const SizedBox(height: 8),
                       const Divider(height: 24),
                       const SizedBox(height: 4),
-
-                      // 안내 문구
                       Container(
                         decoration: BoxDecoration(
-                          color: BackupColors.light.withOpacity(0.12),
+                          color: EndReportColors.primarySoft,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: BackupColors.light.withOpacity(0.8),
+                            color: EndReportColors.primaryLight,
                           ),
                         ),
                         padding: const EdgeInsets.all(12),
@@ -1683,12 +2313,12 @@ class _BackupFormPageState extends State<BackupFormPage> {
                             const Icon(
                               Icons.info_outline,
                               size: 18,
-                              color: BackupColors.dark,
+                              color: EndReportColors.primaryDark,
                             ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                '계약 형태, 신청자 정보, 업무 공백 사유 및 전자서명 정보를 사실에 근거하여 간결하게 작성해 주세요.',
+                                '해당 업무의 수행 내용과 결과를 사실에 근거하여 간결하게 작성해 주세요.',
                                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                   height: 1.4,
                                 ),
@@ -1697,19 +2327,13 @@ class _BackupFormPageState extends State<BackupFormPage> {
                           ],
                         ),
                       ),
-
                       _gap(20),
-
-                      // 섹션 카드 (한 페이지당 하나만)
                       _sectionCard(
                         title: sectionTitle,
                         margin: const EdgeInsets.only(bottom: 0),
                         child: sectionBody,
                       ),
-
                       _gap(12),
-
-                      // 하단 보조 액션 (초기화 / 미리보기)
                       Row(
                         children: [
                           Expanded(
@@ -1717,7 +2341,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
                               onPressed: _sending ? null : _reset,
                               icon: const Icon(Icons.refresh_outlined),
                               label: const Text('초기화'),
-                              style: BackupButtonStyles.outlined(),
+                              style: EndReportButtonStyles.outlined(),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -1726,7 +2350,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
                               onPressed: _sending ? null : _showPreview,
                               icon: const Icon(Icons.visibility_outlined),
                               label: const Text('미리보기'),
-                              style: BackupButtonStyles.primary(),
+                              style: EndReportButtonStyles.primary(),
                             ),
                           ),
                         ],
@@ -1734,7 +2358,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 24),
               ],
             ),
@@ -1748,10 +2371,9 @@ class _BackupFormPageState extends State<BackupFormPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      // 바깥 배경
-      backgroundColor: const Color(0xFFEFF3F6),
+      backgroundColor: EndReportColors.pageBackground,
       appBar: AppBar(
-        title: const Text('연차(결근) 지원 신청서 작성'),
+        title: const Text('업무 종료 보고서 작성'),
         centerTitle: true,
         backgroundColor: Colors.white,
         elevation: 0,
@@ -1766,12 +2388,11 @@ class _BackupFormPageState extends State<BackupFormPage> {
               onPressed: _showPreview,
               icon: const Icon(Icons.visibility_outlined),
               label: const Text('미리보기'),
-              style: BackupButtonStyles.smallPrimary(),
+              style: EndReportButtonStyles.smallPrimary(),
             ),
           ),
         ],
       ),
-      // 전자서명(인덱스 4) 페이지만 제출 버튼 노출 + 서명 전에는 비활성화
       bottomNavigationBar: _currentPageIndex == 4
           ? SafeArea(
         top: false,
@@ -1793,7 +2414,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
           child: SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              // ✅ 서명 전에는 비활성화, 서명 완료 후에만 활성화
               onPressed: (!_sending && _signaturePngBytes != null) ? _submit : null,
               icon: _sending
                   ? const SizedBox(
@@ -1809,7 +2429,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
                 _sending ? '전송 중…' : '제출',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-              style: BackupButtonStyles.primary(),
+              style: EndReportButtonStyles.primary(),
             ),
           ),
         ),
@@ -1822,28 +2442,44 @@ class _BackupFormPageState extends State<BackupFormPage> {
           child: PageView(
             controller: _pageController,
             onPageChanged: (index) {
+              // 1차 제출이 완료되기 전에는 2번 페이지(인덱스 1)를 넘어갈 수 없음
+              if (!_firstSubmittedCompleted && index > 1) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _pageController.animateToPage(
+                    1,
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                  );
+                });
+
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('다음 단계로 진행하기 전에 먼저 "1차 제출"을 완료해 주세요.'),
+                  ),
+                );
+                return;
+              }
+
               setState(() {
                 _currentPageIndex = index;
-
-                // 첫 페이지로 다시 돌아오면 계약 형태 선택 초기화
                 if (index == 0) {
-                  _contractType = null;
+                  _hasSpecialNote = null;
                   _updateMailSubject();
                 }
               });
             },
             children: [
               _buildReportPage(
-                sectionTitle: '1. 계약 형태 선택 (계약직/프리랜서, 필수)',
-                sectionBody: _buildContractTypeBody(),
+                sectionTitle: '1. 특이사항 여부 (필수)',
+                sectionBody: _buildSpecialNoteBody(),
               ),
               _buildReportPage(
-                sectionTitle: '2. 신청자 기본 정보 (성명/주민번호/직위/부서명, 필수)',
-                sectionBody: _buildBasicInfoBody(),
+                sectionTitle: '2. 일일 차량 입고 대수',
+                sectionBody: _buildVehicleBody(),
               ),
               _buildReportPage(
-                sectionTitle: '3. 업무 공백 및 인력 지원 문장 (괄호 입력)',
-                sectionBody: _buildBlankSentenceBody(),
+                sectionTitle: '3. 특이 사항 (조건부 필수)',
+                sectionBody: _buildWorkContentBody(),
               ),
               _buildReportPage(
                 sectionTitle: '4. 메일 전송 내용',

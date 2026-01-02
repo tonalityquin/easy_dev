@@ -10,16 +10,15 @@ import '../../../../../../states/area/area_state.dart';
 import '../../../../../../repositories/commute_log_repository.dart';
 import '../../../../../../utils/block_dialogs/break_duration_blocking_dialog.dart';
 import '../../../../../../utils/block_dialogs/work_end_duration_blocking_dialog.dart';
-import '../../../../../hubs_mode/dev_package/debug_package/debug_database_logger.dart';
-import '../../../../../simple_mode/utils/simple_mode/simple_mode_db.dart';
 
-import '../backup/lite_backup_form_page.dart';
-import '../work_start_report/sections/lite_dashboard_end_report_form_page.dart';
-import '../work_start_report/sections/lite_dashboard_start_report_form_page.dart';
-import 'lite_fielder_document_inventory_repository.dart';
-import 'lite_user_statement_form_page.dart';
-import 'lite_document_item.dart';
-import '../shares/lite_parking_handover_share_page.dart';
+import '../../hubs_mode/dev_package/debug_package/debug_database_logger.dart';
+import '../../simple_mode/sections/widgets/simple_backup/backup_form_page.dart';
+import '../../simple_mode/utils/simple_mode/simple_mode_db.dart';
+import '../document_package/user_statement/user_statement_form_page.dart';
+import '../document_package/work_end_report/dashboard_end_report_form_page.dart';
+import '../document_package/work_start_report/dashboard_start_report_form_page.dart';
+import 'fielder_document_inventory_repository.dart';
+import 'document_item.dart';
 
 Future<void> openFielderDocumentBox(BuildContext context) async {
   await showModalBottomSheet<void>(
@@ -143,15 +142,6 @@ class _FielderDocumentBoxSheet extends StatelessWidget {
                                                   ),
                                                 );
                                               }
-                                              break;
-
-                                            case DocumentType.handoverForm:
-                                              Navigator.of(context).push(
-                                                MaterialPageRoute(
-                                                  builder: (_) => const ParkingHandoverSharePage(),
-                                                  fullscreenDialog: true,
-                                                ),
-                                              );
                                               break;
 
                                             case DocumentType.workEndReportForm:
@@ -957,8 +947,6 @@ Color _accentColorForType(DocumentType type) {
       return const Color(0xFF4F9A94); // 청록
     case DocumentType.workEndReportForm:
       return const Color(0xFFEF6C53); // 기본 오렌지/레드
-    case DocumentType.handoverForm:
-      return const Color(0xFF8D6E63); // 브라운
     case DocumentType.statementForm:
       return const Color(0xFF5C6BC0); // 블루
     case DocumentType.generic:
@@ -987,8 +975,6 @@ IconData _iconForType(DocumentType type) {
       return Icons.wb_sunny_outlined;
     case DocumentType.workEndReportForm:
       return Icons.nights_stay_outlined;
-    case DocumentType.handoverForm:
-      return Icons.swap_horiz;
     case DocumentType.statementForm:
       return Icons.description_outlined;
     case DocumentType.generic:
@@ -1027,10 +1013,7 @@ String _typeLabelForType(DocumentType type) {
     case DocumentType.workStartReportForm:
       return '업무 시작 보고';
     case DocumentType.workEndReportForm:
-    // 기본값(위에서 id별로 override 가능)
       return '퇴근/업무 종료';
-    case DocumentType.handoverForm:
-      return '업무 인수인계';
     case DocumentType.statementForm:
       return '경위서';
     case DocumentType.generic:

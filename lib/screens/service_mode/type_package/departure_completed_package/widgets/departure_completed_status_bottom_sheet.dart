@@ -9,7 +9,7 @@ import '../../../../../states/plate/plate_state.dart';
 import '../../../../../states/user/user_state.dart';
 import '../../../../../utils/snackbar_helper.dart';
 import '../../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
-import '../../../../service_mode/log_package/log_viewer_bottom_sheet.dart';
+import '../../../../common_package/log_package/lite_log_viewer_bottom_sheet.dart';
 
 // import '../../../../utils/usage_reporter.dart';
 
@@ -188,7 +188,7 @@ Future<void> showDepartureCompletedStatusBottomSheet({
                           Navigator.push(
                             rootContext,
                             MaterialPageRoute(
-                              builder: (_) => LogViewerBottomSheet(
+                              builder: (_) => LiteLogViewerBottomSheet(
                                 initialPlateNumber: plateNumber,
                                 division: division,
                                 area: area,
