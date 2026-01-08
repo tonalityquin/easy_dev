@@ -11,7 +11,7 @@ import '../../models/user_model.dart';
 import '../../utils/tts/plate_tts_listener_service.dart';
 import '../area/area_state.dart';
 import '../../services/latest_message_service.dart';
-import '../../repositories/commute_log_repository.dart';
+import '../../repositories/commute_repo_services/commute_log_repository.dart';
 
 class UserState extends ChangeNotifier {
   final UserRepository _repository;

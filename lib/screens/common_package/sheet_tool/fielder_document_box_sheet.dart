@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 import '../../../../../../states/user/user_state.dart';
 import '../../../../../../states/area/area_state.dart';
 
-import '../../../../../../repositories/commute_log_repository.dart';
+import '../../../../../../repositories/commute_repo_services/commute_log_repository.dart';
 import '../../../../../../utils/block_dialogs/break_duration_blocking_dialog.dart';
 import '../../../../../../utils/block_dialogs/work_end_duration_blocking_dialog.dart';
 

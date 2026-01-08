@@ -3,9 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:sqflite/sqflite.dart'; // ✅ ConflictAlgorithm 사용
 
 import 'simple_mode_db.dart';
-
-// ✅ Firestore 연동용 레포지토리 (경로는 실제 프로젝트 구조에 맞게 조정)
-import 'package:easydev/repositories/commute_log_repository.dart';
+import '../../../../repositories/commute_repo_services/commute_log_repository.dart';
 
 /// 약식 모드 출근/퇴근/휴게 버튼 로그 타입
 enum SimpleModeAttendanceType {

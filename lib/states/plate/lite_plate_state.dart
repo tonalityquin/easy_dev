@@ -16,6 +16,13 @@ class _SelectionBaseline {
   const _SelectionBaseline({required this.isSelected, required this.selectedBy});
 }
 
+/// ✅ 1회 조회 결과(문서 + 소스) 묶음
+class _FetchResult {
+  final List<PlateModel> items;
+  final String sourceLabel; // 'server' | 'cache'
+  const _FetchResult({required this.items, required this.sourceLabel});
+}
+
 class LitePlateState extends ChangeNotifier {
   /// ✅ Lite 모드에서는 "입차 완료/출차 완료"만 사용(데이터 대상 제한)
   static const Set<PlateType> liteAllowedTypes = {
@@ -36,6 +43,19 @@ class LitePlateState extends ChangeNotifier {
   /// 로딩 상태: 여러 타입 동시 로드 가능하므로 Set으로 관리
   final Set<PlateType> _loadingTypes = <PlateType>{};
   bool get isLoading => _loadingTypes.isNotEmpty;
+
+  bool isLoadingType(PlateType type) => _loadingTypes.contains(type);
+
+  /// ✅ 타입별 마지막 갱신 시각/소스 (UI 배너 표시에 사용)
+  final Map<PlateType, DateTime?> _lastRefreshAtByType = {
+    for (final t in PlateType.values) t: null,
+  };
+  final Map<PlateType, String> _lastRefreshSourceByType = {
+    for (final t in PlateType.values) t: '-',
+  };
+
+  DateTime? lastRefreshAtOf(PlateType type) => _lastRefreshAtByType[type];
+  String lastRefreshSourceLabelOf(PlateType type) => _lastRefreshSourceByType[type] ?? '-';
 
   /// Lite에서도 기존 로직 호환을 위해 유지
   final Map<String, bool> previousIsLockedFee = <String, bool>{};
@@ -140,6 +160,8 @@ class LitePlateState extends ChangeNotifier {
       _data[t] = <PlateModel>[];
       _lastIdsByType[t] = <String>{};
       _reqSeqByType[t] = 0;
+      _lastRefreshAtByType[t] = null;
+      _lastRefreshSourceByType[t] = '-';
     }
 
     _loadingTypes.clear();
@@ -176,6 +198,8 @@ class LitePlateState extends ChangeNotifier {
     _activeTypes.remove(type);
     _data[type] = <PlateModel>[];
     _lastIdsByType[type] = <String>{};
+    _lastRefreshAtByType[type] = null;
+    _lastRefreshSourceByType[type] = '-';
 
     notifyListeners();
     debugPrint('🧹 [Lite][${_getTypeLabel(type)}] 데이터 비움 (NO-SUBSCRIBE)');
@@ -237,26 +261,8 @@ class LitePlateState extends ChangeNotifier {
     return q;
   }
 
-  Future<List<PlateModel>> _getOnce({
-    required PlateType type,
-    required String area,
-    required bool descending,
-    bool cacheFirst = true,
-  }) async {
-    final query = _baseQuery(type: type, area: area, descending: descending);
-
-    QuerySnapshot<Map<String, dynamic>> snap;
-
-    if (cacheFirst) {
-      try {
-        snap = await query.get(const GetOptions(source: Source.cache));
-      } catch (_) {
-        snap = await query.get(const GetOptions(source: Source.server));
-      }
-    } else {
-      snap = await query.get(const GetOptions(source: Source.server));
-    }
-
+  // ✅ 스냅샷 파싱 유틸
+  List<PlateModel> _parseSnapshot(QuerySnapshot<Map<String, dynamic>> snap, PlateType type) {
     final results = <PlateModel>[];
     for (final doc in snap.docs) {
       try {
@@ -266,6 +272,34 @@ class LitePlateState extends ChangeNotifier {
       }
     }
     return results;
+  }
+
+  /// ✅ 서버 우선 조회 + 실패 시 캐시 폴백
+  Future<_FetchResult> _getOnce({
+    required PlateType type,
+    required String area,
+    required bool descending,
+    bool cacheFirst = true,
+  }) async {
+    final query = _baseQuery(type: type, area: area, descending: descending);
+
+    // 1) 서버 우선 (fresh)
+    try {
+      final snapServer = await query.get(const GetOptions(source: Source.server));
+      final serverResults = _parseSnapshot(snapServer, type);
+      debugPrint('🌐 [Lite][${_getTypeLabel(type)}] server get: ${serverResults.length}개 (area=$area)');
+      return _FetchResult(items: serverResults, sourceLabel: 'server');
+    } catch (e) {
+      debugPrint('⚠️ [Lite][${_getTypeLabel(type)}] server get 실패 → ${cacheFirst ? 'cache로 폴백' : '종료'}: $e');
+
+      if (!cacheFirst) rethrow;
+
+      // 2) 캐시 폴백 (offline)
+      final snapCache = await query.get(const GetOptions(source: Source.cache));
+      final cacheResults = _parseSnapshot(snapCache, type);
+      debugPrint('💾 [Lite][${_getTypeLabel(type)}] cache get: ${cacheResults.length}개 (area=$area)');
+      return _FetchResult(items: cacheResults, sourceLabel: 'cache');
+    }
   }
 
   Future<void> refreshType(PlateType type) async {
@@ -287,18 +321,23 @@ class LitePlateState extends ChangeNotifier {
     debugPrint('🔎 [Lite][${_getTypeLabel(type)}] 1회 로드 시작 (area=$area, desc=$descending)');
 
     try {
-      // ✅ get 기반 1회 조회 (NO-SUBSCRIBE)
-      final results = await _getOnce(
+      final fetched = await _getOnce(
         type: type,
         area: area,
         descending: descending,
         cacheFirst: true,
       );
 
+      final results = fetched.items;
+
       // 중간에 disable/area 전환 등으로 토큰이 바뀌었으면 결과 폐기
       if (!_enabled) return;
       if (_lifecycleEpoch != lifeToken) return;
       if ((_reqSeqByType[type] ?? 0) != seq) return;
+
+      // ✅ 마지막 갱신 시각/소스 기록 (UI 배너 표시 기준)
+      _lastRefreshAtByType[type] = DateTime.now();
+      _lastRefreshSourceByType[type] = fetched.sourceLabel;
 
       // removed 감지: 이전/현재 ID 비교로 대체
       final prevIds = _lastIdsByType[type] ?? <String>{};
@@ -329,9 +368,8 @@ class LitePlateState extends ChangeNotifier {
 
       // 서버 베이스라인 갱신
       for (final p in results) {
-        final normalizedSelectedBy = p.isSelected
-            ? ((p.selectedBy?.trim().isNotEmpty ?? false) ? p.selectedBy!.trim() : null)
-            : null;
+        final normalizedSelectedBy =
+        p.isSelected ? ((p.selectedBy?.trim().isNotEmpty ?? false) ? p.selectedBy!.trim() : null) : null;
 
         _baseline[p.id] = _SelectionBaseline(
           isSelected: p.isSelected,
@@ -557,9 +595,7 @@ class LitePlateState extends ChangeNotifier {
 
       _baseline[plateId] = _SelectionBaseline(
         isSelected: isSelected,
-        selectedBy: isSelected
-            ? ((selectedBy?.trim().isNotEmpty ?? false) ? selectedBy!.trim() : null)
-            : null,
+        selectedBy: isSelected ? ((selectedBy?.trim().isNotEmpty ?? false) ? selectedBy!.trim() : null) : null,
       );
 
       _clearPendingSelectionInternal();

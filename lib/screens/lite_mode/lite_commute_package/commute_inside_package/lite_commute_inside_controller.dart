@@ -11,7 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:easydev/services/endtime_reminder_service.dart';
 
 // ✅ commute_true_false(출근시각 Timestamp) 기록용 Firestore 레포지토리
-import '../../../../repositories/commute_true_false_repository.dart';
+import '../../../../repositories/commute_repo_services/commute_true_false_repository.dart';
 
 // ✅ 추가: 기기별 commute_true_false Firestore 업데이트 ON/OFF
 import '../../../../utils/commute_true_false_mode_config.dart';

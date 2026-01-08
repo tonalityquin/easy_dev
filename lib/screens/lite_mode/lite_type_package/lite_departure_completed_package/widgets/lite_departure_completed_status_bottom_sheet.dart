@@ -66,7 +66,6 @@ class _LiteDepartureCompletedFullHeightSheet extends StatelessWidget {
                 ),
               ),
             ),
-
             Row(
               children: [
                 const Icon(Icons.settings, color: Colors.blueAccent),
@@ -84,11 +83,8 @@ class _LiteDepartureCompletedFullHeightSheet extends StatelessWidget {
                 ),
               ],
             ),
-
             const SizedBox(height: 16),
-
             _SummaryCard(plate: plate),
-
             const SizedBox(height: 24),
 
             // 정산(사전 정산)
@@ -120,7 +116,6 @@ class _LiteDepartureCompletedFullHeightSheet extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(height: 12),
 
             // 정산 취소
@@ -159,18 +154,18 @@ class _LiteDepartureCompletedFullHeightSheet extends StatelessWidget {
 
             const SizedBox(height: 24),
 
-            // ✅ 로그 확인 -> LiteLogViewerBottomSheet.show() 사용
+            // 로그 확인
             ElevatedButton.icon(
               icon: const Icon(Icons.history),
               label: const Text('로그 확인'),
               onPressed: () async {
                 await LiteLogViewerBottomSheet.show(
                   hostContext,
-                  division: '-', // required (조회에는 사용하지 않음)
+                  division: '-',
                   area: plate.area,
                   requestTime: plate.requestTime,
                   initialPlateNumber: plate.plateNumber,
-                  plateId: plate.id, // ✅ 가능하면 docId 직접 전달
+                  plateId: plate.id,
                 );
               },
               style: ElevatedButton.styleFrom(
@@ -187,7 +182,7 @@ class _LiteDepartureCompletedFullHeightSheet extends StatelessWidget {
 
             const SizedBox(height: 12),
 
-            // 정보 수정 (비활성 유지)
+            // 정보 수정 (비활성)
             ElevatedButton.icon(
               icon: const Icon(Icons.edit),
               label: const Text('정보 수정'),

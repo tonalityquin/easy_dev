@@ -2,16 +2,15 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:googleapis/gmail/v1.dart' as gmail;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../../repositories/end_work_report_repo_services/end_work_report_repository.dart';
 import '../../../../../utils/google_auth_v7.dart';
 import '../../../../../utils/api/email_config.dart';
 import 'simple_inside_report_styles.dart';
@@ -38,6 +37,10 @@ class SimpleInsideEndReportFormPage extends StatefulWidget {
 ///     - end_work_reports/area_<area>/months/<yyyyMM> (month meta + reports map 누적)
 ///
 /// - ⚠️ 일자 서브컬렉션(reports/<yyyy-MM-dd>) 문서 생성은 제거
+///
+/// [리팩터링]
+/// - ✅ Firestore 관련 write 로직은 repositories/end_work_report_repository.dart 로 분리
+/// - ✅ UI에서는 Repository 호출만 수행
 /// ─────────────────────────────────────────────────────────────
 class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFormPage> {
   final _formKey = GlobalKey<FormState>();
@@ -91,8 +94,8 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
   final GlobalKey _vehicleFieldKey = GlobalKey();
   final GlobalKey _contentFieldKey = GlobalKey();
 
-  // Firestore (write only)
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  // ✅ Firestore write 로직 분리: Repository
+  final EndWorkReportRepository _endWorkReportRepository = EndWorkReportRepository();
 
   @override
   void initState() {
@@ -800,19 +803,9 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
   // ─────────────────────────────────────────────────────────────
   // [핵심] 2단계 "1차 제출" (Firestore write only)
   //
-  // 변경 사항(요구사항 반영):
-  //  1) ✅ 월 문서 1개 유지 + reports 맵 필드 누적
-  //     end_work_reports/area_<area>/months/<yyyyMM>
-  //       reports: { "<yyyy-MM-dd>": { ...dayPayload... }, ... }
-  //
-  //  2) ✅ 동일 batch 원자 upsert:
-  //       - end_work_reports/area_<area>
-  //       - end_work_reports/area_<area>/months/<yyyyMM>
-  //
-  //  3) ✅ monthKey(yyyyMM) 저장
-  //     DateFormat('yyyyMM').format(now)
-  //
-  //  4) ✅ Firestore 조회(get/query) 없음 (set/merge만 사용)
+  // 리팩터링:
+  // - Firestore refs/payload/batch/commit은 Repository로 이동
+  // - UI는 입력 검증 + 진행 다이얼로그 + 결과 표시만 담당
   // ─────────────────────────────────────────────────────────────
   Future<void> _submitFirstEndReport() async {
     if (_firstSubmitting) return;
@@ -860,103 +853,23 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
     try {
       final vehicleInputCount = int.parse(raw);
 
-      // 조회 금지 요건으로 인해 계산/스냅샷 값은 0으로 저장
-      final vehicleOutputManual = 0;
-      const snapshotLockedVehicleCount = 0;
-      const snapshotTotalLockedFee = 0;
-
-      final now = DateTime.now();
-
-      // yyyy-MM-dd (일자 키)
-      final dateStr = DateFormat('yyyy-MM-dd').format(now);
-
-      // yyyyMM (월 샤딩 key)
-      final monthKey = DateFormat('yyyyMM').format(now);
-
-      final createdAtIso = now.toIso8601String();
-
-      // refs
-      final areaRef = _firestore.collection('end_work_reports').doc('area_$area');
-      final monthRef = areaRef.collection('months').doc(monthKey);
-
-      // history entry (일자 payload 내부 history 배열에 누적)
-      final historyEntry = <String, dynamic>{
-        'date': dateStr,
-        'monthKey': monthKey,
-        'createdAt': createdAtIso,
-        'uploadedBy': userName,
-        'vehicleCount': <String, dynamic>{
-          'vehicleInput': vehicleInputCount,
-          'vehicleOutput': vehicleOutputManual,
-        },
-        'metrics': <String, dynamic>{
-          'snapshot_lockedVehicleCount': snapshotLockedVehicleCount,
-          'snapshot_totalLockedFee': snapshotTotalLockedFee,
-        },
-      };
-
-      // 1) area meta upsert
-      final areaMetaPayload = <String, dynamic>{
-        'division': division,
-        'area': area,
-        // 서버 타임스탬프를 써도 무방하지만(조회 없음), 기존 파일 스타일 유지(ISO 문자열)
-        'updatedAt': createdAtIso,
-        'lastReportDate': dateStr,
-        'lastMonthKey': monthKey,
-      };
-
-      // 2) 월 문서 payload (meta + reports 맵 누적)
-      //
-      // reports: { "<yyyy-MM-dd>": { ...dayPayload... } }
-      // - merge: true 이므로 동일 월 문서 1개를 유지하면서 일자 키만 추가/갱신됨
-      final dayPayload = <String, dynamic>{
-        'division': division,
-        'area': area,
-        'date': dateStr,
-        'monthKey': monthKey,
-        'vehicleCount': <String, dynamic>{
-          'vehicleInput': vehicleInputCount,
-          'vehicleOutput': vehicleOutputManual,
-        },
-        'metrics': <String, dynamic>{
-          'snapshot_lockedVehicleCount': snapshotLockedVehicleCount,
-          'snapshot_totalLockedFee': snapshotTotalLockedFee,
-        },
-        'createdAt': createdAtIso,
-        'uploadedBy': userName,
-
-        // ✅ 월 문서 내부의 reports.<dateStr>.history 로 누적
-        // (Firestore 조회 없이도 arrayUnion 가능)
-        'history': FieldValue.arrayUnion(<Map<String, dynamic>>[historyEntry]),
-      };
-
-      final monthPayload = <String, dynamic>{
-        'division': division,
-        'area': area,
-        'monthKey': monthKey,
-        'updatedAt': createdAtIso,
-        'lastReportDate': dateStr,
-
-        // ✅ 핵심: 일자별 보고를 reports 맵에 누적
-        'reports': <String, dynamic>{
-          dateStr: dayPayload,
-        },
-      };
+      EndWorkReportWriteResult? result;
 
       await _runWithBlockingDialog(
         context: context,
         message: '1차 업무 종료 보고를 저장 중입니다. 잠시만 기다려 주세요...',
         task: () async {
-          final batch = _firestore.batch();
-
-          batch.set(areaRef, areaMetaPayload, SetOptions(merge: true));
-          batch.set(monthRef, monthPayload, SetOptions(merge: true));
-
-          await batch.commit();
+          result = await _endWorkReportRepository.upsertFirstEndReport(
+            area: area,
+            division: division,
+            uploadedBy: userName,
+            vehicleInputCount: vehicleInputCount,
+          );
         },
       );
 
       if (!mounted) return;
+      final r = result!;
 
       setState(() {
         _firstSubmittedCompleted = true;
@@ -965,14 +878,14 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
       _showSnack(
         [
           '1차 업무 종료 보고 저장 완료',
-          '• area: $area',
-          '• division: $division',
-          '• monthKey: $monthKey',
-          '• 저장 문서: end_work_reports/area_$area/months/$monthKey',
-          '• 저장 필드: reports.$dateStr',
-          '• 서버 저장 입고 대수(vehicleInput): ${vehicleInputCount}대',
-          '• 서버 저장 출고 대수(vehicleOutput): ${vehicleOutputManual}대 (조회 없음 → 0)',
-          '• metrics 스냅샷: ${snapshotLockedVehicleCount} / ${snapshotTotalLockedFee} (조회 없음 → 0)',
+          '• area: ${r.area}',
+          '• division: ${r.division}',
+          '• monthKey: ${r.monthKey}',
+          '• 저장 문서: ${r.monthDocPath}',
+          '• 저장 필드: ${r.reportsFieldPath}',
+          '• 서버 저장 입고 대수(vehicleInput): ${r.vehicleInputCount}대',
+          '• 서버 저장 출고 대수(vehicleOutput): ${r.vehicleOutputCount}대 (조회 없음 → 0)',
+          '• metrics 스냅샷: ${r.snapshotLockedVehicleCount} / ${r.snapshotTotalLockedFee} (조회 없음 → 0)',
         ].join('\n'),
       );
     } catch (e) {

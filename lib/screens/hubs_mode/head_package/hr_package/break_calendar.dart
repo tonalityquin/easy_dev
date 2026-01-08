@@ -9,7 +9,7 @@ import '../../../../states/head_quarter/calendar_selection_state.dart';
 import '../../../../models/user_model.dart';
 import '../../../../utils/api/email_config.dart';
 import '../../../../utils/snackbar_helper.dart';
-import '../../../../repositories/commute_log_repository.dart';
+import '../../../../repositories/commute_repo_services/commute_log_repository.dart';
 import '../../../../utils/google_auth_session.dart';
 import 'utils/calendar_excel_mailer.dart';
 import 'mail_recipient_settings.dart';

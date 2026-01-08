@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:developer' as dev;
 import 'dart:typed_data';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -14,6 +13,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../../../repositories/plate_repo_services/plate_count_service.dart';
+import '../../../../../../../repositories/end_work_report_repo_services/end_work_report_firestore_repository.dart';
 import '../../../../../../../states/area/area_state.dart';
 import '../../../../../../../states/user/user_state.dart';
 import '../../../../../../../utils/gcs/gcs_uploader.dart';
@@ -125,70 +125,6 @@ class EndReportButtonStyles {
   }
 }
 
-/// ─────────────────────────────────────────────────────────────
-/// EndWorkReportService / EndWorkReportController / Sheet 에 있던
-/// "업무 종료 서버 보고" 로직을 이 파일 안(SimpleEndWorkReportService)으로
-/// 옮긴 버전입니다.
-///
-/// 이제:
-///  - 2단계 "일일 차량 입고 대수"의 [1차 제출] 버튼 → 서버 보고(plates/GCS(logs)/Firestore/cleanup)
-///  - 5단계 "제출" 버튼 → 메일(PDF) 전송만 수행
-///
-/// [GCS 업로드 변경]
-/// - ✅ /logs 업로드는 유지 (uploadEndLogJson)
-/// - ❌ /reports 업로드는 제거 (uploadEndWorkReportJson 및 관련 처리 전부 삭제)
-///
-/// [Firestore 저장 변경(리팩터링)]
-/// - 기존: end_work_reports/area_<area>/months/<yyyyMM>/reports/<yyyy-MM-dd> (일자별 문서 생성)
-/// - 변경: end_work_reports/area_<area>/months/<yyyyMM> (월 단위 문서 1개)
-///          └ month 문서의 필드 "reports" 에 Map 형태로 일자별 엔트리를 추가
-///
-///   예) /end_work_reports/area_가로수길(캔버스랩)/months/202512
-///       {
-///         division: ...,
-///         area: ...,
-///         monthKey: "202512",
-///         updatedAt: serverTimestamp,
-///         lastReportDate: "2025-12-31",
-///         reports: {
-///           "2025-12-01": { ...dayPayload... },
-///           "2025-12-02": { ...dayPayload... },
-///           ...
-///         }
-///       }
-/// ─────────────────────────────────────────────────────────────
-
-dynamic _endReportJsonSafe(dynamic v) {
-  if (v == null) return null;
-
-  if (v is Timestamp) return v.toDate().toIso8601String();
-  if (v is DateTime) return v.toIso8601String();
-
-  if (v is GeoPoint) {
-    return <String, dynamic>{
-      '_type': 'GeoPoint',
-      'lat': v.latitude,
-      'lng': v.longitude,
-    };
-  }
-
-  if (v is DocumentReference) {
-    return <String, dynamic>{
-      '_type': 'DocumentReference',
-      'path': v.path,
-    };
-  }
-
-  if (v is num || v is String || v is bool) return v;
-
-  if (v is List) return v.map(_endReportJsonSafe).toList();
-  if (v is Map) {
-    return v.map((key, value) => MapEntry(key.toString(), _endReportJsonSafe(value)));
-  }
-
-  return v.toString();
-}
-
 class SimpleEndWorkReportResult {
   final String division;
   final String area;
@@ -221,9 +157,10 @@ class SimpleEndWorkReportResult {
 }
 
 class SimpleEndWorkReportService {
-  final FirebaseFirestore _firestore;
+  final EndWorkReportFirestoreRepository _repo;
 
-  SimpleEndWorkReportService({FirebaseFirestore? firestore}) : _firestore = firestore ?? FirebaseFirestore.instance;
+  SimpleEndWorkReportService({EndWorkReportFirestoreRepository? repo})
+      : _repo = repo ?? EndWorkReportFirestoreRepository();
 
   Future<SimpleEndWorkReportResult> submitEndReport({
     required String division,
@@ -237,16 +174,11 @@ class SimpleEndWorkReportService {
       name: 'SimpleEndWorkReportService',
     );
 
-    // 1. plates 스냅샷 조회
-    QuerySnapshot<Map<String, dynamic>> platesSnap;
+    // 1. plates 스냅샷 조회 (Repository로 위임)
+    List<LockedPlateRecord> plates;
     try {
       dev.log('[END] query plates...', name: 'SimpleEndWorkReportService');
-      platesSnap = await _firestore
-          .collection('plates')
-          .where('type', isEqualTo: 'departure_completed')
-          .where('area', isEqualTo: area)
-          .where('isLockedFee', isEqualTo: true)
-          .get();
+      plates = await _repo.fetchLockedDepartureCompletedPlates(area: area);
     } catch (e, st) {
       dev.log(
         '[END] plates query failed',
@@ -257,13 +189,13 @@ class SimpleEndWorkReportService {
       throw Exception('출차 스냅샷 조회 실패: $e');
     }
 
-    final int snapshotLockedVehicleCount = platesSnap.docs.length;
+    final int snapshotLockedVehicleCount = plates.length;
 
     // 2. 잠금 요금 합계 계산
     num snapshotTotalLockedFee = 0;
     try {
-      for (final d in platesSnap.docs) {
-        final data = d.data();
+      for (final p in plates) {
+        final data = p.data;
         num? fee = (data['lockedFeeAmount'] is num) ? data['lockedFeeAmount'] as num : null;
 
         if (fee == null) {
@@ -319,10 +251,10 @@ class SimpleEndWorkReportService {
     try {
       dev.log('[END] upload logs...', name: 'SimpleEndWorkReportService');
       final items = <Map<String, dynamic>>[
-        for (final d in platesSnap.docs)
+        for (final p in plates)
           <String, dynamic>{
-            'docId': d.id,
-            'data': _endReportJsonSafe(d.data()),
+            'docId': p.docId,
+            'data': EndWorkReportFirestoreRepository.jsonSafe(p.data),
           },
       ];
 
@@ -353,7 +285,7 @@ class SimpleEndWorkReportService {
       );
     }
 
-    // 6. Firestore - end_work_reports 저장 (✅ 월 단위 문서 + reports 맵 필드에 일자별 엔트리 추가)
+    // 6. Firestore - end_work_reports 저장 (Repository로 위임)
     bool firestoreSaveOk = true;
     try {
       dev.log(
@@ -361,79 +293,17 @@ class SimpleEndWorkReportService {
         name: 'SimpleEndWorkReportService',
       );
 
-      // 스키마(리팩터링):
-      // end_work_reports/area_<area>
-      //   └ months/<yyyyMM>   (월 단위 문서 1개)
-      //       ├ division, area, monthKey, updatedAt, lastReportDate ...
-      //       └ reports: {
-      //            "<yyyy-MM-dd>": { ...dayPayload... },
-      //            ...
-      //          }
-      final areaRef = _firestore.collection('end_work_reports').doc('area_$area');
-      final monthRef = areaRef.collection('months').doc(monthKey);
-
-      final historyEntry = <String, dynamic>{
-        'date': dateStr,
-        'monthKey': monthKey,
-        'createdAt': reportLog['createdAt'],
-        'uploadedBy': userName,
-        'vehicleCount': reportLog['vehicleCount'],
-        'metrics': reportLog['metrics'],
-        if (logsUrl != null) 'logsUrl': logsUrl,
-      };
-
-      final dayPayload = <String, dynamic>{
-        'division': division,
-        'area': area,
-        'monthKey': monthKey,
-        'date': dateStr,
-        'vehicleCount': reportLog['vehicleCount'],
-        'metrics': reportLog['metrics'],
-        'createdAt': reportLog['createdAt'],
-        'uploadedBy': reportLog['uploadedBy'],
-        if (logsUrl != null) 'logsUrl': logsUrl,
-        'updatedAt': FieldValue.serverTimestamp(),
-        'history': FieldValue.arrayUnion(<Map<String, dynamic>>[historyEntry]),
-      };
-
-      // ✅ 원자적 커밋(메타 + 월 문서 reports 맵 추가)
-      final batch = _firestore.batch();
-
-      // 6-1) area 메타(유지)
-      batch.set(
-        areaRef,
-        <String, dynamic>{
-          'division': division,
-          'area': area,
-          'updatedAt': FieldValue.serverTimestamp(),
-          'lastMonthKey': monthKey,
-          'lastReportDate': dateStr,
-        },
-        SetOptions(merge: true),
+      await _repo.saveMonthlyEndWorkReport(
+        division: division,
+        area: area,
+        monthKey: monthKey,
+        dateStr: dateStr,
+        vehicleCount: (reportLog['vehicleCount'] as Map<String, dynamic>),
+        metrics: (reportLog['metrics'] as Map<String, dynamic>),
+        createdAtIso: reportLog['createdAt'] as String,
+        uploadedBy: userName,
+        logsUrl: logsUrl,
       );
-
-      // 6-2) month 문서(월 단위 1개) + reports 맵에 dateStr 엔트리 추가
-      //
-      // merge:true 로 set하면,
-      // - month 문서가 없으면 생성
-      // - 있으면 기존 필드는 유지하면서 reports 맵에 dateStr 키를 추가/갱신
-      // - reports.<dateStr>.history 는 arrayUnion 변환으로 누적
-      batch.set(
-        monthRef,
-        <String, dynamic>{
-          'division': division,
-          'area': area,
-          'monthKey': monthKey,
-          'updatedAt': FieldValue.serverTimestamp(),
-          'lastReportDate': dateStr,
-          'reports': <String, dynamic>{
-            dateStr: dayPayload,
-          },
-        },
-        SetOptions(merge: true),
-      );
-
-      await batch.commit();
     } catch (e, st) {
       firestoreSaveOk = false;
       dev.log(
@@ -444,7 +314,7 @@ class SimpleEndWorkReportService {
       );
     }
 
-    // 7. plates / plate_counters cleanup
+    // 7. plates / plate_counters cleanup (Repository로 위임)
     bool cleanupOk = true;
     try {
       dev.log(
@@ -452,22 +322,10 @@ class SimpleEndWorkReportService {
         name: 'SimpleEndWorkReportService',
       );
 
-      final batch = _firestore.batch();
-
-      for (final d in platesSnap.docs) {
-        batch.delete(d.reference);
-      }
-
-      final countersRef = _firestore.collection('plate_counters').doc('area_$area');
-      batch.set(
-        countersRef,
-        <String, dynamic>{
-          'departureCompletedEvents': 0,
-        },
-        SetOptions(merge: true),
+      await _repo.cleanupLockedDepartureCompletedPlates(
+        area: area,
+        plateDocIds: plates.map((e) => e.docId).toList(),
       );
-
-      await batch.commit();
     } catch (e, st) {
       cleanupOk = false;
       dev.log(
