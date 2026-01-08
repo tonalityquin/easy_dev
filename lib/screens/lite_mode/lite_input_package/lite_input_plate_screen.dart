@@ -56,6 +56,24 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
   static const String _platesSub = 'plates';
   static const String _monthlyPlateStatusRoot = 'monthly_plate_status';
 
+  // ─────────────────────────────
+  // ✅ Usage 계측
+  // - useSourceOnlyKey=true 이므로 source가 집계 키(userKey)에 직접 반영
+  // - Lite vs Service 차이는 source 프리픽스로 구분(lite. / svc.)
+  // ─────────────────────────────
+  static const bool _usageUseSourceOnlyKey = true;
+  static const int _usageSourceShardCount = 10;
+
+  /// ✅ (변경) Lite 화면에서 번호판 입력 완료 시 plate_status 조회 → UI 프리필
+  static const String _usageSrcLitePlateStatusLookupOnComplete =
+      'lite.plate_status.lookup.on_complete';
+
+  // 아래 2개는 기존 문자열을 유지(대시보드/집계 호환성)
+  static const String _usageSrcMonthlyLookup =
+      'LiteInputPlateScreen._fetchMonthlyPlateStatus/monthly_plate_status.lookup';
+  static const String _usageSrcMonthlyUpdate =
+      'LiteInputPlateScreen._applyMonthlyMemoAndStatusOnly/monthly_plate_status.doc.update';
+
   // ✅ 현재 기기 로컬 플래그(정기 선택 가능 여부)
   bool _hasMonthlyParking = false;
   bool _hasMonthlyLoaded = false;
@@ -135,6 +153,26 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
     final a = _safeArea(area);
     final p = _canonicalPlateNumber(plateNumber);
     return '${p}_$a';
+  }
+
+  Future<void> _reportUsage({
+    required String area,
+    required String action,
+    required String source,
+    int n = 1,
+  }) async {
+    try {
+      await UsageReporter.instance.report(
+        area: area,
+        action: action,
+        n: n,
+        source: source,
+        useSourceOnlyKey: _usageUseSourceOnlyKey,
+        sourceShardCount: _usageSourceShardCount,
+      );
+    } catch (e) {
+      debugPrint('[UsageReporter] report failed ($source): $e');
+    }
   }
 
   // ✅ SharedPreferences에서 has_monthly_parking 로드
@@ -315,8 +353,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
 
   // ─────────────────────────────
   // ✅ (FIX) Navigator pop 재진입 방지
-  // - PopScope.onPopInvoked 안에서 즉시 pop()을 호출하면 _debugLocked 크래시 가능
-  // - pop 경로를 단일화하고, 필요 시 다음 프레임으로 defer하여 안전하게 pop 수행
   // ─────────────────────────────
   bool _exitInProgress = false;
   bool _exitPostFrameScheduled = false;
@@ -332,7 +368,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
       try {
         Navigator.of(context).pop(false);
       } catch (e) {
-        // pop이 실패하면 플래그를 되돌려 다음 시도를 가능하게 함
         _exitInProgress = false;
         debugPrint('[LiteInputPlateScreen] pop failed: $e');
       }
@@ -343,7 +378,6 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
       return;
     }
 
-    // 이미 예약되어 있으면 중복 예약 방지
     if (_exitPostFrameScheduled) return;
     _exitPostFrameScheduled = true;
 
@@ -583,18 +617,12 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
       return null;
     } finally {
       // ✅ 요구사항: 계측은 무조건 1 read
-      try {
-        await UsageReporter.instance.report(
-          area: safeArea,
-          action: 'read',
-          n: 1,
-          source: 'LiteInputPlateScreen._fetchPlateStatus/plate_status.lookup',
-          useSourceOnlyKey: true,
-          sourceShardCount: 10, // ✅ source-only 집계를 유지하면서 핫스팟 완화
-        );
-      } catch (e) {
-        debugPrint('[UsageReporter] report failed in _fetchPlateStatus: $e');
-      }
+      await _reportUsage(
+        area: safeArea,
+        action: 'read',
+        n: 1,
+        source: _usageSrcLitePlateStatusLookupOnComplete,
+      );
     }
   }
 
@@ -619,20 +647,12 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
       debugPrint('[_fetchMonthlyPlateStatus] error: $e');
       return null;
     } finally {
-      try {
-        await UsageReporter.instance.report(
-          area: safeArea,
-          action: 'read',
-          n: 1,
-          source:
-          'LiteInputPlateScreen._fetchMonthlyPlateStatus/monthly_plate_status.lookup',
-          useSourceOnlyKey: true,
-          sourceShardCount: 10, // ✅ 추가
-        );
-      } catch (e) {
-        debugPrint(
-            '[UsageReporter] report failed in _fetchMonthlyPlateStatus: $e');
-      }
+      await _reportUsage(
+        area: safeArea,
+        action: 'read',
+        n: 1,
+        source: _usageSrcMonthlyLookup,
+      );
     }
   }
 
@@ -736,20 +756,12 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
         skipIfDocMissing: false,
       );
 
-      try {
-        await UsageReporter.instance.report(
-          area: _safeArea(area),
-          action: 'write',
-          n: 1,
-          source:
-          'LiteInputPlateScreen._applyMonthlyMemoAndStatusOnly/monthly_plate_status.doc.update',
-          useSourceOnlyKey: true,
-          sourceShardCount: 10, // ✅ 추가
-        );
-      } catch (e) {
-        debugPrint(
-            '[UsageReporter] report failed in _applyMonthlyMemoAndStatusOnly: $e');
-      }
+      await _reportUsage(
+        area: _safeArea(area),
+        action: 'write',
+        n: 1,
+        source: _usageSrcMonthlyUpdate,
+      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1323,8 +1335,7 @@ class _LiteInputPlateScreenState extends State<LiteInputPlateScreen> {
           return;
         }
 
-        // ✅ FIX 3) PopScope 콜스택(=Navigator pop 처리 중)에서 즉시 pop 호출하면
-        //          _debugLocked로 터질 수 있으므로 다음 프레임으로 defer
+        // ✅ FIX 3) PopScope 콜스택에서 즉시 pop 호출하면 _debugLocked로 터질 수 있어 defer
         if (mounted) {
           _requestExit(defer: true);
         }
@@ -1775,7 +1786,8 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14)),
                         backgroundColor: base,
-                        foregroundColor: _onColorFor(base, fallback: Colors.white),
+                        foregroundColor:
+                        _onColorFor(base, fallback: Colors.white),
                       ),
                       child: const Text('상태 메모 보기',
                           style: TextStyle(fontWeight: FontWeight.w900)),
@@ -1792,8 +1804,6 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
 }
 
 /// ✅ 카드 헤더(핸들/세그먼트 탭) 고정
-/// - 닫힘(sheetOpen=false): 헤더 전체가 "하나의 도커"로 동작(탭하면 열기), 페이지 선택 불가
-/// - 열림(sheetOpen=true): 좌/우 반분 세그먼트로 "정산 유형 / 상태 메모" 선택 가능, 닫기는 핸들 탭으로 수행
 class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
   final Color backgroundColor;
   final bool sheetOpen;

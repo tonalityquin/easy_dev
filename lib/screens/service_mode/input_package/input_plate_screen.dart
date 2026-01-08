@@ -53,6 +53,44 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   static const String _platesSub = 'plates';
   static const String _monthlyPlateStatusRoot = 'monthly_plate_status';
 
+  // ─────────────────────────────
+  // ✅ Usage 계측
+  // - useSourceOnlyKey=true 이므로 source가 집계 키(userKey)에 직접 반영
+  // - Lite vs Service 차이는 source 프리픽스로 구분(lite. / svc.)
+  // ─────────────────────────────
+  static const bool _usageUseSourceOnlyKey = true;
+  static const int _usageSourceShardCount = 10;
+
+  /// ✅ (변경) 서비스 화면에서 번호판 입력 완료 시 plate_status 조회 → UI 프리필
+  static const String _usageSrcSvcPlateStatusLookupOnComplete =
+      'svc.plate_status.lookup.on_complete';
+
+  /// 월정기 관련 source는 기존 문자열 유지(호환성), 호출만 리팩터링
+  static const String _usageSrcMonthlyLookup =
+      'InputPlateScreen._fetchMonthlyPlateStatus/monthly_plate_status.doc.get';
+  static const String _usageSrcMonthlyUpdate =
+      'InputPlateScreen._applyMonthlyMemoAndStatusOnly/monthly_plate_status.doc.update';
+
+  Future<void> _reportUsage({
+    required String area,
+    required String action,
+    required String source,
+    int n = 1,
+  }) async {
+    try {
+      await UsageReporter.instance.report(
+        area: area,
+        action: action,
+        n: n,
+        source: source,
+        useSourceOnlyKey: _usageUseSourceOnlyKey,
+        sourceShardCount: _usageSourceShardCount,
+      );
+    } catch (e) {
+      debugPrint('[UsageReporter] report failed ($source): $e');
+    }
+  }
+
   // ✅ 현재 기기 로컬 플래그(정기 선택 가능 여부)
   bool _hasMonthlyParking = false;
   bool _hasMonthlyLoaded = false;
@@ -536,20 +574,14 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       debugPrint('[_fetchPlateStatus] error: $e');
       return null;
     } finally {
-      // ✅ 계측값 n은 정책상 항상 1로 고정 (unused_local_variable 제거)
-      try {
-        await UsageReporter.instance.report(
-          area: safeArea,
-          action: 'read',
-          n: 1,
-          source:
-          'InputPlateScreen._fetchPlateStatus/plate_status.monthlyShard.doc.get',
-          useSourceOnlyKey: true,
-          sourceShardCount: 10, // Lite와 동일(핫스팟 완화)
-        );
-      } catch (e) {
-        debugPrint('[UsageReporter] report failed in _fetchPlateStatus: $e');
-      }
+      // ✅ 계측값 n은 정책상 항상 1로 고정
+      // ✅ (변경) 목적 중심 + svc 프리픽스로 Lite와 구분
+      await _reportUsage(
+        area: safeArea,
+        action: 'read',
+        n: 1,
+        source: _usageSrcSvcPlateStatusLookupOnComplete,
+      );
     }
   }
 
@@ -573,20 +605,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       debugPrint('[_fetchMonthlyPlateStatus] error: $e');
       return null;
     } finally {
-      try {
-        await UsageReporter.instance.report(
-          area: safeArea,
-          action: 'read',
-          n: 1,
-          source:
-          'InputPlateScreen._fetchMonthlyPlateStatus/monthly_plate_status.doc.get',
-          useSourceOnlyKey: true,
-          sourceShardCount: 10,
-        );
-      } catch (e) {
-        debugPrint(
-            '[UsageReporter] report failed in _fetchMonthlyPlateStatus: $e');
-      }
+      await _reportUsage(
+        area: safeArea,
+        action: 'read',
+        n: 1,
+        source: _usageSrcMonthlyLookup,
+      );
     }
   }
 
@@ -708,20 +732,12 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         skipIfDocMissing: false,
       );
 
-      try {
-        await UsageReporter.instance.report(
-          area: safeArea,
-          action: 'write',
-          n: 1,
-          source:
-          'InputPlateScreen._applyMonthlyMemoAndStatusOnly/monthly_plate_status.doc.update',
-          useSourceOnlyKey: true,
-          sourceShardCount: 10,
-        );
-      } catch (e) {
-        debugPrint(
-            '[UsageReporter] report failed in _applyMonthlyMemoAndStatusOnly: $e');
-      }
+      await _reportUsage(
+        area: safeArea,
+        action: 'write',
+        n: 1,
+        source: _usageSrcMonthlyUpdate,
+      );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1243,8 +1259,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
       transitionBuilder: (child, animation) {
-        final begin =
-        _dockSlideFromRight ? const Offset(0.10, 0) : const Offset(-0.10, 0);
+        final begin = _dockSlideFromRight
+            ? const Offset(0.10, 0)
+            : const Offset(-0.10, 0);
         final offsetAnim =
         Tween<Offset>(begin: begin, end: Offset.zero).animate(animation);
         return SlideTransition(
