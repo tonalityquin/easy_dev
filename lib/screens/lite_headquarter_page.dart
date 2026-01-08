@@ -16,6 +16,12 @@ import 'secondary_page.dart';
 // ✅ AppCardPalette ThemeExtension 사용
 import '../theme.dart';
 
+// ✅ (추가) 구독 ON을 위해 PlateState 접근
+import '../states/plate/plate_state.dart';
+
+// ✅ (추가) Lite 엔진 명시적 OFF를 위해 LitePlateState 접근
+import '../states/plate/lite_plate_state.dart';
+
 class LiteHeadquarterPage extends StatelessWidget {
   const LiteHeadquarterPage({super.key});
 
@@ -86,6 +92,19 @@ class _LiteHqModeSwitchButton extends StatelessWidget {
           label: const Text('서비스 본사로 전환'),
           style: _switchBtnStyle(context),
           onPressed: () {
+            // ✅ 전환 흐름 완결:
+            // 1) LitePlateState(1회 조회 엔진) OFF + 리셋
+            final litePlateState = context.read<LitePlateState>();
+            litePlateState.disableAll();
+
+            // 2) PlateState를 “깨끗한 상태”로 리셋 후
+            // 3) 서비스 구독 엔진 ON(기본 3종 구독 시작)
+            final plateState = context.read<PlateState>();
+            plateState.disableAll();
+
+            final area = plateState.currentArea.trim();
+            plateState.enableForTypePages(withDefaults: area.isNotEmpty);
+
             _replaceWithAnimatedRoute(
               context,
               AppRoutes.headquarterPage,

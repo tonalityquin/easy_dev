@@ -1,15 +1,3 @@
-// lib/screens/secondary_mode/dev_mode_package/back_end_controller.dart
-//
-// ✅ 변경 사항(Dev Auth Gate 추가)
-// - BackEndController 진입 시 DevAuth.restorePrefs()로 개발자 인증 여부 확인
-// - devAuthorized == false 이면, 컨트롤 UI 대신 "개발자 인증 필요" 게이트 화면 표시
-// - 게이트 화면에서 DevLoginBottomSheet 호출 → 성공 시 DevAuth.setDevAuthorized(true) 저장 후 즉시 활성화
-// - 초기화(Reset)도 동일하게 DevLoginBottomSheet의 onReset으로 처리 가능
-//
-// ✅ 추가 수정(요청 사항)
-// - AppBar의 자동 뒤로가기(leading) 아이콘이 보이지 않도록:
-//   automaticallyImplyLeading: false + leading/leadingWidth를 명시
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -28,6 +16,11 @@ class _SvcColors {
   static const dark = Color(0xFF09367D); // 텍스트/아이콘 강조
   static const light = Color(0xFF5472D3); // 서브톤/보더
   static const fg = Color(0xFFFFFFFF);
+
+  static const warnBg = Color(0xFFFFF3E0);
+  static const warnBorder = Color(0xFFFFB74D);
+  static const okBg = Color(0xFFE8F5E9);
+  static const okBorder = Color(0xFF81C784);
 }
 
 class BackEndController extends StatefulWidget {
@@ -270,15 +263,14 @@ class _BackEndControllerState extends State<BackEndController> {
       body: _checkingDevAuth
           ? const Center(child: CircularProgressIndicator())
           : (!_devAuthorized)
-          ? _DevAuthGate(
-        onLogin: _openDevLogin,
-      )
+          ? _DevAuthGate(onLogin: _openDevLogin)
           : _buildControllerBody(context, subscribableTypes),
     );
   }
 
   Widget _buildControllerBody(BuildContext context, List<PlateType> subscribableTypes) {
     final plateState = context.watch<PlateState>();
+    final enabled = plateState.isEnabled;
 
     return Stack(
       children: [
@@ -289,22 +281,47 @@ class _BackEndControllerState extends State<BackEndController> {
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             children: [
               const _HeaderBanner(),
+              const SizedBox(height: 10),
+
+              _EngineStatusBanner(
+                enabled: enabled,
+                desiredCount: plateState.desiredSubscriptionCount,
+                activeCount: plateState.activeSubscriptionCount,
+                currentArea: plateState.currentArea,
+              ),
               const SizedBox(height: 12),
 
               // 타입별 구독 카드
               for (final type in subscribableTypes)
                 _SubscribeTile(
                   title: _getTypeLabel(type),
-                  subtitle: _buildSubscribedAreaText(plateState, type),
+                  subtitle: _buildTileSubtitle(plateState, type),
                   icon: _iconForType(type),
-                  active: plateState.isSubscribed(type),
+
+                  // ✅ “실제 구독(Active)” 기준으로 스위치 표시
+                  active: plateState.isActivelySubscribed(type),
+
                   busy: _isBusy(type),
-                  onChanged: (value) async {
+
+                  // ✅ 엔진 OFF면 토글 자체를 비활성화(혼선 제거)
+                  onChanged: !enabled
+                      ? null
+                      : (value) async {
                     final typeLabel = _getTypeLabel(type);
                     _setBusy(type, true);
                     try {
                       if (value) {
                         await Future.sync(() => plateState.subscribeType(type));
+
+                        // subscribeType이 실제로 구독을 열지 못한 경우(비정상/경계 상황) 방어
+                        if (!plateState.isActivelySubscribed(type)) {
+                          showFailedSnackbar(
+                            context,
+                            '[$typeLabel] 구독을 시작할 수 없습니다.\n(현재 상태/지역을 확인해 주세요)',
+                          );
+                          return;
+                        }
+
                         final currentArea = plateState.currentArea;
                         showSuccessSnackbar(
                           context,
@@ -334,21 +351,35 @@ class _BackEndControllerState extends State<BackEndController> {
           Positioned.fill(
             child: Container(
               color: Colors.white.withOpacity(0.6),
-              child: const Center(
-                child: _LockedBanner(),
-              ),
+              child: const Center(child: _LockedBanner()),
             ),
           ),
       ],
     );
   }
 
-  Widget? _buildSubscribedAreaText(PlateState plateState, PlateType type) {
-    final subscribedArea = plateState.getSubscribedArea(type);
-    if (subscribedArea == null) return null;
-    return Text(
-      '지역: $subscribedArea',
-      style: const TextStyle(fontSize: 13, color: Colors.black54),
+  Widget? _buildTileSubtitle(PlateState plateState, PlateType type) {
+    final enabled = plateState.isEnabled;
+    final active = plateState.isActivelySubscribed(type);
+    final area = plateState.getSubscribedArea(type);
+
+    if (!enabled) {
+      return const Text(
+        '현재 PlateState 엔진이 OFF 입니다.\n(Lite/본사 화면에서는 실시간 구독이 중지됩니다.)',
+        style: TextStyle(fontSize: 12.5, color: Colors.black54, height: 1.25),
+      );
+    }
+
+    if (active) {
+      return Text(
+        '지역: ${area ?? "알 수 없음"}',
+        style: const TextStyle(fontSize: 13, color: Colors.black54),
+      );
+    }
+
+    return const Text(
+      '미구독',
+      style: TextStyle(fontSize: 13, color: Colors.black54),
     );
   }
 
@@ -451,6 +482,71 @@ class _DevAuthGate extends StatelessWidget {
   }
 }
 
+class _EngineStatusBanner extends StatelessWidget {
+  const _EngineStatusBanner({
+    required this.enabled,
+    required this.desiredCount,
+    required this.activeCount,
+    required this.currentArea,
+  });
+
+  final bool enabled;
+  final int desiredCount;
+  final int activeCount;
+  final String currentArea;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = enabled ? _SvcColors.okBg : _SvcColors.warnBg;
+    final border = enabled ? _SvcColors.okBorder : _SvcColors.warnBorder;
+    final icon = enabled ? Icons.play_circle_fill : Icons.pause_circle_filled;
+    final title = enabled ? 'PlateState 엔진: ON' : 'PlateState 엔진: OFF';
+    final desc = enabled
+        ? '실제 구독(Stream listen)이 실행됩니다.'
+        : 'Lite/본사 화면에서는 실시간 구독이 중지됩니다.';
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: _SvcColors.dark),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: _SvcColors.dark,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  desc,
+                  style: const TextStyle(fontSize: 12.5, color: Colors.black87, height: 1.25),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '원하는 구독: $desiredCount개 · 실제 활성 구독: $activeCount개 · area: $currentArea',
+                  style: const TextStyle(fontSize: 12, color: Colors.black54),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 /// ===================================
 /// UI 파츠
 /// ===================================
@@ -508,7 +604,10 @@ class _SubscribeTile extends StatelessWidget {
   final IconData icon;
   final bool active;
   final bool busy;
-  final ValueChanged<bool> onChanged;
+
+  /// ✅ null이면 스위치 비활성화
+  final ValueChanged<bool>? onChanged;
+
   final Widget? subtitle;
 
   @override

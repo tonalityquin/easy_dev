@@ -24,6 +24,9 @@ class PlateState extends ChangeNotifier {
   // ✅ 필드 페이지에서만 스트림을 켜기 위한 스위치 (HQ에서는 false 유지)
   bool _enabled = false;
 
+  /// ✅ BackEndController 등에서 “현재 PlateState 엔진이 켜져있는지” 확인용
+  bool get isEnabled => _enabled;
+
   final Map<String, bool> previousIsLockedFee = {};
 
   final Map<PlateType, List<PlateModel>> _data = {
@@ -31,6 +34,12 @@ class PlateState extends ChangeNotifier {
   };
 
   final Map<PlateType, StreamSubscription> _subscriptions = {};
+
+  /// ✅ 실제 실행 중(= listen 보유) 구독인지 여부
+  bool isActivelySubscribed(PlateType type) => _subscriptions.containsKey(type);
+
+  /// ✅ 실제 활성 구독 개수
+  int get activeSubscriptionCount => _subscriptions.length;
 
   final Map<PlateType, bool> _isSortedMap = {
     for (var c in PlateType.values) c: true,
@@ -40,7 +49,10 @@ class PlateState extends ChangeNotifier {
 
   bool _isLoading = false;
 
+  /// ✅ “원하는 구독(스위치 의도)” 상태
   final Set<PlateType> _desiredSubscriptions = {};
+
+  int get desiredSubscriptionCount => _desiredSubscriptions.length;
 
   // ─────────────────────────────────────────────────────────────
   // departureRequests에서 "사라진" 항목 감지를 위한 캐시 & 이벤트
@@ -120,10 +132,29 @@ class PlateState extends ChangeNotifier {
     }
   }
 
+  /// ✅ 완결 패치 핵심:
+  /// - disableAll() 시 실제 구독(_subscriptions)만 끊으면 UI(희망 구독)와 상태가 어긋날 수 있음
+  /// - 따라서 _desiredSubscriptions까지 함께 정리하여 “전환 직후 스위치도 OFF”가 되도록 보장
   void disableAll() {
-    if (!_enabled && _subscriptions.isEmpty) return;
+    if (!_enabled && _subscriptions.isEmpty && _desiredSubscriptions.isEmpty) return;
+
     _enabled = false;
     debugPrint('🔕 PlateState disabled (HQ or leaving type pages)');
+
+    // ✅ “희망 구독”까지 정리 → BackEndController 스위치 혼선 제거
+    _desiredSubscriptions.clear();
+
+    // 선택 보류/베이스라인/전이 캐시 정리
+    _clearPendingSelection();
+    _baseline.clear();
+    previousIsLockedFee.clear();
+
+    // 데이터/캐시 정리(잔상 방지)
+    for (final t in PlateType.values) {
+      _data[t] = [];
+      _lastByType[t] = {};
+    }
+
     _cancelAllSubscriptions();
   }
 
@@ -335,6 +366,8 @@ class PlateState extends ChangeNotifier {
     _subscribedAreas[type] = area;
   }
 
+  /// ✅ 완결 패치(보강):
+  /// - 구독 중이 아니더라도, “해제”는 항상 UI/캐시 상태를 정리하도록 보장
   void unsubscribeType(PlateType type) {
     _desiredSubscriptions.remove(type);
 
@@ -343,14 +376,20 @@ class PlateState extends ChangeNotifier {
 
     if (sub != null) {
       sub.cancel();
-      _subscriptions.remove(type);
-      _subscribedAreas.remove(type);
-      _data[type] = [];
-      _lastByType[type] = {}; // 캐시도 초기화
-      notifyListeners();
+    }
+
+    _subscriptions.remove(type);
+    _subscribedAreas.remove(type);
+
+    _data[type] = [];
+    _lastByType[type] = {};
+
+    notifyListeners();
+
+    if (area != null) {
       debugPrint('🛑 [${_getTypeLabel(type)}] 구독 해제됨 (지역: $area)');
     } else {
-      debugPrint('⚠️ [${_getTypeLabel(type)}] 구독 중이 아님');
+      debugPrint('🛑 [${_getTypeLabel(type)}] 구독 해제됨');
     }
   }
 
