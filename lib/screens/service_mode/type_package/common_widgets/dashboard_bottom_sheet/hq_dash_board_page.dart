@@ -16,6 +16,9 @@ import 'home_dash_board_controller.dart';
 import 'widgets/home_user_info_card.dart';
 import 'widgets/home_break_button_widget.dart';
 
+// ✅ Trace 기록용 Recorder
+import '../../../../hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
+
 class HqDashBoardPage extends StatefulWidget {
   const HqDashBoardPage({super.key});
 
@@ -28,8 +31,28 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
 
   late final HomeDashBoardController _controller = HomeDashBoardController();
 
+  // ✅ 공통 Trace 기록 헬퍼
+  void _trace(String name, {Map<String, dynamic>? meta}) {
+    DebugActionRecorder.instance.recordAction(
+      name,
+      route: ModalRoute.of(context)?.settings.name,
+      meta: meta,
+    );
+  }
+
   Future<void> _exitAppAfterClockOut(BuildContext context) async {
     AppExitFlag.beginExit();
+
+    // ✅ 앱 종료 직전 Trace 자동 저장(기록 중일 때만) — 유실 방지
+    try {
+      if (DebugActionRecorder.instance.isRecording) {
+        await DebugActionRecorder.instance.stopAndSave(
+          titleOverride: 'auto:clockout_exit',
+        );
+      }
+    } catch (_) {
+      // auto-save 실패는 앱 종료를 막지 않음
+    }
 
     try {
       if (Platform.isAndroid) {
@@ -86,10 +109,30 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
       BuildContext context,
       UserState userState,
       ) async {
+    // ✅ 퇴근 플로우 시작 Trace
+    _trace(
+      '퇴근 처리 시작',
+      meta: <String, dynamic>{
+        'screen': 'hq_dashboard',
+        'action': 'clockout_flow_start',
+        'isWorkingBefore': userState.isWorking,
+      },
+    );
+
     // 1) 기존 퇴근 처리 (user_accounts.isWorking 등)
     await _controller.handleWorkStatus(userState, context);
 
     if (!mounted) return;
+
+    // ✅ 퇴근 처리 후 상태 Trace(선택)
+    _trace(
+      '퇴근 상태 반영',
+      meta: <String, dynamic>{
+        'screen': 'hq_dashboard',
+        'action': 'clockout_state_updated',
+        'isWorkingAfter': userState.isWorking,
+      },
+    );
 
     // 2) 퇴근 처리 성공 여부 확인
     if (!userState.isWorking) {
@@ -102,6 +145,18 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
         final String area = userState.currentArea; // 기존 로직 유지
         final String division = userState.division;
 
+        // ✅ workOut 기록 직전 Trace(선택)
+        _trace(
+          '퇴근 이벤트 기록',
+          meta: <String, dynamic>{
+            'screen': 'hq_dashboard',
+            'action': 'workout_event_insert_and_upload',
+            'area': area,
+            'division': division,
+            'at': now.toIso8601String(),
+          },
+        );
+
         // 2-1) SQLite + (필요 시) Firestore commute_user_logs 업로드
         await SimpleModeAttendanceRepository.instance.insertEventAndUpload(
           dateTime: now,
@@ -113,9 +168,74 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
         );
       }
 
+      // ✅ 앱 종료 직전 Trace(선택)
+      _trace(
+        '앱 종료 진행',
+        meta: <String, dynamic>{
+          'screen': 'hq_dashboard',
+          'action': 'exit_after_clockout',
+        },
+      );
+
       // 3) 퇴근 처리 완료 → 앱 종료
       await _exitAppAfterClockOut(context);
+    } else {
+      // ✅ 퇴근 실패/미반영 Trace(선택)
+      _trace(
+        '퇴근 처리 미완료',
+        meta: <String, dynamic>{
+          'screen': 'hq_dashboard',
+          'action': 'clockout_not_completed',
+          'reason': 'userState.isWorking_still_true',
+        },
+      );
     }
+  }
+
+  Future<void> _onClockOutPressed(BuildContext context, UserState userState) async {
+    // ✅ 퇴근하기 버튼 Trace 기록(진입 즉시)
+    _trace(
+      '퇴근하기 버튼',
+      meta: <String, dynamic>{
+        'screen': 'hq_dashboard',
+        'action': 'clockout_tap',
+        'isWorking': userState.isWorking,
+      },
+    );
+
+    if (userState.isWorking) {
+      final bool confirmed = await showWorkEndDurationBlockingDialog(
+        context,
+        message: '지금 퇴근 처리하시겠습니까?\n5초 안에 취소하지 않으면 자동으로 진행됩니다.',
+        duration: const Duration(seconds: 5),
+      );
+
+      // ✅ 다이얼로그 결과 Trace 기록
+      _trace(
+        '퇴근 다이얼로그 결과',
+        meta: <String, dynamic>{
+          'screen': 'hq_dashboard',
+          'action': 'clockout_dialog_result',
+          'confirmed': confirmed,
+          'durationSeconds': 5,
+        },
+      );
+
+      if (!confirmed) {
+        // ✅ 취소 Trace(선택)
+        _trace(
+          '퇴근 처리 취소',
+          meta: <String, dynamic>{
+            'screen': 'hq_dashboard',
+            'action': 'clockout_aborted',
+            'reason': 'user_cancelled_dialog',
+          },
+        );
+        return;
+      }
+    }
+
+    await _handleClockOutFlow(context, userState);
   }
 
   @override
@@ -143,9 +263,7 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
                 const SizedBox(height: 16),
                 AnimatedCrossFade(
                   duration: const Duration(milliseconds: 200),
-                  crossFadeState: _layerHidden
-                      ? CrossFadeState.showFirst
-                      : CrossFadeState.showSecond,
+                  crossFadeState: _layerHidden ? CrossFadeState.showFirst : CrossFadeState.showSecond,
                   firstChild: const SizedBox.shrink(),
                   secondChild: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -158,22 +276,7 @@ class _HqDashBoardPageState extends State<HqDashBoardPage> {
                           icon: const Icon(Icons.exit_to_app),
                           label: const Text('퇴근하기'),
                           style: _clockOutBtnStyle(),
-                          onPressed: () async {
-                            if (userState.isWorking) {
-                              final bool confirmed =
-                              await showWorkEndDurationBlockingDialog(
-                                context,
-                                message:
-                                '지금 퇴근 처리하시겠습니까?\n5초 안에 취소하지 않으면 자동으로 진행됩니다.',
-                                duration: const Duration(seconds: 5),
-                              );
-                              if (!confirmed) {
-                                return;
-                              }
-                            }
-
-                            await _handleClockOutFlow(context, userState);
-                          },
+                          onPressed: () => _onClockOutPressed(context, userState),
                         ),
                       ),
                       const SizedBox(height: 16),

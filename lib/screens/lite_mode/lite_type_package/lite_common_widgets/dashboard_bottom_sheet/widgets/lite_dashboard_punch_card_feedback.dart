@@ -6,6 +6,37 @@ import 'package:intl/intl.dart';
 
 import '../../../../../simple_mode/utils/simple_mode/simple_mode_attendance_repository.dart';
 
+// ✅ Trace 기록용 Recorder
+import '../../../../../hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
+
+/// ✅ Lite 펀칭 이벤트를 Trace에 기록
+/// - Trace 탭에서 "기록 시작" 상태일 때만 실제로 누적됨(recordAction 내부에서 _recording이 아니면 return)
+void _traceLitePunch(BuildContext context, SimpleModeAttendanceType type, DateTime dateTime) {
+  final String name;
+  switch (type) {
+    case SimpleModeAttendanceType.workIn:
+      name = 'Lite 출근 펀칭';
+      break;
+    case SimpleModeAttendanceType.breakTime:
+      name = 'Lite 휴게 펀칭';
+      break;
+    case SimpleModeAttendanceType.workOut:
+      name = 'Lite 퇴근 펀칭';
+      break;
+  }
+
+  DebugActionRecorder.instance.recordAction(
+    name,
+    route: ModalRoute.of(context)?.settings.name,
+    meta: <String, dynamic>{
+      'screen': 'lite_dashboard_punch_card_feedback',
+      'action': 'punch_feedback_show',
+      'type': type.toString(),
+      'at': dateTime.toIso8601String(),
+    },
+  );
+}
+
 /// 타임카드 펀칭 느낌의 짧은 피드백 시트를 띄우는 헬퍼
 ///
 /// - DB에는 실제 시간(HH:mm)을 저장하지만,
@@ -16,6 +47,9 @@ Future<void> showLiteDashboardPunchCardFeedback(
       required SimpleModeAttendanceType type,
       required DateTime dateTime,
     }) async {
+  // ✅ Trace 기록(휴게/퇴근 포함)
+  _traceLitePunch(context, type, dateTime);
+
   // 촉각 + 시스템 사운드로 피드백
   HapticFeedback.mediumImpact();
   SystemSound.play(SystemSoundType.click);
@@ -111,8 +145,7 @@ class _PunchCardSheet extends StatefulWidget {
   State<_PunchCardSheet> createState() => _PunchCardSheetState();
 }
 
-class _PunchCardSheetState extends State<_PunchCardSheet>
-    with SingleTickerProviderStateMixin {
+class _PunchCardSheetState extends State<_PunchCardSheet> with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _sheetScale;
   late final Animation<double> _headDrop; // 펀칭 헤드 낙하량(0~1)
@@ -392,23 +425,19 @@ class _PunchCardSheetState extends State<_PunchCardSheet>
                                       Expanded(
                                         flex: 3,
                                         child: Column(
-                                          crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                          crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Text(
                                               dateStr,
-                                              style: textTheme.bodyMedium
-                                                  ?.copyWith(
+                                              style: textTheme.bodyMedium?.copyWith(
                                                 fontWeight: FontWeight.w600,
-                                                color:
-                                                const Color(0xFF3C342A),
+                                                color: const Color(0xFF3C342A),
                                               ),
                                             ),
                                             const SizedBox(height: 2),
                                             Text(
                                               weekDayStr,
-                                              style: textTheme.labelSmall
-                                                  ?.copyWith(
+                                              style: textTheme.labelSmall?.copyWith(
                                                 color: const Color(0xFF7A6F63),
                                               ),
                                             ),
@@ -424,9 +453,7 @@ class _PunchCardSheetState extends State<_PunchCardSheet>
                                           accentColor: _accentColorForType(
                                             SimpleModeAttendanceType.workIn,
                                           ),
-                                          // 현재 펀칭 대상 칸 하이라이트
-                                          highlighted: widget.type ==
-                                              SimpleModeAttendanceType.workIn,
+                                          highlighted: widget.type == SimpleModeAttendanceType.workIn,
                                           flashStrength: flashStrength,
                                         ),
                                       ),
@@ -439,9 +466,7 @@ class _PunchCardSheetState extends State<_PunchCardSheet>
                                           accentColor: _accentColorForType(
                                             SimpleModeAttendanceType.breakTime,
                                           ),
-                                          highlighted: widget.type ==
-                                              SimpleModeAttendanceType
-                                                  .breakTime,
+                                          highlighted: widget.type == SimpleModeAttendanceType.breakTime,
                                           flashStrength: flashStrength,
                                         ),
                                       ),
@@ -454,8 +479,7 @@ class _PunchCardSheetState extends State<_PunchCardSheet>
                                           accentColor: _accentColorForType(
                                             SimpleModeAttendanceType.workOut,
                                           ),
-                                          highlighted: widget.type ==
-                                              SimpleModeAttendanceType.workOut,
+                                          highlighted: widget.type == SimpleModeAttendanceType.workOut,
                                           flashStrength: flashStrength,
                                         ),
                                       ),
@@ -551,9 +575,7 @@ class _PunchStatusCell extends StatelessWidget {
         curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
         decoration: BoxDecoration(
-          color: highlighted
-              ? accentColor.withOpacity(0.15 + 0.20 * glow)
-              : Colors.transparent,
+          color: highlighted ? accentColor.withOpacity(0.15 + 0.20 * glow) : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
           boxShadow: highlighted && glow > 0
               ? [
@@ -569,13 +591,9 @@ class _PunchStatusCell extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              showCheck
-                  ? Icons.check_circle_rounded
-                  : Icons.radio_button_unchecked,
+              showCheck ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
               size: 16,
-              color: showCheck
-                  ? accentColor.withOpacity(0.95)
-                  : const Color(0xFFB0A89C),
+              color: showCheck ? accentColor.withOpacity(0.95) : const Color(0xFFB0A89C),
             ),
             const SizedBox(height: 2),
             Text(
@@ -585,9 +603,7 @@ class _PunchStatusCell extends StatelessWidget {
               style: textTheme.labelSmall?.copyWith(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
-                color: showCheck
-                    ? const Color(0xFF2E2720)
-                    : const Color(0xFF9C9286),
+                color: showCheck ? const Color(0xFF2E2720) : const Color(0xFF9C9286),
               ),
             ),
           ],

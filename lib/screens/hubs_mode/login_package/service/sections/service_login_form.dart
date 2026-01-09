@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+
 import '../../../../../routes.dart'; // ✅ AppRoutes 사용 (경로는 현재 파일 위치 기준)
 import '../../../../../theme.dart'; // ✅ AppCardPalette 사용 (theme.dart 연결)
 import '../service_login_controller.dart';
+
+// ✅ Trace 기록용 Recorder
+import '../../../../../screens/hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
 
 class ServiceLoginForm extends StatefulWidget {
   final ServiceLoginController controller;
@@ -21,14 +25,62 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
     _controller = widget.controller; // ✅ init은 상위(LoginScreen)에서만 수행
   }
 
+  // ✅ 공통 Trace 기록 헬퍼
+  void _trace(String name, {Map<String, dynamic>? meta}) {
+    DebugActionRecorder.instance.recordAction(
+      name,
+      route: ModalRoute.of(context)?.settings.name,
+      meta: meta,
+    );
+  }
+
   void _handleLogin() {
     _controller.login(setState);
   }
 
   void _onLoginButtonPressed() {
-    if (!_controller.isLoading) {
-      _handleLogin();
-    }
+    if (_controller.isLoading) return;
+
+    // ✅ 서비스 로그인 버튼 Trace 기록
+    _trace(
+      '서비스 로그인 버튼',
+      meta: <String, dynamic>{
+        'screen': 'service_login',
+        'action': 'login',
+      },
+    );
+
+    _handleLogin();
+  }
+
+  void _onTopCompanyLogoTapped() {
+    // ✅ 상단 회사 로고 탭 Trace 기록 (기존 동작 없음 유지)
+    _trace(
+      '회사 로고(상단)',
+      meta: <String, dynamic>{
+        'screen': 'service_login',
+        'asset': 'assets/images/easyvalet_logo_car.png',
+        'action': 'tap',
+      },
+    );
+  }
+
+  void _onPelicanLogoTapped() {
+    // ✅ 하단 펠리컨 로고 탭 Trace 기록 + 기존 네비게이션 유지
+    _trace(
+      '회사 로고(펠리컨)',
+      meta: <String, dynamic>{
+        'screen': 'service_login',
+        'asset': 'assets/images/pelican.png',
+        'action': 'back_to_selector',
+        'to': AppRoutes.selector,
+      },
+    );
+
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      AppRoutes.selector,
+          (route) => false,
+    );
   }
 
   @override
@@ -121,9 +173,9 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
                   ),
                 ),
 
-                // 로고 (탭 → 협업 캘린더로 이동 가능: 현재는 동작 없음)
+                // ✅ 로고 탭 Trace 기록 (기존: onTap 빈 함수) → 기록만 남기도록 개선
                 GestureDetector(
-                  onTap: () {},
+                  onTap: _onTopCompanyLogoTapped,
                   child: SizedBox(
                     height: 360,
                     child: Image.asset('assets/images/easyvalet_logo_car.png'),
@@ -180,7 +232,7 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
 
                 const SizedBox(height: 32),
 
-                // ▶ 버튼 라벨: 영어 "service login" 적용
+                // ▶ 버튼 라벨: "서비스 로그인"
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
@@ -199,11 +251,10 @@ class _ServiceLoginFormState extends State<ServiceLoginForm> {
 
                 const SizedBox(height: 1),
 
-                // ▼ 펠리컨: 탭하면 LoginSelectorPage로 복귀
+                // ▼ 펠리컨: 탭하면 LoginSelectorPage로 복귀 + Trace 기록
                 Center(
                   child: InkWell(
-                    onTap: () => Navigator.of(context)
-                        .pushNamedAndRemoveUntil(AppRoutes.selector, (route) => false),
+                    onTap: _onPelicanLogoTapped,
                     borderRadius: BorderRadius.circular(8),
                     child: SizedBox(
                       height: 80,

@@ -19,6 +19,9 @@ import '../../../../../../utils/snackbar_helper.dart';
 import 'repositories/lite_parking_completed_repository.dart';
 import 'ui/lite_reverse_page_top_sheet.dart';
 
+// ✅ Trace 기록용 Recorder
+import '../../../../../../screens/hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
+
 /// ✅ 실시간 탭 진입 게이트(ON/OFF)
 /// - 기본 OFF
 /// - 앱 재실행 후에도 유지(SharedPreferences)
@@ -86,6 +89,15 @@ class _LiteParkingCompletedTableSheetState extends State<LiteParkingCompletedTab
   bool _realtimeTabEnabled = false; // ✅ 기본 OFF
   bool _gateLoaded = false;
 
+  // ✅ Trace 기록 헬퍼
+  void _trace(String name, {Map<String, dynamic>? meta}) {
+    DebugActionRecorder.instance.recordAction(
+      name,
+      route: ModalRoute.of(context)?.settings.name,
+      meta: meta,
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -121,7 +133,32 @@ class _LiteParkingCompletedTableSheetState extends State<LiteParkingCompletedTab
   }
 
   void _onTapTab(int index) {
+    // ✅ 탭 클릭 Trace 기록(진입 즉시)
+    _trace(
+      '입차 완료 테이블 탭 클릭',
+      meta: <String, dynamic>{
+        'screen': 'lite_parking_completed_table_sheet',
+        'action': 'tab_tap',
+        'tabIndex': index,
+        'tab': index == 0 ? 'local' : 'realtime',
+        'realtimeEnabled': _realtimeTabEnabled,
+        'area': widget.area,
+      },
+    );
+
     if (index == 1 && !_realtimeTabEnabled) {
+      // ✅ 실시간 탭 잠금(차단) Trace 기록
+      _trace(
+        '실시간 탭 차단',
+        meta: <String, dynamic>{
+          'screen': 'lite_parking_completed_table_sheet',
+          'action': 'tab_blocked',
+          'tabIndex': 1,
+          'area': widget.area,
+          'reason': 'realtime_tab_gate_off',
+        },
+      );
+
       HapticFeedback.selectionClick();
       _tabCtrl.animateTo(0);
       return;
@@ -408,6 +445,15 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
   @override
   bool get wantKeepAlive => true;
 
+  // ✅ Trace 기록 헬퍼
+  void _trace(String name, {Map<String, dynamic>? meta}) {
+    DebugActionRecorder.instance.recordAction(
+      name,
+      route: ModalRoute.of(context)?.settings.name,
+      meta: meta,
+    );
+  }
+
   // ─────────────────────────────────────────────────────────
   // ✅ LocationState 갱신을 post-frame(다음 프레임)으로 이연
   // ─────────────────────────────────────────────────────────
@@ -438,8 +484,7 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
       _pendingPlateCountsByDisplayName = null;
       if (toApply == null) return;
 
-      if (_lastAppliedPlateCountsByDisplayName != null &&
-          _mapsEqual(_lastAppliedPlateCountsByDisplayName!, toApply)) {
+      if (_lastAppliedPlateCountsByDisplayName != null && _mapsEqual(_lastAppliedPlateCountsByDisplayName!, toApply)) {
         return;
       }
 
@@ -617,6 +662,20 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
   Future<void> _refreshRealtimeFromServer() async {
     if (!_isRealtime) return;
 
+    // ✅ 새로고침 요청 Trace(함수 진입)
+    _trace(
+      '실시간 새로고침 요청',
+      meta: <String, dynamic>{
+        'screen': 'lite_parking_completed_table_sheet',
+        'action': 'refresh_request',
+        'area': widget.area,
+        'loading': _loading,
+        'blocked': _isRefreshBlocked,
+        'remainingSec': _refreshRemainingSec,
+        'hasFetchedFromServer': _hasFetchedFromServer,
+      },
+    );
+
     if (_loading) {
       showSelectedSnackbar(context, '이미 갱신 중입니다.');
       return;
@@ -625,6 +684,18 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
     if (_isRefreshBlocked) {
       _ensureCooldownTicker();
       showSelectedSnackbar(context, '새로고침 대기 중: ${_refreshRemainingSec}초');
+
+      // ✅ 차단 Trace(선택)
+      _trace(
+        '실시간 새로고침 차단',
+        meta: <String, dynamic>{
+          'screen': 'lite_parking_completed_table_sheet',
+          'action': 'refresh_blocked',
+          'area': widget.area,
+          'remainingSec': _refreshRemainingSec,
+        },
+      );
+
       return;
     }
 
@@ -632,6 +703,16 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
     _ensureCooldownTicker();
 
     setState(() => _loading = true);
+
+    // ✅ 실제 서버 fetch 시작 Trace(선택)
+    _trace(
+      '실시간 새로고침 시작',
+      meta: <String, dynamic>{
+        'screen': 'lite_parking_completed_table_sheet',
+        'action': 'refresh_start',
+        'area': widget.area,
+      },
+    );
 
     try {
       final rows = await _realtimeRepo.fetchFromServerAndCache(widget.area);
@@ -654,10 +735,32 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
       });
 
       showSuccessSnackbar(context, '실시간 데이터를 갱신했습니다. (${widget.area})');
+
+      // ✅ 성공 Trace(선택)
+      _trace(
+        '실시간 새로고침 성공',
+        meta: <String, dynamic>{
+          'screen': 'lite_parking_completed_table_sheet',
+          'action': 'refresh_success',
+          'area': widget.area,
+          'rowCount': rows.length,
+        },
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
       showFailedSnackbar(context, '실시간 갱신 실패: $e');
+
+      // ✅ 실패 Trace(선택)
+      _trace(
+        '실시간 새로고침 실패',
+        meta: <String, dynamic>{
+          'screen': 'lite_parking_completed_table_sheet',
+          'action': 'refresh_failure',
+          'area': widget.area,
+          'error': e.toString(),
+        },
+      );
     }
   }
 
@@ -771,9 +874,32 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
         context,
         v ? '이 기기에서 실시간 데이터 삽입(Write)을 ON 했습니다.' : '이 기기에서 실시간 데이터 삽입(Write)을 OFF 했습니다.',
       );
+
+      // ✅ 토글 저장 성공 Trace(선택)
+      _trace(
+        '실시간 삽입 토글 저장 성공',
+        meta: <String, dynamic>{
+          'screen': 'lite_parking_completed_table_sheet',
+          'action': 'realtime_write_toggle_saved',
+          'area': widget.area,
+          'value': v,
+        },
+      );
     } catch (e) {
       if (!mounted) return;
       showFailedSnackbar(context, '설정 저장 실패: $e');
+
+      // ✅ 토글 저장 실패 Trace(선택)
+      _trace(
+        '실시간 삽입 토글 저장 실패',
+        meta: <String, dynamic>{
+          'screen': 'lite_parking_completed_table_sheet',
+          'action': 'realtime_write_toggle_save_failed',
+          'area': widget.area,
+          'value': v,
+          'error': e.toString(),
+        },
+      );
     } finally {
       if (!mounted) return;
       setState(() => _writeToggleLoading = false);
@@ -1164,7 +1290,22 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
             child: Switch(
               value: on,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              onChanged: disabled ? null : (v) => _toggleRealtimeWriteEnabled(v),
+              onChanged: disabled
+                  ? null
+                  : (v) {
+                // ✅ 삽입 토글 클릭 Trace 기록
+                _trace(
+                  '실시간 삽입 토글 클릭',
+                  meta: <String, dynamic>{
+                    'screen': 'lite_parking_completed_table_sheet',
+                    'action': 'realtime_write_toggle_tap',
+                    'area': widget.area,
+                    'value': v,
+                    'disabled': disabled,
+                  },
+                );
+                _toggleRealtimeWriteEnabled(v);
+              },
             ),
           ),
         ],
@@ -1230,7 +1371,22 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab> wi
                 if (_isRealtime)
                   IconButton(
                     tooltip: refreshTooltip,
-                    onPressed: _loading ? null : _refreshRealtimeFromServer,
+                    onPressed: _loading
+                        ? null
+                        : () {
+                      // ✅ 새로고침 아이콘 클릭 Trace 기록(즉시)
+                      _trace(
+                        '실시간 새로고침 아이콘 클릭',
+                        meta: <String, dynamic>{
+                          'screen': 'lite_parking_completed_table_sheet',
+                          'action': 'refresh_icon_tap',
+                          'area': widget.area,
+                          'blocked': _isRefreshBlocked,
+                          'remainingSec': _refreshRemainingSec,
+                        },
+                      );
+                      _refreshRealtimeFromServer();
+                    },
                     icon: Icon(
                       Icons.refresh,
                       color: (_loading || _isRefreshBlocked) ? cs.outline.withOpacity(.5) : cs.outline,

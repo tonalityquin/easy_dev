@@ -16,6 +16,9 @@ import 'lite_home_dash_board_controller.dart';
 import 'widgets/lite_home_user_info_card.dart';
 import 'widgets/lite_home_break_button_widget.dart';
 
+// ✅ Trace 기록용 Recorder
+import '../../../../hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
+
 class LiteHqDashBoardPage extends StatefulWidget {
   const LiteHqDashBoardPage({super.key});
 
@@ -28,8 +31,35 @@ class _LiteHqDashBoardPageState extends State<LiteHqDashBoardPage> {
 
   late final LiteHomeDashBoardController _controller = LiteHomeDashBoardController();
 
+  // ✅ 공통 Trace 기록 헬퍼
+  void _trace(String name, {Map<String, dynamic>? meta}) {
+    DebugActionRecorder.instance.recordAction(
+      name,
+      route: ModalRoute.of(context)?.settings.name,
+      meta: meta,
+    );
+  }
+
+  Future<void> _handleLogout(BuildContext context) async {
+    // 기존 동작 유지
+    await LogoutHelper.logoutAndGoToLogin(context);
+  }
+
   Future<void> _exitAppAfterClockOut(BuildContext context) async {
     AppExitFlag.beginExit();
+
+    // ✅ 앱 종료 직전, Trace 기록이 실제로 파일에 남도록 자동 저장(기록 중일 때만)
+    // - stopAndSave는 기록 중이 아니면 null 반환 → 안전
+    // - 앱이 종료되면 Trace 탭에서 수동 저장할 기회가 없으므로 유실 방지 목적
+    try {
+      if (DebugActionRecorder.instance.isRecording) {
+        await DebugActionRecorder.instance.stopAndSave(
+          titleOverride: 'auto:clockout_exit',
+        );
+      }
+    } catch (_) {
+      // auto-save 실패는 앱 종료를 막지 않음
+    }
 
     try {
       if (Platform.isAndroid) {
@@ -83,13 +113,33 @@ class _LiteHqDashBoardPageState extends State<LiteHqDashBoardPage> {
   ///   - commute_true_false 는 출근 시각 기록용이며,
   ///     퇴근(workOut) 시에는 이 컬렉션을 절대 수정하지 않습니다.
   Future<void> _handleClockOutFlow(
-      BuildContext context,
-      UserState userState,
-      ) async {
+    BuildContext context,
+    UserState userState,
+  ) async {
+    // ✅ 퇴근 플로우 시작 Trace
+    _trace(
+      '퇴근 처리 시작',
+      meta: <String, dynamic>{
+        'screen': 'lite_hq_dashboard',
+        'action': 'clockout_flow_start',
+        'isWorkingBefore': userState.isWorking,
+      },
+    );
+
     // 1) 기존 퇴근 처리 (user_accounts.isWorking 등)
     await _controller.handleWorkStatus(userState, context);
 
     if (!mounted) return;
+
+    // ✅ 퇴근 처리 후 상태 Trace(선택)
+    _trace(
+      '퇴근 상태 반영',
+      meta: <String, dynamic>{
+        'screen': 'lite_hq_dashboard',
+        'action': 'clockout_state_updated',
+        'isWorkingAfter': userState.isWorking,
+      },
+    );
 
     // 2) 퇴근 처리 성공 여부 확인
     if (!userState.isWorking) {
@@ -102,6 +152,18 @@ class _LiteHqDashBoardPageState extends State<LiteHqDashBoardPage> {
         final String area = userState.currentArea; // 기존 로직 유지
         final String division = userState.division;
 
+        // ✅ workOut 기록 직전 Trace(선택)
+        _trace(
+          '퇴근 이벤트 기록',
+          meta: <String, dynamic>{
+            'screen': 'lite_hq_dashboard',
+            'action': 'workout_event_insert_and_upload',
+            'area': area,
+            'division': division,
+            'at': now.toIso8601String(),
+          },
+        );
+
         // 2-1) SQLite + (필요 시) Firestore commute_user_logs 업로드
         await SimpleModeAttendanceRepository.instance.insertEventAndUpload(
           dateTime: now,
@@ -113,9 +175,74 @@ class _LiteHqDashBoardPageState extends State<LiteHqDashBoardPage> {
         );
       }
 
+      // ✅ 앱 종료 직전 Trace(선택)
+      _trace(
+        '앱 종료 진행',
+        meta: <String, dynamic>{
+          'screen': 'lite_hq_dashboard',
+          'action': 'exit_after_clockout',
+        },
+      );
+
       // 3) 퇴근 처리 완료 → 앱 종료
       await _exitAppAfterClockOut(context);
+    } else {
+      // ✅ 퇴근 실패/미반영 Trace(선택)
+      _trace(
+        '퇴근 처리 미완료',
+        meta: <String, dynamic>{
+          'screen': 'lite_hq_dashboard',
+          'action': 'clockout_not_completed',
+          'reason': 'userState.isWorking_still_true',
+        },
+      );
     }
+  }
+
+  Future<void> _onClockOutPressed(BuildContext context, UserState userState) async {
+    // ✅ 퇴근하기 버튼 Trace 기록(진입 즉시)
+    _trace(
+      '퇴근하기 버튼',
+      meta: <String, dynamic>{
+        'screen': 'lite_hq_dashboard',
+        'action': 'clockout_tap',
+        'isWorking': userState.isWorking,
+      },
+    );
+
+    if (userState.isWorking) {
+      final bool confirmed = await showWorkEndDurationBlockingDialog(
+        context,
+        message: '지금 퇴근 처리하시겠습니까?\n5초 안에 취소하지 않으면 자동으로 진행됩니다.',
+        duration: const Duration(seconds: 5),
+      );
+
+      // ✅ 다이얼로그 결과 Trace 기록
+      _trace(
+        '퇴근 다이얼로그 결과',
+        meta: <String, dynamic>{
+          'screen': 'lite_hq_dashboard',
+          'action': 'clockout_dialog_result',
+          'confirmed': confirmed,
+          'durationSeconds': 5,
+        },
+      );
+
+      if (!confirmed) {
+        // ✅ 취소 Trace(선택)
+        _trace(
+          '퇴근 처리 취소',
+          meta: <String, dynamic>{
+            'screen': 'lite_hq_dashboard',
+            'action': 'clockout_aborted',
+            'reason': 'user_cancelled_dialog',
+          },
+        );
+        return;
+      }
+    }
+
+    await _handleClockOutFlow(context, userState);
   }
 
   @override
@@ -143,9 +270,7 @@ class _LiteHqDashBoardPageState extends State<LiteHqDashBoardPage> {
                 const SizedBox(height: 16),
                 AnimatedCrossFade(
                   duration: const Duration(milliseconds: 200),
-                  crossFadeState: _layerHidden
-                      ? CrossFadeState.showFirst
-                      : CrossFadeState.showSecond,
+                  crossFadeState: _layerHidden ? CrossFadeState.showFirst : CrossFadeState.showSecond,
                   firstChild: const SizedBox.shrink(),
                   secondChild: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -158,22 +283,7 @@ class _LiteHqDashBoardPageState extends State<LiteHqDashBoardPage> {
                           icon: const Icon(Icons.exit_to_app),
                           label: const Text('퇴근하기'),
                           style: _clockOutBtnStyle(),
-                          onPressed: () async {
-                            if (userState.isWorking) {
-                              final bool confirmed =
-                              await showWorkEndDurationBlockingDialog(
-                                context,
-                                message:
-                                '지금 퇴근 처리하시겠습니까?\n5초 안에 취소하지 않으면 자동으로 진행됩니다.',
-                                duration: const Duration(seconds: 5),
-                              );
-                              if (!confirmed) {
-                                return;
-                              }
-                            }
-
-                            await _handleClockOutFlow(context, userState);
-                          },
+                          onPressed: () => _onClockOutPressed(context, userState),
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -183,7 +293,7 @@ class _LiteHqDashBoardPageState extends State<LiteHqDashBoardPage> {
                           icon: const Icon(Icons.logout),
                           label: const Text('로그아웃'),
                           style: _logoutBtnStyle(),
-                          onPressed: () => LogoutHelper.logoutAndGoToLogin(context),
+                          onPressed: () => _handleLogout(context),
                         ),
                       ),
                       const SizedBox(height: 16),

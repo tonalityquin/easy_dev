@@ -20,6 +20,9 @@ import '../services/latest_message_service.dart';
 // ✅ AppCardPalette ThemeExtension 사용
 import '../theme.dart';
 
+// ✅ Trace 기록용 Recorder
+import 'hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
+
 class LiteTypePage extends StatefulWidget {
   const LiteTypePage({super.key});
 
@@ -167,6 +170,15 @@ class _ChatDashboardBar extends StatelessWidget {
 class _SingleHomeTabBar extends StatelessWidget {
   const _SingleHomeTabBar();
 
+  // ✅ 공통 Trace 기록 헬퍼 (StatelessWidget용)
+  void _trace(BuildContext context, String name, {Map<String, dynamic>? meta}) {
+    DebugActionRecorder.instance.recordAction(
+      name,
+      route: ModalRoute.of(context)?.settings.name,
+      meta: meta,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = AppCardPalette.of(context);
@@ -179,6 +191,18 @@ class _SingleHomeTabBar extends StatelessWidget {
             color: Colors.white,
             child: InkWell(
               onTap: () {
+                // ✅ 홈 버튼 탭 Trace 기록
+                _trace(
+                  context,
+                  '홈 버튼',
+                  meta: <String, dynamic>{
+                    'screen': 'lite_type_page',
+                    'action': 'home_tap',
+                    'targetIndex': 0,
+                    'selectedIndexBefore': pageState.selectedIndex,
+                  },
+                );
+
                 pageState.onItemTapped(
                   context,
                   0,

@@ -20,6 +20,9 @@ import '../utils/snackbar_helper.dart';
 import 'service_mode/type_package/common_widgets/reverse_sheet_package/parking_completed_table_sheet.dart';
 import '../theme.dart';
 
+// ✅ Trace 기록용 Recorder
+import 'hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
+
 class TypePage extends StatefulWidget {
   const TypePage({super.key});
 
@@ -311,6 +314,15 @@ class PageBottomNavigation extends StatefulWidget {
 }
 
 class _PageBottomNavigationState extends State<PageBottomNavigation> {
+  // ✅ Trace 기록 헬퍼
+  void _trace(BuildContext context, String name, {Map<String, dynamic>? meta}) {
+    DebugActionRecorder.instance.recordAction(
+      name,
+      route: ModalRoute.of(context)?.settings.name,
+      meta: meta,
+    );
+  }
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -330,6 +342,22 @@ class _PageBottomNavigationState extends State<PageBottomNavigation> {
           elevation: 0,
           currentIndex: pageState.selectedIndex,
           onTap: (index) {
+            final pageInfo = pageState.pages[index];
+
+            // ✅ 탭 클릭 Trace 기록 (입차 요청/홈/출차 요청 포함)
+            _trace(
+              context,
+              '서비스 타입 탭 클릭',
+              meta: <String, dynamic>{
+                'screen': 'type_page',
+                'action': 'bottom_nav_tap',
+                'index': index,
+                'title': pageInfo.title,
+                'selectedIndexBefore': pageState.selectedIndex,
+                'collectionKey': pageInfo.collectionKey.toString(),
+              },
+            );
+
             pageState.onItemTapped(
               context,
               index,

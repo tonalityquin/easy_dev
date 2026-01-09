@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+
 import '../../../../../routes.dart';
 import '../../../../../theme.dart';
 import '../lite_login_controller.dart';
+
+// ✅ Trace 기록용 Recorder
+import '../../../../../screens/hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
 
 class LiteLoginForm extends StatefulWidget {
   final LiteLoginController controller;
@@ -21,14 +25,62 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
     _controller = widget.controller; // ✅ init은 상위(LoginScreen)에서만 수행
   }
 
+  // ✅ 공통 Trace 기록 헬퍼
+  void _trace(String name, {Map<String, dynamic>? meta}) {
+    DebugActionRecorder.instance.recordAction(
+      name,
+      route: ModalRoute.of(context)?.settings.name,
+      meta: meta,
+    );
+  }
+
   void _handleLogin() {
     _controller.login(setState);
   }
 
   void _onLoginButtonPressed() {
-    if (!_controller.isLoading) {
-      _handleLogin();
-    }
+    if (_controller.isLoading) return;
+
+    // ✅ 경량 로그인 버튼 Trace 기록
+    _trace(
+      '경량 로그인 버튼',
+      meta: <String, dynamic>{
+        'screen': 'lite_login',
+        'action': 'login',
+      },
+    );
+
+    _handleLogin();
+  }
+
+  void _onTopCompanyLogoTapped() {
+    // ✅ 상단 회사 로고 탭 Trace 기록 (기존 동작 없음 유지)
+    _trace(
+      '회사 로고(상단)',
+      meta: <String, dynamic>{
+        'screen': 'lite_login',
+        'asset': 'assets/images/easyvalet_logo_car.png',
+        'action': 'tap',
+      },
+    );
+  }
+
+  void _onPelicanLogoTapped() {
+    // ✅ 하단 펠리컨 로고 탭 Trace 기록 + 기존 네비게이션 유지
+    _trace(
+      '회사 로고(펠리컨)',
+      meta: <String, dynamic>{
+        'screen': 'lite_login',
+        'asset': 'assets/images/pelican.png',
+        'action': 'back_to_selector',
+        'to': AppRoutes.selector,
+      },
+    );
+
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      AppRoutes.selector,
+          (route) => false,
+    );
   }
 
   @override
@@ -121,9 +173,9 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
                   ),
                 ),
 
-                // 로고
+                // ✅ 로고 탭 Trace 기록 (기존: onTap 빈 함수) → 기록만 남기도록 개선
                 GestureDetector(
-                  onTap: () {},
+                  onTap: _onTopCompanyLogoTapped,
                   child: SizedBox(
                     height: 360,
                     child: Image.asset('assets/images/easyvalet_logo_car.png'),
@@ -199,13 +251,10 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
 
                 const SizedBox(height: 1),
 
-                // ▼ 펠리컨: 탭하면 Selector로 복귀
+                // ▼ 펠리컨: 탭하면 Selector로 복귀 + Trace 기록
                 Center(
                   child: InkWell(
-                    onTap: () => Navigator.of(context).pushNamedAndRemoveUntil(
-                      AppRoutes.selector,
-                          (route) => false,
-                    ),
+                    onTap: _onPelicanLogoTapped,
                     borderRadius: BorderRadius.circular(8),
                     child: SizedBox(
                       height: 80,

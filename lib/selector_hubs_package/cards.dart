@@ -5,6 +5,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../routes.dart';
 import '../theme.dart';
 
+// ✅ Trace 기록용 Recorder
+import '../screens/hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
+
 class CardBody extends StatefulWidget {
   const CardBody({
     super.key,
@@ -17,6 +20,10 @@ class CardBody extends StatefulWidget {
     required this.onPressed,
     this.enabled = true,
     this.disabledHint,
+
+    // ✅ Trace 기록용
+    required this.traceName,
+    this.traceMeta,
   });
 
   final IconData icon;
@@ -28,6 +35,10 @@ class CardBody extends StatefulWidget {
   final VoidCallback? onPressed;
   final bool enabled;
   final String? disabledHint;
+
+  // ✅ Trace 기록용
+  final String traceName;
+  final Map<String, dynamic>? traceMeta;
 
   @override
   State<CardBody> createState() => _CardBodyState();
@@ -41,7 +52,7 @@ class _CardBodyState extends State<CardBody> {
   bool _pressed = false;
   bool _animating = false;
 
-  Future<void> _animateThenNavigate() async {
+  Future<void> _animateThenNavigate({required String source}) async {
     if (!widget.enabled || widget.onPressed == null || _animating) return;
     _animating = true;
 
@@ -52,6 +63,17 @@ class _CardBodyState extends State<CardBody> {
       await Future<void>.delayed(_duration);
 
       HapticFeedback.selectionClick();
+
+      // ✅ Trace 기록: 기록 중이 아닐 때는 Recorder 내부에서 무시됨
+      DebugActionRecorder.instance.recordAction(
+        widget.traceName,
+        route: ModalRoute.of(context)?.settings.name,
+        meta: <String, dynamic>{
+          'source': source, // 'card' or 'arrow'
+          if (widget.traceMeta != null) ...widget.traceMeta!,
+        },
+      );
+
       widget.onPressed!.call();
     } finally {
       _animating = false;
@@ -79,7 +101,7 @@ class _CardBodyState extends State<CardBody> {
                 ? '이동'
                 : (widget.disabledHint ?? '현재 저장된 모드에서만 선택할 수 있어요'),
             child: IconButton.filled(
-              onPressed: widget.enabled ? _animateThenNavigate : null,
+              onPressed: widget.enabled ? () => _animateThenNavigate(source: 'arrow') : null,
               style: IconButton.styleFrom(
                 backgroundColor: widget.buttonBg ?? Theme.of(context).colorScheme.primary,
                 foregroundColor: widget.buttonFg ?? Theme.of(context).colorScheme.onPrimary,
@@ -98,7 +120,7 @@ class _CardBodyState extends State<CardBody> {
         duration: _duration,
         curve: Curves.easeOut,
         child: InkWell(
-          onTap: widget.enabled ? _animateThenNavigate : null,
+          onTap: widget.enabled ? () => _animateThenNavigate(source: 'card') : null,
           child: content,
         ),
       ),
@@ -160,6 +182,8 @@ class ServiceCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: p.serviceBase,
         buttonFg: onBase,
+        traceName: '서비스 로그인',
+        traceMeta: {'to': AppRoutes.serviceLogin, 'requiredMode': 'service'},
         onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.serviceLogin),
         enabled: enabled,
         disabledHint: '저장된 모드가 service일 때만 선택할 수 있어요',
@@ -198,6 +222,12 @@ class SimpleLoginCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: p.simpleBase,
         buttonFg: onBase,
+        traceName: '약식 로그인',
+        traceMeta: {
+          'to': AppRoutes.simpleLogin,
+          'redirectAfterLogin': AppRoutes.simpleCommute,
+          'requiredMode': 'simple',
+        },
         onPressed: () => Navigator.of(context).pushReplacementNamed(
           AppRoutes.simpleLogin,
           arguments: {
@@ -242,6 +272,8 @@ class LiteLoginCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: p.liteBase,
         buttonFg: onBase,
+        traceName: '경량 로그인',
+        traceMeta: {'to': AppRoutes.liteLogin, 'requiredMode': 'lite'},
         onPressed: () => Navigator.of(context).pushReplacementNamed(
           AppRoutes.liteLogin,
           arguments: {
@@ -285,6 +317,8 @@ class TabletCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: p.tabletBase,
         buttonFg: onBase,
+        traceName: '태블릿 로그인',
+        traceMeta: {'to': AppRoutes.tabletLogin, 'requiredMode': 'tablet'},
         onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.tabletLogin),
         enabled: enabled,
         disabledHint: '저장된 모드가 tablet일 때만 선택할 수 있어요',
@@ -321,6 +355,8 @@ class CommunityCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: p.communityBase,
         buttonFg: onBase,
+        traceName: '커뮤니티',
+        traceMeta: {'to': AppRoutes.communityStub},
         onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.communityStub),
       ),
     );
@@ -355,6 +391,8 @@ class FaqCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: p.faqBase,
         buttonFg: onBase,
+        traceName: 'FAQ / 문의',
+        traceMeta: {'to': AppRoutes.faq},
         onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.faq),
       ),
     );
@@ -372,9 +410,7 @@ class HeadquarterCard extends StatelessWidget {
       final division = prefs.getString('division') ?? '';
       final selectedArea = prefs.getString('selectedArea') ?? '';
 
-      final allowed = division.isNotEmpty &&
-          selectedArea.isNotEmpty &&
-          division == selectedArea;
+      final allowed = division.isNotEmpty && selectedArea.isNotEmpty && division == selectedArea;
 
       if (allowed) {
         Navigator.of(context).pushReplacementNamed(AppRoutes.headStub);
@@ -419,6 +455,8 @@ class HeadquarterCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: p.headquarterBase,
         buttonFg: onBase,
+        traceName: '본사',
+        traceMeta: {'to': AppRoutes.headStub},
         onPressed: () => _handleTap(context),
       ),
     );
@@ -455,6 +493,8 @@ class DevCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: p.devBase,
         buttonFg: onBase,
+        traceName: '개발',
+        traceMeta: {'to': 'dev'},
         onPressed: onTap,
       ),
     );
@@ -489,6 +529,8 @@ class ParkingCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: p.parkingBase,
         buttonFg: onBase,
+        traceName: '오프라인 서비스',
+        traceMeta: {'to': AppRoutes.offlineLogin},
         onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.offlineLogin),
       ),
     );

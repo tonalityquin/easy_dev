@@ -22,6 +22,9 @@ import '../states/plate/plate_state.dart';
 // ✅ (추가) Lite 엔진 명시적 ON/OFF를 위해 LitePlateState 접근
 import '../states/plate/lite_plate_state.dart';
 
+// ✅ Trace 기록용 Recorder
+import 'hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
+
 class HeadquarterPage extends StatelessWidget {
   const HeadquarterPage({super.key});
 
@@ -81,6 +84,14 @@ class _BottomArea extends StatelessWidget {
 class _HqModeSwitchButton extends StatelessWidget {
   const _HqModeSwitchButton();
 
+  void _trace(BuildContext context, String name, {Map<String, dynamic>? meta}) {
+    DebugActionRecorder.instance.recordAction(
+      name,
+      route: ModalRoute.of(context)?.settings.name,
+      meta: meta,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -92,6 +103,23 @@ class _HqModeSwitchButton extends StatelessWidget {
           label: const Text('Lite 본사로 전환'),
           style: _switchBtnStyle(context),
           onPressed: () {
+            // ✅ Trace: "Lite 본사로 전환" 버튼 탭 기록(진입 즉시)
+            final litePlateStateForMeta = context.read<LitePlateState>();
+            final area = litePlateStateForMeta.currentArea.trim();
+            final withDefaults = area.isNotEmpty;
+
+            _trace(
+              context,
+              'Lite 본사로 전환 버튼',
+              meta: <String, dynamic>{
+                'screen': 'headquarter_page',
+                'action': 'switch_to_lite_headquarter',
+                'to': AppRoutes.liteHeadquarterPage,
+                'withDefaults': withDefaults,
+                if (area.isNotEmpty) 'area': area,
+              },
+            );
+
             // ✅ 전환 흐름 완결:
             // 1) 서비스(PlateState) 실시간 구독 OFF
             final plateState = context.read<PlateState>();
@@ -101,8 +129,7 @@ class _HqModeSwitchButton extends StatelessWidget {
             // 3) Lite 엔진(1회 조회)을 명시적으로 ON
             final litePlateState = context.read<LitePlateState>();
             litePlateState.liteDisableAll();
-            final area = litePlateState.currentArea.trim();
-            litePlateState.liteEnableForTypePages(withDefaults: area.isNotEmpty);
+            litePlateState.liteEnableForTypePages(withDefaults: withDefaults);
 
             _replaceWithAnimatedRoute(
               context,
@@ -191,8 +218,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
 
   void _handleHorizontalDragEnd(BuildContext context, double velocity) {
     // 우→좌(좌 스와이프): dragDistance 음수, velocity 음수
-    final fired =
-        (_dragDistance < -_hDistanceThreshold) && (velocity < -_hVelocityThreshold);
+    final fired = (_dragDistance < -_hDistanceThreshold) && (velocity < -_hVelocityThreshold);
 
     if (fired) {
       _openSecondaryIfAuthorized();
@@ -209,18 +235,14 @@ class _RefreshableBodyState extends State<RefreshableBody> {
       behavior: HitTestBehavior.opaque,
       dragStartBehavior: DragStartBehavior.down,
       onHorizontalDragUpdate: (details) => _dragDistance += details.delta.dx,
-      onHorizontalDragEnd: (details) =>
-          _handleHorizontalDragEnd(context, details.primaryVelocity ?? 0.0),
+      onHorizontalDragEnd: (details) => _handleHorizontalDragEnd(context, details.primaryVelocity ?? 0.0),
       child: Consumer<HqState>(
         builder: (context, state, child) {
           final pages = state.pages;
 
-          final safeIndex =
-          pages.isEmpty ? 0 : state.selectedIndex.clamp(0, pages.length - 1);
+          final safeIndex = pages.isEmpty ? 0 : state.selectedIndex.clamp(0, pages.length - 1);
 
-          final children = pages.isEmpty
-              ? const <Widget>[SizedBox.shrink()]
-              : pages.map((p) => p.page).toList();
+          final children = pages.isEmpty ? const <Widget>[SizedBox.shrink()] : pages.map((p) => p.page).toList();
 
           return Stack(
             children: [

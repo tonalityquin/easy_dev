@@ -6,6 +6,37 @@ import 'package:intl/intl.dart';
 
 import '../../utils/simple_mode/simple_mode_attendance_repository.dart';
 
+// ✅ Trace 기록용 Recorder
+import '../../../../screens/hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
+
+/// ✅ Simple 펀칭 이벤트를 Trace에 기록
+/// - Trace 탭에서 "기록 시작" 상태일 때만 실제로 누적됨(recordAction 내부에서 _recording이 아니면 return)
+void _traceSimplePunch(BuildContext context, SimpleModeAttendanceType type, DateTime dateTime) {
+  final String name;
+  switch (type) {
+    case SimpleModeAttendanceType.workIn:
+      name = 'Simple 출근 펀칭';
+      break;
+    case SimpleModeAttendanceType.breakTime:
+      name = 'Simple 휴게 펀칭';
+      break;
+    case SimpleModeAttendanceType.workOut:
+      name = 'Simple 퇴근 펀칭';
+      break;
+  }
+
+  DebugActionRecorder.instance.recordAction(
+    name,
+    route: ModalRoute.of(context)?.settings.name,
+    meta: <String, dynamic>{
+      'screen': 'simple_punch_card_feedback',
+      'action': 'punch_feedback_show',
+      'type': type.toString(),
+      'at': dateTime.toIso8601String(),
+    },
+  );
+}
+
 /// 타임카드 펀칭 느낌의 짧은 피드백 시트를 띄우는 헬퍼
 ///
 /// - DB에는 실제 시간(HH:mm)을 저장하지만,
@@ -16,6 +47,9 @@ Future<void> showSimplePunchCardFeedback(
       required SimpleModeAttendanceType type,
       required DateTime dateTime,
     }) async {
+  // ✅ Trace 기록(출근/휴게/퇴근 모두)
+  _traceSimplePunch(context, type, dateTime);
+
   // 촉각 + 시스템 사운드로 피드백
   HapticFeedback.mediumImpact();
   SystemSound.play(SystemSoundType.click);
@@ -47,7 +81,7 @@ Future<void> showSimplePunchCardFeedback(
       return SlideTransition(
         position: Tween<Offset>(
           begin: const Offset(0, -1.0), // 화면 위 바깥
-          end: Offset.zero,             // 제자리 (topCenter)
+          end: Offset.zero, // 제자리 (topCenter)
         ).animate(curved),
         child: child,
       );
@@ -111,8 +145,7 @@ class _PunchCardSheet extends StatefulWidget {
   State<_PunchCardSheet> createState() => _PunchCardSheetState();
 }
 
-class _PunchCardSheetState extends State<_PunchCardSheet>
-    with SingleTickerProviderStateMixin {
+class _PunchCardSheetState extends State<_PunchCardSheet> with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _sheetScale;
   late final Animation<double> _headDrop; // 펀칭 헤드 낙하량(0~1)
@@ -220,7 +253,6 @@ class _PunchCardSheetState extends State<_PunchCardSheet>
                           BoxShadow(
                             color: Colors.black.withOpacity(0.20),
                             blurRadius: 20,
-                            // 상단에 붙은 카드이므로, 그림자는 아래쪽으로 떨어지게 설정
                             offset: const Offset(0, 6),
                           ),
                         ],
@@ -232,11 +264,9 @@ class _PunchCardSheetState extends State<_PunchCardSheet>
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // 상단 펀칭 헤드(스탬프)
                           Transform.translate(
                             offset: Offset(0, headDy),
                             child: Opacity(
-                              // 살짝만 보이게
                               opacity: 0.85,
                               child: Container(
                                 width: 68,
@@ -263,7 +293,6 @@ class _PunchCardSheetState extends State<_PunchCardSheet>
                             ),
                           ),
                           const SizedBox(height: 8),
-                          // 헤더 라인: 제목 + 월
                           Row(
                             children: [
                               Text(
@@ -283,7 +312,6 @@ class _PunchCardSheetState extends State<_PunchCardSheet>
                             ],
                           ),
                           const SizedBox(height: 6),
-                          // 두 번째 줄: 펀칭 타입 + 안내
                           Row(
                             children: [
                               Container(
@@ -296,10 +324,7 @@ class _PunchCardSheetState extends State<_PunchCardSheet>
                                     BoxShadow(
                                       color: accentColor.withOpacity(0.35),
                                       blurRadius: 6 * flashStrength,
-                                      offset: Offset(
-                                        0,
-                                        2 * flashStrength,
-                                      ),
+                                      offset: Offset(0, 2 * flashStrength),
                                     ),
                                   ],
                                 ),
@@ -323,7 +348,6 @@ class _PunchCardSheetState extends State<_PunchCardSheet>
                             ],
                           ),
                           const SizedBox(height: 12),
-                          // 실제 카드 영역
                           Container(
                             decoration: BoxDecoration(
                               color: Colors.white,
@@ -342,36 +366,18 @@ class _PunchCardSheetState extends State<_PunchCardSheet>
                             ),
                             child: Column(
                               children: [
-                                // 상단 헤더 셀
                                 Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 6,
-                                  ),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                   decoration: const BoxDecoration(
                                     color: Color(0xFFF3EEE3),
-                                    borderRadius: BorderRadius.vertical(
-                                      top: Radius.circular(12),
-                                    ),
+                                    borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
                                   ),
                                   child: Row(
                                     children: const [
-                                      _HeaderCell(
-                                        label: '일자',
-                                        flex: 3,
-                                      ),
-                                      _HeaderCell(
-                                        label: '출근',
-                                        flex: 3,
-                                      ),
-                                      _HeaderCell(
-                                        label: '휴게',
-                                        flex: 3,
-                                      ),
-                                      _HeaderCell(
-                                        label: '퇴근',
-                                        flex: 3,
-                                      ),
+                                      _HeaderCell(label: '일자', flex: 3),
+                                      _HeaderCell(label: '출근', flex: 3),
+                                      _HeaderCell(label: '휴게', flex: 3),
+                                      _HeaderCell(label: '퇴근', flex: 3),
                                     ],
                                   ),
                                 ),
@@ -380,82 +386,59 @@ class _PunchCardSheetState extends State<_PunchCardSheet>
                                   thickness: 0.8,
                                   color: Color(0xFFE5DFD0),
                                 ),
-                                // 오늘 행
                                 Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 8,
-                                  ),
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                   child: Row(
                                     children: [
-                                      // 일자 셀
                                       Expanded(
                                         flex: 3,
                                         child: Column(
-                                          crossAxisAlignment:
-                                          CrossAxisAlignment.start,
+                                          crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Text(
                                               dateStr,
-                                              style: textTheme.bodyMedium
-                                                  ?.copyWith(
+                                              style: textTheme.bodyMedium?.copyWith(
                                                 fontWeight: FontWeight.w600,
-                                                color:
-                                                const Color(0xFF3C342A),
+                                                color: const Color(0xFF3C342A),
                                               ),
                                             ),
                                             const SizedBox(height: 2),
                                             Text(
                                               weekDayStr,
-                                              style: textTheme.labelSmall
-                                                  ?.copyWith(
+                                              style: textTheme.labelSmall?.copyWith(
                                                 color: const Color(0xFF7A6F63),
                                               ),
                                             ),
                                           ],
                                         ),
                                       ),
-                                      // 출근 칸
                                       Expanded(
                                         flex: 3,
                                         child: _PunchStatusCell(
                                           punched: _punchedWorkIn,
                                           label: '출근',
-                                          accentColor: _accentColorForType(
-                                            SimpleModeAttendanceType.workIn,
-                                          ),
-                                          // 현재 펀칭 대상 칸 하이라이트
-                                          highlighted: widget.type ==
-                                              SimpleModeAttendanceType.workIn,
+                                          accentColor: _accentColorForType(SimpleModeAttendanceType.workIn),
+                                          highlighted: widget.type == SimpleModeAttendanceType.workIn,
                                           flashStrength: flashStrength,
                                         ),
                                       ),
-                                      // 휴게 칸
                                       Expanded(
                                         flex: 3,
                                         child: _PunchStatusCell(
                                           punched: _punchedBreak,
                                           label: '휴게',
-                                          accentColor: _accentColorForType(
-                                            SimpleModeAttendanceType.breakTime,
-                                          ),
-                                          highlighted: widget.type ==
-                                              SimpleModeAttendanceType
-                                                  .breakTime,
+                                          accentColor: _accentColorForType(SimpleModeAttendanceType.breakTime),
+                                          highlighted: widget.type == SimpleModeAttendanceType.breakTime,
                                           flashStrength: flashStrength,
                                         ),
                                       ),
-                                      // 퇴근 칸
                                       Expanded(
                                         flex: 3,
                                         child: _PunchStatusCell(
                                           punched: _punchedWorkOut,
                                           label: '퇴근',
-                                          accentColor: _accentColorForType(
-                                            SimpleModeAttendanceType.workOut,
-                                          ),
-                                          highlighted: widget.type ==
-                                              SimpleModeAttendanceType.workOut,
+                                          accentColor: _accentColorForType(SimpleModeAttendanceType.workOut),
+                                          highlighted: widget.type == SimpleModeAttendanceType.workOut,
                                           flashStrength: flashStrength,
                                         ),
                                       ),
@@ -490,7 +473,6 @@ class _PunchCardSheetState extends State<_PunchCardSheet>
   }
 }
 
-/// 테이블 헤더 셀
 class _HeaderCell extends StatelessWidget {
   final String label;
   final int flex;
@@ -516,16 +498,11 @@ class _HeaderCell extends StatelessWidget {
   }
 }
 
-/// 시간 대신 "펀칭 여부 + 하이라이트"만 시각적으로 보여주는 셀
 class _PunchStatusCell extends StatelessWidget {
   final bool punched;
   final String label;
   final Color accentColor;
-
-  /// 이번에 사용자가 실제로 펀칭한 칸인지 여부
   final bool highlighted;
-
-  /// 0~1 하이라이트 강도(애니메이션 값)
   final double flashStrength;
 
   const _PunchStatusCell({
@@ -551,9 +528,7 @@ class _PunchStatusCell extends StatelessWidget {
         curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
         decoration: BoxDecoration(
-          color: highlighted
-              ? accentColor.withOpacity(0.15 + 0.20 * glow)
-              : Colors.transparent,
+          color: highlighted ? accentColor.withOpacity(0.15 + 0.20 * glow) : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
           boxShadow: highlighted && glow > 0
               ? [
@@ -569,13 +544,9 @@ class _PunchStatusCell extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              showCheck
-                  ? Icons.check_circle_rounded
-                  : Icons.radio_button_unchecked,
+              showCheck ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
               size: 16,
-              color: showCheck
-                  ? accentColor.withOpacity(0.95)
-                  : const Color(0xFFB0A89C),
+              color: showCheck ? accentColor.withOpacity(0.95) : const Color(0xFFB0A89C),
             ),
             const SizedBox(height: 2),
             Text(
@@ -585,9 +556,7 @@ class _PunchStatusCell extends StatelessWidget {
               style: textTheme.labelSmall?.copyWith(
                 fontSize: 10,
                 fontWeight: FontWeight.w600,
-                color: showCheck
-                    ? const Color(0xFF2E2720)
-                    : const Color(0xFF9C9286),
+                color: showCheck ? const Color(0xFF2E2720) : const Color(0xFF9C9286),
               ),
             ),
           ],
