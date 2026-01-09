@@ -9,18 +9,18 @@ import '../../repositories/plate_repo_services/plate_repository.dart';
 import '../area/area_state.dart';
 
 /// 서버 스냅샷 기준의 선택 상태를 plateId별로 보관하기 위한 베이스라인
-class _SelectionBaseline {
+class _LiteSelectionBaseline {
   final bool isSelected;
   final String? selectedBy;
 
-  const _SelectionBaseline({required this.isSelected, required this.selectedBy});
+  const _LiteSelectionBaseline({required this.isSelected, required this.selectedBy});
 }
 
 /// ✅ 1회 조회 결과(문서 + 소스) 묶음
-class _FetchResult {
+class _LiteFetchResult {
   final List<PlateModel> items;
   final String sourceLabel; // 'server' | 'cache'
-  const _FetchResult({required this.items, required this.sourceLabel});
+  const _LiteFetchResult({required this.items, required this.sourceLabel});
 }
 
 class LitePlateState extends ChangeNotifier {
@@ -42,20 +42,22 @@ class LitePlateState extends ChangeNotifier {
 
   /// 로딩 상태: 여러 타입 동시 로드 가능하므로 Set으로 관리
   final Set<PlateType> _loadingTypes = <PlateType>{};
+
   bool get isLoading => _loadingTypes.isNotEmpty;
 
   bool isLoadingType(PlateType type) => _loadingTypes.contains(type);
 
   /// ✅ 타입별 마지막 갱신 시각/소스 (UI 배너 표시에 사용)
-  final Map<PlateType, DateTime?> _lastRefreshAtByType = {
+  final Map<PlateType, DateTime?> _lastLiteRefreshAtByType = {
     for (final t in PlateType.values) t: null,
   };
-  final Map<PlateType, String> _lastRefreshSourceByType = {
+  final Map<PlateType, String> _lastLiteRefreshSourceByType = {
     for (final t in PlateType.values) t: '-',
   };
 
-  DateTime? lastRefreshAtOf(PlateType type) => _lastRefreshAtByType[type];
-  String lastRefreshSourceLabelOf(PlateType type) => _lastRefreshSourceByType[type] ?? '-';
+  DateTime? liteLastRefreshAtOf(PlateType type) => _lastLiteRefreshAtByType[type];
+
+  String liteLastRefreshSourceLabelOf(PlateType type) => _lastLiteRefreshSourceByType[type] ?? '-';
 
   /// Lite에서도 기존 로직 호환을 위해 유지
   final Map<String, bool> previousIsLockedFee = <String, bool>{};
@@ -80,7 +82,7 @@ class LitePlateState extends ChangeNotifier {
   };
 
   /// plateId별 서버 기준 선택 상태 베이스라인
-  final Map<String, _SelectionBaseline> _baseline = <String, _SelectionBaseline>{};
+  final Map<String, _LiteSelectionBaseline> _baseline = <String, _LiteSelectionBaseline>{};
 
   /// ✅ 선택/해제 지연 반영을 위한 보류 상태
   PlateType? _pendingCollection;
@@ -88,8 +90,7 @@ class LitePlateState extends ChangeNotifier {
   bool? _pendingIsSelected;
   String? _pendingSelectedBy;
 
-  bool get hasPendingSelection =>
-      _pendingCollection != null && _pendingPlateId != null && _pendingIsSelected != null;
+  bool get hasPendingSelection => _pendingCollection != null && _pendingPlateId != null && _pendingIsSelected != null;
 
   bool? get pendingIsSelected => _pendingIsSelected;
 
@@ -114,27 +115,13 @@ class LitePlateState extends ChangeNotifier {
     _pendingSelectedBy = null;
   }
 
-  /// 🔸 외부 동작으로 동일 plateId의 선택 의도가 무의미해졌을 때 호출
-  void clearPendingSelection() {
-    _clearPendingSelectionInternal();
-    notifyListeners();
-  }
-
-  /// 🔸 특정 plateId와 일치할 때만 보류 선택을 해제
-  void clearPendingIfMatches(String plateId) {
-    if (_pendingPlateId == plateId) {
-      _clearPendingSelectionInternal();
-      notifyListeners();
-    }
-  }
-
   // ─────────────────────────────────────────────────────────────
   // 공개 스위치: Lite 화면에서만 데이터 로드 활성화
   // ─────────────────────────────────────────────────────────────
 
   /// Lite 모드: withDefaults=true면 "입차완료/출차완료" 2종을 1회 조회로 로드합니다.
   /// (중요) 여기서 “구독”은 절대 하지 않습니다.
-  void enableForTypePages({bool withDefaults = true}) {
+  void liteEnableForTypePages({bool withDefaults = true}) {
     if (_enabled) return;
     _enabled = true;
 
@@ -145,7 +132,7 @@ class LitePlateState extends ChangeNotifier {
     }
   }
 
-  void disableAll() {
+  void liteDisableAll() {
     if (!_enabled && _activeTypes.isEmpty) return;
 
     _enabled = false;
@@ -160,8 +147,8 @@ class LitePlateState extends ChangeNotifier {
       _data[t] = <PlateModel>[];
       _lastIdsByType[t] = <String>{};
       _reqSeqByType[t] = 0;
-      _lastRefreshAtByType[t] = null;
-      _lastRefreshSourceByType[t] = '-';
+      _lastLiteRefreshAtByType[t] = null;
+      _lastLiteRefreshSourceByType[t] = '-';
     }
 
     _loadingTypes.clear();
@@ -173,7 +160,7 @@ class LitePlateState extends ChangeNotifier {
   // 의미를 “활성화 + 1회 로드”로 변경 (구독 금지)
   // ─────────────────────────────────────────────────────────────
 
-  void subscribeType(PlateType type) {
+  void liteSubscribeType(PlateType type) {
     if (!liteAllowedTypes.contains(type)) {
       debugPrint('🚫 [Lite] subscribeType ignored (not allowed): $type');
       return;
@@ -186,37 +173,11 @@ class LitePlateState extends ChangeNotifier {
     _activeTypes.add(type);
 
     // “구독 시작”이 아니라 “1회 로드”로 동작
-    unawaited(refreshType(type));
-  }
-
-  void unsubscribeType(PlateType type) {
-    if (!liteAllowedTypes.contains(type)) {
-      debugPrint('🚫 [Lite] unsubscribeType ignored (not allowed): $type');
-      return;
-    }
-
-    _activeTypes.remove(type);
-    _data[type] = <PlateModel>[];
-    _lastIdsByType[type] = <String>{};
-    _lastRefreshAtByType[type] = null;
-    _lastRefreshSourceByType[type] = '-';
-
-    notifyListeners();
-    debugPrint('🧹 [Lite][${_getTypeLabel(type)}] 데이터 비움 (NO-SUBSCRIBE)');
-  }
-
-  /// 정렬 변경 시: (구독이 없으므로) 즉시 1회 재조회로 반영
-  void updateSortOrder(PlateType type, bool descending) {
-    _isSortedMap[type] = descending;
-    notifyListeners();
-
-    if (_enabled && _activeTypes.contains(type) && liteAllowedTypes.contains(type)) {
-      unawaited(refreshType(type));
-    }
+    unawaited(liteRefreshType(type));
   }
 
   /// Area 변경 감지 시: 활성 타입들만 1회 재조회
-  void syncWithAreaState() {
+  void liteSyncWithAreaState() {
     if (!_enabled) {
       debugPrint('🔕 [Lite] disabled → syncWithAreaState ignored');
       return;
@@ -228,14 +189,14 @@ class LitePlateState extends ChangeNotifier {
     _clearPendingSelectionInternal();
 
     for (final t in _activeTypes.toList()) {
-      unawaited(refreshType(t));
+      unawaited(liteRefreshType(t));
     }
   }
 
   void _initDefaultLoads() {
     // Lite 기본: 입차 완료 + 출차 완료
-    subscribeType(PlateType.parkingCompleted);
-    subscribeType(PlateType.departureCompleted);
+    liteSubscribeType(PlateType.parkingCompleted);
+    liteSubscribeType(PlateType.departureCompleted);
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -275,7 +236,7 @@ class LitePlateState extends ChangeNotifier {
   }
 
   /// ✅ 서버 우선 조회 + 실패 시 캐시 폴백
-  Future<_FetchResult> _getOnce({
+  Future<_LiteFetchResult> _getOnce({
     required PlateType type,
     required String area,
     required bool descending,
@@ -288,7 +249,7 @@ class LitePlateState extends ChangeNotifier {
       final snapServer = await query.get(const GetOptions(source: Source.server));
       final serverResults = _parseSnapshot(snapServer, type);
       debugPrint('🌐 [Lite][${_getTypeLabel(type)}] server get: ${serverResults.length}개 (area=$area)');
-      return _FetchResult(items: serverResults, sourceLabel: 'server');
+      return _LiteFetchResult(items: serverResults, sourceLabel: 'server');
     } catch (e) {
       debugPrint('⚠️ [Lite][${_getTypeLabel(type)}] server get 실패 → ${cacheFirst ? 'cache로 폴백' : '종료'}: $e');
 
@@ -298,11 +259,11 @@ class LitePlateState extends ChangeNotifier {
       final snapCache = await query.get(const GetOptions(source: Source.cache));
       final cacheResults = _parseSnapshot(snapCache, type);
       debugPrint('💾 [Lite][${_getTypeLabel(type)}] cache get: ${cacheResults.length}개 (area=$area)');
-      return _FetchResult(items: cacheResults, sourceLabel: 'cache');
+      return _LiteFetchResult(items: cacheResults, sourceLabel: 'cache');
     }
   }
 
-  Future<void> refreshType(PlateType type) async {
+  Future<void> liteRefreshType(PlateType type) async {
     if (!_enabled) return;
     if (!liteAllowedTypes.contains(type)) return;
 
@@ -336,8 +297,8 @@ class LitePlateState extends ChangeNotifier {
       if ((_reqSeqByType[type] ?? 0) != seq) return;
 
       // ✅ 마지막 갱신 시각/소스 기록 (UI 배너 표시 기준)
-      _lastRefreshAtByType[type] = DateTime.now();
-      _lastRefreshSourceByType[type] = fetched.sourceLabel;
+      _lastLiteRefreshAtByType[type] = DateTime.now();
+      _lastLiteRefreshSourceByType[type] = fetched.sourceLabel;
 
       // removed 감지: 이전/현재 ID 비교로 대체
       final prevIds = _lastIdsByType[type] ?? <String>{};
@@ -369,9 +330,9 @@ class LitePlateState extends ChangeNotifier {
       // 서버 베이스라인 갱신
       for (final p in results) {
         final normalizedSelectedBy =
-        p.isSelected ? ((p.selectedBy?.trim().isNotEmpty ?? false) ? p.selectedBy!.trim() : null) : null;
+            p.isSelected ? ((p.selectedBy?.trim().isNotEmpty ?? false) ? p.selectedBy!.trim() : null) : null;
 
-        _baseline[p.id] = _SelectionBaseline(
+        _baseline[p.id] = _LiteSelectionBaseline(
           isSelected: p.isSelected,
           selectedBy: normalizedSelectedBy,
         );
@@ -403,7 +364,7 @@ class LitePlateState extends ChangeNotifier {
   // 선택 로직 (기존 구조 유지)
   // ─────────────────────────────────────────────────────────────
 
-  PlateModel? getSelectedPlate(PlateType collection, String userName) {
+  PlateModel? liteGetSelectedPlate(PlateType collection, String userName) {
     final plates = _data[collection];
     if (plates == null || plates.isEmpty) return null;
 
@@ -444,25 +405,25 @@ class LitePlateState extends ChangeNotifier {
 
       final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
-        orElse: () => PlateModel(
-          id: '',
-          plateNumber: '',
-          plateFourDigit: '',
-          type: '',
-          requestTime: DateTime.now(),
-          location: '',
-          area: '',
-          userName: '',
-          isSelected: false,
-          statusList: const [],
-        ),
-      );
+            orElse: () => PlateModel(
+              id: '',
+              plateNumber: '',
+              plateFourDigit: '',
+              type: '',
+              requestTime: DateTime.now(),
+              location: '',
+              area: '',
+              userName: '',
+              isSelected: false,
+              statusList: const [],
+            ),
+          );
 
       if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
         onError(
           '⚠️ 이미 다른 번호판을 선택한 상태입니다.\n'
-              '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
-              '선택을 해제한 후 다시 시도해 주세요.',
+          '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
+          '선택을 해제한 후 다시 시도해 주세요.',
         );
         return;
       }
@@ -593,7 +554,7 @@ class LitePlateState extends ChangeNotifier {
         area: currentArea,
       );
 
-      _baseline[plateId] = _SelectionBaseline(
+      _baseline[plateId] = _LiteSelectionBaseline(
         isSelected: isSelected,
         selectedBy: isSelected ? ((selectedBy?.trim().isNotEmpty ?? false) ? selectedBy!.trim() : null) : null,
       );
@@ -655,7 +616,7 @@ class LitePlateState extends ChangeNotifier {
     _clearPendingSelectionInternal();
 
     for (final t in _activeTypes.toList()) {
-      unawaited(refreshType(t));
+      unawaited(liteRefreshType(t));
     }
   }
 

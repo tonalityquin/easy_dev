@@ -1,8 +1,9 @@
 // lib/repositories/plate_repo_services/plate_count_service.dart
 import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../../enums/plate_type.dart';
-import '../../screens/hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class _CacheItem<T> {
@@ -48,8 +49,7 @@ class PlateCountService {
         .where('area', isEqualTo: area);
 
     try {
-      final agg =
-      await baseQuery.count().get().timeout(const Duration(seconds: 10));
+      final agg = await baseQuery.count().get().timeout(const Duration(seconds: 10));
       final int count = agg.count ?? 0;
 
       /*await UsageReporter.instance.reportSampled(
@@ -62,25 +62,8 @@ class PlateCountService {
 
       _setCached(cacheKey, count);
       return count;
-    } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'plates.count.parkingCompletedAll',
-          'collection': 'plates',
-          'filters': {
-            'type': PlateType.parkingCompleted.firestoreValue,
-            'area': area,
-          },
-          'meta': {'timeoutSec': 10},
-          'error': {
-            'type': e.runtimeType.toString(),
-            if (e is FirebaseException) 'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'count', 'parkingCompletedAll', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } catch (_) {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }
@@ -103,8 +86,7 @@ class PlateCountService {
         .where('isLockedFee', isEqualTo: true);
 
     try {
-      final agg =
-      await baseQuery.count().get().timeout(const Duration(seconds: 10));
+      final agg = await baseQuery.count().get().timeout(const Duration(seconds: 10));
       final int docCount = agg.count ?? 0;
 
       /*await UsageReporter.instance.reportSampled(
@@ -117,26 +99,8 @@ class PlateCountService {
 
       _setCached(cacheKey, docCount);
       return docCount;
-    } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'plates.count.departureCompletedAgg',
-          'collection': 'plates',
-          'filters': {
-            'type': PlateType.departureCompleted.firestoreValue,
-            'area': area,
-            'isLockedFee': true,
-          },
-          'meta': {'timeoutSec': 10},
-          'error': {
-            'type': e.runtimeType.toString(),
-            if (e is FirebaseException) 'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'count', 'departureCompletedAgg', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } catch (_) {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }
@@ -151,13 +115,9 @@ class PlateCountService {
     if (cached != null) return cached;
 
     try {
-      final extraSnap = await _firestore
-          .collection('plate_counters')
-          .doc('area_$area')
-          .get();
+      final extraSnap = await _firestore.collection('plate_counters').doc('area_$area').get();
 
-      final int extras =
-          (extraSnap.data()?['departureCompletedEvents'] as int?) ?? 0;
+      final int extras = (extraSnap.data()?['departureCompletedEvents'] as int?) ?? 0;
 
       /*await UsageReporter.instance.reportSampled(
         area: area,
@@ -169,25 +129,8 @@ class PlateCountService {
 
       _setCached(cacheKey, extras);
       return extras;
-    } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'plates.count.departureCompletedExtra',
-          'collection': 'plate_counters',
-          'filters': {
-            'docId': 'area_$area',
-            'field': 'departureCompletedEvents',
-          },
-          'meta': {'timeoutSec': 10},
-          'error': {
-            'type': e.runtimeType.toString(),
-            if (e is FirebaseException) 'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'count', 'departureCompletedExtra', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } catch (_) {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }

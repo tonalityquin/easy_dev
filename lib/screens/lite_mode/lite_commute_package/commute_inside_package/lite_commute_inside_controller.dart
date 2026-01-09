@@ -10,20 +10,16 @@ import '../../../../utils/snackbar_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:easydev/services/endtime_reminder_service.dart';
 
-// ✅ commute_true_false(출근시각 Timestamp) 기록용 Firestore 레포지토리
 import '../../../../repositories/commute_repo_services/commute_true_false_repository.dart';
 
-// ✅ 추가: 기기별 commute_true_false Firestore 업데이트 ON/OFF
 import '../../../../utils/commute_true_false_mode_config.dart';
 import 'utils/lite_commute_inside_clock_in_log_uploader.dart';
 
 const kIsWorkingPrefsKey = 'isWorking';
 
-// ✅ 라우팅을 밖에서 수행하기 위한 목적지 enum
 enum LiteCommuteDestination { none, headquarter, type }
 
 class LiteCommuteInsideController {
-  // ✅ commute_true_false 전용 레포지토리 인스턴스
   final CommuteTrueFalseRepository _commuteTrueFalseRepo =
   CommuteTrueFalseRepository();
 
@@ -47,7 +43,7 @@ class LiteCommuteInsideController {
     });
   }
 
-  Future<LiteCommuteDestination> _decideDestination(
+  Future<LiteCommuteDestination> _liteDecideDestination(
       BuildContext context,
       UserState userState,
       ) async {
@@ -74,13 +70,6 @@ class LiteCommuteInsideController {
     }
   }
 
-  /// ✅ 서비스 로그인 화면의 "출근하기" 버튼에서 호출:
-  /// - 출근 중복 여부 검사
-  /// - 출근 로그 업로드(SQLite)
-  /// - user_accounts.isWorking 토글(true)
-  /// - 오늘 출근 캐시(markClockInToday)
-  /// - commute_true_false 에 "출근 시각 Timestamp" 기록 (퇴근과 무관)
-  /// - 이후 목적지(본사/타입) 판별
   Future<LiteCommuteDestination> handleWorkStatusAndDecide(
       BuildContext context,
       UserState userState,
@@ -114,7 +103,7 @@ class LiteCommuteInsideController {
       await _recordClockInAtToCommuteTrueFalse(userState);
 
       // 상태가 true면 목적지 결정
-      return _decideDestination(context, userState);
+      return _liteDecideDestination(context, userState);
     } catch (e, st) {
       debugPrint('handleWorkStatusAndDecide error: $e\n$st');
       _showWorkError(context);
@@ -125,7 +114,7 @@ class LiteCommuteInsideController {
   // ✅ 자동 경로: (모달 아님) 현재 근무중이면 목적지 판단 후 즉시 라우팅
   void redirectIfWorking(BuildContext context, UserState userState) {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      final dest = await _decideDestination(context, userState);
+      final dest = await _liteDecideDestination(context, userState);
       if (!context.mounted) return;
 
       switch (dest) {

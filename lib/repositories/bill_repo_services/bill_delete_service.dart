@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../screens/hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class BillDeleteService {
@@ -33,27 +32,8 @@ class BillDeleteService {
         n: 1,
         source: 'BillDeleteService.deleteBill.delete',
       );*/
-    } catch (e, st) {
-      // --- 실패 시 Firestore 로거에만 error 레벨 기록 ---
-      try {
-        final payload = {
-          'op': 'bill.delete',
-          'docPath': docRef.path,
-          'docId': targetId,
-          'args': {
-            'idsLen': ids.length,
-            'idsSample': ids.take(5).toList(),
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            if (e is FirebaseException) 'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['bill', 'delete', 'error'],
-        };
-        await DebugDatabaseLogger().log(payload, level: 'error');
-      } catch (_) {}
+    } catch (_) {
+      // ✅ 미사용 payload 생성 로직 제거(경고 해결)
       rethrow;
     }
   }

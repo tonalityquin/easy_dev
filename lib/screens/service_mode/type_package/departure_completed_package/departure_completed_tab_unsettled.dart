@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../enums/plate_type.dart';
-import '../../../../states/plate/lite_plate_state.dart';
+import '../../../../states/plate/plate_state.dart';
 import '../../../../utils/snackbar_helper.dart';
 import '../../../../widgets/container/plate_container.dart';
 import 'departure_completed_control_buttons.dart';
@@ -80,7 +80,7 @@ class _DepartureCompletedUnsettledTabState extends State<DepartureCompletedUnset
 
   @override
   Widget build(BuildContext context) {
-    final plateState = context.watch<LitePlateState>();
+    final plateState = context.watch<PlateState>();
 
     // ✅ 미정산만 노출
     final unsettledPlates = _localPlates.where((p) => p.isLockedFee == false).toList();

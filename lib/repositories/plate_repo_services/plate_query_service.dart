@@ -1,9 +1,9 @@
 import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
-import '../../screens/hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class PlateQueryService {
@@ -11,7 +11,11 @@ class PlateQueryService {
 
   Future<PlateModel?> getPlate(String documentId) async {
     try {
-      final doc = await _firestore.collection('plates').doc(documentId).get().timeout(const Duration(seconds: 10));
+      final doc = await _firestore
+          .collection('plates')
+          .doc(documentId)
+          .get()
+          .timeout(const Duration(seconds: 10));
 
       /*final area = doc.data()?['area'] as String? ?? 'unknown';
       await UsageReporter.instance.report(
@@ -25,22 +29,8 @@ class PlateQueryService {
         return null;
       }
       return PlateModel.fromDocument(doc);
-    } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'plates.get',
-          'collection': 'plates',
-          'docId': documentId,
-          'meta': {'timeoutSec': 10},
-          'error': {
-            'type': e.runtimeType.toString(),
-            if (e is FirebaseException) 'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'get', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } catch (_) {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }
@@ -129,13 +119,13 @@ class PlateQueryService {
     );
   }
 
-  // -------- 공통 쿼리 실행부(파이어스토어 실패만 로깅) --------
+  // -------- 공통 쿼리 실행부 --------
   Future<List<PlateModel>> _queryPlates(
-    Query<Map<String, dynamic>> query, {
-    required String op,
-    required Map<String, dynamic> filters,
-    List<String> tags = const ['plates', 'query'],
-  }) async {
+      Query<Map<String, dynamic>> query, {
+        required String op,
+        required Map<String, dynamic> filters,
+        List<String> tags = const ['plates', 'query'],
+      }) async {
     try {
       final querySnapshot = await query.get();
       final results = querySnapshot.docs.map((doc) => PlateModel.fromDocument(doc)).toList();
@@ -150,21 +140,8 @@ class PlateQueryService {
       );*/
 
       return results;
-    } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': op,
-          'collection': 'plates',
-          'filters': filters,
-          'error': {
-            'type': e.runtimeType.toString(),
-            if (e is FirebaseException) 'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': [...tags, 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } catch (_) {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }

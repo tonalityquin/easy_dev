@@ -98,7 +98,7 @@ class _LiteInputBottomActionSectionState extends State<LiteInputBottomActionSect
         LiteInputAnimatedActionButton(
           isLoading: widget.controller.isLoading,
           isLocationSelected: widget.controller.isLocationSelected,
-          onPressed: () => widget.controller.submitPlateEntry(
+          onPressed: () => widget.controller.liteSubmitPlateEntry(
             context,
             widget.onStateRefresh,
           ),

@@ -1,10 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart'; // debugPrint
-import 'package:flutter/material.dart';
 
 import '../../models/bill_model.dart';
 import '../../models/regular_bill_model.dart';
-import '../../screens/hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class BillWriteService {
@@ -29,29 +27,9 @@ class BillWriteService {
         source: 'BillWriteService.addNormalBill',
       );*/
     } catch (e, st) {
+      // ✅ DebugDatabaseLogger 로직 제거
       debugPrint("🔥 일반 정산 저장 실패: $e");
-      // --- 실패 시 Firestore 로거에만 error 레벨 기록 ---
-      try {
-        final payload = {
-          'op': 'bill.write',
-          'writeType': 'normal',
-          'docPath': docRef.path,
-          'docId': bill.id,
-          'dataPreview': {
-            'keys': data.keys.take(30).toList(),
-            'len': data.length,
-            'type': data['type'],
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            if (e is FirebaseException) 'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['bill', 'write', 'normal', 'error'],
-        };
-        await DebugDatabaseLogger().log(payload, level: 'error');
-      } catch (_) {}
+      debugPrint("stack: $st");
       rethrow;
     }
   }
@@ -75,29 +53,9 @@ class BillWriteService {
         source: 'BillWriteService.addRegularBill',
       );*/
     } catch (e, st) {
+      // ✅ DebugDatabaseLogger 로직 제거
       debugPrint("🔥 정기 정산 저장 실패: $e");
-      // --- 실패 시 Firestore 로거에만 error 레벨 기록 ---
-      try {
-        final payload = {
-          'op': 'bill.write',
-          'writeType': 'regular',
-          'docPath': docRef.path,
-          'docId': bill.id,
-          'dataPreview': {
-            'keys': data.keys.take(30).toList(),
-            'len': data.length,
-            'type': data['type'],
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            if (e is FirebaseException) 'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['bill', 'write', 'regular', 'error'],
-        };
-        await DebugDatabaseLogger().log(payload, level: 'error');
-      } catch (_) {}
+      debugPrint("stack: $st");
       rethrow;
     }
   }

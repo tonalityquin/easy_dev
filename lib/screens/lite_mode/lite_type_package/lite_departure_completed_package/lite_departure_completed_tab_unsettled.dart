@@ -66,13 +66,13 @@ class _LiteDepartureCompletedUnsettledTabState extends State<LiteDepartureComple
     // ✅ 화면 최초 진입 시에도 한 번 갱신 트리거(상위에서 이미 로드했더라도 무해)
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      final plateState = context.read<LitePlateState>();
+      final litePlateState = context.read<LitePlateState>();
       final area = context.read<AreaState>().currentArea.trim();
       if (area.isEmpty) return;
 
       // 이미 로딩 중이면 중복 호출 방지
-      if (!plateState.isLoadingType(PlateType.departureCompleted)) {
-        await plateState.refreshType(PlateType.departureCompleted);
+      if (!litePlateState.isLoadingType(PlateType.departureCompleted)) {
+        await litePlateState.liteRefreshType(PlateType.departureCompleted);
       }
     });
   }
@@ -103,7 +103,7 @@ class _LiteDepartureCompletedUnsettledTabState extends State<LiteDepartureComple
 
   /// ✅ 데이터 갱신 로직: LitePlateState에 출차완료 1회 재조회 요청
   Future<void> _refreshUnsettled() async {
-    final plateState = context.read<LitePlateState>();
+    final litePlateState = context.read<LitePlateState>();
     final area = context.read<AreaState>().currentArea.trim();
 
     if (area.isEmpty) {
@@ -114,12 +114,12 @@ class _LiteDepartureCompletedUnsettledTabState extends State<LiteDepartureComple
       return;
     }
 
-    await plateState.refreshType(PlateType.departureCompleted);
+    await litePlateState.liteRefreshType(PlateType.departureCompleted);
 
     if (!mounted) return;
 
-    final lastAt = plateState.lastRefreshAtOf(PlateType.departureCompleted);
-    final sourceLabel = plateState.lastRefreshSourceLabelOf(PlateType.departureCompleted);
+    final lastAt = litePlateState.liteLastRefreshAtOf(PlateType.departureCompleted);
+    final sourceLabel = litePlateState.liteLastRefreshSourceLabelOf(PlateType.departureCompleted);
 
     final text = (lastAt == null)
         ? '데이터를 갱신했습니다.'
@@ -130,20 +130,20 @@ class _LiteDepartureCompletedUnsettledTabState extends State<LiteDepartureComple
 
   @override
   Widget build(BuildContext context) {
-    final plateState = context.watch<LitePlateState>();
+    final litePlateState = context.watch<LitePlateState>();
 
     // ✅ 이 탭은 "state의 최신 데이터"를 기준으로 렌더링 (갱신 반영 보장)
-    final raw = plateState.dataOfType(PlateType.departureCompleted);
+    final raw = litePlateState.dataOfType(PlateType.departureCompleted);
 
     // departureCompleted는 state 쿼리에서 이미 isLockedFee=false로 제한하지만,
     // 방어적으로 한 번 더 필터링
     final plates = raw.where((p) => p.isLockedFee == false).toList()
       ..sort((a, b) => _sortTime(a).compareTo(_sortTime(b))); // 오래된 순
 
-    final lastRefreshAt = plateState.lastRefreshAtOf(PlateType.departureCompleted);
-    final sourceLabel = plateState.lastRefreshSourceLabelOf(PlateType.departureCompleted);
+    final lastRefreshAt = litePlateState.liteLastRefreshAtOf(PlateType.departureCompleted);
+    final sourceLabel = litePlateState.liteLastRefreshSourceLabelOf(PlateType.departureCompleted);
 
-    final bool isRefreshing = plateState.isLoadingType(PlateType.departureCompleted);
+    final bool isRefreshing = litePlateState.isLoadingType(PlateType.departureCompleted);
 
     // ✅ 날짜별(YYYY-MM-DD) 미정산 건수 사전 계산
     final Map<DateTime, int> dateCounts = <DateTime, int>{};

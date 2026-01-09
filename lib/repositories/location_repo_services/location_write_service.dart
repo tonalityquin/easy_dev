@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../../models/location_model.dart';
-import '../../screens/hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class LocationWriteService {
@@ -21,28 +21,8 @@ class LocationWriteService {
         n: 1,
         source: 'LocationWriteService.addSingleLocation',
       );*/
-    } catch (e, st) {
-      // 실패 시 Firestore 로깅만 (error 레벨)
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'locations.write.single',
-          'docPath': docRef.path,
-          'docId': location.id,
-          'dataPreview': {
-            'keys': data.keys.take(30).toList(),
-            'len': data.length,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            if (e is FirebaseException) 'code': (e).code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['locations', 'write', 'single', 'error'],
-        }, level: 'error');
-      } catch (_) {
-        /* 로깅 실패는 무시 */
-      }
+    } catch (_) {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }
@@ -87,33 +67,8 @@ class LocationWriteService {
           source: 'LocationWriteService.addCompositeLocation',
         );*/
       }
-    } catch (e, st) {
-      // 실패 시 Firestore 로깅만 (error 레벨)
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'locations.write.composite',
-          'collection': 'locations',
-          'parent': parent,
-          'area': area,
-          'subs': {
-            'len': subs.length,
-            'sampleNames': subs
-                .map((m) => (m['name'] ?? '').toString())
-                .where((s) => s.isNotEmpty)
-                .take(10)
-                .toList(),
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            if (e is FirebaseException) 'code': (e).code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['locations', 'write', 'composite', 'error'],
-        }, level: 'error');
-      } catch (_) {
-        /* 로깅 실패는 무시 */
-      }
+    } catch (_) {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }
@@ -145,27 +100,8 @@ class LocationWriteService {
           source: 'LocationWriteService.deleteLocations',
         );*/
       }
-    } catch (e, st) {
-      // 실패 시 Firestore 로깅만 (error 레벨)
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'locations.delete.batch',
-          'collection': 'locations',
-          'ids': {
-            'len': ids.length,
-            'sample': ids.take(20).toList(),
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            if (e is FirebaseException) 'code': (e).code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['locations', 'delete', 'batch', 'error'],
-        }, level: 'error');
-      } catch (_) {
-        /* 로깅 실패는 무시 */
-      }
+    } catch (_) {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }

@@ -104,18 +104,18 @@ class _LiteParkingCompletedPageState extends State<LiteParkingCompletedPage> {
   }
 
   // ✅ 출차 요청 핸들러 (기존 로직 유지)
-  void _handleDepartureRequested(BuildContext context) {
+  void _liteHandleDepartureRequested(BuildContext context) {
     final movementPlate = context.read<MovementPlate>();
     final userName = context.read<UserState>().name;
-    final plateState = context.read<LitePlateState>();
-    final selectedPlate = plateState.getSelectedPlate(PlateType.parkingCompleted, userName);
+    final litePlateState = context.read<LitePlateState>();
+    final liteSelectedPlate = litePlateState.liteGetSelectedPlate(PlateType.parkingCompleted, userName);
 
-    if (selectedPlate != null) {
+    if (liteSelectedPlate != null) {
       movementPlate
           .setDepartureRequested(
-        selectedPlate.plateNumber,
-        selectedPlate.area,
-        selectedPlate.location,
+        liteSelectedPlate.plateNumber,
+        liteSelectedPlate.area,
+        liteSelectedPlate.location,
       )
           .then((_) {
         Future.delayed(const Duration(milliseconds: 300), () {
@@ -141,15 +141,15 @@ class _LiteParkingCompletedPageState extends State<LiteParkingCompletedPage> {
     return WillPopScope(
       // 시스템/뒤로가기 처리: 선택/모드 단계적으로 해제
       onWillPop: () async {
-        final plateState = context.read<LitePlateState>();
+        final litePlateState = context.read<LitePlateState>();
         final userName = context.read<UserState>().name;
-        final selectedPlate = plateState.getSelectedPlate(PlateType.parkingCompleted, userName);
+        final liteSelectedPlate = litePlateState.liteGetSelectedPlate(PlateType.parkingCompleted, userName);
 
         // 선택된 번호판이 있으면 선택 해제 먼저
-        if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
-          await plateState.togglePlateIsSelected(
+        if (liteSelectedPlate != null && liteSelectedPlate.id.isNotEmpty) {
+          await litePlateState.togglePlateIsSelected(
             collection: PlateType.parkingCompleted,
-            plateNumber: selectedPlate.plateNumber,
+            plateNumber: liteSelectedPlate.plateNumber,
             userName: userName,
             onError: (msg) => debugPrint(msg),
           );
@@ -196,14 +196,14 @@ class _LiteParkingCompletedPageState extends State<LiteParkingCompletedPage> {
           resetParkingAreaFilter: () => _resetParkingAreaFilter(context),
           toggleSortIcon: _toggleSortIcon,
           handleEntryParkingRequest: handleEntryParkingRequest,
-          handleDepartureRequested: _handleDepartureRequested,
+          handleDepartureRequested: _liteHandleDepartureRequested,
         ),
       ),
     );
   }
 
   Widget _buildBody(BuildContext context) {
-    final plateState = context.watch<LitePlateState>();
+    final litePlateState = context.watch<LitePlateState>();
     final userName = context.read<UserState>().name;
 
     switch (_mode) {
@@ -232,7 +232,7 @@ class _LiteParkingCompletedPageState extends State<LiteParkingCompletedPage> {
 
       case LiteParkingViewMode.plateList:
       // 🔹 기존 plateList 화면은 보존(다른 경로에서 필요할 수 있음). 현재 기본 흐름에선 사용 안 함.
-        List<PlateModel> plates = plateState.getPlatesByCollection(PlateType.parkingCompleted);
+        List<PlateModel> plates = litePlateState.getPlatesByCollection(PlateType.parkingCompleted);
         if (_selectedParkingArea != null) {
           plates = plates.where((p) => p.location == _selectedParkingArea).toList();
         }

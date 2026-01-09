@@ -3,13 +3,13 @@
 // (요청사항) 기존 주석처리 코드 유지, updatedAt 강제 세팅 반영(생성/업데이트/전환/선택 경로)
 
 import 'dart:async';
+import 'dart:developer' as dev;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
-import 'dart:developer' as dev;
 
 import '../../models/plate_log_model.dart';
 import '../../models/plate_model.dart';
-import '../../screens/hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class PlateWriteService {
@@ -62,64 +62,23 @@ class PlateWriteService {
         n: 1,
         source: 'PlateWriteService.addOrUpdatePlate.write',
       );*/
-    } on TimeoutException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'plates.write.addOrUpdate.timeout',
-          'collection': 'plates',
-          'docPath': docRef.path,
-          'docId': documentId,
-          'meta': {'timeoutSec': 10},
-          'error': {
-            'type': e.runtimeType.toString(),
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'write', 'addOrUpdate', 'timeout', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } on TimeoutException {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
-    } on FirebaseException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'plates.write.addOrUpdate',
-          'collection': 'plates',
-          'docPath': docRef.path,
-          'docId': documentId,
-          'error': {
-            'type': e.runtimeType.toString(),
-            'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'write', 'addOrUpdate', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } on FirebaseException {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
-    } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'plates.write.addOrUpdate.unknown',
-          'collection': 'plates',
-          'docPath': docRef.path,
-          'docId': documentId,
-          'error': {
-            'type': e.runtimeType.toString(),
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'write', 'addOrUpdate', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } catch (_) {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }
 
   Future<void> updatePlate(
-    String documentId,
-    Map<String, dynamic> updatedFields, {
-    PlateLogModel? log,
-  }) async {
+      String documentId,
+      Map<String, dynamic> updatedFields, {
+        PlateLogModel? log,
+      }) async {
     final docRef = _firestore.collection('plates').doc(documentId);
 
     Map<String, dynamic>? current;
@@ -133,39 +92,11 @@ class PlateWriteService {
         n: 1,
         source: 'PlateWriteService.updatePlate.prefetch',
       );*/
-    } on FirebaseException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'plates.update.prefetch',
-          'collection': 'plates',
-          'docPath': docRef.path,
-          'docId': documentId,
-          'error': {
-            'type': e.runtimeType.toString(),
-            'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'update', 'prefetch', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } on FirebaseException {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
-    } on TimeoutException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'plates.update.prefetch.timeout',
-          'collection': 'plates',
-          'docPath': docRef.path,
-          'docId': documentId,
-          'meta': {'timeoutSec': 10},
-          'error': {
-            'type': e.runtimeType.toString(),
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'update', 'prefetch', 'timeout', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } on TimeoutException {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
 
@@ -192,50 +123,13 @@ class PlateWriteService {
         n: 1,
         source: 'PlateWriteService.updatePlate.write',
       );*/
-    } on FirebaseException catch (e, st) {
+    } on FirebaseException catch (e) {
       debugPrint("🔥 문서 업데이트 실패: $e");
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'plates.update',
-          'collection': 'plates',
-          'docPath': docRef.path,
-          'docId': documentId,
-          'fieldsPreview': {
-            'keys': fields.keys.take(30).toList(),
-            'len': fields.length,
-            'hasLog': log != null,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'update', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
-    } catch (e, st) {
+    } catch (e) {
       debugPrint("🔥 문서 업데이트 실패: $e");
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'plates.update.unknown',
-          'collection': 'plates',
-          'docPath': docRef.path,
-          'docId': documentId,
-          'fieldsPreview': {
-            'keys': fields.keys.take(30).toList(),
-            'len': fields.length,
-            'hasLog': log != null,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'update', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }
@@ -262,43 +156,16 @@ class PlateWriteService {
         n: 1,
         source: 'PlateWriteService.deletePlate.delete',
       );*/
-    } on FirebaseException catch (e, st) {
+    } on FirebaseException catch (e) {
       if (e.code == 'not-found') {
         debugPrint("⚠️ 삭제 시 문서 없음 (무시): $documentId");
         return;
       }
       dev.log("🔥 문서 삭제 실패: $e", name: "Firestore");
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'plates.delete',
-          'collection': 'plates',
-          'docPath': docRef.path,
-          'docId': documentId,
-          'error': {
-            'type': e.runtimeType.toString(),
-            'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'delete', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
-    } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'plates.delete.unknown',
-          'collection': 'plates',
-          'docPath': docRef.path,
-          'docId': documentId,
-          'error': {
-            'type': e.runtimeType.toString(),
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'delete', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } catch (_) {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }
@@ -334,7 +201,10 @@ class PlateWriteService {
         }
 
         final currentSelectedBy = data['selectedBy'] as String?;
-        if (!forceOverride && currentSelectedBy != null && currentSelectedBy.isNotEmpty && currentSelectedBy != actor) {
+        if (!forceOverride &&
+            currentSelectedBy != null &&
+            currentSelectedBy.isNotEmpty &&
+            currentSelectedBy != actor) {
           throw FirebaseException(
             plugin: 'cloud_firestore',
             code: 'conflict',
@@ -365,68 +235,27 @@ class PlateWriteService {
       });
 
       /*await UsageReporter.instance.report(
-      area: (extraFields?['area'] as String?) ?? '(unknown)',
-      action: 'write',
-      n: 1,
-      source: 'PlateWriteService.transitionPlateType.tx',
-    );*/
-    } on FirebaseException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'plates.transition',
-          'collection': 'plates',
-          'docPath': docRef.path,
-          'docId': plateId,
-          'inputs': {
-            'from': fromType,
-            'to': toType,
-            'actor': actor,
-            'extraKeys': extraFields?.keys.toList() ?? const [],
-            'forceOverride': forceOverride,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'transition', 'tx', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+        area: (extraFields?['area'] as String?) ?? '(unknown)',
+        action: 'write',
+        n: 1,
+        source: 'PlateWriteService.transitionPlateType.tx',
+      );*/
+    } on FirebaseException {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
-    } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'plates.transition.unknown',
-          'collection': 'plates',
-          'docPath': docRef.path,
-          'docId': plateId,
-          'inputs': {
-            'from': fromType,
-            'to': toType,
-            'actor': actor,
-            'extraKeys': extraFields?.keys.toList() ?? const [],
-            'forceOverride': forceOverride,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'transition', 'tx', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } catch (e) {
+      // ✅ DebugDatabaseLogger 로직 제거 (기존 throw 정책 유지)
       throw Exception("DB 업데이트 실패: $e");
     }
   }
 
   /// ✅ ‘주행’ 커밋 트랜잭션: 서버 상태(타입/선점자) 검증 + 원샷 업데이트
   Future<void> recordWhoPlateClick(
-    String id,
-    bool isSelected, {
-    String? selectedBy,
-    required String area,
-  }) async {
+      String id,
+      bool isSelected, {
+        String? selectedBy,
+        required String area,
+      }) async {
     final docRef = _firestore.collection('plates').doc(id);
 
     try {
@@ -489,54 +318,19 @@ class PlateWriteService {
         n: 1,
         source: 'PlateWriteService.recordWhoPlateClick.tx',
       );*/
-    } on FirebaseException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'plates.recordWhoClick.tx',
-          'collection': 'plates',
-          'docPath': docRef.path,
-          'docId': id,
-          'inputs': {
-            'isSelected': isSelected,
-            'hasSelectedBy': selectedBy != null,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'update', 'recordWhoClick', 'tx', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } on FirebaseException {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
-    } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'plates.recordWhoClick.tx.unknown',
-          'collection': 'plates',
-          'docPath': docRef.path,
-          'docId': id,
-          'inputs': {
-            'isSelected': isSelected,
-            'hasSelectedBy': selectedBy != null,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'update', 'recordWhoClick', 'tx', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } catch (e) {
+      // ✅ DebugDatabaseLogger 로직 제거 (기존 throw 정책 유지)
       throw Exception("DB 업데이트 실패: $e");
     }
   }
 
   Map<String, dynamic> _enforceZeroFeeLock(
-    Map<String, dynamic> data, {
-    Map<String, dynamic>? existing,
-  }) {
+      Map<String, dynamic> data, {
+        Map<String, dynamic>? existing,
+      }) {
     int effInt(String key) {
       if (data.containsKey(key)) return _toInt(data[key]);
       if (existing != null && existing.containsKey(key)) {
@@ -555,7 +349,7 @@ class PlateWriteService {
 
       data.putIfAbsent(
         PlateFields.lockedAtTimeInSeconds,
-        () => DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000,
+            () => DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000,
       );
       data.putIfAbsent(PlateFields.lockedFeeAmount, () => 0);
     }

@@ -29,7 +29,7 @@ class LiteDashBoard extends StatelessWidget {
                   padding: const EdgeInsets.only(left: 12, top: 4),
                   child: Semantics(
                     // 접근성/로그 수집에 유용
-                    label: 'screen_tag: DashBoard C',
+                    label: 'screen_tag: LiteDashBoard C',
                     child: Text(
                       screenTag,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(

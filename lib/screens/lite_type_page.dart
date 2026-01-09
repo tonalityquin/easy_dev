@@ -35,7 +35,7 @@ class _LiteTypePageState extends State<LiteTypePage> {
     // ✅ Lite 진입: PlateState 절대 금지(구독 시작됨)
     // ✅ LitePlateState만 1회 로드(get) 수행
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<LitePlateState>().enableForTypePages(withDefaults: true);
+      context.read<LitePlateState>().liteEnableForTypePages(withDefaults: true);
     });
   }
 
@@ -43,7 +43,7 @@ class _LiteTypePageState extends State<LiteTypePage> {
   void dispose() {
     // ✅ Lite 이탈: 로드/보류 상태 정리
     try {
-      context.read<LitePlateState>().disableAll();
+      context.read<LitePlateState>().liteDisableAll();
     } catch (_) {}
     super.dispose();
   }
@@ -54,7 +54,7 @@ class _LiteTypePageState extends State<LiteTypePage> {
       create: (_) => LitePageState(),
       child: Builder(
         builder: (context) {
-          final plateState = context.read<LitePlateState>();
+          final litePlateState = context.read<LitePlateState>();
           final pageState = context.read<LitePageState>();
           final userName = context.read<UserState>().name;
 
@@ -71,12 +71,12 @@ class _LiteTypePageState extends State<LiteTypePage> {
 
               final currentPage = pageState.pages[pageState.selectedIndex];
               final collection = currentPage.collectionKey;
-              final selectedPlate = plateState.getSelectedPlate(collection, userName);
+              final liteSelectedPlate = litePlateState.liteGetSelectedPlate(collection, userName);
 
-              if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
-                await plateState.togglePlateIsSelected(
+              if (liteSelectedPlate != null && liteSelectedPlate.id.isNotEmpty) {
+                await litePlateState.togglePlateIsSelected(
                   collection: collection,
-                  plateNumber: selectedPlate.plateNumber,
+                  plateNumber: liteSelectedPlate.plateNumber,
                   userName: userName,
                   onError: (msg) => debugPrint(msg),
                 );
@@ -285,11 +285,11 @@ class _RefreshableBodyState extends State<RefreshableBody> {
       onVerticalDragUpdate: (details) => _vDragDistance += details.delta.dy,
       onVerticalDragEnd: (details) => _handleVerticalDragEnd(context, details),
       child: Consumer2<LitePageState, LitePlateState>(
-        builder: (context, pageState, plateState, _) {
+        builder: (context, pageState, litePlateState, _) {
           return Stack(
             children: [
               _buildCurrentPage(context, pageState),
-              if (plateState.isLoading)
+              if (litePlateState.isLoading)
                 Container(
                   color: Colors.white.withOpacity(.35),
                   child: Center(

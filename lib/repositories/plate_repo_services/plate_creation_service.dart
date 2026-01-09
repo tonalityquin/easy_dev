@@ -5,7 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
-import '../../screens/hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 import '../../screens/service_mode/type_package/common_widgets/reverse_sheet_package/services/parking_completed_logger.dart';
 import '../../screens/service_mode/type_package/common_widgets/reverse_sheet_package/services/status_mapping.dart';
 
@@ -158,26 +157,11 @@ class PlateCreationService {
         regularAmount = billData['regularAmount'];
         regularDurationHours = billData['regularDurationHours'];
       } catch (e, st) {
-        try {
-          await DebugDatabaseLogger().log({
-            'op': 'bill.read.forPlateCreation',
-            'collection': 'bill',
-            'docId': '${billingType}_$area',
-            'inputs': {
-              'billingType': billingType,
-              'area': area,
-              'selectedBillType': selectedBillType,
-            },
-            'error': {
-              'type': e.runtimeType.toString(),
-              if (e is FirebaseException) 'code': e.code,
-              'message': e.toString(),
-            },
-            'stack': st.toString(),
-            'tags': ['bill', 'read', 'error'],
-          }, level: 'error');
-        } catch (_) {}
+        // ✅ DebugDatabaseLogger 로직 제거
         debugPrint("🔥 정산 정보 로드 실패: $e");
+        if (kDebugMode) {
+          debugPrint("stack: $st");
+        }
         throw Exception("Firestore 정산 정보 로드 실패: $e");
       }
     } else if (selectedBillType == '정기') {
@@ -284,7 +268,8 @@ class PlateCreationService {
               PlateFields.updatedAt: FieldValue.serverTimestamp(),
               if (base.location.isNotEmpty) PlateFields.location: base.location,
               if (endTime != null) PlateFields.endTime: endTime,
-              if (billingType != null && billingType.trim().isNotEmpty) PlateFields.billingType: billingType,
+              if (billingType != null && billingType.trim().isNotEmpty)
+                PlateFields.billingType: billingType,
               if (imageUrls != null) PlateFields.imageUrls: imageUrls,
               if (paymentMethod != null) PlateFields.paymentMethod: paymentMethod,
               if (lockedAtTimeInSeconds != null) PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
@@ -394,30 +379,8 @@ class PlateCreationService {
       }
     } on DuplicatePlateException {
       rethrow;
-    } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'plate.create.transaction',
-          'collection': 'plates',
-          'docPath': docRef.path,
-          'docId': plateDocId,
-          'inputs': {
-            'plateNumber': plateNumber,
-            'area': area,
-            'location': location,
-            'plateType': plateType.firestoreValue,
-            'selectedBillType': selectedBillType,
-            'billingType': billingType,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            if (e is FirebaseException) 'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plate', 'create', 'transaction', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } catch (_) {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
 
@@ -474,62 +437,11 @@ class PlateCreationService {
 
     try {
       await statusDocRef.set(payload, SetOptions(merge: true));
-    } on FirebaseException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'monthlyPlateStatus.upsert.set',
-          'collection': _monthlyPlateStatusCollection,
-          'docPath': statusDocRef.path,
-          'docId': plateDocId,
-          'inputs': {
-            'plateNumber': plateNumber,
-            'area': area,
-            'selectedBillType': selectedBillType,
-            'statusListLen': statuses.length,
-            'customStatusLen': memo.length,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': [
-            'monthlyPlateStatus',
-            'upsert',
-            'set',
-            'error',
-          ],
-        }, level: 'error');
-      } catch (_) {}
+    } on FirebaseException {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
-    } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'monthlyPlateStatus.upsert.unknown',
-          'collection': _monthlyPlateStatusCollection,
-          'docPath': statusDocRef.path,
-          'docId': plateDocId,
-          'inputs': {
-            'plateNumber': plateNumber,
-            'area': area,
-            'selectedBillType': selectedBillType,
-            'statusListLen': statuses.length,
-            'customStatusLen': memo.length,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            if (e is FirebaseException) 'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': [
-            'monthlyPlateStatus',
-            'upsert',
-            'error',
-          ],
-        }, level: 'error');
-      } catch (_) {}
+    } catch (_) {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }

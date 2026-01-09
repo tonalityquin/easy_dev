@@ -11,7 +11,6 @@ import '../../../../../../repositories/commute_repo_services/commute_log_reposit
 import '../../../../../../utils/block_dialogs/break_duration_blocking_dialog.dart';
 import '../../../../../../utils/block_dialogs/work_end_duration_blocking_dialog.dart';
 
-import '../../hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 import '../../simple_mode/sections/widgets/simple_backup/backup_form_page.dart';
 import '../../simple_mode/utils/simple_mode/simple_mode_db.dart';
 import '../document_package/user_statement/user_statement_form_page.dart';
@@ -521,21 +520,11 @@ class _EmptyState extends StatelessWidget {
 /// SQLite → Firestore 동기화용 모델/함수 (출퇴근/휴게 기록)
 /// ─────────────────────────
 
-/// SQLite에서 읽어 온 출근/퇴근/휴게 1건
 class LocalCommuteRecord {
-  /// Firestore 상태 라벨: "출근" / "퇴근" / "휴게"
   final String status;
-
-  /// 실제 이벤트 시각 (date + time 기준)
   final DateTime dateTime;
-
-  /// 로컬 SQLite 테이블명 (simple_work_attendance / simple_break_attendance)
   final String localTable;
-
-  /// 로컬 SQLite date 값(yyyy-MM-dd)
   final String localDate;
-
-  /// 로컬 SQLite type 값(work_in/work_out/start)
   final String localType;
 
   LocalCommuteRecord({
@@ -547,23 +536,16 @@ class LocalCommuteRecord {
   });
 }
 
-/// SQLite(simple_work_attendance / simple_break_attendance)에서
-/// 출근/퇴근/휴게 데이터를 전부 읽어 오는 함수.
-///
-/// [statuses] 는 Firestore 상태 라벨 기준:
-///   - ["출근", "퇴근"]
-///   - ["휴게"]
 Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
   required BuildContext context,
   required List<String> statuses,
-  required String userId, // 현재 스키마상 userId 컬럼은 없으므로 필터에는 사용하지 않음
+  required String userId,
 }) async {
   final db = await SimpleModeDb.instance.database;
   final result = <LocalCommuteRecord>[];
 
   final dateTimeParser = DateFormat('yyyy-MM-dd HH:mm');
 
-  // 1) 출근/퇴근 (simple_work_attendance)
   final needWorkIn = statuses.contains('출근');
   final needWorkOut = statuses.contains('퇴근');
 
@@ -576,8 +558,8 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
 
     for (final row in workRows) {
       final typeCode = row['type'] as String;
-      final dateStr = row['date'] as String; // yyyy-MM-dd
-      final timeStr = row['time'] as String; // HH:mm
+      final dateStr = row['date'] as String;
+      final timeStr = row['time'] as String;
 
       String? statusLabel;
       if (typeCode == 'work_in' && needWorkIn) {
@@ -600,13 +582,11 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
           ),
         );
       } catch (_) {
-        // 파싱 실패는 무시
         continue;
       }
     }
   }
 
-  // 2) 휴게 (simple_break_attendance, type = "start")
   final needBreak = statuses.contains('휴게');
   if (needBreak) {
     final breakRows = await db.query(
@@ -640,8 +620,6 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
   return result;
 }
 
-/// 업로드(또는 서버 중복으로 간주)된 로컬 행을 삭제합니다.
-/// - (date, type) 기준 1건 삭제
 Future<int> _deleteLocalAttendanceRow(LocalCommuteRecord record) async {
   final db = await SimpleModeDb.instance.database;
   return db.delete(
@@ -651,13 +629,9 @@ Future<int> _deleteLocalAttendanceRow(LocalCommuteRecord record) async {
   );
 }
 
-/// 출퇴근 기록 제출:
-/// - SQLite(simple_work_attendance)에 있는 출근/퇴근 전체 →
-///   Firestore(commute_user_logs)의 "출근"/"퇴근" 로그로 업로드
 Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
   final messenger = ScaffoldMessenger.of(context);
 
-  // 사용자/근무지 정보
   final userState = context.read<UserState>();
   final areaState = context.read<AreaState>();
 
@@ -679,7 +653,6 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
   }
 
   try {
-    // 1) SQLite에서 출근/퇴근 전체 로딩
     final records = await _loadLocalCommuteRecordsFromSqlite(
       context: context,
       statuses: const ['출근', '퇴근'],
@@ -701,12 +674,11 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
 
     var successCount = 0;
     var skippedCount = 0;
-    var deletedCount = 0;
     var failedCount = 0;
+    var deletedCount = 0;
 
-    // 2) Firestore commute_user_logs 에 업로드
     for (final record in records) {
-      final status = record.status; // "출근" 또는 "퇴근"
+      final status = record.status;
       final eventDateTime = record.dateTime;
 
       final dateStr = dateFormatter.format(eventDateTime);
@@ -720,7 +692,6 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
 
       if (alreadyExists) {
         skippedCount++;
-        // 서버에 이미 존재하는 경우, 로컬은 제출 완료로 간주하고 정리
         deletedCount += await _deleteLocalAttendanceRow(record);
         continue;
       }
@@ -736,7 +707,6 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
         dateTime: eventDateTime,
       );
 
-      // ✅ addLog가 예외를 흡수하거나 네트워크/권한 문제로 실제 반영이 안 될 수 있으므로 재검증
       final nowExists = await repo.hasLogForDate(
         status: status,
         userId: userId,
@@ -764,19 +734,7 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
     );
   } catch (e, st) {
     debugPrint('❌ [FielderDocumentBoxSheet] 출퇴근 기록 제출 중 오류: $e');
-
-    try {
-      await DebugDatabaseLogger().log(
-        {
-          'tag': 'FielderDocumentBoxSheet._submitCommuteRecordsFromSqlite',
-          'message': '출퇴근 기록 Firestore 동기화 중 예외 발생',
-          'error': e.toString(),
-          'stack': st.toString(),
-        },
-        level: 'error',
-        tags: const ['database', 'firestore', 'commute', 'migration'],
-      );
-    } catch (_) {}
+    debugPrint('stack: $st'); // ✅ DebugDatabaseLogger 로직 제거(스택은 debugPrint로만)
 
     messenger.showSnackBar(
       const SnackBar(
@@ -789,9 +747,6 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
   }
 }
 
-/// 휴게시간 기록 제출:
-/// - SQLite(simple_break_attendance)에 있는 휴게 로그 전체 →
-///   Firestore(commute_user_logs)의 "휴게" 로그로 업로드
 Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
   final messenger = ScaffoldMessenger.of(context);
 
@@ -816,7 +771,6 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
   }
 
   try {
-    // 1) SQLite에서 휴게 로그 전체 로딩
     final records = await _loadLocalCommuteRecordsFromSqlite(
       context: context,
       statuses: const ['휴게'],
@@ -838,8 +792,8 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
 
     var successCount = 0;
     var skippedCount = 0;
-    var deletedCount = 0;
     var failedCount = 0;
+    var deletedCount = 0;
 
     for (final record in records) {
       final eventDateTime = record.dateTime;
@@ -854,7 +808,6 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
 
       if (alreadyExists) {
         skippedCount++;
-        // 서버에 이미 존재하는 경우, 로컬은 제출 완료로 간주하고 정리
         deletedCount += await _deleteLocalAttendanceRow(record);
         continue;
       }
@@ -897,19 +850,7 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
     );
   } catch (e, st) {
     debugPrint('❌ [FielderDocumentBoxSheet] 휴게시간 기록 제출 중 오류: $e');
-
-    try {
-      await DebugDatabaseLogger().log(
-        {
-          'tag': 'FielderDocumentBoxSheet._submitRestTimeRecordsFromSqlite',
-          'message': '휴게시간 기록 Firestore 동기화 중 예외 발생',
-          'error': e.toString(),
-          'stack': st.toString(),
-        },
-        level: 'error',
-        tags: const ['database', 'firestore', 'break', 'migration'],
-      );
-    } catch (_) {}
+    debugPrint('stack: $st'); // ✅ DebugDatabaseLogger 로직 제거(스택은 debugPrint로만)
 
     messenger.showSnackBar(
       const SnackBar(
@@ -940,29 +881,25 @@ String _formatDateTime(DateTime dt) {
   return '${dt.year}-${two(dt.month)}-${two(dt.day)} ${two(dt.hour)}:${two(dt.minute)}';
 }
 
-/// 기본 type 기준 색상
 Color _accentColorForType(DocumentType type) {
   switch (type) {
     case DocumentType.workStartReportForm:
-      return const Color(0xFF4F9A94); // 청록
+      return const Color(0xFF4F9A94);
     case DocumentType.workEndReportForm:
-      return const Color(0xFFEF6C53); // 기본 오렌지/레드
+      return const Color(0xFFEF6C53);
     case DocumentType.statementForm:
-      return const Color(0xFF5C6BC0); // 블루
+      return const Color(0xFF5C6BC0);
     case DocumentType.generic:
       return const Color(0xFF757575);
   }
 }
 
-/// type + id 기준으로 색상 세분화 (퇴근 vs 업무 종료)
 Color _accentColorForItem(DocumentItem item) {
   if (item.type == DocumentType.workEndReportForm) {
     if (item.id == 'template-work-end-report') {
-      // 퇴근 보고 양식: 기존 오렌지톤
       return const Color(0xFFEF6C53);
     }
     if (item.id == 'template-end-work-report') {
-      // 업무 종료 보고서: 좀 더 진한 레드톤
       return const Color(0xFFD84315);
     }
   }
@@ -982,9 +919,7 @@ IconData _iconForType(DocumentType type) {
   }
 }
 
-/// type + id 기준으로 라벨을 세분화
 String _typeLabelForItem(DocumentItem item) {
-  // 1) 퇴근 vs 업무 종료 세분화
   if (item.type == DocumentType.workEndReportForm) {
     if (item.id == 'template-work-end-report') {
       return '퇴근 보고';
@@ -994,7 +929,6 @@ String _typeLabelForItem(DocumentItem item) {
     }
   }
 
-  // 2) 경위서 계열(출퇴근/휴게 기록) 세분화
   if (item.type == DocumentType.statementForm) {
     switch (item.id) {
       case 'template-commute-record':
@@ -1004,7 +938,6 @@ String _typeLabelForItem(DocumentItem item) {
     }
   }
 
-  // 3) 그 외는 type 기본 라벨
   return _typeLabelForType(item.type);
 }
 
@@ -1021,7 +954,6 @@ String _typeLabelForType(DocumentType type) {
   }
 }
 
-/// Color 확장: 약간 어둡게
 extension _ColorShadeExtension on Color {
   Color darken(double amount) {
     assert(amount >= 0 && amount <= 1);

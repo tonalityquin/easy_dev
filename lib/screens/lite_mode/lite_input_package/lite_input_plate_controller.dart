@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../utils/snackbar_helper.dart';
-import '../../../utils/usage/usage_reporter.dart';
+// import '../../../utils/usage/usage_reporter.dart';
 import 'utils/lite_input_plate_service.dart';
 
 import '../../../states/bill/bill_state.dart';
@@ -58,7 +58,7 @@ class LiteInputPlateController {
     '부산',
     '서울',
     '울산',
-    'इनcheon', // NOTE: If this was unintended, replace with '인천'
+    '인천',
     '전남',
     '전북',
     '제주',
@@ -183,13 +183,13 @@ class LiteInputPlateController {
           SetOptions(merge: true),
         );
 
-        await UsageReporter.instance.report(
+        /* await UsageReporter.instance.report(
           area: (area.isEmpty ? 'unknown' : area),
           action: 'write',
           n: 1,
           source: 'LiteInputPlateController.deleteCustomStatusFromFirestore/monthly_plate_status.doc.set(merge)',
           useSourceOnlyKey: true,
-        );
+        ); */
       }
 
       fetchedCustomStatus = null;
@@ -246,16 +246,16 @@ class LiteInputPlateController {
       SetOptions(merge: true),
     );
 
-    await UsageReporter.instance.report(
+    /* await UsageReporter.instance.report(
       area: (area.isEmpty ? 'unknown' : area),
       action: 'write',
       n: 1,
       source: 'LiteInputPlateController._persistMemoAndStatusAfterEntry/monthly_plate_status.doc.set(merge)',
       useSourceOnlyKey: true,
-    );
+    ); */
   }
 
-  Future<void> submitPlateEntry(
+  Future<void> liteSubmitPlateEntry(
       BuildContext context,
       VoidCallback refreshUI,
       ) async {

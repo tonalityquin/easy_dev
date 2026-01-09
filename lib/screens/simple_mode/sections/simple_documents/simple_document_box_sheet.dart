@@ -9,7 +9,6 @@ import '../../../../../../states/area/area_state.dart';
 import '../../../../repositories/commute_repo_services/commute_log_repository.dart';
 import '../../../../utils/block_dialogs/break_duration_blocking_dialog.dart';
 import '../../../../utils/block_dialogs/work_end_duration_blocking_dialog.dart';
-import '../../../hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 import '../../utils/simple_mode/simple_mode_db.dart';
 import '../widgets/simple_backup/backup_form_page.dart';
 import '../widgets/simple_user_document/simple_user_statement_form_page.dart';
@@ -785,21 +784,10 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
         ),
       ),
     );
-  } catch (e, st) {
+  } catch (e) {
     debugPrint('❌ 출퇴근 기록 제출 중 오류: $e');
 
-    try {
-      await DebugDatabaseLogger().log(
-        {
-          'tag': 'SimpleDocumentBoxSheet._submitCommuteRecordsFromSqlite',
-          'message': '출퇴근 기록 Firestore 동기화 중 예외 발생',
-          'error': e.toString(),
-          'stack': st.toString(),
-        },
-        level: 'error',
-        tags: const ['database', 'firestore', 'commute', 'migration'],
-      );
-    } catch (_) {}
+    // ✅ DebugDatabaseLogger 로직 삭제
 
     messenger.showSnackBar(
       const SnackBar(
@@ -918,21 +906,10 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
         ),
       ),
     );
-  } catch (e, st) {
+  } catch (e) {
     debugPrint('❌ 휴게시간 기록 제출 중 오류: $e');
 
-    try {
-      await DebugDatabaseLogger().log(
-        {
-          'tag': 'SimpleDocumentBoxSheet._submitRestTimeRecordsFromSqlite',
-          'message': '휴게시간 기록 Firestore 동기화 중 예외 발생',
-          'error': e.toString(),
-          'stack': st.toString(),
-        },
-        level: 'error',
-        tags: const ['database', 'firestore', 'break', 'migration'],
-      );
-    } catch (_) {}
+    // ✅ DebugDatabaseLogger 로직 삭제
 
     messenger.showSnackBar(
       const SnackBar(
@@ -1077,10 +1054,6 @@ String _typeLabelForItem(SimpleDocumentItem item) {
 }
 
 /// type 기준 기본 라벨
-///
-/// - simple 모드 문서철에서 실제로 사용하는 것은
-///   statementForm(경위서 계열), generic(연차/사직 등) 위주라
-///   나머지 enum 값들은 공통 fallback 으로 처리
 String _typeLabelForType(SimpleDocumentType type) {
   switch (type) {
     case SimpleDocumentType.statementForm:

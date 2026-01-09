@@ -46,14 +46,14 @@ class LiteDepartureCompletedControlButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final plateState = context.watch<LitePlateState>();
+    final litePlateState = context.watch<LitePlateState>();
     final userName = context.read<UserState>().name;
 
-    final selectedPlate = plateState.getSelectedPlate(
+    final liteSelectedPlate = litePlateState.liteGetSelectedPlate(
       PlateType.departureCompleted,
       userName,
     );
-    final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
+    final isPlateSelected = liteSelectedPlate != null && liteSelectedPlate.isSelected;
 
     return BottomAppBar(
       color: Colors.white,
@@ -68,7 +68,7 @@ class LiteDepartureCompletedControlButtons extends StatelessWidget {
               onPressed: () async {
                 await showLiteDepartureCompletedStatusBottomSheet(
                   context: context,
-                  plate: selectedPlate,
+                  plate: liteSelectedPlate,
                   performedBy: userName, // ✅ 추가 반영
                 );
               },

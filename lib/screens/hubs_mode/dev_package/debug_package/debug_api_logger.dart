@@ -1,4 +1,4 @@
-// File: lib/screens/stub_package/debug_api_logger.dart
+// File: lib/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -6,7 +6,10 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// 외부 API / 연동(Connect) 관련 에러 로그 전용 로거
+/// 통합 에러 로그 로거 (api_log.txt)
+///
+/// - Database/Local/API 로그를 단일 파일로 통합한 이후, 이 로거만 사용합니다.
+/// - error(level == 'error')만 기록합니다.
 class DebugApiLogger {
   // ---- Singleton ----
   static final DebugApiLogger _instance = DebugApiLogger._internal();

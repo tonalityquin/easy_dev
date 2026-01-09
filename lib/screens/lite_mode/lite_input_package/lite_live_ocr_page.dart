@@ -1,4 +1,3 @@
-// lib/screens/input_package/offline_live_ocr_page.dart
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' show Rect;

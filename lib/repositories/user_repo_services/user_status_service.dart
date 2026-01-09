@@ -1,6 +1,5 @@
 // lib/repositories/user_repo_services/user_status_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../screens/hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class UserStatusService {
@@ -15,7 +14,7 @@ class UserStatusService {
     return _firestore.collection('tablet_accounts');
   }
 
-/*String _inferAreaFromHyphenId(String id) {
+  /*String _inferAreaFromHyphenId(String id) {
     final idx = id.lastIndexOf('-');
     if (idx <= 0 || idx >= id.length - 1) return 'unknown';
     return id.substring(idx + 1);
@@ -39,7 +38,8 @@ class UserStatusService {
         n: 1,
         source: 'UserStatusService.$opName.update',
       );*/
-    } on FirebaseException catch (e, st) {
+    } on FirebaseException catch (e) {
+      // ✅ st 미사용 경고 해결: catch (e, st) → catch (e)
       if (e.code == 'not-found') {
         try {
           await docRef.set(updates, SetOptions(merge: true));
@@ -50,53 +50,13 @@ class UserStatusService {
             n: 1,
             source: 'UserStatusService.$opName.upsert',
           );*/
-        } on FirebaseException catch (e2, st2) {
-          try {
-            await DebugDatabaseLogger().log({
-              'op': 'userStatus.$opName.upsert',
-              'collectionPath': col.path,
-              'docId': docId,
-              'updateKeys': updates.keys.take(30).toList(),
-              'updateLen': updates.length,
-              'error': {
-                'type': e2.runtimeType.toString(),
-                'code': e2.code,
-                'message': e2.toString()
-              },
-              'stack': st2.toString(),
-              'tags': ['userStatus', opName, 'upsert', 'error'],
-            }, level: 'error');
-          } catch (_) {}
+        } on FirebaseException {
           rethrow;
         }
       } else {
-        try {
-          await DebugDatabaseLogger().log({
-            'op': 'userStatus.$opName.update',
-            'collectionPath': col.path,
-            'docId': docId,
-            'updateKeys': updates.keys.take(30).toList(),
-            'updateLen': updates.length,
-            'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
-            'stack': st.toString(),
-            'tags': ['userStatus', opName, 'update', 'error'],
-          }, level: 'error');
-        } catch (_) {}
         rethrow;
       }
-    } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'userStatus.$opName.unknown',
-          'collectionPath': col.path,
-          'docId': docId,
-          'updateKeys': updates.keys.take(30).toList(),
-          'updateLen': updates.length,
-          'error': {'type': e.runtimeType.toString(), 'message': e.toString()},
-          'stack': st.toString(),
-          'tags': ['userStatus', opName, 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } catch (_) {
       rethrow;
     }
   }
@@ -127,7 +87,6 @@ class UserStatusService {
         bool? isWorking,
         bool? isSaved,
       }) async {
-
     final updates = <String, dynamic>{};
     if (isWorking != null) updates['isWorking'] = isWorking;
     if (isSaved != null) updates['isSaved'] = isSaved;

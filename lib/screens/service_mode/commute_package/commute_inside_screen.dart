@@ -31,7 +31,6 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
 
     // OPTION A: 자동 라우팅은 최초 진입 시 1회만 수행
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _loadCustomKakaoUrl();
       if (!mounted) return;
 
       final userState = context.read<UserState>();
@@ -66,18 +65,6 @@ class _CommuteInsideScreenState extends State<CommuteInsideScreen> {
     // 남아 있을 수 있는 퇴근 알림도 취소
     await EndTimeReminderService.instance.cancel();
   }
-
-  Future<void> _loadCustomKakaoUrl() async {
-    final prefs = await SharedPreferences.getInstance();
-    final savedUrl = prefs.getString('custom_kakao_url');
-
-    if (!mounted) return;
-    setState(() {
-      kakaoUrl = (savedUrl != null && savedUrl.isNotEmpty) ? savedUrl : null;
-      loadingUrl = false;
-    });
-  }
-
   Future<void> _handleLogout(BuildContext context) async {
     // 앱 종료 대신 공통 정책: 허브(Selector)로 이동 + prefs('mode') 초기화
     await LogoutHelper.logoutAndGoToLogin(

@@ -1,20 +1,13 @@
 // File: lib/screens/.../BreakLogUploader.dart
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../../states/area/area_state.dart';
 import '../../../../../../states/user/user_state.dart';
 import '../../../../../../utils/api/sheet_upload_result.dart';
-import '../../../../../hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 import '../../../../../simple_mode/utils/simple_mode/simple_mode_attendance_repository.dart';
 
-// ✅ DB 전용 로거
-
 class BreakLogUploader {
-  static const String _status = '휴게';
-
   // ─────────────────────────────────────────
   // 휴게 기록 저장 (SQLite 전용, 약식 모드와 동일 테이블 사용)
   //
@@ -53,31 +46,10 @@ class BreakLogUploader {
             'userId=$userId, name=$userName, area=$area, division=$division, time=$recordedTime';
         debugPrint('❌ $msg');
 
-        await DebugDatabaseLogger().log(
-          {
-            'tag': 'BreakLogUploader.uploadBreakJson',
-            'message': '휴게 기록 저장 실패 - 필수 정보 누락',
-            'reason': 'validation_failed',
-            'userId': userId,
-            'userName': userName,
-            'area': area,
-            'division': division,
-            'recordedTime': recordedTime,
-            'payload': data,
-            'status': _status,
-          },
-          level: 'error',
-          tags: const ['database', 'sqlite', 'commute', 'break'],
-        );
-
         return SheetUploadResult(success: false, message: msg);
       }
 
       // 2) ✅ 약식 모드와 동일한 SQLite 테이블(simple_break_attendance)에 저장
-      //
-      //    - type: SimpleModeAttendanceType.breakTime → 'break'
-      //    - date: yyyy-MM-dd
-      //    - time: HH:mm
       final now = DateTime.now();
 
       await SimpleModeAttendanceRepository.instance.insertEvent(
@@ -88,51 +60,11 @@ class BreakLogUploader {
       final msg = '휴게 기록이 로컬에 저장되었습니다. ($area / $division)';
       debugPrint('✅ $msg');
 
-      // (선택) 성공 로그를 남겨두면 후에 장애 분석 시 도움이 됨
-      try {
-        await DebugDatabaseLogger().log(
-          {
-            'tag': 'BreakLogUploader.uploadBreakJson',
-            'message': '휴게 기록 로컬(SQLite) 저장 완료',
-            'status': _status,
-            'userId': userId,
-            'userName': userName,
-            'area': area,
-            'division': division,
-            'recordedTime': recordedTime,
-            'payload': data,
-          },
-          level: 'info',
-          tags: const ['database', 'sqlite', 'commute', 'break'],
-        );
-      } catch (_) {}
-
       return SheetUploadResult(success: true, message: msg);
-    } catch (e, st) {
+    } catch (e) {
       final msg = '휴게 기록 저장 중 오류가 발생했습니다.\n'
           '잠시 후 다시 시도해 주세요.\n($e)';
       debugPrint('❌ $msg');
-
-      try {
-        await DebugDatabaseLogger().log(
-          {
-            'tag': 'BreakLogUploader.uploadBreakJson',
-            'message': '휴게 기록 SQLite 저장 중 예외 발생',
-            'reason': 'exception',
-            'error': e.toString(),
-            'stack': st.toString(),
-            'userId': userId,
-            'userName': userName,
-            'area': area,
-            'division': division,
-            'recordedTime': recordedTime,
-            'payload': data,
-            'status': _status,
-          },
-          level: 'error',
-          tags: const ['database', 'sqlite', 'commute', 'break'],
-        );
-      } catch (_) {}
 
       return SheetUploadResult(success: false, message: msg);
     }

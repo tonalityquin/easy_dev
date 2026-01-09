@@ -229,12 +229,12 @@ void liteAreaPickerBottomSheet({
                               if (!rootContext.mounted) return;
 
                               if (isHeadquarter) {
-                                litePlateState.disableAll();
+                                litePlateState.liteDisableAll();
                                 Navigator.pushReplacementNamed(rootContext, AppRoutes.liteHeadquarterPage);
                               } else {
-                                litePlateState.enableForTypePages();
+                                litePlateState.liteEnableForTypePages();
                                 if (beforeArea != areaState.currentArea) {
-                                  litePlateState.syncWithAreaState();
+                                  litePlateState.liteSyncWithAreaState();
                                 }
                                 Navigator.pushReplacementNamed(rootContext, AppRoutes.liteTypePage);
                               }

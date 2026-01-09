@@ -95,7 +95,7 @@ class _LiteHqModeSwitchButton extends StatelessWidget {
             // ✅ 전환 흐름 완결:
             // 1) LitePlateState(1회 조회 엔진) OFF + 리셋
             final litePlateState = context.read<LitePlateState>();
-            litePlateState.disableAll();
+            litePlateState.liteDisableAll();
 
             // 2) PlateState를 “깨끗한 상태”로 리셋 후
             // 3) 서비스 구독 엔진 ON(기본 3종 구독 시작)

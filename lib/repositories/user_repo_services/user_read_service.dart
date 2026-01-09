@@ -1,12 +1,12 @@
 // lib/repositories/user_repo_services/user_read_service.dart
 import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/tablet_model.dart';
 import '../../models/user_model.dart';
-import '../../screens/hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 import '../../utils/usage/usage_reporter.dart';
 
 class UserReadService {
@@ -71,8 +71,7 @@ class UserReadService {
       isWorking: t.isWorking,
       name: t.name,
       password: t.password,
-      phone: t.handle,
-      // 🔑 handle을 phone 슬롯에 매핑
+      phone: t.handle, // 🔑 handle을 phone 슬롯에 매핑
       position: t.position,
       role: t.role,
       selectedArea: t.selectedArea,
@@ -104,17 +103,8 @@ class UserReadService {
         return null;
       }
       return UserModel.fromMap(doc.id, doc.data()!);
-    } on FirebaseException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'users.getById',
-          'collection': 'user_accounts',
-          'docId': userId,
-          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
-          'stack': st.toString(),
-          'tags': ['users', 'getById', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } on FirebaseException {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }
@@ -139,17 +129,8 @@ class UserReadService {
         final doc = querySnapshot.docs.first;
         return UserModel.fromMap(doc.id, doc.data());
       }
-    } on FirebaseException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'users.getByPhone',
-          'collection': 'user_accounts',
-          'filters': {'phone': phone},
-          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
-          'stack': st.toString(),
-          'tags': ['users', 'getByPhone', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } on FirebaseException {
+      // ✅ DebugDatabaseLogger 로직 제거 (기존 정책: null 반환 유지)
       return null;
     } catch (e) {
       debugPrint("DB 조회 중 예외 발생: $e");
@@ -179,18 +160,8 @@ class UserReadService {
         final doc = qs.docs.first;
         return UserModel.fromMap(doc.id, doc.data());
       }
-    } on FirebaseException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'users.getByHandle',
-          'collection': 'user_accounts',
-          'filters': {'handle': h},
-          'fallbackFilters': {'phone': h},
-          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
-          'stack': st.toString(),
-          'tags': ['users', 'getByHandle', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } on FirebaseException {
+      // ✅ DebugDatabaseLogger 로직 제거 (기존 정책: null 반환 유지)
       return null;
     } catch (e) {
       debugPrint("DB 조회 중 예외 발생: $e");
@@ -219,18 +190,8 @@ class UserReadService {
       if (snap.exists && snap.data() != null) {
         return TabletModel.fromMap(snap.id, snap.data()!);
       }
-    } on FirebaseException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'tablets.getByHandleAndAreaName',
-          'collection': 'tablet_accounts',
-          'docId': docId,
-          'inputs': {'handle': h, 'areaName': name},
-          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
-          'stack': st.toString(),
-          'tags': ['tablets', 'getByHandleAndAreaName', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } on FirebaseException {
+      // ✅ DebugDatabaseLogger 로직 제거 (기존 정책: null 반환 유지)
       return null;
     } catch (e) {
       debugPrint("DB 조회 중 예외 발생: $e");
@@ -258,17 +219,8 @@ class UserReadService {
         final doc = qs.docs.first;
         return TabletModel.fromMap(doc.id, doc.data());
       }
-    } on FirebaseException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'tablets.getByHandle',
-          'collection': 'tablet_accounts',
-          'filters': {'handle': h},
-          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
-          'stack': st.toString(),
-          'tags': ['tablets', 'getByHandle', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } on FirebaseException {
+      // ✅ DebugDatabaseLogger 로직 제거 (기존 정책: null 반환 유지)
       return null;
     } catch (e) {
       debugPrint("DB 조회 중 예외 발생: $e");
@@ -330,17 +282,8 @@ class UserReadService {
 
       await updateCacheWithUsers(selectedArea, users);
       return users;
-    } on FirebaseException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'users.refreshByArea',
-          'collection': 'user_accounts',
-          'filters': {'areas_contains': selectedArea},
-          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
-          'stack': st.toString(),
-          'tags': ['users', 'refreshByArea', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } on FirebaseException {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }
@@ -353,26 +296,13 @@ class UserReadService {
       final usersRef = _getUserShowCollectionRef().doc(docId).collection('users');
       final snap = await usersRef.get(); // ✅ 1회 get
 
-      final users = snap.docs
-          .map((doc) => UserModel.fromMap(doc.id, doc.data()))
-          .toList(growable: false);
+      final users = snap.docs.map((doc) => UserModel.fromMap(doc.id, doc.data())).toList(growable: false);
 
       // 캐시 키 정책을 기존과 동일하게(area 기준) 유지
       await updateCacheWithUsers(area.trim(), users);
       return users;
-    } on FirebaseException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'users_show.refreshByDivisionArea',
-          'collection': 'user_accounts_show',
-          'docId': docId,
-          'subcollection': 'users',
-          'inputs': {'division': division, 'area': area},
-          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
-          'stack': st.toString(),
-          'tags': ['users_show', 'refreshByDivisionArea', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } on FirebaseException {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     } catch (e) {
       debugPrint("refreshUsersByDivisionAreaFromShow 예외: $e");
@@ -400,17 +330,8 @@ class UserReadService {
 
       await updateCacheWithTablets(selectedArea, users);
       return users;
-    } on FirebaseException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'tablets.refreshByArea',
-          'collection': 'tablet_accounts',
-          'filters': {'areas_contains': selectedArea},
-          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
-          'stack': st.toString(),
-          'tags': ['tablets', 'refreshByArea', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } on FirebaseException {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }
@@ -454,18 +375,8 @@ class UserReadService {
         await prefs.setString(key, name);
       }
       return name;
-    } on FirebaseException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'areas.getEnglishName',
-          'collection': 'areas',
-          'docId': '${division.trim()}-${area.trim()}',
-          'inputs': {'area': area, 'division': division},
-          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
-          'stack': st.toString(),
-          'tags': ['areas', 'getEnglishName', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } on FirebaseException {
+      // ✅ DebugDatabaseLogger 로직 제거
       return null;
     } catch (e) {
       debugPrint("[DEBUG] getEnglishNameByArea 실패: $e");

@@ -1,4 +1,3 @@
-// lib/screens/input_package/lite_input_plate_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';

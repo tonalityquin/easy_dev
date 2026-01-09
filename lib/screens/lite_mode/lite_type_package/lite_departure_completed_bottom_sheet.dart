@@ -82,7 +82,7 @@ class _LiteDepartureCompletedBottomSheetState extends State<LiteDepartureComplet
           (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
     );
 
-    final selectedPlate = plateState.getSelectedPlate(PlateType.departureCompleted, userName);
+    final selectedPlate = plateState.liteGetSelectedPlate(PlateType.departureCompleted, userName);
     final plateNumber = selectedPlate?.plateNumber ?? '';
 
     return WillPopScope(

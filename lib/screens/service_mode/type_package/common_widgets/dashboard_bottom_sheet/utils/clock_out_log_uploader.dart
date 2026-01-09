@@ -9,13 +9,9 @@ import '../../../../../../states/area/area_state.dart';
 import '../../../../../../states/user/user_state.dart';
 
 import '../../../../../../utils/api/sheet_upload_result.dart';
-import '../../../../../hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 import '../../../../../simple_mode/utils/simple_mode/simple_mode_attendance_repository.dart';
 
-// ✅ DB 전용 로거
-
 class ClockOutLogUploader {
-  static const String _status = '퇴근';
 
   // ─────────────────────────────────────────
   // 퇴근 기록 저장 (SQLite 전용, 약식 모드와 동일 테이블 사용)
@@ -56,23 +52,7 @@ class ClockOutLogUploader {
             'userId=$userId, name=$userName, area=$area, division=$division, time=$recordedTime';
         debugPrint('❌ $msg');
 
-        await DebugDatabaseLogger().log(
-          {
-            'tag': 'ClockOutLogUploader.uploadLeaveJson',
-            'message': '퇴근 기록 저장 실패 - 필수 정보 누락',
-            'reason': 'validation_failed',
-            'userId': userId,
-            'userName': userName,
-            'area': area,
-            'division': division,
-            'recordedTime': recordedTime,
-            'payload': data,
-            'status': _status,
-          },
-          level: 'error',
-          tags: const ['database', 'sqlite', 'commute', 'clock_out'],
-        );
-
+        // ✅ DebugDatabaseLogger 로직 제거
         return SheetUploadResult(success: false, message: msg);
       }
 
@@ -91,51 +71,14 @@ class ClockOutLogUploader {
       final msg = '퇴근 기록이 로컬에 저장되었습니다. ($area / $division)';
       debugPrint('✅ $msg');
 
-      try {
-        await DebugDatabaseLogger().log(
-          {
-            'tag': 'ClockOutLogUploader.uploadLeaveJson',
-            'message': '퇴근 기록 로컬(SQLite) 저장 완료',
-            'status': _status,
-            'userId': userId,
-            'userName': userName,
-            'area': area,
-            'division': division,
-            'recordedTime': recordedTime,
-            'payload': data,
-          },
-          level: 'info',
-          tags: const ['database', 'sqlite', 'commute', 'clock_out'],
-        );
-      } catch (_) {}
-
+      // ✅ 성공 로깅(DebugDatabaseLogger) 제거
       return SheetUploadResult(success: true, message: msg);
-    } catch (e, st) {
+    } catch (e) {
       final msg = '퇴근 기록 저장 중 오류가 발생했습니다.\n'
           '잠시 후 다시 시도해 주세요.\n($e)';
       debugPrint('❌ $msg');
 
-      try {
-        await DebugDatabaseLogger().log(
-          {
-            'tag': 'ClockOutLogUploader.uploadLeaveJson',
-            'message': '퇴근 기록 SQLite 저장 중 예외 발생',
-            'reason': 'exception',
-            'error': e.toString(),
-            'stack': st.toString(),
-            'userId': userId,
-            'userName': userName,
-            'area': area,
-            'division': division,
-            'recordedTime': recordedTime,
-            'payload': data,
-            'status': _status,
-          },
-          level: 'error',
-          tags: const ['database', 'sqlite', 'commute', 'clock_out'],
-        );
-      } catch (_) {}
-
+      // ✅ 예외 로깅(DebugDatabaseLogger) 제거
       return SheetUploadResult(success: false, message: msg);
     }
   }

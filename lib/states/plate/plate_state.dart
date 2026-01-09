@@ -229,26 +229,24 @@ class PlateState extends ChangeNotifier {
     notifyListeners();
 
     if (type == PlateType.departureCompleted) {
-      final sub = _repository
-          .departureUnpaidSnapshots(area, descending: descending)
-          .listen((QuerySnapshot<Map<String, dynamic>> snapshot) async {
+      final sub = _repository.departureUnpaidSnapshots(area, descending: descending).listen(
+          (QuerySnapshot<Map<String, dynamic>> snapshot) async {
         final results = snapshot.docs
             .map((doc) {
-          try {
-            return PlateModel.fromDocument(doc);
-          } catch (e) {
-            debugPrint('❌ departureCompleted parsing error: $e');
-            return null;
-          }
-        })
+              try {
+                return PlateModel.fromDocument(doc);
+              } catch (e) {
+                debugPrint('❌ departureCompleted parsing error: $e');
+                return null;
+              }
+            })
             .whereType<PlateModel>()
             .toList();
 
         // 서버 베이스라인 갱신 (해제 상태면 selectedBy를 null로 정규화)
         for (final p in results) {
-          final normalizedSelectedBy = p.isSelected
-              ? ((p.selectedBy?.trim().isNotEmpty ?? false) ? p.selectedBy!.trim() : null)
-              : null;
+          final normalizedSelectedBy =
+              p.isSelected ? ((p.selectedBy?.trim().isNotEmpty ?? false) ? p.selectedBy!.trim() : null) : null;
           _baseline[p.id] = _SelectionBaseline(
             isSelected: p.isSelected,
             selectedBy: normalizedSelectedBy,
@@ -329,9 +327,8 @@ class PlateState extends ChangeNotifier {
 
       // 서버 베이스라인 갱신 (해제 상태면 selectedBy를 null로 정규화)
       for (final p in filteredData) {
-        final normalizedSelectedBy = p.isSelected
-            ? ((p.selectedBy?.trim().isNotEmpty ?? false) ? p.selectedBy!.trim() : null)
-            : null;
+        final normalizedSelectedBy =
+            p.isSelected ? ((p.selectedBy?.trim().isNotEmpty ?? false) ? p.selectedBy!.trim() : null) : null;
         _baseline[p.id] = _SelectionBaseline(
           isSelected: p.isSelected,
           selectedBy: normalizedSelectedBy,
@@ -399,7 +396,7 @@ class PlateState extends ChangeNotifier {
 
     try {
       return plates.firstWhere(
-            (plate) => plate.isSelected && plate.selectedBy == userName,
+        (plate) => plate.isSelected && plate.selectedBy == userName,
       );
     } catch (_) {
       return null;
@@ -438,25 +435,25 @@ class PlateState extends ChangeNotifier {
 
       final alreadySelected = _data.entries.expand((entry) => entry.value).firstWhere(
             (p) => p.isSelected && p.selectedBy == userName && p.id != plateId,
-        orElse: () => PlateModel(
-          id: '',
-          plateNumber: '',
-          plateFourDigit: '',
-          type: '',
-          requestTime: DateTime.now(),
-          location: '',
-          area: '',
-          userName: '',
-          isSelected: false,
-          statusList: [],
-        ),
-      );
+            orElse: () => PlateModel(
+              id: '',
+              plateNumber: '',
+              plateFourDigit: '',
+              type: '',
+              requestTime: DateTime.now(),
+              location: '',
+              area: '',
+              userName: '',
+              isSelected: false,
+              statusList: [],
+            ),
+          );
 
       if (alreadySelected.id.isNotEmpty && !plate.isSelected) {
         onError(
           '⚠️ 이미 다른 번호판을 선택한 상태입니다.\n'
-              '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
-              '선택을 해제한 후 다시 시도해 주세요.',
+          '• 선택된 번호판: ${alreadySelected.plateNumber}\n'
+          '선택을 해제한 후 다시 시도해 주세요.',
         );
         return;
       }
@@ -600,9 +597,7 @@ class PlateState extends ChangeNotifier {
       // 커밋 성공 → 서버 베이스라인을 새 상태로 갱신(해제 시 selectedBy는 null로)
       _baseline[plateId] = _SelectionBaseline(
         isSelected: isSelected,
-        selectedBy: isSelected
-            ? ((selectedBy?.trim().isNotEmpty ?? false) ? selectedBy!.trim() : null)
-            : null,
+        selectedBy: isSelected ? ((selectedBy?.trim().isNotEmpty ?? false) ? selectedBy!.trim() : null) : null,
       );
 
       _clearPendingSelection();

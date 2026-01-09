@@ -4,9 +4,6 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
-import '../screens/hubs_mode/dev_package/debug_package/debug_database_logger.dart';
-import '../screens/hubs_mode/dev_package/debug_package/debug_local_logger.dart';
-
 
 class UpdateAlertBar extends StatefulWidget {
   const UpdateAlertBar({
@@ -54,50 +51,46 @@ class _UpdateAlertBarState extends State<UpdateAlertBar> {
     }
   }
 
-  /// Database / Local / API 로그에서 최근 일부 라인만 읽어서
+  /// ✅ API 로그(api_log.txt)에서 최근 일부 라인만 읽어서
   /// "level == error" 가 하나라도 있으면 true
+  ///
+  /// - Database / Local 로그는 제거(리팩터링 정책)
   Future<bool> _hasAnyErrorLog() async {
-    // 🔧 여기! 리스트를 List<dynamic> 으로 명시해서 readTailLines 호출 가능하게
-    final List<dynamic> loggers = [
-      DebugDatabaseLogger(),
-      DebugLocalLogger(),
-      DebugApiLogger(),
-    ];
+    final logger = DebugApiLogger();
 
-    for (final logger in loggers) {
-      try {
-        // 너무 많이 읽지 않도록 tail 기준으로만
-        final lines = await logger.readTailLines(
-          maxLines: 100,
-          maxBytes: 64 * 1024,
-        ) as List<String>;
+    try {
+      // 너무 많이 읽지 않도록 tail 기준으로만
+      final List<String> lines = await logger.readTailLines(
+        maxLines: 100,
+        maxBytes: 64 * 1024,
+      );
 
-        for (final raw in lines) {
-          final line = raw.trim();
-          if (line.isEmpty) continue;
+      for (final raw in lines) {
+        final line = raw.trim();
+        if (line.isEmpty) continue;
 
-          // JSON 로그 포맷일 때
-          try {
-            final decoded = jsonDecode(line);
-            if (decoded is Map<String, dynamic>) {
-              final level = (decoded['level'] as String?)?.toLowerCase();
-              if (level == 'error') return true;
-              // info 로그면 스킵
-              continue;
-            } else {
-              // Map이 아니어도 내용이 있으면 "에러 존재"로 봐도 무방
-              return true;
-            }
-          } catch (_) {
-            // JSON 이 아니더라도, 내용이 있는 라인은 에러 로그로 간주
+        // JSON 로그 포맷일 때
+        try {
+          final decoded = jsonDecode(line);
+          if (decoded is Map<String, dynamic>) {
+            final level = (decoded['level'] as String?)?.toLowerCase();
+            if (level == 'error') return true;
+            // info/other 로그면 스킵
+            continue;
+          } else {
+            // Map이 아니더라도 내용이 있으면 "에러 존재"로 간주
             return true;
           }
+        } catch (_) {
+          // JSON 이 아니더라도, 내용이 있는 라인은 에러 로그로 간주
+          return true;
         }
-      } catch (_) {
-        // 개별 로거 실패는 무시하고 다른 로거 검사 계속
-        continue;
       }
+    } catch (_) {
+      // API 로거 실패 시에는 "에러 없음"으로 취급 (UI 안정성)
+      return false;
     }
+
     return false;
   }
 

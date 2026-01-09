@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../models/tablet_model.dart';
 import '../../models/user_model.dart';
-import '../../screens/hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 import '../../utils/usage/usage_reporter.dart';
 
 class UserWriteService {
@@ -137,9 +136,7 @@ class UserWriteService {
 
     final bool wantActive = user.isActive;
 
-    // ✅ 레거시/정합성 보정:
-    // - 활성 생성이면 strict=true로 실제 activeCount 재집계
-    // - 비활성 생성이면 activeCount가 없을 때만 초기화
+    // ✅ 레거시/정합성 보정
     await _ensureOrSyncActiveCount(
       showDocRef: showDocRef,
       division: division,
@@ -174,7 +171,6 @@ class UserWriteService {
 
         // ✅ 엄격 제한 검사
         if (delta > 0) {
-          // 이미 limit 이상이면 어떤 경우에도 증가 불가
           if (activeCount0 >= limit) {
             throw StateError('ACTIVE_LIMIT_REACHED:$limit');
           }
@@ -217,43 +213,11 @@ class UserWriteService {
         n: 1,
         source: 'UserWriteService.addUserCard',
       );*/
-    } on FirebaseException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'users.add',
-          'collection': 'user_accounts',
-          'docPath': userDocRef.path,
-          'docId': user.id,
-          'mirror': {
-            'collection': 'user_accounts_show',
-            'docId': showId,
-            'subcollection': 'users',
-            'mirrorDocPath': showUserDocRef.path,
-          },
-          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
-          'stack': st.toString(),
-          'tags': ['users', 'add', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } on FirebaseException {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
-    } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'users.add.unknown',
-          'collection': 'user_accounts',
-          'docPath': userDocRef.path,
-          'docId': user.id,
-          'mirror': {
-            'collection': 'user_accounts_show',
-            'docId': showId,
-            'subcollection': 'users',
-            'mirrorDocPath': showUserDocRef.path,
-          },
-          'error': {'type': e.runtimeType.toString(), 'message': e.toString()},
-          'stack': st.toString(),
-          'tags': ['users', 'add', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } catch (_) {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }
@@ -269,31 +233,11 @@ class UserWriteService {
         n: 1,
         source: 'UserWriteService.addTabletCard',
       );
-    } on FirebaseException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'tablets.add',
-          'collection': 'tablet_accounts',
-          'docPath': docRef.path,
-          'docId': tablet.id,
-          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
-          'stack': st.toString(),
-          'tags': ['tablets', 'add', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } on FirebaseException {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
-    } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'tablets.add.unknown',
-          'collection': 'tablet_accounts',
-          'docPath': docRef.path,
-          'docId': tablet.id,
-          'error': {'type': e.runtimeType.toString(), 'message': e.toString()},
-          'stack': st.toString(),
-          'tags': ['tablets', 'add', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } catch (_) {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }
@@ -335,14 +279,12 @@ class UserWriteService {
     final oldShowDocRef = _getUserShowCollectionRef().doc(oldShowId);
     final oldShowUserDocRef = oldShowDocRef.collection('users').doc(user.id);
 
-    // ✅ 레거시 activeCount 초기화/정합성:
-    // - 이동이 없으면 strict 불필요(활성 제한이 변하지 않음)
-    // - 이동이 있으면 "활성 계정 이동"은 사실상 destination에서 +1이 될 수 있으므로 strict로 보정
+    // ✅ 레거시 activeCount 초기화/정합성
     await _ensureOrSyncActiveCount(
       showDocRef: newShowDocRef,
       division: newDivision,
       area: newArea,
-      strict: moved, // 이동 시 destination은 정합성 강화
+      strict: moved,
     );
     if (moved) {
       await _ensureOrSyncActiveCount(
@@ -465,43 +407,11 @@ class UserWriteService {
         n: 1,
         source: 'UserWriteService.updateUser',
       );*/
-    } on FirebaseException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'users.update',
-          'collection': 'user_accounts',
-          'docPath': userDocRef.path,
-          'docId': user.id,
-          'mirror': {
-            'collection': 'user_accounts_show',
-            'docId': newShowId,
-            'subcollection': 'users',
-            'mirrorDocPath': newShowUserDocRef.path,
-          },
-          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
-          'stack': st.toString(),
-          'tags': ['users', 'update', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } on FirebaseException {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
-    } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'users.update.unknown',
-          'collection': 'user_accounts',
-          'docPath': userDocRef.path,
-          'docId': user.id,
-          'mirror': {
-            'collection': 'user_accounts_show',
-            'docId': newShowId,
-            'subcollection': 'users',
-            'mirrorDocPath': newShowUserDocRef.path,
-          },
-          'error': {'type': e.runtimeType.toString(), 'message': e.toString()},
-          'stack': st.toString(),
-          'tags': ['users', 'update', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } catch (_) {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }
@@ -517,31 +427,11 @@ class UserWriteService {
         n: 1,
         source: 'UserWriteService.updateTablet',
       );
-    } on FirebaseException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'tablets.update',
-          'collection': 'tablet_accounts',
-          'docPath': docRef.path,
-          'docId': tablet.id,
-          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
-          'stack': st.toString(),
-          'tags': ['tablets', 'update', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } on FirebaseException {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
-    } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'tablets.update.unknown',
-          'collection': 'tablet_accounts',
-          'docPath': docRef.path,
-          'docId': tablet.id,
-          'error': {'type': e.runtimeType.toString(), 'message': e.toString()},
-          'stack': st.toString(),
-          'tags': ['tablets', 'update', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } catch (_) {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }
@@ -555,9 +445,9 @@ class UserWriteService {
   /// - 활성화(isActive=true) 시에는 트랜잭션 전에 show/users 재집계(strict)로 activeCount를 동기화한 뒤 진행
   /// - 트랜잭션 내부에서는 meta.activeCount 기준으로 제한 체크 및 +1 반영(동시성 안전)
   Future<void> setUserActiveStatus(
-    String userId, {
-    required bool isActive,
-  }) async {
+      String userId, {
+        required bool isActive,
+      }) async {
     final userDocRef = _getUserCollectionRef().doc(userId);
 
     try {
@@ -576,9 +466,7 @@ class UserWriteService {
       final showDocRef = _getUserShowCollectionRef().doc(showId);
       final showUserDocRef = showDocRef.collection('users').doc(userId);
 
-      // ✅ 레거시/정합성 보정:
-      // - 활성화라면 strict=true로 실제 activeCount 재집계
-      // - 비활성화라면 activeCount 없을 때만 초기화
+      // ✅ 레거시/정합성 보정
       await _ensureOrSyncActiveCount(
         showDocRef: showDocRef,
         division: division,
@@ -596,7 +484,6 @@ class UserWriteService {
 
         final userSnap = await tx.get(showUserDocRef);
         if (!userSnap.exists) {
-          // 운영상 안전을 위해: show/users가 없으면 에러로 처리(=데이터 정합성 깨짐)
           throw StateError('SHOW_USER_DOC_MISSING:showId=$showId userId=$userId');
         }
 
@@ -619,7 +506,6 @@ class UserWriteService {
         }
 
         if (isActive) {
-          // ✅ 활성화 제한 체크(엄격)
           if (activeCount >= limit) {
             throw StateError('ACTIVE_LIMIT_REACHED:$limit');
           }
@@ -653,7 +539,6 @@ class UserWriteService {
           if (activeCount < 0) activeCount = 0;
         }
 
-        // show 메타 갱신(division/area도 같이 유지)
         tx.set(
           showDocRef,
           {
@@ -665,31 +550,11 @@ class UserWriteService {
           SetOptions(merge: true),
         );
       });
-    } on FirebaseException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'users.setActiveStatus',
-          'collection': 'user_accounts_show',
-          'docId': userId,
-          'inputs': {'isActive': isActive},
-          'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
-          'stack': st.toString(),
-          'tags': ['users', 'activeStatus', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } on FirebaseException {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
-    } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'users.setActiveStatus.unknown',
-          'collection': 'user_accounts_show',
-          'docId': userId,
-          'inputs': {'isActive': isActive},
-          'error': {'type': e.runtimeType.toString(), 'message': e.toString()},
-          'stack': st.toString(),
-          'tags': ['users', 'activeStatus', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } catch (_) {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }
@@ -777,31 +642,11 @@ class UserWriteService {
 
         final infer = _inferAreaFromHyphenId(id);
         buckets.update(infer, (v) => v + 1, ifAbsent: () => 1);
-      } on FirebaseException catch (e, st) {
-        try {
-          await DebugDatabaseLogger().log({
-            'op': 'users.delete',
-            'collection': 'user_accounts',
-            'docPath': userDocRef.path,
-            'docId': id,
-            'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
-            'stack': st.toString(),
-            'tags': ['users', 'delete', 'error'],
-          }, level: 'error');
-        } catch (_) {}
+      } on FirebaseException {
+        // ✅ DebugDatabaseLogger 로직 제거
         rethrow;
-      } catch (e, st) {
-        try {
-          await DebugDatabaseLogger().log({
-            'op': 'users.delete.unknown',
-            'collection': 'user_accounts',
-            'docPath': userDocRef.path,
-            'docId': id,
-            'error': {'type': e.runtimeType.toString(), 'message': e.toString()},
-            'stack': st.toString(),
-            'tags': ['users', 'delete', 'error'],
-          }, level: 'error');
-        } catch (_) {}
+      } catch (_) {
+        // ✅ DebugDatabaseLogger 로직 제거
         rethrow;
       }
     }
@@ -819,31 +664,11 @@ class UserWriteService {
 
         final area = _inferAreaFromHyphenId(id);
         buckets.update(area, (v) => v + 1, ifAbsent: () => 1);
-      } on FirebaseException catch (e, st) {
-        try {
-          await DebugDatabaseLogger().log({
-            'op': 'tablets.delete',
-            'collection': 'tablet_accounts',
-            'docPath': docRef.path,
-            'docId': id,
-            'error': {'type': e.runtimeType.toString(), 'code': e.code, 'message': e.toString()},
-            'stack': st.toString(),
-            'tags': ['tablets', 'delete', 'error'],
-          }, level: 'error');
-        } catch (_) {}
+      } on FirebaseException {
+        // ✅ DebugDatabaseLogger 로직 제거
         rethrow;
-      } catch (e, st) {
-        try {
-          await DebugDatabaseLogger().log({
-            'op': 'tablets.delete.unknown',
-            'collection': 'tablet_accounts',
-            'docPath': docRef.path,
-            'docId': id,
-            'error': {'type': e.runtimeType.toString(), 'message': e.toString()},
-            'stack': st.toString(),
-            'tags': ['tablets', 'delete', 'error'],
-          }, level: 'error');
-        } catch (_) {}
+      } catch (_) {
+        // ✅ DebugDatabaseLogger 로직 제거
         rethrow;
       }
     }

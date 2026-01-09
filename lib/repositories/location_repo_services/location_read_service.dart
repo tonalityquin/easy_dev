@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart'; // kDebugMode, debugPrint
+
 import '../../models/location_model.dart';
-import '../../screens/hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class LocationReadService {
@@ -10,25 +10,14 @@ class LocationReadService {
   Future<List<LocationModel>> getLocationsOnce(String area) async {
     QuerySnapshot<Map<String, dynamic>> snapshot;
 
-    // 1) Firestore 쿼리 실패 로깅
+    // 1) Firestore 쿼리
     try {
       snapshot = await _firestore.collection('locations').where('area', isEqualTo: area).get();
     } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'op': 'locations.read',
-          'collection': 'locations',
-          'query': {'area': area},
-          'error': {
-            'type': e.runtimeType.toString(),
-            if (e is FirebaseException) 'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['locations', 'read', 'error'],
-        }, level: 'error');
-      } catch (_) {
-        /* 로깅 실패는 무시 */
+      // ✅ DebugDatabaseLogger 로직 제거
+      if (kDebugMode) {
+        debugPrint('❌ locations.read 실패(area=$area): $e');
+        debugPrint('stack: $st');
       }
       rethrow;
     }
@@ -44,30 +33,19 @@ class LocationReadService {
 
     final results = <LocationModel>[];
 
-    // 2) 문서 파싱 실패 로깅
+    // 2) 문서 파싱(실패 시 해당 문서만 스킵)
     for (final doc in snapshot.docs) {
       final data = doc.data();
       try {
         results.add(LocationModel.fromMap(doc.id, data));
       } catch (e, st) {
+        // ✅ DebugDatabaseLogger 로직 제거
         if (kDebugMode) {
-          debugPrint('⚠️ Location parse 실패(id=${doc.id}): $e');
+          debugPrint('⚠️ Location parse 실패(id=${doc.id}, area=$area): $e');
+          debugPrint('stack: $st');
+          debugPrint('rawKeys(<=30): ${data.keys.take(30).toList()}');
         }
-        // 동기 컨텍스트 → await 불가. 로깅 실패는 무시.
-        // ignore: unawaited_futures
-        DebugDatabaseLogger().log({
-          'op': 'locations.parse',
-          'docId': doc.id,
-          'area': area,
-          'error': {
-            'type': e.runtimeType.toString(),
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['locations', 'parse', 'error'],
-          // 과도한 데이터 로깅 방지
-          'rawKeys': data.keys.take(30).toList(),
-        }, level: 'error');
+        // 파싱 실패 문서는 무시하고 계속 진행
       }
     }
 

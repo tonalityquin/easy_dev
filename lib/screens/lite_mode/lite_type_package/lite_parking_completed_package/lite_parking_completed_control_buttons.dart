@@ -61,12 +61,12 @@ class LiteParkingCompletedControlButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Consumer<LitePlateState>(
-      builder: (context, plateState, _) {
+      builder: (context, litePlateState, _) {
         final userName = context.read<UserState>().name;
-        final selectedPlate =
-        plateState.getSelectedPlate(PlateType.parkingCompleted, userName);
+        final liteSelectedPlate =
+        litePlateState.liteGetSelectedPlate(PlateType.parkingCompleted, userName);
         final isPlateSelected =
-            selectedPlate != null && selectedPlate.isSelected;
+            liteSelectedPlate != null && liteSelectedPlate.isSelected;
 
         // 팔레트 기반 컬러
         final Color selectedItemColor = _Palette.base;
@@ -111,7 +111,7 @@ class LiteParkingCompletedControlButtons extends StatelessWidget {
                 transitionBuilder: (child, animation) =>
                     ScaleTransition(scale: animation, child: child),
                 child: isPlateSelected
-                    ? (selectedPlate.isLockedFee
+                    ? (liteSelectedPlate.isLockedFee
                     ? const Icon(Icons.lock_open,
                     key: ValueKey('unlock'),
                     color: Color(0xFF37474F))
@@ -122,7 +122,7 @@ class LiteParkingCompletedControlButtons extends StatelessWidget {
                     key: const ValueKey('refresh'), color: muted),
               ),
               label: isPlateSelected
-                  ? (selectedPlate.isLockedFee
+                  ? (liteSelectedPlate.isLockedFee
                   ? '정산 취소'
                   : '사전 정산')
                   : '채팅하기',
@@ -186,33 +186,33 @@ class LiteParkingCompletedControlButtons extends StatelessWidget {
 
             // 선택된 차량 기준 실행
             final repo = context.read<PlateRepository>();
-            final billingType = selectedPlate.billingType;
+            final billingType = liteSelectedPlate.billingType;
             final now = DateTime.now();
             final entryTime =
-                selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/
+                liteSelectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/
                     1000;
             final currentTime =
                 now.toUtc().millisecondsSinceEpoch ~/ 1000;
             final firestore = FirebaseFirestore.instance;
-            final documentId = selectedPlate.id;
-            final selectedArea = selectedPlate.area;
+            final documentId = liteSelectedPlate.id;
+            final selectedArea = liteSelectedPlate.area;
 
             if (index == 0) {
               // === 0원 규칙: basicAmount==0 && addAmount==0
               final bool isZeroZero =
-                  ((selectedPlate.basicAmount ?? 0) == 0) &&
-                      ((selectedPlate.addAmount ?? 0) == 0);
+                  ((liteSelectedPlate.basicAmount ?? 0) == 0) &&
+                      ((liteSelectedPlate.addAmount ?? 0) == 0);
 
               // 0원 + 이미 잠금 -> 해제 금지 (DB 없음)
-              if (isZeroZero && selectedPlate.isLockedFee) {
+              if (isZeroZero && liteSelectedPlate.isLockedFee) {
                 showFailedSnackbar(context,
                     '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.');
                 return;
               }
 
               // 0원 + 아직 잠금 아님 -> 자동 잠금 (WRITE ×2)
-              if (isZeroZero && !selectedPlate.isLockedFee) {
-                final updatedPlate = selectedPlate.copyWith(
+              if (isZeroZero && !liteSelectedPlate.isLockedFee) {
+                final updatedPlate = liteSelectedPlate.copyWith(
                   isLockedFee: true,
                   lockedAtTimeInSeconds: currentTime,
                   lockedFeeAmount: 0,
@@ -273,14 +273,14 @@ class LiteParkingCompletedControlButtons extends StatelessWidget {
               }
 
               // 이미 잠금 → 정산 취소 (WRITE ×2)
-              if (selectedPlate.isLockedFee) {
+              if (liteSelectedPlate.isLockedFee) {
                 final confirm = await showDialog<bool>(
                   context: context,
                   builder: (_) => const ConfirmCancelFeeDialog(),
                 );
                 if (confirm != true) return;
 
-                final updatedPlate = selectedPlate.copyWith(
+                final updatedPlate = liteSelectedPlate.copyWith(
                   isLockedFee: false,
                   lockedAtTimeInSeconds: null,
                   lockedFeeAmount: null,
@@ -332,18 +332,18 @@ class LiteParkingCompletedControlButtons extends StatelessWidget {
                   context: context,
                   entryTimeInSeconds: entryTime,
                   currentTimeInSeconds: currentTime,
-                  basicStandard: selectedPlate.basicStandard ?? 0,
-                  basicAmount: selectedPlate.basicAmount ?? 0,
-                  addStandard: selectedPlate.addStandard ?? 0,
-                  addAmount: selectedPlate.addAmount ?? 0,
-                  billingType: selectedPlate.billingType ?? '변동',
-                  regularAmount: selectedPlate.regularAmount,
+                  basicStandard: liteSelectedPlate.basicStandard ?? 0,
+                  basicAmount: liteSelectedPlate.basicAmount ?? 0,
+                  addStandard: liteSelectedPlate.addStandard ?? 0,
+                  addAmount: liteSelectedPlate.addAmount ?? 0,
+                  billingType: liteSelectedPlate.billingType ?? '변동',
+                  regularAmount: liteSelectedPlate.regularAmount,
                   regularDurationHours:
-                  selectedPlate.regularDurationHours,
+                  liteSelectedPlate.regularDurationHours,
                 );
                 if (result == null) return;
 
-                final updatedPlate = selectedPlate.copyWith(
+                final updatedPlate = liteSelectedPlate.copyWith(
                   isLockedFee: true,
                   lockedAtTimeInSeconds: currentTime,
                   lockedFeeAmount: result.lockedFee,
@@ -410,11 +410,11 @@ class LiteParkingCompletedControlButtons extends StatelessWidget {
               // 상태 수정 시트(삭제 실행 시 DeletePlate 내부에서 Firebase 처리/계측)
               await showLiteParkingCompletedStatusBottomSheet(
                 context: context,
-                plate: selectedPlate,
+                plate: liteSelectedPlate,
                 onRequestEntry: () => handleEntryParkingRequest(
                   context,
-                  selectedPlate.plateNumber,
-                  selectedPlate.area,
+                  liteSelectedPlate.plateNumber,
+                  liteSelectedPlate.area,
                 ),
                 onDelete: () {
                   showDialog(
@@ -425,11 +425,11 @@ class LiteParkingCompletedControlButtons extends StatelessWidget {
                           context
                               .read<DeletePlate>()
                               .deleteFromParkingCompleted(
-                            selectedPlate.plateNumber,
-                            selectedPlate.area,
+                            liteSelectedPlate.plateNumber,
+                            liteSelectedPlate.area,
                           );
                           showSuccessSnackbar(context,
-                              "삭제 완료: ${selectedPlate.plateNumber}");
+                              "삭제 완료: ${liteSelectedPlate.plateNumber}");
                         } catch (_) {
                           // DeletePlate 내부에서 실패 처리
                         }

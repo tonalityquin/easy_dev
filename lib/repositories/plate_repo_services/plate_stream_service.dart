@@ -5,7 +5,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
-import '../../screens/hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 
 class PlateStreamService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -29,48 +28,16 @@ class PlateStreamService {
     );
 
     return query.snapshots().handleError((e, st) {
-      // 에러는 디버그 로거에만 남김
-      DebugDatabaseLogger().log({
-        'op': 'plates.stream.currentArea',
-        'collection': 'plates',
-        'filters': {
-          'type': type.firestoreValue,
-          'area': area,
-          if (location != null && location.isNotEmpty) 'location': location,
-        },
-        'orderBy': {
-          'field': 'request_time',
-          'descending': descending,
-        },
-        'error': {
-          'type': e.runtimeType.toString(),
-          if (e is FirebaseException) 'code': e.code,
-          'message': e.toString(),
-        },
-        'stack': st.toString(),
-        'tags': ['plates', 'stream', 'currentArea', 'error'],
-      }, level: 'error');
-
+      // ✅ DebugDatabaseLogger 로직 제거
       Error.throwWithStackTrace(e, st);
     }).map((snapshot) {
       // 🔹 여기서는 단순히 PlateModel 리스트로 변환만 수행
       final results = snapshot.docs.map((doc) {
         try {
           return PlateModel.fromDocument(doc);
-        } catch (e, st) {
-          DebugDatabaseLogger().log({
-            'op': 'plates.stream.parse',
-            'collection': 'plates',
-            'docPath': doc.reference.path,
-            'docId': doc.id,
-            'error': {
-              'type': e.runtimeType.toString(),
-              'message': e.toString(),
-            },
-            'stack': st.toString(),
-            'tags': ['plates', 'stream', 'parse', 'error'],
-            'rawKeys': doc.data().keys.take(30).toList(),
-          }, level: 'error');
+        } catch (_) {
+          // ✅ DebugDatabaseLogger 로직 제거
+          // 파싱 실패 문서는 스킵
           return null;
         }
       }).whereType<PlateModel>().toList();
@@ -94,9 +61,7 @@ class PlateStreamService {
       query = query.where('isLockedFee', isEqualTo: false);
     }
 
-    if (type == PlateType.parkingCompleted &&
-        location != null &&
-        location.isNotEmpty) {
+    if (type == PlateType.parkingCompleted && location != null && location.isNotEmpty) {
       query = query.where('location', isEqualTo: location);
     }
 
@@ -118,27 +83,7 @@ class PlateStreamService {
         .orderBy(PlateFields.requestTime, descending: descending);
 
     return query.snapshots().handleError((e, st) {
-      DebugDatabaseLogger().log({
-        'op': 'plates.stream.departureUnpaid',
-        'collection': 'plates',
-        'filters': {
-          'type': PlateType.departureCompleted.firestoreValue,
-          'area': area,
-          'isLockedFee': false,
-        },
-        'orderBy': {
-          'field': PlateFields.requestTime,
-          'descending': descending,
-        },
-        'error': {
-          'type': e.runtimeType.toString(),
-          if (e is FirebaseException) 'code': e.code,
-          'message': e.toString(),
-        },
-        'stack': st.toString(),
-        'tags': ['plates', 'stream', 'departureUnpaid', 'error'],
-      }, level: 'error');
-
+      // ✅ DebugDatabaseLogger 로직 제거
       Error.throwWithStackTrace(e, st);
     });
   }

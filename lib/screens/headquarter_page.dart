@@ -100,9 +100,9 @@ class _HqModeSwitchButton extends StatelessWidget {
             // 2) LitePlateState를 “깨끗한 상태”로 리셋 후
             // 3) Lite 엔진(1회 조회)을 명시적으로 ON
             final litePlateState = context.read<LitePlateState>();
-            litePlateState.disableAll();
+            litePlateState.liteDisableAll();
             final area = litePlateState.currentArea.trim();
-            litePlateState.enableForTypePages(withDefaults: area.isNotEmpty);
+            litePlateState.liteEnableForTypePages(withDefaults: area.isNotEmpty);
 
             _replaceWithAnimatedRoute(
               context,

@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../screens/hubs_mode/dev_package/debug_package/debug_database_logger.dart';
 // import '../../utils/usage_reporter.dart';
 
 class LocationCountService {
@@ -55,45 +54,11 @@ class LocationCountService {
       } catch (_) {}
 
       return safeCount;
-    } on FirebaseException catch (e, st) {
-      // Firestore 에러 로깅
-      try {
-        await DebugDatabaseLogger().log({
-          'action': 'getPlateCount',
-          'query': {
-            'collection': 'plates',
-            'area': _area,
-            'location': _loc,
-            'type': _type,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'count', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } on FirebaseException {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
-    } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'action': 'getPlateCount',
-          'query': {
-            'collection': 'plates',
-            'area': _area,
-            'location': _loc,
-            'type': _type,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'count', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } catch (_) {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }
@@ -138,42 +103,11 @@ class LocationCountService {
       }
 
       return result;
-    } on FirebaseException catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'action': 'getPlateCountsForLocations',
-          'payload': {
-            'names': locationNames.take(20).toList(),
-            'area': _area,
-            'type': _type,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            'code': e.code,
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'count', 'batch', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } on FirebaseException {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
-    } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log({
-          'action': 'getPlateCountsForLocations',
-          'payload': {
-            'names': locationNames.take(20).toList(),
-            'area': _area,
-            'type': _type,
-          },
-          'error': {
-            'type': e.runtimeType.toString(),
-            'message': e.toString(),
-          },
-          'stack': st.toString(),
-          'tags': ['plates', 'count', 'batch', 'error'],
-        }, level: 'error');
-      } catch (_) {}
+    } catch (_) {
+      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }

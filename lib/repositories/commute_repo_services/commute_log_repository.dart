@@ -1,7 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-import '../../screens/hubs_mode/dev_package/debug_package/debug_database_logger.dart';
-
 /// 출근/퇴근/휴게 공통 Firestore 로그 저장 레포지토리
 ///
 /// - 컬렉션: commute_user_logs
@@ -87,21 +85,9 @@ class CommuteLogRepository {
         return exists;
       }
       return false;
-    } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log(
-          {
-            'op': 'commute_user_logs.hasLogForDate',
-            'status': status,
-            'userId': userId,
-            'date': dateStr,
-            'error': e.toString(),
-            'stack': st.toString(),
-          },
-          level: 'error',
-          tags: ['firestore', 'commute_user_logs', 'check_duplicate'],
-        );
-      } catch (_) {}
+    } catch (_) {
+      // ✅ DebugDatabaseLogger 로직 제거
+      // 중복 체크는 실패 시에도 "새로 작성 허용" 정책을 유지하기 위해 false 반환
       return false;
     }
   }
@@ -140,26 +126,9 @@ class CommuteLogRepository {
         },
         SetOptions(merge: true),
       );
-    } catch (e, st) {
-      try {
-        await DebugDatabaseLogger().log(
-          {
-            'op': 'commute_user_logs.set',
-            'status': status,
-            'userId': userId,
-            'userName': userName,
-            'area': area,
-            'division': division,
-            'date': dateStr,
-            'recordedTime': recordedTime,
-            'eventDateTime': dateTime.toIso8601String(),
-            'error': e.toString(),
-            'stack': st.toString(),
-          },
-          level: 'error',
-          tags: ['firestore', 'commute_user_logs', status],
-        );
-      } catch (_) {}
+    } catch (_) {
+      // ✅ DebugDatabaseLogger 로직 제거
+      // 원본 코드도 catch에서 rethrow하지 않았으므로 동일하게 조용히 종료
     }
   }
 
