@@ -19,7 +19,7 @@ import '../../../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 
 // ✅ TTS (오프라인 TTS 사용)
 import '../../../../../offlines/tts/offline_tts.dart';
-import '../../../../common_package/log_package/lite_log_viewer_bottom_sheet.dart';
+import '../../../../common_package/log_package/log_viewer_bottom_sheet.dart';
 import '../../../lite_modify_package/lite_modify_plate_screen.dart';
 
 Future<void> showLiteParkingCompletedStatusBottomSheet({
@@ -804,7 +804,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                                     Navigator.push(
                                       rootContext,
                                       MaterialPageRoute(
-                                        builder: (_) => LiteLogViewerBottomSheet(
+                                        builder: (_) => LogViewerBottomSheet(
                                           initialPlateNumber: widget.plateNumber,
                                           division: widget.division,
                                           area: widget.area,

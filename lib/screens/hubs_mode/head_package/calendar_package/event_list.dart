@@ -1,7 +1,12 @@
 // lib/screens/head_package/calendar_package/event_list.dart
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
+
+// ✅ API 디버그(통합 에러 로그) 로거
+// 프로젝트 구조/패키지명에 맞게 경로를 조정하세요.
+import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
 
 class EventList extends StatelessWidget {
   const EventList({
@@ -47,7 +52,9 @@ class EventList extends StatelessWidget {
         return ListTile(
           leading: Checkbox(
             value: done,
-            onChanged: (v) => onToggleProgress(context, e, v ?? false),
+            onChanged: (v) async {
+              await _safeToggleProgress(context, e, v ?? false, onToggleProgress);
+            },
           ),
           title: Text(
             (e.summary?.trim().isNotEmpty == true) ? e.summary!.trim() : '(제목 없음)',
@@ -69,7 +76,6 @@ class EventList extends StatelessWidget {
             onToggleProgress: onToggleProgress,
             progressOf: progressOf,
           ),
-          // onLongPress: () => _showEventViewSheet(context, e, ...),
 
           // ▶︎ 우측 액션: 편집/삭제
           trailing: Row(
@@ -78,17 +84,112 @@ class EventList extends StatelessWidget {
               IconButton(
                 tooltip: '수정',
                 icon: const Icon(Icons.edit_outlined),
-                onPressed: () => onEdit(context, e),
+                onPressed: () => _safeEdit(context, e, onEdit),
               ),
               IconButton(
                 tooltip: '삭제',
                 icon: const Icon(Icons.delete_outline),
-                onPressed: () => onDelete(context, e),
+                onPressed: () => _safeDelete(context, e, onDelete),
               ),
             ],
           ),
         );
       },
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// ✅ API 디버그 로직: 표준 태그 / 로깅 헬퍼 (file-scope)
+// ─────────────────────────────────────────────────────────────
+const String _tCal = 'calendar';
+const String _tCalUi = 'calendar/ui';
+const String _tCalEventList = 'calendar/event_list';
+const String _tCalSheet = 'calendar/event_sheet';
+const String _tCalAction = 'calendar/action';
+
+Future<void> _logApiError({
+  required String tag,
+  required String message,
+  required Object error,
+  Map<String, dynamic>? extra,
+  List<String>? tags,
+}) async {
+  try {
+    await DebugApiLogger().log(
+      <String, dynamic>{
+        'tag': tag,
+        'message': message,
+        'error': error.toString(),
+        if (extra != null) 'extra': extra,
+      },
+      level: 'error',
+      tags: tags,
+    );
+  } catch (_) {
+    // 로깅 실패는 UI 기능에 영향 없도록 무시
+  }
+}
+
+Map<String, dynamic> _eventCtx(gcal.Event e) {
+  // 민감정보 최소화: 원문 description/location은 넣지 않고 존재 여부/길이만
+  final title = (e.summary ?? '').trim();
+  return <String, dynamic>{
+    'eventId': e.id ?? '',
+    'summaryLen': title.length,
+    'hasLocation': (e.location ?? '').trim().isNotEmpty,
+    'hasDescription': (e.description ?? '').trim().isNotEmpty,
+    'isAllDay': (e.start?.date != null) && (e.start?.dateTime == null),
+  };
+}
+
+Future<void> _safeEdit(BuildContext context, gcal.Event e, void Function(BuildContext, gcal.Event) onEdit) async {
+  try {
+    onEdit(context, e);
+  } catch (err) {
+    await _logApiError(
+      tag: 'EventList._safeEdit',
+      message: '이벤트 편집 핸들러(onEdit) 실행 실패',
+      error: err,
+      extra: _eventCtx(e),
+      tags: const <String>[_tCal, _tCalUi, _tCalEventList, _tCalAction],
+    );
+    // UI에서는 조용히 실패(필요 시 SnackBar 추가 가능)
+  }
+}
+
+Future<void> _safeDelete(BuildContext context, gcal.Event e, void Function(BuildContext, gcal.Event) onDelete) async {
+  try {
+    onDelete(context, e);
+  } catch (err) {
+    await _logApiError(
+      tag: 'EventList._safeDelete',
+      message: '이벤트 삭제 핸들러(onDelete) 실행 실패',
+      error: err,
+      extra: _eventCtx(e),
+      tags: const <String>[_tCal, _tCalUi, _tCalEventList, _tCalAction],
+    );
+  }
+}
+
+Future<void> _safeToggleProgress(
+    BuildContext context,
+    gcal.Event e,
+    bool done,
+    Future<void> Function(BuildContext, gcal.Event, bool) onToggleProgress,
+    ) async {
+  try {
+    await onToggleProgress(context, e, done);
+  } catch (err) {
+    await _logApiError(
+      tag: 'EventList._safeToggleProgress',
+      message: '진행 상태 토글(onToggleProgress) 실패',
+      error: err,
+      extra: <String, dynamic>{
+        ..._eventCtx(e),
+        'targetDone': done,
+      },
+      tags: const <String>[_tCal, _tCalUi, _tCalEventList, _tCalAction],
     );
   }
 }
@@ -132,133 +233,144 @@ Future<void> _showEventViewSheet(
     return '${fmtDate.format(localStart)} • ${hhmm(localStart)}';
   }
 
-  await showModalBottomSheet(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
-    useSafeArea: true,
-    backgroundColor: Colors.white, // ✅ 시트 배경 흰색
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-    ),
-    builder: (context) {
-      return FractionallySizedBox(
-        heightFactor: 0.9, // ✅ 항상 화면 높이의 90%
-        child: Material(
-          color: Colors.white,
-          surfaceTintColor: Colors.transparent, // ✅ M3 틴트 제거
-          child: SafeArea(
-            child: Padding(
-              padding: EdgeInsets.only(
-                left: 16,
-                right: 16,
-                top: 12,
-                bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 헤더: 제목 + 액션(수정)
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            title,
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+  try {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      useSafeArea: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return FractionallySizedBox(
+          heightFactor: 0.9,
+          child: Material(
+            color: Colors.white,
+            surfaceTintColor: Colors.transparent,
+            child: SafeArea(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 12,
+                  bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 헤더: 제목 + 액션(수정)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                        IconButton(
-                          tooltip: '수정',
-                          icon: const Icon(Icons.edit_outlined),
-                          onPressed: () {
-                            Navigator.of(context).pop();
-                            onEdit(context, e);
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
+                          IconButton(
+                            tooltip: '수정',
+                            icon: const Icon(Icons.edit_outlined),
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              // 안전 실행
+                              _safeEdit(context, e, onEdit);
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
 
-                    // 진행 상태/시간
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(done ? Icons.check_circle : Icons.radio_button_unchecked, size: 18),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(whenText(), style: const TextStyle(fontSize: 14)),
-                        ),
-                      ],
-                    ),
-
-                    if (location != null && location.isNotEmpty) ...[
-                      const SizedBox(height: 10),
+                      // 진행 상태/시간
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.place_outlined, size: 18),
+                          Icon(done ? Icons.check_circle : Icons.radio_button_unchecked, size: 18),
                           const SizedBox(width: 8),
-                          Expanded(child: Text(location, style: const TextStyle(fontSize: 14))),
+                          Expanded(
+                            child: Text(whenText(), style: const TextStyle(fontSize: 14)),
+                          ),
+                        ],
+                      ),
+
+                      if (location != null && location.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.place_outlined, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(location, style: const TextStyle(fontSize: 14))),
+                          ],
+                        ),
+                      ],
+
+                      if (desc != null && desc.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        const Text('메모', style: TextStyle(fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 6),
+                        Text(desc, style: const TextStyle(fontSize: 14)),
+                      ],
+
+                      const SizedBox(height: 16),
+
+                      // 하단 버튼: 완료 토글 / 수정 / 삭제
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              icon: Icon(done ? Icons.undo_rounded : Icons.done_rounded),
+                              label: Text(done ? '미완료로' : '완료하기'),
+                              onPressed: () async {
+                                Navigator.of(context).pop();
+                                await _safeToggleProgress(context, e, !done, onToggleProgress);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.edit_outlined),
+                              label: const Text('수정'),
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                _safeEdit(context, e, onEdit);
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.delete_outline),
+                              label: const Text('삭제'),
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                                _safeDelete(context, e, onDelete);
+                              },
+                            ),
+                          ),
                         ],
                       ),
                     ],
-
-                    if (desc != null && desc.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      const Text('메모', style: TextStyle(fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 6),
-                      Text(desc, style: const TextStyle(fontSize: 14)),
-                    ],
-
-                    const SizedBox(height: 16),
-
-                    // 하단 버튼: 완료 토글 / 수정 / 삭제
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            icon: Icon(done ? Icons.undo_rounded : Icons.done_rounded),
-                            label: Text(done ? '미완료로' : '완료하기'),
-                            onPressed: () async {
-                              Navigator.of(context).pop();
-                              await onToggleProgress(context, e, !done);
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            icon: const Icon(Icons.edit_outlined),
-                            label: const Text('수정'),
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                              onEdit(context, e);
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            icon: const Icon(Icons.delete_outline),
-                            label: const Text('삭제'),
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                              onDelete(context, e);
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
+  } catch (err) {
+    await _logApiError(
+      tag: 'EventList._showEventViewSheet',
+      message: '이벤트 상세 시트 표시(showModalBottomSheet) 실패',
+      error: err,
+      extra: _eventCtx(e),
+      tags: const <String>[_tCal, _tCalUi, _tCalSheet],
+    );
+  }
 }

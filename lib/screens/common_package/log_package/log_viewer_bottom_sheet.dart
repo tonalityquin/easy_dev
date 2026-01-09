@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../models/plate_log_model.dart';
 // import '../../utils/usage_reporter.dart';
 
-class LiteLogViewerBottomSheet extends StatefulWidget {
+class LogViewerBottomSheet extends StatefulWidget {
   /// plateNumber (문서 ID 폴백 조합에 사용)
   final String? initialPlateNumber;
 
@@ -20,7 +20,7 @@ class LiteLogViewerBottomSheet extends StatefulWidget {
   /// 가능하면 실제 Firestore 문서 ID를 넘겨주세요 (가장 정확)
   final String? plateId;
 
-  const LiteLogViewerBottomSheet({
+  const LogViewerBottomSheet({
     super.key,
     this.initialPlateNumber,
     required this.division,
@@ -54,7 +54,7 @@ class LiteLogViewerBottomSheet extends StatefulWidget {
           color: Colors.transparent,
           child: Align(
             alignment: Alignment.bottomCenter,
-            child: LiteLogViewerBottomSheet(
+            child: LogViewerBottomSheet(
               division: division,
               area: area,
               requestTime: requestTime,
@@ -75,10 +75,10 @@ class LiteLogViewerBottomSheet extends StatefulWidget {
   }
 
   @override
-  State<LiteLogViewerBottomSheet> createState() => _LiteLogViewerBottomSheetState();
+  State<LogViewerBottomSheet> createState() => _LogViewerBottomSheetState();
 }
 
-class _LiteLogViewerBottomSheetState extends State<LiteLogViewerBottomSheet> {
+class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
   /// 화면 식별 태그(FAQ/에러 리포트용)
   static const String screenTag = 'plate log';
 

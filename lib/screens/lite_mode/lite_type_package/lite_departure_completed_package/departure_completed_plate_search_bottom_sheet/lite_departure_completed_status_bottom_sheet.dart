@@ -11,7 +11,7 @@ import '../../../../../enums/plate_type.dart';
 import '../../../../../repositories/plate_repo_services/plate_repository.dart';
 import '../../../../../utils/snackbar_helper.dart';
 import '../../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
-import '../../../../common_package/log_package/lite_log_viewer_bottom_sheet.dart';
+import '../../../../common_package/log_package/log_viewer_bottom_sheet.dart';
 
 Future<PlateModel?> showLiteDepartureCompletedStatusBottomSheet({
   required BuildContext context,
@@ -369,7 +369,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
                                 Navigator.push(
                                   rootContext,
                                   MaterialPageRoute(
-                                    builder: (_) => LiteLogViewerBottomSheet(
+                                    builder: (_) => LogViewerBottomSheet(
                                       initialPlateNumber: widget.plateNumber,
                                       division: widget.division,
                                       area: widget.area,

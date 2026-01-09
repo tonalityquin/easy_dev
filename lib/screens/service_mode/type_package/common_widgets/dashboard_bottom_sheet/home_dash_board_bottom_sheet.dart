@@ -5,7 +5,7 @@ import '../../../../../../states/user/user_state.dart';
 import '../../../../../../states/area/area_state.dart';
 
 // ✅ 역할별로 다른 문서철 바텀시트를 사용하기 위해 두 파일 모두 import
-import '../../../../common_package/memo_package/lite_dash_memo.dart';
+import '../../../../common_package/memo_package/dash_memo.dart';
 import '../../../../common_package/sheet_tool/fielder_document_box_sheet.dart';
 import '../../../../common_package/sheet_tool/leader_document_box_sheet.dart';
 import 'widgets/dashboard_punch_recorder_section.dart';
@@ -147,9 +147,9 @@ class _HomeDashBoardBottomSheetState extends State<HomeDashBoardBottomSheet> {
                               label: const Text('메모'),
                               style: _outlinedWhiteBtnStyle(height: 55),
                               onPressed: () async {
-                                await LiteDashMemo.init();
-                                LiteDashMemo.mountIfNeeded();
-                                await LiteDashMemo.togglePanel();
+                                await DashMemo.init();
+                                DashMemo.mountIfNeeded();
+                                await DashMemo.togglePanel();
                               },
                             ),
                           ),

@@ -2,6 +2,9 @@
 import 'package:flutter/material.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 
+// ✅ API 디버그(통합 에러 로그) 로거
+import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
+
 /// ───────────────────────────────────────────────────────────
 /// Company Calendar 팔레트 (추출 색상)
 /// base: #43A047, dark: #2E7D32, light: #A5D6A7, fg: #FFFFFF
@@ -29,8 +32,7 @@ class BoardKanbanView extends StatefulWidget {
 
   final List<gcal.Event> allEvents;
   final int Function(gcal.Event e) progressOf;
-  final Future<void> Function(BuildContext context, gcal.Event e, bool done)
-  onToggleProgress;
+  final Future<void> Function(BuildContext context, gcal.Event e, bool done) onToggleProgress;
 
   /// 0: 오늘, 1: 이번주, 2: 나중에, 3: 완료
   final int initialPage;
@@ -42,6 +44,37 @@ class BoardKanbanView extends StatefulWidget {
 class _BoardKanbanViewState extends State<BoardKanbanView> {
   late final PageController _pageController;
   late int _index;
+
+  // ─────────────────────────────────────────────────────────────
+  // ✅ API 디버그 로직: 표준 태그 / 로깅 헬퍼
+  // ─────────────────────────────────────────────────────────────
+  static const String _tCal = 'calendar';
+  static const String _tKanban = 'calendar/kanban';
+  static const String _tUi = 'calendar/ui';
+  static const String _tBucket = 'calendar/kanban/bucket';
+
+  Future<void> _logApiError({
+    required String tag,
+    required String message,
+    required Object error,
+    Map<String, dynamic>? extra,
+    List<String>? tags,
+  }) async {
+    try {
+      await DebugApiLogger().log(
+        <String, dynamic>{
+          'tag': tag,
+          'message': message,
+          'error': error.toString(),
+          if (extra != null) 'extra': extra,
+        },
+        level: 'error',
+        tags: tags,
+      );
+    } catch (_) {
+      // 로깅 실패는 UI 기능에 영향 없도록 무시
+    }
+  }
 
   @override
   void initState() {
@@ -59,13 +92,36 @@ class _BoardKanbanViewState extends State<BoardKanbanView> {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final buckets = _splitByBucket(widget.allEvents, widget.progressOf, now);
+
+    late final Map<BoardBucket, List<gcal.Event>> buckets;
+    try {
+      buckets = _splitByBucket(widget.allEvents, widget.progressOf, now);
+    } catch (e) {
+      // bucket 분류 로직이 깨져도 화면이 죽지 않도록 로그 후 fallback
+      _logApiError(
+        tag: 'BoardKanbanView._splitByBucket',
+        message: 'Kanban 버킷 분류 실패(예외)',
+        error: e,
+        extra: <String, dynamic>{
+          'eventsCount': widget.allEvents.length,
+          'now': now.toIso8601String(),
+        },
+        tags: const <String>[_tCal, _tKanban, _tBucket],
+      );
+
+      buckets = <BoardBucket, List<gcal.Event>>{
+        BoardBucket.today: <gcal.Event>[],
+        BoardBucket.thisWeek: <gcal.Event>[],
+        BoardBucket.later: <gcal.Event>[],
+        BoardBucket.done: <gcal.Event>[],
+      };
+    }
 
     final pages = <_BoardPageData>[
-      _BoardPageData(title: '오늘', bucket: BoardBucket.today, events: buckets[BoardBucket.today]!),
-      _BoardPageData(title: '이번주', bucket: BoardBucket.thisWeek, events: buckets[BoardBucket.thisWeek]!),
-      _BoardPageData(title: '나중에', bucket: BoardBucket.later, events: buckets[BoardBucket.later]!),
-      _BoardPageData(title: '완료', bucket: BoardBucket.done, events: buckets[BoardBucket.done]!),
+      _BoardPageData(title: '오늘', bucket: BoardBucket.today, events: buckets[BoardBucket.today] ?? <gcal.Event>[]),
+      _BoardPageData(title: '이번주', bucket: BoardBucket.thisWeek, events: buckets[BoardBucket.thisWeek] ?? <gcal.Event>[]),
+      _BoardPageData(title: '나중에', bucket: BoardBucket.later, events: buckets[BoardBucket.later] ?? <gcal.Event>[]),
+      _BoardPageData(title: '완료', bucket: BoardBucket.done, events: buckets[BoardBucket.done] ?? <gcal.Event>[]),
     ];
 
     return Column(
@@ -73,20 +129,47 @@ class _BoardKanbanViewState extends State<BoardKanbanView> {
         _TopTabs(
           index: _index,
           pages: pages,
-          onTap: (i) {
-            setState(() => _index = i);
-            _pageController.animateToPage(
-              i,
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOut,
-            );
+          onTap: (i) async {
+            try {
+              setState(() => _index = i);
+              _pageController.animateToPage(
+                i,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeOut,
+              );
+            } catch (e) {
+              await _logApiError(
+                tag: 'BoardKanbanView._TopTabs.onTap',
+                message: '탭 전환(animateToPage) 실패',
+                error: e,
+                extra: <String, dynamic>{
+                  'targetIndex': i,
+                  'currentIndex': _index,
+                },
+                tags: const <String>[_tCal, _tKanban, _tUi],
+              );
+            }
           },
         ),
         const Divider(height: 1),
         Expanded(
           child: PageView(
             controller: _pageController,
-            onPageChanged: (i) => setState(() => _index = i),
+            onPageChanged: (i) {
+              try {
+                setState(() => _index = i);
+              } catch (e) {
+                _logApiError(
+                  tag: 'BoardKanbanView.onPageChanged',
+                  message: '페이지 전환 상태 반영(setState) 실패',
+                  error: e,
+                  extra: <String, dynamic>{
+                    'targetIndex': i,
+                  },
+                  tags: const <String>[_tCal, _tKanban, _tUi],
+                );
+              }
+            },
             children: [
               for (final p in pages)
                 _KanbanColumnPage(
@@ -109,7 +192,7 @@ class _BoardKanbanViewState extends State<BoardKanbanView> {
       int Function(gcal.Event e) progressOf,
       DateTime now,
       ) {
-    final map = {
+    final map = <BoardBucket, List<gcal.Event>>{
       BoardBucket.today: <gcal.Event>[],
       BoardBucket.thisWeek: <gcal.Event>[],
       BoardBucket.later: <gcal.Event>[],
@@ -118,6 +201,7 @@ class _BoardKanbanViewState extends State<BoardKanbanView> {
 
     final today0 = DateTime(now.year, now.month, now.day);
     final tomorrow0 = today0.add(const Duration(days: 1));
+
     // 주 시작(월=1) ~ 다음 주 시작
     final weekStart = today0.subtract(Duration(days: today0.weekday - 1));
     final nextWeekStart = weekStart.add(const Duration(days: 7));
@@ -148,6 +232,7 @@ class _BoardKanbanViewState extends State<BoardKanbanView> {
         return sa.compareTo(sb);
       });
     }
+
     return map;
   }
 
@@ -163,6 +248,7 @@ class _BoardKanbanViewState extends State<BoardKanbanView> {
 
 class _BoardPageData {
   _BoardPageData({required this.title, required this.bucket, required this.events});
+
   final String title;
   final BoardBucket bucket;
   final List<gcal.Event> events;
@@ -171,6 +257,7 @@ class _BoardPageData {
 /// 상단 탭 (인디케이터 + 카운트)
 class _TopTabs extends StatelessWidget {
   const _TopTabs({required this.index, required this.pages, required this.onTap});
+
   final int index;
   final List<_BoardPageData> pages;
   final ValueChanged<int> onTap;
@@ -217,7 +304,11 @@ class _TopTabs extends StatelessWidget {
                         ),
                         child: Text(
                           '${p.events.length}',
-                          style: const TextStyle(color: _BoardColors.fg, fontWeight: FontWeight.w700, fontSize: 12),
+                          style: const TextStyle(
+                            color: _BoardColors.fg,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
                         ),
                       ),
                     ],
@@ -246,8 +337,7 @@ class _KanbanColumnPage extends StatelessWidget {
   final BoardBucket bucket;
   final List<gcal.Event> events;
   final int Function(gcal.Event e) progressOf;
-  final Future<void> Function(BuildContext context, gcal.Event e, bool done)
-  onToggleProgress;
+  final Future<void> Function(BuildContext context, gcal.Event e, bool done) onToggleProgress;
 
   @override
   Widget build(BuildContext context) {
@@ -264,7 +354,9 @@ class _KanbanColumnPage extends StatelessWidget {
               return _EventCard(
                 event: e,
                 progress: progressOf(e),
-                onToggleDone: () => onToggleProgress(context, e, progressOf(e) != 100),
+                onToggleDone: () async {
+                  await _safeToggleProgress(context, e, progressOf(e) != 100, onToggleProgress);
+                },
               );
             },
           ),
@@ -274,8 +366,38 @@ class _KanbanColumnPage extends StatelessWidget {
   }
 }
 
+Future<void> _safeToggleProgress(
+    BuildContext context,
+    gcal.Event e,
+    bool nextDone,
+    Future<void> Function(BuildContext context, gcal.Event e, bool done) onToggleProgress,
+    ) async {
+  try {
+    await onToggleProgress(context, e, nextDone);
+  } catch (err) {
+    // 토글 실패도 개발자가 DebugBottomSheet에서 즉시 확인 가능하게 로깅
+    try {
+      await DebugApiLogger().log(
+        <String, dynamic>{
+          'tag': 'BoardKanbanView.onToggleProgress',
+          'message': '칸반 완료 토글 실패',
+          'error': err.toString(),
+          'extra': <String, dynamic>{
+            'eventId': e.id ?? '',
+            'summaryLen': (e.summary ?? '').trim().length,
+            'targetDone': nextDone,
+          },
+        },
+        level: 'error',
+        tags: const <String>['calendar', 'calendar/kanban', 'calendar/action'],
+      );
+    } catch (_) {}
+  }
+}
+
 class _ColumnHeader extends StatelessWidget {
   const _ColumnHeader({required this.title, required this.count});
+
   final String title;
   final int count;
 
@@ -296,7 +418,11 @@ class _ColumnHeader extends StatelessWidget {
             ),
             child: Text(
               '$count',
-              style: const TextStyle(color: _BoardColors.fg, fontWeight: FontWeight.w700, fontSize: 12),
+              style: const TextStyle(
+                color: _BoardColors.fg,
+                fontWeight: FontWeight.w700,
+                fontSize: 12,
+              ),
             ),
           ),
         ],
@@ -338,7 +464,11 @@ class _EventCard extends StatelessWidget {
             color: isDone ? Colors.green.shade600 : _BoardColors.base,
             shape: BoxShape.circle,
           ),
-          child: Icon(isDone ? Icons.check_rounded : Icons.circle_outlined, color: _BoardColors.fg, size: 18),
+          child: Icon(
+            isDone ? Icons.check_rounded : Icons.circle_outlined,
+            color: _BoardColors.fg,
+            size: 18,
+          ),
         ),
         title: Text(
           title,
@@ -372,14 +502,14 @@ class _EventCard extends StatelessWidget {
 
   String _formatWhen(gcal.Event e) {
     if (e.start?.date != null) {
-      // 종일
       final sd = e.start!.date!;
       return '종일 • ${sd.month}/${sd.day}';
     }
     final s = e.start?.dateTime?.toLocal();
     final en = e.end?.dateTime?.toLocal();
     if (s == null) return '';
-    String hhmm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+    String hhmm(DateTime t) =>
+        '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
     if (en != null) return '${hhmm(s)}–${hhmm(en)}';
     return hhmm(s);
   }

@@ -1,4 +1,5 @@
 import 'dart:convert'; // ⬅️ 이메일 RAW·첨부 생성용
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData, HapticFeedback;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -6,9 +7,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../utils/app_navigator.dart';
 // ✅ 수신자 이메일 저장/검증 유틸
 import '../../../utils/api/email_config.dart';
-// ✅ Gmail 전송용
+// ✅ Gmail 전송용(중앙 세션)
 import '../../../utils/google_auth_session.dart';
 import 'package:googleapis/gmail/v1.dart' as gmail;
+
+// ✅ API 디버그(통합 에러 로그) 로거
+import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
 
 /// EasyMemo
 /// - 전역 navigatorKey로 안전한 컨텍스트 확보 (showModalBottomSheet)
@@ -19,6 +23,7 @@ class HeadMemo {
 
   /// ✅ MaterialApp.navigatorKey 로 연결
   static GlobalKey<NavigatorState> get navigatorKey => AppNavigator.key;
+
   /// 켜짐/꺼짐 토글 상태
   static final enabled = ValueNotifier<bool>(false);
 
@@ -29,21 +34,84 @@ class HeadMemo {
   static const _kNotesKey = 'head_memo_notes_v1';
 
   static SharedPreferences? _prefs;
+  static bool _inited = false;
 
   // ===== 패널 토글 상태 & 중복 호출 가드 =====
   static bool _isPanelOpen = false;
   static Future<void>? _panelFuture;
 
+  // ─────────────────────────────────────────────────────────────
+  // ✅ API 디버그 로직: 표준 태그 / 로깅 헬퍼
+  // ─────────────────────────────────────────────────────────────
+  static const String _tMemo = 'head_memo';
+  static const String _tMemoUi = 'head_memo/ui';
+  static const String _tMemoPrefs = 'head_memo/prefs';
+  static const String _tMemoEmail = 'head_memo/email';
+  static const String _tEmailConfig = 'email_config';
+  static const String _tGmailSend = 'gmail/send';
+
+  static Future<void> _logApiError({
+    required String tag,
+    required String message,
+    required Object error,
+    Map<String, dynamic>? extra,
+    List<String>? tags,
+  }) async {
+    try {
+      await DebugApiLogger().log(
+        <String, dynamic>{
+          'tag': tag,
+          'message': message,
+          'error': error.toString(),
+          if (extra != null) 'extra': extra,
+        },
+        level: 'error',
+        tags: tags,
+      );
+    } catch (_) {
+      // 로깅 실패는 기능에 영향 없도록 무시
+    }
+  }
+
+  static Future<void> _ensureInited() async {
+    if (_inited) return;
+    await init();
+  }
+
   /// 앱 시작 시 1회 호출
   static Future<void> init() async {
-    _prefs ??= await SharedPreferences.getInstance();
-    enabled.value = _prefs!.getBool(_kEnabledKey) ?? false;
-    notes.value = _prefs!.getStringList(_kNotesKey) ?? const <String>[];
+    if (_inited) return;
 
-    // 토글 변경 시 저장 (버블 제거 → 오버레이 토글 없음)
-    enabled.addListener(() {
-      _prefs?.setBool(_kEnabledKey, enabled.value);
-    });
+    try {
+      _prefs ??= await SharedPreferences.getInstance();
+      enabled.value = _prefs!.getBool(_kEnabledKey) ?? false;
+      notes.value = _prefs!.getStringList(_kNotesKey) ?? const <String>[];
+
+      // 토글 변경 시 저장 (버블 제거 → 오버레이 토글 없음)
+      enabled.addListener(() {
+        try {
+          _prefs?.setBool(_kEnabledKey, enabled.value);
+        } catch (e) {
+          _logApiError(
+            tag: 'HeadMemo.enabled.listener',
+            message: 'enabled 토글 저장 실패(SharedPreferences)',
+            error: e,
+            extra: <String, dynamic>{'enabled': enabled.value},
+            tags: const <String>[_tMemo, _tMemoPrefs],
+          );
+        }
+      });
+
+      _inited = true;
+    } catch (e) {
+      await _logApiError(
+        tag: 'HeadMemo.init',
+        message: 'HeadMemo init 실패(SharedPreferences)',
+        error: e,
+        tags: const <String>[_tMemo, _tMemoPrefs],
+      );
+      rethrow;
+    }
   }
 
   /// Navigator 의 overlay.context 를 최우선으로 사용 → MediaQuery/Theme 보장
@@ -58,14 +126,21 @@ class HeadMemo {
 
   /// ✅ 패널 토글 API: 열려 있으면 닫고, 닫혀 있으면 연다
   static Future<void> togglePanel() async {
+    await _ensureInited();
+
     final ctx = _bestContext();
     if (ctx == null) {
+      await _logApiError(
+        tag: 'HeadMemo.togglePanel',
+        message: 'Navigator context를 가져오지 못해 panel 토글을 지연',
+        error: Exception('no_context'),
+        tags: const <String>[_tMemo, _tMemoUi],
+      );
       WidgetsBinding.instance.addPostFrameCallback((_) => togglePanel());
       return;
     }
 
     if (_isPanelOpen) {
-      // 이미 열려 있으면 닫기
       Navigator.of(ctx).maybePop();
       return;
     }
@@ -78,7 +153,7 @@ class HeadMemo {
       context: ctx,
       useSafeArea: true,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent, // 바깥(시트 바깥) 배경은 투명 유지
+      backgroundColor: Colors.transparent,
       builder: (_) => const _HeadMemoSheet(),
     ).whenComplete(() {
       _isPanelOpen = false;
@@ -91,26 +166,69 @@ class HeadMemo {
   // ----------------- 데이터 조작 -----------------
 
   static Future<void> add(String text) async {
+    await _ensureInited();
+
     final now = DateTime.now();
     final stamp =
         "${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} "
         "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
     final line = "$stamp | $text";
+
     final list = List<String>.from(notes.value)..insert(0, line);
     notes.value = list;
-    await _prefs?.setStringList(_kNotesKey, list);
+
+    try {
+      await _prefs?.setStringList(_kNotesKey, list);
+    } catch (e) {
+      await _logApiError(
+        tag: 'HeadMemo.add',
+        message: '메모 저장 실패(SharedPreferences)',
+        error: e,
+        extra: <String, dynamic>{'len': text.trim().length, 'count': list.length},
+        tags: const <String>[_tMemo, _tMemoPrefs],
+      );
+    }
   }
 
   static Future<void> removeAt(int index) async {
-    final list = List<String>.from(notes.value)..removeAt(index);
+    await _ensureInited();
+
+    final list = List<String>.from(notes.value);
+    if (index < 0 || index >= list.length) return;
+    list.removeAt(index);
+
     notes.value = list;
-    await _prefs?.setStringList(_kNotesKey, list);
+
+    try {
+      await _prefs?.setStringList(_kNotesKey, list);
+    } catch (e) {
+      await _logApiError(
+        tag: 'HeadMemo.removeAt',
+        message: '메모 삭제 반영 실패(SharedPreferences)',
+        error: e,
+        extra: <String, dynamic>{'index': index, 'count': list.length},
+        tags: const <String>[_tMemo, _tMemoPrefs],
+      );
+    }
   }
 
   static Future<void> removeLine(String line) async {
+    await _ensureInited();
+
     final list = List<String>.from(notes.value)..remove(line);
     notes.value = list;
-    await _prefs?.setStringList(_kNotesKey, list);
+
+    try {
+      await _prefs?.setStringList(_kNotesKey, list);
+    } catch (e) {
+      await _logApiError(
+        tag: 'HeadMemo.removeLine',
+        message: '메모 삭제 반영 실패(SharedPreferences)',
+        error: e,
+        extra: <String, dynamic>{'count': list.length},
+        tags: const <String>[_tMemo, _tMemoPrefs],
+      );
+    }
   }
 }
 
@@ -136,29 +254,50 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
 
   String _query = '';
 
+  // MIME helpers
+  static const int _mimeB64LineLength = 76;
+
   @override
   void initState() {
     super.initState();
     _searchCtrl.addListener(() {
+      if (!mounted) return;
       setState(() => _query = _searchCtrl.text.trim());
     });
 
     // ✅ EmailConfig 로드 → 다이얼로그 초기값 준비
     () async {
-      final cfg = await EmailConfig.load();
-      final to = cfg.to;
-      setState(() {
-        _mailToCtrl.text = to;
-        _mailToValid = to.isEmpty || EmailConfig.isValidToList(to);
-        _mailToLoading = false;
-      });
-      _mailToCtrl.addListener(() {
-        final t = _mailToCtrl.text.trim();
-        final valid = t.isEmpty || EmailConfig.isValidToList(t);
-        if (valid != _mailToValid) {
-          setState(() => _mailToValid = valid);
-        }
-      });
+      try {
+        final cfg = await EmailConfig.load();
+        final to = cfg.to;
+        if (!mounted) return;
+
+        setState(() {
+          _mailToCtrl.text = to;
+          _mailToValid = to.isEmpty || EmailConfig.isValidToList(to);
+          _mailToLoading = false;
+        });
+
+        _mailToCtrl.addListener(() {
+          final t = _mailToCtrl.text.trim();
+          final valid = t.isEmpty || EmailConfig.isValidToList(t);
+          if (!mounted) return;
+          if (valid != _mailToValid) setState(() => _mailToValid = valid);
+        });
+      } catch (e) {
+        await HeadMemo._logApiError(
+          tag: '_HeadMemoSheet.initState',
+          message: 'EmailConfig.load 실패',
+          error: e,
+          tags: const <String>[HeadMemo._tMemo, HeadMemo._tEmailConfig],
+        );
+        if (!mounted) return;
+        setState(() {
+          _mailToCtrl.text = '';
+          _mailToValid = true;
+          _mailToLoading = false;
+        });
+      }
     }();
   }
 
@@ -176,13 +315,12 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
     final textTheme = Theme.of(context).textTheme;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-    // 90% 높이 바텀시트 (배경: 순백색)
     return FractionallySizedBox(
       heightFactor: 0.9,
       child: ClipRRect(
         borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         child: Material(
-          color: Colors.white, // ✅ 배경을 완전한 흰색으로 고정
+          color: Colors.white,
           child: SafeArea(
             top: false,
             child: Padding(
@@ -203,7 +341,6 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
                         Text('메모', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
                         const Spacer(),
 
-                        // On/Off 토글
                         ValueListenableBuilder<bool>(
                           valueListenable: HeadMemo.enabled,
                           builder: (_, on, __) => Row(
@@ -222,8 +359,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
                           tooltip: _sending ? '전송 중...' : '이메일로 보내기',
                           onPressed: _sending ? null : _sendNotesByEmail,
                           icon: _sending
-                              ? const SizedBox(
-                              width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                               : const Icon(Icons.email_outlined),
                         ),
 
@@ -234,7 +370,6 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
                           icon: const Icon(Icons.alternate_email_rounded),
                         ),
 
-                        // 닫기
                         IconButton(
                           tooltip: '닫기',
                           icon: const Icon(Icons.close_rounded),
@@ -303,9 +438,8 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
                       valueListenable: HeadMemo.notes,
                       builder: (_, list, __) {
                         final filtered = _filtered(list, _query);
-                        if (filtered.isEmpty) {
-                          return _EmptyState(query: _query);
-                        }
+                        if (filtered.isEmpty) return _EmptyState(query: _query);
+
                         return ListView.separated(
                           padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
                           itemCount: filtered.length,
@@ -313,6 +447,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
                           itemBuilder: (context, i) {
                             final line = filtered[i];
                             final (time, text) = _parse(line);
+
                             return Dismissible(
                               key: ValueKey(line),
                               direction: DismissDirection.endToStart,
@@ -332,9 +467,7 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
                                   child: Icon(Icons.notes_rounded, color: cs.onPrimaryContainer, size: 18),
                                 ),
                                 title: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis),
-                                subtitle: time.isNotEmpty
-                                    ? Text(time, style: textTheme.bodySmall?.copyWith(color: cs.outline))
-                                    : null,
+                                subtitle: time.isNotEmpty ? Text(time, style: textTheme.bodySmall?.copyWith(color: cs.outline)) : null,
                                 trailing: Wrap(
                                   spacing: 4,
                                   children: [
@@ -375,8 +508,9 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
     );
   }
 
-  // ---------- 이메일 전송(.txt 첨부) ----------
-
+  // ─────────────────────────────────────────────────────────────
+  // ✅ 이메일 전송(.txt 첨부): DebugApiLogger 로깅 + MIME 안정화
+  // ─────────────────────────────────────────────────────────────
   Future<void> _sendNotesByEmail() async {
     final notes = HeadMemo.notes.value;
     if (notes.isEmpty) {
@@ -384,52 +518,85 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       return;
     }
 
+    // 세션 차단이면 전송 금지(안전)
+    if (GoogleAuthSession.instance.isSessionBlocked) {
+      _showSnack('구글 세션 차단(ON) 상태입니다. 전송을 위해 OFF로 변경해 주세요.');
+      await HeadMemo._logApiError(
+        tag: '_HeadMemoSheet._sendNotesByEmail',
+        message: '구글 세션 차단(ON) 상태로 이메일 전송 차단됨',
+        error: StateError('google_session_blocked'),
+        tags: const <String>[HeadMemo._tMemo, HeadMemo._tMemoEmail],
+      );
+      return;
+    }
+
     // 수신자 확인
-    final cfg = await EmailConfig.load();
+    EmailConfig cfg;
+    try {
+      cfg = await EmailConfig.load();
+    } catch (e) {
+      _showSnack('수신자 설정 로드 실패: $e');
+      await HeadMemo._logApiError(
+        tag: '_HeadMemoSheet._sendNotesByEmail',
+        message: 'EmailConfig.load 실패',
+        error: e,
+        tags: const <String>[HeadMemo._tMemo, HeadMemo._tEmailConfig],
+      );
+      return;
+    }
+
     final toCsv = cfg.to.trim();
     if (!EmailConfig.isValidToList(toCsv)) {
       _showSnack('수신자(To) 설정이 필요합니다: 우측 @ 아이콘으로 이메일을 입력하세요.');
+      await HeadMemo._logApiError(
+        tag: '_HeadMemoSheet._sendNotesByEmail',
+        message: '수신자(To) 설정이 비어있거나 형식이 올바르지 않음',
+        error: StateError('invalid_to'),
+        extra: <String, dynamic>{'toLen': toCsv.length},
+        tags: const <String>[HeadMemo._tMemo, HeadMemo._tMemoEmail, HeadMemo._tEmailConfig],
+      );
       return;
     }
 
     setState(() => _sending = true);
+
     try {
       final now = DateTime.now();
       final subject = 'HeadMemo export (${_fmtYMD(now)})';
       final filename = 'head_memo_${_fmtCompact(now)}.txt';
-      final fileText = notes.join('\n'); // 최신순 문자열 리스트 → LF로 합치기
+      final fileText = notes.join('\n'); // LF
 
-      // MIME multipart 작성
       final boundary = 'headmemo_${now.millisecondsSinceEpoch}';
-      final bodyText = '첨부된 텍스트 파일에 메모가 포함되어 있습니다.';
+      const bodyText = '첨부된 텍스트 파일에 메모가 포함되어 있습니다.';
 
-      // 첨부는 표준 base64
+      // base64 첨부 + 76자 CRLF 래핑
       final attachmentB64 = base64.encode(utf8.encode(fileText));
+      final attachmentWrapped = _wrapBase64Lines(attachmentB64);
 
+      // MIME CRLF
+      const crlf = '\r\n';
       final mime = StringBuffer()
-        ..writeln('MIME-Version: 1.0')
-        ..writeln('To: $toCsv')
-        ..writeln('Subject: $subject')
-        ..writeln('Content-Type: multipart/mixed; boundary="$boundary"')
-        ..writeln()
-        ..writeln('--$boundary')
-        ..writeln('Content-Type: text/plain; charset="utf-8"')
-        ..writeln('Content-Transfer-Encoding: 7bit')
-        ..writeln()
-        ..writeln(bodyText)
-        ..writeln()
-        ..writeln('--$boundary')
-        ..writeln('Content-Type: text/plain; charset="utf-8"; name="$filename"')
-        ..writeln('Content-Disposition: attachment; filename="$filename"')
-        ..writeln('Content-Transfer-Encoding: base64')
-        ..writeln()
-        ..writeln(attachmentB64)
-        ..writeln('--$boundary--');
+        ..write('MIME-Version: 1.0$crlf')
+        ..write('To: $toCsv$crlf')
+        ..write('Subject: ${_encodeSubjectRfc2047(subject)}$crlf')
+        ..write('Content-Type: multipart/mixed; boundary="$boundary"$crlf')
+        ..write(crlf)
+        ..write('--$boundary$crlf')
+        ..write('Content-Type: text/plain; charset="utf-8"$crlf')
+        ..write('Content-Transfer-Encoding: 7bit$crlf')
+        ..write(crlf)
+        ..write(bodyText)
+        ..write(crlf)
+        ..write('--$boundary$crlf')
+        ..write('Content-Type: text/plain; charset="utf-8"; name="$filename"$crlf')
+        ..write('Content-Disposition: attachment; filename="$filename"$crlf')
+        ..write('Content-Transfer-Encoding: base64$crlf')
+        ..write(crlf)
+        ..write(attachmentWrapped)
+        ..write('--$boundary--$crlf');
 
-      // 전체 RAW를 base64url 인코딩
-      final raw = base64Url.encode(utf8.encode(mime.toString()));
-
-      final client = await GoogleAuthSession.instance.safeClient(); // googleapis_auth.AuthClient
+      final raw = base64UrlEncode(utf8.encode(mime.toString())).replaceAll('=', '');
+      final client = await GoogleAuthSession.instance.safeClient();
       final api = gmail.GmailApi(client);
       final message = gmail.Message()..raw = raw;
 
@@ -438,6 +605,16 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       _showSnack('이메일을 보냈습니다.');
     } catch (e) {
       _showSnack('전송 실패: $e');
+      await HeadMemo._logApiError(
+        tag: '_HeadMemoSheet._sendNotesByEmail',
+        message: 'Gmail 메모 전송 실패',
+        error: e,
+        extra: <String, dynamic>{
+          'notesCount': notes.length,
+          'notesBytes': utf8.encode(notes.join('\n')).length,
+        },
+        tags: const <String>[HeadMemo._tMemo, HeadMemo._tMemoEmail, HeadMemo._tGmailSend],
+      );
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -480,7 +657,6 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
               label: const Text('초기화'),
               onPressed: () async {
                 await _clearMailTo();
-                // 다이얼로그 내에서도 에러 텍스트 갱신
                 (ctx as Element).markNeedsBuild();
               },
             ),
@@ -505,21 +681,17 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
   // ---------- helpers ----------
 
   OutlineInputBorder _inputBorder({bool focused = false, ColorScheme? cs}) {
-    final color = focused
-        ? (cs ?? Theme.of(context).colorScheme).primary
-        : Theme.of(context).dividerColor.withOpacity(.2);
+    final scheme = cs ?? Theme.of(context).colorScheme;
+    final color = focused ? scheme.primary : Theme.of(context).dividerColor.withOpacity(.2);
     return OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
       borderSide: BorderSide(color: color, width: focused ? 1.4 : 1),
     );
   }
 
-  // ✅ 수신자 입력 전용 테두리(유효/무효 색상 반영)
   OutlineInputBorder _emailBorder({bool focused = false, bool valid = true, ColorScheme? cs}) {
     final scheme = cs ?? Theme.of(context).colorScheme;
-    final Color color = valid
-        ? (focused ? scheme.primary : scheme.outlineVariant)
-        : scheme.error;
+    final Color color = valid ? (focused ? scheme.primary : scheme.outlineVariant) : scheme.error;
     return OutlineInputBorder(
       borderRadius: BorderRadius.circular(10),
       borderSide: BorderSide(color: color, width: focused ? 1.4 : 1),
@@ -549,31 +721,51 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
     HapticFeedback.lightImpact();
   }
 
-  // ✅ 수신자 저장/초기화
   Future<bool> _saveMailTo({bool fromDialog = false}) async {
     final to = _mailToCtrl.text.trim();
     if (to.isNotEmpty && !EmailConfig.isValidToList(to)) {
-      setState(() => _mailToValid = false);
-      if (fromDialog) {
-        // 다이얼로그 내 에러 텍스트 표시 위해 스낵은 생략 가능
-      } else {
-        _showSnack('수신자 이메일 형식을 확인해 주세요.');
-      }
+      if (mounted) setState(() => _mailToValid = false);
+      if (!fromDialog) _showSnack('수신자 이메일 형식을 확인해 주세요.');
       return false;
     }
-    await EmailConfig.save(EmailConfig(to: to));
-    setState(() => _mailToValid = true);
+
+    try {
+      await EmailConfig.save(EmailConfig(to: to));
+    } catch (e) {
+      await HeadMemo._logApiError(
+        tag: '_HeadMemoSheet._saveMailTo',
+        message: 'EmailConfig.save 실패',
+        error: e,
+        extra: <String, dynamic>{'toLen': to.length},
+        tags: const <String>[HeadMemo._tMemo, HeadMemo._tEmailConfig],
+      );
+      _showSnack('저장 실패: $e');
+      return false;
+    }
+
+    if (mounted) setState(() => _mailToValid = true);
     _showSnack('수신자 설정을 저장했습니다.');
     return true;
   }
 
   Future<void> _clearMailTo() async {
-    await EmailConfig.clear();
-    setState(() {
-      _mailToCtrl.text = '';
-      _mailToValid = true;
-    });
-    _showSnack('수신자를 기본값(빈 값)으로 복원했습니다.');
+    try {
+      await EmailConfig.clear();
+      if (!mounted) return;
+      setState(() {
+        _mailToCtrl.text = '';
+        _mailToValid = true;
+      });
+      _showSnack('수신자를 기본값(빈 값)으로 복원했습니다.');
+    } catch (e) {
+      await HeadMemo._logApiError(
+        tag: '_HeadMemoSheet._clearMailTo',
+        message: 'EmailConfig.clear 실패',
+        error: e,
+        tags: const <String>[HeadMemo._tMemo, HeadMemo._tEmailConfig],
+      );
+      _showSnack('초기화 실패: $e');
+    }
   }
 
   void _showSnack(String msg) {
@@ -591,6 +783,25 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
   String _fmtYMD(DateTime d) => '${d.year}-${_fmt2(d.month)}-${_fmt2(d.day)}';
   String _fmtCompact(DateTime d) =>
       '${d.year}${_fmt2(d.month)}${_fmt2(d.day)}_${_fmt2(d.hour)}${_fmt2(d.minute)}${_fmt2(d.second)}';
+
+  // MIME helpers
+  String _wrapBase64Lines(String b64, {int lineLength = _mimeB64LineLength}) {
+    if (b64.isEmpty) return '';
+    final sb = StringBuffer();
+    for (int i = 0; i < b64.length; i += lineLength) {
+      final end = (i + lineLength < b64.length) ? i + lineLength : b64.length;
+      sb.write(b64.substring(i, end));
+      sb.write('\r\n');
+    }
+    return sb.toString();
+  }
+
+  String _encodeSubjectRfc2047(String subject) {
+    final hasNonAscii = subject.codeUnits.any((c) => c > 127);
+    if (!hasNonAscii) return subject;
+    final subjectB64 = base64.encode(utf8.encode(subject));
+    return '=?utf-8?B?$subjectB64?=';
+  }
 }
 
 // ---------- widgets ----------
@@ -628,13 +839,11 @@ class _SwipeDeleteBackground extends StatelessWidget {
 /// 작은 제네릭 ValueNotifier(리스트 비교 시 setState 유발 보장용)
 class ValueListenableNotifier<T> extends ValueNotifier<T> {
   ValueListenableNotifier(super.value);
+
   @override
   set value(T newValue) {
-    if (!identical(newValue, super.value)) {
-      super.value = newValue;
-    } else {
-      super.value = newValue;
-    }
+    // 동일 참조여도 notify를 일으키고 싶다면 super.value 재할당이 가장 단순합니다.
+    super.value = newValue;
   }
 }
 

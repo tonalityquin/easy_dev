@@ -10,8 +10,8 @@ import '../../../../repositories/commute_repo_services/commute_log_repository.da
 import '../../../../utils/block_dialogs/break_duration_blocking_dialog.dart';
 import '../../../../utils/block_dialogs/work_end_duration_blocking_dialog.dart';
 import '../../utils/simple_mode/simple_mode_db.dart';
-import '../widgets/simple_backup/backup_form_page.dart';
-import '../widgets/simple_user_document/simple_user_statement_form_page.dart';
+import '../../../common_package/document_package/backup/backup_form_page.dart';
+import '../../../common_package/document_package/user_statement/user_statement_form_page.dart';
 import 'simple_document_inventory_repository.dart';
 import 'simple_document_item.dart';
 
@@ -142,7 +142,7 @@ class _SimpleDocumentBoxSheet extends StatelessWidget {
                                                 // 그 외(경위서 양식 등)는 기존처럼 경위서 작성 화면
                                                 Navigator.of(context).push(
                                                   MaterialPageRoute(
-                                                    builder: (_) => const SimpleUserStatementFormPage(),
+                                                    builder: (_) => const UserStatementFormPage(),
                                                     fullscreenDialog: true,
                                                   ),
                                                 );

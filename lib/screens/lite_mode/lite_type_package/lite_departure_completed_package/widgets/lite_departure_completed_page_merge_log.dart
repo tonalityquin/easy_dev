@@ -12,6 +12,9 @@ import 'lite_departure_completed_plate_image_dialog.dart';
 // ✅ OAuth 헬퍼 (패키지 import로 고정; 필요 시 상대경로로 교체 가능)
 import 'package:easydev/utils/google_auth_v7.dart';
 
+// ✅ API 디버그(통합 에러 로그) 로거
+import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
+
 /// === GCS 설정 ===
 const String kBucketName = 'easydev-image';
 
@@ -21,30 +24,98 @@ const double _kTimeColWidth = 84.0; // HH:mm:ss 고정폭
 const double _kFeeColWidth = 108.0; // 요금/결제 표시
 const double _kChevronWidth = 28.0; // 펼침 아이콘
 
+// ─────────────────────────────────────────────────────────────
+// ✅ API 디버그 로직: 표준 태그 / 로깅 헬퍼 (file-scope)
+// ─────────────────────────────────────────────────────────────
+const String _tLogs = 'logs';
+const String _tLogsUi = 'logs/ui';
+const String _tLogsLoad = 'logs/load';
+const String _tLogsParse = 'logs/parse';
+const String _tLogsSearch = 'logs/search';
+
+const String _tGcs = 'gcs';
+const String _tGcsList = 'gcs/list';
+const String _tGcsGet = 'gcs/get';
+
+Future<void> _logApiError({
+  required String tag,
+  required String message,
+  required Object error,
+  Map<String, dynamic>? extra,
+  List<String>? tags,
+}) async {
+  try {
+    await DebugApiLogger().log(
+      <String, dynamic>{
+        'tag': tag,
+        'message': message,
+        'error': error.toString(),
+        if (extra != null) 'extra': extra,
+      },
+      level: 'error',
+      tags: tags,
+    );
+  } catch (_) {
+    // 로깅 실패는 기능에 영향 없도록 무시
+  }
+}
+
 /// === GCS 헬퍼 (OAuth 사용) ===
 class _GcsHelper {
   /// prefix 하위 object 목록 (페이지네이션 대응)
   Future<List<String>> listObjects(String prefix) async {
-    final client = await GoogleAuthV7.authedClient(
-      [gcs.StorageApi.devstorageReadOnlyScope],
-    );
+    // OAuth client 생성 실패도 로깅
+    late final http.Client client;
+    try {
+      client = await GoogleAuthV7.authedClient(
+        [gcs.StorageApi.devstorageReadOnlyScope],
+      );
+    } catch (e) {
+      await _logApiError(
+        tag: '_GcsHelper.listObjects',
+        message: 'GoogleAuthV7.authedClient 실패',
+        error: e,
+        extra: <String, dynamic>{'prefix': prefix},
+        tags: const <String>[_tLogs, _tGcs, _tGcsList],
+      );
+      rethrow;
+    }
+
     try {
       final storage = gcs.StorageApi(client);
       final acc = <String>[];
       String? pageToken;
+
       do {
-        final res = await storage.objects.list(
-          kBucketName,
-          prefix: prefix,
-          pageToken: pageToken,
-        );
-        final items = res.items ?? const <gcs.Object>[];
-        for (final o in items) {
-          final name = o.name;
-          if (name != null && name.isNotEmpty) acc.add(name);
+        try {
+          final res = await storage.objects.list(
+            kBucketName,
+            prefix: prefix,
+            pageToken: pageToken,
+          );
+          final items = res.items ?? const <gcs.Object>[];
+          for (final o in items) {
+            final name = o.name;
+            if (name != null && name.isNotEmpty) acc.add(name);
+          }
+          pageToken = res.nextPageToken;
+        } catch (e) {
+          await _logApiError(
+            tag: '_GcsHelper.listObjects',
+            message: 'GCS objects.list 실패',
+            error: e,
+            extra: <String, dynamic>{
+              'bucket': kBucketName,
+              'prefix': prefix,
+              'pageToken': pageToken ?? '',
+              'accCount': acc.length,
+            },
+            tags: const <String>[_tLogs, _tGcs, _tGcsList],
+          );
+          rethrow;
         }
-        pageToken = res.nextPageToken;
       } while (pageToken != null && pageToken.isNotEmpty);
+
       return acc;
     } finally {
       client.close();
@@ -52,17 +123,65 @@ class _GcsHelper {
   }
 
   /// public URL로 JSON 로드(버킷이 공개라면 그대로 사용).
-  /// 비공개 버킷이면 아래 주석의 objects.get(fullMedia) 방식으로 교체하세요.
+  /// 비공개 버킷이면 주석의 objects.get(fullMedia) 방식으로 교체하세요.
   /// (웹 호환을 위해 package:http 사용)
   Future<Map<String, dynamic>> loadJsonByObjectName(String objectName) async {
     final url = Uri.parse('https://storage.googleapis.com/$kBucketName/$objectName');
-    final resp = await http.get(url);
+
+    http.Response resp;
+    try {
+      resp = await http.get(url);
+    } catch (e) {
+      await _logApiError(
+        tag: '_GcsHelper.loadJsonByObjectName',
+        message: 'HTTP GET 실패',
+        error: e,
+        extra: <String, dynamic>{'url': url.toString(), 'objectName': objectName},
+        tags: const <String>[_tLogs, _tGcs, _tGcsGet],
+      );
+      rethrow;
+    }
+
     if (resp.statusCode != 200) {
+      await _logApiError(
+        tag: '_GcsHelper.loadJsonByObjectName',
+        message: 'GCS GET 실패(status != 200)',
+        error: Exception('status=${resp.statusCode}'),
+        extra: <String, dynamic>{
+          'url': url.toString(),
+          'objectName': objectName,
+          'statusCode': resp.statusCode,
+          'bodyPreview': resp.bodyBytes.isNotEmpty
+              ? utf8.decode(resp.bodyBytes.take(120).toList(), allowMalformed: true)
+              : '',
+        },
+        tags: const <String>[_tLogs, _tGcs, _tGcsGet],
+      );
       throw Exception('GCS GET failed with ${resp.statusCode}');
     }
-    final decoded = jsonDecode(utf8.decode(resp.bodyBytes));
-    if (decoded is Map<String, dynamic>) return decoded;
-    return <String, dynamic>{};
+
+    try {
+      final decoded = jsonDecode(utf8.decode(resp.bodyBytes));
+      if (decoded is Map<String, dynamic>) return decoded;
+      // 형태가 map이 아니면 빈 map 반환(기존 정책 유지)
+      await _logApiError(
+        tag: '_GcsHelper.loadJsonByObjectName',
+        message: 'JSON이 Map 형태가 아님',
+        error: Exception('decoded_type=${decoded.runtimeType}'),
+        extra: <String, dynamic>{'objectName': objectName},
+        tags: const <String>[_tLogs, _tGcs, _tGcsGet, _tLogsParse],
+      );
+      return <String, dynamic>{};
+    } catch (e) {
+      await _logApiError(
+        tag: '_GcsHelper.loadJsonByObjectName',
+        message: 'JSON 디코딩 실패',
+        error: e,
+        extra: <String, dynamic>{'objectName': objectName},
+        tags: const <String>[_tLogs, _tGcs, _tGcsGet, _tLogsParse],
+      );
+      rethrow;
+    }
 
     /*
     // 🔒 비공개 버킷일 때는 아래처럼 OAuth 클라이언트로 직접 다운(캐스팅 주의)
@@ -422,7 +541,9 @@ class _LiteMergedLogSectionState extends State<LiteMergedLogSection> {
     final userAdjustment = _toNum(meta['userAdjustment']);
 
     final lockedFeeAmount =
-        _toNum(meta['lockedFeeAmount']) ?? _toNum(meta['lockedFee']) ?? _pickNumFromLogs(logs, ['lockedFee', 'lockedFeeAmount', 'lockedFeeAmount']);
+        _toNum(meta['lockedFeeAmount']) ??
+            _toNum(meta['lockedFee']) ??
+            _pickNumFromLogs(logs, ['lockedFee', 'lockedFeeAmount', 'lockedFeeAmount']);
 
     final paymentMethod = _toStr(meta['paymentMethod']) ?? _pickStrFromLogs(logs, ['paymentMethod']);
 
@@ -494,13 +615,23 @@ class _LiteMergedLogSectionState extends State<LiteMergedLogSection> {
 
   // ===== 사진 다이얼로그 열기 =====
   void _openPlateImageDialog(String plateNumber) {
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: "사진 보기",
-      transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (_, __, ___) => LiteDepartureCompletedPlateImageDialog(plateNumber: plateNumber),
-    );
+    try {
+      showGeneralDialog(
+        context: context,
+        barrierDismissible: true,
+        barrierLabel: "사진 보기",
+        transitionDuration: const Duration(milliseconds: 300),
+        pageBuilder: (_, __, ___) => LiteDepartureCompletedPlateImageDialog(plateNumber: plateNumber),
+      );
+    } catch (e) {
+      _logApiError(
+        tag: '_LiteMergedLogSectionState._openPlateImageDialog',
+        message: '사진 다이얼로그 오픈 실패',
+        error: e,
+        extra: <String, dynamic>{'plateNumber': plateNumber},
+        tags: const <String>[_tLogs, _tLogsUi],
+      );
+    }
   }
 
   // ===== GCS 로드 (월 prefix 최적화 + 혼재 스키마 + 날짜/문서 병합) =====
@@ -532,6 +663,7 @@ class _LiteMergedLogSectionState extends State<LiteMergedLogSection> {
 
       // 3) 월 단위 prefix로 먼저 리스트업 (속도 개선)
       final monthKeys = _monthKeysBetween(start, end);
+
       final names = <String>[];
       for (final mk in monthKeys) {
         final prefixMonth = '$division/$area/logs/$mk/';
@@ -560,7 +692,6 @@ class _LiteMergedLogSectionState extends State<LiteMergedLogSection> {
       }
 
       // 5) 날짜별(docId별) 병합 구조
-      // dateStr -> docId -> docBundle
       final Map<String, Map<String, _DocBundle>> dayDocMap = {};
 
       for (final objectName in inRange) {
@@ -599,7 +730,7 @@ class _LiteMergedLogSectionState extends State<LiteMergedLogSection> {
         }
       }
 
-      // 6) _days 생성(날짜 오름차순), 각 날짜 내 docs는 마지막 로그시간 기준 오름차순
+      // 6) _days 생성(날짜 오름차순)
       final dayKeys = dayDocMap.keys.toList()..sort();
       for (final dateStr in dayKeys) {
         final docs = dayDocMap[dateStr]!.values.toList();
@@ -615,6 +746,19 @@ class _LiteMergedLogSectionState extends State<LiteMergedLogSection> {
 
       setState(() => _loading = false);
     } catch (e) {
+      await _logApiError(
+        tag: '_LiteMergedLogSectionState._load',
+        message: 'GCS 로그 로드 실패',
+        error: e,
+        extra: <String, dynamic>{
+          'division': widget.division,
+          'area': widget.area,
+          'start': _yyyymmdd(_start),
+          'end': _yyyymmdd(_end),
+        },
+        tags: const <String>[_tLogs, _tLogsLoad],
+      );
+
       setState(() {
         _loading = false;
         _error = '로드 실패: $e';
@@ -635,26 +779,41 @@ class _LiteMergedLogSectionState extends State<LiteMergedLogSection> {
       return;
     }
 
-    setState(() {
-      _error = null;
-      _hits = [];
-      _selectedHit = null;
-    });
+    try {
+      setState(() {
+        _error = null;
+        _hits = [];
+        _selectedHit = null;
+      });
 
-    final hits = <_SearchHit>[];
-    for (final day in _days) {
-      for (final doc in day.docs) {
-        final tail = _tail4OfPlate(doc.plateNumber, doc.docId, plateFourDigit: doc.plateFourDigit);
-        if (tail == q) {
-          hits.add(_SearchHit(dateStr: day.dateStr, doc: doc));
+      final hits = <_SearchHit>[];
+      for (final day in _days) {
+        for (final doc in day.docs) {
+          final tail = _tail4OfPlate(doc.plateNumber, doc.docId, plateFourDigit: doc.plateFourDigit);
+          if (tail == q) {
+            hits.add(_SearchHit(dateStr: day.dateStr, doc: doc));
+          }
         }
       }
-    }
 
-    setState(() => _hits = hits);
+      setState(() => _hits = hits);
 
-    if (_currentPage != 1) {
-      _pageController.animateToPage(1, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+      if (_currentPage != 1) {
+        _pageController.animateToPage(1, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+      }
+    } catch (e) {
+      await _logApiError(
+        tag: '_LiteMergedLogSectionState._search',
+        message: '검색 처리 실패',
+        error: e,
+        extra: <String, dynamic>{'query': q, 'days': _days.length},
+        tags: const <String>[_tLogs, _tLogsSearch],
+      );
+      setState(() {
+        _error = '검색 실패: $e';
+        _hits = [];
+        _selectedHit = null;
+      });
     }
   }
 
@@ -811,11 +970,21 @@ class _LiteMergedLogSectionState extends State<LiteMergedLogSection> {
                 tooltip: _currentPage == 0 ? '검색 화면으로' : '목록 화면으로',
                 onPressed: () {
                   final next = (_currentPage == 0) ? 1 : 0;
-                  _pageController.animateToPage(
-                    next,
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeOut,
-                  );
+                  try {
+                    _pageController.animateToPage(
+                      next,
+                      duration: const Duration(milliseconds: 200),
+                      curve: Curves.easeOut,
+                    );
+                  } catch (e) {
+                    _logApiError(
+                      tag: '_LiteMergedLogSectionState.build.togglePage',
+                      message: '페이지 전환(animateToPage) 실패',
+                      error: e,
+                      extra: <String, dynamic>{'from': _currentPage, 'to': next},
+                      tags: const <String>[_tLogs, _tLogsUi],
+                    );
+                  }
                 },
                 icon: Icon(_currentPage == 0 ? Icons.search : Icons.list),
                 visualDensity: VisualDensity.compact,
@@ -864,15 +1033,21 @@ class _LiteMergedLogSectionState extends State<LiteMergedLogSection> {
                                   children: const [
                                     SizedBox(
                                       width: _kTimeColWidth,
-                                      child: Text('시간', style: TextStyle(fontSize: 12, color: Colors.black54), textAlign: TextAlign.center),
+                                      child: Text('시간',
+                                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                                          textAlign: TextAlign.center),
                                     ),
                                     SizedBox(width: 8),
                                     Expanded(
-                                      child: Text('번호판', style: TextStyle(fontSize: 12, color: Colors.black54), textAlign: TextAlign.center),
+                                      child: Text('번호판',
+                                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                                          textAlign: TextAlign.center),
                                     ),
                                     SizedBox(
                                       width: _kFeeColWidth,
-                                      child: Text('요금/결제', style: TextStyle(fontSize: 12, color: Colors.black54), textAlign: TextAlign.center),
+                                      child: Text('요금/결제',
+                                          style: TextStyle(fontSize: 12, color: Colors.black54),
+                                          textAlign: TextAlign.center),
                                     ),
                                     SizedBox(width: _kChevronWidth),
                                   ],
@@ -938,8 +1113,12 @@ class _LiteMergedLogSectionState extends State<LiteMergedLogSection> {
                                         child: Column(
                                           mainAxisAlignment: MainAxisAlignment.center,
                                           children: [
-                                            Text(feeText, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                                            Text(payText, style: const TextStyle(fontSize: 11, color: Colors.black54), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                            Text(feeText,
+                                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                                            Text(payText,
+                                                style: const TextStyle(fontSize: 11, color: Colors.black54),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis),
                                           ],
                                         ),
                                       ),

@@ -1,15 +1,3 @@
-// lib/screens/type_package/common_widgets/dashboard_bottom_sheet/memo/dash_memo.dart
-//
-// 사용법:
-//   await DashMemo.init();           // (지연 초기화 가능)
-//   DashMemo.mountIfNeeded();        // enabled=true면 버블 부착
-//   await DashMemo.togglePanel();    // 메모 시트 열기
-//
-// 변경 사항:
-// - ".txt로 내보내기" 버튼/기능 제거
-// - 이메일 전송(첨부)만 제공: 헤더에 "이메일" 버튼 추가
-// - 최소 색 적용: _base/_dark/_light 포인트만 사용
-
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -23,13 +11,17 @@ import '../../../../../../utils/app_navigator.dart';
 import '../../../../../../utils/google_auth_session.dart';
 import '../../../../../../utils/api/email_config.dart';
 
+// ✅ API 디버그(통합 에러 로그) 로거 + (옵션) 디버그 UI
+import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
+import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_bottom_sheet.dart';
+
 // ── Brand palette (minimal use)
-const Color _base  = Color(0xFF0D47A1);
-const Color _dark  = Color(0xFF09367D);
+const Color _base = Color(0xFF0D47A1);
+const Color _dark = Color(0xFF09367D);
 const Color _light = Color(0xFF5472D3);
 
-class LiteDashMemo {
-  LiteDashMemo._();
+class DashMemo {
+  DashMemo._();
 
   static GlobalKey<NavigatorState> get navigatorKey => AppNavigator.key;
 
@@ -48,6 +40,10 @@ class LiteDashMemo {
   /// 노트 상한 (초과 시 오래된 항목 제거)
   static const int kMaxNotes = 1000;
 
+  // ✅ FIX: MIME base64 line length (RFC 2045 recommends 76 chars)
+  // (이 값이 없어서 _DashMemoSheetState에서 참조 시 컴파일 오류 발생)
+  static const int _mimeB64LineLength = 76;
+
   static SharedPreferences? _prefs;
   static OverlayEntry? _entry;
   static bool _inited = false;
@@ -56,24 +52,78 @@ class LiteDashMemo {
   static bool _isPanelOpen = false;
   static Future<void>? _panelFuture;
 
+  // ─────────────────────────────────────────────────────────────
+  // ✅ API 디버그 로직: 표준 태그 / 로깅 헬퍼
+  // ─────────────────────────────────────────────────────────────
+  static const String _tMemo = 'dash_memo';
+  static const String _tMemoUi = 'dash_memo/ui';
+  static const String _tMemoPrefs = 'dash_memo/prefs';
+  static const String _tMemoEmail = 'dash_memo/email';
+  static const String _tGmailSend = 'gmail/send';
+
+  static Future<void> _logApiError({
+    required String tag,
+    required String message,
+    required Object error,
+    Map<String, dynamic>? extra,
+    List<String>? tags,
+  }) async {
+    try {
+      await DebugApiLogger().log(
+        <String, dynamic>{
+          'tag': tag,
+          'message': message,
+          'error': error.toString(),
+          if (extra != null) 'extra': extra,
+        },
+        level: 'error',
+        tags: tags,
+      );
+    } catch (_) {
+      // 로깅 실패는 기능에 영향 없도록 무시
+    }
+  }
+
   /// 최초 1회 초기화 (지연 호출 가능)
   static Future<void> init() async {
     if (_inited) return;
-    _prefs ??= await SharedPreferences.getInstance();
-    enabled.value = _prefs!.getBool(_kEnabledKey) ?? false;
-    notes.value = _prefs!.getStringList(_kNotesKey) ?? const <String>[];
 
-    // 토글 변경 시 저장 + 오버레이 토글
-    enabled.addListener(() {
-      _prefs?.setBool(_kEnabledKey, enabled.value);
-      if (enabled.value) {
-        _showOverlay();
-      } else {
-        _hideOverlay();
-      }
-    });
+    try {
+      _prefs ??= await SharedPreferences.getInstance();
+      enabled.value = _prefs!.getBool(_kEnabledKey) ?? false;
+      notes.value = _prefs!.getStringList(_kNotesKey) ?? const <String>[];
 
-    _inited = true;
+      // 토글 변경 시 저장 + 오버레이 토글
+      enabled.addListener(() {
+        try {
+          _prefs?.setBool(_kEnabledKey, enabled.value);
+        } catch (e) {
+          _logApiError(
+            tag: 'LiteDashMemo.enabled.listener',
+            message: 'enabled 토글 상태 저장 실패(SharedPreferences)',
+            error: e,
+            extra: <String, dynamic>{'enabled': enabled.value},
+            tags: const <String>[_tMemoPrefs, _tMemo],
+          );
+        }
+
+        if (enabled.value) {
+          _showOverlay();
+        } else {
+          _hideOverlay();
+        }
+      });
+
+      _inited = true;
+    } catch (e) {
+      await _logApiError(
+        tag: 'LiteDashMemo.init',
+        message: 'LiteDashMemo init 실패(SharedPreferences)',
+        error: e,
+        tags: const <String>[_tMemoPrefs, _tMemo],
+      );
+      rethrow;
+    }
   }
 
   /// 첫 프레임 이후 오버레이 필요 시 부착
@@ -94,6 +144,14 @@ class LiteDashMemo {
     if (!_inited) await init();
     final ctx = _bestContext();
     if (ctx == null) {
+      // ✅ _tMemoUi 사용(경고 해결 겸, UI 컨텍스트 부재 상황 로깅)
+      await _logApiError(
+        tag: 'LiteDashMemo.togglePanel',
+        message: 'Navigator context를 가져오지 못해 panel 토글을 지연',
+        error: Exception('no_context'),
+        tags: const <String>[_tMemoUi, _tMemo],
+      );
+
       WidgetsBinding.instance.addPostFrameCallback((_) => togglePanel());
       return;
     }
@@ -125,6 +183,14 @@ class LiteDashMemo {
     if (_entry != null) return;
     final overlay = navigatorKey.currentState?.overlay;
     if (overlay == null) {
+      // ✅ _tMemoUi 사용(경고 해결 겸)
+      _logApiError(
+        tag: 'LiteDashMemo._showOverlay',
+        message: 'Navigator overlay를 찾지 못해 overlay 부착을 지연',
+        error: Exception('overlay_null'),
+        tags: const <String>[_tMemoUi, _tMemo],
+      );
+
       WidgetsBinding.instance.addPostFrameCallback((_) => _showOverlay());
       return;
     }
@@ -150,21 +216,52 @@ class LiteDashMemo {
       list.length = kMaxNotes;
     }
     notes.value = list;
-    await _prefs?.setStringList(_kNotesKey, list);
+
+    try {
+      await _prefs?.setStringList(_kNotesKey, list);
+    } catch (e) {
+      await _logApiError(
+        tag: 'LiteDashMemo.add',
+        message: '메모 저장 실패(SharedPreferences)',
+        error: e,
+        extra: <String, dynamic>{'len': text.trim().length, 'count': list.length},
+        tags: const <String>[_tMemoPrefs, _tMemo],
+      );
+    }
   }
 
   static Future<void> removeLine(String line) async {
     if (!_inited) await init();
     final list = List<String>.from(notes.value)..remove(line);
     notes.value = list;
-    await _prefs?.setStringList(_kNotesKey, list);
+    try {
+      await _prefs?.setStringList(_kNotesKey, list);
+    } catch (e) {
+      await _logApiError(
+        tag: 'LiteDashMemo.removeLine',
+        message: '메모 삭제 반영 실패(SharedPreferences)',
+        error: e,
+        extra: <String, dynamic>{'count': list.length},
+        tags: const <String>[_tMemoPrefs, _tMemo],
+      );
+    }
   }
 
   /// 버블 좌표 저장/복원 (영속화)
   static Future<void> saveBubblePos(Offset pos) async {
     if (!_inited) await init();
-    await _prefs!.setDouble(_kBubbleXKey, pos.dx);
-    await _prefs!.setDouble(_kBubbleYKey, pos.dy);
+    try {
+      await _prefs!.setDouble(_kBubbleXKey, pos.dx);
+      await _prefs!.setDouble(_kBubbleYKey, pos.dy);
+    } catch (e) {
+      await _logApiError(
+        tag: 'LiteDashMemo.saveBubblePos',
+        message: '버블 위치 저장 실패(SharedPreferences)',
+        error: e,
+        extra: <String, dynamic>{'x': pos.dx, 'y': pos.dy},
+        tags: const <String>[_tMemoPrefs, _tMemo],
+      );
+    }
   }
 
   static Offset restoreBubblePos() {
@@ -187,14 +284,13 @@ class _DashMemoBubbleState extends State<_DashMemoBubble> with SingleTickerProvi
   late Offset _pos;
   bool _clampedOnce = false;
 
-  // 탭 시 기어 회전(간단한 시각 효과)
   late final AnimationController _spinCtrl;
-  late final Animation<double> _spin; // 0 → 1
+  late final Animation<double> _spin;
 
   @override
   void initState() {
     super.initState();
-    _pos = LiteDashMemo.restoreBubblePos();
+    _pos = DashMemo.restoreBubblePos();
     _spinCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
@@ -215,7 +311,7 @@ class _DashMemoBubbleState extends State<_DashMemoBubble> with SingleTickerProvi
   Future<void> _onTap() async {
     HapticFeedback.selectionClick();
     _spinCtrl.forward(from: 0).then((_) => _spinCtrl.reverse());
-    await LiteDashMemo.togglePanel();
+    await DashMemo.togglePanel();
   }
 
   @override
@@ -231,7 +327,6 @@ class _DashMemoBubbleState extends State<_DashMemoBubble> with SingleTickerProvi
 
     return Stack(
       children: [
-        // 메인 버블 (드래그 + 탭 → 시트 즉시 열기)
         Positioned(
           left: _pos.dx,
           top: _pos.dy,
@@ -243,10 +338,9 @@ class _DashMemoBubbleState extends State<_DashMemoBubble> with SingleTickerProvi
               });
             },
             onPanEnd: (_) async {
-              // 좌/우 엣지 스냅
               final snapX = (_pos.dx + _bubbleSize / 2) < screen.width / 2 ? 8.0 : screen.width - _bubbleSize - 8.0;
               setState(() => _pos = Offset(snapX, _pos.dy));
-              await LiteDashMemo.saveBubblePos(_pos);
+              await DashMemo.saveBubblePos(_pos);
             },
             child: Material(
               color: Colors.transparent,
@@ -260,14 +354,14 @@ class _DashMemoBubbleState extends State<_DashMemoBubble> with SingleTickerProvi
                       width: _bubbleSize,
                       height: _bubbleSize,
                       decoration: BoxDecoration(
-                        color: _base.withOpacity(0.92), // brand
+                        color: _base.withOpacity(0.92),
                         shape: BoxShape.circle,
                         border: Border.all(color: _light.withOpacity(.55)),
                         boxShadow: const [BoxShadow(blurRadius: 10, color: Colors.black26)],
                       ),
                       alignment: Alignment.center,
                       child: Transform.rotate(
-                        angle: _spin.value * math.pi, // 0 → π (반바퀴)
+                        angle: _spin.value * math.pi,
                         child: Icon(Icons.settings_rounded, color: Colors.white.withOpacity(0.95)),
                       ),
                     );
@@ -340,32 +434,46 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
                   _DragHandle(),
                   const SizedBox(height: 12),
 
-                  // 헤더: 타이틀 · 온/오프 · 이메일 · 닫기
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
                       children: [
-                        const Icon(Icons.sticky_note_2_rounded, color: _base), // brand
+                        const Icon(Icons.sticky_note_2_rounded, color: _base),
                         const SizedBox(width: 8),
                         Text('메모', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
                         const Spacer(),
-                        // on/off
+
+                        IconButton(
+                          tooltip: 'API 디버그',
+                          onPressed: () async {
+                            HapticFeedback.selectionClick();
+                            await showModalBottomSheet<void>(
+                              context: context,
+                              isScrollControlled: true,
+                              useSafeArea: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (_) => const DebugBottomSheet(),
+                            );
+                          },
+                          icon: const Icon(Icons.bug_report_outlined),
+                        ),
+
                         ValueListenableBuilder<bool>(
-                          valueListenable: LiteDashMemo.enabled,
+                          valueListenable: DashMemo.enabled,
                           builder: (_, on, __) => Row(
                             children: [
                               Text(on ? 'On' : 'Off', style: textTheme.labelMedium?.copyWith(color: cs.outline)),
                               const SizedBox(width: 6),
                               Switch(
                                 value: on,
-                                onChanged: (v) => LiteDashMemo.enabled.value = v,
-                                activeColor: _base, // subtle brand
+                                onChanged: (v) => DashMemo.enabled.value = v,
+                                activeColor: _base,
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(width: 8),
-                        // 이메일 전송 (내보내기 버튼 제거됨)
+
                         IconButton(
                           tooltip: _sending ? '전송 중...' : '이메일로 보내기',
                           onPressed: _sending ? null : _sendNotesByEmail,
@@ -375,7 +483,7 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
                             height: 18,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(_base), // brand
+                              valueColor: AlwaysStoppedAnimation<Color>(_base),
                             ),
                           )
                               : const Icon(Icons.email_outlined),
@@ -389,7 +497,6 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
                     ),
                   ),
 
-                  // 검색 바
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                     child: TextField(
@@ -408,7 +515,6 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
                     ),
                   ),
 
-                  // 입력 영역
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                     child: Row(
@@ -433,12 +539,11 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        // 버튼 톤: 흰 배경 + 검정 전경 + brand outline만
                         FilledButton.icon(
                           style: FilledButton.styleFrom(
                             backgroundColor: Colors.white,
                             foregroundColor: Colors.black,
-                            side: const BorderSide(color: _light, width: 1.1), // brand outline
+                            side: const BorderSide(color: _light, width: 1.1),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
                           onPressed: () => _submitNote(_inputCtrl.text),
@@ -449,10 +554,9 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
                     ),
                   ),
 
-                  // 리스트
                   Expanded(
                     child: ValueListenableBuilder<List<String>>(
-                      valueListenable: LiteDashMemo.notes,
+                      valueListenable: DashMemo.notes,
                       builder: (_, list, __) {
                         final filtered = _filtered(list, _query);
                         if (filtered.isEmpty) {
@@ -473,14 +577,14 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
                                 iconColor: cs.onErrorContainer,
                               ),
                               onDismissed: (_) async {
-                                await LiteDashMemo.removeLine(line);
+                                await DashMemo.removeLine(line);
                                 HapticFeedback.selectionClick();
                               },
                               child: ListTile(
                                 dense: false,
                                 leading: CircleAvatar(
                                   radius: 18,
-                                  backgroundColor: _light.withOpacity(.18), // brand tint
+                                  backgroundColor: _light.withOpacity(.18),
                                   child: const Icon(Icons.notes_rounded, color: _dark, size: 18),
                                 ),
                                 title: Text(text, maxLines: 2, overflow: TextOverflow.ellipsis),
@@ -509,7 +613,7 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
                                       tooltip: '삭제',
                                       icon: const Icon(Icons.delete_outline_rounded),
                                       onPressed: () async {
-                                        await LiteDashMemo.removeLine(line);
+                                        await DashMemo.removeLine(line);
                                         HapticFeedback.selectionClick();
                                       },
                                     ),
@@ -531,60 +635,73 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
     );
   }
 
-  // ---------- 이메일 전송 ----------
-
   Future<void> _sendNotesByEmail() async {
-    final notes = LiteDashMemo.notes.value;
+    final notes = DashMemo.notes.value;
     if (notes.isEmpty) {
       _showSnack('보낼 메모가 없습니다.');
+      return;
+    }
+
+    final blocked = GoogleAuthSession.instance.isSessionBlocked;
+    if (blocked) {
+      _showSnack('구글 세션 차단(ON) 상태입니다. 전송을 위해 OFF로 변경해 주세요.');
       return;
     }
 
     final cfg = await EmailConfig.load();
     if (!EmailConfig.isValidToList(cfg.to)) {
       _showSnack('수신자(To) 설정이 필요합니다: 설정 화면에서 이메일을 입력하세요.');
+
+      await DashMemo._logApiError(
+        tag: 'DashMemo._sendNotesByEmail',
+        message: '수신자(To) 설정이 비어있거나 형식이 올바르지 않음',
+        error: Exception('invalid_to'),
+        extra: <String, dynamic>{'toRaw': cfg.to},
+        tags: const <String>[DashMemo._tMemoEmail, DashMemo._tMemo],
+      );
+
       return;
     }
 
     setState(() => _sending = true);
     try {
-      // 본문/첨부 내용 생성
       final now = DateTime.now();
       final subject = 'DashMemo export (${DateFormat('yyyy-MM-dd').format(now)})';
       final filename = 'dash_memo_${DateFormat('yyyyMMdd_HHmmss').format(now)}.txt';
-      final contentLines = notes; // 이미 최신순 문자열 리스트
-      final fileText = contentLines.join('\n'); // LF 사용, UTF-8
 
-      // MIME multipart 작성
+      final fileText = notes.join('\n');
+
       final boundary = 'dashmemo_${now.millisecondsSinceEpoch}';
-      final bodyText = '첨부된 텍스트 파일에 메모가 포함되어 있습니다.';
-      final toCsv = cfg.to;
+      const bodyText = '첨부된 텍스트 파일에 메모가 포함되어 있습니다.';
+      final toCsv = cfg.to.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).join(', ');
 
-      final attachmentB64 = base64.encode(utf8.encode(fileText)); // 표준 base64
+      final attachmentB64 = base64.encode(utf8.encode(fileText));
+      final attachmentWrapped = _wrapBase64Lines(attachmentB64);
+
+      const crlf = '\r\n';
       final mime = StringBuffer()
-        ..writeln('MIME-Version: 1.0')
-        ..writeln('To: $toCsv')
-        ..writeln('Subject: $subject')
-        ..writeln('Content-Type: multipart/mixed; boundary="$boundary"')
-        ..writeln()
-        ..writeln('--$boundary')
-        ..writeln('Content-Type: text/plain; charset="utf-8"')
-        ..writeln('Content-Transfer-Encoding: 7bit')
-        ..writeln()
-        ..writeln(bodyText)
-        ..writeln()
-        ..writeln('--$boundary')
-        ..writeln('Content-Type: text/plain; charset="utf-8"; name="$filename"')
-        ..writeln('Content-Disposition: attachment; filename="$filename"')
-        ..writeln('Content-Transfer-Encoding: base64')
-        ..writeln()
-        ..writeln(attachmentB64)
-        ..writeln('--$boundary--');
+        ..write('MIME-Version: 1.0$crlf')
+        ..write('To: $toCsv$crlf')
+        ..write('Subject: ${_encodeSubjectRfc2047(subject)}$crlf')
+        ..write('Content-Type: multipart/mixed; boundary="$boundary"$crlf')
+        ..write(crlf)
+        ..write('--$boundary$crlf')
+        ..write('Content-Type: text/plain; charset="utf-8"$crlf')
+        ..write('Content-Transfer-Encoding: 7bit$crlf')
+        ..write(crlf)
+        ..write(bodyText)
+        ..write(crlf)
+        ..write('--$boundary$crlf')
+        ..write('Content-Type: text/plain; charset="utf-8"; name="$filename"$crlf')
+        ..write('Content-Disposition: attachment; filename="$filename"$crlf')
+        ..write('Content-Transfer-Encoding: base64$crlf')
+        ..write(crlf)
+        ..write(attachmentWrapped)
+        ..write('--$boundary--$crlf');
 
-      // 전체 RAW를 base64url 인코딩
-      final raw = base64Url.encode(utf8.encode(mime.toString()));
+      final raw = base64Url.encode(utf8.encode(mime.toString())).replaceAll('=', '');
 
-      final client = await GoogleAuthSession.instance.safeClient(); // googleapis_auth.AuthClient
+      final client = await GoogleAuthSession.instance.safeClient();
       final api = gmail.GmailApi(client);
       final message = gmail.Message()..raw = raw;
 
@@ -593,6 +710,17 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
       _showSnack('이메일을 보냈습니다.');
     } catch (e) {
       _showSnack('전송 실패: $e');
+
+      await DashMemo._logApiError(
+        tag: 'DashMemo._sendNotesByEmail',
+        message: 'Gmail API 메모 전송 실패',
+        error: e,
+        extra: <String, dynamic>{
+          'notesCount': notes.length,
+          'notesBytes': utf8.encode(notes.join('\n')).length,
+        },
+        tags: const <String>[DashMemo._tMemoEmail, DashMemo._tGmailSend, DashMemo._tMemo],
+      );
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -604,10 +732,8 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
     );
   }
 
-  // ---------- helpers ----------
-
   OutlineInputBorder _inputBorder({bool focused = false, ColorScheme? cs}) {
-    final color = focused ? _base : Theme.of(context).dividerColor.withOpacity(.2); // brand on focus
+    final color = focused ? _base : Theme.of(context).dividerColor.withOpacity(.2);
     return OutlineInputBorder(
       borderRadius: BorderRadius.circular(12),
       borderSide: BorderSide(color: color, width: focused ? 1.4 : 1),
@@ -631,10 +757,26 @@ class _DashMemoSheetState extends State<_DashMemoSheet> {
   void _submitNote(String raw) {
     final t = raw.trim();
     if (t.isEmpty) return;
-    LiteDashMemo.add(t);
+    DashMemo.add(t);
     _inputCtrl.clear();
     FocusScope.of(context).unfocus();
     HapticFeedback.lightImpact();
+  }
+
+  String _wrapBase64Lines(String b64, {int lineLength = DashMemo._mimeB64LineLength}) {
+    if (b64.isEmpty) return '';
+    final sb = StringBuffer();
+    for (int i = 0; i < b64.length; i += lineLength) {
+      final end = (i + lineLength < b64.length) ? i + lineLength : b64.length;
+      sb.write(b64.substring(i, end));
+      sb.write('\r\n');
+    }
+    return sb.toString();
+  }
+
+  String _encodeSubjectRfc2047(String subject) {
+    final subjectB64 = base64.encode(utf8.encode(subject));
+    return '=?utf-8?B?$subjectB64?=';
   }
 }
 
@@ -677,11 +819,7 @@ class _ValueListenableNotifier<T> extends ValueNotifier<T> {
 
   @override
   set value(T newValue) {
-    if (!identical(newValue, super.value)) {
-      super.value = newValue;
-    } else {
-      super.value = newValue;
-    }
+    super.value = newValue;
   }
 }
 

@@ -11,12 +11,78 @@ import 'package:googleapis/storage/v1.dart' as gcs;
 // ✅ 중앙 OAuth 세션만 사용 (최초 1회 로그인 후 재사용)
 import '../../../../utils/google_auth_session.dart';
 
+// ✅ API 디버그(통합 에러 로그) 로거
+import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
+
 import '../../../../utils/gcs/gcs_image_uploader.dart';
 import '../../../../states/plate/input_plate.dart';
 import '../../../../states/area/area_state.dart';
 import '../../../../states/user/user_state.dart';
 
 class InputPlateService {
+  // ─────────────────────────────────────────
+  // ✅ API 디버그 로직: 표준 태그 / 로깅 헬퍼
+  // ─────────────────────────────────────────
+  static const String _tPlate = 'plate';
+  static const String _tPlateInput = 'plate/input';
+  static const String _tPlateUpload = 'plate/upload';
+  static const String _tPlateRegister = 'plate/register';
+  static const String _tGcs = 'gcs';
+  static const String _tGcsList = 'gcs/list';
+  static const String _tAuth = 'google/auth';
+
+  static const Duration _uploadRetryDelay = Duration(milliseconds: 500);
+  static const int _uploadMaxAttempts = 3;
+
+  static Future<void> _logApiError({
+    required String tag,
+    required String message,
+    required Object error,
+    Map<String, dynamic>? extra,
+    List<String>? tags,
+  }) async {
+    try {
+      await DebugApiLogger().log(
+        <String, dynamic>{
+          'tag': tag,
+          'message': message,
+          'error': error.toString(),
+          if (extra != null) 'extra': extra,
+        },
+        level: 'error',
+        tags: tags,
+      );
+    } catch (_) {
+      // 로깅 실패는 기능에 영향 없도록 무시
+    }
+  }
+
+  static Map<String, dynamic> _ctxBasic({
+    String? plateNumber,
+    String? area,
+    String? division,
+    String? userName,
+    String? filePath,
+    String? gcsPath,
+    String? yearMonth,
+    int? index,
+    int? total,
+    int? attempt,
+  }) {
+    return <String, dynamic>{
+      if (plateNumber != null) 'plateNumber': plateNumber,
+      if (area != null) 'area': area,
+      if (division != null) 'division': division,
+      if (userName != null) 'userNameLen': userName.trim().length,
+      if (filePath != null) 'filePath': filePath,
+      if (gcsPath != null) 'gcsPath': gcsPath,
+      if (yearMonth != null) 'yearMonth': yearMonth,
+      if (index != null) 'index': index,
+      if (total != null) 'total': total,
+      if (attempt != null) 'attempt': attempt,
+    };
+  }
+
   // ─────────────────────────────────────────
   // 날짜/경로 유틸 (UTC 기준 통일 + 월 폴더 분리)
   // ─────────────────────────────────────────
@@ -43,7 +109,7 @@ class InputPlateService {
   }
 
   /// ✅ 변경된 업로드 경로 규칙:
-  ///   $division/$area/images/$yyyyMM/$fileName
+  ///   $division/$area/images/$yyyy-MM/$fileName
   static String _buildGcsPathUtc({
     required String division,
     required String area,
@@ -63,6 +129,9 @@ class InputPlateService {
     return ym;
   }
 
+  // ─────────────────────────────────────────
+  // ✅ 업로드: 디버그 로깅 + 재시도 + 월 폴더 규칙
+  // ─────────────────────────────────────────
   static Future<List<String>> uploadCapturedImages(
       List<XFile> images,
       String plateNumber,
@@ -83,6 +152,22 @@ class InputPlateService {
       if (!file.existsSync()) {
         debugPrint('❌ [${i + 1}/${images.length}] 파일이 존재하지 않음: ${file.path}');
         failedFiles.add(file.path);
+
+        await _logApiError(
+          tag: 'InputPlateService.uploadCapturedImages',
+          message: '업로드 대상 파일이 존재하지 않음',
+          error: Exception('file_not_found'),
+          extra: _ctxBasic(
+            plateNumber: plateNumber,
+            area: area,
+            division: division,
+            userName: userName,
+            filePath: file.path,
+            index: i + 1,
+            total: images.length,
+          ),
+          tags: const <String>[_tPlate, _tPlateInput, _tPlateUpload],
+        );
         continue;
       }
 
@@ -104,24 +189,82 @@ class InputPlateService {
       );
 
       String? gcsUrl;
-      for (int attempt = 0; attempt < 3; attempt++) {
+
+      for (int attempt = 0; attempt < _uploadMaxAttempts; attempt++) {
         try {
           debugPrint('⬆️ [${i + 1}/${images.length}] 업로드 시도 #${attempt + 1}: $gcsPath');
+
           // NOTE: GcsImageUploader 내부가 OAuth(중앙 세션) 사용하도록 리팩터링되어 있다고 가정
           gcsUrl = await uploader.inputUploadImage(file, gcsPath);
+
           if (gcsUrl != null) {
             debugPrint('✅ 업로드 성공: $gcsUrl');
             break;
           }
+
+          // null 반환도 실패로 기록(원인 추적용)
+          await _logApiError(
+            tag: 'InputPlateService.uploadCapturedImages',
+            message: 'GCS 업로드 결과가 null',
+            error: Exception('upload_returned_null'),
+            extra: _ctxBasic(
+              plateNumber: plateNumber,
+              area: area,
+              division: division,
+              userName: userName,
+              filePath: file.path,
+              gcsPath: gcsPath,
+              index: i + 1,
+              total: images.length,
+              attempt: attempt + 1,
+            ),
+            tags: const <String>[_tPlate, _tPlateInput, _tPlateUpload, _tGcs],
+          );
         } catch (e) {
           debugPrint('❌ [시도 ${attempt + 1}] 업로드 실패 (${file.path}): $e');
-          await Future.delayed(const Duration(milliseconds: 500));
+
+          await _logApiError(
+            tag: 'InputPlateService.uploadCapturedImages',
+            message: 'GCS 업로드 예외',
+            error: e,
+            extra: _ctxBasic(
+              plateNumber: plateNumber,
+              area: area,
+              division: division,
+              userName: userName,
+              filePath: file.path,
+              gcsPath: gcsPath,
+              index: i + 1,
+              total: images.length,
+              attempt: attempt + 1,
+            ),
+            tags: const <String>[_tPlate, _tPlateInput, _tPlateUpload, _tGcs],
+          );
+
+          await Future.delayed(_uploadRetryDelay);
         }
       }
 
       if (gcsUrl == null) {
         debugPrint('❌ 업로드 최종 실패: ${file.path}');
         failedFiles.add(file.path);
+
+        await _logApiError(
+          tag: 'InputPlateService.uploadCapturedImages',
+          message: 'GCS 업로드 최종 실패(재시도 소진)',
+          error: Exception('upload_failed_final'),
+          extra: _ctxBasic(
+            plateNumber: plateNumber,
+            area: area,
+            division: division,
+            userName: userName,
+            filePath: file.path,
+            gcsPath: gcsPath,
+            index: i + 1,
+            total: images.length,
+          ),
+          tags: const <String>[_tPlate, _tPlateInput, _tPlateUpload, _tGcs],
+        );
       } else {
         uploadedUrls.add(gcsUrl);
       }
@@ -134,11 +277,29 @@ class InputPlateService {
       for (final f in failedFiles) {
         debugPrint(' - 실패 파일: $f');
       }
+
+      await _logApiError(
+        tag: 'InputPlateService.uploadCapturedImages',
+        message: '일부 이미지 업로드 실패',
+        error: Exception('partial_upload_failed'),
+        extra: <String, dynamic>{
+          'plateNumber': plateNumber,
+          'area': area,
+          'division': division,
+          'total': images.length,
+          'success': uploadedUrls.length,
+          'failed': failedFiles.length,
+        },
+        tags: const <String>[_tPlate, _tPlateInput, _tPlateUpload, _tGcs],
+      );
     }
 
     return uploadedUrls;
   }
 
+  // ─────────────────────────────────────────
+  // ✅ 입차 등록: 예외 로깅 추가
+  // ─────────────────────────────────────────
   static Future<bool> registerPlateEntry({
     required BuildContext context,
     required String plateNumber,
@@ -171,32 +332,66 @@ class InputPlateService {
       finalAddAmount = 0;
     }
 
-    return await inputState.registerPlateEntry(
-      context: context,
-      plateNumber: plateNumber,
-      location: location,
-      isLocationSelected: isLocationSelected,
-      areaState: areaState,
-      userState: userState,
-      billingType: selectedBill,
-      statusList: selectedStatuses,
-      basicStandard: finalBasicStandard,
-      basicAmount: finalBasicAmount,
-      addStandard: finalAddStandard,
-      addAmount: finalAddAmount,
-      region: region,
-      imageUrls: imageUrls,
-      customStatus: customStatus ?? '',
-      selectedBillType: selectedBillType,
-    );
+    try {
+      return await inputState.registerPlateEntry(
+        context: context,
+        plateNumber: plateNumber,
+        location: location,
+        isLocationSelected: isLocationSelected,
+        areaState: areaState,
+        userState: userState,
+        billingType: selectedBill,
+        statusList: selectedStatuses,
+        basicStandard: finalBasicStandard,
+        basicAmount: finalBasicAmount,
+        addStandard: finalAddStandard,
+        addAmount: finalAddAmount,
+        region: region,
+        imageUrls: imageUrls,
+        customStatus: customStatus ?? '',
+        selectedBillType: selectedBillType,
+      );
+    } catch (e) {
+      await _logApiError(
+        tag: 'InputPlateService.registerPlateEntry',
+        message: '입차 등록(registerPlateEntry) 실패',
+        error: e,
+        extra: <String, dynamic>{
+          'plateNumber': plateNumber,
+          'locationLen': location.trim().length,
+          'isLocationSelected': isLocationSelected,
+          'imageUrlsCount': imageUrls.length,
+          'selectedBillType': selectedBillType,
+          'selectedBill': selectedBill,
+          'statusCount': selectedStatuses.length,
+          'regionLen': region.trim().length,
+          'customStatusLen': (customStatus ?? '').trim().length,
+          'area': areaState.currentArea,
+          'division': areaState.currentDivision,
+          'userNameLen': userState.name.trim().length,
+        },
+        tags: const <String>[_tPlate, _tPlateInput, _tPlateRegister],
+      );
+      rethrow;
+    }
   }
 
   // ─────────────────────────────────────────
-  // GCS 목록 조회 (중앙 세션 사용) + 월 단위 조회 옵션
+  // GCS 목록 조회 (중앙 세션 사용) + 월 단위 조회 옵션 + 디버그 로깅
   // ─────────────────────────────────────────
   static Future<gcs.StorageApi> _storage() async {
-    final client = await GoogleAuthSession.instance.safeClient();
-    return gcs.StorageApi(client);
+    try {
+      final client = await GoogleAuthSession.instance.safeClient();
+      return gcs.StorageApi(client);
+    } catch (e) {
+      await _logApiError(
+        tag: 'InputPlateService._storage',
+        message: 'GoogleAuthSession.safeClient 또는 StorageApi 생성 실패',
+        error: e,
+        tags: const <String>[_tGcs, _tAuth],
+      );
+      rethrow;
+    }
   }
 
   /// ✅ 중앙 OAuth로 GCS 객체 목록 조회
@@ -216,33 +411,65 @@ class InputPlateService {
     final storage = await _storage();
 
     final String prefix;
-    if (yearMonth != null && yearMonth.trim().isNotEmpty) {
-      final ym = _sanitizeYearMonth(yearMonth);
-      prefix = '$division/$area/images/$ym/';
-    } else {
-      prefix = '$division/$area/images/';
+    try {
+      if (yearMonth != null && yearMonth.trim().isNotEmpty) {
+        final ym = _sanitizeYearMonth(yearMonth);
+        prefix = '$division/$area/images/$ym/';
+      } else {
+        prefix = '$division/$area/images/';
+      }
+    } catch (e) {
+      await _logApiError(
+        tag: 'InputPlateService.listPlateImages',
+        message: 'yearMonth 파라미터 검증 실패',
+        error: e,
+        extra: _ctxBasic(
+          plateNumber: plateNumber,
+          area: area,
+          division: division,
+          yearMonth: yearMonth,
+        ),
+        tags: const <String>[_tPlate, _tPlateInput, _tGcsList],
+      );
+      rethrow;
     }
 
     final urls = <String>[];
 
-    // 페이지네이션 대응
     String? pageToken;
-    do {
-      final res = await storage.objects.list(
-        bucketName,
-        prefix: prefix,
-        pageToken: pageToken,
-      );
-      final items = res.items ?? const <gcs.Object>[];
-      for (final obj in items) {
-        final name = obj.name;
-        if (name != null && name.endsWith('.jpg') && name.contains(plateNumber)) {
-          urls.add('https://storage.googleapis.com/$bucketName/$name');
+    try {
+      do {
+        final res = await storage.objects.list(
+          bucketName,
+          prefix: prefix,
+          pageToken: pageToken,
+        );
+        final items = res.items ?? const <gcs.Object>[];
+        for (final obj in items) {
+          final name = obj.name;
+          if (name != null && name.endsWith('.jpg') && name.contains(plateNumber)) {
+            urls.add('https://storage.googleapis.com/$bucketName/$name');
+          }
         }
-      }
-      pageToken = res.nextPageToken;
-    } while (pageToken != null && pageToken.isNotEmpty);
+        pageToken = res.nextPageToken;
+      } while (pageToken != null && pageToken.isNotEmpty);
 
-    return urls;
+      return urls;
+    } catch (e) {
+      await _logApiError(
+        tag: 'InputPlateService.listPlateImages',
+        message: 'GCS objects.list 실패',
+        error: e,
+        extra: <String, dynamic>{
+          'bucket': bucketName,
+          'prefix': prefix,
+          'plateNumber': plateNumber,
+          'found': urls.length,
+          'pageToken': pageToken ?? '',
+        },
+        tags: const <String>[_tPlate, _tPlateInput, _tGcs, _tGcsList],
+      );
+      rethrow;
+    }
   }
 }

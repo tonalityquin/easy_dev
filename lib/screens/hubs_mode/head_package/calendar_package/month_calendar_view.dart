@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 
+// ✅ API 디버그(통합 에러 로그) 로거
+// 프로젝트 패키지/경로에 맞게 조정하세요.
+import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
+
 class MonthCalendarView extends StatefulWidget {
   const MonthCalendarView({
     super.key,
@@ -15,9 +19,12 @@ class MonthCalendarView extends StatefulWidget {
 
   final List<gcal.Event> allEvents;
   final int Function(gcal.Event) progressOf;
-  final void Function(BuildContext, gcal.Event) onEdit; // (읽기 전용 시트에서는 사용 안 함)
-  final void Function(BuildContext, gcal.Event) onDelete; // (읽기 전용 시트에서는 사용 안 함)
-  final Future<void> Function(BuildContext, gcal.Event, bool) onToggleProgress; // (읽기 전용 시트에서는 사용 안 함)
+
+  // (읽기 전용 시트에서는 사용 안 함)
+  final void Function(BuildContext, gcal.Event) onEdit;
+  final void Function(BuildContext, gcal.Event) onDelete;
+  final Future<void> Function(BuildContext, gcal.Event, bool) onToggleProgress;
+
   final Future<void> Function(DateTime monthStart, DateTime monthEnd)? onMonthRequested;
 
   @override
@@ -28,6 +35,41 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
   late DateTime _visibleMonth; // 해당 월의 1일
   DateTime? _selectedDay; // 탭 하이라이트
 
+  // ✅ 월 범위 요청 중복 호출 방지
+  bool _monthRequestBusy = false;
+
+  // ─────────────────────────────────────────────────────────────
+  // ✅ API 디버그 로직: 표준 태그 / 로깅 헬퍼
+  // ─────────────────────────────────────────────────────────────
+  static const String _tCal = 'calendar';
+  static const String _tCalUi = 'calendar/ui';
+  static const String _tCalMonth = 'calendar/month';
+  static const String _tCalMonthRequest = 'calendar/month/request';
+  static const String _tCalSheet = 'calendar/day_sheet';
+
+  Future<void> _logApiError({
+    required String tag,
+    required String message,
+    required Object error,
+    Map<String, dynamic>? extra,
+    List<String>? tags,
+  }) async {
+    try {
+      await DebugApiLogger().log(
+        <String, dynamic>{
+          'tag': tag,
+          'message': message,
+          'error': error.toString(),
+          if (extra != null) 'extra': extra,
+        },
+        level: 'error',
+        tags: tags,
+      );
+    } catch (_) {
+      // 로깅 실패는 UI 기능에 영향 없도록 무시
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -35,14 +77,38 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
     _visibleMonth = DateTime(now.year, now.month, 1);
 
     // 첫 빌드 직후 현재 보이는 달 범위 로드 요청
-    WidgetsBinding.instance.addPostFrameCallback((_) => _notifyMonthRequested());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _notifyMonthRequested();
+    });
   }
 
-  void _notifyMonthRequested() {
-    if (widget.onMonthRequested == null) return;
+  Future<void> _notifyMonthRequested() async {
+    final fn = widget.onMonthRequested;
+    if (fn == null) return;
+
+    // 중복 호출 방지(버튼 연타, 빠른 월 이동 등)
+    if (_monthRequestBusy) return;
+    _monthRequestBusy = true;
+
     final start = DateTime(_visibleMonth.year, _visibleMonth.month, 1);
     final end = DateTime(start.year, start.month + 1, 1); // 다음 달 1일(Exclusive)
-    widget.onMonthRequested!(start, end);
+
+    try {
+      await fn(start, end);
+    } catch (e) {
+      await _logApiError(
+        tag: 'MonthCalendarView._notifyMonthRequested',
+        message: '월 범위 이벤트 로드(onMonthRequested) 실패',
+        error: e,
+        extra: <String, dynamic>{
+          'monthStart': start.toIso8601String(),
+          'monthEndExclusive': end.toIso8601String(),
+        },
+        tags: const <String>[_tCal, _tCalMonth, _tCalMonthRequest],
+      );
+    } finally {
+      _monthRequestBusy = false;
+    }
   }
 
   bool _isSameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
@@ -67,6 +133,7 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
       final ed = DateTime(e.end!.date!.year, e.end!.date!.month, e.end!.date!.day);
       return !day.isBefore(s) && day.isBefore(ed);
     }
+
     // 시간 이벤트: 시작~끝 사이 날짜 포함
     final start = e.start?.dateTime?.toLocal();
     final end = e.end?.dateTime?.toLocal();
@@ -91,105 +158,118 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
     return list;
   }
 
-  // ❌ 미사용 메서드 제거: _eventCountOnDay
-
   Future<void> _openDaySheet(BuildContext context, DateTime day) async {
     final events = _eventsOnDay(day);
     final fmtDay = DateFormat('yyyy-MM-dd (EEE)');
     final fmtTime = DateFormat('HH:mm');
 
-    await showModalBottomSheet<void>(
-      context: context,
-      useSafeArea: true,
-      isScrollControlled: true,
-      builder: (_) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.6,
-          minChildSize: 0.4,
-          maxChildSize: 0.9,
-          builder: (context, controller) {
-            return Material(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              child: Column(
-                children: [
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 36,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.black12,
-                      borderRadius: BorderRadius.circular(2),
+    try {
+      await showModalBottomSheet<void>(
+        context: context,
+        useSafeArea: true,
+        isScrollControlled: true,
+        builder: (_) {
+          return DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 0.6,
+            minChildSize: 0.4,
+            maxChildSize: 0.9,
+            builder: (context, controller) {
+              return Material(
+                color: Theme.of(context).colorScheme.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                child: Column(
+                  children: [
+                    const SizedBox(height: 8),
+                    Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.black12,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            fmtDay.format(day),
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              fmtDay.format(day),
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
+                          IconButton(
+                            icon: const Icon(Icons.close),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const Divider(height: 1),
-                  Expanded(
-                    child: events.isEmpty
-                        ? const Center(child: Text('이 날짜에 이벤트가 없습니다.'))
-                        : ListView.separated(
-                            controller: controller,
-                            itemCount: events.length,
-                            separatorBuilder: (_, __) => const Divider(height: 1),
-                            itemBuilder: (context, i) {
-                              final e = events[i];
-                              final isAllDay = (e.start?.date != null) && (e.start?.dateTime == null);
-                              String whenText;
-                              if (isAllDay) {
-                                whenText = '종일';
-                              } else {
-                                final st = e.start?.dateTime?.toLocal();
-                                final ed = e.end?.dateTime?.toLocal();
-                                if (st != null && ed != null) {
-                                  whenText = '${fmtTime.format(st)} ~ ${fmtTime.format(ed)}';
-                                } else if (st != null) {
-                                  whenText = fmtTime.format(st);
-                                } else {
-                                  whenText = '(시간 미정)';
-                                }
-                              }
-                              final done = widget.progressOf(e) == 100;
+                    const Divider(height: 1),
+                    Expanded(
+                      child: events.isEmpty
+                          ? const Center(child: Text('이 날짜에 이벤트가 없습니다.'))
+                          : ListView.separated(
+                        controller: controller,
+                        itemCount: events.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, i) {
+                          final e = events[i];
+                          final isAllDay = (e.start?.date != null) && (e.start?.dateTime == null);
 
-                              return ListTile(
-                                leading: done
-                                    ? const Icon(Icons.check_circle, size: 20)
-                                    : const Icon(Icons.radio_button_unchecked, size: 20),
-                                title: Text(
-                                  e.summary ?? '(제목 없음)',
-                                  style: done ? const TextStyle(decoration: TextDecoration.lineThrough) : null,
-                                ),
-                                subtitle: Text(whenText),
-                              );
-                            },
-                          ),
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
+                          String whenText;
+                          if (isAllDay) {
+                            whenText = '종일';
+                          } else {
+                            final st = e.start?.dateTime?.toLocal();
+                            final ed = e.end?.dateTime?.toLocal();
+                            if (st != null && ed != null) {
+                              whenText = '${fmtTime.format(st)} ~ ${fmtTime.format(ed)}';
+                            } else if (st != null) {
+                              whenText = fmtTime.format(st);
+                            } else {
+                              whenText = '(시간 미정)';
+                            }
+                          }
+
+                          final done = widget.progressOf(e) == 100;
+
+                          return ListTile(
+                            leading: done
+                                ? const Icon(Icons.check_circle, size: 20)
+                                : const Icon(Icons.radio_button_unchecked, size: 20),
+                            title: Text(
+                              e.summary ?? '(제목 없음)',
+                              style: done ? const TextStyle(decoration: TextDecoration.lineThrough) : null,
+                            ),
+                            subtitle: Text(whenText),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      );
+    } catch (e) {
+      await _logApiError(
+        tag: 'MonthCalendarView._openDaySheet',
+        message: 'Day Sheet 열기 실패',
+        error: e,
+        extra: <String, dynamic>{
+          'day': DateFormat('yyyy-MM-dd').format(day),
+          'eventsCount': events.length,
+        },
+        tags: const <String>[_tCal, _tCalUi, _tCalSheet],
+      );
+    }
   }
 
   @override
@@ -323,6 +403,7 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
                             children: [
                               ...eventsOfDay.take(3).map((e) {
                                 final p = widget.progressOf(e);
+                                // 원 코드 유지: 완료=red, 미완료=black
                                 final color = (p == 100) ? Colors.red : Colors.black;
                                 return Padding(
                                   padding: const EdgeInsets.only(left: 4),

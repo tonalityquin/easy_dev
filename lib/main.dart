@@ -37,7 +37,7 @@ import 'utils/google_auth_session.dart';
 import 'screens/hubs_mode/head_package/hub_quick_actions.dart';
 
 // ✅ (신규) DashMemo 전역 오버레이 부착을 위해 추가
-import 'screens/common_package/memo_package/lite_dash_memo.dart';
+import 'screens/common_package/memo_package/dash_memo.dart';
 
 // ✅ (신규) 개발 허브 퀵 액션(DevQuickActions) 사용
 import 'screens/hubs_mode/dev_package/dev_quick_actions.dart';
@@ -440,7 +440,7 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
 
     // ✅ DashMemo 전역 초기화 — 이후 mountIfNeeded로 부착
     debugPrint('[MAIN][${_ts()}] DashMemo.init');
-    await LiteDashMemo.init();
+    await DashMemo.init();
 
     // ✅ 본사 허브 퀵 액션 버블 전역 초기화
     debugPrint('[MAIN][${_ts()}] HeadHubActions.init');
@@ -599,7 +599,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
             // DevMemo / HeadMemo 는 자동 부착 X
             HeadHubActions.mountIfNeeded();
-            LiteDashMemo.mountIfNeeded();
+            DashMemo.mountIfNeeded();
             DevQuickActions.mountIfNeeded();
           });
 

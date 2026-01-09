@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../../models/plate_model.dart';
 import '../../../../../screens/service_mode/modify_package/modify_plate_screen.dart';
-import '../../../../../screens/common_package/log_package/lite_log_viewer_bottom_sheet.dart';
+import '../../../../../screens/common_package/log_package/log_viewer_bottom_sheet.dart';
 import '../../../../../states/area/area_state.dart';
 import '../../../../../enums/plate_type.dart';
 import '../../../../../states/user/user_state.dart';
@@ -127,7 +127,7 @@ class _FullHeightSheet extends StatelessWidget {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (_) => LiteLogViewerBottomSheet(
+                              builder: (_) => LogViewerBottomSheet(
                                 initialPlateNumber: plateNumber,
                                 division: division,
                                 area: area,

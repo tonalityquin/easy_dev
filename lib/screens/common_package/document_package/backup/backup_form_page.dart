@@ -11,6 +11,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../../utils/google_auth_v7.dart';
 import '../../../../../../utils/api/email_config.dart';
+
+import '../../../hubs_mode/dev_package/debug_package/debug_api_logger.dart';
+import '../../../hubs_mode/dev_package/debug_package/debug_bottom_sheet.dart';
 import 'backup_styles.dart';
 import 'backup_signature_dialog.dart';
 
@@ -37,8 +40,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
   final _deptCtrl = TextEditingController();
 
   // 3번 카드: 괄호 안 입력용 컨트롤러
-  // (   )으로 인해 (    )의 (   ) 시간 대의 업무에 공백이 발생했습니다.
-  // ... 향후 이에 대해서는 (    )로 처리됨을 인지합니다.
   final _reasonCtrl = TextEditingController(); // 첫 번째 괄호
   final _targetCtrl = TextEditingController(); // 두 번째 괄호
   final _timeCtrl = TextEditingController(); // 세 번째 괄호 (시간대)
@@ -73,6 +74,55 @@ class _BackupFormPageState extends State<BackupFormPage> {
   // 현재 페이지 인덱스 (0~4)
   int _currentPageIndex = 0;
 
+  // ─────────────────────────────────────────────────────────────
+  // ✅ API 디버그 로직: 표준 태그 / 로깅 헬퍼
+  // ─────────────────────────────────────────────────────────────
+
+  // DebugBottomSheet에서 tag로 즉시 필터링 가능하도록 "/" 기반 네임스페이스 사용
+  static const String _tBackup = 'backup';
+  static const String _tBackupForm = 'backup/form';
+  static const String _tBackupPdf = 'backup/pdf';
+  static const String _tBackupEmail = 'backup/email';
+  static const String _tBackupPrefs = 'backup/prefs';
+  static const String _tGmail = 'gmail/send';
+
+  static const int _mimeB64LineLength = 76;
+
+  Future<void> _logApiError({
+    required String tag,
+    required String message,
+    required Object error,
+    Map<String, dynamic>? extra,
+    List<String>? tags,
+  }) async {
+    try {
+      await DebugApiLogger().log(
+        <String, dynamic>{
+          'tag': tag,
+          'message': message,
+          'error': error.toString(),
+          if (extra != null) 'extra': extra,
+        },
+        level: 'error',
+        tags: tags,
+      );
+    } catch (_) {
+      // 로깅 실패는 UX에 영향 없도록 무시
+    }
+  }
+
+  // (선택) 이 페이지에서 DebugBottomSheet 즉시 오픈
+  Future<void> _openDebugBottomSheet() async {
+    HapticFeedback.selectionClick();
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const DebugBottomSheet(),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -82,16 +132,29 @@ class _BackupFormPageState extends State<BackupFormPage> {
   }
 
   Future<void> _loadSelectedArea() async {
-    final prefs = await SharedPreferences.getInstance();
-    final area = prefs.getString('selectedArea') ?? '';
-    if (!mounted) return;
-    setState(() {
-      _selectedArea = area.isEmpty ? null : area;
-    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final area = prefs.getString('selectedArea') ?? '';
+      if (!mounted) return;
+      setState(() {
+        _selectedArea = area.isEmpty ? null : area;
+      });
 
-    // 사용자가 아직 제목을 입력하지 않은 경우에만 자동 채움
-    if (_mailSubjectCtrl.text.trim().isEmpty) {
-      _updateMailSubject();
+      // 사용자가 아직 제목을 입력하지 않은 경우에만 자동 채움
+      if (_mailSubjectCtrl.text.trim().isEmpty) {
+        _updateMailSubject();
+      }
+    } catch (e) {
+      await _logApiError(
+        tag: 'BackupFormPage._loadSelectedArea',
+        message: 'SharedPreferences에서 selectedArea 로드 실패',
+        error: e,
+        tags: const <String>[_tBackupPrefs, _tBackup],
+      );
+      if (!mounted) return;
+      setState(() {
+        _selectedArea = null;
+      });
     }
   }
 
@@ -192,11 +255,9 @@ class _BackupFormPageState extends State<BackupFormPage> {
       _currentPageIndex = 0;
     });
 
-    // 리셋 후에도 제목/본문은 기본값으로 자동 생성
     _updateMailSubject();
     _updateMailBody(force: true);
 
-    // 페이지도 첫 페이지로
     _pageController.jumpToPage(0);
   }
 
@@ -206,17 +267,14 @@ class _BackupFormPageState extends State<BackupFormPage> {
     final month = now.month;
     final day = now.day;
 
-    // 계약 형태 텍스트
     String suffixType = '';
     if (_contractType != null) {
       suffixType = ' - ${_contractTypeText(_contractType)}';
     }
 
-    // SharedPreferences에 저장된 selectedArea 사용 (없으면 '업무' 기본값)
     final area =
     (_selectedArea != null && _selectedArea!.trim().isNotEmpty) ? _selectedArea!.trim() : '업무';
 
-    // 예: 콜센터 연차(결근) 지원 신청서 – 11월 25일자 - 계약직
     _mailSubjectCtrl.text = '$area 연차(결근) 지원 신청서 – ${month}월 ${day}일자$suffixType';
   }
 
@@ -268,7 +326,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
 
   Future<void> _showPreview() async {
     HapticFeedback.lightImpact();
-    _updateMailBody(); // 미리보기 전에 본문이 비어있으면 자동 생성
+    _updateMailBody();
     final text = _buildPreviewText(context);
 
     final contractText = _contractTypeText(_contractType);
@@ -337,7 +395,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // 상단 헤더 바
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.fromLTRB(20, 14, 16, 12),
@@ -384,7 +441,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
                             ),
                           ),
 
-                          // 본문 스크롤 영역
                           Flexible(
                             child: Scrollbar(
                               child: SingleChildScrollView(
@@ -392,7 +448,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
-                                    // 상단 요약 배지들
                                     Wrap(
                                       spacing: 8,
                                       runSpacing: 8,
@@ -411,7 +466,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                     ),
                                     const SizedBox(height: 16),
 
-                                    // 메일 정보 카드
                                     Container(
                                       decoration: BoxDecoration(
                                         color: const Color(0xFFF9FAFB),
@@ -488,7 +542,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
 
                                     const SizedBox(height: 16),
 
-                                    // 신청 사유(고정 문장) 카드
                                     Container(
                                       decoration: BoxDecoration(
                                         color: Colors.white,
@@ -532,14 +585,10 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                               ),
                                             ),
                                             child: Text(
-                                              bodySentence.trim().isEmpty
-                                                  ? '입력된 문장이 없습니다.'
-                                                  : bodySentence,
+                                              bodySentence.trim().isEmpty ? '입력된 문장이 없습니다.' : bodySentence,
                                               style: theme.textTheme.bodyMedium?.copyWith(
                                                 height: 1.4,
-                                                color: bodySentence.trim().isEmpty
-                                                    ? Colors.grey[600]
-                                                    : Colors.black,
+                                                color: bodySentence.trim().isEmpty ? Colors.grey[600] : Colors.black,
                                               ),
                                             ),
                                           ),
@@ -549,7 +598,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
 
                                     const SizedBox(height: 16),
 
-                                    // 서명 정보 + 이미지
                                     Container(
                                       decoration: BoxDecoration(
                                         color: Colors.white,
@@ -664,7 +712,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
 
                                     const SizedBox(height: 12),
 
-                                    // 원본 텍스트 안내
                                     Container(
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
@@ -699,7 +746,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
                             ),
                           ),
 
-                          // 하단 액션 영역
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
@@ -716,14 +762,10 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                 TextButton.icon(
                                   onPressed: () async {
                                     HapticFeedback.selectionClick();
-                                    await Clipboard.setData(
-                                      ClipboardData(text: text),
-                                    );
+                                    await Clipboard.setData(ClipboardData(text: text));
                                     if (!mounted) return;
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('텍스트가 클립보드에 복사되었습니다.'),
-                                      ),
+                                      const SnackBar(content: Text('텍스트가 클립보드에 복사되었습니다.')),
                                     );
                                   },
                                   icon: const Icon(Icons.copy_rounded, size: 18),
@@ -770,25 +812,26 @@ class _BackupFormPageState extends State<BackupFormPage> {
 
     HapticFeedback.lightImpact();
     setState(() => _sending = true);
+
     try {
       final cfg = await EmailConfig.load();
       if (!EmailConfig.isValidToList(cfg.to)) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              '수신자(To)가 비어있거나 형식이 올바르지 않습니다. 설정에서 수신자를 저장해 주세요.',
-            ),
+            content: Text('수신자(To)가 비어있거나 형식이 올바르지 않습니다. 설정에서 수신자를 저장해 주세요.'),
           ),
         );
         return;
       }
-      final toCsv = cfg.to.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).join(', ');
 
+      final toCsv = cfg.to.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).join(', ');
       final subject = _mailSubjectCtrl.text.trim();
+
       // 제출 시점 기준으로 본문 시간 강제 갱신
       _updateMailBody(force: true);
       final body = _mailBodyCtrl.text.trim();
+
       if (subject.isEmpty) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -798,6 +841,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
       }
 
       final pdfBytes = await _buildPdfBytes();
+
       final now = DateTime.now();
       final nameForFile = _nameCtrl.text.trim().isEmpty ? '무기명' : _nameCtrl.text.trim();
       final filename = _safeFileName('연차결근지원신청서_${nameForFile}_${_dateTag(now)}');
@@ -815,6 +859,20 @@ class _BackupFormPageState extends State<BackupFormPage> {
         const SnackBar(content: Text('메일 전송 완료')),
       );
     } catch (e) {
+      await _logApiError(
+        tag: 'BackupFormPage._submit',
+        message: '메일 전송(제출) 실패',
+        error: e,
+        extra: <String, dynamic>{
+          'contractType': _contractTypeText(_contractType),
+          'hasSignature': _signaturePngBytes != null,
+          'pdfBytes': null, // 민감정보 방지: 여기서는 크기를 직접 넣지 않음(각 단계 로깅에서 처리)
+          'subjectLen': _mailSubjectCtrl.text.trim().length,
+          'bodyLen': _mailBodyCtrl.text.trim().length,
+        },
+        tags: const <String>[_tBackupForm, _tBackup, _tBackupEmail, _tGmail],
+      );
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('메일 전송 실패: $e')),
@@ -829,201 +887,228 @@ class _BackupFormPageState extends State<BackupFormPage> {
     return s.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // ✅ PDF 생성: 실패 시 DebugApiLogger 기록
+  // ─────────────────────────────────────────────────────────────
+
   Future<Uint8List> _buildPdfBytes() async {
-    pw.Font? regular;
-    pw.Font? bold;
-
     try {
-      final regData = await rootBundle.load('assets/fonts/NotoSansKR/NotoSansKR-Regular.ttf');
-      regular = pw.Font.ttf(regData);
-    } catch (_) {}
+      pw.Font? regular;
+      pw.Font? bold;
 
-    try {
-      final boldData = await rootBundle.load('assets/fonts/NotoSansKR/NotoSansKR-Bold.ttf');
-      bold = pw.Font.ttf(boldData);
-    } catch (_) {
-      bold = regular;
-    }
+      try {
+        final regData = await rootBundle.load('assets/fonts/NotoSansKR/NotoSansKR-Regular.ttf');
+        regular = pw.Font.ttf(regData);
+      } catch (_) {}
 
-    final theme = (regular != null)
-        ? pw.ThemeData.withFont(
-      base: regular,
-      bold: bold ?? regular,
-      italic: regular,
-      boldItalic: bold ?? regular,
-    )
-        : pw.ThemeData.base();
+      try {
+        final boldData = await rootBundle.load('assets/fonts/NotoSansKR/NotoSansKR-Bold.ttf');
+        bold = pw.Font.ttf(boldData);
+      } catch (_) {
+        bold = regular;
+      }
 
-    final doc = pw.Document();
+      final theme = (regular != null)
+          ? pw.ThemeData.withFont(
+        base: regular,
+        bold: bold ?? regular,
+        italic: regular,
+        boldItalic: bold ?? regular,
+      )
+          : pw.ThemeData.base();
 
-    final contractText = _contractTypeText(_contractType);
-    final name = _nameCtrl.text.trim().isEmpty ? '-' : _nameCtrl.text.trim();
-    final rrn = _rrnCtrl.text.trim().isEmpty ? '-' : _rrnCtrl.text.trim();
-    final position = _positionCtrl.text.trim().isEmpty ? '-' : _positionCtrl.text.trim();
-    final dept = _deptCtrl.text.trim().isEmpty ? '-' : _deptCtrl.text.trim();
-    final bodySentence = _buildBodySentence();
+      final doc = pw.Document();
 
-    // 상단 간단 필드
-    final fields = <MapEntry<String, String>>[
-      MapEntry('계약 형태', contractText),
-      MapEntry('성명', name),
-      MapEntry('주민등록번호', rrn),
-      MapEntry('직위', position),
-      MapEntry('부서명', dept),
-    ];
+      final contractText = _contractTypeText(_contractType);
+      final name = _nameCtrl.text.trim().isEmpty ? '-' : _nameCtrl.text.trim();
+      final rrn = _rrnCtrl.text.trim().isEmpty ? '-' : _rrnCtrl.text.trim();
+      final position = _positionCtrl.text.trim().isEmpty ? '-' : _positionCtrl.text.trim();
+      final dept = _deptCtrl.text.trim().isEmpty ? '-' : _deptCtrl.text.trim();
+      final bodySentence = _buildBodySentence();
 
-    pw.Widget buildFieldTable() => pw.Table(
-      border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
-      columnWidths: const {
-        0: pw.FlexColumnWidth(3),
-        1: pw.FlexColumnWidth(7),
-      },
-      children: [
-        for (final kv in fields)
-          pw.TableRow(
-            children: [
-              pw.Container(
-                padding: const pw.EdgeInsets.all(6),
-                color: PdfColors.grey200,
-                child: pw.Text(
-                  kv.key,
-                  style: const pw.TextStyle(fontSize: 11),
+      final fields = <MapEntry<String, String>>[
+        MapEntry('계약 형태', contractText),
+        MapEntry('성명', name),
+        MapEntry('주민등록번호', rrn),
+        MapEntry('직위', position),
+        MapEntry('부서명', dept),
+      ];
+
+      pw.Widget buildFieldTable() => pw.Table(
+        border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+        columnWidths: const {
+          0: pw.FlexColumnWidth(3),
+          1: pw.FlexColumnWidth(7),
+        },
+        children: [
+          for (final kv in fields)
+            pw.TableRow(
+              children: [
+                pw.Container(
+                  padding: const pw.EdgeInsets.all(6),
+                  color: PdfColors.grey200,
+                  child: pw.Text(kv.key, style: const pw.TextStyle(fontSize: 11)),
                 ),
-              ),
-              pw.Container(
-                padding: const pw.EdgeInsets.all(6),
-                child: pw.Text(
-                  kv.value,
-                  style: const pw.TextStyle(fontSize: 11),
+                pw.Container(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text(kv.value, style: const pw.TextStyle(fontSize: 11)),
                 ),
-              ),
-            ],
-          ),
-      ],
-    );
+              ],
+            ),
+        ],
+      );
 
-    pw.Widget buildSection(String title, String body) => pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: [
-        pw.SizedBox(height: 8),
-        pw.Text(
-          title,
-          style: pw.TextStyle(
-            fontSize: 13,
-            fontWeight: pw.FontWeight.bold,
-          ),
-        ),
-        pw.SizedBox(height: 4),
-        pw.Container(
-          width: double.infinity,
-          padding: const pw.EdgeInsets.all(8),
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
-            borderRadius: pw.BorderRadius.circular(4),
-          ),
-          child: pw.Text(
-            body.isEmpty ? '-' : body,
-            style: const pw.TextStyle(fontSize: 11),
-          ),
-        ),
-      ],
-    );
-
-    pw.Widget buildSignature() {
-      final name = _signerName.isEmpty ? '이름 미입력' : _signerName;
-      final timeText = _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
-
-      return pw.Column(
+      pw.Widget buildSection(String title, String body) => pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.SizedBox(height: 8),
           pw.Text(
-            '전자서명',
+            title,
             style: pw.TextStyle(
               fontSize: 13,
               fontWeight: pw.FontWeight.bold,
             ),
           ),
           pw.SizedBox(height: 4),
-          pw.Row(
-            children: [
-              pw.Expanded(
-                child: pw.Text(
-                  '서명자: $name',
-                  style: const pw.TextStyle(fontSize: 11),
-                ),
-              ),
-              pw.SizedBox(width: 8),
-              pw.Text(
-                '서명 일시: $timeText',
-                style: const pw.TextStyle(fontSize: 11),
-              ),
-            ],
-          ),
-          pw.SizedBox(height: 4),
           pw.Container(
-            height: 120,
             width: double.infinity,
+            padding: const pw.EdgeInsets.all(8),
             decoration: pw.BoxDecoration(
               border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
               borderRadius: pw.BorderRadius.circular(4),
             ),
-            child: _signaturePngBytes == null
-                ? pw.Center(
-              child: pw.Text(
-                '서명 이미지 없음',
-                style: const pw.TextStyle(
-                  fontSize: 10,
-                  color: PdfColors.grey,
-                ),
-              ),
-            )
-                : pw.Padding(
-              padding: const pw.EdgeInsets.all(6),
-              child: pw.Image(
-                pw.MemoryImage(_signaturePngBytes!),
-                fit: pw.BoxFit.contain,
-              ),
+            child: pw.Text(
+              body.isEmpty ? '-' : body,
+              style: const pw.TextStyle(fontSize: 11),
             ),
           ),
         ],
       );
-    }
 
-    doc.addPage(
-      pw.MultiPage(
-        theme: theme,
-        pageFormat: PdfPageFormat.a4,
-        margin: const pw.EdgeInsets.fromLTRB(32, 36, 32, 36),
-        build: (context) => [
-          pw.Center(
-            child: pw.Text(
-              '연차(결근) 지원 신청서',
+      pw.Widget buildSignature() {
+        final name = _signerName.isEmpty ? '이름 미입력' : _signerName;
+        final timeText = _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
+
+        return pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.SizedBox(height: 8),
+            pw.Text(
+              '전자서명',
               style: pw.TextStyle(
-                fontSize: 20,
+                fontSize: 13,
                 fontWeight: pw.FontWeight.bold,
               ),
             ),
-          ),
-          pw.SizedBox(height: 12),
-          buildFieldTable(),
-          buildSection('[업무 공백 및 인력 지원 요청]', bodySentence),
-          buildSignature(),
-        ],
-        footer: (context) => pw.Align(
-          alignment: pw.Alignment.centerRight,
-          child: pw.Text(
-            '생성 시각: ${_fmtCompact(DateTime.now())}',
-            style: const pw.TextStyle(
-              fontSize: 9,
-              color: PdfColors.grey700,
+            pw.SizedBox(height: 4),
+            pw.Row(
+              children: [
+                pw.Expanded(
+                  child: pw.Text('서명자: $name', style: const pw.TextStyle(fontSize: 11)),
+                ),
+                pw.SizedBox(width: 8),
+                pw.Text('서명 일시: $timeText', style: const pw.TextStyle(fontSize: 11)),
+              ],
+            ),
+            pw.SizedBox(height: 4),
+            pw.Container(
+              height: 120,
+              width: double.infinity,
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: _signaturePngBytes == null
+                  ? pw.Center(
+                child: pw.Text(
+                  '서명 이미지 없음',
+                  style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey),
+                ),
+              )
+                  : pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Image(
+                  pw.MemoryImage(_signaturePngBytes!),
+                  fit: pw.BoxFit.contain,
+                ),
+              ),
+            ),
+          ],
+        );
+      }
+
+      doc.addPage(
+        pw.MultiPage(
+          theme: theme,
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.fromLTRB(32, 36, 32, 36),
+          build: (context) => [
+            pw.Center(
+              child: pw.Text(
+                '연차(결근) 지원 신청서',
+                style: pw.TextStyle(
+                  fontSize: 20,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+            ),
+            pw.SizedBox(height: 12),
+            buildFieldTable(),
+            buildSection('[업무 공백 및 인력 지원 요청]', bodySentence),
+            buildSignature(),
+          ],
+          footer: (context) => pw.Align(
+            alignment: pw.Alignment.centerRight,
+            child: pw.Text(
+              '생성 시각: ${_fmtCompact(DateTime.now())}',
+              style: const pw.TextStyle(
+                fontSize: 9,
+                color: PdfColors.grey700,
+              ),
             ),
           ),
         ),
-      ),
-    );
+      );
 
-    return doc.save();
+      final bytes = await doc.save();
+
+      // ✅ 성공 로그는 남기지 않음(에러만 기록하는 정책 유지)
+      return bytes;
+    } catch (e) {
+      await _logApiError(
+        tag: 'BackupFormPage._buildPdfBytes',
+        message: 'PDF 생성 실패',
+        error: e,
+        extra: <String, dynamic>{
+          'contractType': _contractTypeText(_contractType),
+          'hasSignature': _signaturePngBytes != null,
+          'nameLen': _nameCtrl.text.trim().length,
+          'rrnLen': _rrnCtrl.text.trim().length, // 원문은 기록하지 않음
+        },
+        tags: const <String>[_tBackupPdf, _tBackup, _tBackupForm],
+      );
+      rethrow;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // ✅ Gmail MIME 생성 유틸
+  // ─────────────────────────────────────────────────────────────
+
+  String _wrapBase64Lines(String b64, {int lineLength = _mimeB64LineLength}) {
+    if (b64.isEmpty) return '';
+    final sb = StringBuffer();
+    for (int i = 0; i < b64.length; i += lineLength) {
+      final end = (i + lineLength < b64.length) ? i + lineLength : b64.length;
+      sb.write(b64.substring(i, end));
+      sb.write('\r\n');
+    }
+    return sb.toString();
+  }
+
+  String _encodeSubjectRfc2047(String subject) {
+    final subjectB64 = base64.encode(utf8.encode(subject));
+    return '=?utf-8?B?$subjectB64?=';
   }
 
   Future<void> _sendEmailViaGmail({
@@ -1034,33 +1119,58 @@ class _BackupFormPageState extends State<BackupFormPage> {
     required String body,
   }) async {
     final client = await GoogleAuthV7.authedClient(const <String>[]);
-    final api = gmail.GmailApi(client);
+    try {
+      final api = gmail.GmailApi(client);
 
-    final boundary = 'dart-mail-boundary-${DateTime.now().millisecondsSinceEpoch}';
-    final subjectB64 = base64.encode(utf8.encode(subject));
-    final sb = StringBuffer()
-      ..writeln('To: $to')
-      ..writeln('Subject: =?utf-8?B?$subjectB64?=')
-      ..writeln('MIME-Version: 1.0')
-      ..writeln('Content-Type: multipart/mixed; boundary="$boundary"')
-      ..writeln()
-      ..writeln('--$boundary')
-      ..writeln('Content-Type: text/plain; charset="utf-8"')
-      ..writeln('Content-Transfer-Encoding: 7bit')
-      ..writeln()
-      ..writeln(body)
-      ..writeln()
-      ..writeln('--$boundary')
-      ..writeln('Content-Type: application/pdf; name="$filename"')
-      ..writeln('Content-Disposition: attachment; filename="$filename"')
-      ..writeln('Content-Transfer-Encoding: base64')
-      ..writeln()
-      ..writeln(base64.encode(pdfBytes))
-      ..writeln('--$boundary--');
+      final boundary = 'dart-mail-boundary-${DateTime.now().millisecondsSinceEpoch}';
+      const crlf = '\r\n';
 
-    final raw = base64UrlEncode(utf8.encode(sb.toString())).replaceAll('=', '');
-    final msg = gmail.Message()..raw = raw;
-    await api.users.messages.send(msg, 'me');
+      final pdfB64Wrapped = _wrapBase64Lines(base64.encode(pdfBytes));
+
+      final mime = StringBuffer()
+        ..write('To: $to$crlf')
+        ..write('Subject: ${_encodeSubjectRfc2047(subject)}$crlf')
+        ..write('MIME-Version: 1.0$crlf')
+        ..write('Content-Type: multipart/mixed; boundary="$boundary"$crlf')
+        ..write(crlf)
+        ..write('--$boundary$crlf')
+        ..write('Content-Type: text/plain; charset="utf-8"$crlf')
+        ..write('Content-Transfer-Encoding: 7bit$crlf')
+        ..write(crlf)
+        ..write(body)
+        ..write(crlf)
+        ..write('--$boundary$crlf')
+        ..write('Content-Type: application/pdf; name="$filename"$crlf')
+        ..write('Content-Disposition: attachment; filename="$filename"$crlf')
+        ..write('Content-Transfer-Encoding: base64$crlf')
+        ..write(crlf)
+        ..write(pdfB64Wrapped)
+        ..write('--$boundary--$crlf');
+
+      final raw = base64UrlEncode(utf8.encode(mime.toString())).replaceAll('=', '');
+      final msg = gmail.Message()..raw = raw;
+
+      await api.users.messages.send(msg, 'me');
+    } catch (e) {
+      await _logApiError(
+        tag: 'BackupFormPage._sendEmailViaGmail',
+        message: 'Gmail API 전송 실패',
+        error: e,
+        extra: <String, dynamic>{
+          'toLen': to.length,
+          'subjectLen': subject.length,
+          'bodyLen': body.length,
+          'pdfBytes': pdfBytes.length,
+          'filename': filename,
+        },
+        tags: const <String>[_tBackupEmail, _tBackup, _tGmail],
+      );
+      rethrow;
+    } finally {
+      try {
+        client.close();
+      } catch (_) {}
+    }
   }
 
   InputDecoration _inputDec({
@@ -1131,39 +1241,48 @@ class _BackupFormPageState extends State<BackupFormPage> {
 
   Future<void> _openSignatureDialog() async {
     HapticFeedback.selectionClick();
-    final result = await showGeneralDialog<SignatureResult>(
-      context: context,
-      barrierLabel: '서명',
-      barrierDismissible: false,
-      barrierColor: Colors.black54,
-      pageBuilder: (ctx, animation, secondaryAnimation) {
-        return SignatureFullScreenDialog(
-          name: _signerName,
-          initialDateTime: _signDateTime,
-        );
-      },
-      transitionBuilder: (ctx, animation, secondaryAnimation, child) {
-        return FadeTransition(
-          opacity: CurvedAnimation(
-            parent: animation,
-            curve: Curves.easeOut,
-          ),
-          child: child,
-        );
-      },
-    );
+    try {
+      final result = await showGeneralDialog<SignatureResult>(
+        context: context,
+        barrierLabel: '서명',
+        barrierDismissible: false,
+        barrierColor: Colors.black54,
+        pageBuilder: (ctx, animation, secondaryAnimation) {
+          return SignatureFullScreenDialog(
+            name: _signerName,
+            initialDateTime: _signDateTime,
+          );
+        },
+        transitionBuilder: (ctx, animation, secondaryAnimation, child) {
+          return FadeTransition(
+            opacity: CurvedAnimation(
+              parent: animation,
+              curve: Curves.easeOut,
+            ),
+            child: child,
+          );
+        },
+      );
 
-    if (result != null) {
-      setState(() {
-        _signaturePngBytes = result.pngBytes;
-        _signDateTime = result.signDateTime;
-      });
+      if (result != null) {
+        setState(() {
+          _signaturePngBytes = result.pngBytes;
+          _signDateTime = result.signDateTime;
+        });
+      }
+    } catch (e) {
+      await _logApiError(
+        tag: 'BackupFormPage._openSignatureDialog',
+        message: '전자서명 다이얼로그 처리 실패',
+        error: e,
+        tags: const <String>[_tBackupForm, _tBackup],
+      );
+      rethrow;
     }
   }
 
   // ===== 섹션별 본문 위젯들 =====
 
-  /// 1. 계약 형태 선택 (계약직 / 프리랜서)
   Widget _buildContractTypeBody() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1191,9 +1310,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
                     curve: Curves.easeOut,
                   );
                 },
-                style: _contractType == ContractType.contract
-                    ? BackupButtonStyles.primary()
-                    : BackupButtonStyles.outlined(),
+                style: _contractType == ContractType.contract ? BackupButtonStyles.primary() : BackupButtonStyles.outlined(),
                 child: const Text('계약직'),
               ),
             ),
@@ -1211,9 +1328,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
                     curve: Curves.easeOut,
                   );
                 },
-                style: _contractType == ContractType.freelancer
-                    ? BackupButtonStyles.primary()
-                    : BackupButtonStyles.outlined(),
+                style: _contractType == ContractType.freelancer ? BackupButtonStyles.primary() : BackupButtonStyles.outlined(),
                 child: const Text('프리랜서'),
               ),
             ),
@@ -1230,7 +1345,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
     );
   }
 
-  /// 2. 성명 / 주민번호 / 직위 / 부서명
   Widget _buildBasicInfoBody() {
     final theme = Theme.of(context);
     return Column(
@@ -1314,9 +1428,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
     );
   }
 
-  /// 3. 고정 본문 + 괄호 4개 입력
-  /// (   )으로 인해 (    )의 (   ) 시간 대의 업무에 공백이 발생했습니다.
-  /// 본 문서를 통해 ... (    )로 처리됨을 인지합니다.
   Widget _buildBlankSentenceBody() {
     final theme = Theme.of(context);
     final sentencePreview = _buildBodySentence();
@@ -1332,8 +1443,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
           ),
         ),
         const SizedBox(height: 12),
-
-        // 고정 문장 예시 (read-only)
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(10),
@@ -1353,10 +1462,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
             ),
           ),
         ),
-
         const SizedBox(height: 16),
-
-        // 괄호별 입력 필드
         TextFormField(
           controller: _reasonCtrl,
           decoration: _inputDec(
@@ -1364,12 +1470,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
             hintText: '예: 개인 사정, 병원 진료, 고객사 교육 등',
           ),
           onChanged: (_) => setState(() {}),
-          validator: (v) {
-            if (v == null || v.trim().isEmpty) {
-              return '첫 번째 괄호의 내용을 입력해 주세요.';
-            }
-            return null;
-          },
+          validator: (v) => (v == null || v.trim().isEmpty) ? '첫 번째 괄호의 내용을 입력해 주세요.' : null,
         ),
         const SizedBox(height: 8),
         TextFormField(
@@ -1379,12 +1480,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
             hintText: '예: 2025년 11월 26일, 11월 3주차, 주간 야간근무 등',
           ),
           onChanged: (_) => setState(() {}),
-          validator: (v) {
-            if (v == null || v.trim().isEmpty) {
-              return '두 번째 괄호의 내용을 입력해 주세요.';
-            }
-            return null;
-          },
+          validator: (v) => (v == null || v.trim().isEmpty) ? '두 번째 괄호의 내용을 입력해 주세요.' : null,
         ),
         const SizedBox(height: 8),
         TextFormField(
@@ -1394,12 +1490,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
             hintText: '예: 09:00~18:00, 야간, 오전, 오후 등',
           ),
           onChanged: (_) => setState(() {}),
-          validator: (v) {
-            if (v == null || v.trim().isEmpty) {
-              return '세 번째 괄호의 내용을 입력해 주세요.';
-            }
-            return null;
-          },
+          validator: (v) => (v == null || v.trim().isEmpty) ? '세 번째 괄호의 내용을 입력해 주세요.' : null,
         ),
         const SizedBox(height: 8),
         TextFormField(
@@ -1409,17 +1500,9 @@ class _BackupFormPageState extends State<BackupFormPage> {
             hintText: '예: 연차, 결근, 반차 등',
           ),
           onChanged: (_) => setState(() {}),
-          validator: (v) {
-            if (v == null || v.trim().isEmpty) {
-              return '네 번째 괄호의 내용을 입력해 주세요.';
-            }
-            return null;
-          },
+          validator: (v) => (v == null || v.trim().isEmpty) ? '네 번째 괄호의 내용을 입력해 주세요.' : null,
         ),
-
         const SizedBox(height: 12),
-
-        // 실제 문장 미리보기 (read-only)
         Text(
           '실제 문장 미리보기',
           style: theme.textTheme.bodySmall?.copyWith(
@@ -1439,9 +1522,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
           ),
           child: Text(
             sentencePreview,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              height: 1.4,
-            ),
+            style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
           ),
         ),
         const SizedBox(height: 6),
@@ -1455,7 +1536,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
     );
   }
 
-  /// 4. 메일 제목/본문
   Widget _buildMailBody() {
     return Column(
       children: [
@@ -1485,16 +1565,12 @@ class _BackupFormPageState extends State<BackupFormPage> {
     );
   }
 
-  /// 5. 전자서명
   Widget _buildSignatureBody() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(
-            vertical: 8,
-            horizontal: 12,
-          ),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
           decoration: BoxDecoration(
             color: Colors.white,
             border: Border.all(color: Colors.black12),
@@ -1512,9 +1588,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
                   const SizedBox(width: 6),
                   Text(
                     '서명자: ${_signerName.isEmpty ? "이름 미입력" : _signerName}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w500,
-                    ),
+                    style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
                 ],
               ),
@@ -1525,9 +1599,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
                   const SizedBox(width: 6),
                   Text(
                     '서명 일시: ${_signDateTime == null ? "저장 시 자동" : _fmtCompact(_signDateTime!)}',
-                    style: const TextStyle(
-                      color: Colors.black87,
-                    ),
+                    style: const TextStyle(color: Colors.black87),
                   ),
                 ],
               ),
@@ -1577,7 +1649,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
     );
   }
 
-  /// 공통 페이지 래퍼: 문서 헤더 + 안내문 + 섹션 카드 + 하단 (초기화/미리보기)
   Widget _buildReportPage({
     required String sectionTitle,
     required Widget sectionBody,
@@ -1587,12 +1658,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
     return Scrollbar(
       child: SingleChildScrollView(
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        padding: EdgeInsets.fromLTRB(
-          16,
-          16,
-          16,
-          16 + bottomInset, // 키보드 높이만큼 추가 패딩
-        ),
+        padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomInset),
         child: Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
@@ -1600,7 +1666,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 상단 문서 헤더
                 Text(
                   '연차(결근) 지원 신청서',
                   textAlign: TextAlign.center,
@@ -1620,7 +1685,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // 실제 "종이" 느낌의 신청서 카드
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
@@ -1634,7 +1698,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // 상단 메타 정보 라인
                       Row(
                         children: [
                           const Icon(
@@ -1657,9 +1720,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
                           const SizedBox(width: 8),
                           Text(
                             '작성일 ${_fmtCompact(DateTime.now())}',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.black54,
-                            ),
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black54),
                           ),
                         ],
                       ),
@@ -1667,31 +1728,23 @@ class _BackupFormPageState extends State<BackupFormPage> {
                       const Divider(height: 24),
                       const SizedBox(height: 4),
 
-                      // 안내 문구
                       Container(
                         decoration: BoxDecoration(
                           color: BackupColors.light.withOpacity(0.12),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: BackupColors.light.withOpacity(0.8),
-                          ),
+                          border: Border.all(color: BackupColors.light.withOpacity(0.8)),
                         ),
                         padding: const EdgeInsets.all(12),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(
-                              Icons.info_outline,
-                              size: 18,
-                              color: BackupColors.dark,
-                            ),
+                            const Icon(Icons.info_outline, size: 18, color: BackupColors.dark),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                '계약 형태, 신청자 정보, 업무 공백 사유 및 전자서명 정보를 사실에 근거하여 간결하게 작성해 주세요.',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  height: 1.4,
-                                ),
+                                '계약 형태, 신청자 정보, 업무 공백 사유 및 전자서명 정보를 사실에 근거하여 간결하게 작성해 주세요.\n'
+                                    '문제 발생 시 상단의 “버그” 버튼에서 API 디버그 로그를 확인할 수 있습니다.',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.4),
                               ),
                             ),
                           ],
@@ -1700,7 +1753,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
 
                       _gap(20),
 
-                      // 섹션 카드 (한 페이지당 하나만)
                       _sectionCard(
                         title: sectionTitle,
                         margin: const EdgeInsets.only(bottom: 0),
@@ -1709,7 +1761,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
 
                       _gap(12),
 
-                      // 하단 보조 액션 (초기화 / 미리보기)
                       Row(
                         children: [
                           Expanded(
@@ -1748,7 +1799,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      // 바깥 배경
       backgroundColor: const Color(0xFFEFF3F6),
       appBar: AppBar(
         title: const Text('연차(결근) 지원 신청서 작성'),
@@ -1760,6 +1810,12 @@ class _BackupFormPageState extends State<BackupFormPage> {
           bottom: BorderSide(color: Colors.black12, width: 1),
         ),
         actions: [
+          // ✅ 바로 디버그 UI 열기(원하면 제거 가능)
+          IconButton(
+            tooltip: 'API 디버그',
+            onPressed: _openDebugBottomSheet,
+            icon: const Icon(Icons.bug_report_outlined),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: ElevatedButton.icon(
@@ -1771,7 +1827,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
           ),
         ],
       ),
-      // 전자서명(인덱스 4) 페이지만 제출 버튼 노출 + 서명 전에는 비활성화
       bottomNavigationBar: _currentPageIndex == 4
           ? SafeArea(
         top: false,
@@ -1793,7 +1848,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
           child: SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              // ✅ 서명 전에는 비활성화, 서명 완료 후에만 활성화
               onPressed: (!_sending && _signaturePngBytes != null) ? _submit : null,
               icon: _sending
                   ? const SizedBox(
@@ -1824,8 +1878,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
             onPageChanged: (index) {
               setState(() {
                 _currentPageIndex = index;
-
-                // 첫 페이지로 다시 돌아오면 계약 형태 선택 초기화
                 if (index == 0) {
                   _contractType = null;
                   _updateMailSubject();

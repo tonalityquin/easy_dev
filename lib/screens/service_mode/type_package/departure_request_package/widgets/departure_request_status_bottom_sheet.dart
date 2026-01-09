@@ -7,7 +7,7 @@ import '../../../../../states/plate/movement_plate.dart';
 import '../../../../../states/user/user_state.dart';
 import '../../../../../utils/snackbar_helper.dart';
 import '../../../../../enums/plate_type.dart';
-import '../../../../common_package/log_package/lite_log_viewer_bottom_sheet.dart';
+import '../../../../common_package/log_package/log_viewer_bottom_sheet.dart';
 
 Future<void> showDepartureRequestStatusBottomSheet({
   required BuildContext context,
@@ -108,7 +108,7 @@ Future<void> showDepartureRequestStatusBottomSheet({
                           Navigator.push(
                             rootContext,
                             MaterialPageRoute(
-                              builder: (_) => LiteLogViewerBottomSheet(
+                              builder: (_) => LogViewerBottomSheet(
                                 initialPlateNumber: plateNumber,
                                 division: division,
                                 area: area,

@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:googleapis/gmail/v1.dart' as gmail;
 import 'package:intl/intl.dart';
 
+import '../../../../utils/debug_tags.dart';
 import '../../../../utils/google_auth_session.dart';
 import '../../../../utils/snackbar_helper.dart';
 
@@ -54,6 +55,9 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
   // "API 디버그 선택" (tags 필터)
   static const String _tagAll = '__ALL__';
   static const String _tagUntagged = '__UNTAGGED__';
+
+  // ✅ namespace(접두어) 태그 지원: 예) "sheets/chat/*"
+  static const String _tagNamespaceSuffix = '/*';
 
   String _selectedTag = _tagAll;
   List<String> _availableTags = <String>[];
@@ -174,10 +178,20 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
         }
       }
 
+      // ✅ namespace tags 자동 생성(최대 2 depth)
+      final nsSet = <String>{};
+      for (final t in tagSet) {
+        nsSet.addAll(_makeNamespaceTags(t, maxDepth: 2));
+      }
+
       final tags = tagSet.toList()..sort();
+      final nsTags = nsSet.toList()..sort();
 
       final available = <String>[_tagAll];
       if (hasUntagged) available.add(_tagUntagged);
+
+      // ✅ namespace tag를 위쪽에 배치(UX 개선)
+      available.addAll(nsTags);
       available.addAll(tags);
 
       // 선택된 태그가 더 이상 없으면 ALL로 fallback
@@ -205,6 +219,31 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
       });
       showFailedSnackbar(context, '로그 로딩 실패: $e');
     }
+  }
+
+  List<String> _makeNamespaceTags(String tag, {int maxDepth = 2}) {
+    if (!tag.contains('/')) return const [];
+    final parts = tag.split('/').where((p) => p.trim().isNotEmpty).toList();
+    if (parts.length < 2) return const [];
+
+    final out = <String>[];
+    for (int d = 1; d <= maxDepth; d++) {
+      if (parts.length >= d + 1) {
+        final prefix = parts.take(d + 1).join('/');
+        out.add('$prefix$_tagNamespaceSuffix'); // 예: sheets/chat/*
+      }
+    }
+    return out;
+  }
+
+  String _labelForTag(String t) {
+    if (t == _tagAll) return '전체';
+    if (t == _tagUntagged) return '(미지정)';
+    if (t.endsWith(_tagNamespaceSuffix)) {
+      final prefix = t.substring(0, t.length - _tagNamespaceSuffix.length);
+      return '$prefix (전체)';
+    }
+    return t;
   }
 
   _LogEntry? _parseLine(String line) {
@@ -266,6 +305,13 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
   bool _tagMatches(_LogEntry e, String selectedTag) {
     if (selectedTag == _tagAll) return true;
     if (selectedTag == _tagUntagged) return e.tags.isEmpty;
+
+    // ✅ namespace match: "sheets/chat/*" → startsWith("sheets/chat/")
+    if (selectedTag.endsWith(_tagNamespaceSuffix)) {
+      final prefix = selectedTag.substring(0, selectedTag.length - _tagNamespaceSuffix.length);
+      return e.tags.any((t) => t == prefix || t.startsWith('$prefix/'));
+    }
+
     return e.tags.contains(selectedTag);
   }
 
@@ -366,6 +412,12 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
       sb.write('\r\n');
     }
     return sb.toString();
+  }
+
+  // ✅ RFC 2047 subject encoding (한글/비ASCII 안전)
+  String _encodeSubjectRfc2047(String subject) {
+    final b64 = base64.encode(utf8.encode(subject));
+    return '=?utf-8?B?$b64?=';
   }
 
   String _sanitizeForEmail(String input) {
@@ -470,7 +522,9 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
       }
 
       final now = DateTime.now();
-      final subjectTag = selectedTag == _tagAll ? 'ALL' : (selectedTag == _tagUntagged ? 'UNTAGGED' : selectedTag);
+      final subjectTag = selectedTag == _tagAll
+          ? 'ALL'
+          : (selectedTag == _tagUntagged ? 'UNTAGGED' : selectedTag);
       final subject = 'Pelican API 디버그 에러 로그($subjectTag) (${_fmt.format(now)})';
       final filename = 'pelican_api_logs_${DateFormat('yyyyMMdd_HHmmss').format(now)}.md';
 
@@ -503,7 +557,7 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
       final mime = StringBuffer()
         ..write('MIME-Version: 1.0$crlf')
         ..write('To: $toAddress$crlf')
-        ..write('Subject: $subject$crlf')
+        ..write('Subject: ${_encodeSubjectRfc2047(subject)}$crlf')
         ..write('Content-Type: multipart/mixed; boundary="$boundary"$crlf')
         ..write(crlf)
         ..write('--$boundary$crlf')
@@ -520,7 +574,8 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
         ..write(attachmentB64Wrapped)
         ..write('--$boundary--$crlf');
 
-      final raw = base64Url.encode(utf8.encode(mime.toString()));
+      // ✅ padding 제거(호환성)
+      final raw = base64Url.encode(utf8.encode(mime.toString())).replaceAll('=', '');
 
       final client = await GoogleAuthSession.instance.safeClient();
       final api = gmail.GmailApi(client);
@@ -635,7 +690,6 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
         '${status ?? ''}\n$msg\n$err\n$raw'
         .toLowerCase();
 
-    // 카테고리(휴리스틱)
     _IssueCategory cat;
     if (hay.contains('timeoutexception') || hay.contains('timed out') || hay.contains('timeout')) {
       cat = _IssueCategory.timeout;
@@ -652,7 +706,7 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
     } else if (hay.contains('401') ||
         hay.contains('unauthorized') ||
         hay.contains('invalid_grant') ||
-        hay.contains('token') && (hay.contains('expired') || hay.contains('invalid')) ||
+        (hay.contains('token') && (hay.contains('expired') || hay.contains('invalid'))) ||
         hay.contains('authentication')) {
       cat = _IssueCategory.auth;
     } else if (hay.contains('403') || hay.contains('permission') || hay.contains('forbidden') || hay.contains('denied')) {
@@ -666,8 +720,8 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
       cat = _IssueCategory.firebase;
     } else if (hay.contains('formatexception') ||
         hay.contains('unexpected character') ||
-        hay.contains('json') && hay.contains('decode') ||
-        hay.contains('type') && hay.contains('is not a subtype')) {
+        (hay.contains('json') && hay.contains('decode')) ||
+        (hay.contains('type') && hay.contains('is not a subtype'))) {
       cat = _IssueCategory.parsing;
     } else if (status != null && status >= 500) {
       cat = _IssueCategory.server;
@@ -679,10 +733,8 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
       cat = _IssueCategory.unknown;
     }
 
-    // Headline(한 줄 진단)
     final headline = _buildHeadline(cat: cat, status: status, method: method, url: url);
 
-    // 핵심 요약 필드 (우선순위 높은 것만)
     final fields = <_KeyValue>[
       if (tag != null && tag.trim().isNotEmpty) _KeyValue('tag', tag.trim()),
       if (tags.isNotEmpty) _KeyValue('tags', tags.join(', ')),
@@ -694,11 +746,9 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
       if (payload != null && payload.containsKey('exception')) _KeyValue('exception', payload['exception']?.toString() ?? ''),
     ];
 
-    // 원인/조치(간단하지만 즉시 행동 가능한 수준)
     final cause = _probableCause(cat, status: status, hay: hay);
     final actions = _recommendedActions(cat, status: status);
 
-    // 요약 텍스트(복사용)
     final summaryForCopy = _buildCopySummary(
       headline: headline,
       ts: p.entry.ts,
@@ -933,8 +983,6 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
     final tsText = entry.ts != null ? _fmt.format(entry.ts!) : '-';
     final raw = (entry.original ?? entry.message ?? '').trim();
     final rawPretty = _prettyJsonIfPossible(raw);
-
-    // “핵심”으로 삼을 메시지(가독성 위해 원문 전체가 아니라 요약)
     final messagePreview = _extractPrimaryMessage(parsed);
 
     await showModalBottomSheet<void>(
@@ -965,8 +1013,6 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                         ),
                       ),
                       const SizedBox(height: 10),
-
-                      // Header
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Row(
@@ -996,15 +1042,12 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                           ],
                         ),
                       ),
-
                       const SizedBox(height: 8),
                       Divider(height: 1, color: cs.outlineVariant.withOpacity(0.6)),
-
                       Expanded(
                         child: ListView(
                           padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
                           children: [
-                            // Headline
                             Container(
                               padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
@@ -1017,10 +1060,7 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                                 children: [
                                   Text(
                                     insight.headline,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleMedium
-                                        ?.copyWith(fontWeight: FontWeight.w900, height: 1.25),
+                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900, height: 1.25),
                                   ),
                                   const SizedBox(height: 8),
                                   Wrap(
@@ -1047,10 +1087,7 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                                 ],
                               ),
                             ),
-
                             const SizedBox(height: 12),
-
-                            // Key Fields
                             _DetailSection(
                               title: '추출된 핵심 필드',
                               icon: Icons.tune_rounded,
@@ -1061,10 +1098,7 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                               )
                                   : _KeyValueGrid(items: insight.fields),
                             ),
-
                             const SizedBox(height: 12),
-
-                            // Cause + Actions
                             _DetailSection(
                               title: '추정 원인 및 권장 조치',
                               icon: Icons.lightbulb_rounded,
@@ -1084,10 +1118,7 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                                 ],
                               ),
                             ),
-
                             const SizedBox(height: 12),
-
-                            // Raw
                             _DetailSection(
                               title: '원문(로그 라인)',
                               icon: Icons.article_rounded,
@@ -1120,10 +1151,7 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                                     initiallyExpanded: false,
                                     title: Text(
                                       '원문 펼치기',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w800,
-                                        color: cs.onSurface,
-                                      ),
+                                      style: TextStyle(fontWeight: FontWeight.w800, color: cs.onSurface),
                                     ),
                                     children: [
                                       const SizedBox(height: 8),
@@ -1150,7 +1178,6 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                                 ],
                               ),
                             ),
-
                             const SizedBox(height: 10),
                           ],
                         ),
@@ -1179,8 +1206,6 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
   }
 
   String _extractPrimaryMessage(_ParsedLog p) {
-    // 가장 사람이 읽기 쉬운 1~2줄 메시지 추출
-    // payload에 'message'/'error'가 있으면 우선, 없으면 messageText 일부
     final payload = p.payload;
 
     String? best;
@@ -1438,8 +1463,6 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                     ),
                   ),
                   const SizedBox(height: 10),
-
-                  // Header
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Row(
@@ -1459,7 +1482,7 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                               const SizedBox(height: 2),
                               Text(
                                 _pane == _Pane.api
-                                    ? 'API 에러 로그(태그 선택) / 전송 / 삭제'
+                                    ? 'API 에러 로그(태그 선택/네임스페이스) / 전송 / 삭제'
                                     : '사용자 버튼(액션) 순서 기록 / 세션 저장',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -1469,8 +1492,6 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                           ),
                         ),
                         const SizedBox(width: 8),
-
-                        // More menu
                         PopupMenuButton<_MenuAction>(
                           tooltip: '더보기',
                           onSelected: (action) async {
@@ -1479,7 +1500,6 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                                 if (!_blockFlagLoaded) return;
                                 await _setGoogleSessionBlock(!_blockGoogleSessionAttempts);
                                 break;
-
                               case _MenuAction.toggleMasking:
                                 setState(() => _maskSensitiveInEmail = !_maskSensitiveInEmail);
                                 if (!mounted) return;
@@ -1488,7 +1508,6 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                                   _maskSensitiveInEmail ? '이메일 마스킹: ON' : '이메일 마스킹: OFF',
                                 );
                                 break;
-
                               case _MenuAction.openAdvancedInfo:
                                 if (!mounted) return;
                                 showSelectedSnackbar(
@@ -1518,7 +1537,6 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                             ),
                           ],
                         ),
-
                         IconButton(
                           tooltip: '닫기',
                           onPressed: () => Navigator.of(context).maybePop(),
@@ -1527,10 +1545,7 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 12),
-
-                  // Pane toggle (one window)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: _PaneToggle(
@@ -1538,11 +1553,8 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                       onChanged: (p) => setState(() => _pane = p),
                     ),
                   ),
-
                   const SizedBox(height: 10),
                   Divider(height: 1, color: cs.outlineVariant.withOpacity(0.6)),
-
-                  // Body
                   Expanded(
                     child: AnimatedSwitcher(
                       duration: const Duration(milliseconds: 180),
@@ -1567,10 +1579,19 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
     final newestTs = _filtered.isNotEmpty ? _filtered.first.ts : null;
     final newestLabel = newestTs != null ? _fmt.format(newestTs) : '-';
 
+    // ✅ SheetChatService 표준 태그 quick filters
+    final quickCandidates = <String>[
+      '${DebugTags.sheetsChat}$_tagNamespaceSuffix',
+      DebugTags.sheetsChatPoll,
+      DebugTags.sheetsChatSend,
+      DebugTags.sheetsChatClear,
+      DebugTags.sheetsChatDelta,
+    ];
+    final quickTags = quickCandidates.where((t) => _availableTags.contains(t)).toList(growable: false);
+
     return Column(
       key: key,
       children: [
-        // Tag selector + refresh
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           child: Row(
@@ -1591,10 +1612,9 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
                     labelText: 'API 디버그 선택(tag)',
                   ),
                   items: _availableTags.map((t) {
-                    final label = (t == _tagAll) ? '전체' : (t == _tagUntagged ? '(미지정)' : t);
                     return DropdownMenuItem<String>(
                       value: t,
-                      child: Text(label, overflow: TextOverflow.ellipsis),
+                      child: Text(_labelForTag(t), overflow: TextOverflow.ellipsis),
                     );
                   }).toList(growable: false),
                   onChanged: _loading
@@ -1618,7 +1638,32 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
           ),
         ),
 
-        // Search + copy
+        if (quickTags.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final t in quickTags)
+                    ActionChip(
+                      label: Text(_labelForTag(t)),
+                      onPressed: _loading
+                          ? null
+                          : () {
+                        setState(() {
+                          _selectedTag = t;
+                          _applyFilter();
+                        });
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ),
+
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
           child: Row(
@@ -1657,7 +1702,6 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
           ),
         ),
 
-        // Info + send + clear
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
           child: Row(
@@ -1898,7 +1942,7 @@ class _DebugBottomSheetState extends State<DebugBottomSheet> {
 }
 
 // ─────────────────────────────────────────────────────────────
-// Detail parsing / insight models (NEW)
+// Detail parsing / insight models
 // ─────────────────────────────────────────────────────────────
 
 enum _IssueCategory {
@@ -1971,7 +2015,6 @@ class _PaneToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
     final selected = <bool>[pane == _Pane.api, pane == _Pane.trace];
 
     return Container(
@@ -2289,7 +2332,6 @@ class _KeyValueGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
     final shown = items.where((e) => e.value.trim().isNotEmpty).toList();
 
     return Column(

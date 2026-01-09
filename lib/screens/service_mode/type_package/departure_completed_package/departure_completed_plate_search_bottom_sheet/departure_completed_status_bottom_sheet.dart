@@ -6,7 +6,7 @@ import '../../../../../utils/snackbar_helper.dart';
 import '../../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 
 // ✅ 로그 뷰어 import (서비스 모드)
-import '../../../../common_package/log_package/lite_log_viewer_bottom_sheet.dart';
+import '../../../../common_package/log_package/log_viewer_bottom_sheet.dart';
 
 Future<PlateModel?> showDepartureCompletedStatusBottomSheet({
   required BuildContext context,
@@ -167,7 +167,7 @@ class _DepartureCompletedFullHeightSheet extends StatelessWidget {
               icon: const Icon(Icons.history),
               label: const Text('로그 확인'),
               onPressed: () async {
-                await LiteLogViewerBottomSheet.show(
+                await LogViewerBottomSheet.show(
                   hostContext,
                   division: '-',
                   // LogViewerBottomSheet는 조회에 사용하지 않지만 required

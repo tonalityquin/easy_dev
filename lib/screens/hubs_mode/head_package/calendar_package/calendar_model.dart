@@ -5,6 +5,9 @@ import 'package:googleapis/calendar/v3.dart' as gcal;
 // 같은 폴더라면 아래 상대경로 유지, 폴더 구조가 다르면 경로만 수정하세요.
 import './google_calendar_service.dart';
 
+// ✅ API 디버그(통합 에러 로그) 로거
+import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
+
 class CalendarModel extends ChangeNotifier {
   final GoogleCalendarService _service;
 
@@ -16,7 +19,50 @@ class CalendarModel extends ChangeNotifier {
   List<gcal.Event> events = [];
 
   // ---- progress 파생상태 유틸 (위젯 쪽에서 공용으로 쓰기 좋게 제공) ----
-  static final RegExp progressTag = RegExp(r'\[\s*progress\s*:\s*(0|100)\s*\]', caseSensitive: false);
+  static final RegExp progressTag =
+  RegExp(r'\[\s*progress\s*:\s*(0|100)\s*\]', caseSensitive: false);
+
+  // ─────────────────────────────────────────────────────────────
+  // ✅ API 디버그 로직: 표준 태그 / 로깅 헬퍼
+  // ─────────────────────────────────────────────────────────────
+  static const String _tCal = 'calendar';
+  static const String _tCalModel = 'calendar/model';
+  static const String _tCalService = 'calendar/service';
+  static const String _tCalLoad = 'calendar/load';
+  static const String _tCalRange = 'calendar/load_range';
+  static const String _tCalCrud = 'calendar/crud';
+  static const String _tCalParse = 'calendar/parse';
+
+  Future<void> _logApiError({
+    required String tag,
+    required String message,
+    required Object error,
+    Map<String, dynamic>? extra,
+    List<String>? tags,
+  }) async {
+    try {
+      await DebugApiLogger().log(
+        <String, dynamic>{
+          'tag': tag,
+          'message': message,
+          'error': error.toString(),
+          if (extra != null) 'extra': extra,
+        },
+        level: 'error',
+        tags: tags,
+      );
+    } catch (_) {
+      // 로깅 실패는 모델 동작에 영향 없도록 무시
+    }
+  }
+
+  Map<String, dynamic> _ctxBase() {
+    return <String, dynamic>{
+      'calendarId': calendarId,
+      'eventsCount': events.length,
+      'loading': loading,
+    };
+  }
 
   /// description에 [progress:0|100]이 있으면 0/100 반환, 없으면 0
   static int progressOfEvent(gcal.Event e) {
@@ -42,26 +88,42 @@ class CalendarModel extends ChangeNotifier {
     if (raw.isEmpty) return null;
     var s = raw.trim();
 
-    if (s.startsWith('http')) {
-      final uri = Uri.tryParse(s);
-      final src = uri?.queryParameters['src'];
-      if (src != null && src.isNotEmpty) return Uri.decodeComponent(src);
-      final idx = s.indexOf('src=');
-      if (idx != -1) {
-        var tail = s.substring(idx + 4);
-        final amp = tail.indexOf('&');
-        if (amp != -1) tail = tail.substring(0, amp);
-        return Uri.decodeComponent(tail);
+    try {
+      if (s.startsWith('http')) {
+        final uri = Uri.tryParse(s);
+        final src = uri?.queryParameters['src'];
+        if (src != null && src.isNotEmpty) return Uri.decodeComponent(src);
+        final idx = s.indexOf('src=');
+        if (idx != -1) {
+          var tail = s.substring(idx + 4);
+          final amp = tail.indexOf('&');
+          if (amp != -1) tail = tail.substring(0, amp);
+          return Uri.decodeComponent(tail);
+        }
       }
-    }
 
-    if (s.contains('&')) s = s.split('&').first;
-    return Uri.decodeComponent(s);
+      if (s.contains('&')) s = s.split('&').first;
+      return Uri.decodeComponent(s);
+    } catch (e) {
+      // normalize는 UI 입력 보정 성격이 강해서, 실패를 조용히 처리하되 로그는 남김
+      _logApiError(
+        tag: 'CalendarModel._normalizeCalendarId',
+        message: '캘린더 ID 정규화 실패',
+        error: e,
+        extra: <String, dynamic>{
+          'rawLen': raw.length,
+          'rawPrefix': raw.length > 24 ? raw.substring(0, 24) : raw,
+        },
+        tags: const <String>[_tCal, _tCalModel, _tCalParse],
+      );
+      return null;
+    }
   }
 
   /// 서버에서 최신 이벤트 목록을 다시 불러옵니다.
   Future<void> refresh() async {
     if (calendarId.isEmpty) return;
+
     try {
       loading = true;
       error = null;
@@ -71,6 +133,14 @@ class CalendarModel extends ChangeNotifier {
       _sortEvents();
     } catch (e) {
       error = '새로고침 실패: $e';
+
+      await _logApiError(
+        tag: 'CalendarModel.refresh',
+        message: '이벤트 새로고침(listEvents) 실패',
+        error: e,
+        extra: _ctxBase(),
+        tags: const <String>[_tCal, _tCalModel, _tCalService, _tCalLoad],
+      );
     } finally {
       loading = false;
       notifyListeners();
@@ -105,16 +175,27 @@ class CalendarModel extends ChangeNotifier {
         error = '불러오기 실패: $msg';
       }
       events = [];
+
+      await _logApiError(
+        tag: 'CalendarModel.load',
+        message: '캘린더 이벤트 불러오기(listEvents) 실패',
+        error: e,
+        extra: <String, dynamic>{
+          ..._ctxBase(),
+          'inputRawLen': raw.length,
+          'calendarIdNormalized': calendarId,
+        },
+        tags: const <String>[_tCal, _tCalModel, _tCalService, _tCalLoad],
+      );
     } finally {
       loading = false;
       notifyListeners();
     }
   }
 
-  // ===== NEW: 특정 기간(예: 월 범위)만 로드하여 events를 교체 =====
-  // 현재 GoogleCalendarService.listEvents(calendarId: ...) 시그니처만 있다고 가정하고,
-  // 일단 전체를 받아 클라이언트에서 [timeMin, timeMax)로 필터링합니다.
-  // (효율을 높이려면 service에 timeMin/timeMax 지원을 추가해 서버 측에서 기간 조회하세요.)
+  // ===== 특정 기간만 로드 =====
+  // 현재 GoogleCalendarService.listEvents(calendarId: ...)가 timeMin/timeMax를 지원하므로
+  // 서버 측 기간 조회로 효율화하여 listEvents를 호출합니다.
   Future<void> loadRange({
     required DateTime timeMin,
     required DateTime timeMax, // exclusive
@@ -130,11 +211,29 @@ class CalendarModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final all = await _service.listEvents(calendarId: calendarId);
-      events = _filterByRange(all, timeMin, timeMax);
+      final ranged = await _service.listEvents(
+        calendarId: calendarId,
+        timeMin: timeMin,
+        timeMax: timeMax,
+      );
+
+      // 안전망: 혹시 서버가 넓게 주더라도 클라이언트에서 한 번 더 범위 필터
+      events = _filterByRange(ranged, timeMin, timeMax);
       _sortEvents();
     } catch (e) {
       error = '기간 로드 실패: $e';
+
+      await _logApiError(
+        tag: 'CalendarModel.loadRange',
+        message: '기간 로드(listEvents timeMin/timeMax) 실패',
+        error: e,
+        extra: <String, dynamic>{
+          ..._ctxBase(),
+          'timeMin': timeMin.toIso8601String(),
+          'timeMaxExclusive': timeMax.toIso8601String(),
+        },
+        tags: const <String>[_tCal, _tCalModel, _tCalService, _tCalRange],
+      );
       // 실패 시 기존 events 유지
     } finally {
       loading = false;
@@ -172,11 +271,25 @@ class CalendarModel extends ChangeNotifier {
         colorId: colorId,
       );
 
-      // ✅ 생성 후 서버 기준으로 다시 목록 불러오기
       await refresh();
-      return null; // 목록을 새로 불러오므로 단일 반환은 사용하지 않아도 됨
+      return null;
     } catch (e) {
       error = '생성 실패: $e';
+
+      await _logApiError(
+        tag: 'CalendarModel.create',
+        message: '이벤트 생성(createEvent) 실패',
+        error: e,
+        extra: <String, dynamic>{
+          ..._ctxBase(),
+          'summaryLen': summary.trim().length,
+          'hasDescription': (description ?? '').trim().isNotEmpty,
+          'allDay': allDay,
+          'colorIdProvided': (colorId ?? '').trim().isNotEmpty,
+        },
+        tags: const <String>[_tCal, _tCalModel, _tCalService, _tCalCrud],
+      );
+
       return null;
     } finally {
       loading = false;
@@ -204,8 +317,6 @@ class CalendarModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // ✅ 반드시 description을 patch에 포함시키기 위해
-      //    description이 null이면 현재 이벤트의 description(또는 '')를 사용
       final current = events.firstWhere(
             (e) => e.id == eventId,
         orElse: () => gcal.Event()..description = '',
@@ -216,18 +327,34 @@ class CalendarModel extends ChangeNotifier {
         calendarId: calendarId,
         eventId: eventId,
         summary: summary,
-        description: descToSend, // ← 항상 non-null로 전달하여 patch에 포함
+        description: descToSend,
         start: start,
         end: end,
         allDay: allDay,
         colorId: colorId,
       );
 
-      // ✅ 수정 후 서버 기준으로 다시 목록 불러오기
       await refresh();
       return null;
     } catch (e) {
       error = '수정 실패: $e';
+
+      await _logApiError(
+        tag: 'CalendarModel.update',
+        message: '이벤트 수정(updateEvent) 실패',
+        error: e,
+        extra: <String, dynamic>{
+          ..._ctxBase(),
+          'eventId': eventId,
+          'hasSummary': summary != null,
+          'hasDescription': description != null,
+          'hasTimeRange': (start != null && end != null),
+          'allDay': allDay,
+          'colorIdProvided': colorId != null,
+        },
+        tags: const <String>[_tCal, _tCalModel, _tCalService, _tCalCrud],
+      );
+
       return null;
     } finally {
       loading = false;
@@ -248,12 +375,22 @@ class CalendarModel extends ChangeNotifier {
 
     try {
       await _service.deleteEvent(calendarId: calendarId, eventId: eventId);
-
-      // ✅ 삭제 후 서버 기준으로 다시 목록 불러오기
       await refresh();
       return true;
     } catch (e) {
       error = '삭제 실패: $e';
+
+      await _logApiError(
+        tag: 'CalendarModel.delete',
+        message: '이벤트 삭제(deleteEvent) 실패',
+        error: e,
+        extra: <String, dynamic>{
+          ..._ctxBase(),
+          'eventId': eventId,
+        },
+        tags: const <String>[_tCal, _tCalModel, _tCalService, _tCalCrud],
+      );
+
       return false;
     } finally {
       loading = false;
@@ -285,8 +422,7 @@ class CalendarModel extends ChangeNotifier {
       return start.isBefore(max) && end.isAfter(min);
     }
 
-    final filtered = source.where(overlaps).toList();
-    return filtered;
+    return source.where(overlaps).toList();
   }
 
   /// 이벤트의 로컬시간 기준 [start, end)를 계산
@@ -295,21 +431,35 @@ class CalendarModel extends ChangeNotifier {
   (DateTime, DateTime)? _eventRangeLocal(gcal.Event e) {
     if (e.start == null) return null;
 
-    if (e.start?.date != null) {
-      // 종일
-      final s = e.start!.date!;
-      // end.date는 다음날 00:00 (exclusive)
-      final ed = e.end?.date ?? s.add(const Duration(days: 1));
-      final start = DateTime(s.year, s.month, s.day);
-      final end = DateTime(ed.year, ed.month, ed.day);
-      return (start, end);
-    } else {
-      // 시간제
-      final sdt = e.start?.dateTime?.toLocal();
-      final edt = e.end?.dateTime?.toLocal();
-      if (sdt == null) return null;
-      final end = edt ?? sdt.add(const Duration(hours: 1));
-      return (sdt, end);
+    try {
+      if (e.start?.date != null) {
+        final s = e.start!.date!;
+        final ed = e.end?.date ?? s.add(const Duration(days: 1));
+        final start = DateTime(s.year, s.month, s.day);
+        final end = DateTime(ed.year, ed.month, ed.day);
+        return (start, end);
+      } else {
+        final sdt = e.start?.dateTime?.toLocal();
+        final edt = e.end?.dateTime?.toLocal();
+        if (sdt == null) return null;
+        final end = edt ?? sdt.add(const Duration(hours: 1));
+        return (sdt, end);
+      }
+    } catch (e2) {
+      _logApiError(
+        tag: 'CalendarModel._eventRangeLocal',
+        message: '이벤트 시간 범위 파싱 실패',
+        error: e2,
+        extra: <String, dynamic>{
+          'eventId': e.id ?? '',
+          'hasStartDate': e.start?.date != null,
+          'hasStartDateTime': e.start?.dateTime != null,
+          'hasEndDate': e.end?.date != null,
+          'hasEndDateTime': e.end?.dateTime != null,
+        },
+        tags: const <String>[_tCal, _tCalModel, _tCalParse],
+      );
+      return null;
     }
   }
 }

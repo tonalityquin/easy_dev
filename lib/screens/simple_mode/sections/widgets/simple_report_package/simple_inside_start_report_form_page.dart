@@ -13,6 +13,9 @@ import '../../../../../utils/api/email_config.dart';
 import 'simple_inside_report_styles.dart';
 import 'simple_inside_report_signature_dialog.dart';
 
+// ✅ API 디버그(통합 에러 로그) 로거
+import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
+
 class SimpleInsideStartReportFormPage extends StatefulWidget {
   const SimpleInsideStartReportFormPage({super.key});
 
@@ -62,6 +65,42 @@ class _SimpleInsideStartReportFormPageState
   // 키보드가 필드를 가리지 않도록 하기 위한 키
   final GlobalKey _contentFieldKey = GlobalKey();
 
+  // ─────────────────────────────────────────────────────────────
+  // ✅ API 디버그 로직: 표준 태그 / 로깅 헬퍼
+  // ─────────────────────────────────────────────────────────────
+  static const String _tReport = 'report';
+  static const String _tReportStart = 'report/start';
+  static const String _tReportPdf = 'report/pdf';
+  static const String _tReportEmail = 'report/email';
+
+  static const String _tGmail = 'gmail';
+  static const String _tGmailSend = 'gmail/send';
+
+  static const String _tPrefs = 'prefs';
+
+  static Future<void> _logApiError({
+    required String tag,
+    required String message,
+    required Object error,
+    Map<String, dynamic>? extra,
+    List<String>? tags,
+  }) async {
+    try {
+      await DebugApiLogger().log(
+        <String, dynamic>{
+          'tag': tag,
+          'message': message,
+          'error': error.toString(),
+          if (extra != null) 'extra': extra,
+        },
+        level: 'error',
+        tags: tags,
+      );
+    } catch (_) {
+      // 로깅 실패는 기능에 영향 없도록 무시
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -71,16 +110,29 @@ class _SimpleInsideStartReportFormPageState
   }
 
   Future<void> _loadSelectedArea() async {
-    final prefs = await SharedPreferences.getInstance();
-    final area = prefs.getString('selectedArea') ?? '';
-    if (!mounted) return;
-    setState(() {
-      _selectedArea = area.isEmpty ? null : area;
-    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final area = prefs.getString('selectedArea') ?? '';
+      if (!mounted) return;
+      setState(() {
+        _selectedArea = area.isEmpty ? null : area;
+      });
 
-    // 사용자가 아직 제목을 입력하지 않은 경우에만 자동 채움
-    if (_mailSubjectCtrl.text.trim().isEmpty) {
-      _updateMailSubject();
+      // 사용자가 아직 제목을 입력하지 않은 경우에만 자동 채움
+      if (_mailSubjectCtrl.text.trim().isEmpty) {
+        _updateMailSubject();
+      }
+    } catch (e) {
+      await _logApiError(
+        tag: 'SimpleInsideStartReportFormPage._loadSelectedArea',
+        message: 'SharedPreferences(selectedArea) 로드 실패',
+        error: e,
+        tags: const <String>[_tReport, _tReportStart, _tPrefs],
+      );
+      // UX는 유지: selectedArea 없으면 기본값으로 제목 생성
+      if (_mailSubjectCtrl.text.trim().isEmpty) {
+        _updateMailSubject();
+      }
     }
   }
 
@@ -809,6 +861,14 @@ class _SimpleInsideStartReportFormPageState
     try {
       final cfg = await EmailConfig.load();
       if (!EmailConfig.isValidToList(cfg.to)) {
+        await _logApiError(
+          tag: 'SimpleInsideStartReportFormPage._submit',
+          message: '수신자(To) 설정이 비어있거나 형식이 올바르지 않음',
+          error: Exception('invalid_to'),
+          extra: <String, dynamic>{'toRaw': cfg.to},
+          tags: const <String>[_tReport, _tReportStart, _tReportEmail],
+        );
+
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -819,6 +879,7 @@ class _SimpleInsideStartReportFormPageState
         );
         return;
       }
+
       final toCsv = cfg.to
           .split(',')
           .map((s) => s.trim())
@@ -826,10 +887,17 @@ class _SimpleInsideStartReportFormPageState
           .join(', ');
 
       final subject = _mailSubjectCtrl.text.trim();
-      // 제출 시점 기준으로 본문 시간 강제 갱신
       _updateMailBody(force: true);
       final body = _mailBodyCtrl.text.trim();
+
       if (subject.isEmpty) {
+        await _logApiError(
+          tag: 'SimpleInsideStartReportFormPage._submit',
+          message: '메일 제목이 비어있음(자동 생성 실패)',
+          error: Exception('empty_subject'),
+          tags: const <String>[_tReport, _tReportStart],
+        );
+
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('메일 제목이 자동 생성되지 않았습니다.')),
@@ -857,6 +925,19 @@ class _SimpleInsideStartReportFormPageState
         const SnackBar(content: Text('메일 전송 완료')),
       );
     } catch (e) {
+      await _logApiError(
+        tag: 'SimpleInsideStartReportFormPage._submit',
+        message: '업무 시작 보고서 제출 실패(예외)',
+        error: e,
+        extra: <String, dynamic>{
+          'hasSignature': _signaturePngBytes != null,
+          'hasSpecialNote': _hasSpecialNote,
+          'contentLen': _contentCtrl.text.trim().length,
+          'subjectLen': _mailSubjectCtrl.text.trim().length,
+        },
+        tags: const <String>[_tReport, _tReportStart],
+      );
+
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('메일 전송 실패: $e')),
@@ -876,16 +957,30 @@ class _SimpleInsideStartReportFormPageState
     pw.Font? bold;
 
     try {
-      final regData =
-      await rootBundle.load('assets/fonts/NotoSansKR/NotoSansKR-Regular.ttf');
+      final regData = await rootBundle
+          .load('assets/fonts/NotoSansKR/NotoSansKR-Regular.ttf');
       regular = pw.Font.ttf(regData);
-    } catch (_) {}
+    } catch (e) {
+      await _logApiError(
+        tag: 'SimpleInsideStartReportFormPage._buildPdfBytes',
+        message: 'PDF 폰트 로드 실패(Regular)',
+        error: e,
+        tags: const <String>[_tReport, _tReportStart, _tReportPdf],
+      );
+    }
 
     try {
       final boldData =
       await rootBundle.load('assets/fonts/NotoSansKR/NotoSansKR-Bold.ttf');
       bold = pw.Font.ttf(boldData);
-    } catch (_) {
+    } catch (e) {
+      // bold는 fallback 가능(regular)
+      await _logApiError(
+        tag: 'SimpleInsideStartReportFormPage._buildPdfBytes',
+        message: 'PDF 폰트 로드 실패(Bold) — regular로 대체',
+        error: e,
+        tags: const <String>[_tReport, _tReportStart, _tReportPdf],
+      );
       bold = regular;
     }
 
@@ -1060,7 +1155,21 @@ class _SimpleInsideStartReportFormPageState
       ),
     );
 
-    return doc.save();
+    try {
+      return doc.save();
+    } catch (e) {
+      await _logApiError(
+        tag: 'SimpleInsideStartReportFormPage._buildPdfBytes',
+        message: 'PDF 생성/저장 실패',
+        error: e,
+        extra: <String, dynamic>{
+          'contentLen': _contentCtrl.text.trim().length,
+          'hasSignature': _signaturePngBytes != null,
+        },
+        tags: const <String>[_tReport, _tReportStart, _tReportPdf],
+      );
+      rethrow;
+    }
   }
 
   Future<void> _sendEmailViaGmail({
@@ -1070,36 +1179,72 @@ class _SimpleInsideStartReportFormPageState
     required String subject,
     required String body,
   }) async {
-    final client = await GoogleAuthV7.authedClient(const <String>[]);
-    final api = gmail.GmailApi(client);
+    try {
+      final client = await GoogleAuthV7.authedClient(const <String>[]);
+      final api = gmail.GmailApi(client);
 
-    final boundary =
-        'dart-mail-boundary-${DateTime.now().millisecondsSinceEpoch}';
-    final subjectB64 = base64.encode(utf8.encode(subject));
-    final sb = StringBuffer()
-      ..writeln('To: $to')
-      ..writeln('Subject: =?utf-8?B?$subjectB64?=')
-      ..writeln('MIME-Version: 1.0')
-      ..writeln('Content-Type: multipart/mixed; boundary="$boundary"')
-      ..writeln()
-      ..writeln('--$boundary')
-      ..writeln('Content-Type: text/plain; charset="utf-8"')
-      ..writeln('Content-Transfer-Encoding: 7bit')
-      ..writeln()
-      ..writeln(body)
-      ..writeln()
-      ..writeln('--$boundary')
-      ..writeln('Content-Type: application/pdf; name="$filename"')
-      ..writeln('Content-Disposition: attachment; filename="$filename"')
-      ..writeln('Content-Transfer-Encoding: base64')
-      ..writeln()
-      ..writeln(base64.encode(pdfBytes))
-      ..writeln('--$boundary--');
+      final boundary = 'dart-mail-boundary-${DateTime.now().millisecondsSinceEpoch}';
+      final subjectB64 = base64.encode(utf8.encode(subject));
 
-    final raw =
-    base64UrlEncode(utf8.encode(sb.toString())).replaceAll('=', '');
-    final msg = gmail.Message()..raw = raw;
-    await api.users.messages.send(msg, 'me');
+      // ✅ 첨부 base64는 76자 권장 줄바꿈 적용(호환성 개선)
+      final attachmentB64 = base64.encode(pdfBytes);
+      final attachmentWrapped = _wrapBase64Lines(attachmentB64);
+
+      const crlf = '\r\n';
+      final sb = StringBuffer()
+        ..write('To: $to$crlf')
+        ..write('Subject: =?utf-8?B?$subjectB64?=$crlf')
+        ..write('MIME-Version: 1.0$crlf')
+        ..write('Content-Type: multipart/mixed; boundary="$boundary"$crlf')
+        ..write(crlf)
+        ..write('--$boundary$crlf')
+        ..write('Content-Type: text/plain; charset="utf-8"$crlf')
+        ..write('Content-Transfer-Encoding: 7bit$crlf')
+        ..write(crlf)
+        ..write(body)
+        ..write(crlf)
+        ..write('--$boundary$crlf')
+        ..write('Content-Type: application/pdf; name="$filename"$crlf')
+        ..write('Content-Disposition: attachment; filename="$filename"$crlf')
+        ..write('Content-Transfer-Encoding: base64$crlf')
+        ..write(crlf)
+        ..write(attachmentWrapped)
+        ..write('--$boundary--$crlf');
+
+      final raw = base64UrlEncode(utf8.encode(sb.toString())).replaceAll('=', '');
+      final msg = gmail.Message()..raw = raw;
+
+      await api.users.messages.send(msg, 'me');
+    } catch (e) {
+      await _logApiError(
+        tag: 'SimpleInsideStartReportFormPage._sendEmailViaGmail',
+        message: 'Gmail 전송 실패',
+        error: e,
+        extra: <String, dynamic>{
+          'toLen': to.trim().length,
+          'subjectLen': subject.trim().length,
+          'bodyLen': body.trim().length,
+          'filename': filename,
+          'pdfBytes': pdfBytes.length,
+        },
+        tags: const <String>[_tReport, _tReportStart, _tReportEmail, _tGmail, _tGmailSend],
+      );
+      rethrow;
+    }
+  }
+
+  // MIME helpers: RFC 2045 base64 wrap (76 chars + CRLF)
+  static const int _mimeB64LineLength = 76;
+
+  String _wrapBase64Lines(String b64, {int lineLength = _mimeB64LineLength}) {
+    if (b64.isEmpty) return '';
+    final sb = StringBuffer();
+    for (int i = 0; i < b64.length; i += lineLength) {
+      final end = (i + lineLength < b64.length) ? (i + lineLength) : b64.length;
+      sb.write(b64.substring(i, end));
+      sb.write('\r\n');
+    }
+    return sb.toString();
   }
 
   InputDecoration _inputDec({
@@ -1181,8 +1326,7 @@ class _SimpleInsideStartReportFormPageState
           initialDateTime: _signDateTime,
         );
       },
-      transitionBuilder:
-          (ctx, animation, secondaryAnimation, child) {
+      transitionBuilder: (ctx, animation, secondaryAnimation, child) {
         return FadeTransition(
           opacity: CurvedAnimation(
             parent: animation,
@@ -1226,8 +1370,7 @@ class _SimpleInsideStartReportFormPageState
                     _updateMailSubject();
                   });
                   _pageController.nextPage(
-                    duration:
-                    const Duration(milliseconds: 250),
+                    duration: const Duration(milliseconds: 250),
                     curve: Curves.easeOut,
                   );
                 },
@@ -1247,8 +1390,7 @@ class _SimpleInsideStartReportFormPageState
                     _updateMailSubject();
                   });
                   _pageController.nextPage(
-                    duration:
-                    const Duration(milliseconds: 250),
+                    duration: const Duration(milliseconds: 250),
                     curve: Curves.easeOut,
                   );
                 },
@@ -1306,7 +1448,6 @@ class _SimpleInsideStartReportFormPageState
             return '업무 내용을 입력하세요.';
           }
         }
-        // 특이사항 없음(false) 또는 미선택(null)인 경우는 선택 입력으로 처리
         return null;
       },
     );
@@ -1321,8 +1462,7 @@ class _SimpleInsideStartReportFormPageState
           enableInteractiveSelection: true,
           decoration: _inputDec(
             labelText: '메일 제목(자동 생성)',
-            hintText:
-            '예: 콜센터 업무 시작 보고서 – 11월 25일자 - 특이사항 있음',
+            hintText: '예: 콜센터 업무 시작 보고서 – 11월 25일자 - 특이사항 있음',
           ),
           validator: (v) => (v == null || v.trim().isEmpty)
               ? '메일 제목이 자동 생성되지 않았습니다.'
@@ -1449,7 +1589,7 @@ class _SimpleInsideStartReportFormPageState
           16,
           16,
           16,
-          16 + bottomInset, // 키보드 높이만큼 추가 패딩
+          16 + bottomInset,
         ),
         child: Align(
           alignment: Alignment.topCenter,
@@ -1458,14 +1598,10 @@ class _SimpleInsideStartReportFormPageState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // 상단 문서 헤더
                 Text(
                   '업무 시작 보고서',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context)
-                      .textTheme
-                      .headlineSmall
-                      ?.copyWith(
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                     letterSpacing: 4,
                   ),
@@ -1481,24 +1617,19 @@ class _SimpleInsideStartReportFormPageState
                 ),
                 const SizedBox(height: 16),
 
-                // 실제 "종이" 느낌의 보고서 카드
                 Container(
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color:
-                      SimpleReportColors.light.withOpacity(0.8),
+                      color: SimpleReportColors.light.withOpacity(0.8),
                       width: 1,
                     ),
                   ),
-                  padding:
-                  const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
                   child: Column(
-                    crossAxisAlignment:
-                    CrossAxisAlignment.stretch,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // 상단 메타 정보 라인
                       Row(
                         children: [
                           const Icon(
@@ -1509,22 +1640,15 @@ class _SimpleInsideStartReportFormPageState
                           const SizedBox(width: 8),
                           Text(
                             '업무 시작 보고서 양식',
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w600,
-                              color:
-                              SimpleReportColors.dark,
+                              color: SimpleReportColors.dark,
                             ),
                           ),
                           const Spacer(),
                           Text(
                             '작성일 ${_fmtCompact(DateTime.now())}',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
                               color: Colors.black54,
                             ),
                           ),
@@ -1534,23 +1658,17 @@ class _SimpleInsideStartReportFormPageState
                       const Divider(height: 24),
                       const SizedBox(height: 4),
 
-                      // 안내 문구
                       Container(
                         decoration: BoxDecoration(
-                          color: SimpleReportColors.light
-                              .withOpacity(0.12),
-                          borderRadius:
-                          BorderRadius.circular(12),
+                          color: SimpleReportColors.light.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: SimpleReportColors.light
-                                .withOpacity(0.8),
+                            color: SimpleReportColors.light.withOpacity(0.8),
                           ),
                         ),
-                        padding:
-                        const EdgeInsets.all(12),
+                        padding: const EdgeInsets.all(12),
                         child: Row(
-                          crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Icon(
                               Icons.info_outline,
@@ -1561,10 +1679,7 @@ class _SimpleInsideStartReportFormPageState
                             Expanded(
                               child: Text(
                                 '해당 업무의 수행 내용과 결과를 사실에 근거하여 간결하게 작성해 주세요.',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                   height: 1.4,
                                 ),
                               ),
@@ -1575,41 +1690,31 @@ class _SimpleInsideStartReportFormPageState
 
                       _gap(20),
 
-                      // 섹션 카드 (한 페이지당 하나만)
                       _sectionCard(
                         title: sectionTitle,
-                        margin:
-                        const EdgeInsets.only(bottom: 0),
+                        margin: const EdgeInsets.only(bottom: 0),
                         child: sectionBody,
                       ),
 
                       _gap(12),
 
-                      // 하단 보조 액션 (초기화 / 미리보기)
                       Row(
                         children: [
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed:
-                              _sending ? null : _reset,
-                              icon: const Icon(
-                                  Icons.refresh_outlined),
+                              onPressed: _sending ? null : _reset,
+                              icon: const Icon(Icons.refresh_outlined),
                               label: const Text('초기화'),
-                              style: SimpleReportButtonStyles
-                                  .outlined(),
+                              style: SimpleReportButtonStyles.outlined(),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: ElevatedButton.icon(
-                              onPressed:
-                              _sending ? null : _showPreview,
-                              icon: const Icon(
-                                  Icons.visibility_outlined),
+                              onPressed: _sending ? null : _showPreview,
+                              icon: const Icon(Icons.visibility_outlined),
                               label: const Text('미리보기'),
-                              style:
-                              SimpleReportButtonStyles
-                                  .primary(),
+                              style: SimpleReportButtonStyles.primary(),
                             ),
                           ),
                         ],
@@ -1631,7 +1736,6 @@ class _SimpleInsideStartReportFormPageState
   Widget build(BuildContext context) {
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      // 바깥 배경
       backgroundColor: const Color(0xFFEFF3F6),
       appBar: AppBar(
         title: const Text('업무 시작 보고서 작성'),
@@ -1654,7 +1758,6 @@ class _SimpleInsideStartReportFormPageState
           ),
         ],
       ),
-      // 👉 4. 전자서명(인덱스 3) 페이지만 제출 버튼 노출 + 서명 전에는 비활성화
       bottomNavigationBar: _currentPageIndex == 3
           ? SafeArea(
         top: false,
@@ -1665,43 +1768,33 @@ class _SimpleInsideStartReportFormPageState
             left: 16,
             right: 16,
             top: 10,
-            bottom: 16 +
-                MediaQuery.of(context).viewInsets.bottom,
+            bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
           ),
           decoration: const BoxDecoration(
             color: Colors.white,
             border: Border(
-              top: BorderSide(
-                  color: Colors.black12, width: 1),
+              top: BorderSide(color: Colors.black12, width: 1),
             ),
           ),
           child: SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              // ✅ 서명 전에는 비활성화, 서명 완료 후에만 활성화
-              onPressed: (!_sending &&
-                  _signaturePngBytes != null)
-                  ? _submit
-                  : null,
+              onPressed: (!_sending && _signaturePngBytes != null) ? _submit : null,
               icon: _sending
                   ? const SizedBox(
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor:
-                  AlwaysStoppedAnimation<Color>(
-                      Colors.black),
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
                 ),
               )
                   : const Icon(Icons.send_outlined),
               label: Text(
                 _sending ? '전송 중…' : '제출',
-                style: const TextStyle(
-                    fontWeight: FontWeight.bold),
+                style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-              style:
-              SimpleReportButtonStyles.primary(),
+              style: SimpleReportButtonStyles.primary(),
             ),
           ),
         ),
@@ -1710,15 +1803,13 @@ class _SimpleInsideStartReportFormPageState
       body: SafeArea(
         child: Form(
           key: _formKey,
-          autovalidateMode:
-          AutovalidateMode.onUserInteraction,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           child: PageView(
             controller: _pageController,
             onPageChanged: (index) {
               setState(() {
                 _currentPageIndex = index;
 
-                // 첫 페이지로 다시 돌아오면 특이사항 선택 초기화
                 if (index == 0) {
                   _hasSpecialNote = null;
                   _updateMailSubject();

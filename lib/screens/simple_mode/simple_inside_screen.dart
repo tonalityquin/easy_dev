@@ -1,5 +1,7 @@
 // lib/screens/simple_package/simple_inside_screen.dart
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,6 +21,9 @@ import 'sections/simple_inside_document_box_button_section.dart';
 import 'sections/simple_inside_report_button_section.dart';
 import 'simple_inside_controller.dart';
 
+// ✅ API 디버그(통합 에러 로그) 로거
+import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
+
 enum SimpleInsideMode {
   leader,
   fieldUser,
@@ -33,9 +38,56 @@ const String _kNoticeSheetName = 'noti';
 /// ✅ 공지 Range (noti 시트 A열 1~50행)
 const String _kNoticeSpreadsheetRange = '$_kNoticeSheetName!A1:A50';
 
+// ─────────────────────────────────────────────────────────────
+// ✅ API 디버그 로직: 표준 태그 / 로깅 헬퍼 (file-scope)
+// ─────────────────────────────────────────────────────────────
+const String _tSimple = 'simple';
+const String _tSimpleInside = 'simple/inside';
+const String _tSimpleNotice = 'simple/notice';
+
+const String _tSheets = 'sheets';
+const String _tSheetsRead = 'sheets/read';
+
+const String _tPrefs = 'prefs';
+const String _tAuth = 'google/auth';
+const String _tUi = 'ui';
+
+Future<void> _logApiError({
+  required String tag,
+  required String message,
+  required Object error,
+  Map<String, dynamic>? extra,
+  List<String>? tags,
+}) async {
+  try {
+    await DebugApiLogger().log(
+      <String, dynamic>{
+        'tag': tag,
+        'message': message,
+        'error': error.toString(),
+        if (extra != null) 'extra': extra,
+      },
+      level: 'error',
+      tags: tags,
+    );
+  } catch (_) {
+    // 로깅 실패는 UX에 영향 없도록 무시
+  }
+}
+
 Future<sheets.SheetsApi> _sheetsApi() async {
-  final client = await GoogleAuthSession.instance.safeClient();
-  return sheets.SheetsApi(client);
+  try {
+    final client = await GoogleAuthSession.instance.safeClient();
+    return sheets.SheetsApi(client);
+  } catch (e) {
+    await _logApiError(
+      tag: '_sheetsApi',
+      message: 'GoogleAuthSession.safeClient 또는 SheetsApi 생성 실패',
+      error: e,
+      tags: const <String>[_tSimple, _tSimpleInside, _tSimpleNotice, _tSheets, _tAuth],
+    );
+    rethrow;
+  }
 }
 
 class SimpleInsideScreen extends StatefulWidget {
@@ -102,8 +154,14 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
 
       if (saved.isEmpty) return;
       await _loadNotice();
-    } catch (_) {
-      // 부트스트랩 실패는 공지 영역에만 영향 → 조용히 무시
+    } catch (e) {
+      // 부트스트랩 실패는 공지 영역에만 영향
+      await _logApiError(
+        tag: 'SimpleInsideScreen._bootstrapNoticeSheetId',
+        message: '공지 SpreadsheetId 부트스트랩 실패(SharedPreferences)',
+        error: e,
+        tags: const <String>[_tSimple, _tSimpleInside, _tSimpleNotice, _tPrefs],
+      );
     }
   }
 
@@ -129,16 +187,14 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
       final api = await _sheetsApi();
 
       // ✅ noti 시트에서 읽음
-      final resp =
-      await api.spreadsheets.values.get(id, _kNoticeSpreadsheetRange);
+      final resp = await api.spreadsheets.values.get(id, _kNoticeSpreadsheetRange);
 
       final values = resp.values ?? const [];
 
       // rows -> text lines
       final lines = <String>[];
       for (final row in values) {
-        final rowStrings =
-        row.map((c) => (c ?? '').toString().trim()).toList();
+        final rowStrings = row.map((c) => (c ?? '').toString().trim()).toList();
         final joined = rowStrings.where((s) => s.isNotEmpty).join(' ');
         if (joined.isNotEmpty) lines.add(joined);
       }
@@ -153,6 +209,17 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
       final msg = GoogleAuthSession.isInvalidTokenError(e)
           ? '구글 계정 연결이 만료되었습니다. 다시 로그인 후 시도하세요.'
           : '공지 불러오기 실패: $e';
+
+      await _logApiError(
+        tag: 'SimpleInsideScreen._loadNotice',
+        message: '공지 불러오기 실패(Google Sheets)',
+        error: e,
+        extra: <String, dynamic>{
+          'spreadsheetIdLen': id.length,
+          'range': _kNoticeSpreadsheetRange,
+        },
+        tags: const <String>[_tSimple, _tSimpleInside, _tSimpleNotice, _tSheets, _tSheetsRead],
+      );
 
       if (!mounted) return;
       setState(() {
@@ -278,20 +345,39 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
   }
 
   Future<void> _resetStaleWorkingState(UserState userState) async {
-    await userState.isHeWorking();
+    try {
+      await userState.isHeWorking();
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isWorking', false);
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('isWorking', false);
 
-    await EndTimeReminderService.instance.cancel();
+      await EndTimeReminderService.instance.cancel();
+    } catch (e) {
+      await _logApiError(
+        tag: 'SimpleInsideScreen._resetStaleWorkingState',
+        message: 'stale working state 리셋 실패',
+        error: e,
+        tags: const <String>[_tSimple, _tSimpleInside, _tPrefs],
+      );
+    }
   }
 
   Future<void> _handleLogout(BuildContext context) async {
-    await LogoutHelper.logoutAndGoToLogin(
-      context,
-      checkWorking: false,
-      delay: const Duration(milliseconds: 500),
-    );
+    try {
+      await LogoutHelper.logoutAndGoToLogin(
+        context,
+        checkWorking: false,
+        delay: const Duration(milliseconds: 500),
+      );
+    } catch (e) {
+      await _logApiError(
+        tag: 'SimpleInsideScreen._handleLogout',
+        message: '로그아웃 처리 실패',
+        error: e,
+        tags: const <String>[_tSimple, _tSimpleInside, _tUi],
+      );
+      rethrow;
+    }
   }
 
   Widget _buildScreenTag(BuildContext context) {
@@ -452,8 +538,6 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
 }
 
 /// ✅ SimpleInsideScreen 전용: 하단 고정 채팅 도크
-/// - ChatOpenButtonLite는 내부에서 UserState.currentArea를 사용하여 scopeKey를 결정
-/// - 눌렀을 때 lite_chat_bottom_sheet.dart(팝오버/풀시트 fallback)로 열림
 class _SimpleInsideChatDock extends StatelessWidget {
   const _SimpleInsideChatDock();
 
@@ -468,8 +552,7 @@ class _SimpleInsideChatDock extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
         child: SizedBox(
           height: 48,
-          child: ChatOpenButtonLite(
-          ),
+          child: ChatOpenButtonLite(),
         ),
       ),
     );
