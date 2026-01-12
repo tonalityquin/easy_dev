@@ -10,7 +10,7 @@ class InputPlate with ChangeNotifier {
 
   InputPlate(this._plateRepository);
 
-  Future<bool> registerPlateEntry({
+  Future<bool> commonRegisterPlateEntry({
     required BuildContext context,
     required String plateNumber,
     required String location,
@@ -33,8 +33,7 @@ class InputPlate with ChangeNotifier {
     String? customStatus,
   }) async {
     final correctedLocation = location.isEmpty ? '미지정' : location;
-    final plateType =
-    isLocationSelected ? PlateType.parkingCompleted : PlateType.parkingRequests;
+    final plateType = isLocationSelected ? PlateType.parkingCompleted : PlateType.parkingRequests;
 
     try {
       await _plateRepository.addPlate(
@@ -63,9 +62,7 @@ class InputPlate with ChangeNotifier {
       return true;
     } catch (error) {
       if (!context.mounted) return false;
-      final errorMessage = error.toString().contains('이미 등록된 번호판')
-          ? '이미 등록된 번호판입니다: $plateNumber'
-          : '오류 발생: $error';
+      final errorMessage = error.toString().contains('이미 등록된 번호판') ? '이미 등록된 번호판입니다: $plateNumber' : '오류 발생: $error';
       showFailedSnackbar(context, errorMessage);
       return false;
     }

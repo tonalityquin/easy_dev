@@ -27,6 +27,12 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
     required this.devBase,
     required this.devDark,
     required this.devLight,
+
+    // ✅ 신규: 노말 모드
+    required this.normalBase,
+    required this.normalDark,
+    required this.normalLight,
+
     required this.parkingBase,
     required this.parkingDark,
     required this.parkingLight,
@@ -71,6 +77,11 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
   final Color devBase;
   final Color devDark;
   final Color devLight;
+
+  /// Selector 카드(노말 모드) - ✅ 신규
+  final Color normalBase;
+  final Color normalDark;
+  final Color normalLight;
 
   /// Selector 카드(오프라인 서비스)
   final Color parkingBase;
@@ -123,6 +134,11 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
     devDark: Color(0xFF4A148C),
     devLight: Color(0xFFCE93D8),
 
+    // ✅ Normal (Signature: Pink 계열로 기존 컬러들과 겹침 최소화)
+    normalBase: Color(0xFFD81B60),
+    normalDark: Color(0xFFAD1457),
+    normalLight: Color(0xFFF48FB1),
+
     // Parking (Offline Service)
     parkingBase: Color(0xFFF4511E),
     parkingDark: Color(0xFFD84315),
@@ -155,6 +171,12 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
     Color? devBase,
     Color? devDark,
     Color? devLight,
+
+    // ✅ 신규: 노말 모드
+    Color? normalBase,
+    Color? normalDark,
+    Color? normalLight,
+
     Color? parkingBase,
     Color? parkingDark,
     Color? parkingLight,
@@ -184,6 +206,9 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
       devBase: devBase ?? this.devBase,
       devDark: devDark ?? this.devDark,
       devLight: devLight ?? this.devLight,
+      normalBase: normalBase ?? this.normalBase,
+      normalDark: normalDark ?? this.normalDark,
+      normalLight: normalLight ?? this.normalLight,
       parkingBase: parkingBase ?? this.parkingBase,
       parkingDark: parkingDark ?? this.parkingDark,
       parkingLight: parkingLight ?? this.parkingLight,
@@ -218,6 +243,9 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
       devBase: Color.lerp(devBase, other.devBase, t)!,
       devDark: Color.lerp(devDark, other.devDark, t)!,
       devLight: Color.lerp(devLight, other.devLight, t)!,
+      normalBase: Color.lerp(normalBase, other.normalBase, t)!,
+      normalDark: Color.lerp(normalDark, other.normalDark, t)!,
+      normalLight: Color.lerp(normalLight, other.normalLight, t)!,
       parkingBase: Color.lerp(parkingBase, other.parkingBase, t)!,
       parkingDark: Color.lerp(parkingDark, other.parkingDark, t)!,
       parkingLight: Color.lerp(parkingLight, other.parkingLight, t)!,

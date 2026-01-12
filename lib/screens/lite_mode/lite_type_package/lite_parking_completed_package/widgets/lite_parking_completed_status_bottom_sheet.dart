@@ -209,7 +209,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
 
     final userName = context.read<UserState>().name;
     final repo = context.read<PlateRepository>();
-    final plateState = context.read<LitePlateState>();
+    final litePlateState = context.read<LitePlateState>();
     final firestore = FirebaseFirestore.instance;
 
     final now = DateTime.now();
@@ -231,7 +231,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
         n: 1,
       );
 
-      await plateState.updatePlateLocally(
+      await litePlateState.liteUpdatePlateLocally(
         PlateType.parkingCompleted,
         updatedPlate,
       );
@@ -546,7 +546,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                                     onTap: () async {
                                       final userName = context.read<UserState>().name;
                                       final repo = context.read<PlateRepository>();
-                                      final plateState = context.read<LitePlateState>();
+                                      final litePlateState = context.read<LitePlateState>();
                                       final firestore = FirebaseFirestore.instance;
 
                                       final bt = (_plate.billingType ?? '').trim();
@@ -589,7 +589,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                                           n: 1,
                                         );
 
-                                        await plateState.updatePlateLocally(
+                                        await litePlateState.liteUpdatePlateLocally(
                                           PlateType.parkingCompleted,
                                           updatedPlate,
                                         );
@@ -652,7 +652,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                                     onTap: () async {
                                       final userName = context.read<UserState>().name;
                                       final repo = context.read<PlateRepository>();
-                                      final plateState = context.read<LitePlateState>();
+                                      final litePlateState = context.read<LitePlateState>();
                                       final firestore = FirebaseFirestore.instance;
 
                                       if (_plate.isLockedFee != true) {
@@ -683,7 +683,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                                           n: 1,
                                         );
 
-                                        await plateState.updatePlateLocally(
+                                        await litePlateState.liteUpdatePlateLocally(
                                           PlateType.parkingCompleted,
                                           updatedPlate,
                                         );

@@ -116,7 +116,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
 
     final userName = context.read<UserState>().name;
     final repo = context.read<PlateRepository>();
-    final plateState = context.read<LitePlateState>();
+    final litePlateState = context.read<LitePlateState>();
     final firestore = FirebaseFirestore.instance;
 
     final now = DateTime.now();
@@ -139,7 +139,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
       );
 
       // ✅ 출차 완료 탭 로컬 반영
-      await plateState.updatePlateLocally(
+      await litePlateState.liteUpdatePlateLocally(
         PlateType.departureCompleted,
         updatedPlate,
       );
@@ -189,7 +189,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
 
     final userName = context.read<UserState>().name;
     final repo = context.read<PlateRepository>();
-    final plateState = context.read<LitePlateState>();
+    final litePlateState = context.read<LitePlateState>();
     final firestore = FirebaseFirestore.instance;
 
     final bt = (_plate.billingType ?? '').trim();
@@ -233,7 +233,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
       );
 
       // ✅ 출차 완료 탭 로컬 반영
-      await plateState.updatePlateLocally(
+      await litePlateState.liteUpdatePlateLocally(
         PlateType.departureCompleted,
         updatedPlate,
       );

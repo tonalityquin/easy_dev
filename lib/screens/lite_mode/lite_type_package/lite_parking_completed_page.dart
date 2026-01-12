@@ -6,7 +6,6 @@ import '../../../models/plate_model.dart';
 import '../../../enums/plate_type.dart';
 
 import '../../../states/area/area_state.dart';
-import '../../../states/plate/lite_filter_plate.dart';
 import '../../../states/plate/lite_plate_state.dart';
 import '../../../states/plate/movement_plate.dart';
 import '../../../states/user/user_state.dart';
@@ -94,15 +93,6 @@ class _LiteParkingCompletedPageState extends State<LiteParkingCompletedPage> {
     );
   }
 
-  void _resetParkingAreaFilter(BuildContext context) {
-    context.read<LiteFilterPlate>().clearLocationSearchQuery();
-    setState(() {
-      _selectedParkingArea = null;
-      _mode = LiteParkingViewMode.status;
-    });
-    _log('reset location filter');
-  }
-
   // ✅ 출차 요청 핸들러 (기존 로직 유지)
   void _liteHandleDepartureRequested(BuildContext context) {
     final movementPlate = context.read<MovementPlate>();
@@ -147,7 +137,7 @@ class _LiteParkingCompletedPageState extends State<LiteParkingCompletedPage> {
 
         // 선택된 번호판이 있으면 선택 해제 먼저
         if (liteSelectedPlate != null && liteSelectedPlate.id.isNotEmpty) {
-          await litePlateState.togglePlateIsSelected(
+          await litePlateState.liteTogglePlateIsSelected(
             collection: PlateType.parkingCompleted,
             plateNumber: liteSelectedPlate.plateNumber,
             userName: userName,
@@ -193,7 +183,6 @@ class _LiteParkingCompletedPageState extends State<LiteParkingCompletedPage> {
             _log(_isLocked ? 'lock ON' : 'lock OFF');
           },
           showSearchDialog: () => _showSearchDialog(context),
-          resetParkingAreaFilter: () => _resetParkingAreaFilter(context),
           toggleSortIcon: _toggleSortIcon,
           handleEntryParkingRequest: handleEntryParkingRequest,
           handleDepartureRequested: _liteHandleDepartureRequested,
@@ -232,7 +221,7 @@ class _LiteParkingCompletedPageState extends State<LiteParkingCompletedPage> {
 
       case LiteParkingViewMode.plateList:
       // 🔹 기존 plateList 화면은 보존(다른 경로에서 필요할 수 있음). 현재 기본 흐름에선 사용 안 함.
-        List<PlateModel> plates = litePlateState.getPlatesByCollection(PlateType.parkingCompleted);
+        List<PlateModel> plates = litePlateState.liteGetPlatesByCollection(PlateType.parkingCompleted);
         if (_selectedParkingArea != null) {
           plates = plates.where((p) => p.location == _selectedParkingArea).toList();
         }
@@ -248,7 +237,7 @@ class _LiteParkingCompletedPageState extends State<LiteParkingCompletedPage> {
               collection: PlateType.parkingCompleted,
               filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
               onPlateTap: (plateNumber, area) {
-                context.read<LitePlateState>().togglePlateIsSelected(
+                context.read<LitePlateState>().liteTogglePlateIsSelected(
                   collection: PlateType.parkingCompleted,
                   plateNumber: plateNumber,
                   userName: userName,

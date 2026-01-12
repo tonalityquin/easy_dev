@@ -306,7 +306,7 @@ class LiteInputPlateController {
         division,
       );
 
-      final wasSuccessful = await LiteInputPlateService.registerPlateEntry(
+      final wasSuccessful = await LiteInputPlateService.liteRegisterPlateEntry(
         context: context,
         plateNumber: plateNumber,
         location: location,

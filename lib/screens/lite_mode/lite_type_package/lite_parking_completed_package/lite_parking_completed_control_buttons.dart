@@ -37,7 +37,6 @@ class LiteParkingCompletedControlButtons extends StatelessWidget {
   final bool isLocked;
   final VoidCallback onToggleLock;
   final VoidCallback showSearchDialog;
-  final VoidCallback resetParkingAreaFilter;
   final VoidCallback toggleSortIcon;
   final Function(BuildContext context, String plateNumber, String area)
   handleEntryParkingRequest;
@@ -52,7 +51,6 @@ class LiteParkingCompletedControlButtons extends StatelessWidget {
     required this.isLocked,
     required this.onToggleLock,
     required this.showSearchDialog,
-    required this.resetParkingAreaFilter,
     required this.toggleSortIcon,
     required this.handleEntryParkingRequest,
     required this.handleDepartureRequested,
@@ -231,7 +229,7 @@ class LiteParkingCompletedControlButtons extends StatelessWidget {
 
                   await context
                       .read<LitePlateState>()
-                      .updatePlateLocally(
+                      .liteUpdatePlateLocally(
                       PlateType.parkingCompleted, updatedPlate);
 
                   final autoLog = {
@@ -299,7 +297,7 @@ class LiteParkingCompletedControlButtons extends StatelessWidget {
 
                   await context
                       .read<LitePlateState>()
-                      .updatePlateLocally(
+                      .liteUpdatePlateLocally(
                       PlateType.parkingCompleted, updatedPlate);
 
                   final cancelLog = {
@@ -362,7 +360,7 @@ class LiteParkingCompletedControlButtons extends StatelessWidget {
 
                   await context
                       .read<LitePlateState>()
-                      .updatePlateLocally(
+                      .liteUpdatePlateLocally(
                       PlateType.parkingCompleted, updatedPlate);
 
                   final log = {

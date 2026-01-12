@@ -77,7 +77,7 @@ class _LiteTypePageState extends State<LiteTypePage> {
               final liteSelectedPlate = litePlateState.liteGetSelectedPlate(collection, userName);
 
               if (liteSelectedPlate != null && liteSelectedPlate.id.isNotEmpty) {
-                await litePlateState.togglePlateIsSelected(
+                await litePlateState.liteTogglePlateIsSelected(
                   collection: collection,
                   plateNumber: liteSelectedPlate.plateNumber,
                   userName: userName,

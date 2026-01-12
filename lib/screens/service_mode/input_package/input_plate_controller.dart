@@ -215,7 +215,7 @@ class InputPlateController {
         division,
       );
 
-      final wasSuccessful = await InputPlateService.registerPlateEntry(
+      final wasSuccessful = await InputPlateService.serviceRegisterPlateEntry(
         context: context,
         plateNumber: plateNumber,
         location: locationController.text,

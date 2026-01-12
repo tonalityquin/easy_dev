@@ -92,8 +92,6 @@ class LitePlateState extends ChangeNotifier {
 
   bool get hasPendingSelection => _pendingCollection != null && _pendingPlateId != null && _pendingIsSelected != null;
 
-  bool? get pendingIsSelected => _pendingIsSelected;
-
   /// 라이프사이클 변경(비활성/지역 변경) 토큰
   int _lifecycleEpoch = 0;
 
@@ -375,7 +373,7 @@ class LitePlateState extends ChangeNotifier {
     }
   }
 
-  Future<void> togglePlateIsSelected({
+  Future<void> liteTogglePlateIsSelected({
     required PlateType collection,
     required String plateNumber,
     required String userName,
@@ -529,58 +527,7 @@ class LitePlateState extends ChangeNotifier {
     return true;
   }
 
-  Future<void> commitPendingSelection({
-    required void Function(String) onError,
-  }) async {
-    if (!hasPendingSelection) return;
-
-    final plateId = _pendingPlateId!;
-    final isSelected = _pendingIsSelected!;
-    final selectedBy = _pendingSelectedBy;
-    final expected = _pendingCollection!;
-
-    if (!pendingStillValidFor(expected)) {
-      _clearPendingSelectionInternal();
-      notifyListeners();
-      onError('선택 항목이 더 이상 유효하지 않습니다. 목록을 새로고침한 뒤 다시 시도해 주세요.');
-      return;
-    }
-
-    try {
-      await _repository.recordWhoPlateClick(
-        plateId,
-        isSelected,
-        selectedBy: selectedBy,
-        area: currentArea,
-      );
-
-      _baseline[plateId] = _LiteSelectionBaseline(
-        isSelected: isSelected,
-        selectedBy: isSelected ? ((selectedBy?.trim().isNotEmpty ?? false) ? selectedBy!.trim() : null) : null,
-      );
-
-      _clearPendingSelectionInternal();
-      notifyListeners();
-    } on FirebaseException catch (e) {
-      switch (e.code) {
-        case 'invalid-state':
-          onError('이미 다른 상태로 처리된 문서입니다. 목록을 새로고침해 주세요.');
-          break;
-        case 'conflict':
-          onError('다른 사용자가 먼저 선택했습니다.');
-          break;
-        case 'not-found':
-          onError('문서를 찾을 수 없습니다.');
-          break;
-        default:
-          onError('DB 오류: ${e.message ?? e.code}');
-      }
-    } catch (e) {
-      onError('🚨 번호판 변경 사항 반영 실패:\n$e');
-    }
-  }
-
-  List<PlateModel> getPlatesByCollection(PlateType collection, {DateTime? selectedDate}) {
+  List<PlateModel> liteGetPlatesByCollection(PlateType collection, {DateTime? selectedDate}) {
     var plates = _data[collection] ?? <PlateModel>[];
 
     if (collection == PlateType.departureCompleted && selectedDate != null) {
@@ -596,7 +543,7 @@ class LitePlateState extends ChangeNotifier {
     return plates;
   }
 
-  Future<void> updatePlateLocally(PlateType collection, PlateModel updatedPlate) async {
+  Future<void> liteUpdatePlateLocally(PlateType collection, PlateModel updatedPlate) async {
     final list = _data[collection];
     if (list == null) return;
 

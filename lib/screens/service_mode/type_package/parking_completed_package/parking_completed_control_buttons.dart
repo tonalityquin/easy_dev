@@ -37,7 +37,6 @@ class ParkingCompletedControlButtons extends StatelessWidget {
   final bool isLocked;
   final VoidCallback onToggleLock;
   final VoidCallback showSearchDialog;
-  final VoidCallback resetParkingAreaFilter;
   final VoidCallback toggleSortIcon;
   final Function(BuildContext context, String plateNumber, String area)
   handleEntryParkingRequest;
@@ -52,7 +51,6 @@ class ParkingCompletedControlButtons extends StatelessWidget {
     required this.isLocked,
     required this.onToggleLock,
     required this.showSearchDialog,
-    required this.resetParkingAreaFilter,
     required this.toggleSortIcon,
     required this.handleEntryParkingRequest,
     required this.handleDepartureRequested,

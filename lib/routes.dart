@@ -1,5 +1,6 @@
 // lib/routes.dart
 import 'package:easydev/offlines/offline_type_page.dart';
+import 'package:easydev/screens/normal_headquarter_page.dart';
 import 'package:flutter/material.dart';
 
 // ▼ 오프라인 패키지
@@ -19,6 +20,8 @@ import 'package:easydev/screens/hubs_mode/community_stub_page.dart';
 import 'screens/lite_headquarter_page.dart';
 import 'screens/lite_mode/lite_commute_package/lite_commute_inside_screen.dart';
 import 'screens/lite_type_page.dart';
+import 'screens/normal_mode/normal_commute_package/normal_commute_inside_screen.dart';
+import 'screens/normal_type_page.dart';
 import 'screens/service_mode/commute_package/commute_inside_screen.dart';
 import 'screens/hubs_mode/dev_package/dev_calendar_page.dart';
 import 'screens/hubs_mode/head_package/company_calendar_page.dart';
@@ -34,6 +37,7 @@ class AppRoutes {
   static const tabletLogin = '/tablet_login';
   static const liteLogin = '/lite_login';
   static const simpleLogin = '/simple_login';
+  static const normalLogin = '/normal_login';
 
   // ✅ 오프라인 전용
   static const offlineLogin = '/offline_login';
@@ -41,12 +45,16 @@ class AppRoutes {
   static const commute = '/commute';
   static const simpleCommute = '/simple_commute';
   static const liteCommute = '/lite_commute';
+  static const normalCommute = '/normal_commute';
 
   static const headquarterPage = '/headquarter_page';
   static const liteHeadquarterPage = '/lite_headquarter_page';
+  static const normalHeadquarterPage = '/normal_headquarter_page';
   static const typePage = '/type_page';
   static const liteTypePage = '/lite_type_page';
+  static const normalTypePage = '/normal_type_page';
   static const offlineTypePage = '/offline_type_page';
+
   static const tablet = '/tablet_page';
   static const faq = '/faq';
 
@@ -73,6 +81,7 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.tabletLogin: (context) => const LoginScreen(mode: 'tablet'),
   AppRoutes.simpleLogin: (context) => const LoginScreen(mode: 'simple'),
   AppRoutes.liteLogin: (context) => const LoginScreen(mode: 'lite'),
+  AppRoutes.normalLogin: (context) => const LoginScreen(mode: 'normal'),
 
   // ✅ 오프라인 로그인 → 성공 시 오프라인 출퇴근으로 이동
   AppRoutes.offlineLogin: (context) => OfflineLoginScreen(
@@ -84,12 +93,15 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.liteCommute: (context) => const LiteCommuteInsideScreen(),
   AppRoutes.simpleCommute: (context) => const SimpleInsideScreen(),
   AppRoutes.offlineCommute: (context) => const OfflineCommuteInsideScreen(),
+  AppRoutes.normalCommute: (context) => const NormalCommuteInsideScreen(),
 
   // 기타 페이지들
   AppRoutes.headquarterPage: (context) => const HeadquarterPage(),
   AppRoutes.typePage: (context) => const TypePage(),
   AppRoutes.liteHeadquarterPage: (context) => const LiteHeadquarterPage(),
+  AppRoutes.normalHeadquarterPage: (context) => const NormalHeadquarterPage(),
   AppRoutes.liteTypePage: (context) => const LiteTypePage(),
+  AppRoutes.normalTypePage: (context) => const NormalTypePage(),
   AppRoutes.offlineTypePage: (context) => const OfflineTypePage(),
   AppRoutes.tablet: (context) => const TabletPage(),
   AppRoutes.faq: (context) => const FaqPage(),

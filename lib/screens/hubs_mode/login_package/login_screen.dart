@@ -20,8 +20,12 @@ import 'tablet/sections/tablet_login_form.dart';
 import 'lite/lite_login_controller.dart';
 import 'lite/sections/lite_login_form.dart';
 
+// ✅ normal
+import 'normal/normal_login_controller.dart';
+import 'normal/sections/normal_login_form.dart';
+
 class LoginScreen extends StatefulWidget {
-  // ✅ mode: 'service' | 'tablet' | 'simple' | 'lite'
+  // ✅ mode: 'service' | 'tablet' | 'simple' | 'lite' | 'normal'
   const LoginScreen({super.key, this.mode = 'service'});
 
   final String mode;
@@ -36,6 +40,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   SimpleLoginController? _simpleLoginController;
   TabletLoginController? _tabletController;
   LiteLoginController? _liteLoginController;
+  NormalLoginController? _normalLoginController;
 
   late final AnimationController _loginAnimationController;
   late final Animation<Offset> _offsetAnimation;
@@ -65,6 +70,11 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       );
     } else if (widget.mode == 'lite') {
       _liteLoginController = LiteLoginController(
+        context,
+        onLoginSucceeded: _navigateAfterLogin,
+      );
+    } else if (widget.mode == 'normal') {
+      _normalLoginController = NormalLoginController(
         context,
         onLoginSucceeded: _navigateAfterLogin,
       );
@@ -114,7 +124,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     }
 
     // ▼ 자동 로그인 게이트: 라우트 인자를 먼저 확보한 뒤 1회만 실행
-    //   - service / simple / lite 모두 자동 로그인 적용 (tablet만 제외)
+    //   - service / simple / lite / normal 모두 자동 로그인 적용 (tablet만 제외)
     if (!_didInitAuto && widget.mode != 'tablet') {
       _didInitAuto = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -126,6 +136,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
             _simpleLoginController?.initState();
           } else if (widget.mode == 'lite') {
             _liteLoginController?.initState();
+          } else if (widget.mode == 'normal') {
+            _normalLoginController?.initState();
           } else {
             _serviceLoginController?.initState();
           }
@@ -135,8 +147,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   }
 
   bool _isHeadTarget() {
-    return _redirectAfterLogin == AppRoutes.headStub ||
-        _redirectAfterLogin == AppRoutes.headquarterPage;
+    return _redirectAfterLogin == AppRoutes.headStub || _redirectAfterLogin == AppRoutes.headquarterPage;
   }
 
   /// ✅ 모드별 기본 라우트 결정
@@ -144,6 +155,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   /// - simple   → /simple_commute
   /// - tablet   → /commute (정책에 따라 변경 가능)
   /// - lite     → /lite_commute (LiteCommuteInsideScreen)
+  /// - normal   → /normal_commute (현재는 /commute와 동일한 화면을 매핑하는 것을 권장)
   String _defaultRouteForMode() {
     switch (widget.mode) {
       case 'simple':
@@ -151,7 +163,9 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       case 'tablet':
         return AppRoutes.commute;
       case 'lite':
-        return AppRoutes.liteCommute; // ✅ 핵심 변경
+        return AppRoutes.liteCommute;
+      case 'normal':
+        return AppRoutes.normalCommute;
       case 'service':
       default:
         return AppRoutes.commute;
@@ -193,8 +207,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
                   const Icon(Icons.lock_outline, size: 40),
                   const SizedBox(height: 12),
                   Text(
-                    '접근 가능한 모드가 아닙니다. '
-                        '(요청: ${_requiredMode!}, 현재: ${widget.mode})',
+                    '접근 가능한 모드가 아닙니다. (요청: ${_requiredMode!}, 현재: ${widget.mode})',
                   ),
                   const SizedBox(height: 12),
                   FilledButton(
@@ -217,6 +230,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       loginForm = SimpleLoginForm(controller: _simpleLoginController!);
     } else if (widget.mode == 'lite') {
       loginForm = LiteLoginForm(controller: _liteLoginController!);
+    } else if (widget.mode == 'normal') {
+      loginForm = NormalLoginForm(controller: _normalLoginController!);
     } else {
       loginForm = ServiceLoginForm(controller: _serviceLoginController!);
     }
@@ -253,6 +268,8 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       _simpleLoginController?.dispose();
     } else if (widget.mode == 'lite') {
       _liteLoginController?.dispose();
+    } else if (widget.mode == 'normal') {
+      _normalLoginController?.dispose();
     } else {
       _serviceLoginController?.dispose();
     }

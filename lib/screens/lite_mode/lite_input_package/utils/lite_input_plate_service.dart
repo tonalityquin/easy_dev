@@ -273,7 +273,7 @@ class LiteInputPlateService {
   // ─────────────────────────────────────────
   // ✅ 입차 등록: 예외 로깅 추가
   // ─────────────────────────────────────────
-  static Future<bool> registerPlateEntry({
+  static Future<bool> liteRegisterPlateEntry({
     required BuildContext context,
     required String plateNumber,
     required String location,
@@ -305,7 +305,7 @@ class LiteInputPlateService {
     }
 
     try {
-      return await inputState.registerPlateEntry(
+      return await inputState.commonRegisterPlateEntry(
         context: context,
         plateNumber: plateNumber,
         location: location,

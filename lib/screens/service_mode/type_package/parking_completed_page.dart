@@ -6,7 +6,6 @@ import '../../../models/plate_model.dart';
 import '../../../enums/plate_type.dart';
 
 import '../../../states/area/area_state.dart';
-import '../../../states/plate/filter_plate.dart';
 import '../../../states/plate/plate_state.dart';
 import '../../../states/plate/movement_plate.dart';
 import '../../../states/user/user_state.dart';
@@ -92,15 +91,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
         );
       },
     );
-  }
-
-  void _resetParkingAreaFilter(BuildContext context) {
-    context.read<FilterPlate>().clearLocationSearchQuery();
-    setState(() {
-      _selectedParkingArea = null;
-      _mode = ParkingViewMode.status;
-    });
-    _log('reset location filter');
   }
 
   // ✅ 출차 요청 핸들러 (기존 로직 유지)
@@ -193,7 +183,6 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
             _log(_isLocked ? 'lock ON' : 'lock OFF');
           },
           showSearchDialog: () => _showSearchDialog(context),
-          resetParkingAreaFilter: () => _resetParkingAreaFilter(context),
           toggleSortIcon: _toggleSortIcon,
           handleEntryParkingRequest: handleEntryParkingRequest,
           handleDepartureRequested: _handleDepartureRequested,
@@ -208,7 +197,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
 
     switch (_mode) {
       case ParkingViewMode.status:
-      // 🔹 현황 화면을 탭하면 위치 선택 화면으로 전환
+        // 🔹 현황 화면을 탭하면 위치 선택 화면으로 전환
         return GestureDetector(
           onTap: () {
             setState(() => _mode = ParkingViewMode.locationPicker);
@@ -222,7 +211,7 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
         );
 
       case ParkingViewMode.locationPicker:
-      // ✅ 요구사항: 주차 구역 선택 시 아무 동작도 하지 않음
+        // ✅ 요구사항: 주차 구역 선택 시 아무 동작도 하지 않음
         return ParkingCompletedLocationPicker(
           onLocationSelected: (_) {
             // no-op
@@ -231,13 +220,13 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
         );
 
       case ParkingViewMode.plateList:
-      // 🔹 기존 plateList 화면은 보존(다른 경로에서 필요할 수 있음). 현재 기본 흐름에선 사용하지 않음.
+        // 🔹 기존 plateList 화면은 보존(다른 경로에서 필요할 수 있음). 현재 기본 흐름에선 사용하지 않음.
         List<PlateModel> plates = plateState.getPlatesByCollection(PlateType.parkingCompleted);
         if (_selectedParkingArea != null) {
           plates = plates.where((p) => p.location == _selectedParkingArea).toList();
         }
         plates.sort(
-              (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
+          (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
         );
 
         return ListView(
@@ -249,11 +238,11 @@ class _ParkingCompletedPageState extends State<ParkingCompletedPage> {
               filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
               onPlateTap: (plateNumber, area) {
                 context.read<PlateState>().togglePlateIsSelected(
-                  collection: PlateType.parkingCompleted,
-                  plateNumber: plateNumber,
-                  userName: userName,
-                  onError: (msg) => showFailedSnackbar(context, msg),
-                );
+                      collection: PlateType.parkingCompleted,
+                      plateNumber: plateNumber,
+                      userName: userName,
+                      onError: (msg) => showFailedSnackbar(context, msg),
+                    );
                 _log('tap plate: $plateNumber');
               },
             ),

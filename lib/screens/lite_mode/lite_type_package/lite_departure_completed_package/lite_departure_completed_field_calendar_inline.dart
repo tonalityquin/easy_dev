@@ -59,7 +59,7 @@ class _LiteDepartureCompletedFieldCalendarInlineState extends State<LiteDepartur
     final area = context.watch<AreaState>().currentArea;
     final plateState = context.watch<LitePlateState>();
 
-    final allCompleted = plateState.getPlatesByCollection(
+    final allCompleted = plateState.liteGetPlatesByCollection(
       PlateType.departureCompleted,
     );
 

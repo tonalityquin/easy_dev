@@ -37,11 +37,6 @@ class _DepartureRequestPageState extends State<DepartureRequestPage> {
     setState(() {
       _isSorted = !_isSorted;
     });
-
-    context.read<PlateState>().updateSortOrder(
-      PlateType.departureRequests,
-      _isSorted,
-    );
   }
 
   void _toggleLock() {

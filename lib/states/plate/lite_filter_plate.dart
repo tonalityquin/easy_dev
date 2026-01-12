@@ -15,10 +15,6 @@ class LiteFilterPlate extends ChangeNotifier {
 
   String get locationQuery => _locationQuery ?? "";
 
-  void clearLocationSearchQuery() {
-    _locationQuery = null;
-    notifyListeners();
-  }
   List<PlateModel> getPlates(PlateType type) {
     return _plateState.dataOfType(type);
   }

@@ -291,7 +291,7 @@ class LiteModifyPlateController {
       );
 
       final litePlateState = context.read<LitePlateState>();
-      await litePlateState.updatePlateLocally(collectionKey, updatedPlate);
+      await litePlateState.liteUpdatePlateLocally(collectionKey, updatedPlate);
 
       onSuccess();
     }

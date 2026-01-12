@@ -175,11 +175,14 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
         const FaqCard(),
         const ParkingCard(),
       ],
+
+      // ✅ 개발자 인증 시, 개발 카드(좌) + 노말 모드 카드(우) 같은 페이지에 나란히 배치
       if (_devAuthorized)
         [
           DevCard(
             onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.devStub),
           ),
+          const NormalLoginCard(),
         ],
     ];
 

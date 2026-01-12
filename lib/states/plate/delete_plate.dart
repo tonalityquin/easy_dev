@@ -26,11 +26,11 @@ class DeletePlate {
     await deletePlate(PlateType.parkingRequests, plateNumber, area, performedBy: performedBy);
   }
 
-  Future<void> deleteFromParkingCompleted(String plateNumber, String area, {String performedBy = 'Unknown'}) async {
-    await deletePlate(PlateType.parkingCompleted, plateNumber, area, performedBy: performedBy);
-  }
-
   Future<void> deleteFromDepartureRequest(String plateNumber, String area, {String performedBy = 'Unknown'}) async {
     await deletePlate(PlateType.departureRequests, plateNumber, area, performedBy: performedBy);
+  }
+
+  Future<void> deleteFromParkingCompleted(String plateNumber, String area, {String performedBy = 'Unknown'}) async {
+    await deletePlate(PlateType.parkingCompleted, plateNumber, area, performedBy: performedBy);
   }
 }

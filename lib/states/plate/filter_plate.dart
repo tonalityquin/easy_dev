@@ -14,11 +14,6 @@ class FilterPlate extends ChangeNotifier {
   String get searchQuery => _searchQuery ?? "";
 
   String get locationQuery => _locationQuery ?? "";
-
-  void clearLocationSearchQuery() {
-    _locationQuery = null;
-    notifyListeners();
-  }
   List<PlateModel> getPlates(PlateType type) {
     return _plateState.dataOfType(type);
   }

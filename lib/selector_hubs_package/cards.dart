@@ -8,6 +8,16 @@ import '../theme.dart';
 // ✅ Trace 기록용 Recorder
 import '../screens/hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
 
+Text _selectorCardTitle(BuildContext context, String text, Color color) {
+  return Text(
+    text,
+    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+      fontWeight: FontWeight.w700,
+      color: color,
+    ),
+  );
+}
+
 class CardBody extends StatefulWidget {
   const CardBody({
     super.key,
@@ -162,13 +172,7 @@ class ServiceCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    final title = Text(
-      '서비스 로그인',
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.w700,
-        color: p.serviceDark,
-      ),
-    );
+    final title = _selectorCardTitle(context, '서비스 로그인', p.serviceDark);
 
     return Card(
       color: Theme.of(context).cardColor,
@@ -202,13 +206,7 @@ class SimpleLoginCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    final title = Text(
-      '약식 로그인',
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.w700,
-        color: p.simpleDark,
-      ),
-    );
+    final title = _selectorCardTitle(context, '약식 로그인', p.simpleDark);
 
     return Card(
       color: Theme.of(context).cardColor,
@@ -252,13 +250,7 @@ class LiteLoginCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    final title = Text(
-      '경량 로그인',
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.w700,
-        color: p.liteDark,
-      ),
-    );
+    final title = _selectorCardTitle(context, '경량 로그인', p.liteDark);
 
     return Card(
       color: Theme.of(context).cardColor,
@@ -297,13 +289,7 @@ class TabletCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    final title = Text(
-      '태블릿 로그인',
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.w700,
-        color: p.tabletDark,
-      ),
-    );
+    final title = _selectorCardTitle(context, '태블릿 로그인', p.tabletDark);
 
     return Card(
       color: Theme.of(context).cardColor,
@@ -335,13 +321,7 @@ class CommunityCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    final title = Text(
-      '커뮤니티',
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.w700,
-        color: p.communityDark,
-      ),
-    );
+    final title = _selectorCardTitle(context, '커뮤니티', p.communityDark);
 
     return Card(
       color: Theme.of(context).cardColor,
@@ -371,13 +351,7 @@ class FaqCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    final title = Text(
-      'FAQ / 문의',
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.w700,
-        color: p.faqDark,
-      ),
-    );
+    final title = _selectorCardTitle(context, 'FAQ / 문의', p.faqDark);
 
     return Card(
       color: Theme.of(context).cardColor,
@@ -435,13 +409,7 @@ class HeadquarterCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    final title = Text(
-      '본사',
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.w700,
-        color: p.headquarterDark,
-      ),
-    );
+    final title = _selectorCardTitle(context, '본사', p.headquarterDark);
 
     return Card(
       color: Theme.of(context).cardColor,
@@ -473,13 +441,7 @@ class DevCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    final title = Text(
-      '개발',
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.w700,
-        color: p.devDark,
-      ),
-    );
+    final title = _selectorCardTitle(context, '개발', p.devDark);
 
     return Card(
       color: Theme.of(context).cardColor,
@@ -501,6 +463,54 @@ class DevCard extends StatelessWidget {
   }
 }
 
+/// ✅ 노말 로그인 카드 (다른 모드 카드와 동일 패턴)
+/// - enabled/disabledHint 지원
+/// - AppRoutes.normalLogin 으로 이동
+/// - requiredMode/redirectAfterLogin 인자 전달
+class NormalLoginCard extends StatelessWidget {
+  const NormalLoginCard({super.key, this.enabled = true});
+
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppCardPalette.of(context);
+    final onBase = Theme.of(context).colorScheme.onPrimary;
+
+    final title = _selectorCardTitle(context, '노말 로그인', p.normalDark);
+
+    return Card(
+      color: Theme.of(context).cardColor,
+      elevation: 1,
+      clipBehavior: Clip.antiAlias,
+      surfaceTintColor: p.normalLight,
+      child: CardBody(
+        icon: Icons.apps_rounded,
+        bg: p.normalBase,
+        iconColor: onBase,
+        titleWidget: title,
+        buttonBg: p.normalBase,
+        buttonFg: onBase,
+        traceName: '노말 로그인',
+        traceMeta: {
+          'to': AppRoutes.normalLogin,
+          'redirectAfterLogin': AppRoutes.normalCommute,
+          'requiredMode': 'normal',
+        },
+        onPressed: () => Navigator.of(context).pushReplacementNamed(
+          AppRoutes.normalLogin,
+          arguments: {
+            'redirectAfterLogin': AppRoutes.normalCommute,
+            'requiredMode': 'normal',
+          },
+        ),
+        enabled: enabled,
+        disabledHint: '저장된 모드가 normal일 때만 선택할 수 있어요',
+      ),
+    );
+  }
+}
+
 class ParkingCard extends StatelessWidget {
   const ParkingCard({super.key});
 
@@ -509,13 +519,7 @@ class ParkingCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    final title = Text(
-      '오프라인 서비스',
-      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-        fontWeight: FontWeight.w700,
-        color: p.parkingDark,
-      ),
-    );
+    final title = _selectorCardTitle(context, '오프라인 서비스', p.parkingDark);
 
     return Card(
       color: Theme.of(context).cardColor,

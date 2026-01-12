@@ -59,7 +59,7 @@ class _LiteDepartureCompletedBottomSheetState extends State<LiteDepartureComplet
 
   @override
   Widget build(BuildContext context) {
-    final plateState = context.watch<LitePlateState>();
+    final litePlateState = context.watch<LitePlateState>();
     final userName = context.read<UserState>().name;
     final areaState = context.watch<AreaState>();
 
@@ -68,7 +68,7 @@ class _LiteDepartureCompletedBottomSheetState extends State<LiteDepartureComplet
     final selectedDateRaw = context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now();
     final selectedDate = DateTime(selectedDateRaw.year, selectedDateRaw.month, selectedDateRaw.day);
 
-    final baseList = plateState.getPlatesByCollection(
+    final baseList = litePlateState.liteGetPlatesByCollection(
       PlateType.departureCompleted,
       selectedDate: selectedDate,
     );
@@ -82,15 +82,15 @@ class _LiteDepartureCompletedBottomSheetState extends State<LiteDepartureComplet
           (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
     );
 
-    final selectedPlate = plateState.liteGetSelectedPlate(PlateType.departureCompleted, userName);
-    final plateNumber = selectedPlate?.plateNumber ?? '';
+    final liteSelectedPlate = litePlateState.liteGetSelectedPlate(PlateType.departureCompleted, userName);
+    final plateNumber = liteSelectedPlate?.plateNumber ?? '';
 
     return WillPopScope(
       onWillPop: () async {
-        if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
-          await plateState.togglePlateIsSelected(
+        if (liteSelectedPlate != null && liteSelectedPlate.id.isNotEmpty) {
+          await litePlateState.liteTogglePlateIsSelected(
             collection: PlateType.departureCompleted,
-            plateNumber: selectedPlate.plateNumber,
+            plateNumber: liteSelectedPlate.plateNumber,
             userName: userName,
             onError: (msg) => debugPrint(msg),
           );
