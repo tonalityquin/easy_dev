@@ -1,3 +1,5 @@
+// lib/screens/normal_mode/normal_type_package/normal_parking_completed_package/widgets/normal_parking_completed_status_bottom_sheet.dart
+
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -82,7 +84,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
   late final AnimationController _attentionCtrl;
   late final Animation<double> _attentionPulse;
 
-  // ✅ “정산 없이 출차 완료” 2차 선택지 제공을 위한 상태
+  // ✅ “정산 없이 출차 요청” 2차 선택지 제공을 위한 상태
   bool _departureOverrideArmed = false;
   DateTime? _departureOverrideArmedAt;
 
@@ -315,7 +317,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                     const SizedBox(width: 10),
                     const Expanded(
                       child: Text(
-                        '정산 없이 출차 완료',
+                        '정산 없이 출차 요청',
                         style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
                       ),
                     ),
@@ -346,7 +348,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        '그래도 출차 완료로 이동하시겠습니까?',
+                        '그래도 출차 요청으로 이동하시겠습니까?',
                         style: TextStyle(
                           color: Colors.black.withOpacity(0.70),
                           fontWeight: FontWeight.w700,
@@ -426,7 +428,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       ),
                       child: const Text(
-                        '그래도 출차 완료',
+                        '그래도 출차 요청',
                         style: TextStyle(fontWeight: FontWeight.w900),
                       ),
                     ),
@@ -440,15 +442,18 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
     );
   }
 
-  Future<void> _goDepartureCompleted() async {
+  Future<void> _goDepartureRequested() async {
     final movementPlate = context.read<MovementPlate>();
-    await movementPlate.setDepartureCompletedDirectFromParkingCompleted(
+
+    final effectiveLocation = _plate.location.trim().isEmpty ? '미지정' : _plate.location.trim();
+
+    await movementPlate.setDepartureRequested(
       _plate.plateNumber,
       _plate.area,
-      _plate.location,
+      effectiveLocation,
     );
 
-    // (기존 코드 유지)
+    // ✅ 이제 실제 상태도 departure_requests로 이동하므로 TTS 문구와 일치
     OfflineTts.instance.sayDepartureRequested(
       plateNumber: _plate.plateNumber,
     );
@@ -505,7 +510,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                 builder: (context, _) {
                   final attention = _attentionPulse.value;
 
-                  final shakeDx = math.sin(_attentionCtrl.value * math.pi * 10) * (1 - _attentionCtrl.value) * 6;
+                  final shakeDx =
+                      math.sin(_attentionCtrl.value * math.pi * 10) * (1 - _attentionCtrl.value) * 6;
                   final scale = 1 + (attention * 0.012);
 
                   return ListView(
@@ -728,17 +734,17 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                             ),
                             const SizedBox(height: 12),
                             _PrimaryCtaButton(
-                              icon: Icons.exit_to_app,
-                              title: '출차 완료로 이동',
-                              subtitle: '차량을 출차 완료 상태로 전환합니다.',
+                              icon: Icons.local_shipping_outlined,
+                              title: '출차 요청으로 이동',
+                              subtitle: '차량을 출차 요청 상태로 전환합니다.',
                               onPressed: () async {
                                 // ✅ 정산 미완료 케이스
                                 if (_needsBilling) {
-                                  // ✅ 무료면: 자동 정산(0원 잠금) 후 바로 출차 완료
+                                  // ✅ 무료면: 자동 정산(0원 잠금) 후 바로 출차 요청
                                   if (_isFreeBilling) {
                                     final ok = await _autoPrebillFreeIfNeeded();
                                     if (!ok) return;
-                                    await _goDepartureCompleted();
+                                    await _goDepartureRequested();
                                     return;
                                   }
 
@@ -750,13 +756,13 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                                     if (!mounted) return;
 
                                     if (choice == _DepartureOverrideChoice.proceed) {
-                                      await _goDepartureCompleted();
+                                      await _goDepartureRequested();
                                       return;
                                     }
 
                                     if (choice == _DepartureOverrideChoice.goBilling) {
                                       await _triggerBillingRequiredAttention(
-                                        message: '정산을 진행해주세요. 정산 후 출차 완료로 이동할 수 있습니다.',
+                                        message: '정산을 진행해주세요. 정산 후 출차 요청으로 이동할 수 있습니다.',
                                       );
                                       return;
                                     }
@@ -769,14 +775,14 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                                   _armOverride();
                                   await _triggerBillingRequiredAttention(
                                     message: '정산이 필요합니다. 먼저 정산을 진행하세요.\n'
-                                        '정산 없이 출차 완료가 필요하면, 출차 완료 버튼을 한 번 더 누르세요.',
+                                        '정산 없이 출차 요청이 필요하면, 출차 요청 버튼을 한 번 더 누르세요.',
                                   );
                                   return;
                                 }
 
                                 // ✅ 정산 완료 상태면 기존 로직 그대로 수행
                                 _resetOverride();
-                                await _goDepartureCompleted();
+                                await _goDepartureRequested();
                               },
                             ),
                           ],
@@ -916,8 +922,7 @@ class _PlateSummaryCard extends StatelessWidget {
     final billingText = billingType.isNotEmpty ? billingType : '미지정';
 
     final borderColor = Color.lerp(Colors.black12, Colors.orange, (attention * 0.9).clamp(0, 1))!;
-    final bgColor =
-    Color.lerp(Colors.grey.shade50, Colors.orange.withOpacity(0.06), (attention * 0.8).clamp(0, 1))!;
+    final bgColor = Color.lerp(Colors.grey.shade50, Colors.orange.withOpacity(0.06), (attention * 0.8).clamp(0, 1))!;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -989,7 +994,7 @@ class _PlateSummaryCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      '정산이 필요합니다. 정산 후 출차 완료로 이동할 수 있습니다.',
+                      '정산이 필요합니다. 정산 후 출차 요청으로 이동할 수 있습니다.',
                       style: TextStyle(
                         color: Colors.orange.shade800,
                         fontWeight: FontWeight.w800,
