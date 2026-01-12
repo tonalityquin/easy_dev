@@ -189,7 +189,7 @@ class _SingleHomeTabBar extends StatelessWidget {
           child: Material(
             color: Colors.white,
             child: InkWell(
-              onTap: () {
+              onTap: () async {
                 // ✅ 홈 버튼 탭 Trace 기록
                 _trace(
                   context,
@@ -202,11 +202,23 @@ class _SingleHomeTabBar extends StatelessWidget {
                   },
                 );
 
-                pageState.onItemTapped(
+                // ✅ (기존) 홈 탭 처리: 재탭이면 reset 수행
+                await pageState.onItemTapped(
                   context,
                   0,
                   onError: (msg) => showFailedSnackbar(context, msg),
                 );
+
+                // ✅ (기존 유지) 홈 버튼을 탭할 때마다 데이터 갱신(1회 조회 get)
+                try {
+                  context.read<NormalPlateState>().normalSyncWithAreaState();
+                } catch (_) {
+                  // no-op
+                }
+
+                // ✅ [추가] 같은 area에서도 출차요청 aggregation count 재조회 트리거
+                // - 내부에 0.8초 쿨다운(Throttle) 적용됨
+                pageState.bumpDepartureRequestsCountRefreshToken();
               },
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -269,7 +281,6 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   Future<void> _handleVerticalDragEnd(BuildContext context, DragEndDetails details) async {
     final vy = details.primaryVelocity ?? 0.0;
 
-    // ✅ (변경) 위로 스와이프하여 채팅 열기 로직 삭제
     // ✅ 아래로 스와이프(TopSheet)만 유지
     final firedDown = (_vDragDistance > _vDistanceThresholdDown) || (vy > _vVelocityThresholdDown);
 

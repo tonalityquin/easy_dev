@@ -7,6 +7,7 @@ import 'dart:developer' as dev;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // ✅ 추가
 
 import '../../models/plate_log_model.dart';
 import '../../models/plate_model.dart';
@@ -14,6 +15,30 @@ import '../../models/plate_model.dart';
 
 class PlateWriteService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  // ✅ (추가) departure_requests_view 동기화(선택 시 삭제/해제 시 복구)를 위한 기기 로컬 토글 키
+  // - MovementPlate의 departure_requests_view write 토글과 동일 키 사용
+  static const String _kDepartureRequestsViewWritePrefsKey = 'departure_requests_realtime_write_enabled_v1';
+
+  static SharedPreferences? _prefs;
+  static Future<void>? _prefsLoading;
+
+  static Future<bool> _canUpsertDepartureRequestsView() async {
+    _prefsLoading ??= SharedPreferences.getInstance().then((p) => _prefs = p);
+    await _prefsLoading;
+    return _prefs!.getBool(_kDepartureRequestsViewWritePrefsKey) ?? false; // 기본 OFF
+  }
+
+  String _fallbackPlateFromDocId(String docId) {
+    final idx = docId.lastIndexOf('_');
+    if (idx > 0) return docId.substring(0, idx);
+    return docId;
+  }
+
+  String _normalizeLocation(String? raw) {
+    final v = (raw ?? '').trim();
+    return v.isEmpty ? '미지정' : v;
+  }
 
   Future<void> addOrUpdatePlate(String documentId, PlateModel plate) async {
     final docRef = _firestore.collection('plates').doc(documentId);
@@ -250,6 +275,11 @@ class PlateWriteService {
   }
 
   /// ✅ ‘주행’ 커밋 트랜잭션: 서버 상태(타입/선점자) 검증 + 원샷 업데이트
+  ///
+  /// ✅ (추가 반영)
+  /// - departure_requests 상태에서 isSelected==true가 되면
+  ///   departure_requests_view/{area}.items.{id} 를 삭제(항상 수행)
+  /// - isSelected==false로 풀릴 때는 (토글 ON인 경우) view에 복구(upsert)
   Future<void> recordWhoPlateClick(
       String id,
       bool isSelected, {
@@ -257,6 +287,9 @@ class PlateWriteService {
         required String area,
       }) async {
     final docRef = _firestore.collection('plates').doc(id);
+
+    // ✅ 트랜잭션 내부에서 prefs 조회 불가 → 사전 조회
+    final canUpsertDepView = await _canUpsertDepartureRequestsView();
 
     try {
       await _firestore.runTransaction((tx) async {
@@ -310,6 +343,54 @@ class PlateWriteService {
         };
 
         tx.update(docRef, update); // WRITE 1
+
+        // ✅ (추가) departure_requests 상태에서 view 동기화
+        if (type == 'departure_requests') {
+          final docArea = ((data['area'] as String?) ?? area).trim();
+          if (docArea.isNotEmpty) {
+            final viewRef = _firestore.collection('departure_requests_view').doc(docArea);
+
+            if (isSelected) {
+              // ✅ 요구사항: isSelected == true면 items.{id} 삭제(토글과 무관하게 수행)
+              tx.set(
+                viewRef,
+                <String, dynamic>{
+                  'area': docArea,
+                  'updatedAt': FieldValue.serverTimestamp(),
+                  'items': <String, dynamic>{
+                    id: FieldValue.delete(),
+                  }
+                },
+                SetOptions(merge: true),
+              );
+            } else {
+              // ✅ 선택 해제 시에는 view에 복구(단, upsert는 토글 ON일 때만)
+              if (canUpsertDepView) {
+                final plateNumber = ((data['plateNumber'] as String?) ?? _fallbackPlateFromDocId(id)).trim();
+                final location = _normalizeLocation(data['location'] as String?);
+
+                final depRequestedAt = data['departureRequestedAt'];
+
+                tx.set(
+                  viewRef,
+                  <String, dynamic>{
+                    'area': docArea,
+                    'updatedAt': FieldValue.serverTimestamp(),
+                    'items': <String, dynamic>{
+                      id: <String, dynamic>{
+                        'plateNumber': plateNumber,
+                        'location': location,
+                        'departureRequestedAt': depRequestedAt ?? FieldValue.serverTimestamp(),
+                        'updatedAt': FieldValue.serverTimestamp(),
+                      }
+                    }
+                  },
+                  SetOptions(merge: true),
+                );
+              }
+            }
+          }
+        }
       });
 
       /*await UsageReporter.instance.report(

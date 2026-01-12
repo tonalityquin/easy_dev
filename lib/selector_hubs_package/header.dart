@@ -21,6 +21,9 @@ import '../../utils/commute_true_false_mode_config.dart';
 // ✅ (추가) 입차 완료 테이블 "실시간 탭" On/Off(기기별, 기본 OFF + 유지)
 import '../../utils/parking_completed_realtime_tab_mode_config.dart';
 
+// ✅ (추가) 출차 요청 테이블 "실시간 탭" On/Off(기기별, 기본 OFF + 유지)
+import '../../utils/departure_requests_realtime_tab_mode_config.dart';
+
 // ✅ (추가) 스프레드시트 ID/URL에서 ID 추출 헬퍼
 import '../../utils/api/sheets_config.dart';
 
@@ -133,7 +136,6 @@ class _HeaderState extends State<Header> {
       final values = resp.values ?? const [];
 
       // rows -> text lines
-      // - A열 기준이지만, 혹시 다중열이 오면 행 단위로 join
       final lines = <String>[];
       for (final row in values) {
         final rowStrings = row.map((c) => (c ?? '').toString().trim()).toList();
@@ -327,9 +329,7 @@ class _TopRow extends StatelessWidget {
   // ✅ 앱 설정 진입 비밀번호
   static const String _kAppSettingsPassword = 'blsnc150119';
 
-  /// ✅ 앱 설정 진입 게이트: 비밀번호 입력 → 성공 시 설정 시트 오픈
   Future<void> _openAppSettingsGate(BuildContext context) async {
-    // expanded가 false이면 버튼 자체가 안 보이지만, 방어적으로 가드
     if (!expanded) return;
 
     final controller = TextEditingController();
@@ -469,26 +469,18 @@ class _TopRow extends StatelessWidget {
     await _openSheetsLinkSheet(context);
   }
 
-  // ✅ 앱 종료 처리 (공용 서비스로 위임)
   Future<void> _exitApp(BuildContext context) async {
     await AppExitService.exitApp(context);
   }
 
-  // “설정” 바텀시트 — Gmail(수신자만) + QuickOverlay 오버레이 권한 + 오버레이 모드(항상 노출)
-  // + commute_true_false 토글 + parking_completed 실시간 탭 토글
-  // + ✅ 공지 스프레드시트 ID 설정(noti 시트)
   Future<void> _openSheetsLinkSheet(BuildContext context) async {
-    // Gmail 수신자 로드 (To 만)
     final emailCfg = await EmailConfig.load();
     final mailToCtrl = TextEditingController(text: emailCfg.to);
 
-    // 현재 오버레이 모드 로드
     OverlayMode currentOverlayMode = await OverlayModeConfig.getMode();
 
-    // SharedPreferences 로드
     final prefs = await SharedPreferences.getInstance();
 
-    // 오버레이 형태 기본값(초기 1회만 topHalf로 강제)
     final initialized = prefs.getBool('overlay_mode_initialized_v2') ?? false;
     if (!initialized) {
       currentOverlayMode = OverlayMode.topHalf;
@@ -496,14 +488,12 @@ class _TopRow extends StatelessWidget {
       await prefs.setBool('overlay_mode_initialized_v2', true);
     }
 
-    // ✅ commute_true_false Firestore 기록 토글 로드 (기본 OFF)
     bool commuteTrueFalseEnabled = await CommuteTrueFalseModeConfig.isEnabled();
 
-    // ✅ (추가) 입차 완료 테이블 "실시간 탭" 토글 로드 (기본 OFF)
-    bool parkingCompletedRealtimeTabEnabled =
-    await ParkingCompletedRealtimeTabModeConfig.isEnabled();
+    // ✅ (변경) 입차완료/출차요청 실시간 탭 게이트 각각 로드
+    bool parkingCompletedRealtimeTabEnabled = await ParkingCompletedRealtimeTabModeConfig.isEnabled();
+    bool departureRequestsRealtimeTabEnabled = await DepartureRequestsRealtimeTabModeConfig.isEnabled();
 
-    // ✅ (추가) 공지 스프레드시트 ID 로드
     final noticeIdCtrl = TextEditingController(
       text: (prefs.getString(_kNoticeSpreadsheetIdKey) ?? '').trim(),
     );
@@ -522,7 +512,6 @@ class _TopRow extends StatelessWidget {
           builder: (ctx, sc) {
             return StatefulBuilder(
               builder: (ctx, setSheetState) {
-                // QuickOverlay 권한 섹션
                 Widget buildOverlayPermissionSection() {
                   return Container(
                     margin: const EdgeInsets.only(bottom: 16),
@@ -577,32 +566,20 @@ class _TopRow extends StatelessWidget {
                                 onPressed: () async {
                                   if (!Platform.isAndroid) {
                                     if (!ctx.mounted) return;
-                                    showFailedSnackbar(
-                                      context,
-                                      '안드로이드에서만 지원되는 기능입니다.',
-                                    );
+                                    showFailedSnackbar(context, '안드로이드에서만 지원되는 기능입니다.');
                                     return;
                                   }
                                   try {
                                     final granted = await FlutterOverlayWindow.isPermissionGranted();
                                     if (!ctx.mounted) return;
                                     if (granted) {
-                                      showSelectedSnackbar(
-                                        context,
-                                        '이미 “다른 앱 위에 표시” 권한이 허용되어 있습니다.',
-                                      );
+                                      showSelectedSnackbar(context, '이미 “다른 앱 위에 표시” 권한이 허용되어 있습니다.');
                                     } else {
-                                      showFailedSnackbar(
-                                        context,
-                                        '현재 “다른 앱 위에 표시” 권한이 허용되지 않았습니다.',
-                                      );
+                                      showFailedSnackbar(context, '현재 “다른 앱 위에 표시” 권한이 허용되지 않았습니다.');
                                     }
                                   } catch (e) {
                                     if (!ctx.mounted) return;
-                                    showFailedSnackbar(
-                                      context,
-                                      '권한 상태를 확인하는 중 오류가 발생했습니다: $e',
-                                    );
+                                    showFailedSnackbar(context, '권한 상태를 확인하는 중 오류가 발생했습니다: $e');
                                   }
                                 },
                                 label: const Text('현재 상태 확인'),
@@ -615,20 +592,14 @@ class _TopRow extends StatelessWidget {
                                 onPressed: () async {
                                   if (!Platform.isAndroid) {
                                     if (!ctx.mounted) return;
-                                    showFailedSnackbar(
-                                      context,
-                                      '안드로이드에서만 지원되는 기능입니다.',
-                                    );
+                                    showFailedSnackbar(context, '안드로이드에서만 지원되는 기능입니다.');
                                     return;
                                   }
                                   try {
                                     final already = await FlutterOverlayWindow.isPermissionGranted();
                                     if (already) {
                                       if (!ctx.mounted) return;
-                                      showSelectedSnackbar(
-                                        context,
-                                        '이미 권한이 허용되어 있습니다.\n설정 앱에서 언제든지 변경할 수 있습니다.',
-                                      );
+                                      showSelectedSnackbar(context, '이미 권한이 허용되어 있습니다.\n설정 앱에서 언제든지 변경할 수 있습니다.');
                                       return;
                                     }
 
@@ -636,22 +607,13 @@ class _TopRow extends StatelessWidget {
 
                                     if (!ctx.mounted) return;
                                     if (result == true) {
-                                      showSuccessSnackbar(
-                                        context,
-                                        '권한이 허용되었습니다. 오버레이를 사용할 수 있습니다.',
-                                      );
+                                      showSuccessSnackbar(context, '권한이 허용되었습니다. 오버레이를 사용할 수 있습니다.');
                                     } else {
-                                      showFailedSnackbar(
-                                        context,
-                                        '권한을 허용하지 않았습니다.\n필요 시 “설정 > 다른 앱 위에 표시”에서 직접 허용해 주세요.',
-                                      );
+                                      showFailedSnackbar(context, '권한을 허용하지 않았습니다.\n필요 시 “설정 > 다른 앱 위에 표시”에서 직접 허용해 주세요.');
                                     }
                                   } catch (e) {
                                     if (!ctx.mounted) return;
-                                    showFailedSnackbar(
-                                      context,
-                                      '권한 설정 화면을 여는 중 오류가 발생했습니다: $e',
-                                    );
+                                    showFailedSnackbar(context, '권한 설정 화면을 여는 중 오류가 발생했습니다: $e');
                                   }
                                 },
                                 style: ElevatedButton.styleFrom(
@@ -668,7 +630,6 @@ class _TopRow extends StatelessWidget {
                   );
                 }
 
-                // 오버레이 형태 선택 섹션 (✅ 항상 노출)
                 Widget buildOverlayModeSection() {
                   String labelFor(OverlayMode mode) {
                     switch (mode) {
@@ -773,17 +734,13 @@ class _TopRow extends StatelessWidget {
                         const SizedBox(height: 6),
                         Text(
                           '현재 선택: ${labelFor(currentOverlayMode)}',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: Colors.black54,
-                          ),
+                          style: const TextStyle(fontSize: 12, color: Colors.black54),
                         ),
                       ],
                     ),
                   );
                 }
 
-                // ✅ commute_true_false Firestore 기록 On/Off 섹션
                 Widget buildCommuteTrueFalseToggleSection() {
                   return Container(
                     margin: const EdgeInsets.only(bottom: 16),
@@ -859,8 +816,11 @@ class _TopRow extends StatelessWidget {
                   );
                 }
 
-                // ✅ (추가) 입차 완료 테이블: 실시간 탭 On/Off 섹션
-                Widget buildParkingCompletedRealtimeTabToggleSection() {
+                // ✅ (수정) 실시간 탭 토글: 입차완료 ON이면 출차요청도 같이 ON
+                Widget buildRealtimeTabsToggleSection() {
+                  // 단일 스위치로 표현(둘 중 하나라도 ON이면 ON으로 표시)
+                  final combined = parkingCompletedRealtimeTabEnabled || departureRequestsRealtimeTabEnabled;
+
                   return Container(
                     margin: const EdgeInsets.only(bottom: 16),
                     padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
@@ -890,7 +850,7 @@ class _TopRow extends StatelessWidget {
                             const SizedBox(width: 10),
                             const Expanded(
                               child: Text(
-                                '입차 완료 테이블: 실시간 탭(서버 조회)',
+                                '출차 요청/입차 완료 테이블: 실시간 탭(서버 조회)',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w800,
                                   color: Colors.black87,
@@ -902,44 +862,49 @@ class _TopRow extends StatelessWidget {
                         const SizedBox(height: 10),
                         const Text(
                           '이 설정은 “기기별(로컬)”로 저장됩니다.\n'
-                              'ON이면 입차 완료 테이블에 “실시간” 탭이 표시되어 진입할 수 있습니다.\n'
-                              'OFF이면 “실시간” 탭 자체가 숨겨져 진입할 수 없습니다(로컬 탭만 사용).',
+                              'ON이면 출차 요청/입차 완료 테이블에 “실시간(view)” 탭이 열립니다.\n'
+                              'OFF이면 두 테이블의 실시간 탭이 모두 잠기고 로컬 탭만 사용합니다.',
                           style: TextStyle(fontSize: 13, color: Colors.black87),
                         ),
                         const SizedBox(height: 10),
                         SwitchListTile(
                           contentPadding: EdgeInsets.zero,
-                          title: Text(
-                            parkingCompletedRealtimeTabEnabled
-                                ? 'ON (실시간 탭 사용)'
-                                : 'OFF (실시간 탭 숨김)',
-                          ),
+                          title: Text(combined ? 'ON (실시간 탭 사용)' : 'OFF (실시간 탭 숨김)'),
                           subtitle: Text(
-                            parkingCompletedRealtimeTabEnabled
-                                ? '입차 완료 테이블에서 실시간 탭 진입이 허용됩니다.'
-                                : '입차 완료 테이블에서 실시간 탭 진입이 차단됩니다.',
+                            combined
+                                ? '출차 요청/입차 완료 테이블에서 실시간 탭 진입이 허용됩니다.'
+                                : '출차 요청/입차 완료 테이블에서 실시간 탭 진입이 차단됩니다.',
                           ),
-                          value: parkingCompletedRealtimeTabEnabled,
+                          value: combined,
                           onChanged: (v) async {
+                            // ✅ 두 게이트를 동일 값으로 동기화
                             parkingCompletedRealtimeTabEnabled = v;
+                            departureRequestsRealtimeTabEnabled = v;
+
                             setSheetState(() {});
+
                             await ParkingCompletedRealtimeTabModeConfig.setEnabled(v);
+                            await DepartureRequestsRealtimeTabModeConfig.setEnabled(v);
 
                             if (!ctx.mounted) return;
                             showSuccessSnackbar(
                               context,
                               v
-                                  ? '이 기기에서 “입차 완료 테이블 실시간 탭”을 ON으로 설정했습니다.'
-                                  : '이 기기에서 “입차 완료 테이블 실시간 탭”을 OFF로 설정했습니다.',
+                                  ? '이 기기에서 출차 요청/입차 완료 “실시간 탭”을 ON으로 설정했습니다.'
+                                  : '이 기기에서 출차 요청/입차 완료 “실시간 탭”을 OFF로 설정했습니다.',
                             );
                           },
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '상태: 출차요청=${departureRequestsRealtimeTabEnabled ? "ON" : "OFF"} / 입차완료=${parkingCompletedRealtimeTabEnabled ? "ON" : "OFF"}',
+                          style: const TextStyle(fontSize: 12, color: Colors.black54),
                         ),
                       ],
                     ),
                   );
                 }
 
-                // ✅ 공지 스프레드시트 ID 섹션
                 Widget buildNoticeSpreadsheetSection() {
                   return Container(
                     margin: const EdgeInsets.only(bottom: 16),
@@ -1060,7 +1025,6 @@ class _TopRow extends StatelessWidget {
                   );
                 }
 
-                // Gmail 수신자 섹션(To 만)
                 Widget buildGmailSection() {
                   return Container(
                     margin: const EdgeInsets.only(bottom: 16),
@@ -1105,15 +1069,9 @@ class _TopRow extends StatelessWidget {
                                 final cfg = await EmailConfig.load();
                                 mailToCtrl.text = cfg.to;
                                 if (!ctx.mounted) return;
-                                showSelectedSnackbar(
-                                  context,
-                                  '수신자를 기본값(빈 값)으로 복원했습니다.',
-                                );
+                                showSelectedSnackbar(context, '수신자를 기본값(빈 값)으로 복원했습니다.');
                               },
-                              icon: const Icon(
-                                Icons.restore,
-                                color: Colors.black87,
-                              ),
+                              icon: const Icon(Icons.restore, color: Colors.black87),
                             ),
                           ],
                         ),
@@ -1140,18 +1098,12 @@ class _TopRow extends StatelessWidget {
                                   final to = mailToCtrl.text.trim();
                                   if (!EmailConfig.isValidToList(to)) {
                                     if (!ctx.mounted) return;
-                                    showFailedSnackbar(
-                                      context,
-                                      '수신자 이메일 형식을 확인해 주세요.',
-                                    );
+                                    showFailedSnackbar(context, '수신자 이메일 형식을 확인해 주세요.');
                                     return;
                                   }
                                   await EmailConfig.save(EmailConfig(to: to));
                                   if (!ctx.mounted) return;
-                                  showSuccessSnackbar(
-                                    context,
-                                    '수신자 설정을 저장했습니다.',
-                                  );
+                                  showSuccessSnackbar(context, '수신자 설정을 저장했습니다.');
                                 },
                                 label: const Text('저장'),
                               ),
@@ -1162,14 +1114,9 @@ class _TopRow extends StatelessWidget {
                                 icon: const Icon(Icons.copy_all_outlined),
                                 onPressed: () async {
                                   final raw = 'To: ${mailToCtrl.text}';
-                                  await Clipboard.setData(
-                                    ClipboardData(text: raw),
-                                  );
+                                  await Clipboard.setData(ClipboardData(text: raw));
                                   if (!ctx.mounted) return;
-                                  showSuccessSnackbar(
-                                    context,
-                                    '현재 수신자 설정을 복사했습니다.',
-                                  );
+                                  showSuccessSnackbar(context, '현재 수신자 설정을 복사했습니다.');
                                 },
                                 label: const Text('설정 복사'),
                               ),
@@ -1205,10 +1152,7 @@ class _TopRow extends StatelessWidget {
                             const Expanded(
                               child: Text(
                                 '서비스 설정',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 16,
-                                ),
+                                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
                               ),
                             ),
                             IconButton(
@@ -1219,28 +1163,17 @@ class _TopRow extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 8),
-                        Divider(
-                          height: 1,
-                          color: Colors.black.withOpacity(.08),
-                        ),
+                        Divider(height: 1, color: Colors.black.withOpacity(.08)),
                         const SizedBox(height: 16),
 
-                        // 오버레이 권한 (누구나)
                         buildOverlayPermissionSection(),
-
-                        // ✅ 오버레이 모드 (항상 노출)
                         buildOverlayModeSection(),
-
-                        // commute_true_false 토글
                         buildCommuteTrueFalseToggleSection(),
 
-                        // ✅ 입차 완료 테이블 실시간 탭 토글
-                        buildParkingCompletedRealtimeTabToggleSection(),
+                        // ✅ (변경) 실시간 탭 토글(출차요청/입차완료 동시 동기화)
+                        buildRealtimeTabsToggleSection(),
 
-                        // ✅ 공지 스프레드시트 ID 설정 (noti 시트)
                         buildNoticeSpreadsheetSection(),
-
-                        // Gmail 수신자(To) 설정
                         buildGmailSection(),
                       ],
                     ),

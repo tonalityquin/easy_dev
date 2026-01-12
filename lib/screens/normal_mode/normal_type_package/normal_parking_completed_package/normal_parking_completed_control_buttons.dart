@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 
 import '../../../../enums/plate_type.dart';
 import '../../../../repositories/plate_repo_services/plate_repository.dart';
+import '../../../../states/area/area_state.dart';
+import '../../../../states/page/normal_page_state.dart';
 import '../../../../states/plate/delete_plate.dart';
 import '../../../../states/plate/normal_plate_state.dart';
 import '../../../../states/user/user_state.dart';
@@ -28,6 +30,126 @@ class _Palette {
   static const success = Color(0xFF2E7D32); // 출차 완료(초록색)
 }
 
+/// ✅ 출차 요청(PlateType.departureRequests) 건수(aggregation count) 표시 위젯
+/// - plates 컬렉션에서 (type == departure_requests && area == area) 조건으로 count()
+/// - refreshToken 변경 시(같은 area여도) 다시 count().get()
+class DepartureRequestsAggregationCount extends StatefulWidget {
+  final String area;
+  final Color color;
+  final double fontSize;
+
+  /// ✅ 같은 area에서도 재조회 트리거로 사용
+  final int refreshToken;
+
+  const DepartureRequestsAggregationCount({
+    super.key,
+    required this.area,
+    required this.color,
+    this.fontSize = 18,
+    required this.refreshToken,
+  });
+
+  @override
+  State<DepartureRequestsAggregationCount> createState() => _DepartureRequestsAggregationCountState();
+}
+
+class _DepartureRequestsAggregationCountState extends State<DepartureRequestsAggregationCount> {
+  Future<int>? _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _fetch();
+  }
+
+  @override
+  void didUpdateWidget(covariant DepartureRequestsAggregationCount oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    final areaChanged = oldWidget.area.trim() != widget.area.trim();
+    final tokenChanged = oldWidget.refreshToken != widget.refreshToken;
+
+    if (areaChanged || tokenChanged) {
+      _future = _fetch(); // ✅ 같은 area여도 token이 바뀌면 재조회
+    }
+  }
+
+  Future<int> _fetch() async {
+    final area = widget.area.trim();
+    if (area.isEmpty) return 0;
+
+    final agg = FirebaseFirestore.instance
+        .collection('plates')
+        .where('type', isEqualTo: PlateType.departureRequests.firestoreValue)
+        .where('area', isEqualTo: area)
+        .count();
+
+    final snap = await agg.get();
+    return snap.count ?? 0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final area = widget.area.trim();
+
+    // area가 비어있으면 표시만 0으로(조회 시도 없음)
+    if (area.isEmpty) {
+      return Center(
+        child: Text(
+          '0',
+          style: TextStyle(
+            color: widget.color,
+            fontSize: widget.fontSize,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      );
+    }
+
+    return FutureBuilder<int>(
+      future: _future,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.2,
+              valueColor: AlwaysStoppedAnimation<Color>(widget.color),
+            ),
+          );
+        }
+
+        if (snap.hasError) {
+          return Center(
+            child: Text(
+              '—',
+              style: TextStyle(
+                color: widget.color,
+                fontSize: widget.fontSize,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          );
+        }
+
+        final count = snap.data ?? 0;
+        return FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            '$count',
+            style: TextStyle(
+              color: widget.color,
+              fontSize: widget.fontSize,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class NormalParkingCompletedControlButtons extends StatelessWidget {
   final bool isParkingAreaMode;
   final bool isStatusMode;
@@ -37,8 +159,7 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
   final VoidCallback onToggleLock;
   final VoidCallback showSearchDialog;
   final VoidCallback toggleSortIcon;
-  final Function(BuildContext context, String plateNumber, String area)
-  handleEntryParkingRequest;
+  final Function(BuildContext context, String plateNumber, String area) handleEntryParkingRequest;
   final Function(BuildContext context) handleDepartureRequested;
 
   const NormalParkingCompletedControlButtons({
@@ -55,6 +176,20 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
     required this.handleDepartureRequested,
   });
 
+  /// ✅ area 결정(주석 의도에 맞춰 fallbackArea(선택 plate.area) 우선)
+  String _resolveArea(BuildContext context, {String? fallbackArea}) {
+    final fb = (fallbackArea ?? '').trim();
+    if (fb.isNotEmpty) return fb;
+
+    final userArea = context.read<UserState>().currentArea.trim();
+    if (userArea.isNotEmpty) return userArea;
+
+    final stateArea = context.read<AreaState>().currentArea.trim();
+    if (stateArea.isNotEmpty) return stateArea;
+
+    return '';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<NormalPlateState>(
@@ -62,8 +197,12 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
         final userName = context.read<UserState>().name;
         final normalSelectedPlate =
         normalPlateState.normalGetSelectedPlate(PlateType.parkingCompleted, userName);
-        final isPlateSelected =
-            normalSelectedPlate != null && normalSelectedPlate.isSelected;
+        final isPlateSelected = normalSelectedPlate != null && normalSelectedPlate.isSelected;
+
+        final departureCountArea = _resolveArea(
+          context,
+          fallbackArea: normalSelectedPlate?.area,
+        );
 
         // 팔레트 기반 컬러
         final Color selectedItemColor = _Palette.base;
@@ -84,18 +223,30 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
             BottomNavigationBarItem(
               icon: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),
-                transitionBuilder: (child, anim) =>
-                    ScaleTransition(scale: anim, child: child),
+                transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
                 child: isLocked
                     ? const Icon(Icons.lock, key: ValueKey('locked'))
                     : const Icon(Icons.lock_open, key: ValueKey('unlocked')),
               ),
               label: isLocked ? '화면 잠금' : '잠금 해제',
             ),
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.move_down, color: _Palette.danger),
+
+            // ✅ 출차 요청: aggregation count (refreshToken 기반 재조회)
+            BottomNavigationBarItem(
+              icon: Selector<NormalPageState, int>(
+                selector: (_, s) => s.departureRequestsCountRefreshToken,
+                builder: (context, token, _) {
+                  return DepartureRequestsAggregationCount(
+                    area: departureCountArea,
+                    color: _Palette.danger,
+                    fontSize: 18,
+                    refreshToken: token,
+                  );
+                },
+              ),
               label: '출차 요청',
             ),
+
             const BottomNavigationBarItem(
               icon: Icon(Icons.directions_car, color: _Palette.success),
               label: '출차 완료',
@@ -105,34 +256,37 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
             BottomNavigationBarItem(
               icon: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 300),
-                transitionBuilder: (child, animation) =>
-                    ScaleTransition(scale: animation, child: child),
+                transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
                 child: isPlateSelected
                     ? (normalSelectedPlate.isLockedFee
                     ? const Icon(Icons.lock_open,
-                    key: ValueKey('unlock'),
-                    color: Color(0xFF37474F))
-                    : const Icon(Icons.lock,
-                    key: ValueKey('lock'),
-                    color: Color(0xFF37474F)))
-                    : Icon(Icons.refresh,
-                    key: const ValueKey('refresh'), color: muted),
+                    key: ValueKey('unlock'), color: Color(0xFF37474F))
+                    : const Icon(Icons.lock, key: ValueKey('lock'), color: Color(0xFF37474F)))
+                    : Icon(Icons.refresh, key: const ValueKey('refresh'), color: muted),
               ),
               label: isPlateSelected
-                  ? (normalSelectedPlate.isLockedFee
-                  ? '정산 취소'
-                  : '사전 정산')
+                  ? (normalSelectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
                   : '채팅하기',
             ),
+
+            // ✅ (선택된 경우) 출차 요청: aggregation count (refreshToken 기반 재조회)
             BottomNavigationBarItem(
-              icon: Icon(
-                isPlateSelected ? Icons.check_circle : Icons.search,
-                color:
-                isPlateSelected ? _Palette.danger : muted,
-              ),
-              label:
-              isPlateSelected ? '출차 요청' : '번호판 검색',
+              icon: isPlateSelected
+                  ? Selector<NormalPageState, int>(
+                selector: (_, s) => s.departureRequestsCountRefreshToken,
+                builder: (context, token, _) {
+                  return DepartureRequestsAggregationCount(
+                    area: departureCountArea,
+                    color: _Palette.danger,
+                    fontSize: 18,
+                    refreshToken: token,
+                  );
+                },
+              )
+                  : Icon(Icons.search, color: muted),
+              label: isPlateSelected ? '출차 요청' : '번호판 검색',
             ),
+
             BottomNavigationBarItem(
               icon: AnimatedRotation(
                 turns: isSorted ? 0.5 : 0.0,
@@ -140,16 +294,12 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                 child: Transform.scale(
                   scaleX: isSorted ? -1 : 1,
                   child: Icon(
-                    isPlateSelected
-                        ? Icons.settings
-                        : Icons.sort,
+                    isPlateSelected ? Icons.settings : Icons.sort,
                     color: muted,
                   ),
                 ),
               ),
-              label: isPlateSelected
-                  ? '상태 수정'
-                  : (isSorted ? '최신순' : '오래된 순'),
+              label: isPlateSelected ? '상태 수정' : (isSorted ? '최신순' : '오래된 순'),
             ),
           ],
           onTap: (index) async {
@@ -164,8 +314,7 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                   context: context,
                   isScrollControlled: true,
                   backgroundColor: Colors.transparent,
-                  builder: (context) =>
-                  const NormalDepartureCompletedBottomSheet(),
+                  builder: (context) => const NormalDepartureCompletedBottomSheet(),
                 );
               }
               return;
@@ -185,29 +334,21 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
             final repo = context.read<PlateRepository>();
             final billingType = normalSelectedPlate.billingType;
             final now = DateTime.now();
-            final entryTime =
-                normalSelectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/
-                    1000;
-            final currentTime =
-                now.toUtc().millisecondsSinceEpoch ~/ 1000;
+            final entryTime = normalSelectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+            final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
             final firestore = FirebaseFirestore.instance;
             final documentId = normalSelectedPlate.id;
             final selectedArea = normalSelectedPlate.area;
 
             if (index == 0) {
-              // === 0원 규칙: basicAmount==0 && addAmount==0
               final bool isZeroZero =
-                  ((normalSelectedPlate.basicAmount ?? 0) == 0) &&
-                      ((normalSelectedPlate.addAmount ?? 0) == 0);
+                  ((normalSelectedPlate.basicAmount ?? 0) == 0) && ((normalSelectedPlate.addAmount ?? 0) == 0);
 
-              // 0원 + 이미 잠금 -> 해제 금지 (DB 없음)
               if (isZeroZero && normalSelectedPlate.isLockedFee) {
-                showFailedSnackbar(context,
-                    '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.');
+                showFailedSnackbar(context, '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.');
                 return;
               }
 
-              // 0원 + 아직 잠금 아님 -> 자동 잠금 (WRITE ×2)
               if (isZeroZero && !normalSelectedPlate.isLockedFee) {
                 final updatedPlate = normalSelectedPlate.copyWith(
                   isLockedFee: true,
@@ -221,15 +362,13 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                   _reportDbSafe(
                     area: selectedArea,
                     action: 'write',
-                    source:
-                    'parkingCompleted.prebill.autoZero.repo.addOrUpdatePlate',
+                    source: 'parkingCompleted.prebill.autoZero.repo.addOrUpdatePlate',
                     n: 1,
                   );
 
                   await context
                       .read<NormalPlateState>()
-                      .normalUpdatePlateLocally(
-                      PlateType.parkingCompleted, updatedPlate);
+                      .normalUpdatePlateLocally(PlateType.parkingCompleted, updatedPlate);
 
                   final autoLog = {
                     'action': '사전 정산(자동 잠금: 0원)',
@@ -239,37 +378,28 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                     'auto': true,
                   };
 
-                  await firestore
-                      .collection('plates')
-                      .doc(documentId)
-                      .update({
+                  await firestore.collection('plates').doc(documentId).update({
                     'logs': FieldValue.arrayUnion([autoLog])
                   });
                   _reportDbSafe(
                     area: selectedArea,
                     action: 'write',
-                    source:
-                    'parkingCompleted.prebill.autoZero.plates.update.logs.arrayUnion',
+                    source: 'parkingCompleted.prebill.autoZero.plates.update.logs.arrayUnion',
                     n: 1,
                   );
 
-                  showSuccessSnackbar(
-                      context, '0원 유형이라 자동으로 잠금되었습니다.');
+                  showSuccessSnackbar(context, '0원 유형이라 자동으로 잠금되었습니다.');
                 } catch (e) {
-                  showFailedSnackbar(context,
-                      '자동 잠금 처리에 실패했습니다. 다시 시도해 주세요.');
+                  showFailedSnackbar(context, '자동 잠금 처리에 실패했습니다. 다시 시도해 주세요.');
                 }
                 return;
               }
 
-              // 정산 타입 미지정 (DB 없음)
               if ((billingType ?? '').trim().isEmpty) {
-                showFailedSnackbar(
-                    context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
+                showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
                 return;
               }
 
-              // 이미 잠금 → 정산 취소 (WRITE ×2)
               if (normalSelectedPlate.isLockedFee) {
                 final confirm = await showDialog<bool>(
                   context: context,
@@ -289,15 +419,13 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                   _reportDbSafe(
                     area: selectedArea,
                     action: 'write',
-                    source:
-                    'parkingCompleted.prebill.unlock.repo.addOrUpdatePlate',
+                    source: 'parkingCompleted.prebill.unlock.repo.addOrUpdatePlate',
                     n: 1,
                   );
 
                   await context
                       .read<NormalPlateState>()
-                      .normalUpdatePlateLocally(
-                      PlateType.parkingCompleted, updatedPlate);
+                      .normalUpdatePlateLocally(PlateType.parkingCompleted, updatedPlate);
 
                   final cancelLog = {
                     'action': '사전 정산 취소',
@@ -305,17 +433,13 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                     'timestamp': now.toIso8601String(),
                   };
 
-                  await firestore
-                      .collection('plates')
-                      .doc(documentId)
-                      .update({
+                  await firestore.collection('plates').doc(documentId).update({
                     'logs': FieldValue.arrayUnion([cancelLog])
                   });
                   _reportDbSafe(
                     area: selectedArea,
                     action: 'write',
-                    source:
-                    'parkingCompleted.prebill.unlock.plates.update.logs.arrayUnion',
+                    source: 'parkingCompleted.prebill.unlock.plates.update.logs.arrayUnion',
                     n: 1,
                   );
 
@@ -324,7 +448,6 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                   showFailedSnackbar(context, '정산 취소 중 오류가 발생했습니다.');
                 }
               } else {
-                // 사전 정산(바텀시트) → 확정 시 WRITE ×2
                 final result = await showOnTapBillingBottomSheet(
                   context: context,
                   entryTimeInSeconds: entryTime,
@@ -335,8 +458,7 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                   addAmount: normalSelectedPlate.addAmount ?? 0,
                   billingType: normalSelectedPlate.billingType ?? '변동',
                   regularAmount: normalSelectedPlate.regularAmount,
-                  regularDurationHours:
-                  normalSelectedPlate.regularDurationHours,
+                  regularDurationHours: normalSelectedPlate.regularDurationHours,
                 );
                 if (result == null) return;
 
@@ -352,15 +474,13 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                   _reportDbSafe(
                     area: selectedArea,
                     action: 'write',
-                    source:
-                    'parkingCompleted.prebill.lock.repo.addOrUpdatePlate',
+                    source: 'parkingCompleted.prebill.lock.repo.addOrUpdatePlate',
                     n: 1,
                   );
 
                   await context
                       .read<NormalPlateState>()
-                      .normalUpdatePlateLocally(
-                      PlateType.parkingCompleted, updatedPlate);
+                      .normalUpdatePlateLocally(PlateType.parkingCompleted, updatedPlate);
 
                   final log = {
                     'action': '사전 정산',
@@ -368,22 +488,16 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                     'timestamp': now.toIso8601String(),
                     'lockedFee': result.lockedFee,
                     'paymentMethod': result.paymentMethod,
-                    if (result.reason != null &&
-                        result.reason!.trim().isNotEmpty)
-                      'reason': result.reason!.trim(),
+                    if (result.reason != null && result.reason!.trim().isNotEmpty) 'reason': result.reason!.trim(),
                   };
 
-                  await firestore
-                      .collection('plates')
-                      .doc(documentId)
-                      .update({
+                  await firestore.collection('plates').doc(documentId).update({
                     'logs': FieldValue.arrayUnion([log])
                   });
                   _reportDbSafe(
                     area: selectedArea,
                     action: 'write',
-                    source:
-                    'parkingCompleted.prebill.lock.plates.update.logs.arrayUnion',
+                    source: 'parkingCompleted.prebill.lock.plates.update.logs.arrayUnion',
                     n: 1,
                   );
 
@@ -396,7 +510,6 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                 }
               }
             } else if (index == 1) {
-              // 출차 요청(확정 동작은 외부 핸들러에서 Firebase 처리/계측)
               showDialog(
                 context: context,
                 builder: (context) => NormalSetDepartureRequestDialog(
@@ -404,7 +517,6 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                 ),
               );
             } else if (index == 2) {
-              // 상태 수정 시트(삭제 실행 시 DeletePlate 내부에서 Firebase 처리/계측)
               await showNormalParkingCompletedStatusBottomSheet(
                 context: context,
                 plate: normalSelectedPlate,
@@ -419,14 +531,11 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                     builder: (_) => PlateRemoveDialog(
                       onConfirm: () {
                         try {
-                          context
-                              .read<DeletePlate>()
-                              .deleteFromParkingCompleted(
+                          context.read<DeletePlate>().deleteFromParkingCompleted(
                             normalSelectedPlate.plateNumber,
                             normalSelectedPlate.area,
                           );
-                          showSuccessSnackbar(context,
-                              "삭제 완료: ${normalSelectedPlate.plateNumber}");
+                          showSuccessSnackbar(context, "삭제 완료: ${normalSelectedPlate.plateNumber}");
                         } catch (_) {
                           // DeletePlate 내부에서 실패 처리
                         }
