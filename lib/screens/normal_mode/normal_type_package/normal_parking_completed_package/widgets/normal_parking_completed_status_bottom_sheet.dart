@@ -1,5 +1,3 @@
-// lib/screens/normal_mode/normal_type_package/normal_parking_completed_package/widgets/normal_parking_completed_status_bottom_sheet.dart
-
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -84,11 +82,14 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
   late final AnimationController _attentionCtrl;
   late final Animation<double> _attentionPulse;
 
-  // ✅ “정산 없이 출차 요청” 2차 선택지 제공을 위한 상태
+  // ✅ “정산 없이 출차 요청” 2차 선택지 제공을 위한 상태 (parking_completed 전용 UX)
   bool _departureOverrideArmed = false;
   DateTime? _departureOverrideArmedAt;
 
   static const Duration _overrideWindow = Duration(seconds: 12);
+
+  // ✅ Primary CTA 중복 클릭 방지
+  bool _primaryBusy = false;
 
   @override
   void initState() {
@@ -119,9 +120,12 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
     super.dispose();
   }
 
-  bool get _needsBilling => _plate.isLockedFee != true;
+  PlateType? get _type => _plate.typeEnum;
 
-  /// ✅ 무료 판정: basicAmount == 0 && addAmount == 0
+  /// ✅ 기존 정산 강조 UX는 "입차 완료(parking_completed)"에만 의미가 있으므로 해당 타입에만 적용
+  bool get _needsBilling => (_type == PlateType.parkingCompleted) && (_plate.isLockedFee != true);
+
+  /// ✅ 무료 판정: basicAmount == 0 && addAmount == 0 (parking_completed에서만 사용)
   bool get _isFreeBilling => (_plate.basicAmount ?? 0) == 0 && (_plate.addAmount ?? 0) == 0;
 
   bool get _overrideActive {
@@ -137,6 +141,23 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
   void _armOverride() {
     _departureOverrideArmed = true;
     _departureOverrideArmedAt = DateTime.now();
+  }
+
+  String _plateDocId() {
+    if (_plate.id.trim().isNotEmpty) return _plate.id.trim();
+    return '${_plate.plateNumber}_${_plate.area}';
+  }
+
+  String get _effectiveLocation => _plate.location.trim().isEmpty ? '미지정' : _plate.location.trim();
+
+  Future<void> _runPrimary(Future<void> Function() fn) async {
+    if (_primaryBusy) return;
+    setState(() => _primaryBusy = true);
+    try {
+      await fn();
+    } finally {
+      if (mounted) setState(() => _primaryBusy = false);
+    }
   }
 
   /// ✅ Overlay 기반 커스텀 스낵바가 context/Overlay 구조에 따라 실패할 수 있으므로
@@ -201,10 +222,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
     _attentionCtrl.forward(from: 0);
   }
 
-  /// ✅ 무료면 자동 “사전정산(0원 잠금)” 처리
-  /// - repo 업데이트
-  /// - 로컬 상태 반영
-  /// - logs 기록
+  /// ✅ 무료면 자동 “사전정산(0원 잠금)” 처리 (parking_completed 전용)
   Future<bool> _autoPrebillFreeIfNeeded() async {
     if (_plate.isLockedFee == true) return true; // 이미 잠금(정산) 상태
     if (!_isFreeBilling) return false; // 무료가 아니면 여기서 처리하지 않음
@@ -445,12 +463,10 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
   Future<void> _goDepartureRequested() async {
     final movementPlate = context.read<MovementPlate>();
 
-    final effectiveLocation = _plate.location.trim().isEmpty ? '미지정' : _plate.location.trim();
-
     await movementPlate.setDepartureRequested(
       _plate.plateNumber,
       _plate.area,
-      effectiveLocation,
+      _effectiveLocation,
     );
 
     // ✅ 이제 실제 상태도 departure_requests로 이동하므로 TTS 문구와 일치
@@ -462,6 +478,172 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
     Navigator.pop(context);
   }
 
+  /// ✅ 완전 블로킹 "주행 중" 다이얼로그
+  /// - 다른 곳 터치/뒤로가기/제스처 모두 불가
+  /// - 유일한 액션: '주행 완료'
+  Future<bool> _showDrivingBlockingDialog({
+    required String message,
+    required Future<void> Function() onComplete,
+  }) async {
+    Object? err;
+    StackTrace? st;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      useRootNavigator: true,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withOpacity(0.55),
+      builder: (_) => PopScope(
+        canPop: false,
+        child: _DrivingBlockingDialog(
+          message: message,
+          onComplete: () async {
+            try {
+              await onComplete();
+              return true;
+            } catch (e, s) {
+              err = e;
+              st = s;
+              return false;
+            }
+          },
+        ),
+      ),
+    );
+
+    if (ok == true) return true;
+
+    if (err != null) {
+      // 실패 원인을 사용자에게 안내 (스낵바/폴백)
+      _showWarningSafe('주행 완료 처리 실패: $err');
+      // 필요한 경우 st는 로깅용(여기서는 사용하지 않음)
+      // ignore: unused_local_variable
+      final _ = st;
+    }
+
+    return false;
+  }
+
+  Future<void> _startEntryDriving() async {
+    await _runPrimary(() async {
+      // 타입 안전장치
+      if (_type != PlateType.parkingRequests) {
+        _showWarningSafe('현재 상태에서는 입차 주행 시작이 불가능합니다.');
+        return;
+      }
+
+      final userName = context.read<UserState>().name;
+      final selectedBy = (_plate.selectedBy ?? '').trim();
+      if (_plate.isSelected == true && selectedBy.isNotEmpty && selectedBy != userName) {
+        _showWarningSafe('다른 사용자가 이미 주행 중입니다. (선택자: $selectedBy)');
+        return;
+      }
+
+      final repo = context.read<PlateRepository>();
+      final movementPlate = context.read<MovementPlate>();
+      final id = _plateDocId();
+
+      try {
+        // 1) 주행 시작(선점)
+        await repo.recordWhoPlateClick(
+          id,
+          true,
+          selectedBy: userName,
+          area: _plate.area,
+        );
+
+        // 2) 블로킹 다이얼로그 + 주행 완료 시 상태 전환
+        final success = await _showDrivingBlockingDialog(
+          message: '입차 주행 중입니다.',
+          onComplete: () async {
+            await movementPlate.setParkingCompleted(
+              _plate.plateNumber,
+              _plate.area,
+              _effectiveLocation,
+            );
+          },
+        );
+
+        if (!success) {
+          // 실패 시 선점 해제(잠김 방지)
+          try {
+            await repo.recordWhoPlateClick(
+              id,
+              false,
+              area: _plate.area,
+            );
+          } catch (_) {}
+          return;
+        }
+
+        // 완료 후 시트 종료(상태가 바뀌므로 화면 갱신은 상위 스트림에 맡김)
+        if (!mounted) return;
+        Navigator.pop(context);
+      } on FirebaseException catch (e) {
+        _showWarningSafe('입차 주행 시작 실패: ${e.message ?? e.code}');
+      } catch (e) {
+        _showWarningSafe('입차 주행 시작 실패: $e');
+      }
+    });
+  }
+
+  Future<void> _startDepartureDriving() async {
+    await _runPrimary(() async {
+      if (_type != PlateType.departureRequests) {
+        _showWarningSafe('현재 상태에서는 출차 주행 시작이 불가능합니다.');
+        return;
+      }
+
+      final userName = context.read<UserState>().name;
+      final selectedBy = (_plate.selectedBy ?? '').trim();
+      if (_plate.isSelected == true && selectedBy.isNotEmpty && selectedBy != userName) {
+        _showWarningSafe('다른 사용자가 이미 주행 중입니다. (선택자: $selectedBy)');
+        return;
+      }
+
+      final repo = context.read<PlateRepository>();
+      final movementPlate = context.read<MovementPlate>();
+      final id = _plateDocId();
+
+      try {
+        // 1) 주행 시작(선점)
+        await repo.recordWhoPlateClick(
+          id,
+          true,
+          selectedBy: userName,
+          area: _plate.area,
+        );
+
+        // 2) 블로킹 다이얼로그 + 주행 완료 시 상태 전환
+        final success = await _showDrivingBlockingDialog(
+          message: '출차 주행 중입니다.',
+          onComplete: () async {
+            await movementPlate.setDepartureCompleted(_plate);
+          },
+        );
+
+        if (!success) {
+          // 실패 시 선점 해제
+          try {
+            await repo.recordWhoPlateClick(
+              id,
+              false,
+              area: _plate.area,
+            );
+          } catch (_) {}
+          return;
+        }
+
+        if (!mounted) return;
+        Navigator.pop(context);
+      } on FirebaseException catch (e) {
+        _showWarningSafe('출차 주행 시작 실패: ${e.message ?? e.code}');
+      } catch (e) {
+        _showWarningSafe('출차 주행 시작 실패: $e');
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final rootContext = Navigator.of(context, rootNavigator: true).context;
@@ -471,6 +653,75 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
     final paymentMethod = (_plate.paymentMethod ?? '').trim();
     final billingType = (_plate.billingType ?? '').trim();
     final location = (_plate.location).trim().isEmpty ? '미지정' : _plate.location.trim();
+
+    // ✅ Primary CTA만 상태에 따라 변경 (디자인/나머지 버튼 로직은 유지)
+    IconData primaryIcon = Icons.local_shipping_outlined;
+    String primaryTitle = '출차 요청으로 이동';
+    String primarySubtitle = '차량을 출차 요청 상태로 전환합니다.';
+    Future<void> Function() primaryOnPressed = () async {
+      // 기본은 기존 로직(입차 완료 → 출차 요청)
+      await _runPrimary(() async {
+        // ✅ 정산 미완료 케이스 (parking_completed 전용)
+        if (_needsBilling) {
+          // ✅ 무료면: 자동 정산(0원 잠금) 후 바로 출차 요청
+          if (_isFreeBilling) {
+            final ok = await _autoPrebillFreeIfNeeded();
+            if (!ok) return;
+            await _goDepartureRequested();
+            return;
+          }
+
+          // 2차 클릭(유효 시간 내): 선택지 제공
+          if (_overrideActive) {
+            _resetOverride();
+
+            final choice = await _showDepartureOverrideDialog();
+            if (!mounted) return;
+
+            if (choice == _DepartureOverrideChoice.proceed) {
+              await _goDepartureRequested();
+              return;
+            }
+
+            if (choice == _DepartureOverrideChoice.goBilling) {
+              await _triggerBillingRequiredAttention(
+                message: '정산을 진행해주세요. 정산 후 출차 요청으로 이동할 수 있습니다.',
+              );
+              return;
+            }
+
+            // cancel / null
+            return;
+          }
+
+          // 1차 클릭: 경고 + 임팩트 + “다시 누르면 선택지” 안내
+          _armOverride();
+          await _triggerBillingRequiredAttention(
+            message: '정산이 필요합니다. 먼저 정산을 진행하세요.\n'
+                '정산 없이 출차 요청이 필요하면, 출차 요청 버튼을 한 번 더 누르세요.',
+          );
+          return;
+        }
+
+        // ✅ 정산 완료 상태면 기존 로직 그대로 수행
+        _resetOverride();
+        await _goDepartureRequested();
+      });
+    };
+
+    if (_type == PlateType.parkingRequests) {
+      primaryIcon = Icons.play_circle_fill;
+      primaryTitle = '입차 주행 시작';
+      primarySubtitle = '주행 중으로 전환 후, 완료 시 입차 완료로 변경됩니다.';
+      primaryOnPressed = _startEntryDriving;
+    } else if (_type == PlateType.departureRequests) {
+      primaryIcon = Icons.play_circle_fill;
+      primaryTitle = '출차 주행 시작';
+      primarySubtitle = '주행 중으로 전환 후, 완료 시 출차 완료로 변경됩니다.';
+      primaryOnPressed = _startDepartureDriving;
+    } else {
+      // parking_completed 또는 기타: 기존 "출차 요청으로 이동" 유지
+    }
 
     return SafeArea(
       top: false,
@@ -713,7 +964,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
 
                                         setState(() => _plate = updatedPlate);
 
-                                        // ✅ 정산 취소 시 override는 리셋(다시 1차→2차 UX 유지)
+                                        // ✅ 정산 취소 시 override는 리셋
                                         _resetOverride();
 
                                         try {
@@ -733,57 +984,13 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                               ],
                             ),
                             const SizedBox(height: 12),
+
+                            // ✅ 여기만 상태에 따라 (입차 주행 시작 / 출차 요청으로 이동 / 출차 주행 시작) 으로 바뀜
                             _PrimaryCtaButton(
-                              icon: Icons.local_shipping_outlined,
-                              title: '출차 요청으로 이동',
-                              subtitle: '차량을 출차 요청 상태로 전환합니다.',
-                              onPressed: () async {
-                                // ✅ 정산 미완료 케이스
-                                if (_needsBilling) {
-                                  // ✅ 무료면: 자동 정산(0원 잠금) 후 바로 출차 요청
-                                  if (_isFreeBilling) {
-                                    final ok = await _autoPrebillFreeIfNeeded();
-                                    if (!ok) return;
-                                    await _goDepartureRequested();
-                                    return;
-                                  }
-
-                                  // 2차 클릭(유효 시간 내): 선택지 제공
-                                  if (_overrideActive) {
-                                    _resetOverride();
-
-                                    final choice = await _showDepartureOverrideDialog();
-                                    if (!mounted) return;
-
-                                    if (choice == _DepartureOverrideChoice.proceed) {
-                                      await _goDepartureRequested();
-                                      return;
-                                    }
-
-                                    if (choice == _DepartureOverrideChoice.goBilling) {
-                                      await _triggerBillingRequiredAttention(
-                                        message: '정산을 진행해주세요. 정산 후 출차 요청으로 이동할 수 있습니다.',
-                                      );
-                                      return;
-                                    }
-
-                                    // cancel / null
-                                    return;
-                                  }
-
-                                  // 1차 클릭: 경고 + 임팩트 + “다시 누르면 선택지” 안내
-                                  _armOverride();
-                                  await _triggerBillingRequiredAttention(
-                                    message: '정산이 필요합니다. 먼저 정산을 진행하세요.\n'
-                                        '정산 없이 출차 요청이 필요하면, 출차 요청 버튼을 한 번 더 누르세요.',
-                                  );
-                                  return;
-                                }
-
-                                // ✅ 정산 완료 상태면 기존 로직 그대로 수행
-                                _resetOverride();
-                                await _goDepartureRequested();
-                              },
+                              icon: primaryIcon,
+                              title: primaryTitle,
+                              subtitle: primarySubtitle,
+                              onPressed: primaryOnPressed,
                             ),
                           ],
                         ),
@@ -855,6 +1062,85 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                     ],
                   );
                 },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// ✅ 내부 전용: 완전 블로킹 주행 다이얼로그 UI
+class _DrivingBlockingDialog extends StatefulWidget {
+  const _DrivingBlockingDialog({
+    required this.message,
+    required this.onComplete,
+  });
+
+  final String message;
+
+  /// true 반환 시 성공, false 반환 시 실패
+  final Future<bool> Function() onComplete;
+
+  @override
+  State<_DrivingBlockingDialog> createState() => _DrivingBlockingDialogState();
+}
+
+class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
+  bool _busy = false;
+
+  Future<void> _handleComplete() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+
+    final ok = await widget.onComplete();
+
+    if (!mounted) return;
+
+    // 성공/실패 여부는 상위에서 처리하므로 여기서는 닫기만 수행
+    Navigator.of(context, rootNavigator: true).pop(ok);
+
+    // setState는 pop 이후 의미 없지만 안전 위해
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 30,
+              height: 30,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  _busy ? Colors.grey : Colors.blueAccent,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              widget.message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _busy ? null : _handleComplete,
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                ),
+                child: Text(_busy ? '처리 중...' : '주행 완료'),
               ),
             ),
           ],

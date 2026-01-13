@@ -18,8 +18,6 @@ import 'widgets/normal_parking_completed_status_bottom_sheet.dart';
 import 'widgets/normal_set_departure_request_dialog.dart';
 import '../../../../widgets/dialog/plate_remove_dialog.dart';
 
-// import '../../../utils/usage_reporter.dart';
-
 /// Deep Blue 팔레트(서비스 카드와 동일 계열) + 상태 색상
 class _Palette {
   static const base = Color(0xFF37474F); // primary
@@ -50,10 +48,12 @@ class DepartureRequestsAggregationCount extends StatefulWidget {
   });
 
   @override
-  State<DepartureRequestsAggregationCount> createState() => _DepartureRequestsAggregationCountState();
+  State<DepartureRequestsAggregationCount> createState() =>
+      _DepartureRequestsAggregationCountState();
 }
 
-class _DepartureRequestsAggregationCountState extends State<DepartureRequestsAggregationCount> {
+class _DepartureRequestsAggregationCountState
+    extends State<DepartureRequestsAggregationCount> {
   Future<int>? _future;
 
   @override
@@ -63,7 +63,8 @@ class _DepartureRequestsAggregationCountState extends State<DepartureRequestsAgg
   }
 
   @override
-  void didUpdateWidget(covariant DepartureRequestsAggregationCount oldWidget) {
+  void didUpdateWidget(
+      covariant DepartureRequestsAggregationCount oldWidget) {
     super.didUpdateWidget(oldWidget);
 
     final areaChanged = oldWidget.area.trim() != widget.area.trim();
@@ -159,7 +160,8 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
   final VoidCallback onToggleLock;
   final VoidCallback showSearchDialog;
   final VoidCallback toggleSortIcon;
-  final Function(BuildContext context, String plateNumber, String area) handleEntryParkingRequest;
+  final Function(BuildContext context, String plateNumber, String area)
+  handleEntryParkingRequest;
   final Function(BuildContext context) handleDepartureRequested;
 
   const NormalParkingCompletedControlButtons({
@@ -195,9 +197,12 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
     return Consumer<NormalPlateState>(
       builder: (context, normalPlateState, _) {
         final userName = context.read<UserState>().name;
-        final normalSelectedPlate =
-        normalPlateState.normalGetSelectedPlate(PlateType.parkingCompleted, userName);
-        final isPlateSelected = normalSelectedPlate != null && normalSelectedPlate.isSelected;
+        final normalSelectedPlate = normalPlateState.normalGetSelectedPlate(
+          PlateType.parkingCompleted,
+          userName,
+        );
+        final isPlateSelected =
+            normalSelectedPlate != null && normalSelectedPlate.isSelected;
 
         final departureCountArea = _resolveArea(
           context,
@@ -223,10 +228,12 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
             BottomNavigationBarItem(
               icon: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),
-                transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
+                transitionBuilder: (child, anim) =>
+                    ScaleTransition(scale: anim, child: child),
                 child: isLocked
                     ? const Icon(Icons.lock, key: ValueKey('locked'))
-                    : const Icon(Icons.lock_open, key: ValueKey('unlocked')),
+                    : const Icon(Icons.lock_open,
+                    key: ValueKey('unlocked')),
               ),
               label: isLocked ? '화면 잠금' : '잠금 해제',
             ),
@@ -256,13 +263,18 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
             BottomNavigationBarItem(
               icon: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 300),
-                transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
+                transitionBuilder: (child, animation) =>
+                    ScaleTransition(scale: animation, child: child),
                 child: isPlateSelected
                     ? (normalSelectedPlate.isLockedFee
                     ? const Icon(Icons.lock_open,
-                    key: ValueKey('unlock'), color: Color(0xFF37474F))
-                    : const Icon(Icons.lock, key: ValueKey('lock'), color: Color(0xFF37474F)))
-                    : Icon(Icons.refresh, key: const ValueKey('refresh'), color: muted),
+                    key: ValueKey('unlock'),
+                    color: Color(0xFF37474F))
+                    : const Icon(Icons.lock,
+                    key: ValueKey('lock'),
+                    color: Color(0xFF37474F)))
+                    : Icon(Icons.refresh,
+                    key: const ValueKey('refresh'), color: muted),
               ),
               label: isPlateSelected
                   ? (normalSelectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
@@ -273,7 +285,8 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
             BottomNavigationBarItem(
               icon: isPlateSelected
                   ? Selector<NormalPageState, int>(
-                selector: (_, s) => s.departureRequestsCountRefreshToken,
+                selector: (_, s) =>
+                s.departureRequestsCountRefreshToken,
                 builder: (context, token, _) {
                   return DepartureRequestsAggregationCount(
                     area: departureCountArea,
@@ -299,7 +312,9 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                   ),
                 ),
               ),
-              label: isPlateSelected ? '상태 수정' : (isSorted ? '최신순' : '오래된 순'),
+              label: isPlateSelected
+                  ? '상태 수정'
+                  : (isSorted ? '최신순' : '오래된 순'),
             ),
           ],
           onTap: (index) async {
@@ -334,7 +349,8 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
             final repo = context.read<PlateRepository>();
             final billingType = normalSelectedPlate.billingType;
             final now = DateTime.now();
-            final entryTime = normalSelectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+            final entryTime =
+                normalSelectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
             final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
             final firestore = FirebaseFirestore.instance;
             final documentId = normalSelectedPlate.id;
@@ -342,10 +358,12 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
 
             if (index == 0) {
               final bool isZeroZero =
-                  ((normalSelectedPlate.basicAmount ?? 0) == 0) && ((normalSelectedPlate.addAmount ?? 0) == 0);
+                  ((normalSelectedPlate.basicAmount ?? 0) == 0) &&
+                      ((normalSelectedPlate.addAmount ?? 0) == 0);
 
               if (isZeroZero && normalSelectedPlate.isLockedFee) {
-                showFailedSnackbar(context, '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.');
+                showFailedSnackbar(
+                    context, '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.');
                 return;
               }
 
@@ -488,7 +506,8 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                     'timestamp': now.toIso8601String(),
                     'lockedFee': result.lockedFee,
                     'paymentMethod': result.paymentMethod,
-                    if (result.reason != null && result.reason!.trim().isNotEmpty) 'reason': result.reason!.trim(),
+                    if (result.reason != null && result.reason!.trim().isNotEmpty)
+                      'reason': result.reason!.trim(),
                   };
 
                   await firestore.collection('plates').doc(documentId).update({
@@ -535,7 +554,8 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                             normalSelectedPlate.plateNumber,
                             normalSelectedPlate.area,
                           );
-                          showSuccessSnackbar(context, "삭제 완료: ${normalSelectedPlate.plateNumber}");
+                          showSuccessSnackbar(
+                              context, "삭제 완료: ${normalSelectedPlate.plateNumber}");
                         } catch (_) {
                           // DeletePlate 내부에서 실패 처리
                         }
