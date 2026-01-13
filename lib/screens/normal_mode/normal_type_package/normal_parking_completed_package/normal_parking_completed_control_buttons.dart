@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../enums/plate_type.dart';
+import '../../../../models/plate_model.dart';
 import '../../../../repositories/plate_repo_services/plate_repository.dart';
 import '../../../../states/area/area_state.dart';
 import '../../../../states/page/normal_page_state.dart';
@@ -29,7 +30,7 @@ class _Palette {
 }
 
 /// ✅ 출차 요청(PlateType.departureRequests) 건수(aggregation count) 표시 위젯
-/// - plates 컬렉션에서 (type == departure_requests && area == area) 조건으로 count()
+/// - plates 컬렉션에서 (type == departure_requests && area == area && isSelected == false) 조건으로 count()
 /// - refreshToken 변경 시(같은 area여도) 다시 count().get()
 class DepartureRequestsAggregationCount extends StatefulWidget {
   final String area;
@@ -81,8 +82,10 @@ class _DepartureRequestsAggregationCountState
 
     final agg = FirebaseFirestore.instance
         .collection('plates')
-        .where('type', isEqualTo: PlateType.departureRequests.firestoreValue)
-        .where('area', isEqualTo: area)
+        .where(PlateFields.type,
+        isEqualTo: PlateType.departureRequests.firestoreValue)
+        .where(PlateFields.area, isEqualTo: area)
+        .where(PlateFields.isSelected, isEqualTo: false) // ✅ 추가 조건
         .count();
 
     final snap = await agg.get();
@@ -329,7 +332,8 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                   context: context,
                   isScrollControlled: true,
                   backgroundColor: Colors.transparent,
-                  builder: (context) => const NormalDepartureCompletedBottomSheet(),
+                  builder: (context) =>
+                  const NormalDepartureCompletedBottomSheet(),
                 );
               }
               return;
@@ -350,7 +354,8 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
             final billingType = normalSelectedPlate.billingType;
             final now = DateTime.now();
             final entryTime =
-                normalSelectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+                normalSelectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/
+                    1000;
             final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
             final firestore = FirebaseFirestore.instance;
             final documentId = normalSelectedPlate.id;
@@ -380,13 +385,13 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                   _reportDbSafe(
                     area: selectedArea,
                     action: 'write',
-                    source: 'parkingCompleted.prebill.autoZero.repo.addOrUpdatePlate',
+                    source:
+                    'parkingCompleted.prebill.autoZero.repo.addOrUpdatePlate',
                     n: 1,
                   );
 
-                  await context
-                      .read<NormalPlateState>()
-                      .normalUpdatePlateLocally(PlateType.parkingCompleted, updatedPlate);
+                  await context.read<NormalPlateState>().normalUpdatePlateLocally(
+                      PlateType.parkingCompleted, updatedPlate);
 
                   final autoLog = {
                     'action': '사전 정산(자동 잠금: 0원)',
@@ -402,13 +407,15 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                   _reportDbSafe(
                     area: selectedArea,
                     action: 'write',
-                    source: 'parkingCompleted.prebill.autoZero.plates.update.logs.arrayUnion',
+                    source:
+                    'parkingCompleted.prebill.autoZero.plates.update.logs.arrayUnion',
                     n: 1,
                   );
 
                   showSuccessSnackbar(context, '0원 유형이라 자동으로 잠금되었습니다.');
                 } catch (e) {
-                  showFailedSnackbar(context, '자동 잠금 처리에 실패했습니다. 다시 시도해 주세요.');
+                  showFailedSnackbar(
+                      context, '자동 잠금 처리에 실패했습니다. 다시 시도해 주세요.');
                 }
                 return;
               }
@@ -437,13 +444,13 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                   _reportDbSafe(
                     area: selectedArea,
                     action: 'write',
-                    source: 'parkingCompleted.prebill.unlock.repo.addOrUpdatePlate',
+                    source:
+                    'parkingCompleted.prebill.unlock.repo.addOrUpdatePlate',
                     n: 1,
                   );
 
-                  await context
-                      .read<NormalPlateState>()
-                      .normalUpdatePlateLocally(PlateType.parkingCompleted, updatedPlate);
+                  await context.read<NormalPlateState>().normalUpdatePlateLocally(
+                      PlateType.parkingCompleted, updatedPlate);
 
                   final cancelLog = {
                     'action': '사전 정산 취소',
@@ -457,7 +464,8 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                   _reportDbSafe(
                     area: selectedArea,
                     action: 'write',
-                    source: 'parkingCompleted.prebill.unlock.plates.update.logs.arrayUnion',
+                    source:
+                    'parkingCompleted.prebill.unlock.plates.update.logs.arrayUnion',
                     n: 1,
                   );
 
@@ -492,13 +500,13 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                   _reportDbSafe(
                     area: selectedArea,
                     action: 'write',
-                    source: 'parkingCompleted.prebill.lock.repo.addOrUpdatePlate',
+                    source:
+                    'parkingCompleted.prebill.lock.repo.addOrUpdatePlate',
                     n: 1,
                   );
 
-                  await context
-                      .read<NormalPlateState>()
-                      .normalUpdatePlateLocally(PlateType.parkingCompleted, updatedPlate);
+                  await context.read<NormalPlateState>().normalUpdatePlateLocally(
+                      PlateType.parkingCompleted, updatedPlate);
 
                   final log = {
                     'action': '사전 정산',
@@ -516,7 +524,8 @@ class NormalParkingCompletedControlButtons extends StatelessWidget {
                   _reportDbSafe(
                     area: selectedArea,
                     action: 'write',
-                    source: 'parkingCompleted.prebill.lock.plates.update.logs.arrayUnion',
+                    source:
+                    'parkingCompleted.prebill.lock.plates.update.logs.arrayUnion',
                     n: 1,
                   );
 

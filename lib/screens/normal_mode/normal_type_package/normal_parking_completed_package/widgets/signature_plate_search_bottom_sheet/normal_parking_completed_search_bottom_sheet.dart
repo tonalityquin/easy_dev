@@ -5,14 +5,12 @@ import '../../../../../../models/plate_model.dart';
 import '../../../../../../enums/plate_type.dart';
 import '../../../../../../repositories/plate_repo_services/plate_repository.dart';
 
-// ✅ 삭제/복귀용
 import '../../../../../../states/plate/delete_plate.dart';
 import '../../../../../../states/plate/movement_plate.dart';
-import '../../../../../../states/user/user_state.dart';
 import '../../../../../../utils/snackbar_helper.dart';
 import '../../../../../../widgets/dialog/plate_remove_dialog.dart';
 
-// ✅ 기존 상태 바텀시트(새 바텀시트 X)
+// ✅ 기존 상태 바텀시트 (새 바텀시트 X)
 import '../normal_parking_completed_status_bottom_sheet.dart';
 
 import 'keypad/animated_keypad.dart';
@@ -39,7 +37,6 @@ class NormalParkingCompletedSearchBottomSheet extends StatefulWidget {
 class _NormalParkingCompletedSearchBottomSheetState
     extends State<NormalParkingCompletedSearchBottomSheet>
     with SingleTickerProviderStateMixin {
-  // ✅ 요청 팔레트 (BlueGrey)
   static const Color _base = Color(0xFF546E7A); // BlueGrey 600
   static const Color _dark = Color(0xFF37474F); // BlueGrey 800
 
@@ -86,7 +83,6 @@ class _NormalParkingCompletedSearchBottomSheetState
     try {
       final repository = context.read<PlateRepository>();
 
-      // ✅ 기존 signatureQuery(입차완료 고정) → commonQuery(타입 전체)
       final results = await repository.fourDigitCommonQuery(
         plateFourDigit: _controller.text.trim(),
         area: widget.area.trim(),
@@ -117,13 +113,10 @@ class _NormalParkingCompletedSearchBottomSheetState
   }
 
   void _openStatusBottomSheet(BuildContext rootContext, PlateModel selected) {
-    // ✅ 기존 상태 바텀시트에 필요한 콜백 구성
     Future<void> onRequestEntry() async {
-      // 이 동작은 기존 앱 의미상 parking_completed에서만 유효하므로 그때만 수행
       if (selected.typeEnum != PlateType.parkingCompleted) return;
 
-      final movement = rootContext.read<MovementPlate>();
-      await movement.goBackToParkingRequest(
+      await rootContext.read<MovementPlate>().goBackToParkingRequest(
         fromType: PlateType.parkingCompleted,
         plateNumber: selected.plateNumber,
         area: selected.area,
@@ -137,28 +130,15 @@ class _NormalParkingCompletedSearchBottomSheetState
         builder: (_) => PlateRemoveDialog(
           onConfirm: () {
             final deleter = rootContext.read<DeletePlate>();
-            final performedBy = rootContext.read<UserState>().name;
             final t = selected.typeEnum;
 
             Future<void> f;
             if (t == PlateType.parkingRequests) {
-              f = deleter.deleteFromParkingRequest(
-                selected.plateNumber,
-                selected.area,
-                performedBy: performedBy,
-              );
+              f = deleter.deleteFromParkingRequest(selected.plateNumber, selected.area);
             } else if (t == PlateType.parkingCompleted) {
-              f = deleter.deleteFromParkingCompleted(
-                selected.plateNumber,
-                selected.area,
-                performedBy: performedBy,
-              );
+              f = deleter.deleteFromParkingCompleted(selected.plateNumber, selected.area);
             } else if (t == PlateType.departureRequests) {
-              f = deleter.deleteFromDepartureRequest(
-                selected.plateNumber,
-                selected.area,
-                performedBy: performedBy,
-              );
+              f = deleter.deleteFromDepartureRequest(selected.plateNumber, selected.area);
             } else {
               showFailedSnackbar(rootContext, '이 상태에서는 삭제할 수 없습니다.');
               return;
@@ -240,34 +220,28 @@ class _NormalParkingCompletedSearchBottomSheetState
                           controller: scrollController,
                           padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                           children: [
-                            // 입력 카드
                             _CardSection(
                               title: '번호 4자리 입력',
                               subtitle: '예: 1234',
                               accent: _base,
                               child: NormalParkingCompletedPlateNumberDisplay(
-                                // ✅ 프로젝트 실제 시그니처: controller/isValidPlate 필수
                                 controller: _controller,
                                 isValidPlate: isValidPlate,
                               ),
                             ),
-
                             const SizedBox(height: 12),
 
-                            // 결과 영역
                             AnimatedSwitcher(
                               duration: const Duration(milliseconds: 220),
                               switchInCurve: Curves.easeOut,
                               switchOutCurve: Curves.easeIn,
                               child: _buildResultSection(rootContext, scrollController),
                             ),
-
                             const SizedBox(height: 12),
                           ],
                         ),
                       ),
 
-                      // 하단 CTA (검색 버튼)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
                         child: ValueListenableBuilder<TextEditingValue>(
@@ -295,7 +269,6 @@ class _NormalParkingCompletedSearchBottomSheetState
           ),
         ),
 
-        // ✅ 키패드(검색 전만 노출) — 프로젝트 AnimatedKeypad 시그니처에 맞춤
         bottomNavigationBar: _hasSearched
             ? const SizedBox.shrink()
             : AnimatedKeypad(
@@ -309,6 +282,7 @@ class _NormalParkingCompletedSearchBottomSheetState
             _controller.clear();
             _hasSearched = false;
             _results.clear();
+            _navigating = false; // ✅ 재진입 안전
           }),
         ),
       ),
@@ -319,9 +293,7 @@ class _NormalParkingCompletedSearchBottomSheetState
     final text = _controller.text;
     final valid = isValidPlate(text);
 
-    if (!_hasSearched) {
-      return const SizedBox.shrink();
-    }
+    if (!_hasSearched) return const SizedBox.shrink();
 
     if (_isLoading) {
       return const Padding(
@@ -354,7 +326,6 @@ class _NormalParkingCompletedSearchBottomSheetState
         if (_navigating) return;
         _navigating = true;
 
-        // ✅ 검색 바텀시트 닫고, "기존 상태 바텀시트"를 바로 오픈
         Navigator.pop(context);
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
