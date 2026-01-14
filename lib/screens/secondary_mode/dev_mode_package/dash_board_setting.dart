@@ -367,6 +367,7 @@ class _DashboardSettingState extends State<DashboardSetting> {
           children: [
             _SwitchTile(
               title: '입차 요청',
+              subtitle: '입차 요청 발생 시 음성 안내',
               value: _filters.parking,
               onChanged: _applying ? null : (v) => _apply(_filters.copyWith(parking: v)),
               icon: Icons.local_parking_rounded,
@@ -374,6 +375,7 @@ class _DashboardSettingState extends State<DashboardSetting> {
             const Divider(height: 1),
             _SwitchTile(
               title: '출차 요청',
+              subtitle: '출차 요청 발생 시 음성 안내',
               value: _filters.departure,
               onChanged: _applying ? null : (v) => _apply(_filters.copyWith(departure: v)),
               icon: Icons.exit_to_app_rounded,
@@ -381,6 +383,7 @@ class _DashboardSettingState extends State<DashboardSetting> {
             const Divider(height: 1),
             _SwitchTile(
               title: '출차 완료(2회)',
+              subtitle: '출차 완료 발생 시 2회 안내',
               value: _filters.completed,
               onChanged: _applying ? null : (v) => _apply(_filters.copyWith(completed: v)),
               icon: Icons.done_all_rounded,
@@ -433,15 +436,12 @@ class _DashboardSettingState extends State<DashboardSetting> {
             ),
             const SizedBox(width: 8),
 
-            // ✅ 디자인은 FilledButton.tonalIcon 그대로 유지
-            // ✅ 안정화: 버튼만 M3 컨텍스트로 보정 + width=0(minSize) edge-case 회피
             Theme(
               data: Theme.of(context).copyWith(useMaterial3: true),
               child: FilledButton.tonalIcon(
                 style: FilledButton.styleFrom(
                   backgroundColor: _SvcColors.light.withOpacity(.20),
                   foregroundColor: _SvcColors.dark,
-                  // 기존: Size.fromHeight(44) == Size(0,44) -> 일부 환경에서 edge case 유발 가능
                   minimumSize: const Size(1, 44),
                   padding: const EdgeInsets.symmetric(horizontal: 14),
                 ),
@@ -662,7 +662,6 @@ class _Section extends StatelessWidget {
         bg = Colors.red.withOpacity(.06);
         break;
       case _Tone.neutral:
-      default:
         border = Colors.black.withOpacity(.08);
         bg = Colors.black.withOpacity(.03);
         break;
