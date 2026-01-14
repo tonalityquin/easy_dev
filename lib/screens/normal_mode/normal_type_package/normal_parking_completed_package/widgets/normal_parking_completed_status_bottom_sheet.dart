@@ -17,8 +17,6 @@ import '../../../../../utils/snackbar_helper.dart';
 import '../../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 
-// ✅ TTS (오프라인 TTS 사용)
-import '../../../../../offlines/tts/offline_tts.dart';
 import '../../../../common_package/log_package/log_viewer_bottom_sheet.dart';
 import '../../../normal_modify_package/normal_modify_plate_screen.dart';
 
@@ -432,10 +430,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
       _plate.plateNumber,
       _plate.area,
       _effectiveLocation,
-    );
-
-    OfflineTts.instance.sayDepartureRequested(
-      plateNumber: _plate.plateNumber,
     );
 
     if (!mounted) return;

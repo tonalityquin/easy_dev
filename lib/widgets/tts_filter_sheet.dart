@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
-import '../../states/area/area_state.dart';
+import '../../utils/tts/tts_sync_helper.dart';
 import '../../utils/tts/tts_user_filters.dart';
 
 class TtsFilterSheet extends StatefulWidget {
@@ -15,6 +13,9 @@ class TtsFilterSheet extends StatefulWidget {
 class _TtsFilterSheetState extends State<TtsFilterSheet> {
   TtsUserFilters _filters = TtsUserFilters.defaults();
   bool _loading = true;
+
+  // ✅ 토글 연타 방지
+  bool _applying = false;
 
   @override
   void initState() {
@@ -31,20 +32,30 @@ class _TtsFilterSheetState extends State<TtsFilterSheet> {
     });
   }
 
+  /// DashboardSetting 기준의 실시간 반영:
+  /// save → PlateTTS(setEnabled/updateFilters) → FG(sendDataToTask) → snackbar_helper
   Future<void> _apply(TtsUserFilters next) async {
-    setState(() => _filters = next);
-    await _filters.save();
+    if (_applying) return;
 
-    final area = context.read<AreaState>().currentArea;
-    final payload = {
-      'area': area, // area를 함께 보내면 FG에서 같은 area면 재구독 없이 필터만 갱신됨
-      'ttsFilters': _filters.toMap(),
-    };
-    FlutterForegroundTask.sendDataToTask(payload);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('TTS 알림 설정이 적용되었습니다.')),
+    setState(() {
+      _filters = next;
+      _applying = true;
+    });
+
+    try {
+      await TtsSyncHelper.apply(
+        context,
+        next,
+        save: true,
+        showSnackbar: true,
+        successMessage: 'TTS 알림 설정이 적용되었습니다.',
       );
+    } catch (_) {
+      // 실패 스낵바는 helper가 처리
+    } finally {
+      if (mounted) {
+        setState(() => _applying = false);
+      }
     }
   }
 
@@ -62,24 +73,38 @@ class _TtsFilterSheetState extends State<TtsFilterSheet> {
           children: [
             const _SheetHandle(),
             const SizedBox(height: 12),
-            Text('TTS 알림 설정', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'TTS 알림 설정',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                if (_applying)
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+              ],
+            ),
             const SizedBox(height: 12),
             _SwitchTile(
               title: '입차 요청',
               value: _filters.parking,
-              onChanged: (v) => _apply(_filters.copyWith(parking: v)),
+              onChanged: _applying ? null : (v) => _apply(_filters.copyWith(parking: v)),
             ),
             _SwitchTile(
               title: '출차 요청',
               value: _filters.departure,
-              onChanged: (v) => _apply(_filters.copyWith(departure: v)),
+              onChanged: _applying ? null : (v) => _apply(_filters.copyWith(departure: v)),
             ),
             _SwitchTile(
               title: '출차 완료(2회)',
               value: _filters.completed,
-              onChanged: (v) => _apply(_filters.copyWith(completed: v)),
+              onChanged: _applying ? null : (v) => _apply(_filters.copyWith(completed: v)),
             ),
-            const SizedBox(height: 8),
           ],
         ),
       ),
@@ -90,13 +115,18 @@ class _TtsFilterSheetState extends State<TtsFilterSheet> {
 class _SwitchTile extends StatelessWidget {
   final String title;
   final bool value;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
 
-  const _SwitchTile({required this.title, required this.value, required this.onChanged});
+  const _SwitchTile({
+    required this.title,
+    required this.value,
+    required this.onChanged,
+  });
 
   @override
   Widget build(BuildContext context) {
     return SwitchListTile(
+      contentPadding: EdgeInsets.zero,
       title: Text(title),
       value: value,
       onChanged: onChanged,

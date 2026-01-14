@@ -1,4 +1,4 @@
-// lib/screens/secondary_package/dev_mode_package/dash_board_setting.dart
+// lib/screens/secondary_mode/dev_mode_package/dash_board_setting.dart
 //
 // 최신 트렌드(UI/UX)로 깔끔하게 리팩터링 + '서비스 로그인' 팔레트 적용:
 // - 상단 Large 스타일 헤더 느낌(섹션 배너) + 얇은 구분선
@@ -10,30 +10,32 @@
 // - 토글 연타 방지, 비동기 예외 처리 보강
 //
 // ✅ 변경: "업로드 스프레드시트" / "업무 종료 보고 스프레드시트" 섹션 및 관련 로직 삭제
-// 동작적으로는 기존과 동일하며, 레이아웃/스타일은 유지됩니다.
 //
 // ✅ 추가 변경(요청 반영):
 // - 데이터 새로고침 시 monthly_plate_status 컬렉션에서 "현재 지역(area) 문서가 하나라도 존재하는지" 확인
 // - SharedPreferences에는 지역별로 저장하지 않고, 단일 boolean 키(has_monthly_parking)만 저장
 // - 문서가 없으면 false로 갱신됨(조회 성공 기준). 조회 실패 시에는 기존 값 유지(덮어쓰기 방지).
 //
-// ✅ 추가 변경(요청 반영):
-// - ChatTtsListenerService 관련 로직(직접 setEnabled 호출) 제거
-// - Chat 관련 토글은 저장 및 FG isolate 전달(ttsFilters)만 수행
+// ✅ 추가(이번 요청):
+// - 태블릿 TTS(= 태블릿 상단 메뉴의 '출차 요청 구독' 음성 알림 토글)도 대시보드에서 같이 제어
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // ✅ 월주차 문서 존재 여부 확인
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../states/area/area_state.dart';
 import '../../../../../states/location/location_state.dart';
 import '../../../../states/bill/bill_state.dart';
+
 import '../../../../utils/tts/tts_user_filters.dart';
-import '../../../../utils/tts/plate_tts_listener_service.dart'; // ✅ PlateTTS setEnabled / updateFilters
+import '../../../../utils/tts/tts_sync_helper.dart';
 import '../../../../utils/snackbar_helper.dart';
 import '../../../../utils/init/logout_helper.dart';
+
+// ✅ 태블릿 출차 요청 "구독" 토글을 대시보드에서 제어하기 위해 추가
+import '../../../../states/plate/plate_state.dart';
+import '../../../../enums/plate_type.dart';
 
 /// 서비스 로그인 카드 팔레트 (일관된 브랜드 톤 적용)
 class _SvcColors {
@@ -73,10 +75,19 @@ class _DashboardSettingState extends State<DashboardSetting> {
   // 마지막 새로고침 시각
   DateTime? _lastRefreshAt;
 
+  // ✅ 태블릿 출차 요청 구독 토글 연타 방지
+  final ValueNotifier<bool> _tabletDepBusy = ValueNotifier<bool>(false);
+
   @override
   void initState() {
     super.initState();
     _bootstrap();
+  }
+
+  @override
+  void dispose() {
+    _tabletDepBusy.dispose();
+    super.dispose();
   }
 
   Future<void> _bootstrap() async {
@@ -99,24 +110,17 @@ class _DashboardSettingState extends State<DashboardSetting> {
   Future<void> _load() async {
     final loaded = await TtsUserFilters.load();
 
-    // ✅ PlateTTS: parking/departure/completed 중 하나라도 켜져 있으면 전체 활성화
+    // ✅ DashboardSetting 기준: 저장 없이 앱 isolate + FG isolate 동기화만 수행
     try {
-      final masterOn = loaded.parking || loaded.departure || loaded.completed;
-      await PlateTtsListenerService.setEnabled(masterOn);
-      // ✅ 앱 isolate에서도 즉시 반영(중요): 타입별 필터 상태를 직접 주입
-      PlateTtsListenerService.updateFilters(loaded);
+      await TtsSyncHelper.apply(
+        context,
+        loaded,
+        save: false,
+        showSnackbar: false,
+      );
     } catch (e) {
-      debugPrint('PlateTtsListenerService 초기화 실패: $e');
+      debugPrint('TTS 초기 동기화 실패: $e');
     }
-
-    // ✅ FG isolate에도 동기화: 필터 & area 전달(필요 시)
-    try {
-      final area = context.read<AreaState>().currentArea;
-      FlutterForegroundTask.sendDataToTask({
-        'area': area,
-        'ttsFilters': loaded.toMap(),
-      });
-    } catch (_) {}
 
     if (!mounted) return;
     setState(() {
@@ -127,54 +131,86 @@ class _DashboardSettingState extends State<DashboardSetting> {
 
   Future<void> _apply(TtsUserFilters next) async {
     if (_applying) return;
+
     setState(() {
       _filters = next;
       _applying = true;
     });
 
     try {
-      await _filters.save();
-
-      // ✅ ChatTtsListenerService 호출 제거
-      // - chat 토글은 저장 + FG isolate 전달(ttsFilters)로만 반영됨
-
-      // ✅ PlateTTS: parking/departure/completed 합성하여 마스터 on/off 즉시 반영
-      final masterOn = _filters.parking || _filters.departure || _filters.completed;
-      await PlateTtsListenerService.setEnabled(masterOn);
-
-      // ✅ 앱 isolate 필터 즉시 반영(핵심)
-      PlateTtsListenerService.updateFilters(_filters);
-
-      // ✅ FG isolate에도 최신 필터 전달
-      final area = context.read<AreaState>().currentArea; // 비어있을 수도 있음
-      FlutterForegroundTask.sendDataToTask({
-        'area': area,
-        'ttsFilters': _filters.toMap(),
-      });
-
-      if (mounted) {
-        showSuccessSnackbar(context, 'TTS 설정이 적용되었습니다.');
-      }
+      await TtsSyncHelper.apply(
+        context,
+        next,
+        save: true,
+        showSnackbar: true,
+        successMessage: 'TTS 설정이 적용되었습니다.',
+      );
     } catch (e) {
       debugPrint('TTS 적용 실패: $e');
-      if (mounted) {
-        showFailedSnackbar(context, '적용 실패: $e');
-      }
+      // 실패 스낵바는 helper가 처리합니다.
     } finally {
       if (mounted) setState(() => _applying = false);
     }
   }
 
   Future<void> _resendToForeground() async {
-    final area = context.read<AreaState>().currentArea;
-    // ✅ 재전송 시에도 앱 isolate 필터 싱크를 보수적으로 맞춰줌
-    PlateTtsListenerService.updateFilters(_filters);
-    FlutterForegroundTask.sendDataToTask({
-      'area': area,
-      'ttsFilters': _filters.toMap(),
-    });
-    if (mounted) {
-      showSuccessSnackbar(context, '현재 TTS 설정을 포그라운드 서비스에 재전송했습니다.');
+    try {
+      // ✅ 저장 없이 현재 메모리 필터를 앱/FG에 재동기화
+      await TtsSyncHelper.apply(
+        context,
+        _filters,
+        save: false,
+        showSnackbar: false,
+      );
+      if (mounted) {
+        showSuccessSnackbar(context, '현재 TTS 설정을 포그라운드 서비스에 재전송했습니다.');
+      }
+    } catch (e) {
+      debugPrint('FG 재전송 실패: $e');
+      if (mounted) {
+        showFailedSnackbar(context, '재전송 실패: $e');
+      }
+    }
+  }
+
+  /// ✅ 태블릿 "출차 요청" 구독(음성 알림) 토글
+  /// - TabletTopNavigation에서 제공하던 로직을 대시보드로 동일 이식
+  Future<void> _setTabletDepartureSubscribe(bool enable) async {
+    if (_tabletDepBusy.value) return;
+
+    final plateState = context.read<PlateState>();
+    final isSubscribed = plateState.isSubscribed(PlateType.departureRequests);
+
+    // 이미 원하는 상태면 no-op
+    if (enable == isSubscribed) return;
+
+    _tabletDepBusy.value = true;
+    try {
+      if (enable) {
+        await Future.sync(() => plateState.tabletSubscribeDeparture());
+        final currentArea = plateState.currentArea;
+        if (mounted) {
+          showSuccessSnackbar(
+            context,
+            '✅ [출차 요청] 구독 시작됨\n지역: ${currentArea.isEmpty ? "미지정" : currentArea}',
+          );
+        }
+      } else {
+        await Future.sync(() => plateState.tabletUnsubscribeDeparture());
+        final unsubscribedArea = plateState.getSubscribedArea(PlateType.departureRequests) ?? '알 수 없음';
+        if (mounted) {
+          showSelectedSnackbar(
+            context,
+            '⏹ [출차 요청] 구독 해제됨\n지역: $unsubscribedArea',
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        showFailedSnackbar(context, '작업 실패: $e');
+      }
+    } finally {
+      _tabletDepBusy.value = false;
     }
   }
 
@@ -288,6 +324,19 @@ class _DashboardSettingState extends State<DashboardSetting> {
     );
   }
 
+  Future<void> _toggleLock() async {
+    final next = !_locked;
+    setState(() => _locked = next);
+    await _saveLockState(next);
+
+    if (!mounted) return;
+    if (next) {
+      showSelectedSnackbar(context, '화면이 잠겼습니다. (LOCK)');
+    } else {
+      showSuccessSnackbar(context, '잠금이 해제되었습니다.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final currentArea = context.select<AreaState, String>((s) => s.currentArea);
@@ -296,12 +345,12 @@ class _DashboardSettingState extends State<DashboardSetting> {
       const _HeaderBanner(),
       const SizedBox(height: 12),
 
-      if ((currentArea).isEmpty)
-        _Section(
+      if (currentArea.isEmpty)
+        const _Section(
           title: '지역 설정 필요',
           icon: Icons.info_outline,
           tone: _Tone.warning,
-          child: const Text(
+          child: Text(
             '현재 지역 정보가 비어 있습니다. FG 서비스에서 지역 기반 구독을 사용하는 경우, '
                 '지역 설정 완료 후 다시 적용하세요.',
           ),
@@ -316,14 +365,6 @@ class _DashboardSettingState extends State<DashboardSetting> {
             : null,
         child: Column(
           children: [
-            _SwitchTile(
-              title: '채팅 읽어주기',
-              subtitle: '구역 채팅 최신 메시지를 음성으로 읽어줍니다',
-              value: _filters.chat,
-              onChanged: _applying ? null : (v) => _apply(_filters.copyWith(chat: v)),
-              icon: Icons.chat_bubble_outline_rounded,
-            ),
-            const Divider(height: 1),
             _SwitchTile(
               title: '입차 요청',
               value: _filters.parking,
@@ -348,6 +389,37 @@ class _DashboardSettingState extends State<DashboardSetting> {
         ),
       ),
 
+      // ✅ 추가: 태블릿 출차 요청 "구독" 음성 알림 토글을 대시보드에서도 제어
+      _Section(
+        title: '태블릿 음성 알림',
+        icon: Icons.tablet_android_outlined,
+        subtitle: '태블릿 상단 메뉴의 [출차 요청] 구독 토글과 동일한 기능입니다.',
+        child: Selector<PlateState, bool>(
+          selector: (_, s) => s.isSubscribed(PlateType.departureRequests),
+          builder: (ctx, isSubscribedDeparture, __) {
+            return ValueListenableBuilder<bool>(
+              valueListenable: _tabletDepBusy,
+              builder: (_, busy, __) {
+                return Column(
+                  children: [
+                    _BusySwitchTile(
+                      title: '출차 요청 구독',
+                      subtitle: '태블릿에서 출차 요청을 음성으로 안내합니다.',
+                      icon: isSubscribedDeparture
+                          ? Icons.notifications_active_outlined
+                          : Icons.notifications_off_outlined,
+                      value: isSubscribedDeparture,
+                      busy: busy,
+                      onChanged: busy ? null : (v) => _setTabletDepartureSubscribe(v),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        ),
+      ),
+
       _Section(
         title: '현재 지역',
         icon: Icons.place_outlined,
@@ -360,14 +432,23 @@ class _DashboardSettingState extends State<DashboardSetting> {
               ),
             ),
             const SizedBox(width: 8),
-            FilledButton.tonalIcon(
-              style: FilledButton.styleFrom(
-                backgroundColor: _SvcColors.light.withOpacity(.20),
-                foregroundColor: _SvcColors.dark,
+
+            // ✅ 디자인은 FilledButton.tonalIcon 그대로 유지
+            // ✅ 안정화: 버튼만 M3 컨텍스트로 보정 + width=0(minSize) edge-case 회피
+            Theme(
+              data: Theme.of(context).copyWith(useMaterial3: true),
+              child: FilledButton.tonalIcon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: _SvcColors.light.withOpacity(.20),
+                  foregroundColor: _SvcColors.dark,
+                  // 기존: Size.fromHeight(44) == Size(0,44) -> 일부 환경에서 edge case 유발 가능
+                  minimumSize: const Size(1, 44),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                ),
+                onPressed: _loading ? null : _resendToForeground,
+                icon: const Icon(Icons.send),
+                label: const Text('재적용'),
               ),
-              onPressed: _loading ? null : _resendToForeground,
-              icon: const Icon(Icons.send),
-              label: const Text('재적용'),
             ),
           ],
         ),
@@ -397,8 +478,11 @@ class _DashboardSettingState extends State<DashboardSetting> {
                     : const Icon(Icons.sync),
                 label: const Text('지금 새로고침'),
                 style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
                   backgroundColor: _SvcColors.base,
                   foregroundColor: _SvcColors.fg,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
             ),
@@ -421,6 +505,8 @@ class _DashboardSettingState extends State<DashboardSetting> {
                 style: OutlinedButton.styleFrom(
                   side: BorderSide(color: Colors.black.withOpacity(.22)),
                   minimumSize: const Size.fromHeight(48),
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
               ),
             ),
@@ -443,7 +529,25 @@ class _DashboardSettingState extends State<DashboardSetting> {
       ),
     );
 
+    final content = Stack(
+      children: [
+        AbsorbPointer(
+          absorbing: _locked,
+          child: listView,
+        ),
+        if (_locked)
+          Positioned.fill(
+            child: Container(
+              color: Colors.black.withOpacity(0.08),
+              alignment: Alignment.center,
+              child: _LockOverlay(onUnlock: _toggleLock),
+            ),
+          ),
+      ],
+    );
+
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('대시보드 설정'),
         backgroundColor: Colors.white,
@@ -457,56 +561,76 @@ class _DashboardSettingState extends State<DashboardSetting> {
           child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
         ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: Row(
+          IconButton(
+            tooltip: _locked ? '잠금 해제' : '잠금',
+            onPressed: _loading ? null : _toggleLock,
+            icon: Icon(_locked ? Icons.lock_rounded : Icons.lock_open_rounded),
+          ),
+          const SizedBox(width: 6),
+        ],
+      ),
+      body: content,
+    );
+  }
+}
+
+enum _Tone { neutral, warning, danger }
+
+class _HeaderBanner extends StatelessWidget {
+  const _HeaderBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 16),
+      decoration: BoxDecoration(
+        color: _SvcColors.light.withOpacity(.10),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _SvcColors.light.withOpacity(.22)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: _SvcColors.base.withOpacity(.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.tune_rounded, color: _SvcColors.dark),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(_locked ? Icons.lock : Icons.lock_open, color: _SvcColors.dark),
-                Switch.adaptive(
-                  activeColor: _SvcColors.base,
-                  value: _locked,
-                  onChanged: (v) async {
-                    setState(() => _locked = v);
-                    await _saveLockState(v);
-                  },
+                Text(
+                  '설정',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.black87,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'TTS 및 주요 동기화/세션 기능을 제어합니다.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.black54,
+                    height: 1.25,
+                  ),
                 ),
               ],
             ),
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          IgnorePointer(ignoring: _locked, child: listView),
-          if (_locked)
-            Positioned.fill(
-              child: Container(
-                color: Colors.white.withOpacity(0.6),
-                child: const Center(child: _LockedBanner()),
-              ),
-            ),
-        ],
-      ),
     );
   }
 }
 
-/// =======================
-/// 디자인 보조 위젯들
-/// =======================
-
-enum _Tone { normal, warning, danger }
-
 class _Section extends StatelessWidget {
-  const _Section({
-    required this.title,
-    required this.icon,
-    required this.child,
-    this.subtitle,
-    this.trailing,
-    this.tone = _Tone.normal,
-  });
-
   final String title;
   final String? subtitle;
   final IconData icon;
@@ -514,39 +638,72 @@ class _Section extends StatelessWidget {
   final Widget? trailing;
   final _Tone tone;
 
+  const _Section({
+    required this.title,
+    required this.icon,
+    required this.child,
+    this.subtitle,
+    this.trailing,
+    this.tone = _Tone.neutral,
+  });
+
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    Color border;
+    Color bg;
 
-    final Color bg = switch (tone) {
-      _Tone.normal => cs.surface,
-      _Tone.warning => const Color(0xFFFFF8E1),
-      _Tone.danger => const Color(0xFFFFEBEE),
-    };
-    final Color border = switch (tone) {
-      _Tone.normal => _SvcColors.light.withOpacity(.35),
-      _Tone.warning => const Color(0xFFFFECB3),
-      _Tone.danger => const Color(0xFFFFCDD2),
-    };
+    switch (tone) {
+      case _Tone.warning:
+        border = Colors.orange.withOpacity(.25);
+        bg = Colors.orange.withOpacity(.08);
+        break;
+      case _Tone.danger:
+        border = Colors.red.withOpacity(.22);
+        bg = Colors.red.withOpacity(.06);
+        break;
+      case _Tone.neutral:
+      default:
+        border = Colors.black.withOpacity(.08);
+        bg = Colors.black.withOpacity(.03);
+        break;
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: border),
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _SectionHeader(
-              icon: icon,
-              title: title,
-              subtitle: subtitle,
-              trailing: trailing,
+            Row(
+              children: [
+                Icon(icon, size: 18, color: _SvcColors.dark),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ),
+                if (trailing != null) trailing!,
+              ],
             ),
+            if (subtitle != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                subtitle!,
+                style: const TextStyle(fontSize: 12.5, color: Colors.black54, height: 1.25),
+              ),
+            ],
             const SizedBox(height: 10),
             child,
           ],
@@ -556,209 +713,188 @@ class _Section extends StatelessWidget {
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({
-    required this.icon,
-    required this.title,
-    this.subtitle,
-    this.trailing,
-  });
-
-  final IconData icon;
-  final String title;
-  final String? subtitle;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 36,
-          height: 36,
-          decoration: BoxDecoration(
-            color: _SvcColors.light.withOpacity(0.20),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: const Icon(iconDataPlaceholder, size: 20),
-        ).withIcon(icon),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: text.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: _SvcColors.dark,
-                ),
-              ),
-              if (subtitle != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2.0),
-                  child: Text(
-                    subtitle!,
-                    style: text.bodySmall?.copyWith(color: Colors.black54),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        if (trailing != null) trailing!,
-      ],
-    );
-  }
-}
-
-/// 작은 헬퍼: 위젯의 아이콘을 교체하기 위한 확장
-extension _WithIcon on Widget {
-  Widget withIcon(IconData icon) {
-    return Stack(
-      children: [
-        this,
-        Positioned.fill(
-          child: Center(
-            child: Icon(icon, size: 20, color: _SvcColors.dark),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// 더미 상수(컴파일 편의)
-const IconData iconDataPlaceholder = Icons.circle;
-
 class _SwitchTile extends StatelessWidget {
-  const _SwitchTile({
-    required this.title,
-    required this.value,
-    required this.onChanged,
-    this.subtitle,
-    this.icon,
-  });
-
   final String title;
   final String? subtitle;
   final bool value;
   final ValueChanged<bool>? onChanged;
-  final IconData? icon;
+  final IconData icon;
+
+  const _SwitchTile({
+    required this.title,
+    required this.value,
+    required this.onChanged,
+    required this.icon,
+    this.subtitle,
+  });
 
   @override
   Widget build(BuildContext context) {
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 6),
-      leading: icon == null
-          ? null
-          : Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: _SvcColors.light.withOpacity(0.18),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(icon, size: 20, color: _SvcColors.dark),
-      ),
+      dense: false,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      minLeadingWidth: 24,
+      leading: Icon(icon, color: Colors.black87),
       title: Text(
         title,
-        style: const TextStyle(fontWeight: FontWeight.w600, color: _SvcColors.dark),
+        style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.black87),
       ),
-      subtitle: subtitle == null ? null : Text(subtitle!, style: const TextStyle(fontSize: 12)),
+      subtitle: (subtitle == null)
+          ? null
+          : Text(
+        subtitle!,
+        style: const TextStyle(fontSize: 12.5, color: Colors.black54),
+      ),
       trailing: Switch.adaptive(
         value: value,
-        activeColor: _SvcColors.base,
         onChanged: onChanged,
       ),
+      onTap: onChanged == null ? null : () => onChanged!(!value),
+    );
+  }
+}
+
+/// ✅ 태블릿 구독 토글용: busy 시 스피너 + 스위치 입력 차단
+class _BusySwitchTile extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final bool value;
+  final bool busy;
+  final ValueChanged<bool>? onChanged;
+  final IconData icon;
+
+  const _BusySwitchTile({
+    required this.title,
+    required this.value,
+    required this.busy,
+    required this.onChanged,
+    required this.icon,
+    this.subtitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      dense: false,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      minLeadingWidth: 24,
+      leading: Icon(icon, color: Colors.black87),
+      title: Text(
+        title,
+        style: const TextStyle(fontWeight: FontWeight.w700, color: Colors.black87),
+      ),
+      subtitle: (subtitle == null)
+          ? null
+          : Text(
+        subtitle!,
+        style: const TextStyle(fontSize: 12.5, color: Colors.black54),
+      ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (busy)
+            const Padding(
+              padding: EdgeInsets.only(right: 10),
+              child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+          Switch.adaptive(
+            value: value,
+            onChanged: busy ? null : onChanged,
+          ),
+        ],
+      ),
+      onTap: (busy || onChanged == null) ? null : () => onChanged!(!value),
     );
   }
 }
 
 class _Pill extends StatelessWidget {
-  const _Pill({required this.text});
-
   final String text;
+
+  const _Pill({required this.text});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: _SvcColors.light.withOpacity(.20),
+        color: Colors.black.withOpacity(.06),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: _SvcColors.light.withOpacity(.35)),
+        border: Border.all(color: Colors.black.withOpacity(.08)),
       ),
       child: Text(
         text,
-        style: const TextStyle(
-          color: _SvcColors.dark,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
+        style: const TextStyle(fontSize: 11.5, color: Colors.black54, fontWeight: FontWeight.w600),
       ),
     );
   }
 }
 
-class _HeaderBanner extends StatelessWidget {
-  const _HeaderBanner();
+class _LockOverlay extends StatelessWidget {
+  final VoidCallback onUnlock;
+
+  const _LockOverlay({required this.onUnlock});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            _SvcColors.light.withOpacity(.95),
-            _SvcColors.base.withOpacity(.95),
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 420),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 18),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.black.withOpacity(.10)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(.12),
+              blurRadius: 18,
+              offset: const Offset(0, 10),
+            ),
           ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _SvcColors.dark.withOpacity(.18)),
-      ),
-      child: Row(
-        children: const [
-          Icon(Icons.tune_rounded, color: _SvcColors.fg),
-          SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              '앱 동작과 알림을 여기서 관리하세요.\n변경 즉시 기기에 적용됩니다.',
-              style: TextStyle(
-                color: _SvcColors.fg,
-                fontWeight: FontWeight.w700,
-                height: 1.25,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: _SvcColors.base.withOpacity(.10),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: const Icon(Icons.lock_rounded, color: _SvcColors.dark),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              '잠금 상태',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.black87),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              '설정 변경을 막기 위해 화면이 잠겨 있습니다.\n오른쪽 상단의 잠금 버튼 또는 아래 버튼으로 해제할 수 있습니다.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 12.5, color: Colors.black54, height: 1.25),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: onUnlock,
+                icon: const Icon(Icons.lock_open_rounded),
+                label: const Text('잠금 해제'),
+                style: ElevatedButton.styleFrom(
+                  minimumSize: const Size.fromHeight(48),
+                  backgroundColor: _SvcColors.base,
+                  foregroundColor: _SvcColors.fg,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _LockedBanner extends StatelessWidget {
-  const _LockedBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: const [
-        Icon(Icons.lock, size: 48, color: Colors.black54),
-        SizedBox(height: 8),
-        Text(
-          '화면이 잠금 상태입니다',
-          style: TextStyle(fontWeight: FontWeight.w600),
+          ],
         ),
-        SizedBox(height: 4),
-        Text('오른쪽 상단 스위치를 끄면 조작할 수 있어요'),
-      ],
+      ),
     );
   }
 }

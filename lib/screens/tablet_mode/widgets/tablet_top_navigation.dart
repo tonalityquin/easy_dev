@@ -1,19 +1,14 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../../states/area/area_state.dart';
 import '../../../widgets/tts_filter_sheet.dart';
+import '../../../utils/tts/tts_sync_helper.dart';
 import '../states/tablet_pad_mode_state.dart';
 
-// ⬇️ TTS 사용자 필터
-import '../../../utils/tts/tts_user_filters.dart';
 // ⬇️ 로그아웃 공통 헬퍼
 import '../../../utils/init/logout_helper.dart';
-
-// ✅ 앱 isolate Plate TTS 동기화
-import '../../../utils/tts/plate_tts_listener_service.dart';
 
 // ✅ 출차 요청 구독 토글을 위해 PlateState/PlateType/스낵바
 import '../../../states/plate/plate_state.dart';
@@ -351,27 +346,11 @@ class TabletTopNavigation extends StatelessWidget {
                                     Navigator.of(dialogCtx).pop();
                                     await _openTtsFilterSheet(context);
 
-                                    // ✅ 저장된 최신 필터를 앱/FG에 동기화
-                                    final currentArea = context.read<AreaState>().currentArea;
-                                    final filters = await TtsUserFilters.load();
-
-                                    // ✅ ChatTtsListenerService 호출 제거
-                                    // - chat 토글은 저장 및 FG isolate(tssFilters) 전달로만 반영
-
-                                    // ✅ Plate TTS 마스터 on/off + 앱 isolate 필터 즉시 반영
+                                    // ✅ 시트에서 토글 변경 즉시(실시간) 저장/앱/FG 동기화가 수행됩니다.
+                                    // 아래는 혹시 모를 상태 불일치(예: 중간 예외) 대비용 보수적 재동기화(무음)입니다.
                                     try {
-                                      final masterOn = filters.parking || filters.departure || filters.completed;
-                                      await PlateTtsListenerService.setEnabled(masterOn);
-                                      PlateTtsListenerService.updateFilters(filters);
+                                      await TtsSyncHelper.loadAndSync(context, showSnackbar: false);
                                     } catch (_) {}
-
-                                    // ✅ FG isolate에도 최신 필터 전달 (chat 포함 map 전달 가능)
-                                    if (currentArea.isNotEmpty) {
-                                      FlutterForegroundTask.sendDataToTask({
-                                        'area': currentArea,
-                                        'ttsFilters': filters.toMap(),
-                                      });
-                                    }
                                   },
                                 ),
                               ),

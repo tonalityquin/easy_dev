@@ -28,21 +28,31 @@ class MyTaskHandler implements TaskHandler {
       debugPrint('[HANDLER][${_ts()}] Firebase init error: $e\n$st');
     }
 
-    // 핸들러는 PlateTTS를 직접 시작하지 않습니다. (앱에서 시작)
     // 초기에는 안전하게 정리만 수행.
-    PlateTtsListenerService.stop();
+    await PlateTtsListenerService.stop();
+
+    // ✅ FG isolate 시작 시에도 prefs 기준으로 필터/마스터를 1회 보정(선택적)
+    final f = await _loadFiltersSafe();
+    if (f != null) {
+      PlateTtsListenerService.updateFilters(f);
+      final masterOn = f.parking || f.departure || f.completed;
+      await PlateTtsListenerService.setEnabled(masterOn);
+      if (!masterOn) {
+        await PlateTtsListenerService.stop();
+      }
+      debugPrint('[HANDLER][${_ts()}] bootstrap filters applied: ${f.toMap()} masterOn=$masterOn');
+    }
   }
 
   @override
   Future<void> onRepeatEvent(DateTime timestamp) async {
-    // no-op: 반복 이벤트에서도 PlateTTS 구독/시작을 건드리지 않습니다.
+    // no-op
   }
 
   @override
   Future<void> onDestroy(DateTime timestamp, bool isServiceDetached) async {
     debugPrint('[HANDLER][${_ts()}] onDestroy: detached=$isServiceDetached → stop listener (area=$_listeningArea)');
-    // 서비스 종료 시에는 안전하게 정리
-    PlateTtsListenerService.stop();
+    await PlateTtsListenerService.stop();
     _listeningArea = null;
   }
 
@@ -83,22 +93,42 @@ class MyTaskHandler implements TaskHandler {
       debugPrint('[HANDLER][${_ts()}] unsupported data type=${data.runtimeType}');
     }
 
-    // 필터 들어오면 즉시 반영(구독 자체는 앱이 관리)
+    // ✅ ttsFilters가 안 넘어오는 케이스(예: area만 전송)에서도 prefs를 로드하여 stale 방지
+    incomingFilters ??= await _loadFiltersSafe();
+
     if (incomingFilters != null) {
       PlateTtsListenerService.updateFilters(incomingFilters);
+
+      final masterOn = incomingFilters.parking || incomingFilters.departure || incomingFilters.completed;
+      await PlateTtsListenerService.setEnabled(masterOn);
+
+      if (!masterOn) {
+        // ✅ OFF면 수신 자체를 끊음(리스너가 살아있으면 stop)
+        await PlateTtsListenerService.stop();
+      }
+
+      debugPrint('[HANDLER][${_ts()}] filters applied in FG: ${incomingFilters.toMap()} masterOn=$masterOn');
     }
 
     // area가 없으면 끝
     if (area == null || area.isEmpty) return;
 
     if (area == _listeningArea) {
-      debugPrint('[HANDLER][${_ts()}] same area="$area" → no-op (filters may have updated)');
+      debugPrint('[HANDLER][${_ts()}] same area="$area" → no-op');
       return;
     }
 
-    // 🔁 기존: stop → start(area, force:true)
-    // ✅ 변경: 핸들러는 시작/재구독을 하지 않음. 앱(UserState)에서만 시작하도록 위임.
+    // 핸들러는 시작/재구독을 직접 하지 않음(앱에서 start 호출).
     _listeningArea = area;
-    debugPrint('[HANDLER][${_ts()}] area updated to "$area" (app-driven start only; handler no-op)');
+    debugPrint('[HANDLER][${_ts()}] area updated to "$area" (handler no-op)');
+  }
+
+  Future<TtsUserFilters?> _loadFiltersSafe() async {
+    try {
+      return await TtsUserFilters.load();
+    } catch (e) {
+      debugPrint('[HANDLER][${_ts()}] TtsUserFilters.load() failed: $e');
+      return null;
+    }
   }
 }
