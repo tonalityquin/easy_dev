@@ -1,12 +1,22 @@
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'dart:ui';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:firebase_core/firebase_core.dart';
 
+import 'plate_local_notification_service.dart';
 import 'plate_tts_listener_service.dart';
 import 'tts_user_filters.dart';
 
 String _ts() => DateTime.now().toIso8601String();
 
+/// ✅ 포그라운드 서비스 isolate(TaskHandler)에서 Plate Firestore listen + TTS + 로컬 알림까지
+/// 직접 수행하도록 리팩터링된 핸들러.
+///
+/// 요구사항:
+/// - 앱 최소화/절전(화면 꺼짐) 상태에서도 이벤트 감지/알림이 유지되어야 함
+/// - DashboardSetting의 스위치(입차/출차/완료) ON인 타입만 알림/음성 발생
 @pragma('vm:entry-point')
 class MyTaskHandler implements TaskHandler {
   String? _listeningArea;
@@ -14,6 +24,10 @@ class MyTaskHandler implements TaskHandler {
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
+    // ✅ 백그라운드 isolate에서 플러그인 사용을 위해 필요
+    WidgetsFlutterBinding.ensureInitialized();
+    DartPluginRegistrant.ensureInitialized();
+
     _startedAt = DateTime.now();
     debugPrint('[HANDLER][${_ts()}] onStart: starter=$starter at=$_startedAt');
 
@@ -28,10 +42,13 @@ class MyTaskHandler implements TaskHandler {
       debugPrint('[HANDLER][${_ts()}] Firebase init error: $e\n$st');
     }
 
+    // ✅ 로컬 알림 초기화(베스트 에포트). 권한 요청은 UI isolate에서 수행.
+    await PlateLocalNotificationService.instance.ensureInitialized();
+
     // 초기에는 안전하게 정리만 수행.
     await PlateTtsListenerService.stop();
 
-    // ✅ FG isolate 시작 시에도 prefs 기준으로 필터/마스터를 1회 보정(선택적)
+    // ✅ FG isolate 시작 시에도 prefs 기준으로 필터/마스터를 1회 보정
     final f = await _loadFiltersSafe();
     if (f != null) {
       PlateTtsListenerService.updateFilters(f);
@@ -46,7 +63,7 @@ class MyTaskHandler implements TaskHandler {
 
   @override
   Future<void> onRepeatEvent(DateTime timestamp) async {
-    // no-op
+    // no-op (Firestore snapshot listener가 이벤트 기반으로 동작)
   }
 
   @override
@@ -96,10 +113,11 @@ class MyTaskHandler implements TaskHandler {
     // ✅ ttsFilters가 안 넘어오는 케이스(예: area만 전송)에서도 prefs를 로드하여 stale 방지
     incomingFilters ??= await _loadFiltersSafe();
 
+    bool masterOn = true;
     if (incomingFilters != null) {
       PlateTtsListenerService.updateFilters(incomingFilters);
 
-      final masterOn = incomingFilters.parking || incomingFilters.departure || incomingFilters.completed;
+      masterOn = incomingFilters.parking || incomingFilters.departure || incomingFilters.completed;
       await PlateTtsListenerService.setEnabled(masterOn);
 
       if (!masterOn) {
@@ -110,17 +128,22 @@ class MyTaskHandler implements TaskHandler {
       debugPrint('[HANDLER][${_ts()}] filters applied in FG: ${incomingFilters.toMap()} masterOn=$masterOn');
     }
 
-    // area가 없으면 끝
+    // 마스터 OFF면 area가 와도 구독하지 않음
+    if (!masterOn) return;
+
+    // area가 없으면(또는 비면) 시작 조건이 성립하지 않음
     if (area == null || area.isEmpty) return;
 
-    if (area == _listeningArea) {
-      debugPrint('[HANDLER][${_ts()}] same area="$area" → no-op');
+    // area 변경(또는 최초) 시: FG isolate에서 직접 listen 시작
+    if (_listeningArea != area) {
+      _listeningArea = area;
+      debugPrint('[HANDLER][${_ts()}] start listening in FG isolate: area="$area"');
+      PlateTtsListenerService.start(area, force: true);
       return;
     }
 
-    // 핸들러는 시작/재구독을 직접 하지 않음(앱에서 start 호출).
-    _listeningArea = area;
-    debugPrint('[HANDLER][${_ts()}] area updated to "$area" (handler no-op)');
+    // 동일 area는 no-op
+    debugPrint('[HANDLER][${_ts()}] same area="$area" → no-op');
   }
 
   Future<TtsUserFilters?> _loadFiltersSafe() async {
