@@ -1,4 +1,3 @@
-// lib/routes.dart
 import 'package:easydev/offlines/offline_type_page.dart';
 import 'package:easydev/screens/triple_headquarter_page.dart';
 import 'package:flutter/material.dart';
@@ -38,6 +37,9 @@ class AppRoutes {
   static const doubleLogin = '/double_login';
   static const singleLogin = '/single_login';
   static const tripleLogin = '/triple_login';
+
+  // ✅ 마이너 로그인 (신규)
+  static const minorLogin = '/minor_login';
 
   // ✅ 오프라인 전용
   static const offlineLogin = '/offline_login';
@@ -83,10 +85,13 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.doubleLogin: (context) => const LoginScreen(mode: 'double'),
   AppRoutes.tripleLogin: (context) => const LoginScreen(mode: 'triple'),
 
+  // ✅ 마이너 로그인: 현재는 LoginScreen(mode:'triple')을 재사용 (리다이렉트로 목적지 분기)
+  AppRoutes.minorLogin: (context) => const LoginScreen(mode: 'triple'),
+
   // ✅ 오프라인 로그인 → 성공 시 오프라인 출퇴근으로 이동
   AppRoutes.offlineLogin: (context) => OfflineLoginScreen(
-        onLoginSucceeded: () => Navigator.of(context).pushReplacementNamed(AppRoutes.offlineCommute),
-      ),
+    onLoginSucceeded: () => Navigator.of(context).pushReplacementNamed(AppRoutes.offlineCommute),
+  ),
 
   // 출퇴근(온라인/약식/오프라인)
   AppRoutes.commute: (context) => const CommuteInsideScreen(),

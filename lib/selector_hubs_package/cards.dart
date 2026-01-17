@@ -279,6 +279,56 @@ class DoubleLoginCard extends StatelessWidget {
   }
 }
 
+/// ✅ 마이너 로그인 카드 (신규)
+/// - AppRoutes.minorLogin 으로 이동
+/// - (기본 정책) 트리플 권한(triple)과 동일하게 취급해 requiredMode='triple'
+/// - 로그인 성공 후 이동: AppRoutes.attendanceSheet (원하시면 다른 라우트로 변경 가능)
+class MinorLoginCard extends StatelessWidget {
+  const MinorLoginCard({super.key, this.enabled = true});
+
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppCardPalette.of(context);
+    final onBase = Theme.of(context).colorScheme.onPrimary;
+
+    // 팔레트에 minor가 정의되어 있지 않아, 기존 색상 계열을 재사용합니다.
+    // 필요 시 theme.dart(AppCardPalette)에 minor 색상 세트를 추가해도 됩니다.
+    final title = _selectorCardTitle(context, '마이너 로그인', p.tripleDark);
+
+    return Card(
+      color: Theme.of(context).cardColor,
+      elevation: 1,
+      clipBehavior: Clip.antiAlias,
+      surfaceTintColor: p.tripleLight,
+      child: CardBody(
+        icon: Icons.tune_rounded,
+        bg: p.tripleBase,
+        iconColor: onBase,
+        titleWidget: title,
+        buttonBg: p.tripleBase,
+        buttonFg: onBase,
+        traceName: '마이너 로그인',
+        traceMeta: {
+          'to': AppRoutes.minorLogin,
+          'redirectAfterLogin': AppRoutes.attendanceSheet,
+          'requiredMode': 'triple',
+        },
+        onPressed: () => Navigator.of(context).pushReplacementNamed(
+          AppRoutes.minorLogin,
+          arguments: {
+            'redirectAfterLogin': AppRoutes.attendanceSheet,
+            'requiredMode': 'triple',
+          },
+        ),
+        enabled: enabled,
+        disabledHint: '저장된 모드가 triple일 때만 선택할 수 있어요',
+      ),
+    );
+  }
+}
+
 class TabletCard extends StatelessWidget {
   const TabletCard({super.key, this.enabled = true});
 
@@ -463,8 +513,7 @@ class DevCard extends StatelessWidget {
   }
 }
 
-/// ✅ 노말 로그인 카드 (다른 모드 카드와 동일 패턴)
-/// - enabled/disabledHint 지원
+/// ✅ 로그인(트리플) 카드
 /// - AppRoutes.tripleLogin 으로 이동
 /// - requiredMode/redirectAfterLogin 인자 전달
 class TripleLoginCard extends StatelessWidget {
@@ -477,7 +526,8 @@ class TripleLoginCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    final title = _selectorCardTitle(context, ' 로그인', p.tripleDark);
+    // 기존 코드의 ' 로그인' (앞 공백) 제거
+    final title = _selectorCardTitle(context, '로그인', p.tripleDark);
 
     return Card(
       color: Theme.of(context).cardColor,
@@ -491,7 +541,8 @@ class TripleLoginCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: p.tripleBase,
         buttonFg: onBase,
-        traceName: '노말 로그인',
+        // 기존 '노말 로그인' → 현재 명칭 기준으로 '로그인'
+        traceName: '로그인',
         traceMeta: {
           'to': AppRoutes.tripleLogin,
           'redirectAfterLogin': AppRoutes.tripleCommute,

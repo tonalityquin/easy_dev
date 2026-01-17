@@ -23,11 +23,14 @@ class NormalLoginController {
         this.onLoginSucceeded, // ✅ 성공 시 화면에서 내비 처리(redirectAfterLogin 반영)
       });
 
-  static const String _requiredMode = 'normal';
+  // ✅ 노말(normal) 모드는 트리플(triple)로 리네이밍 중
+  // - 신규: triple
+  // - 하위 호환: normal
+  static const String _requiredMode = 'triple';
 
   final BuildContext context;
 
-  // 성공 시 호출되는 콜백(없으면 기본 동작으로 /commute 이동)
+  // 성공 시 호출되는 콜백(없으면 기본 동작으로 /triple_commute 이동)
   final VoidCallback? onLoginSucceeded;
 
   final TextEditingController nameController = TextEditingController();
@@ -43,7 +46,18 @@ class NormalLoginController {
 
   bool _hasModeAccess(List<String> modes, String required) {
     final req = required.trim().toLowerCase();
-    return modes.any((m) => m.trim().toLowerCase() == req);
+
+    bool matches(String raw) {
+      final v = raw.trim().toLowerCase();
+
+      // ✅ 하위 호환: normal ↔ triple
+      if (req == 'triple') return v == 'triple' || v == 'normal';
+      if (req == 'normal') return v == 'normal' || v == 'triple';
+
+      return v == req;
+    }
+
+    return modes.any(matches);
   }
 
   /// ✅ 자동 로그인 게이트(기존 initState 역할)
@@ -61,17 +75,17 @@ class NormalLoginController {
       final allowed = user != null && _hasModeAccess(user.modes, _requiredMode);
       if (!allowed) {
         debugPrint('[LOGIN-SERVICE][${_ts()}] autoLogin blocked: modes missing "$_requiredMode"');
-        showFailedSnackbar(context, '이 계정은 normal 모드 사용 권한이 없습니다.');
+        showFailedSnackbar(context, '이 계정은 triple(구 normal) 모드 사용 권한이 없습니다.');
         return;
       }
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         debugPrint('[LOGIN-SERVICE][${_ts()}] autoLogin → onLoginSucceeded()');
-        // 콜백이 없으면 기존 기본값(/commute)로 이동해 하위 호환 유지
+        // 콜백이 없으면 기본값(/triple_commute)로 이동해 하위 호환 유지
         if (onLoginSucceeded != null) {
           onLoginSucceeded!();
         } else {
-          Navigator.pushReplacementNamed(context, '/commute');
+          Navigator.pushReplacementNamed(context, '/triple_commute');
         }
       });
     });
@@ -141,7 +155,7 @@ class NormalLoginController {
         if (!allowed) {
           debugPrint('[LOGIN-SERVICE][${_ts()}] login blocked: modes missing "$_requiredMode"');
           if (context.mounted) {
-            showFailedSnackbar(context, '이 계정은 normal 모드 사용 권한이 없습니다.');
+            showFailedSnackbar(context, '이 계정은 triple(구 normal) 모드 사용 권한이 없습니다.');
           }
           return;
         }
@@ -170,7 +184,8 @@ class NormalLoginController {
         await prefs.setString('role', updatedUser.role);
         await prefs.setString('position', updatedUser.position ?? '');
         await prefs.setStringList('fixedHolidays', updatedUser.fixedHolidays);
-        await prefs.setString('mode', 'normal'); // ✅ 로그인 모드 저장
+        // ✅ 로그인 모드 저장 (리네이밍 반영: triple)
+        await prefs.setString('mode', 'triple');
 
         // ✅ 오너십: 포그라운드가 Plate TTS를 담당하도록 설정
         await TtsOwnership.setOwner(TtsOwner.foreground);
@@ -203,7 +218,7 @@ class NormalLoginController {
             if (onLoginSucceeded != null) {
               onLoginSucceeded!();
             } else {
-              Navigator.pushReplacementNamed(context, '/commute'); // 하위 호환
+              Navigator.pushReplacementNamed(context, '/triple_commute'); // 하위 호환
             }
           });
         }

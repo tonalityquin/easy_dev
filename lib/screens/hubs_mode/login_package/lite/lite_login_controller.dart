@@ -24,11 +24,14 @@ class LiteLoginController {
         this.onLoginSucceeded,
       });
 
-  static const String _requiredMode = 'lite';
+  // ✅ lite 모드는 double(더블)로 리네이밍 중
+  // - 신규: double
+  // - 하위 호환: lite / light
+  static const String _requiredMode = 'double';
 
   final BuildContext context;
 
-  // 성공 시 호출되는 콜백(없으면 기본 동작으로 /commute 이동)
+  // 성공 시 호출되는 콜백(없으면 기본 동작으로 /double_commute 이동)
   final VoidCallback? onLoginSucceeded;
 
   final TextEditingController nameController = TextEditingController();
@@ -44,7 +47,18 @@ class LiteLoginController {
 
   bool _hasModeAccess(List<String> modes, String required) {
     final req = required.trim().toLowerCase();
-    return modes.any((m) => m.trim().toLowerCase() == req);
+
+    bool matches(String raw) {
+      final v = raw.trim().toLowerCase();
+
+      // ✅ 하위 호환: lite/light ↔ double
+      if (req == 'double') return v == 'double' || v == 'lite' || v == 'light';
+      if (req == 'lite' || req == 'light') return v == 'double' || v == 'lite' || v == 'light';
+
+      return v == req;
+    }
+
+    return modes.any(matches);
   }
 
   /// ✅ 자동 로그인 게이트(서비스와 동일)
@@ -61,7 +75,7 @@ class LiteLoginController {
       final allowed = user != null && _hasModeAccess(user.modes, _requiredMode);
       if (!allowed) {
         debugPrint('[LOGIN-LITE][${_ts()}] autoLogin blocked: modes missing "$_requiredMode"');
-        showFailedSnackbar(context, '이 계정은 lite 모드 사용 권한이 없습니다.');
+        showFailedSnackbar(context, '이 계정은 double(구 lite/light) 모드 사용 권한이 없습니다.');
         return;
       }
 
@@ -70,7 +84,7 @@ class LiteLoginController {
         if (onLoginSucceeded != null) {
           onLoginSucceeded!();
         } else {
-          Navigator.pushReplacementNamed(context, '/commute');
+          Navigator.pushReplacementNamed(context, '/double_commute');
         }
       });
     });
@@ -138,7 +152,7 @@ class LiteLoginController {
         if (!allowed) {
           debugPrint('[LOGIN-LITE][${_ts()}] login blocked: modes missing "$_requiredMode"');
           if (context.mounted) {
-            showFailedSnackbar(context, '이 계정은 lite 모드 사용 권한이 없습니다.');
+            showFailedSnackbar(context, '이 계정은 double(구 lite/light) 모드 사용 권한이 없습니다.');
           }
           return;
         }
@@ -204,7 +218,7 @@ class LiteLoginController {
             if (onLoginSucceeded != null) {
               onLoginSucceeded!();
             } else {
-              Navigator.pushReplacementNamed(context, '/commute');
+              Navigator.pushReplacementNamed(context, '/double_commute');
             }
           });
         }

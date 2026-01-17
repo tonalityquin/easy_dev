@@ -28,11 +28,14 @@ class SimpleLoginController {
         this.onLoginSucceeded, // ✅ 성공 시 화면에서 내비 처리(redirectAfterLogin 반영)
       });
 
-  static const String _requiredMode = 'simple';
+  // ✅ simple 모드는 single(싱글/약식)로 리네이밍 중
+  // - 신규: single
+  // - 하위 호환: simple
+  static const String _requiredMode = 'single';
 
   final BuildContext context;
 
-  // 성공 시 호출되는 콜백(없으면 기본 동작으로 /simple_commute 이동)
+  // 성공 시 호출되는 콜백(없으면 기본 동작으로 /single_commute 이동)
   final VoidCallback? onLoginSucceeded;
 
   final TextEditingController nameController = TextEditingController();
@@ -48,7 +51,18 @@ class SimpleLoginController {
 
   bool _hasModeAccessFromList(List<String> modes, String required) {
     final req = required.trim().toLowerCase();
-    return modes.any((m) => m.trim().toLowerCase() == req);
+
+    bool matches(String raw) {
+      final v = raw.trim().toLowerCase();
+
+      // ✅ 하위 호환: simple ↔ single
+      if (req == 'single') return v == 'single' || v == 'simple';
+      if (req == 'simple') return v == 'single' || v == 'simple';
+
+      return v == req;
+    }
+
+    return modes.any(matches);
   }
 
   List<String> _extractModes(dynamic raw) {
@@ -75,17 +89,17 @@ class SimpleLoginController {
       final allowed = user != null && _hasModeAccessFromList(user.modes, _requiredMode);
       if (!allowed) {
         debugPrint('[LOGIN-SIMPLE][${_ts()}] autoLogin blocked: modes missing "$_requiredMode"');
-        showFailedSnackbar(context, '이 계정은 simple 모드 사용 권한이 없습니다.');
+        showFailedSnackbar(context, '이 계정은 single(구 simple) 모드 사용 권한이 없습니다.');
         return;
       }
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         debugPrint('[LOGIN-SIMPLE][${_ts()}] autoLogin → onLoginSucceeded()');
-        // 콜백이 없으면 기본값(/simple_commute)로 이동
+        // 콜백이 없으면 기본값(/single_commute)로 이동
         if (onLoginSucceeded != null) {
           onLoginSucceeded!();
         } else {
-          Navigator.pushReplacementNamed(context, '/simple_commute');
+          Navigator.pushReplacementNamed(context, '/single_commute');
         }
       });
     });
@@ -163,7 +177,7 @@ class SimpleLoginController {
                 if (onLoginSucceeded != null) {
                   onLoginSucceeded!();
                 } else {
-                  Navigator.pushReplacementNamed(context, '/simple_commute');
+                  Navigator.pushReplacementNamed(context, '/single_commute');
                 }
               });
             }
@@ -212,7 +226,7 @@ class SimpleLoginController {
         if (!allowed) {
           debugPrint('[LOGIN-SIMPLE][${_ts()}] login blocked: modes missing "$_requiredMode"');
           if (context.mounted) {
-            showFailedSnackbar(context, '이 계정은 simple 모드 사용 권한이 없습니다.');
+            showFailedSnackbar(context, '이 계정은 single(구 simple) 모드 사용 권한이 없습니다.');
           }
           return;
         }
@@ -274,7 +288,7 @@ class SimpleLoginController {
             if (onLoginSucceeded != null) {
               onLoginSucceeded!();
             } else {
-              Navigator.pushReplacementNamed(context, '/simple_commute'); // 하위 호환
+              Navigator.pushReplacementNamed(context, '/single_commute'); // 하위 호환
             }
           });
         }
