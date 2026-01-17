@@ -18,6 +18,21 @@ Text _selectorCardTitle(BuildContext context, String text, Color color) {
   );
 }
 
+/// ✅ 카드에 표시할 기능 요약(서브 타이틀) 스타일
+Widget _selectorCardFeatureText(BuildContext context, String text) {
+  final cs = Theme.of(context).colorScheme;
+  return Text(
+    text,
+    textAlign: TextAlign.center,
+    maxLines: 2,
+    overflow: TextOverflow.ellipsis,
+    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+      fontWeight: FontWeight.w600,
+      color: cs.onSurface.withOpacity(0.62),
+    ),
+  );
+}
+
 class CardBody extends StatefulWidget {
   const CardBody({
     super.key,
@@ -27,6 +42,10 @@ class CardBody extends StatefulWidget {
     this.buttonBg,
     this.buttonFg,
     required this.titleWidget,
+
+    // ✅ 기능 안내 문구(선택)
+    this.featureText,
+
     required this.onPressed,
     this.enabled = true,
     this.disabledHint,
@@ -41,7 +60,12 @@ class CardBody extends StatefulWidget {
   final Color iconColor;
   final Color? buttonBg;
   final Color? buttonFg;
+
   final Widget titleWidget;
+
+  /// ✅ 카드에 “제공 기능”을 보여주기 위한 서브 타이틀(없으면 표시하지 않음)
+  final String? featureText;
+
   final VoidCallback? onPressed;
   final bool enabled;
   final String? disabledHint;
@@ -80,6 +104,8 @@ class _CardBodyState extends State<CardBody> {
         route: ModalRoute.of(context)?.settings.name,
         meta: <String, dynamic>{
           'source': source, // 'card' or 'arrow'
+          if (widget.featureText != null && widget.featureText!.trim().isNotEmpty)
+            'featureText': widget.featureText,
           if (widget.traceMeta != null) ...widget.traceMeta!,
         },
       );
@@ -93,6 +119,8 @@ class _CardBodyState extends State<CardBody> {
 
   @override
   Widget build(BuildContext context) {
+    final hasFeature = widget.featureText != null && widget.featureText!.trim().isNotEmpty;
+
     final content = Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -105,7 +133,16 @@ class _CardBodyState extends State<CardBody> {
           ),
           const SizedBox(height: 12),
           widget.titleWidget,
-          const SizedBox(height: 12),
+
+          // ✅ 기능 안내 문구(디자인을 헤치지 않도록 작은 글씨/약한 대비로 1~2줄만 표시)
+          if (hasFeature) ...[
+            const SizedBox(height: 6),
+            _selectorCardFeatureText(context, widget.featureText!.trim()),
+            const SizedBox(height: 10),
+          ] else ...[
+            const SizedBox(height: 12),
+          ],
+
           Tooltip(
             message: widget.enabled
                 ? '이동'
@@ -163,9 +200,16 @@ class LeadingIcon extends StatelessWidget {
 
 /// 개별 카드들 (팔레트는 theme.dart(AppCardPalette)에서 주입)
 class ServiceCard extends StatelessWidget {
-  const ServiceCard({super.key, this.enabled = true});
+  const ServiceCard({
+    super.key,
+    this.enabled = true,
+    this.devAuthorized = false, // ✅ 개발자 인증 게이트
+  });
 
   final bool enabled;
+
+  /// ✅ “개발 로그인(개발자 인증)” 활성화 여부
+  final bool devAuthorized;
 
   @override
   Widget build(BuildContext context) {
@@ -173,6 +217,14 @@ class ServiceCard extends StatelessWidget {
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
     final title = _selectorCardTitle(context, '서비스 로그인', p.serviceDark);
+
+    // ✅ 최종 활성화: 저장모드 조건(enabled) AND 개발자 인증(devAuthorized)
+    final bool effectiveEnabled = enabled && devAuthorized;
+
+    // ✅ 비활성 사유를 사용자에게 명확히 전달
+    final String hint = !devAuthorized
+        ? '개발자 인증 후 사용할 수 있어요'
+        : '저장된 모드가 service일 때만 선택할 수 있어요';
 
     return Card(
       color: Theme.of(context).cardColor,
@@ -187,10 +239,14 @@ class ServiceCard extends StatelessWidget {
         buttonBg: p.serviceBase,
         buttonFg: onBase,
         traceName: '서비스 로그인',
-        traceMeta: {'to': AppRoutes.serviceLogin, 'requiredMode': 'service'},
+        traceMeta: {
+          'to': AppRoutes.serviceLogin,
+          'requiredMode': 'service',
+          'requiresDevAuth': true,
+        },
         onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.serviceLogin),
-        enabled: enabled,
-        disabledHint: '저장된 모드가 service일 때만 선택할 수 있어요',
+        enabled: effectiveEnabled,
+        disabledHint: hint,
       ),
     );
   }
@@ -206,7 +262,7 @@ class SingleLoginCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    final title = _selectorCardTitle(context, '약식 로그인', p.singleDark);
+    final title = _selectorCardTitle(context, 'WorkFlow D', p.singleDark);
 
     return Card(
       color: Theme.of(context).cardColor,
@@ -220,7 +276,8 @@ class SingleLoginCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: p.singleBase,
         buttonFg: onBase,
-        traceName: '약식 로그인',
+        featureText: '출/퇴근 · 휴게시간',
+        traceName: 'WorkFlow D',
         traceMeta: {
           'to': AppRoutes.singleLogin,
           'redirectAfterLogin': AppRoutes.singleCommute,
@@ -250,7 +307,7 @@ class DoubleLoginCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    final title = _selectorCardTitle(context, '경량 로그인', p.doubleDark);
+    final title = _selectorCardTitle(context, 'WorkFlow A', p.doubleDark);
 
     return Card(
       color: Theme.of(context).cardColor,
@@ -264,7 +321,8 @@ class DoubleLoginCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: p.doubleBase,
         buttonFg: onBase,
-        traceName: '경량 로그인',
+        featureText: '입차 완료 · 출차 완료',
+        traceName: 'WorkFlow A',
         traceMeta: {'to': AppRoutes.doubleLogin, 'requiredMode': 'double'},
         onPressed: () => Navigator.of(context).pushReplacementNamed(
           AppRoutes.doubleLogin,
@@ -279,10 +337,7 @@ class DoubleLoginCard extends StatelessWidget {
   }
 }
 
-/// ✅ 마이너 로그인 카드 (신규)
-/// - AppRoutes.minorLogin 으로 이동
-/// - (기본 정책) 트리플 권한(triple)과 동일하게 취급해 requiredMode='triple'
-/// - 로그인 성공 후 이동: AppRoutes.attendanceSheet (원하시면 다른 라우트로 변경 가능)
+/// ✅ 마이너 로그인 카드
 class MinorLoginCard extends StatelessWidget {
   const MinorLoginCard({super.key, this.enabled = true});
 
@@ -293,9 +348,7 @@ class MinorLoginCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    // 팔레트에 minor가 정의되어 있지 않아, 기존 색상 계열을 재사용합니다.
-    // 필요 시 theme.dart(AppCardPalette)에 minor 색상 세트를 추가해도 됩니다.
-    final title = _selectorCardTitle(context, '마이너 로그인', p.tripleDark);
+    final title = _selectorCardTitle(context, 'WorkFlow C', p.tripleDark);
 
     return Card(
       color: Theme.of(context).cardColor,
@@ -309,7 +362,8 @@ class MinorLoginCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: p.tripleBase,
         buttonFg: onBase,
-        traceName: '마이너 로그인',
+        featureText: '입차 요청 · 입차 완료 · 출차 요청 · 출차 완료',
+        traceName: 'WorkFlow C',
         traceMeta: {
           'to': AppRoutes.minorLogin,
           'redirectAfterLogin': AppRoutes.attendanceSheet,
@@ -339,7 +393,7 @@ class TabletCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    final title = _selectorCardTitle(context, '태블릿 로그인', p.tabletDark);
+    final title = _selectorCardTitle(context, 'Tablet Mode', p.tabletDark);
 
     return Card(
       color: Theme.of(context).cardColor,
@@ -371,7 +425,7 @@ class CommunityCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    final title = _selectorCardTitle(context, '커뮤니티', p.communityDark);
+    final title = _selectorCardTitle(context, 'Community', p.communityDark);
 
     return Card(
       color: Theme.of(context).cardColor,
@@ -385,7 +439,7 @@ class CommunityCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: p.communityBase,
         buttonFg: onBase,
-        traceName: '커뮤니티',
+        traceName: 'Community',
         traceMeta: {'to': AppRoutes.communityStub},
         onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.communityStub),
       ),
@@ -401,7 +455,7 @@ class FaqCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    final title = _selectorCardTitle(context, 'FAQ / 문의', p.faqDark);
+    final title = _selectorCardTitle(context, 'FAQ', p.faqDark);
 
     return Card(
       color: Theme.of(context).cardColor,
@@ -415,7 +469,7 @@ class FaqCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: p.faqBase,
         buttonFg: onBase,
-        traceName: 'FAQ / 문의',
+        traceName: 'FAQ',
         traceMeta: {'to': AppRoutes.faq},
         onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.faq),
       ),
@@ -430,7 +484,6 @@ class HeadquarterCard extends StatelessWidget {
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      // ✅ mode 조건 삭제 (요청 반영)
       final division = prefs.getString('division') ?? '';
       final selectedArea = prefs.getString('selectedArea') ?? '';
 
@@ -459,7 +512,7 @@ class HeadquarterCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    final title = _selectorCardTitle(context, '본사', p.headquarterDark);
+    final title = _selectorCardTitle(context, 'HeadQuarter', p.headquarterDark);
 
     return Card(
       color: Theme.of(context).cardColor,
@@ -473,7 +526,7 @@ class HeadquarterCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: p.headquarterBase,
         buttonFg: onBase,
-        traceName: '본사',
+        traceName: 'HeadQuarter',
         traceMeta: {'to': AppRoutes.headStub},
         onPressed: () => _handleTap(context),
       ),
@@ -513,9 +566,6 @@ class DevCard extends StatelessWidget {
   }
 }
 
-/// ✅ 로그인(트리플) 카드
-/// - AppRoutes.tripleLogin 으로 이동
-/// - requiredMode/redirectAfterLogin 인자 전달
 class TripleLoginCard extends StatelessWidget {
   const TripleLoginCard({super.key, this.enabled = true});
 
@@ -526,8 +576,7 @@ class TripleLoginCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    // 기존 코드의 ' 로그인' (앞 공백) 제거
-    final title = _selectorCardTitle(context, '로그인', p.tripleDark);
+    final title = _selectorCardTitle(context, 'WorkFlow B', p.tripleDark);
 
     return Card(
       color: Theme.of(context).cardColor,
@@ -541,8 +590,8 @@ class TripleLoginCard extends StatelessWidget {
         titleWidget: title,
         buttonBg: p.tripleBase,
         buttonFg: onBase,
-        // 기존 '노말 로그인' → 현재 명칭 기준으로 '로그인'
-        traceName: '로그인',
+        featureText: '입차 완료 · 출차 요청 · 출차 완료',
+        traceName: 'WorkFlow B',
         traceMeta: {
           'to': AppRoutes.tripleLogin,
           'redirectAfterLogin': AppRoutes.tripleCommute,
@@ -570,7 +619,7 @@ class ParkingCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    final title = _selectorCardTitle(context, '오프라인 서비스', p.parkingDark);
+    final title = _selectorCardTitle(context, 'Practice Space', p.parkingDark);
 
     return Card(
       color: Theme.of(context).cardColor,
