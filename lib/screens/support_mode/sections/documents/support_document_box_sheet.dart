@@ -9,7 +9,7 @@ import '../../../../../../states/area/area_state.dart';
 import '../../../../repositories/commute_repo_services/commute_log_repository.dart';
 import '../../../../utils/block_dialogs/break_duration_blocking_dialog.dart';
 import '../../../../utils/block_dialogs/work_end_duration_blocking_dialog.dart';
-import '../../utils/support_mode_db.dart';
+import '../../utils/att_brk_mode_db.dart';
 import '../../../common_package/document_package/backup/backup_form_page.dart';
 import '../../../common_package/document_package/user_statement/user_statement_form_page.dart';
 import 'support_document_inventory_repository.dart';
@@ -176,7 +176,7 @@ class _SupportDocumentBoxSheet extends StatelessWidget {
                                               ScaffoldMessenger.of(context).showSnackBar(
                                                 const SnackBar(
                                                   content: Text(
-                                                    '업무 시작 보고 양식은 현재 Simple 모드에서 사용하지 않습니다.',
+                                                    '업무 시작 보고 양식은 현재 Support 모드에서 사용하지 않습니다.',
                                                   ),
                                                 ),
                                               );
@@ -549,7 +549,7 @@ class LocalCommuteRecord {
   /// 실제 이벤트 시각 (date + time 기준)
   final DateTime dateTime;
 
-  /// 로컬 SQLite 테이블명 (simple_work_attendance / simple_break_attendance)
+  /// 로컬 SQLite 테이블명 (support_work_attendance / support_break_attendance)
   final String localTable;
 
   /// 로컬 SQLite date 값(yyyy-MM-dd)
@@ -567,7 +567,7 @@ class LocalCommuteRecord {
   });
 }
 
-/// SQLite(simple_work_attendance / simple_break_attendance)에서
+/// SQLite(support_work_attendance / support_break_attendance)에서
 /// 출근/퇴근/휴게 데이터를 전부 읽어 오는 함수.
 ///
 /// [statuses] 는 Firestore 상태 라벨 기준:
@@ -578,7 +578,7 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
   required List<String> statuses,
   required String userId, // 현재 스키마상 userId 컬럼은 없으므로 필터에는 사용하지 않음
 }) async {
-  final db = await SimpleModeDb.instance.database;
+  final db = await AttBrkModeDb.instance.database;
   final result = <LocalCommuteRecord>[];
 
   final dateTimeParser = DateFormat('yyyy-MM-dd HH:mm');
@@ -663,7 +663,7 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
 /// 업로드(또는 서버 중복으로 간주)된 로컬 행을 삭제합니다.
 /// - (date, type) PK 기반으로 1건 삭제
 Future<int> _deleteLocalAttendanceRow(LocalCommuteRecord record) async {
-  final db = await SimpleModeDb.instance.database;
+  final db = await AttBrkModeDb.instance.database;
 
   return db.delete(
     record.localTable,

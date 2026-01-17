@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../states/user/user_state.dart';
 import '../../../states/area/area_state.dart';
 
-class SimpleInsideController {
+class SupportInsideController {
   /// 화면 최초 진입 시, 사용자 area 에 맞는 AreaState 초기화만 수행하는 컨트롤러.
   ///
   /// 기존에는 출근 처리 / 근무 상태 토글 / 시트 업로드 / 알림 / 라우팅 등의

@@ -9,7 +9,7 @@ import '../../../../../../states/area/area_state.dart';
 import '../../../../../../states/user/user_state.dart';
 
 import '../../../../../../utils/api/sheet_upload_result.dart';
-import '../../../../../support_mode/utils/support_mode_attendance_repository.dart';
+import '../../../../../support_mode/utils/att_brk_repository.dart';
 
 class ClockOutLogUploader {
 
@@ -63,9 +63,9 @@ class ClockOutLogUploader {
       //    - time: HH:mm
       final now = DateTime.now();
 
-      await SimpleModeAttendanceRepository.instance.insertEvent(
+      await AttBrkRepository.instance.insertEvent(
         dateTime: now,
-        type: SimpleModeAttendanceType.workOut,
+        type: AttBrkModeType.workOut,
       );
 
       final msg = '퇴근 기록이 로컬에 저장되었습니다. ($area / $division)';

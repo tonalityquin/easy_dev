@@ -2,25 +2,25 @@
 import 'package:intl/intl.dart';
 import 'package:sqflite/sqflite.dart'; // ✅ ConflictAlgorithm 사용
 
-import 'support_mode_db.dart';
+import 'att_brk_mode_db.dart';
 import '../../../../repositories/commute_repo_services/commute_log_repository.dart';
 
 /// 약식 모드 출근/퇴근/휴게 버튼 로그 타입
-enum SimpleModeAttendanceType {
+enum AttBrkModeType {
   workIn, // 출근
   workOut, // 퇴근
   breakTime // 휴게 버튼
 }
 
-extension SimpleModeAttendanceTypeX on SimpleModeAttendanceType {
+extension AttBrkTypeX on AttBrkModeType {
   /// SQLite에 저장되는 코드 값
   String get code {
     switch (this) {
-      case SimpleModeAttendanceType.workIn:
+      case AttBrkModeType.workIn:
         return 'work_in';
-      case SimpleModeAttendanceType.workOut:
+      case AttBrkModeType.workOut:
         return 'work_out';
-      case SimpleModeAttendanceType.breakTime:
+      case AttBrkModeType.breakTime:
         return 'break';
     }
   }
@@ -28,11 +28,11 @@ extension SimpleModeAttendanceTypeX on SimpleModeAttendanceType {
   /// Firestore에 사용하는 상태 라벨 (CommuteLogRepository.status 용)
   String get statusLabel {
     switch (this) {
-      case SimpleModeAttendanceType.workIn:
+      case AttBrkModeType.workIn:
         return '출근';
-      case SimpleModeAttendanceType.workOut:
+      case AttBrkModeType.workOut:
         return '퇴근';
-      case SimpleModeAttendanceType.breakTime:
+      case AttBrkModeType.breakTime:
         return '휴게';
     }
   }
@@ -40,38 +40,38 @@ extension SimpleModeAttendanceTypeX on SimpleModeAttendanceType {
   /// 출근/퇴근 여부 (로컬 SQLite 테이블 분리를 위한 헬퍼)
   bool get isWork {
     switch (this) {
-      case SimpleModeAttendanceType.workIn:
-      case SimpleModeAttendanceType.workOut:
+      case AttBrkModeType.workIn:
+      case AttBrkModeType.workOut:
         return true;
-      case SimpleModeAttendanceType.breakTime:
+      case AttBrkModeType.breakTime:
         return false;
     }
   }
 
   /// 휴게 여부 (로컬 SQLite 테이블 분리를 위한 헬퍼)
-  bool get isBreak => this == SimpleModeAttendanceType.breakTime;
+  bool get isBreak => this == AttBrkModeType.breakTime;
 }
 
 /// DB에 저장된 type 문자열 → Enum 매핑 헬퍼
-SimpleModeAttendanceType? simpleModeAttendanceTypeFromCode(String code) {
+AttBrkModeType? supportModeAttBrkTypeFromCode(String code) {
   switch (code) {
     case 'work_in':
-      return SimpleModeAttendanceType.workIn;
+      return AttBrkModeType.workIn;
     case 'work_out':
-      return SimpleModeAttendanceType.workOut;
+      return AttBrkModeType.workOut;
     case 'break':
-      return SimpleModeAttendanceType.breakTime;
+      return AttBrkModeType.breakTime;
   }
   return null;
 }
 
-class SimpleModeAttendanceRepository {
-  SimpleModeAttendanceRepository._({
+class AttBrkRepository {
+  AttBrkRepository._({
     CommuteLogRepository? commuteLogRepository,
   }) : _commuteLogRepository = commuteLogRepository ?? CommuteLogRepository();
 
-  static final SimpleModeAttendanceRepository instance =
-  SimpleModeAttendanceRepository._();
+  static final AttBrkRepository instance =
+  AttBrkRepository._();
 
   /// Firestore 로그용 레포지토리
   final CommuteLogRepository _commuteLogRepository;
@@ -85,7 +85,7 @@ class SimpleModeAttendanceRepository {
   static const String _breakTypeStart = 'start';
 
   /// 내부 공용 DB 게터
-  Future<Database> get _database async => SimpleModeDb.instance.database;
+  Future<Database> get _database async => AttBrkModeDb.instance.database;
 
   /// 버튼을 누른 시각을 그대로 한 줄 INSERT (로컬 SQLite 전용)
   ///
@@ -97,7 +97,7 @@ class SimpleModeAttendanceRepository {
   /// ⚠️ Firestore에는 아무 것도 쓰지 않는 순수 로컬 메서드입니다.
   Future<void> insertEvent({
     required DateTime dateTime,
-    required SimpleModeAttendanceType type,
+    required AttBrkModeType type,
   }) async {
     final db = await _database;
 
@@ -142,14 +142,14 @@ class SimpleModeAttendanceRepository {
   /// - 휴게: simple_break_attendance 에서 type="start" 한 건 조회
   ///
   /// 반환: { SimpleModeAttendanceType.workIn: '09:12', ... } 형식
-  Future<Map<SimpleModeAttendanceType, String>> getEventsForDate(
+  Future<Map<AttBrkModeType, String>> getEventsForDate(
       DateTime dateTime,
       ) async {
     final db = await _database;
 
     final date = _dateFormatter.format(dateTime); // 'yyyy-MM-dd'
 
-    final result = <SimpleModeAttendanceType, String>{};
+    final result = <AttBrkModeType, String>{};
 
     // 1) 출근/퇴근 테이블 조회
     final workRows = await db.query(
@@ -164,13 +164,13 @@ class SimpleModeAttendanceRepository {
       final time = row['time'] as String;
 
       // nullable → non-null 변환
-      final maybeType = simpleModeAttendanceTypeFromCode(typeCode);
+      final maybeType = supportModeAttBrkTypeFromCode(typeCode);
       if (maybeType == null) {
         continue;
       }
 
-      if (maybeType == SimpleModeAttendanceType.workIn ||
-          maybeType == SimpleModeAttendanceType.workOut) {
+      if (maybeType == AttBrkModeType.workIn ||
+          maybeType == AttBrkModeType.workOut) {
         result[maybeType] = time;
       }
     }
@@ -185,7 +185,7 @@ class SimpleModeAttendanceRepository {
 
     if (breakRows.isNotEmpty) {
       final time = breakRows.first['time'] as String;
-      result[SimpleModeAttendanceType.breakTime] = time;
+      result[AttBrkModeType.breakTime] = time;
     }
 
     return result;
@@ -213,7 +213,7 @@ class SimpleModeAttendanceRepository {
   ///   );
   Future<void> insertEventAndUpload({
     required DateTime dateTime,
-    required SimpleModeAttendanceType type,
+    required AttBrkModeType type,
     required String userId,
     required String userName,
     required String area,

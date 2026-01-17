@@ -1,12 +1,11 @@
-// lib/time_record/simple_mode/simple_mode_db.dart
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
 
-class SimpleModeDb {
-  SimpleModeDb._();
+class AttBrkModeDb {
+  AttBrkModeDb._();
 
-  static final SimpleModeDb instance = SimpleModeDb._();
+  static final AttBrkModeDb instance = AttBrkModeDb._();
 
   static const _dbName = 'simple_mode_attendance.db';
 
@@ -40,14 +39,14 @@ class SimpleModeDb {
     debugPrint('[SimpleModeDb] onCreate v$version');
     // 신규 생성 시에는 분리된 두 테이블만 생성 (v4 스키마 기준)
     await _createWorkAttendanceTable(db);
-    await _createBreakAttendanceTable(db);
+    await _createBrkTable(db);
   }
 
   Future<void> _onOpen(Database db) async {
     debugPrint('[SimpleModeDb] onOpen → ensure tables');
     // 앱 실행 시마다 분리된 두 테이블이 존재하는지 보장 (v4 스키마 기준)
     await _createWorkAttendanceTable(db);
-    await _createBreakAttendanceTable(db);
+    await _createBrkTable(db);
   }
 
   /// 버전 업그레이드 마이그레이션
@@ -89,7 +88,7 @@ class SimpleModeDb {
     );
     if (tables.isEmpty) {
       // 테이블 없으면 새 스키마만 생성
-      await _createSimpleModeAttendanceTable(db);
+      await _createAttTable(db);
       return;
     }
 
@@ -99,7 +98,7 @@ class SimpleModeDb {
     );
 
     // 2) 새로운 스키마로 테이블 생성
-    await _createSimpleModeAttendanceTable(db);
+    await _createAttTable(db);
 
     // 3) 데이터 복사
     await db.execute('''
@@ -118,7 +117,7 @@ class SimpleModeDb {
   Future<void> _migrateV3_splitAttendanceTable(Database db) async {
     // 1) 대상 테이블(분리된 두 테이블) 생성 보장
     await _createWorkAttendanceTable(db);
-    await _createBreakAttendanceTable(db);
+    await _createBrkTable(db);
 
     // 2) 기존 단일 테이블 존재 여부 확인
     final tables = await db.rawQuery(
@@ -160,7 +159,7 @@ class SimpleModeDb {
     );
     if (tables.isEmpty) {
       // 기존 break 테이블이 없다면, 새 스키마로만 생성
-      await _createBreakAttendanceTable(db);
+      await _createBrkTable(db);
       return;
     }
 
@@ -170,7 +169,7 @@ class SimpleModeDb {
     );
 
     // 3) 새 스키마로 break 테이블 생성
-    await _createBreakAttendanceTable(db);
+    await _createBrkTable(db);
 
     // 4) 데이터 이관: 기존 모든 row 에 대해 type = 'start' 부여
     await db.execute('''
@@ -209,7 +208,7 @@ class SimpleModeDb {
   /// - time: HH:mm
   /// - created_at: ISO8601 문자열
   /// - PK: (date, type)
-  Future<void> _createBreakAttendanceTable(Database db) async {
+  Future<void> _createBrkTable(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS simple_break_attendance (
         date TEXT NOT NULL,
@@ -225,7 +224,7 @@ class SimpleModeDb {
   ///
   /// - (리팩터링 이후에는 신규 생성 시 사용하지 않고,
   ///   v1 → v2 마이그레이션용으로만 사용됨)
-  Future<void> _createSimpleModeAttendanceTable(Database db) async {
+  Future<void> _createAttTable(Database db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS simple_mode_attendance (
         date TEXT NOT NULL,

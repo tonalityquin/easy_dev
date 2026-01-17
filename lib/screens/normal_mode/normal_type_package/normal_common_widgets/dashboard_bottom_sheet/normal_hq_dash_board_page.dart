@@ -11,7 +11,7 @@ import '../../../../../utils/init/logout_helper.dart';
 import '../../../../../utils/app_exit_flag.dart';
 
 import '../../../../common_package/sheet_tool/leader_document_box_sheet.dart';
-import '../../../../support_mode/utils/support_mode_attendance_repository.dart';
+import '../../../../support_mode/utils/att_brk_repository.dart';
 import 'normal_home_dash_board_controller.dart';
 import 'widgets/normal_home_user_info_card.dart';
 import 'widgets/normal_home_break_button_widget.dart';
@@ -165,9 +165,9 @@ class _NormalHqDashBoardPageState extends State<NormalHqDashBoardPage> {
         );
 
         // 2-1) SQLite + (필요 시) Firestore commute_user_logs 업로드
-        await SimpleModeAttendanceRepository.instance.insertEventAndUpload(
+        await AttBrkRepository.instance.insertEventAndUpload(
           dateTime: now,
-          type: SimpleModeAttendanceType.workOut,
+          type: AttBrkModeType.workOut,
           userId: userId,
           userName: userName,
           area: area,

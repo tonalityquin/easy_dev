@@ -16,16 +16,16 @@ import 'support_inside_report_signature_dialog.dart';
 // ✅ API 디버그(통합 에러 로그) 로거
 import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
 
-class SimpleInsideStartReportFormPage extends StatefulWidget {
-  const SimpleInsideStartReportFormPage({super.key});
+class SupportInsideStartReportFormPage extends StatefulWidget {
+  const SupportInsideStartReportFormPage({super.key});
 
   @override
-  State<SimpleInsideStartReportFormPage> createState() =>
-      _SimpleInsideStartReportFormPageState();
+  State<SupportInsideStartReportFormPage> createState() =>
+      _SupportInsideStartReportFormPageState();
 }
 
-class _SimpleInsideStartReportFormPageState
-    extends State<SimpleInsideStartReportFormPage> {
+class _SupportInsideStartReportFormPageState
+    extends State<SupportInsideStartReportFormPage> {
   final _formKey = GlobalKey<FormState>();
 
   // 기존 기본 정보 컨트롤러 (현재 UI에서는 사용하지 않지만, 향후 확장 고려해 유지)
@@ -344,7 +344,7 @@ class _SimpleInsideStartReportFormPageState
                             padding:
                             const EdgeInsets.fromLTRB(20, 14, 16, 12),
                             decoration: const BoxDecoration(
-                              color: SimpleReportColors.dark,
+                              color: SupportReportColors.dark,
                             ),
                             child: Row(
                               children: [
@@ -440,7 +440,7 @@ class _SimpleInsideStartReportFormPageState
                                               const Icon(
                                                 Icons.email_outlined,
                                                 size: 18,
-                                                color: SimpleReportColors.dark,
+                                                color: SupportReportColors.dark,
                                               ),
                                               const SizedBox(width: 6),
                                               Text(
@@ -451,7 +451,7 @@ class _SimpleInsideStartReportFormPageState
                                                   fontWeight:
                                                   FontWeight.w600,
                                                   color:
-                                                  SimpleReportColors.dark,
+                                                  SupportReportColors.dark,
                                                 ),
                                               ),
                                             ],
@@ -533,7 +533,7 @@ class _SimpleInsideStartReportFormPageState
                                                 Icons
                                                     .report_problem_outlined,
                                                 size: 18,
-                                                color: SimpleReportColors.dark,
+                                                color: SupportReportColors.dark,
                                               ),
                                               const SizedBox(width: 6),
                                               Text(
@@ -544,7 +544,7 @@ class _SimpleInsideStartReportFormPageState
                                                   fontWeight:
                                                   FontWeight.w600,
                                                   color:
-                                                  SimpleReportColors.dark,
+                                                  SupportReportColors.dark,
                                                 ),
                                               ),
                                             ],
@@ -611,7 +611,7 @@ class _SimpleInsideStartReportFormPageState
                                               const Icon(
                                                 Icons.edit_outlined,
                                                 size: 18,
-                                                color: SimpleReportColors.dark,
+                                                color: SupportReportColors.dark,
                                               ),
                                               const SizedBox(width: 6),
                                               Text(
@@ -622,7 +622,7 @@ class _SimpleInsideStartReportFormPageState
                                                   fontWeight:
                                                   FontWeight.w600,
                                                   color:
-                                                  SimpleReportColors.dark,
+                                                  SupportReportColors.dark,
                                                 ),
                                               ),
                                             ],
@@ -1267,7 +1267,7 @@ class _SimpleInsideStartReportFormPageState
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(
-          color: SimpleReportColors.base,
+          color: SupportReportColors.base,
           width: 1.6,
         ),
       ),
@@ -1375,8 +1375,8 @@ class _SimpleInsideStartReportFormPageState
                   );
                 },
                 style: _hasSpecialNote == false
-                    ? SimpleReportButtonStyles.primary()
-                    : SimpleReportButtonStyles.outlined(),
+                    ? SupportReportButtonStyles.primary()
+                    : SupportReportButtonStyles.outlined(),
                 child: const Text('특이사항 없음'),
               ),
             ),
@@ -1395,8 +1395,8 @@ class _SimpleInsideStartReportFormPageState
                   );
                 },
                 style: _hasSpecialNote == true
-                    ? SimpleReportButtonStyles.primary()
-                    : SimpleReportButtonStyles.outlined(),
+                    ? SupportReportButtonStyles.primary()
+                    : SupportReportButtonStyles.outlined(),
                 child: const Text('특이사항 있음'),
               ),
             ),
@@ -1533,7 +1533,7 @@ class _SimpleInsideStartReportFormPageState
                 onPressed: _openSignatureDialog,
                 icon: const Icon(Icons.border_color),
                 label: const Text('서명하기'),
-                style: SimpleReportButtonStyles.smallPrimary(),
+                style: SupportReportButtonStyles.smallPrimary(),
               ),
               if (_signaturePngBytes != null)
                 OutlinedButton.icon(
@@ -1546,7 +1546,7 @@ class _SimpleInsideStartReportFormPageState
                   },
                   icon: const Icon(Icons.delete_outline),
                   label: const Text('서명 삭제'),
-                  style: SimpleReportButtonStyles.smallOutlined(),
+                  style: SupportReportButtonStyles.smallOutlined(),
                 ),
             ],
           ),
@@ -1622,7 +1622,7 @@ class _SimpleInsideStartReportFormPageState
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: SimpleReportColors.light.withOpacity(0.8),
+                      color: SupportReportColors.light.withOpacity(0.8),
                       width: 1,
                     ),
                   ),
@@ -1635,14 +1635,14 @@ class _SimpleInsideStartReportFormPageState
                           const Icon(
                             Icons.edit_note_rounded,
                             size: 22,
-                            color: SimpleReportColors.dark,
+                            color: SupportReportColors.dark,
                           ),
                           const SizedBox(width: 8),
                           Text(
                             '업무 시작 보고서 양식',
                             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w600,
-                              color: SimpleReportColors.dark,
+                              color: SupportReportColors.dark,
                             ),
                           ),
                           const Spacer(),
@@ -1660,10 +1660,10 @@ class _SimpleInsideStartReportFormPageState
 
                       Container(
                         decoration: BoxDecoration(
-                          color: SimpleReportColors.light.withOpacity(0.12),
+                          color: SupportReportColors.light.withOpacity(0.12),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: SimpleReportColors.light.withOpacity(0.8),
+                            color: SupportReportColors.light.withOpacity(0.8),
                           ),
                         ),
                         padding: const EdgeInsets.all(12),
@@ -1673,7 +1673,7 @@ class _SimpleInsideStartReportFormPageState
                             const Icon(
                               Icons.info_outline,
                               size: 18,
-                              color: SimpleReportColors.dark,
+                              color: SupportReportColors.dark,
                             ),
                             const SizedBox(width: 8),
                             Expanded(
@@ -1705,7 +1705,7 @@ class _SimpleInsideStartReportFormPageState
                               onPressed: _sending ? null : _reset,
                               icon: const Icon(Icons.refresh_outlined),
                               label: const Text('초기화'),
-                              style: SimpleReportButtonStyles.outlined(),
+                              style: SupportReportButtonStyles.outlined(),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -1714,7 +1714,7 @@ class _SimpleInsideStartReportFormPageState
                               onPressed: _sending ? null : _showPreview,
                               icon: const Icon(Icons.visibility_outlined),
                               label: const Text('미리보기'),
-                              style: SimpleReportButtonStyles.primary(),
+                              style: SupportReportButtonStyles.primary(),
                             ),
                           ),
                         ],
@@ -1753,7 +1753,7 @@ class _SimpleInsideStartReportFormPageState
               onPressed: _showPreview,
               icon: const Icon(Icons.visibility_outlined),
               label: const Text('미리보기'),
-              style: SimpleReportButtonStyles.smallPrimary(),
+              style: SupportReportButtonStyles.smallPrimary(),
             ),
           ),
         ],
@@ -1794,7 +1794,7 @@ class _SimpleInsideStartReportFormPageState
                 _sending ? '전송 중…' : '제출',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-              style: SimpleReportButtonStyles.primary(),
+              style: SupportReportButtonStyles.primary(),
             ),
           ),
         ),

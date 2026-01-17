@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-class SimpleInsideHeaderWidgetSection extends StatelessWidget {
-  const SimpleInsideHeaderWidgetSection({super.key});
+class SupportInsideHeaderWidgetSection extends StatelessWidget {
+  const SupportInsideHeaderWidgetSection({super.key});
 
   @override
   Widget build(BuildContext context) {

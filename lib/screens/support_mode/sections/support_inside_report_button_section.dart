@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 
 import 'support_inside_report_selector_sheet.dart';
 
-class SimpleInsideReportButtonSection extends StatelessWidget {
+class SupportInsideReportButtonSection extends StatelessWidget {
   final bool isDisabled;
 
-  const SimpleInsideReportButtonSection({
+  const SupportInsideReportButtonSection({
     super.key,
     this.isDisabled = false,
   });
@@ -35,7 +35,7 @@ class SimpleInsideReportButtonSection extends StatelessWidget {
       // 🔹 문서철 스타일의 선택 시트 → 선택 결과에 따라 시작/종료 보고서 폼 오픈
       onPressed: isDisabled
           ? null
-          : () => openSimpleInsideReportSelectorSheet(context),
+          : () => openSupportInsideReportSelectorSheet(context),
     );
   }
 }

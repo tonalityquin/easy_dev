@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../../../states/area/area_state.dart';
 import '../../../../../states/user/user_state.dart';
 import '../../../../../utils/api/sheet_upload_result.dart';
-import '../../../../support_mode/utils/support_mode_attendance_repository.dart';
+import '../../../../support_mode/utils/att_brk_repository.dart';
 
 class CommuteInsideClockInLogUploader {
   // ─────────────────────────────────────────
@@ -34,9 +34,9 @@ class CommuteInsideClockInLogUploader {
       // ✅ 약식 모드와 동일한 SQLite 테이블(simple_work_attendance)에 출근 기록 저장
       final now = DateTime.now();
 
-      await SimpleModeAttendanceRepository.instance.insertEvent(
+      await AttBrkRepository.instance.insertEvent(
         dateTime: now,
-        type: SimpleModeAttendanceType.workIn,
+        type: AttBrkModeType.workIn,
       );
 
       final msg = '출근 기록이 로컬에 저장되었습니다. ($area / $division)';

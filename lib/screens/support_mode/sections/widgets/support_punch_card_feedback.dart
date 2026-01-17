@@ -4,23 +4,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
-import '../../utils/support_mode_attendance_repository.dart';
+import '../../utils/att_brk_repository.dart';
 
 // ✅ Trace 기록용 Recorder
 import '../../../../screens/hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
 
 /// ✅ Simple 펀칭 이벤트를 Trace에 기록
 /// - Trace 탭에서 "기록 시작" 상태일 때만 실제로 누적됨(recordAction 내부에서 _recording이 아니면 return)
-void _traceSimplePunch(BuildContext context, SimpleModeAttendanceType type, DateTime dateTime) {
+void _traceAttBrkPunch(BuildContext context, AttBrkModeType type, DateTime dateTime) {
   final String name;
   switch (type) {
-    case SimpleModeAttendanceType.workIn:
+    case AttBrkModeType.workIn:
       name = 'Simple 출근 펀칭';
       break;
-    case SimpleModeAttendanceType.breakTime:
+    case AttBrkModeType.breakTime:
       name = 'Simple 휴게 펀칭';
       break;
-    case SimpleModeAttendanceType.workOut:
+    case AttBrkModeType.workOut:
       name = 'Simple 퇴근 펀칭';
       break;
   }
@@ -42,13 +42,13 @@ void _traceSimplePunch(BuildContext context, SimpleModeAttendanceType type, Date
 /// - DB에는 실제 시간(HH:mm)을 저장하지만,
 /// - 이 UI에서는 "몇 시"인지는 전혀 보여주지 않고
 ///   출근/휴게/퇴근 중 어느 칸이 펀칭되었는지만 시각적으로 표현한다.
-Future<void> showSimplePunchCardFeedback(
+Future<void> showSupportPunchCardFeedback(
     BuildContext context, {
-      required SimpleModeAttendanceType type,
+      required AttBrkModeType type,
       required DateTime dateTime,
     }) async {
   // ✅ Trace 기록(출근/휴게/퇴근 모두)
-  _traceSimplePunch(context, type, dateTime);
+  _traceAttBrkPunch(context, type, dateTime);
 
   // 촉각 + 시스템 사운드로 피드백
   HapticFeedback.mediumImpact();
@@ -89,35 +89,35 @@ Future<void> showSimplePunchCardFeedback(
   );
 }
 
-String _typeLabel(SimpleModeAttendanceType type) {
+String _typeLabel(AttBrkModeType type) {
   switch (type) {
-    case SimpleModeAttendanceType.workIn:
+    case AttBrkModeType.workIn:
       return '출근 펀칭';
-    case SimpleModeAttendanceType.workOut:
+    case AttBrkModeType.workOut:
       return '퇴근 펀칭';
-    case SimpleModeAttendanceType.breakTime:
+    case AttBrkModeType.breakTime:
       return '휴게 펀칭';
   }
 }
 
-IconData _iconForType(SimpleModeAttendanceType type) {
+IconData _iconForType(AttBrkModeType type) {
   switch (type) {
-    case SimpleModeAttendanceType.workIn:
+    case AttBrkModeType.workIn:
       return Icons.login;
-    case SimpleModeAttendanceType.workOut:
+    case AttBrkModeType.workOut:
       return Icons.logout;
-    case SimpleModeAttendanceType.breakTime:
+    case AttBrkModeType.breakTime:
       return Icons.free_breakfast;
   }
 }
 
-Color _accentColorForType(SimpleModeAttendanceType type) {
+Color _accentColorForType(AttBrkModeType type) {
   switch (type) {
-    case SimpleModeAttendanceType.workIn:
+    case AttBrkModeType.workIn:
       return const Color(0xFF4F9A94); // 청록(출근)
-    case SimpleModeAttendanceType.workOut:
+    case AttBrkModeType.workOut:
       return const Color(0xFFEF6C53); // 오렌지(퇴근)
-    case SimpleModeAttendanceType.breakTime:
+    case AttBrkModeType.breakTime:
       return const Color(0xFFF2A93B); // 노랑(휴게)
   }
 }
@@ -133,7 +133,7 @@ String _weekdayKo(DateTime dt) {
 /// - 상단에 펀칭 헤드(스탬프)가 아래로 떨어지면서 카드에 찍히는 애니메이션
 /// - 오늘 행에서 해당 칸만 강하게 하이라이트
 class _PunchCardSheet extends StatefulWidget {
-  final SimpleModeAttendanceType type;
+  final AttBrkModeType type;
   final DateTime dateTime;
 
   const _PunchCardSheet({
@@ -203,9 +203,9 @@ class _PunchCardSheetState extends State<_PunchCardSheet> with SingleTickerProvi
     super.dispose();
   }
 
-  bool get _punchedWorkIn => widget.type == SimpleModeAttendanceType.workIn;
-  bool get _punchedBreak => widget.type == SimpleModeAttendanceType.breakTime;
-  bool get _punchedWorkOut => widget.type == SimpleModeAttendanceType.workOut;
+  bool get _punchedWorkIn => widget.type == AttBrkModeType.workIn;
+  bool get _punchedBreak => widget.type == AttBrkModeType.breakTime;
+  bool get _punchedWorkOut => widget.type == AttBrkModeType.workOut;
 
   @override
   Widget build(BuildContext context) {
@@ -417,8 +417,8 @@ class _PunchCardSheetState extends State<_PunchCardSheet> with SingleTickerProvi
                                         child: _PunchStatusCell(
                                           punched: _punchedWorkIn,
                                           label: '출근',
-                                          accentColor: _accentColorForType(SimpleModeAttendanceType.workIn),
-                                          highlighted: widget.type == SimpleModeAttendanceType.workIn,
+                                          accentColor: _accentColorForType(AttBrkModeType.workIn),
+                                          highlighted: widget.type == AttBrkModeType.workIn,
                                           flashStrength: flashStrength,
                                         ),
                                       ),
@@ -427,8 +427,8 @@ class _PunchCardSheetState extends State<_PunchCardSheet> with SingleTickerProvi
                                         child: _PunchStatusCell(
                                           punched: _punchedBreak,
                                           label: '휴게',
-                                          accentColor: _accentColorForType(SimpleModeAttendanceType.breakTime),
-                                          highlighted: widget.type == SimpleModeAttendanceType.breakTime,
+                                          accentColor: _accentColorForType(AttBrkModeType.breakTime),
+                                          highlighted: widget.type == AttBrkModeType.breakTime,
                                           flashStrength: flashStrength,
                                         ),
                                       ),
@@ -437,8 +437,8 @@ class _PunchCardSheetState extends State<_PunchCardSheet> with SingleTickerProvi
                                         child: _PunchStatusCell(
                                           punched: _punchedWorkOut,
                                           label: '퇴근',
-                                          accentColor: _accentColorForType(SimpleModeAttendanceType.workOut),
-                                          highlighted: widget.type == SimpleModeAttendanceType.workOut,
+                                          accentColor: _accentColorForType(AttBrkModeType.workOut),
+                                          highlighted: widget.type == AttBrkModeType.workOut,
                                           flashStrength: flashStrength,
                                         ),
                                       ),

@@ -1,5 +1,3 @@
-// lib/screens/simple_package/simple_inside_screen.dart
-
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -24,7 +22,7 @@ import 'support_inside_controller.dart';
 // ✅ API 디버그(통합 에러 로그) 로거
 import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
 
-enum SimpleInsideMode {
+enum SupportInsideMode {
   leader,
   fieldUser,
 }
@@ -41,9 +39,9 @@ const String _kNoticeSpreadsheetRange = '$_kNoticeSheetName!A1:A50';
 // ─────────────────────────────────────────────────────────────
 // ✅ API 디버그 로직: 표준 태그 / 로깅 헬퍼 (file-scope)
 // ─────────────────────────────────────────────────────────────
-const String _tSimple = 'simple';
-const String _tSimpleInside = 'simple/inside';
-const String _tSimpleNotice = 'simple/notice';
+const String _tSupport = 'Support';
+const String _tSupportInside = 'Support/inside';
+const String _tSupportNotice = 'Support/notice';
 
 const String _tSheets = 'sheets';
 const String _tSheetsRead = 'sheets/read';
@@ -84,26 +82,26 @@ Future<sheets.SheetsApi> _sheetsApi() async {
       tag: '_sheetsApi',
       message: 'GoogleAuthSession.safeClient 또는 SheetsApi 생성 실패',
       error: e,
-      tags: const <String>[_tSimple, _tSimpleInside, _tSimpleNotice, _tSheets, _tAuth],
+      tags: const <String>[_tSupport, _tSupportInside, _tSupportNotice, _tSheets, _tAuth],
     );
     rethrow;
   }
 }
 
-class SimpleInsideScreen extends StatefulWidget {
-  const SimpleInsideScreen({
+class SupportInsideScreen extends StatefulWidget {
+  const SupportInsideScreen({
     super.key,
     this.mode,
   });
 
-  final SimpleInsideMode? mode;
+  final SupportInsideMode? mode;
 
   @override
-  State<SimpleInsideScreen> createState() => _SimpleInsideScreenState();
+  State<SupportInsideScreen> createState() => _SupportInsideScreenState();
 }
 
-class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
-  final controller = SimpleInsideController();
+class _SupportInsideScreenState extends State<SupportInsideScreen> {
+  final controller = SupportInsideController();
 
   // ✅ 공지 로딩 상태
   bool _noticeLoading = false;
@@ -157,10 +155,10 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
     } catch (e) {
       // 부트스트랩 실패는 공지 영역에만 영향
       await _logApiError(
-        tag: 'SimpleInsideScreen._bootstrapNoticeSheetId',
+        tag: 'SupportInsideScreen._bootstrapNoticeSheetId',
         message: '공지 SpreadsheetId 부트스트랩 실패(SharedPreferences)',
         error: e,
-        tags: const <String>[_tSimple, _tSimpleInside, _tSimpleNotice, _tPrefs],
+        tags: const <String>[_tSupport, _tSupportInside, _tSupportNotice, _tPrefs],
       );
     }
   }
@@ -211,14 +209,14 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
           : '공지 불러오기 실패: $e';
 
       await _logApiError(
-        tag: 'SimpleInsideScreen._loadNotice',
+        tag: 'SupportInsideScreen._loadNotice',
         message: '공지 불러오기 실패(Google Sheets)',
         error: e,
         extra: <String, dynamic>{
           'spreadsheetIdLen': id.length,
           'range': _kNoticeSpreadsheetRange,
         },
-        tags: const <String>[_tSimple, _tSimpleInside, _tSimpleNotice, _tSheets, _tSheetsRead],
+        tags: const <String>[_tSupport, _tSupportInside, _tSupportNotice, _tSheets, _tSheetsRead],
       );
 
       if (!mounted) return;
@@ -354,10 +352,10 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
       await EndTimeReminderService.instance.cancel();
     } catch (e) {
       await _logApiError(
-        tag: 'SimpleInsideScreen._resetStaleWorkingState',
+        tag: 'SupportInsideScreen._resetStaleWorkingState',
         message: 'stale working state 리셋 실패',
         error: e,
-        tags: const <String>[_tSimple, _tSimpleInside, _tPrefs],
+        tags: const <String>[_tSupport, _tSupportInside, _tPrefs],
       );
     }
   }
@@ -371,10 +369,10 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
       );
     } catch (e) {
       await _logApiError(
-        tag: 'SimpleInsideScreen._handleLogout',
+        tag: 'SupportInsideScreen._handleLogout',
         message: '로그아웃 처리 실패',
         error: e,
-        tags: const <String>[_tSimple, _tSimpleInside, _tUi],
+        tags: const <String>[_tSupport, _tSupportInside, _tUi],
       );
       rethrow;
     }
@@ -399,14 +397,14 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
       left: 12,
       child: IgnorePointer(
         child: Semantics(
-          label: 'screen_tag: simple screen',
-          child: Text('simple screen', style: style),
+          label: 'screen_tag: support screen',
+          child: Text('support screen', style: style),
         ),
       ),
     );
   }
 
-  SimpleInsideMode _resolveMode(UserState userState) {
+  SupportInsideMode _resolveMode(UserState userState) {
     if (widget.mode != null) return widget.mode!;
 
     String role = '';
@@ -417,13 +415,13 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
       role = rawRole.trim();
     }
 
-    debugPrint('[SimpleInsideScreen] resolved role="$role"');
+    debugPrint('[SupportInsideScreen] resolved role="$role"');
 
     if (role == 'fieldCommon') {
-      return SimpleInsideMode.fieldUser;
+      return SupportInsideMode.fieldUser;
     }
 
-    return SimpleInsideMode.leader;
+    return SupportInsideMode.leader;
   }
 
   @override
@@ -432,7 +430,7 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
       canPop: false,
       child: Scaffold(
         // ✅ 하단 고정 채팅 버튼(누르기 쉬운 위치)
-        bottomNavigationBar: const _SimpleInsideChatDock(),
+        bottomNavigationBar: const _SupportInsideChatDock(),
         body: Consumer<UserState>(
           builder: (context, userState, _) {
             final mode = _resolveMode(userState);
@@ -450,7 +448,7 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
             final String division = userState.division;
 
             debugPrint(
-              '[SimpleInsideScreen] punchRecorder props → '
+              '[SupportInsideScreen] punchRecorder props → '
                   'userId="$userId", userName="$userName", area="$area", division="$division"',
             );
 
@@ -464,7 +462,7 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
                         padding: const EdgeInsets.all(24),
                         child: Column(
                           children: [
-                            const SimpleInsideHeaderWidgetSection(),
+                            const SupportInsideHeaderWidgetSection(),
                             const SizedBox(height: 12),
 
                             // ✅ (추가) PunchRecorder 상단 공지
@@ -472,7 +470,7 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
                             const SizedBox(height: 12),
 
                             // 🔹 간편 모드 출퇴근 카드에 회사/지역/유저 정보 전달
-                            SimpleInsidePunchRecorderSection(
+                            SupportInsidePunchRecorderSection(
                               userId: userId,
                               userName: userName,
                               area: area,
@@ -481,7 +479,7 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
 
                             const SizedBox(height: 6),
 
-                            if (mode == SimpleInsideMode.leader)
+                            if (mode == SupportInsideMode.leader)
                               const _CommonModeButtonGrid()
                             else
                               const _TeamModeButtonGrid(),
@@ -538,8 +536,8 @@ class _SimpleInsideScreenState extends State<SimpleInsideScreen> {
 }
 
 /// ✅ SimpleInsideScreen 전용: 하단 고정 채팅 도크
-class _SimpleInsideChatDock extends StatelessWidget {
-  const _SimpleInsideChatDock();
+class _SupportInsideChatDock extends StatelessWidget {
+  const _SupportInsideChatDock();
 
   @override
   Widget build(BuildContext context) {
@@ -568,9 +566,9 @@ class _CommonModeButtonGrid extends StatelessWidget {
       children: const [
         Row(
           children: [
-            Expanded(child: SimpleInsideReportButtonSection()),
+            Expanded(child: SupportInsideReportButtonSection()),
             SizedBox(width: 12),
-            Expanded(child: SimpleInsideDocumentBoxButtonSection()),
+            Expanded(child: SupportInsideDocumentBoxButtonSection()),
           ],
         ),
       ],
@@ -587,7 +585,7 @@ class _TeamModeButtonGrid extends StatelessWidget {
       children: const [
         Row(
           children: [
-            Expanded(child: SimpleInsideDocumentBoxButtonSection()),
+            Expanded(child: SupportInsideDocumentBoxButtonSection()),
           ],
         ),
       ],

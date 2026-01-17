@@ -17,11 +17,11 @@ import 'support_inside_report_styles.dart';
 import 'support_inside_report_signature_dialog.dart';
 import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
 
-class SimpleInsideEndReportFormPage extends StatefulWidget {
-  const SimpleInsideEndReportFormPage({super.key});
+class SupportInsideEndReportFormPage extends StatefulWidget {
+  const SupportInsideEndReportFormPage({super.key});
 
   @override
-  State<SimpleInsideEndReportFormPage> createState() => _SimpleInsideEndReportFormPageState();
+  State<SupportInsideEndReportFormPage> createState() => _SupportInsideEndReportFormPageState();
 }
 
 /// ─────────────────────────────────────────────────────────────
@@ -43,7 +43,7 @@ class SimpleInsideEndReportFormPage extends StatefulWidget {
 /// - ✅ Firestore 관련 write 로직은 repositories/end_work_report_repository.dart 로 분리
 /// - ✅ UI에서는 Repository 호출만 수행
 /// ─────────────────────────────────────────────────────────────
-class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFormPage> {
+class _SupportInsideEndReportFormPageState extends State<SupportInsideEndReportFormPage> {
   final _formKey = GlobalKey<FormState>();
 
   // 기본 정보 컨트롤러(확장 대비 유지)
@@ -390,7 +390,7 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.fromLTRB(20, 14, 16, 12),
-                            decoration: const BoxDecoration(color: SimpleReportColors.dark),
+                            decoration: const BoxDecoration(color: SupportReportColors.dark),
                             child: Row(
                               children: [
                                 const Icon(Icons.visibility_outlined, color: Colors.white),
@@ -989,8 +989,8 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                   );
                 },
                 style: _hasSpecialNote == false
-                    ? SimpleReportButtonStyles.primary()
-                    : SimpleReportButtonStyles.outlined(),
+                    ? SupportReportButtonStyles.primary()
+                    : SupportReportButtonStyles.outlined(),
                 child: const Text('특이사항 없음'),
               ),
             ),
@@ -1009,8 +1009,8 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                   );
                 },
                 style: _hasSpecialNote == true
-                    ? SimpleReportButtonStyles.primary()
-                    : SimpleReportButtonStyles.outlined(),
+                    ? SupportReportButtonStyles.primary()
+                    : SupportReportButtonStyles.outlined(),
                 child: const Text('특이사항 있음'),
               ),
             ),
@@ -1038,7 +1038,7 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
             value,
             style: textTheme.bodySmall?.copyWith(
               fontWeight: isEmphasis ? FontWeight.w700 : FontWeight.w600,
-              color: isEmphasis ? SimpleReportColors.dark : Colors.black87,
+              color: isEmphasis ? SupportReportColors.dark : Colors.black87,
             ),
           ),
         ],
@@ -1084,22 +1084,22 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
           width: double.infinity,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: SimpleReportColors.light.withOpacity(0.12),
+            color: SupportReportColors.light.withOpacity(0.12),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: SimpleReportColors.light.withOpacity(0.8)),
+            border: Border.all(color: SupportReportColors.light.withOpacity(0.8)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  const Icon(Icons.info_outline, size: 18, color: SimpleReportColors.dark),
+                  const Icon(Icons.info_outline, size: 18, color: SupportReportColors.dark),
                   const SizedBox(width: 8),
                   Text(
                     '시스템 집계 기준 (참고용)',
                     style: textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w600,
-                      color: SimpleReportColors.dark,
+                      color: SupportReportColors.dark,
                     ),
                   ),
                 ],
@@ -1141,7 +1141,7 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
           width: double.infinity,
           child: ElevatedButton.icon(
             onPressed: (_firstSubmitting || !_isVehicleCountValid) ? null : _submitFirstEndReport,
-            style: SimpleReportButtonStyles.primary(),
+            style: SupportReportButtonStyles.primary(),
             icon: _firstSubmitting
                 ? const SizedBox(
               width: 18,
@@ -1278,7 +1278,7 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                 onPressed: _openSignatureDialog,
                 icon: const Icon(Icons.border_color),
                 label: const Text('서명하기'),
-                style: SimpleReportButtonStyles.smallPrimary(),
+                style: SupportReportButtonStyles.smallPrimary(),
               ),
               if (_signaturePngBytes != null)
                 OutlinedButton.icon(
@@ -1291,7 +1291,7 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                   },
                   icon: const Icon(Icons.delete_outline),
                   label: const Text('서명 삭제'),
-                  style: SimpleReportButtonStyles.smallOutlined(),
+                  style: SupportReportButtonStyles.smallOutlined(),
                 ),
             ],
           ),
@@ -1360,7 +1360,7 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: SimpleReportColors.light.withOpacity(0.8),
+                      color: SupportReportColors.light.withOpacity(0.8),
                       width: 1,
                     ),
                   ),
@@ -1370,13 +1370,13 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.edit_note_rounded, size: 22, color: SimpleReportColors.dark),
+                          const Icon(Icons.edit_note_rounded, size: 22, color: SupportReportColors.dark),
                           const SizedBox(width: 8),
                           Text(
                             '업무 종료 보고서 양식',
                             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w600,
-                              color: SimpleReportColors.dark,
+                              color: SupportReportColors.dark,
                             ),
                           ),
                           const Spacer(),
@@ -1391,15 +1391,15 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                       const SizedBox(height: 4),
                       Container(
                         decoration: BoxDecoration(
-                          color: SimpleReportColors.light.withOpacity(0.12),
+                          color: SupportReportColors.light.withOpacity(0.12),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: SimpleReportColors.light.withOpacity(0.8)),
+                          border: Border.all(color: SupportReportColors.light.withOpacity(0.8)),
                         ),
                         padding: const EdgeInsets.all(12),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.info_outline, size: 18, color: SimpleReportColors.dark),
+                            const Icon(Icons.info_outline, size: 18, color: SupportReportColors.dark),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -1424,7 +1424,7 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                               onPressed: _sending ? null : _reset,
                               icon: const Icon(Icons.refresh_outlined),
                               label: const Text('초기화'),
-                              style: SimpleReportButtonStyles.outlined(),
+                              style: SupportReportButtonStyles.outlined(),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -1433,7 +1433,7 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                               onPressed: _sending ? null : _showPreview,
                               icon: const Icon(Icons.visibility_outlined),
                               label: const Text('미리보기'),
-                              style: SimpleReportButtonStyles.primary(),
+                              style: SupportReportButtonStyles.primary(),
                             ),
                           ),
                         ],
@@ -1466,7 +1466,7 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: SimpleReportColors.base, width: 1.6),
+        borderSide: const BorderSide(color: SupportReportColors.base, width: 1.6),
       ),
       contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
     );
@@ -1553,7 +1553,7 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
               onPressed: _sending ? null : _showPreview,
               icon: const Icon(Icons.visibility_outlined),
               label: const Text('미리보기'),
-              style: SimpleReportButtonStyles.smallPrimary(),
+              style: SupportReportButtonStyles.smallPrimary(),
             ),
           ),
         ],
@@ -1593,7 +1593,7 @@ class _SimpleInsideEndReportFormPageState extends State<SimpleInsideEndReportFor
                 _sending ? '전송 중…' : '제출',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
-              style: SimpleReportButtonStyles.primary(),
+              style: SupportReportButtonStyles.primary(),
             ),
           ),
         ),

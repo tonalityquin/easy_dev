@@ -8,7 +8,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import '../../../../utils/app_exit_flag.dart';
 import '../../../../utils/block_dialogs/work_end_duration_blocking_dialog.dart';
 import '../../../../utils/block_dialogs/work_start_duration_blocking_dialog.dart';
-import '../../utils/support_mode_attendance_repository.dart';
+import '../../utils/att_brk_repository.dart';
 import 'support_punch_card_feedback.dart';
 import '../../../../../repositories/commute_repo_services/commute_true_false_repository.dart';
 
@@ -28,8 +28,8 @@ class _Palette {
 /// - 추가 정책:
 ///   - 출근(workIn) 시에만 commute_true_false 컬렉션에 "출근 시각(Timestamp)" 기록
 ///   - 퇴근(workOut) 시에는 commute_true_false 와 무관 (절대 호출하지 않음)
-class SimpleInsidePunchRecorderSection extends StatefulWidget {
-  const SimpleInsidePunchRecorderSection({
+class SupportInsidePunchRecorderSection extends StatefulWidget {
+  const SupportInsidePunchRecorderSection({
     super.key,
     required this.userId,
     required this.userName,
@@ -43,12 +43,12 @@ class SimpleInsidePunchRecorderSection extends StatefulWidget {
   final String division;
 
   @override
-  State<SimpleInsidePunchRecorderSection> createState() =>
-      _SimpleInsidePunchRecorderSectionState();
+  State<SupportInsidePunchRecorderSection> createState() =>
+      _SupportInsidePunchRecorderSectionState();
 }
 
-class _SimpleInsidePunchRecorderSectionState
-    extends State<SimpleInsidePunchRecorderSection> {
+class _SupportInsidePunchRecorderSectionState
+    extends State<SupportInsidePunchRecorderSection> {
   late DateTime _selectedDate;
 
   String? _workInTime;
@@ -75,13 +75,13 @@ class _SimpleInsidePunchRecorderSectionState
     });
 
     final events =
-    await SimpleModeAttendanceRepository.instance.getEventsForDate(date);
+    await AttBrkRepository.instance.getEventsForDate(date);
 
     setState(() {
       _selectedDate = date;
-      _workInTime = events[SimpleModeAttendanceType.workIn];
-      _breakTime = events[SimpleModeAttendanceType.breakTime];
-      _workOutTime = events[SimpleModeAttendanceType.workOut];
+      _workInTime = events[AttBrkModeType.workIn];
+      _breakTime = events[AttBrkModeType.breakTime];
+      _workOutTime = events[AttBrkModeType.workOut];
       _loading = false;
     });
   }
@@ -186,21 +186,21 @@ class _SimpleInsidePunchRecorderSectionState
     }
   }
 
-  Future<void> _punch(SimpleModeAttendanceType type) async {
+  Future<void> _punch(AttBrkModeType type) async {
     if (_loading) return;
 
-    if (type == SimpleModeAttendanceType.breakTime && !_hasWorkIn) {
+    if (type == AttBrkModeType.breakTime && !_hasWorkIn) {
       _showGuardSnack('먼저 출근을 펀칭한 뒤 휴게시간을 펀칭할 수 있습니다.');
       return;
     }
 
-    if (type == SimpleModeAttendanceType.workOut && (!_hasWorkIn || !_hasBreak)) {
+    if (type == AttBrkModeType.workOut && (!_hasWorkIn || !_hasBreak)) {
       _showGuardSnack('출근과 휴게시간을 모두 펀칭한 뒤 퇴근을 펀칭할 수 있습니다.');
       return;
     }
 
     // ✅ 출근/퇴근 시 Duration Blocking Dialog 분리 적용
-    if (type == SimpleModeAttendanceType.workIn) {
+    if (type == AttBrkModeType.workIn) {
       final proceed = await showWorkStartDurationBlockingDialog(
         context,
         message: '출근을 펀칭하면 근무가 시작됩니다.\n약 5초 정도 소요됩니다.',
@@ -209,7 +209,7 @@ class _SimpleInsidePunchRecorderSectionState
       if (!proceed) return;
     }
 
-    if (type == SimpleModeAttendanceType.workOut) {
+    if (type == AttBrkModeType.workOut) {
       final proceed = await showWorkEndDurationBlockingDialog(
         context,
         message: '퇴근을 펀칭하면 오늘 근무가 종료되고 앱이 종료됩니다.\n약 5초 정도 소요됩니다.',
@@ -232,13 +232,13 @@ class _SimpleInsidePunchRecorderSectionState
     );
 
     // 1) SQLite 저장
-    await SimpleModeAttendanceRepository.instance.insertEvent(
+    await AttBrkRepository.instance.insertEvent(
       dateTime: targetDateTime,
       type: type,
     );
 
     // 2) 피드백 UI
-    await showSimplePunchCardFeedback(
+    await showSupportPunchCardFeedback(
       context,
       type: type,
       dateTime: targetDateTime,
@@ -246,7 +246,7 @@ class _SimpleInsidePunchRecorderSectionState
 
     // 3) ✅ 출근(workIn)일 때만 commute_true_false에 출근시각 기록
     //    ✅ 퇴근(workOut)은 이 컬렉션과 무관: 호출 금지
-    if (type == SimpleModeAttendanceType.workIn) {
+    if (type == AttBrkModeType.workIn) {
       await _recordClockInAtToCommuteTrueFalse(targetDateTime);
     }
 
@@ -254,7 +254,7 @@ class _SimpleInsidePunchRecorderSectionState
     await _loadForDate(_selectedDate);
 
     // 5) 퇴근 시 앱 종료
-    if (type == SimpleModeAttendanceType.workOut) {
+    if (type == AttBrkModeType.workOut) {
       await _exitAppAfterClockOut(context);
     }
   }
@@ -372,32 +372,32 @@ class _SimpleInsidePunchRecorderSectionState
                         Expanded(
                           child: _PunchSlot(
                             label: '출근',
-                            type: SimpleModeAttendanceType.workIn,
+                            type: AttBrkModeType.workIn,
                             time: _workInTime,
                             enabled: canPunchWorkIn,
-                            onTap: () => _punch(SimpleModeAttendanceType.workIn),
+                            onTap: () => _punch(AttBrkModeType.workIn),
                           ),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: _PunchSlot(
                             label: '휴게',
-                            type: SimpleModeAttendanceType.breakTime,
+                            type: AttBrkModeType.breakTime,
                             time: _breakTime,
                             enabled: canPunchBreak,
                             onTap: () =>
-                                _punch(SimpleModeAttendanceType.breakTime),
+                                _punch(AttBrkModeType.breakTime),
                           ),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: _PunchSlot(
                             label: '퇴근',
-                            type: SimpleModeAttendanceType.workOut,
+                            type: AttBrkModeType.workOut,
                             time: _workOutTime,
                             enabled: canPunchWorkOut,
                             onTap: () =>
-                                _punch(SimpleModeAttendanceType.workOut),
+                                _punch(AttBrkModeType.workOut),
                           ),
                         ),
                       ],
@@ -424,7 +424,7 @@ class _SimpleInsidePunchRecorderSectionState
 
 class _PunchSlot extends StatelessWidget {
   final String label;
-  final SimpleModeAttendanceType type;
+  final AttBrkModeType type;
   final String? time;
   final bool enabled;
   final VoidCallback onTap;
@@ -439,22 +439,22 @@ class _PunchSlot extends StatelessWidget {
 
   Color get _accent {
     switch (type) {
-      case SimpleModeAttendanceType.workIn:
+      case AttBrkModeType.workIn:
         return const Color(0xFF4F9A94);
-      case SimpleModeAttendanceType.breakTime:
+      case AttBrkModeType.breakTime:
         return const Color(0xFFF2A93B);
-      case SimpleModeAttendanceType.workOut:
+      case AttBrkModeType.workOut:
         return const Color(0xFFEF6C53);
     }
   }
 
   IconData get _icon {
     switch (type) {
-      case SimpleModeAttendanceType.workIn:
+      case AttBrkModeType.workIn:
         return Icons.login;
-      case SimpleModeAttendanceType.breakTime:
+      case AttBrkModeType.breakTime:
         return Icons.free_breakfast;
-      case SimpleModeAttendanceType.workOut:
+      case AttBrkModeType.workOut:
         return Icons.logout;
     }
   }

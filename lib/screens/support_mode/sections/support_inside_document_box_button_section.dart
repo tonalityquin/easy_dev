@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 
 import 'documents/support_document_box_sheet.dart';
 
-class SimpleInsideDocumentBoxButtonSection extends StatelessWidget {
+class SupportInsideDocumentBoxButtonSection extends StatelessWidget {
   final bool isDisabled;
 
-  const SimpleInsideDocumentBoxButtonSection({
+  const SupportInsideDocumentBoxButtonSection({
     super.key,
     this.isDisabled = false,
   });

@@ -91,7 +91,7 @@ final Map<String, WidgetBuilder> appRoutes = {
   // 출퇴근(온라인/약식/오프라인)
   AppRoutes.commute: (context) => const CommuteInsideScreen(),
   AppRoutes.liteCommute: (context) => const LiteCommuteInsideScreen(),
-  AppRoutes.simpleCommute: (context) => const SimpleInsideScreen(),
+  AppRoutes.simpleCommute: (context) => const SupportInsideScreen(),
   AppRoutes.offlineCommute: (context) => const OfflineCommuteInsideScreen(),
   AppRoutes.normalCommute: (context) => const NormalCommuteInsideScreen(),
 

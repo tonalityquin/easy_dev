@@ -12,7 +12,7 @@ import '../../../../../../utils/block_dialogs/break_duration_blocking_dialog.dar
 import '../../../../../../utils/block_dialogs/work_end_duration_blocking_dialog.dart';
 
 import '../../common_package/document_package/backup/backup_form_page.dart';
-import '../../support_mode/utils/support_mode_db.dart';
+import '../../support_mode/utils/att_brk_mode_db.dart';
 import '../document_package/user_statement/user_statement_form_page.dart';
 import '../document_package/work_end_report/dashboard_end_report_form_page.dart';
 import '../document_package/work_start_report/dashboard_start_report_form_page.dart';
@@ -541,7 +541,7 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
   required List<String> statuses,
   required String userId,
 }) async {
-  final db = await SimpleModeDb.instance.database;
+  final db = await AttBrkModeDb.instance.database;
   final result = <LocalCommuteRecord>[];
 
   final dateTimeParser = DateFormat('yyyy-MM-dd HH:mm');
@@ -621,7 +621,7 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
 }
 
 Future<int> _deleteLocalAttendanceRow(LocalCommuteRecord record) async {
-  final db = await SimpleModeDb.instance.database;
+  final db = await AttBrkModeDb.instance.database;
   return db.delete(
     record.localTable,
     where: 'date = ? AND type = ?',

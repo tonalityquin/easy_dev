@@ -3,21 +3,21 @@ import 'package:flutter/material.dart';
 import 'widgets/support_inside_report_bottom_sheet.dart';
 import 'widgets/support_inside_work_bottom_sheet.dart';
 
-enum _SimpleReportSheetResult {
+enum _SupportReportSheetResult {
   workStart,
   workEnd,
 }
-Future<void> openSimpleInsideReportSelectorSheet(
+Future<void> openSupportInsideReportSelectorSheet(
   BuildContext context,
 ) async {
   final rootContext = context;
 
-  final _SimpleReportSheetResult? result = await showModalBottomSheet<_SimpleReportSheetResult>(
+  final _SupportReportSheetResult? result = await showModalBottomSheet<_SupportReportSheetResult>(
     context: context,
     useRootNavigator: false,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (ctx) => const _SimpleReportSelectorSheet(),
+    builder: (ctx) => const _SupportReportSelectorSheet(),
   );
 
   if (result == null) {
@@ -27,20 +27,20 @@ Future<void> openSimpleInsideReportSelectorSheet(
 
   // 선택 결과에 따라 기존 풀스크린 바텀시트 헬퍼 호출
   switch (result) {
-    case _SimpleReportSheetResult.workStart:
-      // ✅ 업무 시작 보고서 폼 (SimpleInsideWorkFormPage)
-      showSimpleInsideWorkFullScreenBottomSheet(rootContext);
+    case _SupportReportSheetResult.workStart:
+      // ✅ 업무 시작 보고서 폼 (SupportInsideWorkFormPage)
+      showSupportInsideWorkFullScreenBottomSheet(rootContext);
       break;
-    case _SimpleReportSheetResult.workEnd:
-      // ✅ 업무 종료 보고서 폼 (SimpleInsideReportFormPage)
-      showSimpleInsideReportFullScreenBottomSheet(rootContext);
+    case _SupportReportSheetResult.workEnd:
+      // ✅ 업무 종료 보고서 폼 (SupportInsideReportFormPage)
+      showSupportInsideReportFullScreenBottomSheet(rootContext);
       break;
   }
 }
 
 /// 문서철 스타일의 "업무 보고 선택" 시트
-class _SimpleReportSelectorSheet extends StatelessWidget {
-  const _SimpleReportSelectorSheet();
+class _SupportReportSelectorSheet extends StatelessWidget {
+  const _SupportReportSelectorSheet();
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +55,7 @@ class _SimpleReportSelectorSheet extends StatelessWidget {
         // 선택 가능한 옵션 2개 (업무 시작 / 업무 종료)
         final options = <_ReportOption>[
           _ReportOption(
-            result: _SimpleReportSheetResult.workStart,
+            result: _SupportReportSheetResult.workStart,
             title: '업무 시작 보고서',
             subtitle: '근무 시작 시 작성하는 보고서',
             tagLabel: '업무 시작 보고',
@@ -64,7 +64,7 @@ class _SimpleReportSelectorSheet extends StatelessWidget {
             iconData: Icons.wb_sunny_outlined,
           ),
           _ReportOption(
-            result: _SimpleReportSheetResult.workEnd,
+            result: _SupportReportSheetResult.workEnd,
             title: '업무 종료 보고서',
             subtitle: '근무 종료 시 작성하는 보고서',
             tagLabel: '업무 종료 보고',
@@ -118,7 +118,7 @@ class _SimpleReportSelectorSheet extends StatelessWidget {
                                 itemCount: options.length,
                                 itemBuilder: (context, index) {
                                   final option = options[index];
-                                  return _SimpleReportListItem(
+                                  return _SupportReportListItem(
                                     option: option,
                                     textTheme: textTheme,
                                     onTap: () {
@@ -273,7 +273,7 @@ class _SheetHeader extends StatelessWidget {
 
 /// 선택 가능한 옵션 1개를 표현하는 내부 모델
 class _ReportOption {
-  final _SimpleReportSheetResult result;
+  final _SupportReportSheetResult result;
   final String title;
   final String subtitle;
   final String tagLabel;
@@ -291,13 +291,13 @@ class _ReportOption {
 }
 
 /// 각각의 옵션을 카드 형태로 보여주는 위젯
-/// (simple_document_box_sheet 의 _DocumentListItem 과 동일한 레이아웃/스타일)
-class _SimpleReportListItem extends StatelessWidget {
+/// (support_document_box_sheet 의 _DocumentListItem 과 동일한 레이아웃/스타일)
+class _SupportReportListItem extends StatelessWidget {
   final _ReportOption option;
   final TextTheme? textTheme;
   final VoidCallback onTap;
 
-  const _SimpleReportListItem({
+  const _SupportReportListItem({
     required this.option,
     required this.textTheme,
     required this.onTap,
