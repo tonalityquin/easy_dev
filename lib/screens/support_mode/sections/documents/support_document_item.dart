@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-enum SimpleDocumentType {
+enum SupportDocumentType {
   generic,
   statementForm,
   workStartReportForm,
@@ -10,7 +10,7 @@ enum SimpleDocumentType {
 
 /// 문서철에 표시되는 1개의 문서 정보
 @immutable
-class SimpleDocumentItem {
+class SupportDocumentItem {
   /// 라우팅/분기용 ID (예: 'template-statement', 'template-commute-record')
   final String id;
 
@@ -24,13 +24,13 @@ class SimpleDocumentItem {
   final DateTime updatedAt;
 
   /// 문서 유형 (레이블/아이콘/색상 기본값 결정)
-  final SimpleDocumentType type;
+  final SupportDocumentType type;
 
-  const SimpleDocumentItem({
+  const SupportDocumentItem({
     required this.id,
     required this.title,
     required this.updatedAt,
     this.subtitle,
-    this.type = SimpleDocumentType.generic,
+    this.type = SupportDocumentType.generic,
   });
 }

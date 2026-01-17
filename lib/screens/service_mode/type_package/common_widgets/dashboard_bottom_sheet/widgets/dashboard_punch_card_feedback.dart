@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../../simple_mode/utils/simple_mode/simple_mode_attendance_repository.dart';
+import '../../../../../support_mode/utils/support_mode_attendance_repository.dart';
 
 // ✅ Trace 기록용 Recorder
 import '../../../../../hubs_mode/dev_package/debug_package/debug_action_recorder.dart';

@@ -15,11 +15,11 @@ import '../../../../states/user/user_state.dart';
 import '../../../utils/init/logout_helper.dart';
 import '../../services/endTime_reminder_service.dart';
 import '../common_package/chat_package/lite_chat_bottom_sheet.dart';
-import 'sections/simple_inside_header_widget_section.dart';
-import 'sections/widgets/simple_inside_punch_recorder_section.dart';
-import 'sections/simple_inside_document_box_button_section.dart';
-import 'sections/simple_inside_report_button_section.dart';
-import 'simple_inside_controller.dart';
+import 'sections/support_inside_header_widget_section.dart';
+import 'sections/widgets/support_inside_punch_recorder_section.dart';
+import 'sections/support_inside_document_box_button_section.dart';
+import 'sections/support_inside_report_button_section.dart';
+import 'support_inside_controller.dart';
 
 // ✅ API 디버그(통합 에러 로그) 로거
 import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';

@@ -25,7 +25,7 @@ import 'screens/normal_type_page.dart';
 import 'screens/service_mode/commute_package/commute_inside_screen.dart';
 import 'screens/hubs_mode/dev_package/dev_calendar_page.dart';
 import 'screens/hubs_mode/head_package/company_calendar_page.dart';
-import 'screens/simple_mode/simple_inside_screen.dart';
+import 'screens/support_mode/support_inside_screen.dart';
 import 'selector_hubs_page.dart';
 
 // ▼ 신규 페이지 import

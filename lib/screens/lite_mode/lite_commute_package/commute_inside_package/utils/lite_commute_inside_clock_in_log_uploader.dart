@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../../../../../states/area/area_state.dart';
 import '../../../../../states/user/user_state.dart';
 import '../../../../../utils/api/sheet_upload_result.dart';
-import '../../../../simple_mode/utils/simple_mode/simple_mode_attendance_repository.dart';
+import '../../../../support_mode/utils/support_mode_attendance_repository.dart';
 
 class LiteCommuteInsideClockInLogUploader {
   static Future<SheetUploadResult> uploadAttendanceJson({

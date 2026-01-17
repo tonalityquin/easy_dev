@@ -10,8 +10,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../utils/google_auth_v7.dart';
 import '../../../../../utils/api/email_config.dart';
-import 'simple_inside_report_styles.dart';
-import 'simple_inside_report_signature_dialog.dart';
+import 'support_inside_report_styles.dart';
+import 'support_inside_report_signature_dialog.dart';
 
 // ✅ API 디버그(통합 에러 로그) 로거
 import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';

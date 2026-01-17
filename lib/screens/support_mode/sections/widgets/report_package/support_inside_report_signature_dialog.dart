@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
-import 'simple_inside_report_styles.dart';
-import 'simple_inside_report_signature_painter.dart';
+import 'support_inside_report_styles.dart';
+import 'support_inside_report_signature_painter.dart';
 
 class SignatureResult {
   SignatureResult({required this.pngBytes, required this.signDateTime});

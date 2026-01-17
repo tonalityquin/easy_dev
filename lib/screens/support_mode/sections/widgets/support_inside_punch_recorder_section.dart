@@ -8,8 +8,8 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import '../../../../utils/app_exit_flag.dart';
 import '../../../../utils/block_dialogs/work_end_duration_blocking_dialog.dart';
 import '../../../../utils/block_dialogs/work_start_duration_blocking_dialog.dart';
-import '../../utils/simple_mode/simple_mode_attendance_repository.dart';
-import 'simple_punch_card_feedback.dart';
+import '../../utils/support_mode_attendance_repository.dart';
+import 'support_punch_card_feedback.dart';
 import '../../../../../repositories/commute_repo_services/commute_true_false_repository.dart';
 
 // ✅ 추가: 기기별 commute_true_false Firestore 업데이트 ON/OFF

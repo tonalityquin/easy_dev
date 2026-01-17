@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import 'simple_documents/simple_document_box_sheet.dart';
+import 'support_inside_report_selector_sheet.dart';
 
-class SimpleInsideDocumentBoxButtonSection extends StatelessWidget {
+class SimpleInsideReportButtonSection extends StatelessWidget {
   final bool isDisabled;
 
-  const SimpleInsideDocumentBoxButtonSection({
+  const SimpleInsideReportButtonSection({
     super.key,
     this.isDisabled = false,
   });
@@ -13,9 +13,9 @@ class SimpleInsideDocumentBoxButtonSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ElevatedButton.icon(
-      icon: const Icon(Icons.folder_open),
+      icon: const Icon(Icons.report),
       label: const Text(
-        '서류함 열기',
+        '업무 보고',
         style: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.bold,
@@ -32,7 +32,10 @@ class SimpleInsideDocumentBoxButtonSection extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
         ),
       ),
-      onPressed: isDisabled ? null : () => openSimpleDocumentBox(context),
+      // 🔹 문서철 스타일의 선택 시트 → 선택 결과에 따라 시작/종료 보고서 폼 오픈
+      onPressed: isDisabled
+          ? null
+          : () => openSimpleInsideReportSelectorSheet(context),
     );
   }
 }

@@ -2,7 +2,7 @@
 import 'package:intl/intl.dart';
 import 'package:sqflite/sqflite.dart'; // ✅ ConflictAlgorithm 사용
 
-import 'simple_mode_db.dart';
+import 'support_mode_db.dart';
 import '../../../../repositories/commute_repo_services/commute_log_repository.dart';
 
 /// 약식 모드 출근/퇴근/휴게 버튼 로그 타입

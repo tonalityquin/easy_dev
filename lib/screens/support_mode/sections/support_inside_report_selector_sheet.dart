@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'widgets/simple_inside_report_bottom_sheet.dart';
-import 'widgets/simple_inside_work_bottom_sheet.dart';
+import 'widgets/support_inside_report_bottom_sheet.dart';
+import 'widgets/support_inside_work_bottom_sheet.dart';
 
 enum _SimpleReportSheetResult {
   workStart,

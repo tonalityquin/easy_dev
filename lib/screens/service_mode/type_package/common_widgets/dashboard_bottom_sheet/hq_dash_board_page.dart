@@ -11,7 +11,7 @@ import '../../../../../utils/init/logout_helper.dart';
 import '../../../../../utils/app_exit_flag.dart';
 
 import '../../../../common_package/sheet_tool/leader_document_box_sheet.dart';
-import '../../../../simple_mode/utils/simple_mode/simple_mode_attendance_repository.dart';
+import '../../../../support_mode/utils/support_mode_attendance_repository.dart';
 import 'home_dash_board_controller.dart';
 import 'widgets/home_user_info_card.dart';
 import 'widgets/home_break_button_widget.dart';

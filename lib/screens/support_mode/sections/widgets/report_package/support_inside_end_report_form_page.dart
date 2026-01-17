@@ -13,8 +13,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../../repositories/end_work_report_repo_services/end_work_report_repository.dart';
 import '../../../../../utils/google_auth_v7.dart';
 import '../../../../../utils/api/email_config.dart';
-import 'simple_inside_report_styles.dart';
-import 'simple_inside_report_signature_dialog.dart';
+import 'support_inside_report_styles.dart';
+import 'support_inside_report_signature_dialog.dart';
 import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
 
 class SimpleInsideEndReportFormPage extends StatefulWidget {

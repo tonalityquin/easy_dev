@@ -7,7 +7,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
 import '../../../../../../utils/app_exit_flag.dart';
 import '../../../../../../utils/block_dialogs/work_end_duration_blocking_dialog.dart';
-import '../../../../../simple_mode/utils/simple_mode/simple_mode_attendance_repository.dart';
+import '../../../../../support_mode/utils/support_mode_attendance_repository.dart';
 import 'lite_dashboard_punch_card_feedback.dart';
 
 import '../../../../../../repositories/commute_repo_services/commute_true_false_repository.dart';
