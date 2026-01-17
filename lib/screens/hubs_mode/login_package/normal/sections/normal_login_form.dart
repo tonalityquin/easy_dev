@@ -89,8 +89,8 @@ class _NormalLoginFormState extends State<NormalLoginForm> {
 
     // ✅ theme.dart(AppCardPalette)에서 normal 팔레트 획득
     final palette = AppCardPalette.of(context);
-    final base = palette.normalBase; // 기존 _base
-    final light = palette.normalLight; // 기존 _light
+    final base = palette.tripleBase; // 기존 _base
+    final light = palette.tripleLight; // 기존 _light
 
     return Material(
       color: Colors.transparent,

@@ -24,11 +24,11 @@ import '../states/head_quarter/calendar_selection_state.dart';
 import '../states/location/location_state.dart';
 import '../states/page/page_info.dart';
 import '../states/page/page_state.dart';
-import '../states/plate/lite_filter_plate.dart';
-import '../states/plate/lite_plate_state.dart';
+import '../states/plate/double_filter_plate.dart';
+import '../states/plate/double_plate_state.dart';
 import '../states/plate/input_plate.dart';
-import '../states/plate/normal_filter_plate.dart';
-import '../states/plate/normal_plate_state.dart';
+import '../states/plate/triple_filter_plate.dart';
+import '../states/plate/triple_plate_state.dart';
 import '../states/plate/plate_state.dart';
 import '../states/plate/delete_plate.dart';
 import '../states/plate/movement_plate.dart';
@@ -59,21 +59,21 @@ final List<SingleChildWidget> stateProviders = [
     create: (context) {
       final repo = context.read<PlateRepository>();
       final area = context.read<AreaState>();
-      return LitePlateState(repo, area);
+      return DoublePlateState(repo, area);
     },
   ),
   ChangeNotifierProvider(
-    create: (context) => LiteFilterPlate(context.read<LitePlateState>()),
+    create: (context) => DoubleFilterPlate(context.read<DoublePlateState>()),
   ),
   ChangeNotifierProvider(
     create: (context) {
       final repo = context.read<PlateRepository>();
       final area = context.read<AreaState>();
-      return NormalPlateState(repo, area);
+      return TriplePlateState(repo, area);
     },
   ),
   ChangeNotifierProvider(
-    create: (context) => NormalFilterPlate(context.read<NormalPlateState>()),
+    create: (context) => TripleFilterPlate(context.read<TriplePlateState>()),
   ),
   Provider(
     create: (context) => DeletePlate(context.read<PlateRepository>(), {}),

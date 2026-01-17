@@ -11,7 +11,7 @@ import '../../../../../../repositories/commute_repo_services/commute_log_reposit
 import '../../../../../../utils/block_dialogs/break_duration_blocking_dialog.dart';
 import '../../../../../../utils/block_dialogs/work_end_duration_blocking_dialog.dart';
 
-import '../../support_mode/utils/att_brk_mode_db.dart';
+import '../../single_mode/utils/att_brk_mode_db.dart';
 import '../document_package/backup/backup_form_page.dart';
 import '../document_package/user_statement/user_statement_form_page.dart';
 import '../document_package/work_end_report/dashboard_end_report_form_page.dart';

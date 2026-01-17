@@ -89,9 +89,9 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
 
     // ✅ theme.dart(AppCardPalette)에서 Lite 팔레트 획득
     final palette = AppCardPalette.of(context);
-    final base = palette.liteBase; // 기존 _base
-    final dark = palette.liteDark; // 기존 _dark
-    final light = palette.liteLight; // 기존 _light
+    final base = palette.doubleBase; // 기존 _base
+    final dark = palette.doubleDark; // 기존 _dark
+    final light = palette.doubleLight; // 기존 _light
 
     return Material(
       color: Colors.transparent,

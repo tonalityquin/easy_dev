@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../../../states/area/area_state.dart';
 import '../../../../../states/user/user_state.dart';
 import '../../../../../utils/api/sheet_upload_result.dart';
-import '../../../../support_mode/utils/att_brk_repository.dart';
+import '../../../../single_mode/utils/att_brk_repository.dart';
 
 class CommuteInsideClockInLogUploader {
   // ─────────────────────────────────────────

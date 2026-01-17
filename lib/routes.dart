@@ -1,6 +1,6 @@
 // lib/routes.dart
 import 'package:easydev/offlines/offline_type_page.dart';
-import 'package:easydev/screens/normal_headquarter_page.dart';
+import 'package:easydev/screens/triple_headquarter_page.dart';
 import 'package:flutter/material.dart';
 
 // ▼ 오프라인 패키지
@@ -17,15 +17,15 @@ import 'package:easydev/screens/tablet_mode/tablet_page.dart';
 import 'package:easydev/screens/hubs_mode/faq_page.dart';
 import 'package:easydev/screens/hubs_mode/community_stub_page.dart';
 
-import 'screens/lite_headquarter_page.dart';
-import 'screens/lite_mode/lite_commute_package/lite_commute_inside_screen.dart';
-import 'screens/lite_type_page.dart';
-import 'screens/normal_mode/normal_commute_package/normal_commute_inside_screen.dart';
-import 'screens/normal_type_page.dart';
+import 'screens/double_headquarter_page.dart';
+import 'screens/double_mode/commute_package/double_commute_in_screen.dart';
+import 'screens/double_type_page.dart';
+import 'screens/triple_type_page.dart';
 import 'screens/service_mode/commute_package/commute_inside_screen.dart';
 import 'screens/hubs_mode/dev_package/dev_calendar_page.dart';
 import 'screens/hubs_mode/head_package/company_calendar_page.dart';
-import 'screens/support_mode/support_inside_screen.dart';
+import 'screens/single_mode/single_inside_screen.dart';
+import 'screens/triple_mode/commute_package/triple_commute_in_screen.dart';
 import 'selector_hubs_page.dart';
 
 // ▼ 신규 페이지 import
@@ -35,24 +35,24 @@ class AppRoutes {
   static const selector = '/selector';
   static const serviceLogin = '/service_login';
   static const tabletLogin = '/tablet_login';
-  static const liteLogin = '/lite_login';
-  static const simpleLogin = '/simple_login';
-  static const normalLogin = '/normal_login';
+  static const doubleLogin = '/double_login';
+  static const singleLogin = '/single_login';
+  static const tripleLogin = '/triple_login';
 
   // ✅ 오프라인 전용
   static const offlineLogin = '/offline_login';
   static const offlineCommute = '/offline_commute';
   static const commute = '/commute';
-  static const simpleCommute = '/simple_commute';
-  static const liteCommute = '/lite_commute';
-  static const normalCommute = '/normal_commute';
+  static const singleCommute = '/single_commute';
+  static const doubleCommute = '/double_commute';
+  static const tripleCommute = '/triple_commute';
 
   static const headquarterPage = '/headquarter_page';
-  static const liteHeadquarterPage = '/lite_headquarter_page';
-  static const normalHeadquarterPage = '/normal_headquarter_page';
+  static const doubleHeadquarterPage = '/double_headquarter_page';
+  static const tripleHeadquarterPage = '/triple_headquarter_page';
   static const typePage = '/type_page';
-  static const liteTypePage = '/lite_type_page';
-  static const normalTypePage = '/normal_type_page';
+  static const doubleTypePage = '/double_type_page';
+  static const tripleTypePage = '/triple_type_page';
   static const offlineTypePage = '/offline_type_page';
 
   static const tablet = '/tablet_page';
@@ -79,9 +79,9 @@ final Map<String, WidgetBuilder> appRoutes = {
   // 서비스/태블릿 로그인(온라인용 기존 화면: 유지)
   AppRoutes.serviceLogin: (context) => const LoginScreen(), // mode 기본값 = 'service'
   AppRoutes.tabletLogin: (context) => const LoginScreen(mode: 'tablet'),
-  AppRoutes.simpleLogin: (context) => const LoginScreen(mode: 'simple'),
-  AppRoutes.liteLogin: (context) => const LoginScreen(mode: 'lite'),
-  AppRoutes.normalLogin: (context) => const LoginScreen(mode: 'normal'),
+  AppRoutes.singleLogin: (context) => const LoginScreen(mode: 'single'),
+  AppRoutes.doubleLogin: (context) => const LoginScreen(mode: 'double'),
+  AppRoutes.tripleLogin: (context) => const LoginScreen(mode: 'triple'),
 
   // ✅ 오프라인 로그인 → 성공 시 오프라인 출퇴근으로 이동
   AppRoutes.offlineLogin: (context) => OfflineLoginScreen(
@@ -90,18 +90,18 @@ final Map<String, WidgetBuilder> appRoutes = {
 
   // 출퇴근(온라인/약식/오프라인)
   AppRoutes.commute: (context) => const CommuteInsideScreen(),
-  AppRoutes.liteCommute: (context) => const LiteCommuteInsideScreen(),
-  AppRoutes.simpleCommute: (context) => const SupportInsideScreen(),
+  AppRoutes.doubleCommute: (context) => const DoubleCommuteInScreen(),
+  AppRoutes.singleCommute: (context) => const SingleInsideScreen(),
   AppRoutes.offlineCommute: (context) => const OfflineCommuteInsideScreen(),
-  AppRoutes.normalCommute: (context) => const NormalCommuteInsideScreen(),
+  AppRoutes.tripleCommute: (context) => const TripleCommuteInScreen(),
 
   // 기타 페이지들
   AppRoutes.headquarterPage: (context) => const HeadquarterPage(),
   AppRoutes.typePage: (context) => const TypePage(),
-  AppRoutes.liteHeadquarterPage: (context) => const LiteHeadquarterPage(),
-  AppRoutes.normalHeadquarterPage: (context) => const NormalHeadquarterPage(),
-  AppRoutes.liteTypePage: (context) => const LiteTypePage(),
-  AppRoutes.normalTypePage: (context) => const NormalTypePage(),
+  AppRoutes.doubleHeadquarterPage: (context) => const DoubleHeadquarterPage(),
+  AppRoutes.tripleHeadquarterPage: (context) => const TripleHeadquarterPage(),
+  AppRoutes.doubleTypePage: (context) => const LiteTypePage(),
+  AppRoutes.tripleTypePage: (context) => const TripleTypePage(),
   AppRoutes.offlineTypePage: (context) => const OfflineTypePage(),
   AppRoutes.tablet: (context) => const TabletPage(),
   AppRoutes.faq: (context) => const FaqPage(),

@@ -20,7 +20,7 @@ import '../theme.dart';
 import '../states/plate/plate_state.dart';
 
 // ✅ (추가) Lite 엔진 명시적 ON/OFF를 위해 LitePlateState 접근
-import '../states/plate/lite_plate_state.dart';
+import '../states/plate/double_plate_state.dart';
 
 // ✅ Trace 기록용 Recorder
 import 'hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
@@ -104,7 +104,7 @@ class _HqModeSwitchButton extends StatelessWidget {
           style: _switchBtnStyle(context),
           onPressed: () {
             // ✅ Trace: "Lite 본사로 전환" 버튼 탭 기록(진입 즉시)
-            final litePlateStateForMeta = context.read<LitePlateState>();
+            final litePlateStateForMeta = context.read<DoublePlateState>();
             final area = litePlateStateForMeta.currentArea.trim();
             final withDefaults = area.isNotEmpty;
 
@@ -114,7 +114,7 @@ class _HqModeSwitchButton extends StatelessWidget {
               meta: <String, dynamic>{
                 'screen': 'headquarter_page',
                 'action': 'switch_to_lite_headquarter',
-                'to': AppRoutes.liteHeadquarterPage,
+                'to': AppRoutes.doubleHeadquarterPage,
                 'withDefaults': withDefaults,
                 if (area.isNotEmpty) 'area': area,
               },
@@ -127,13 +127,13 @@ class _HqModeSwitchButton extends StatelessWidget {
 
             // 2) LitePlateState를 “깨끗한 상태”로 리셋 후
             // 3) Lite 엔진(1회 조회)을 명시적으로 ON
-            final litePlateState = context.read<LitePlateState>();
-            litePlateState.liteDisableAll();
-            litePlateState.liteEnableForTypePages(withDefaults: withDefaults);
+            final litePlateState = context.read<DoublePlateState>();
+            litePlateState.doubleDisableAll();
+            litePlateState.doubleEnableForTypePages(withDefaults: withDefaults);
 
             _replaceWithAnimatedRoute(
               context,
-              AppRoutes.liteHeadquarterPage,
+              AppRoutes.doubleHeadquarterPage,
               beginOffset: const Offset(1.0, 0.0),
             );
           },

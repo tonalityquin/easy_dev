@@ -24,7 +24,7 @@ class SelectorHubsPage extends StatefulWidget {
 }
 
 class _SelectorHubsPageState extends State<SelectorHubsPage> {
-  String? _savedMode; // 'service' | 'tablet' | 'simple' | 'lite' | null
+  String? _savedMode; // 'service' | 'tablet' | 'single' | 'double' | 'triple' |  null
   bool _devAuthorized = false;
 
   @override
@@ -108,63 +108,55 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
 
   @override
   Widget build(BuildContext context) {
-    // 🔹 모드별 허브 카드 활성화 규칙
-    // - null        : 서비스/약식/태블릿/경량(lite) 모두 선택 가능
-    // - 'service'   : 서비스만 활성
-    // - 'simple'    : 약식만 활성
-    // - 'tablet'    : 태블릿만 활성
-    // - 'lite'      : 경량만 활성
-    //
-    // ✅ 호환성: 기존에 'light'로 저장된 경우도 'lite'로 간주(이전 데이터 대응)
     final mode = _savedMode;
     final bool isLiteMode = mode == 'lite' || mode == 'light';
 
     final bool serviceEnabled;
-    final bool simpleEnabled;
+    final bool singleEnabled;
     final bool tabletEnabled;
-    final bool liteEnabled;
+    final bool doubleEnabled;
 
     if (mode == null) {
       serviceEnabled = true;
-      simpleEnabled = true;
+      singleEnabled = true;
       tabletEnabled = true;
-      liteEnabled = true;
+      doubleEnabled = true;
     } else if (mode == 'service') {
       serviceEnabled = true;
-      simpleEnabled = false;
+      singleEnabled = false;
       tabletEnabled = false;
-      liteEnabled = false;
+      doubleEnabled = false;
     } else if (mode == 'simple') {
       serviceEnabled = false;
-      simpleEnabled = true;
+      singleEnabled = true;
       tabletEnabled = false;
-      liteEnabled = false;
+      doubleEnabled = false;
     } else if (mode == 'tablet') {
       serviceEnabled = false;
-      simpleEnabled = false;
+      singleEnabled = false;
       tabletEnabled = true;
-      liteEnabled = false;
+      doubleEnabled = false;
     } else if (isLiteMode) {
       serviceEnabled = false;
-      simpleEnabled = false;
+      singleEnabled = false;
       tabletEnabled = false;
-      liteEnabled = true;
+      doubleEnabled = true;
     } else {
       // 예기치 못한 값이 들어온 경우: 방어적으로 모두 허용
       serviceEnabled = true;
-      simpleEnabled = true;
+      singleEnabled = true;
       tabletEnabled = true;
-      liteEnabled = true;
+      doubleEnabled = true;
     }
 
     // ✅ “안 보인다”를 원천 차단: 경량(Lite) 로그인 카드를 1페이지(첫 화면) 고정 배치
     final List<List<Widget>> pages = [
       [
         ServiceCard(enabled: serviceEnabled),
-        LiteLoginCard(enabled: liteEnabled),
+        DoubleLoginCard(enabled: doubleEnabled),
       ],
       [
-        SimpleLoginCard(enabled: simpleEnabled),
+        SingleLoginCard(enabled: singleEnabled),
         TabletCard(enabled: tabletEnabled),
       ],
       [
@@ -182,7 +174,7 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
           DevCard(
             onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.devStub),
           ),
-          const NormalLoginCard(),
+          const TripleLoginCard(),
         ],
     ];
 

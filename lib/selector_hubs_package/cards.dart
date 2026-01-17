@@ -196,8 +196,8 @@ class ServiceCard extends StatelessWidget {
   }
 }
 
-class SimpleLoginCard extends StatelessWidget {
-  const SimpleLoginCard({super.key, this.enabled = true});
+class SingleLoginCard extends StatelessWidget {
+  const SingleLoginCard({super.key, this.enabled = true});
 
   final bool enabled;
 
@@ -206,42 +206,42 @@ class SimpleLoginCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    final title = _selectorCardTitle(context, '약식 로그인', p.simpleDark);
+    final title = _selectorCardTitle(context, '약식 로그인', p.singleDark);
 
     return Card(
       color: Theme.of(context).cardColor,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: p.simpleLight,
+      surfaceTintColor: p.singleLight,
       child: CardBody(
         icon: Icons.access_time_filled_rounded,
-        bg: p.simpleBase,
+        bg: p.singleBase,
         iconColor: onBase,
         titleWidget: title,
-        buttonBg: p.simpleBase,
+        buttonBg: p.singleBase,
         buttonFg: onBase,
         traceName: '약식 로그인',
         traceMeta: {
-          'to': AppRoutes.simpleLogin,
-          'redirectAfterLogin': AppRoutes.simpleCommute,
-          'requiredMode': 'simple',
+          'to': AppRoutes.singleLogin,
+          'redirectAfterLogin': AppRoutes.singleCommute,
+          'requiredMode': 'single',
         },
         onPressed: () => Navigator.of(context).pushReplacementNamed(
-          AppRoutes.simpleLogin,
+          AppRoutes.singleLogin,
           arguments: {
-            'redirectAfterLogin': AppRoutes.simpleCommute,
-            'requiredMode': 'simple',
+            'redirectAfterLogin': AppRoutes.singleCommute,
+            'requiredMode': 'single',
           },
         ),
         enabled: enabled,
-        disabledHint: '저장된 모드가 simple일 때만 선택할 수 있어요',
+        disabledHint: '저장된 모드가 single일 때만 선택할 수 있어요',
       ),
     );
   }
 }
 
-class LiteLoginCard extends StatelessWidget {
-  const LiteLoginCard({super.key, this.enabled = true});
+class DoubleLoginCard extends StatelessWidget {
+  const DoubleLoginCard({super.key, this.enabled = true});
 
   final bool enabled;
 
@@ -250,30 +250,30 @@ class LiteLoginCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    final title = _selectorCardTitle(context, '경량 로그인', p.liteDark);
+    final title = _selectorCardTitle(context, '경량 로그인', p.doubleDark);
 
     return Card(
       color: Theme.of(context).cardColor,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: p.liteLight,
+      surfaceTintColor: p.doubleLight,
       child: CardBody(
         icon: Icons.bolt_rounded,
-        bg: p.liteBase,
+        bg: p.doubleBase,
         iconColor: onBase,
         titleWidget: title,
-        buttonBg: p.liteBase,
+        buttonBg: p.doubleBase,
         buttonFg: onBase,
         traceName: '경량 로그인',
-        traceMeta: {'to': AppRoutes.liteLogin, 'requiredMode': 'lite'},
+        traceMeta: {'to': AppRoutes.doubleLogin, 'requiredMode': 'double'},
         onPressed: () => Navigator.of(context).pushReplacementNamed(
-          AppRoutes.liteLogin,
+          AppRoutes.doubleLogin,
           arguments: {
-            'requiredMode': 'lite',
+            'requiredMode': 'double',
           },
         ),
         enabled: enabled,
-        disabledHint: '저장된 모드가 lite일 때만 선택할 수 있어요',
+        disabledHint: '저장된 모드가 double일 때만 선택할 수 있어요',
       ),
     );
   }
@@ -465,10 +465,10 @@ class DevCard extends StatelessWidget {
 
 /// ✅ 노말 로그인 카드 (다른 모드 카드와 동일 패턴)
 /// - enabled/disabledHint 지원
-/// - AppRoutes.normalLogin 으로 이동
+/// - AppRoutes.tripleLogin 으로 이동
 /// - requiredMode/redirectAfterLogin 인자 전달
-class NormalLoginCard extends StatelessWidget {
-  const NormalLoginCard({super.key, this.enabled = true});
+class TripleLoginCard extends StatelessWidget {
+  const TripleLoginCard({super.key, this.enabled = true});
 
   final bool enabled;
 
@@ -477,35 +477,35 @@ class NormalLoginCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    final title = _selectorCardTitle(context, '노말 로그인', p.normalDark);
+    final title = _selectorCardTitle(context, ' 로그인', p.tripleDark);
 
     return Card(
       color: Theme.of(context).cardColor,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: p.normalLight,
+      surfaceTintColor: p.tripleLight,
       child: CardBody(
         icon: Icons.apps_rounded,
-        bg: p.normalBase,
+        bg: p.tripleBase,
         iconColor: onBase,
         titleWidget: title,
-        buttonBg: p.normalBase,
+        buttonBg: p.tripleBase,
         buttonFg: onBase,
         traceName: '노말 로그인',
         traceMeta: {
-          'to': AppRoutes.normalLogin,
-          'redirectAfterLogin': AppRoutes.normalCommute,
-          'requiredMode': 'normal',
+          'to': AppRoutes.tripleLogin,
+          'redirectAfterLogin': AppRoutes.tripleCommute,
+          'requiredMode': 'triple',
         },
         onPressed: () => Navigator.of(context).pushReplacementNamed(
-          AppRoutes.normalLogin,
+          AppRoutes.tripleLogin,
           arguments: {
-            'redirectAfterLogin': AppRoutes.normalCommute,
-            'requiredMode': 'normal',
+            'redirectAfterLogin': AppRoutes.tripleCommute,
+            'requiredMode': 'triple',
           },
         ),
         enabled: enabled,
-        disabledHint: '저장된 모드가 normal일 때만 선택할 수 있어요',
+        disabledHint: '저장된 모드가 triple일 때만 선택할 수 있어요',
       ),
     );
   }

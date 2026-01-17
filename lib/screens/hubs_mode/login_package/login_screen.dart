@@ -159,13 +159,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
   String _defaultRouteForMode() {
     switch (widget.mode) {
       case 'simple':
-        return AppRoutes.simpleCommute;
+        return AppRoutes.singleCommute;
       case 'tablet':
         return AppRoutes.commute;
       case 'lite':
-        return AppRoutes.liteCommute;
+        return AppRoutes.doubleCommute;
       case 'normal':
-        return AppRoutes.normalCommute;
+        return AppRoutes.tripleCommute;
       case 'service':
       default:
         return AppRoutes.commute;
@@ -226,7 +226,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     final Widget loginForm;
     if (widget.mode == 'tablet') {
       loginForm = TabletLoginForm(controller: _tabletController!);
-    } else if (widget.mode == 'simple') {
+    } else if (widget.mode == 'single') {
       loginForm = SimpleLoginForm(controller: _simpleLoginController!);
     } else if (widget.mode == 'lite') {
       loginForm = LiteLoginForm(controller: _liteLoginController!);

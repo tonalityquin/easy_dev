@@ -89,8 +89,8 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
 
     // ✅ theme.dart(AppCardPalette)에서 Simple 팔레트 획득
     final palette = AppCardPalette.of(context);
-    final base = palette.simpleBase; // 기존 _base
-    final light = palette.simpleLight; // 기존 _light
+    final base = palette.singleBase; // 기존 _base
+    final light = palette.singleLight; // 기존 _light
 
     return Material(
       color: Colors.transparent,

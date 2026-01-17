@@ -6,12 +6,12 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
     required this.serviceBase,
     required this.serviceDark,
     required this.serviceLight,
-    required this.simpleBase,
-    required this.simpleDark,
-    required this.simpleLight,
-    required this.liteBase,
-    required this.liteDark,
-    required this.liteLight,
+    required this.singleBase,
+    required this.singleDark,
+    required this.singleLight,
+    required this.doubleBase,
+    required this.doubleDark,
+    required this.doubleLight,
     required this.tabletBase,
     required this.tabletDark,
     required this.tabletLight,
@@ -27,11 +27,9 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
     required this.devBase,
     required this.devDark,
     required this.devLight,
-
-    // ✅ 신규: 노말 모드
-    required this.normalBase,
-    required this.normalDark,
-    required this.normalLight,
+    required this.tripleBase,
+    required this.tripleDark,
+    required this.tripleLight,
 
     required this.parkingBase,
     required this.parkingDark,
@@ -44,14 +42,14 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
   final Color serviceLight;
 
   /// Selector 카드(약식)
-  final Color simpleBase;
-  final Color simpleDark;
-  final Color simpleLight;
+  final Color singleBase;
+  final Color singleDark;
+  final Color singleLight;
 
   /// Selector 카드(경량)
-  final Color liteBase;
-  final Color liteDark;
-  final Color liteLight;
+  final Color doubleBase;
+  final Color doubleDark;
+  final Color doubleLight;
 
   /// Selector 카드(태블릿)
   final Color tabletBase;
@@ -79,9 +77,9 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
   final Color devLight;
 
   /// Selector 카드(노말 모드) - ✅ 신규
-  final Color normalBase;
-  final Color normalDark;
-  final Color normalLight;
+  final Color tripleBase;
+  final Color tripleDark;
+  final Color tripleLight;
 
   /// Selector 카드(오프라인 서비스)
   final Color parkingBase;
@@ -100,14 +98,14 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
     serviceLight: Color(0xFF5472D3),
 
     // Simple
-    simpleBase: Color(0xFF00897B),
-    simpleDark: Color(0xFF00695C),
-    simpleLight: Color(0xFF80CBC4),
+    singleBase: Color(0xFF00897B),
+    singleDark: Color(0xFF00695C),
+    singleLight: Color(0xFF80CBC4),
 
     // Lite (BlueGrey)
-    liteBase: Color(0xFF546E7A),
-    liteDark: Color(0xFF37474F),
-    liteLight: Color(0xFFB0BEC5),
+    doubleBase: Color(0xFF546E7A),
+    doubleDark: Color(0xFF37474F),
+    doubleLight: Color(0xFFB0BEC5),
 
     // Tablet
     tabletBase: Color(0xFF00ACC1),
@@ -134,10 +132,10 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
     devDark: Color(0xFF4A148C),
     devLight: Color(0xFFCE93D8),
 
-    // ✅ Normal (Signature: Pink 계열로 기존 컬러들과 겹침 최소화)
-    normalBase: Color(0xFFD81B60),
-    normalDark: Color(0xFFAD1457),
-    normalLight: Color(0xFFF48FB1),
+    // ✅ Triple (Signature: Pink 계열로 기존 컬러들과 겹침 최소화)
+    tripleBase: Color(0xFFD81B60),
+    tripleDark: Color(0xFFAD1457),
+    tripleLight: Color(0xFFF48FB1),
 
     // Parking (Offline Service)
     parkingBase: Color(0xFFF4511E),
@@ -150,12 +148,12 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
     Color? serviceBase,
     Color? serviceDark,
     Color? serviceLight,
-    Color? simpleBase,
-    Color? simpleDark,
-    Color? simpleLight,
-    Color? liteBase,
-    Color? liteDark,
-    Color? liteLight,
+    Color? singleBase,
+    Color? singleDark,
+    Color? singleLight,
+    Color? doubleBase,
+    Color? doubleDark,
+    Color? doubleLight,
     Color? tabletBase,
     Color? tabletDark,
     Color? tabletLight,
@@ -173,9 +171,9 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
     Color? devLight,
 
     // ✅ 신규: 노말 모드
-    Color? normalBase,
-    Color? normalDark,
-    Color? normalLight,
+    Color? tripleBase,
+    Color? tripleDark,
+    Color? tripleLight,
 
     Color? parkingBase,
     Color? parkingDark,
@@ -185,12 +183,12 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
       serviceBase: serviceBase ?? this.serviceBase,
       serviceDark: serviceDark ?? this.serviceDark,
       serviceLight: serviceLight ?? this.serviceLight,
-      simpleBase: simpleBase ?? this.simpleBase,
-      simpleDark: simpleDark ?? this.simpleDark,
-      simpleLight: simpleLight ?? this.simpleLight,
-      liteBase: liteBase ?? this.liteBase,
-      liteDark: liteDark ?? this.liteDark,
-      liteLight: liteLight ?? this.liteLight,
+      singleBase: singleBase ?? this.singleBase,
+      singleDark: singleDark ?? this.singleDark,
+      singleLight: singleLight ?? this.singleLight,
+      doubleBase: doubleBase ?? this.doubleBase,
+      doubleDark: doubleDark ?? this.doubleDark,
+      doubleLight: doubleLight ?? this.doubleLight,
       tabletBase: tabletBase ?? this.tabletBase,
       tabletDark: tabletDark ?? this.tabletDark,
       tabletLight: tabletLight ?? this.tabletLight,
@@ -206,9 +204,9 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
       devBase: devBase ?? this.devBase,
       devDark: devDark ?? this.devDark,
       devLight: devLight ?? this.devLight,
-      normalBase: normalBase ?? this.normalBase,
-      normalDark: normalDark ?? this.normalDark,
-      normalLight: normalLight ?? this.normalLight,
+      tripleBase: tripleBase ?? this.tripleBase,
+      tripleDark: tripleDark ?? this.tripleDark,
+      tripleLight: tripleLight ?? this.tripleLight,
       parkingBase: parkingBase ?? this.parkingBase,
       parkingDark: parkingDark ?? this.parkingDark,
       parkingLight: parkingLight ?? this.parkingLight,
@@ -222,12 +220,12 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
       serviceBase: Color.lerp(serviceBase, other.serviceBase, t)!,
       serviceDark: Color.lerp(serviceDark, other.serviceDark, t)!,
       serviceLight: Color.lerp(serviceLight, other.serviceLight, t)!,
-      simpleBase: Color.lerp(simpleBase, other.simpleBase, t)!,
-      simpleDark: Color.lerp(simpleDark, other.simpleDark, t)!,
-      simpleLight: Color.lerp(simpleLight, other.simpleLight, t)!,
-      liteBase: Color.lerp(liteBase, other.liteBase, t)!,
-      liteDark: Color.lerp(liteDark, other.liteDark, t)!,
-      liteLight: Color.lerp(liteLight, other.liteLight, t)!,
+      singleBase: Color.lerp(singleBase, other.singleBase, t)!,
+      singleDark: Color.lerp(singleDark, other.singleDark, t)!,
+      singleLight: Color.lerp(singleLight, other.singleLight, t)!,
+      doubleBase: Color.lerp(doubleBase, other.doubleBase, t)!,
+      doubleDark: Color.lerp(doubleDark, other.doubleDark, t)!,
+      doubleLight: Color.lerp(doubleLight, other.doubleLight, t)!,
       tabletBase: Color.lerp(tabletBase, other.tabletBase, t)!,
       tabletDark: Color.lerp(tabletDark, other.tabletDark, t)!,
       tabletLight: Color.lerp(tabletLight, other.tabletLight, t)!,
@@ -243,9 +241,9 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
       devBase: Color.lerp(devBase, other.devBase, t)!,
       devDark: Color.lerp(devDark, other.devDark, t)!,
       devLight: Color.lerp(devLight, other.devLight, t)!,
-      normalBase: Color.lerp(normalBase, other.normalBase, t)!,
-      normalDark: Color.lerp(normalDark, other.normalDark, t)!,
-      normalLight: Color.lerp(normalLight, other.normalLight, t)!,
+      tripleBase: Color.lerp(tripleBase, other.tripleBase, t)!,
+      tripleDark: Color.lerp(tripleDark, other.tripleDark, t)!,
+      tripleLight: Color.lerp(tripleLight, other.tripleLight, t)!,
       parkingBase: Color.lerp(parkingBase, other.parkingBase, t)!,
       parkingDark: Color.lerp(parkingDark, other.parkingDark, t)!,
       parkingLight: Color.lerp(parkingLight, other.parkingLight, t)!,
