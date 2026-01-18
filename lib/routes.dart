@@ -19,7 +19,9 @@ import 'package:easydev/screens/hubs_mode/community_stub_page.dart';
 import 'screens/double_headquarter_page.dart';
 import 'screens/double_mode/commute_package/double_commute_in_screen.dart';
 import 'screens/double_type_page.dart';
+import 'screens/minor_headquarter_page.dart';
 import 'screens/minor_mode/commute_package/minor_commute_in_screen.dart';
+import 'screens/minor_type_page.dart';
 import 'screens/triple_type_page.dart';
 import 'screens/service_mode/commute_package/commute_inside_screen.dart';
 import 'screens/hubs_mode/dev_package/dev_calendar_page.dart';
@@ -108,13 +110,13 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.tripleHeadquarterPage: (context) => const TripleHeadquarterPage(),
 
   // ✅ minor 본사(임시: triple 본사 재사용)
-  AppRoutes.minorHeadquarterPage: (context) => const TripleHeadquarterPage(),
+  AppRoutes.minorHeadquarterPage: (context) => const MinorHeadquarterPage(),
 
   AppRoutes.doubleTypePage: (context) => const LiteTypePage(),
   AppRoutes.tripleTypePage: (context) => const TripleTypePage(),
 
   // ✅ minor 타입(임시: triple 타입 재사용)
-  AppRoutes.minorTypePage: (context) => const TripleTypePage(),
+  AppRoutes.minorTypePage: (context) => const MinorTypePage(),
 
   AppRoutes.offlineTypePage: (context) => const OfflineTypePage(),
   AppRoutes.tablet: (context) => const TabletPage(),

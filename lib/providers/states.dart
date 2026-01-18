@@ -27,6 +27,8 @@ import '../states/page/page_state.dart';
 import '../states/plate/double_filter_plate.dart';
 import '../states/plate/double_plate_state.dart';
 import '../states/plate/input_plate.dart';
+import '../states/plate/minor_filter_plate.dart';
+import '../states/plate/minor_plate_state.dart';
 import '../states/plate/triple_filter_plate.dart';
 import '../states/plate/triple_plate_state.dart';
 import '../states/plate/plate_state.dart';
@@ -74,6 +76,16 @@ final List<SingleChildWidget> stateProviders = [
   ),
   ChangeNotifierProvider(
     create: (context) => TripleFilterPlate(context.read<TriplePlateState>()),
+  ),
+  ChangeNotifierProvider(
+    create: (context) {
+      final repo = context.read<PlateRepository>();
+      final area = context.read<AreaState>();
+      return MinorPlateState(repo, area);
+    },
+  ),
+  ChangeNotifierProvider(
+    create: (context) => MinorFilterPlate(context.read<TriplePlateState>()),
   ),
   Provider(
     create: (context) => DeletePlate(context.read<PlateRepository>(), {}),
