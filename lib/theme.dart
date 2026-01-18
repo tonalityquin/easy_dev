@@ -31,6 +31,11 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
     required this.tripleDark,
     required this.tripleLight,
 
+    // ✅ 신규: Minor(마이너)
+    required this.minorBase,
+    required this.minorDark,
+    required this.minorLight,
+
     required this.parkingBase,
     required this.parkingDark,
     required this.parkingLight,
@@ -76,10 +81,15 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
   final Color devDark;
   final Color devLight;
 
-  /// Selector 카드(노말 모드) - ✅ 신규
+  /// Selector 카드(트리플)
   final Color tripleBase;
   final Color tripleDark;
   final Color tripleLight;
+
+  /// ✅ Selector 카드(마이너)
+  final Color minorBase;
+  final Color minorDark;
+  final Color minorLight;
 
   /// Selector 카드(오프라인 서비스)
   final Color parkingBase;
@@ -132,10 +142,16 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
     devDark: Color(0xFF4A148C),
     devLight: Color(0xFFCE93D8),
 
-    // ✅ Triple (Signature: Pink 계열로 기존 컬러들과 겹침 최소화)
+    // Triple (Signature: Pink)
     tripleBase: Color(0xFFD81B60),
     tripleDark: Color(0xFFAD1457),
     tripleLight: Color(0xFFF48FB1),
+
+    // ✅ Minor (Signature: Amber/Gold 계열로 기존 컬러들과 겹침 최소화)
+    // - triple(Pink), service(Blue), dev(Purple), parking(Orange)와 겹치지 않게 “Amber” 톤으로 배치
+    minorBase: Color(0xFFFFB300), // Amber 600
+    minorDark: Color(0xFFFF8F00), // Amber 800
+    minorLight: Color(0xFFFFE082), // Amber 200
 
     // Parking (Offline Service)
     parkingBase: Color(0xFFF4511E),
@@ -169,11 +185,14 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
     Color? devBase,
     Color? devDark,
     Color? devLight,
-
-    // ✅ 신규: 노말 모드
     Color? tripleBase,
     Color? tripleDark,
     Color? tripleLight,
+
+    // ✅ 신규: Minor
+    Color? minorBase,
+    Color? minorDark,
+    Color? minorLight,
 
     Color? parkingBase,
     Color? parkingDark,
@@ -207,6 +226,12 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
       tripleBase: tripleBase ?? this.tripleBase,
       tripleDark: tripleDark ?? this.tripleDark,
       tripleLight: tripleLight ?? this.tripleLight,
+
+      // ✅ Minor
+      minorBase: minorBase ?? this.minorBase,
+      minorDark: minorDark ?? this.minorDark,
+      minorLight: minorLight ?? this.minorLight,
+
       parkingBase: parkingBase ?? this.parkingBase,
       parkingDark: parkingDark ?? this.parkingDark,
       parkingLight: parkingLight ?? this.parkingLight,
@@ -244,6 +269,12 @@ class AppCardPalette extends ThemeExtension<AppCardPalette> {
       tripleBase: Color.lerp(tripleBase, other.tripleBase, t)!,
       tripleDark: Color.lerp(tripleDark, other.tripleDark, t)!,
       tripleLight: Color.lerp(tripleLight, other.tripleLight, t)!,
+
+      // ✅ Minor lerp 추가
+      minorBase: Color.lerp(minorBase, other.minorBase, t)!,
+      minorDark: Color.lerp(minorDark, other.minorDark, t)!,
+      minorLight: Color.lerp(minorLight, other.minorLight, t)!,
+
       parkingBase: Color.lerp(parkingBase, other.parkingBase, t)!,
       parkingDark: Color.lerp(parkingDark, other.parkingDark, t)!,
       parkingLight: Color.lerp(parkingLight, other.parkingLight, t)!,

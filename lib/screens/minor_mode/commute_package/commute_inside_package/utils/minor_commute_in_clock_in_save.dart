@@ -1,0 +1,45 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import 'package:easydev/states/area/area_state.dart';
+import 'package:easydev/states/user/user_state.dart';
+import 'package:easydev/utils/api/sheet_upload_result.dart';
+
+// 약식 모드 SQLite 저장소 재사용
+import 'package:easydev/screens/single_mode/utils/att_brk_repository.dart';
+
+class MinorCommuteInClockInSave {
+  static Future<SheetUploadResult> uploadAttendanceJson({
+    required BuildContext context,
+    required Map<String, dynamic> data,
+  }) async {
+    String area = '';
+    String division = '';
+
+    try {
+      final areaState = context.read<AreaState>();
+      final userState = context.read<UserState>();
+
+      area = (userState.user?.selectedArea ?? '').trim();
+      division = areaState.currentDivision.trim();
+
+      // ✅ 더블/마이너 출근 화면은 약식과 동일하게 SQLite(simple_work_attendance)에 저장
+      final now = DateTime.now();
+
+      await AttBrkRepository.instance.insertEvent(
+        dateTime: now,
+        type: AttBrkModeType.workIn,
+      );
+
+      final msg = '출근 기록이 로컬에 저장되었습니다. ($area / $division)';
+      debugPrint('✅ [Minor] $msg');
+
+      return SheetUploadResult(success: true, message: msg);
+    } catch (e) {
+      final msg = '출근 기록 저장 중 오류가 발생했습니다.\n잠시 후 다시 시도해 주세요.\n($e)';
+      debugPrint('❌ [Minor] $msg');
+
+      return SheetUploadResult(success: false, message: msg);
+    }
+  }
+}

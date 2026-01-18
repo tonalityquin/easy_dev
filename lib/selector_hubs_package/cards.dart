@@ -134,7 +134,6 @@ class _CardBodyState extends State<CardBody> {
           const SizedBox(height: 12),
           widget.titleWidget,
 
-          // ✅ 기능 안내 문구(디자인을 헤치지 않도록 작은 글씨/약한 대비로 1~2줄만 표시)
           if (hasFeature) ...[
             const SizedBox(height: 6),
             _selectorCardFeatureText(context, widget.featureText!.trim()),
@@ -199,16 +198,15 @@ class LeadingIcon extends StatelessWidget {
 }
 
 /// 개별 카드들 (팔레트는 theme.dart(AppCardPalette)에서 주입)
+
 class ServiceCard extends StatelessWidget {
   const ServiceCard({
     super.key,
     this.enabled = true,
-    this.devAuthorized = false, // ✅ 개발자 인증 게이트
+    this.devAuthorized = false,
   });
 
   final bool enabled;
-
-  /// ✅ “개발 로그인(개발자 인증)” 활성화 여부
   final bool devAuthorized;
 
   @override
@@ -218,10 +216,7 @@ class ServiceCard extends StatelessWidget {
 
     final title = _selectorCardTitle(context, '서비스 로그인', p.serviceDark);
 
-    // ✅ 최종 활성화: 저장모드 조건(enabled) AND 개발자 인증(devAuthorized)
     final bool effectiveEnabled = enabled && devAuthorized;
-
-    // ✅ 비활성 사유를 사용자에게 명확히 전달
     final String hint = !devAuthorized
         ? '개발자 인증 후 사용할 수 있어요'
         : '저장된 모드가 service일 때만 선택할 수 있어요';
@@ -337,7 +332,9 @@ class DoubleLoginCard extends StatelessWidget {
   }
 }
 
-/// ✅ 마이너 로그인 카드
+/// ✅ 마이너 로그인 카드 (WorkFlow C) - 정합 완료
+/// - requiredMode: 'minor'
+/// - redirectAfterLogin: AppRoutes.minorCommute
 class MinorLoginCard extends StatelessWidget {
   const MinorLoginCard({super.key, this.enabled = true});
 
@@ -348,36 +345,37 @@ class MinorLoginCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    final title = _selectorCardTitle(context, 'WorkFlow C', p.tripleDark);
+    // ✅ minor 색상 적용
+    final title = _selectorCardTitle(context, 'WorkFlow C', p.minorDark);
 
     return Card(
       color: Theme.of(context).cardColor,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
-      surfaceTintColor: p.tripleLight,
+      surfaceTintColor: p.minorLight,
       child: CardBody(
         icon: Icons.tune_rounded,
-        bg: p.tripleBase,
+        bg: p.minorBase,
         iconColor: onBase,
         titleWidget: title,
-        buttonBg: p.tripleBase,
+        buttonBg: p.minorBase,
         buttonFg: onBase,
         featureText: '입차 요청 · 입차 완료 · 출차 요청 · 출차 완료',
         traceName: 'WorkFlow C',
         traceMeta: {
           'to': AppRoutes.minorLogin,
-          'redirectAfterLogin': AppRoutes.attendanceSheet,
-          'requiredMode': 'triple',
+          'redirectAfterLogin': AppRoutes.minorCommute,
+          'requiredMode': 'minor',
         },
         onPressed: () => Navigator.of(context).pushReplacementNamed(
           AppRoutes.minorLogin,
           arguments: {
-            'redirectAfterLogin': AppRoutes.attendanceSheet,
-            'requiredMode': 'triple',
+            'redirectAfterLogin': AppRoutes.minorCommute,
+            'requiredMode': 'minor',
           },
         ),
         enabled: enabled,
-        disabledHint: '저장된 모드가 triple일 때만 선택할 수 있어요',
+        disabledHint: '저장된 모드가 minor일 때만 선택할 수 있어요',
       ),
     );
   }
