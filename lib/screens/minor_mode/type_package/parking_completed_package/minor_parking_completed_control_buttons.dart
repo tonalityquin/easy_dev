@@ -27,6 +27,135 @@ class _Palette {
   // 상태 강조 색
   static const danger = Color(0xFFD32F2F); // 출차 요청(붉은색)
   static const success = Color(0xFF2E7D32); // 출차 완료(초록색)
+
+  // 입차 요청 강조 색(필요 시 조정)
+  static const entryRequest = Color(0xFF1976D2); // 파란 계열
+}
+
+/// ✅ 입차 요청(PlateType.parkingRequests) 건수(aggregation count) 표시 위젯
+/// - plates 컬렉션에서 (type == parking_requests && area == area && isSelected == false) 조건으로 count()
+/// - refreshToken 변경 시(같은 area여도) 다시 count().get()
+class ParkingRequestsAggregationCount extends StatefulWidget {
+  final String area;
+  final Color color;
+  final double fontSize;
+
+  /// ✅ 같은 area에서도 재조회 트리거로 사용
+  final int refreshToken;
+
+  const ParkingRequestsAggregationCount({
+    super.key,
+    required this.area,
+    required this.color,
+    this.fontSize = 18,
+    required this.refreshToken,
+  });
+
+  @override
+  State<ParkingRequestsAggregationCount> createState() =>
+      _ParkingRequestsAggregationCountState();
+}
+
+class _ParkingRequestsAggregationCountState
+    extends State<ParkingRequestsAggregationCount> {
+  Future<int>? _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _fetch();
+  }
+
+  @override
+  void didUpdateWidget(covariant ParkingRequestsAggregationCount oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    final areaChanged = oldWidget.area.trim() != widget.area.trim();
+    final tokenChanged = oldWidget.refreshToken != widget.refreshToken;
+
+    if (areaChanged || tokenChanged) {
+      _future = _fetch(); // ✅ 같은 area여도 token이 바뀌면 재조회
+    }
+  }
+
+  Future<int> _fetch() async {
+    final area = widget.area.trim();
+    if (area.isEmpty) return 0;
+
+    final agg = FirebaseFirestore.instance
+        .collection('plates')
+        .where(
+      PlateFields.type,
+      isEqualTo: PlateType.parkingRequests.firestoreValue,
+    )
+        .where(PlateFields.area, isEqualTo: area)
+        .where(PlateFields.isSelected, isEqualTo: false) // ✅ 주행(선점) 중 제외
+        .count();
+
+    final snap = await agg.get();
+    return snap.count ?? 0;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final area = widget.area.trim();
+
+    // area가 비어있으면 표시만 0으로(조회 시도 없음)
+    if (area.isEmpty) {
+      return Center(
+        child: Text(
+          '0',
+          style: TextStyle(
+            color: widget.color,
+            fontSize: widget.fontSize,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      );
+    }
+
+    return FutureBuilder<int>(
+      future: _future,
+      builder: (context, snap) {
+        if (snap.connectionState == ConnectionState.waiting) {
+          return SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.2,
+              valueColor: AlwaysStoppedAnimation<Color>(widget.color),
+            ),
+          );
+        }
+
+        if (snap.hasError) {
+          return Center(
+            child: Text(
+              '—',
+              style: TextStyle(
+                color: widget.color,
+                fontSize: widget.fontSize,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          );
+        }
+
+        final count = snap.data ?? 0;
+        return FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Text(
+            '$count',
+            style: TextStyle(
+              color: widget.color,
+              fontSize: widget.fontSize,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        );
+      },
+    );
+  }
 }
 
 /// ✅ 출차 요청(PlateType.departureRequests) 건수(aggregation count) 표시 위젯
@@ -64,8 +193,7 @@ class _DepartureRequestsAggregationCountState
   }
 
   @override
-  void didUpdateWidget(
-      covariant DepartureRequestsAggregationCount oldWidget) {
+  void didUpdateWidget(covariant DepartureRequestsAggregationCount oldWidget) {
     super.didUpdateWidget(oldWidget);
 
     final areaChanged = oldWidget.area.trim() != widget.area.trim();
@@ -207,7 +335,7 @@ class MinorParkingCompletedControlButtons extends StatelessWidget {
         final isPlateSelected =
             selectedPlate != null && selectedPlate.isSelected;
 
-        final departureCountArea = _resolveArea(
+        final countArea = _resolveArea(
           context,
           fallbackArea: selectedPlate?.area,
         );
@@ -228,15 +356,18 @@ class MinorParkingCompletedControlButtons extends StatelessWidget {
           unselectedItemColor: unselectedItemColor,
           items: (isLocationPickerMode || isStatusMode)
               ? [
+            // ✅ (변경) 화면 잠금 기능은 유지하되, 아이콘 자리에 "입차 요청" aggregation count 표시
             BottomNavigationBarItem(
-              icon: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 200),
-                transitionBuilder: (child, anim) =>
-                    ScaleTransition(scale: anim, child: child),
-                child: isLocked
-                    ? const Icon(Icons.lock, key: ValueKey('locked'))
-                    : const Icon(Icons.lock_open,
-                    key: ValueKey('unlocked')),
+              icon: Selector<MinorPageState, int>(
+                selector: (_, s) => s.departureRequestsCountRefreshToken,
+                builder: (context, token, _) {
+                  return ParkingRequestsAggregationCount(
+                    area: countArea,
+                    color: _Palette.entryRequest,
+                    fontSize: 18,
+                    refreshToken: token,
+                  );
+                },
               ),
               label: isLocked ? '화면 잠금' : '잠금 해제',
             ),
@@ -247,7 +378,7 @@ class MinorParkingCompletedControlButtons extends StatelessWidget {
                 selector: (_, s) => s.departureRequestsCountRefreshToken,
                 builder: (context, token, _) {
                   return DepartureRequestsAggregationCount(
-                    area: departureCountArea,
+                    area: countArea,
                     color: _Palette.danger,
                     fontSize: 18,
                     refreshToken: token,
@@ -292,7 +423,7 @@ class MinorParkingCompletedControlButtons extends StatelessWidget {
                 s.departureRequestsCountRefreshToken,
                 builder: (context, token, _) {
                   return DepartureRequestsAggregationCount(
-                    area: departureCountArea,
+                    area: countArea,
                     color: _Palette.danger,
                     fontSize: 18,
                     refreshToken: token,
@@ -315,15 +446,14 @@ class MinorParkingCompletedControlButtons extends StatelessWidget {
                   ),
                 ),
               ),
-              label: isPlateSelected
-                  ? '상태 수정'
-                  : (isSorted ? '최신순' : '오래된 순'),
+              label: isPlateSelected ? '상태 수정' : (isSorted ? '최신순' : '오래된 순'),
             ),
           ],
           onTap: (index) async {
             // 상태/로케이션 선택 모드 전용(여기서는 DB 없음)
             if (isLocationPickerMode || isStatusMode) {
               if (index == 0) {
+                // ✅ (유지) 화면 잠금 토글
                 onToggleLock();
               } else if (index == 1) {
                 showSearchDialog();
@@ -332,8 +462,7 @@ class MinorParkingCompletedControlButtons extends StatelessWidget {
                   context: context,
                   isScrollControlled: true,
                   backgroundColor: Colors.transparent,
-                  builder: (context) =>
-                  const MinorDepartureCompletedBottomSheet(),
+                  builder: (context) => const MinorDepartureCompletedBottomSheet(),
                 );
               }
               return;
@@ -354,8 +483,7 @@ class MinorParkingCompletedControlButtons extends StatelessWidget {
             final billingType = selectedPlate.billingType;
             final now = DateTime.now();
             final entryTime =
-                selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/
-                    1000;
+                selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
             final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
             final firestore = FirebaseFirestore.instance;
             final documentId = selectedPlate.id;
@@ -500,8 +628,7 @@ class MinorParkingCompletedControlButtons extends StatelessWidget {
                   _reportDbSafe(
                     area: selectedArea,
                     action: 'write',
-                    source:
-                    'parkingCompleted.prebill.lock.repo.addOrUpdatePlate',
+                    source: 'parkingCompleted.prebill.lock.repo.addOrUpdatePlate',
                     n: 1,
                   );
 
@@ -514,7 +641,8 @@ class MinorParkingCompletedControlButtons extends StatelessWidget {
                     'timestamp': now.toIso8601String(),
                     'lockedFee': result.lockedFee,
                     'paymentMethod': result.paymentMethod,
-                    if (result.reason != null && result.reason!.trim().isNotEmpty)
+                    if (result.reason != null &&
+                        result.reason!.trim().isNotEmpty)
                       'reason': result.reason!.trim(),
                   };
 

@@ -49,6 +49,26 @@ class _DepartureRequestsViewWriteGate {
   }
 }
 
+/// ✅ parking_requests_view "쓰기(Upsert/Delete)"를 기기 로컬 토글(SharedPreferences)로 제어
+/// - 출차 요청/입차 완료 view와 동일 패턴
+class _ParkingRequestsViewWriteGate {
+  static const String prefsKey = 'parking_requests_realtime_write_enabled_v1';
+
+  static SharedPreferences? _prefs;
+  static Future<void>? _loading;
+
+  static Future<void> _ensureLoaded() async {
+    if (_prefs != null) return;
+    _loading ??= SharedPreferences.getInstance().then((p) => _prefs = p);
+    await _loading;
+  }
+
+  static Future<bool> canWrite() async {
+    await _ensureLoaded();
+    return _prefs!.getBool(prefsKey) ?? false; // 기본 OFF
+  }
+}
+
 class MovementPlate extends ChangeNotifier {
   final PlateWriteService _write;
   final UserState _user;
@@ -58,8 +78,11 @@ class MovementPlate extends ChangeNotifier {
   /// ✅ (기존) 경량 View 컬렉션명
   static const String _parkingCompletedViewCollection = 'parking_completed_view';
 
-  /// ✅ (신규) 출차 요청 View 컬렉션명
+  /// ✅ (기존) 출차 요청 View 컬렉션명
   static const String _departureRequestsViewCollection = 'departure_requests_view';
+
+  /// ✅ (신규) 입차 요청 View 컬렉션명
+  static const String _parkingRequestsViewCollection = 'parking_requests_view';
 
   /// ✅ plates 문서명과 동일한 docId를 항상 만들기 위한 헬퍼
   String _plateDocId(String plateNumber, String area) => '${plateNumber}_$area';
@@ -69,10 +92,19 @@ class MovementPlate extends ChangeNotifier {
     return FirebaseFirestore.instance.collection(_parkingCompletedViewCollection).doc(area);
   }
 
-  /// ✅ (신규) view 문서는 area 1개(=departure_requests_view/{area})
+  /// ✅ view 문서는 area 1개(=departure_requests_view/{area})
   DocumentReference<Map<String, dynamic>> _departureRequestsViewRef(String area) {
     return FirebaseFirestore.instance.collection(_departureRequestsViewCollection).doc(area);
   }
+
+  /// ✅ view 문서는 area 1개(=parking_requests_view/{area})
+  DocumentReference<Map<String, dynamic>> _parkingRequestsViewRef(String area) {
+    return FirebaseFirestore.instance.collection(_parkingRequestsViewCollection).doc(area);
+  }
+
+  // ─────────────────────────────────────────
+  // parking_completed_view upsert/remove
+  // ─────────────────────────────────────────
 
   /// ✅ View upsert: parking_completed_view/{area}.items.{plateDocId}
   Future<void> _upsertParkingCompletedViewItem({
@@ -143,7 +175,11 @@ class MovementPlate extends ChangeNotifier {
     }
   }
 
-  /// ✅ (신규) View upsert: departure_requests_view/{area}.items.{plateDocId}
+  // ─────────────────────────────────────────
+  // departure_requests_view upsert/remove
+  // ─────────────────────────────────────────
+
+  /// ✅ View upsert: departure_requests_view/{area}.items.{plateDocId}
   Future<void> _upsertDepartureRequestsViewItem({
     required String area,
     required String plateDocId,
@@ -181,7 +217,7 @@ class MovementPlate extends ChangeNotifier {
     }
   }
 
-  /// ✅ (신규) View remove: departure_requests_view/{area}.items.{plateDocId} delete
+  /// ✅ View remove: departure_requests_view/{area}.items.{plateDocId} delete
   Future<void> _removeDepartureRequestsViewItem({
     required String area,
     required String plateDocId,
@@ -209,6 +245,79 @@ class MovementPlate extends ChangeNotifier {
       );
     } catch (e) {
       debugPrint('⚠️ departure_requests_view remove 실패: $e');
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // parking_requests_view upsert/remove (신규)
+  // ─────────────────────────────────────────
+
+  /// ✅ View upsert: parking_requests_view/{area}.items.{plateDocId}
+  Future<void> _upsertParkingRequestsViewItem({
+    required String area,
+    required String plateDocId,
+    required String plateNumber,
+    required String location,
+  }) async {
+    final canWriteView = await _ParkingRequestsViewWriteGate.canWrite();
+    if (!canWriteView) {
+      if (kDebugMode) {
+        debugPrint('🚫 [MovementPlate] skip parking_requests_view upsert (toggle OFF)');
+      }
+      return;
+    }
+
+    try {
+      final ref = _parkingRequestsViewRef(area);
+
+      await ref.set(
+        <String, dynamic>{
+          'area': area,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'items': <String, dynamic>{
+            plateDocId: <String, dynamic>{
+              'plateNumber': plateNumber,
+              'location': location.isNotEmpty ? location : '미지정',
+              'parkingRequestedAt': FieldValue.serverTimestamp(),
+              'updatedAt': FieldValue.serverTimestamp(),
+            }
+          }
+        },
+        SetOptions(merge: true),
+      );
+    } catch (e) {
+      debugPrint('⚠️ parking_requests_view upsert 실패: $e');
+    }
+  }
+
+  /// ✅ View remove: parking_requests_view/{area}.items.{plateDocId} delete
+  Future<void> _removeParkingRequestsViewItem({
+    required String area,
+    required String plateDocId,
+  }) async {
+    final canWriteView = await _ParkingRequestsViewWriteGate.canWrite();
+    if (!canWriteView) {
+      if (kDebugMode) {
+        debugPrint('🚫 [MovementPlate] skip parking_requests_view remove (toggle OFF)');
+      }
+      return;
+    }
+
+    try {
+      final ref = _parkingRequestsViewRef(area);
+
+      await ref.set(
+        <String, dynamic>{
+          'area': area,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'items': <String, dynamic>{
+            plateDocId: FieldValue.delete(),
+          }
+        },
+        SetOptions(merge: true),
+      );
+    } catch (e) {
+      debugPrint('⚠️ parking_requests_view remove 실패: $e');
     }
   }
 
@@ -254,6 +363,12 @@ class MovementPlate extends ChangeNotifier {
       forceOverride: forceOverride,
     );
 
+    // ✅ parking_requests 이탈 → parking_requests_view remove
+    await _removeParkingRequestsViewItem(
+      area: area,
+      plateDocId: plateDocId,
+    );
+
     // ✅ parking_completed 진입 → parking_completed_view upsert
     await _upsertParkingCompletedViewItem(
       area: area,
@@ -288,7 +403,6 @@ class MovementPlate extends ChangeNotifier {
       extraFields: {
         'location': location,
         'area': area,
-        // ✅ 정합성 필드(선택): 요청 시각 기록
         'departureRequestedAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       },
@@ -423,6 +537,8 @@ class MovementPlate extends ChangeNotifier {
   }
 
   /// (옵션) 임의 상태 → 입차 요청 되돌리기
+  /// ✅ (요구사항) "입차 요청으로 되돌리면 parking_requests_view에 생성",
+  ///    "기존 view(출차요청/입차완료)에서는 제거"
   Future<void> goBackToParkingRequest({
     required PlateType fromType,
     required String plateNumber,
@@ -441,6 +557,7 @@ class MovementPlate extends ChangeNotifier {
       extraFields: {
         'area': area,
         'location': newLocation,
+        'requestTime': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       },
       forceOverride: forceOverride,
@@ -452,5 +569,13 @@ class MovementPlate extends ChangeNotifier {
     } else if (fromType == PlateType.departureRequests) {
       await _removeDepartureRequestsViewItem(area: area, plateDocId: plateDocId);
     }
+
+    // ✅ parking_requests 재진입 → parking_requests_view upsert
+    await _upsertParkingRequestsViewItem(
+      area: area,
+      plateDocId: plateDocId,
+      plateNumber: plateNumber,
+      location: newLocation,
+    );
   }
 }

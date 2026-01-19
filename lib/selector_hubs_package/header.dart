@@ -24,6 +24,9 @@ import '../../utils/parking_completed_realtime_tab_mode_config.dart';
 // ✅ (추가) 출차 요청 테이블 "실시간 탭" On/Off(기기별, 기본 OFF + 유지)
 import '../../utils/departure_requests_realtime_tab_mode_config.dart';
 
+// ✅ (추가) 입차 요청 테이블 "실시간 탭" On/Off(기기별, 기본 OFF + 유지)
+import '../../utils/parking_requests_realtime_tab_mode_config.dart';
+
 // ✅ (추가) 스프레드시트 ID/URL에서 ID 추출 헬퍼
 import '../../utils/api/sheets_config.dart';
 
@@ -490,9 +493,10 @@ class _TopRow extends StatelessWidget {
 
     bool commuteTrueFalseEnabled = await CommuteTrueFalseModeConfig.isEnabled();
 
-    // ✅ (변경) 입차완료/출차요청 실시간 탭 게이트 각각 로드
+    // ✅ (변경) 입차완료/출차요청/입차요청 실시간 탭 게이트 각각 로드
     bool parkingCompletedRealtimeTabEnabled = await ParkingCompletedRealtimeTabModeConfig.isEnabled();
     bool departureRequestsRealtimeTabEnabled = await DepartureRequestsRealtimeTabModeConfig.isEnabled();
+    bool parkingRequestsRealtimeTabEnabled = await ParkingRequestsRealtimeTabModeConfig.isEnabled();
 
     final noticeIdCtrl = TextEditingController(
       text: (prefs.getString(_kNoticeSpreadsheetIdKey) ?? '').trim(),
@@ -816,10 +820,13 @@ class _TopRow extends StatelessWidget {
                   );
                 }
 
-                // ✅ (수정) 실시간 탭 토글: 입차완료 ON이면 출차요청도 같이 ON
+                // ✅ (변경) 실시간 탭 토글: 입차완료 ON이면 출차요청/입차요청도 같이 ON
                 Widget buildRealtimeTabsToggleSection() {
-                  // 단일 스위치로 표현(둘 중 하나라도 ON이면 ON으로 표시)
-                  final combined = parkingCompletedRealtimeTabEnabled || departureRequestsRealtimeTabEnabled;
+                  // 단일 스위치로 표현(셋 중 하나라도 ON이면 ON으로 표시)
+                  final combined =
+                      parkingCompletedRealtimeTabEnabled ||
+                          departureRequestsRealtimeTabEnabled ||
+                          parkingRequestsRealtimeTabEnabled;
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 16),
@@ -850,7 +857,7 @@ class _TopRow extends StatelessWidget {
                             const SizedBox(width: 10),
                             const Expanded(
                               child: Text(
-                                '출차 요청/입차 완료 테이블: 실시간 탭(서버 조회)',
+                                '출차 요청/입차 요청/입차 완료 테이블: 실시간 탭(서버 조회)',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w800,
                                   color: Colors.black87,
@@ -862,8 +869,8 @@ class _TopRow extends StatelessWidget {
                         const SizedBox(height: 10),
                         const Text(
                           '이 설정은 “기기별(로컬)”로 저장됩니다.\n'
-                              'ON이면 출차 요청/입차 완료 테이블에 “실시간(view)” 탭이 열립니다.\n'
-                              'OFF이면 두 테이블의 실시간 탭이 모두 잠기고 로컬 탭만 사용합니다.',
+                              'ON이면 출차 요청/입차 요청/입차 완료 테이블에 “실시간(view)” 탭이 열립니다.\n'
+                              'OFF이면 세 테이블의 실시간 탭이 모두 잠깁니다.',
                           style: TextStyle(fontSize: 13, color: Colors.black87),
                         ),
                         const SizedBox(height: 10),
@@ -872,32 +879,36 @@ class _TopRow extends StatelessWidget {
                           title: Text(combined ? 'ON (실시간 탭 사용)' : 'OFF (실시간 탭 숨김)'),
                           subtitle: Text(
                             combined
-                                ? '출차 요청/입차 완료 테이블에서 실시간 탭 진입이 허용됩니다.'
-                                : '출차 요청/입차 완료 테이블에서 실시간 탭 진입이 차단됩니다.',
+                                ? '출차 요청/입차 요청/입차 완료 테이블에서 실시간 탭 진입이 허용됩니다.'
+                                : '출차 요청/입차 요청/입차 완료 테이블에서 실시간 탭 진입이 차단됩니다.',
                           ),
                           value: combined,
                           onChanged: (v) async {
-                            // ✅ 두 게이트를 동일 값으로 동기화
+                            // ✅ 세 게이트를 동일 값으로 동기화
                             parkingCompletedRealtimeTabEnabled = v;
                             departureRequestsRealtimeTabEnabled = v;
+                            parkingRequestsRealtimeTabEnabled = v;
 
                             setSheetState(() {});
 
                             await ParkingCompletedRealtimeTabModeConfig.setEnabled(v);
                             await DepartureRequestsRealtimeTabModeConfig.setEnabled(v);
+                            await ParkingRequestsRealtimeTabModeConfig.setEnabled(v);
 
                             if (!ctx.mounted) return;
                             showSuccessSnackbar(
                               context,
                               v
-                                  ? '이 기기에서 출차 요청/입차 완료 “실시간 탭”을 ON으로 설정했습니다.'
-                                  : '이 기기에서 출차 요청/입차 완료 “실시간 탭”을 OFF로 설정했습니다.',
+                                  ? '이 기기에서 출차 요청/입차 요청/입차 완료 “실시간 탭”을 ON으로 설정했습니다.'
+                                  : '이 기기에서 출차 요청/입차 요청/입차 완료 “실시간 탭”을 OFF로 설정했습니다.',
                             );
                           },
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          '상태: 출차요청=${departureRequestsRealtimeTabEnabled ? "ON" : "OFF"} / 입차완료=${parkingCompletedRealtimeTabEnabled ? "ON" : "OFF"}',
+                          '상태: 출차요청=${departureRequestsRealtimeTabEnabled ? "ON" : "OFF"}'
+                              ' / 입차요청=${parkingRequestsRealtimeTabEnabled ? "ON" : "OFF"}'
+                              ' / 입차완료=${parkingCompletedRealtimeTabEnabled ? "ON" : "OFF"}',
                           style: const TextStyle(fontSize: 12, color: Colors.black54),
                         ),
                       ],
@@ -1170,7 +1181,7 @@ class _TopRow extends StatelessWidget {
                         buildOverlayModeSection(),
                         buildCommuteTrueFalseToggleSection(),
 
-                        // ✅ (변경) 실시간 탭 토글(출차요청/입차완료 동시 동기화)
+                        // ✅ (변경) 실시간 탭 토글(출차요청/입차요청/입차완료 동시 동기화)
                         buildRealtimeTabsToggleSection(),
 
                         buildNoticeSpreadsheetSection(),

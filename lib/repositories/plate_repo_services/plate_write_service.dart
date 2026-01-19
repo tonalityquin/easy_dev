@@ -16,17 +16,29 @@ import '../../models/plate_model.dart';
 class PlateWriteService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // ✅ (추가) departure_requests_view 동기화(선택 시 삭제/해제 시 복구)를 위한 기기 로컬 토글 키
-  // - MovementPlate의 departure_requests_view write 토글과 동일 키 사용
+  // ✅ departure_requests_view 동기화(선택 시 삭제/해제 시 복구)를 위한 기기 로컬 토글 키
   static const String _kDepartureRequestsViewWritePrefsKey = 'departure_requests_realtime_write_enabled_v1';
+
+  // ✅ parking_requests_view 동기화(선택 시 삭제/해제 시 복구)를 위한 기기 로컬 토글 키
+  static const String _kParkingRequestsViewWritePrefsKey = 'parking_requests_realtime_write_enabled_v1';
 
   static SharedPreferences? _prefs;
   static Future<void>? _prefsLoading;
 
-  static Future<bool> _canUpsertDepartureRequestsView() async {
+  static Future<SharedPreferences> _ensurePrefs() async {
     _prefsLoading ??= SharedPreferences.getInstance().then((p) => _prefs = p);
     await _prefsLoading;
-    return _prefs!.getBool(_kDepartureRequestsViewWritePrefsKey) ?? false; // 기본 OFF
+    return _prefs!;
+  }
+
+  static Future<bool> _canUpsertDepartureRequestsView() async {
+    final prefs = await _ensurePrefs();
+    return prefs.getBool(_kDepartureRequestsViewWritePrefsKey) ?? false; // 기본 OFF
+  }
+
+  static Future<bool> _canUpsertParkingRequestsView() async {
+    final prefs = await _ensurePrefs();
+    return prefs.getBool(_kParkingRequestsViewWritePrefsKey) ?? false; // 기본 OFF
   }
 
   String _fallbackPlateFromDocId(String docId) {
@@ -78,23 +90,11 @@ class PlateWriteService {
       newData['updatedAt'] = FieldValue.serverTimestamp();
 
       await docRef.set(newData, SetOptions(merge: true)).timeout(const Duration(seconds: 10));
-
-      /*final area = (newData[PlateFields.area] ?? docSnapshot.data()?['area'] ?? plate.area ?? 'unknown') as String;
-
-      await UsageReporter.instance.report(
-        area: area,
-        action: 'write',
-        n: 1,
-        source: 'PlateWriteService.addOrUpdatePlate.write',
-      );*/
     } on TimeoutException {
-      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     } on FirebaseException {
-      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     } catch (_) {
-      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }
@@ -109,19 +109,9 @@ class PlateWriteService {
     Map<String, dynamic>? current;
     try {
       current = (await docRef.get().timeout(const Duration(seconds: 10))).data();
-
-      /*final areaPref = (current?['area'] as String?) ?? 'unknown';
-      await UsageReporter.instance.report(
-        area: areaPref,
-        action: 'read',
-        n: 1,
-        source: 'PlateWriteService.updatePlate.prefetch',
-      );*/
     } on FirebaseException {
-      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     } on TimeoutException {
-      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
 
@@ -140,21 +130,11 @@ class PlateWriteService {
     try {
       await docRef.update(fields);
       debugPrint("✅ 문서 업데이트 완료: $documentId");
-
-      /*final area = (fields[PlateFields.area] ?? current?['area'] ?? 'unknown') as String;
-      await UsageReporter.instance.report(
-        area: area,
-        action: 'write',
-        n: 1,
-        source: 'PlateWriteService.updatePlate.write',
-      );*/
     } on FirebaseException catch (e) {
       debugPrint("🔥 문서 업데이트 실패: $e");
-      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     } catch (e) {
       debugPrint("🔥 문서 업데이트 실패: $e");
-      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }
@@ -163,48 +143,28 @@ class PlateWriteService {
     final docRef = _firestore.collection('plates').doc(documentId);
 
     try {
-      /*final snap = await docRef.get();
-      final area = (snap.data()?['area'] as String?) ?? 'unknown';
-      await UsageReporter.instance.report(
-        area: area,
-        action: 'read',
-        n: 1,
-        source: 'PlateWriteService.deletePlate.prefetch',
-      );*/
-
       await docRef.delete();
       dev.log("🗑️ 문서 삭제 완료: $documentId", name: "Firestore");
-
-      /*await UsageReporter.instance.report(
-        area: area,
-        action: 'delete',
-        n: 1,
-        source: 'PlateWriteService.deletePlate.delete',
-      );*/
     } on FirebaseException catch (e) {
       if (e.code == 'not-found') {
         debugPrint("⚠️ 삭제 시 문서 없음 (무시): $documentId");
         return;
       }
       dev.log("🔥 문서 삭제 실패: $e", name: "Firestore");
-      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     } catch (_) {
-      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     }
   }
 
   /// ✅ 전환(입차/출차 완료 등) 트랜잭션:
-  /// - 현재 상태(fromType)와 선점자(forceOverride=false면 검사)를 검증
-  /// - 상태/선택/로그를 **원샷** 업데이트(WRITE 1)
   Future<void> transitionPlateType({
     required String plateId,
-    required String actor, // 전환 수행자(userName)
-    required String fromType, // 예: 'parking_requests'
-    required String toType, // 예: 'parking_completed'
-    Map<String, dynamic>? extraFields, // location/area 등 (nullable로 변경)
-    bool forceOverride = true, // false면 타인 선택 시 전환 거부
+    required String actor,
+    required String fromType,
+    required String toType,
+    Map<String, dynamic>? extraFields,
+    bool forceOverride = true,
   }) async {
     final docRef = _firestore.collection('plates').doc(plateId);
 
@@ -239,14 +199,10 @@ class PlateWriteService {
 
         final update = <String, dynamic>{
           'type': toType,
-          // 전환 시에는 선택 상태를 정리(유령 선택 방지)
           'isSelected': false,
           'selectedBy': null,
-          'updatedAt': FieldValue.serverTimestamp(), // ✅ 전환 시점 갱신
-
-          // 🔴 extraFields를 "같은 update 안에" 포함
+          'updatedAt': FieldValue.serverTimestamp(),
           if (extraFields != null) ...extraFields,
-
           'logs': FieldValue.arrayUnion([
             {
               'action': '$fromType → $toType',
@@ -258,28 +214,20 @@ class PlateWriteService {
 
         tx.update(docRef, update); // WRITE 1
       });
-
-      /*await UsageReporter.instance.report(
-        area: (extraFields?['area'] as String?) ?? '(unknown)',
-        action: 'write',
-        n: 1,
-        source: 'PlateWriteService.transitionPlateType.tx',
-      );*/
     } on FirebaseException {
-      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     } catch (e) {
-      // ✅ DebugDatabaseLogger 로직 제거 (기존 throw 정책 유지)
       throw Exception("DB 업데이트 실패: $e");
     }
   }
 
-  /// ✅ ‘주행’ 커밋 트랜잭션: 서버 상태(타입/선점자) 검증 + 원샷 업데이트
+  /// ✅ ‘주행’ 커밋 트랜잭션: 서버 상태 검증 + 원샷 업데이트
   ///
-  /// ✅ (추가 반영)
-  /// - departure_requests 상태에서 isSelected==true가 되면
-  ///   departure_requests_view/{area}.items.{id} 를 삭제(항상 수행)
-  /// - isSelected==false로 풀릴 때는 (토글 ON인 경우) view에 복구(upsert)
+  /// ✅ (확장)
+  /// - departure_requests 상태: isSelected=true면 departure_requests_view에서 삭제(항상)
+  ///   isSelected=false면 (토글 ON일 때) view 복구(upsert)
+  /// - parking_requests 상태: isSelected=true면 parking_requests_view에서 삭제(항상)
+  ///   isSelected=false면 (토글 ON일 때) view 복구(upsert)
   Future<void> recordWhoPlateClick(
       String id,
       bool isSelected, {
@@ -290,6 +238,7 @@ class PlateWriteService {
 
     // ✅ 트랜잭션 내부에서 prefs 조회 불가 → 사전 조회
     final canUpsertDepView = await _canUpsertDepartureRequestsView();
+    final canUpsertReqView = await _canUpsertParkingRequestsView();
 
     try {
       await _firestore.runTransaction((tx) async {
@@ -331,7 +280,7 @@ class PlateWriteService {
         final update = <String, dynamic>{
           'isSelected': isSelected,
           'selectedBy': isSelected ? selectedBy : null,
-          'updatedAt': FieldValue.serverTimestamp(), // ✅ 선택 상태 변경 시각 갱신
+          'updatedAt': FieldValue.serverTimestamp(),
           if (isSelected && (selectedBy?.trim().isNotEmpty ?? false))
             'logs': FieldValue.arrayUnion([
               {
@@ -344,66 +293,110 @@ class PlateWriteService {
 
         tx.update(docRef, update); // WRITE 1
 
-        // ✅ (추가) departure_requests 상태에서 view 동기화
-        if (type == 'departure_requests') {
-          final docArea = ((data['area'] as String?) ?? area).trim();
-          if (docArea.isNotEmpty) {
-            final viewRef = _firestore.collection('departure_requests_view').doc(docArea);
+        final docArea = ((data['area'] as String?) ?? area).trim();
 
-            if (isSelected) {
-              // ✅ 요구사항: isSelected == true면 items.{id} 삭제(토글과 무관하게 수행)
+        // ─────────────────────────────────────────
+        // departure_requests_view sync
+        // ─────────────────────────────────────────
+        if (type == 'departure_requests' && docArea.isNotEmpty) {
+          final viewRef = _firestore.collection('departure_requests_view').doc(docArea);
+
+          if (isSelected) {
+            // ✅ 요구사항: isSelected == true면 items.{id} 삭제(토글과 무관하게 수행)
+            tx.set(
+              viewRef,
+              <String, dynamic>{
+                'area': docArea,
+                'updatedAt': FieldValue.serverTimestamp(),
+                'items': <String, dynamic>{
+                  id: FieldValue.delete(),
+                }
+              },
+              SetOptions(merge: true),
+            );
+          } else {
+            // ✅ 선택 해제 시에는 view에 복구(단, upsert는 토글 ON일 때만)
+            if (canUpsertDepView) {
+              final plateNumber =
+              ((data['plateNumber'] as String?) ?? _fallbackPlateFromDocId(id)).trim();
+              final location = _normalizeLocation(data['location'] as String?);
+              final depRequestedAt = data['departureRequestedAt'];
+
               tx.set(
                 viewRef,
                 <String, dynamic>{
                   'area': docArea,
                   'updatedAt': FieldValue.serverTimestamp(),
                   'items': <String, dynamic>{
-                    id: FieldValue.delete(),
+                    id: <String, dynamic>{
+                      'plateNumber': plateNumber,
+                      'location': location,
+                      'departureRequestedAt': depRequestedAt ?? FieldValue.serverTimestamp(),
+                      'updatedAt': FieldValue.serverTimestamp(),
+                    }
                   }
                 },
                 SetOptions(merge: true),
               );
-            } else {
-              // ✅ 선택 해제 시에는 view에 복구(단, upsert는 토글 ON일 때만)
-              if (canUpsertDepView) {
-                final plateNumber = ((data['plateNumber'] as String?) ?? _fallbackPlateFromDocId(id)).trim();
-                final location = _normalizeLocation(data['location'] as String?);
+            }
+          }
+        }
 
-                final depRequestedAt = data['departureRequestedAt'];
+        // ─────────────────────────────────────────
+        // parking_requests_view sync (신규)
+        // ─────────────────────────────────────────
+        if (type == 'parking_requests' && docArea.isNotEmpty) {
+          final viewRef = _firestore.collection('parking_requests_view').doc(docArea);
 
-                tx.set(
-                  viewRef,
-                  <String, dynamic>{
-                    'area': docArea,
-                    'updatedAt': FieldValue.serverTimestamp(),
-                    'items': <String, dynamic>{
-                      id: <String, dynamic>{
-                        'plateNumber': plateNumber,
-                        'location': location,
-                        'departureRequestedAt': depRequestedAt ?? FieldValue.serverTimestamp(),
-                        'updatedAt': FieldValue.serverTimestamp(),
-                      }
+          if (isSelected) {
+            // ✅ 요구사항: isSelected == true면 items.{id} 삭제(토글과 무관하게 수행)
+            tx.set(
+              viewRef,
+              <String, dynamic>{
+                'area': docArea,
+                'updatedAt': FieldValue.serverTimestamp(),
+                'items': <String, dynamic>{
+                  id: FieldValue.delete(),
+                }
+              },
+              SetOptions(merge: true),
+            );
+          } else {
+            // ✅ 선택 해제 시에는 view에 복구(단, upsert는 토글 ON일 때만)
+            if (canUpsertReqView) {
+              final plateNumber =
+              ((data['plateNumber'] as String?) ?? _fallbackPlateFromDocId(id)).trim();
+              final location = _normalizeLocation(data['location'] as String?);
+
+              // plates 쪽 시간 필드 우선순위:
+              // 1) requestTime(기존 PlateModel)
+              // 2) parkingRequestedAt(혹시 직접 저장하는 경우)
+              // 3) 서버 시각
+              final reqAt = data['requestTime'] ?? data['parkingRequestedAt'];
+
+              tx.set(
+                viewRef,
+                <String, dynamic>{
+                  'area': docArea,
+                  'updatedAt': FieldValue.serverTimestamp(),
+                  'items': <String, dynamic>{
+                    id: <String, dynamic>{
+                      'plateNumber': plateNumber,
+                      'location': location,
+                      'parkingRequestedAt': reqAt ?? FieldValue.serverTimestamp(),
+                      'updatedAt': FieldValue.serverTimestamp(),
                     }
-                  },
-                  SetOptions(merge: true),
-                );
-              }
+                  }
+                },
+                SetOptions(merge: true),
+              );
             }
           }
         }
       });
-
-      /*await UsageReporter.instance.report(
-        area: area,
-        action: 'write',
-        n: 1,
-        source: 'PlateWriteService.recordWhoPlateClick.tx',
-      );*/
     } on FirebaseException {
-      // ✅ DebugDatabaseLogger 로직 제거
       rethrow;
     } catch (e) {
-      // ✅ DebugDatabaseLogger 로직 제거 (기존 throw 정책 유지)
       throw Exception("DB 업데이트 실패: $e");
     }
   }

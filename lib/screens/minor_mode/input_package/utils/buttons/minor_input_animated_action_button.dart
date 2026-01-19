@@ -55,25 +55,28 @@ class _MinorInputAnimatedActionButtonState extends State<MinorInputAnimatedActio
     final bool isLoading = widget.isLoading;
     final bool isLocationSelected = widget.isLocationSelected;
 
-    // ✅ Normal 모드: "입차 완료"만 노출
-    const String label = '입차 완료';
+    // ✅ Minor 모드도 Service 모드와 동일하게
+    // - 위치 선택 시: "입차 완료"
+    // - 위치 미선택 시: "입차 요청"
+    final String label = isLocationSelected ? '입차 완료' : '입차 요청';
 
-    // ✅ 위치 미선택이면 완료 불가(입차요청 플로우 제거)
-    final bool isDisabled = isLoading || !isLocationSelected;
+    // ✅ 위치 미선택이어도 "입차 요청"으로 제출 가능해야 함
+    // (로딩 중일 때만 비활성화)
+    final bool isDisabled = isLoading;
 
     return ScaleTransition(
       scale: _scaleAnimation,
       child: ElevatedButton(
         onPressed: isDisabled ? null : _handleTap,
         style: ElevatedButton.styleFrom(
-          backgroundColor: isLocationSelected ? Colors.indigo[50] : Colors.grey[200],
-          foregroundColor: isLocationSelected ? Colors.indigo[800] : Colors.grey[600],
+          backgroundColor: isLocationSelected ? Colors.indigo[50] : Colors.blueGrey[50],
+          foregroundColor: isLocationSelected ? Colors.indigo[800] : Colors.blueGrey[800],
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 80),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
             side: BorderSide(
-              color: isLocationSelected ? Colors.indigo : Colors.grey,
+              color: isLocationSelected ? Colors.indigo : Colors.blueGrey,
               width: 1.5,
             ),
           ),
@@ -93,10 +96,10 @@ class _MinorInputAnimatedActionButtonState extends State<MinorInputAnimatedActio
               color: Colors.black,
             ),
           )
-              : const Text(
-            key: ValueKey('buttonText'),
+              : Text(
+            key: const ValueKey('buttonText'),
             label,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,
             ),

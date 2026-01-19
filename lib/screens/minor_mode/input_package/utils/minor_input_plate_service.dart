@@ -276,6 +276,7 @@ class MinorInputPlateService {
     required BuildContext context,
     required String plateNumber,
     required String location,
+    required bool isLocationSelected,
     required List<String> imageUrls,
     required String? selectedBill,
     required List<String> selectedStatuses,
@@ -308,7 +309,10 @@ class MinorInputPlateService {
         context: context,
         plateNumber: plateNumber,
         location: location,
-        isLocationSelected: true,
+        // ✅ Minor 모드도 Service 모드와 동일하게
+        // - 위치가 없으면 "입차 요청"(parking_requests)
+        // - 위치가 있으면 "입차 완료"(parking_completed)
+        isLocationSelected: isLocationSelected,
         areaState: areaState,
         userState: userState,
         billingType: selectedBill,
@@ -330,6 +334,7 @@ class MinorInputPlateService {
         extra: <String, dynamic>{
           'plateNumber': plateNumber,
           'locationLen': location.trim().length,
+          'isLocationSelected': isLocationSelected,
           'imageUrlsCount': imageUrls.length,
           'selectedBillType': selectedBillType,
           'statusCount': selectedStatuses.length,

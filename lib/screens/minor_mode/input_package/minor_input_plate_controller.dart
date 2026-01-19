@@ -267,13 +267,12 @@ class MinorInputPlateController {
     final billState = context.read<BillState>();
     final hasAnyBill = billState.generalBills.isNotEmpty || billState.regularBills.isNotEmpty;
 
-    // ✅ Normal 모드: "입차 완료"만 허용 → 위치 필수
+    // ✅ Minor 모드도 Service 모드와 동일하게
+    // - 위치가 없으면 "입차 요청"(parking_requests)
+    // - 위치가 있으면 "입차 완료"(parking_completed)
+    // ※ location이 비어 있으면 commonRegisterPlateEntry에서 '미지정'으로 저장됨
     final location = locationController.text.trim();
     isLocationSelected = location.isNotEmpty;
-    if (!isLocationSelected) {
-      showFailedSnackbar(context, '주차 위치를 선택해주세요');
-      return;
-    }
 
     // 정기인데 선택값이 비어있으면 countTypeController를 폴백으로 반영
     if (selectedBillType == '정기' && (selectedBill == null || selectedBill!.trim().isEmpty)) {
@@ -310,6 +309,7 @@ class MinorInputPlateController {
         context: context,
         plateNumber: plateNumber,
         location: location,
+        isLocationSelected: isLocationSelected,
         imageUrls: uploadedUrls,
         selectedBill: selectedBill,
         selectedStatuses: selectedStatuses,
