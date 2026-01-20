@@ -116,12 +116,6 @@ class _DoubleParkingCompletedTableSheetState
   final _RealtimeTabController _localCtrl = _RealtimeTabController();
   final _RealtimeTabController _realtimeCtrl = _RealtimeTabController();
 
-  // ✅ 하단 삽입(Write) 토글(실시간 탭에서만 의미)
-  final _ParkingCompletedViewRepository _writeRepo = _ParkingCompletedViewRepository();
-  bool _writeLoaded = false;
-  bool _writeLoading = false;
-  bool _writeOn = false;
-
   void _trace(String name, {Map<String, dynamic>? meta}) {
     DebugActionRecorder.instance.recordAction(
       name,
@@ -137,11 +131,10 @@ class _DoubleParkingCompletedTableSheetState
     _tabCtrl = TabController(length: 2, vsync: this);
     _tabCtrl.addListener(() {
       if (!mounted) return;
-      setState(() {}); // 헤더 타이틀 + footer 토글 활성화 상태 동기화
+      setState(() {}); // 헤더 타이틀 동기화
     });
 
     _loadGate();
-    _loadWriteToggle();
   }
 
   @override
@@ -168,24 +161,6 @@ class _DoubleParkingCompletedTableSheetState
         _gateLoaded = true;
         _tabCtrl.index = 0;
       });
-    }
-  }
-
-  Future<void> _loadWriteToggle() async {
-    setState(() => _writeLoading = true);
-    try {
-      await _writeRepo.ensureWriteToggleLoaded();
-      if (!mounted) return;
-      setState(() {
-        _writeOn = _writeRepo.isRealtimeWriteEnabled;
-        _writeLoaded = true;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _writeLoaded = true);
-    } finally {
-      if (!mounted) return;
-      setState(() => _writeLoading = false);
     }
   }
 
@@ -273,56 +248,7 @@ class _DoubleParkingCompletedTableSheetState
     );
   }
 
-  Future<void> _toggleWriteForCurrentTab(bool v) async {
-    if (_writeLoading) return;
-    if (!_writeLoaded) return;
-    if (!_gateLoaded) return;
-
-    // 로컬 탭에서는 의미 없음
-    if (!_isRealtimeSelected) {
-      HapticFeedback.selectionClick();
-      return;
-    }
-
-    // 실시간 탭이 비활성화면 차단
-    if (!_realtimeTabEnabled) {
-      HapticFeedback.selectionClick();
-      showSelectedSnackbar(context, '실시간 탭이 비활성화되어 있습니다.');
-      return;
-    }
-
-    setState(() => _writeLoading = true);
-
-    try {
-      await _writeRepo.setRealtimeWriteEnabled(v);
-      _writeOn = _writeRepo.isRealtimeWriteEnabled;
-
-      if (!mounted) return;
-      showSelectedSnackbar(
-        context,
-        v
-            ? '이 기기에서 입차 완료 실시간 삽입(Write)을 ON 했습니다.'
-            : '이 기기에서 입차 완료 실시간 삽입(Write)을 OFF 했습니다.',
-      );
-
-      _trace(
-        '실시간 삽입 토글 저장',
-        meta: <String, dynamic>{
-          'screen': 'double_parking_completed_table_sheet',
-          'action': 'realtime_write_toggle_saved',
-          'area': widget.area,
-          'value': v,
-        },
-      );
-    } catch (e) {
-      if (!mounted) return;
-      showFailedSnackbar(context, '설정 저장 실패: $e');
-    } finally {
-      if (!mounted) return;
-      setState(() => _writeLoading = false);
-    }
-  }
-
+  /// ✅ 상단: 상태(게이트) + 타이틀 + 지역 + 닫기
   Widget _buildTopHeader(TextTheme textTheme, ColorScheme cs) {
     final title = _isRealtimeSelected ? '입차 완료 테이블(실시간)' : '입차 완료 테이블(로컬)';
 
@@ -368,7 +294,7 @@ class _DoubleParkingCompletedTableSheetState
               ],
             ),
           ),
-          if (!_gateLoaded || !_writeLoaded) ...[
+          if (!_gateLoaded) ...[
             const SizedBox(width: 8),
             SizedBox(
               width: 18,
@@ -391,59 +317,8 @@ class _DoubleParkingCompletedTableSheetState
     );
   }
 
-  Widget _buildFooterWriteToggle(ColorScheme cs, TextTheme text) {
-    final isLocal = !_isRealtimeSelected;
-
-    final enabled = _gateLoaded &&
-        _writeLoaded &&
-        _realtimeTabEnabled &&
-        !isLocal &&
-        !_writeLoading;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: _Palette.base.withOpacity(.06),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: _Palette.light.withOpacity(.18)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.edit_note_outlined, size: 16, color: _Palette.base),
-          const SizedBox(width: 6),
-          Text(
-            '삽입:',
-            style: text.labelMedium?.copyWith(
-              color: _Palette.base,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            isLocal ? '-' : (_writeOn ? 'ON' : 'OFF'),
-            style: text.labelMedium?.copyWith(
-              color: isLocal ? cs.outline : (_writeOn ? Colors.teal : cs.outline),
-              fontWeight: FontWeight.w900,
-              letterSpacing: .2,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Transform.scale(
-            scale: 0.85,
-            child: Switch(
-              value: _writeOn,
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              onChanged: enabled ? (v) => _toggleWriteForCurrentTab(v) : null,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ✅ 하단 바: 삽입 토글 + 탭 (갱신 버튼 없음)
-  Widget _buildBottomBar(ColorScheme cs, TextTheme text) {
+  /// ✅ 하단: 탭(내비게이션/갱신)만
+  Widget _buildBottomBar(ColorScheme cs) {
     return SafeArea(
       top: false,
       left: false,
@@ -455,35 +330,27 @@ class _DoubleParkingCompletedTableSheetState
           color: Colors.white,
           border: Border(top: BorderSide(color: cs.outline.withOpacity(.15))),
         ),
-        child: Row(
-          children: [
-            _buildFooterWriteToggle(cs, text),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Container(
-                height: 48,
-                decoration: BoxDecoration(
-                  color: _Palette.base.withOpacity(.04),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: _Palette.light.withOpacity(.25)),
-                ),
-                child: TabBar(
-                  controller: _tabCtrl,
-                  onTap: _onTapTab,
-                  labelColor: _Palette.base,
-                  unselectedLabelColor: cs.outline,
-                  indicatorColor: _Palette.base,
-                  indicatorSize: TabBarIndicatorSize.tab,
-                  dividerColor: Colors.transparent,
-                  labelPadding: const EdgeInsets.symmetric(horizontal: 6),
-                  tabs: [
-                    Tab(child: _tabLabel(text: '로컬', enabled: true)),
-                    Tab(child: _tabLabel(text: '실시간', enabled: _realtimeTabEnabled)),
-                  ],
-                ),
-              ),
-            ),
-          ],
+        child: Container(
+          height: 48,
+          decoration: BoxDecoration(
+            color: _Palette.base.withOpacity(.04),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: _Palette.light.withOpacity(.25)),
+          ),
+          child: TabBar(
+            controller: _tabCtrl,
+            onTap: _onTapTab,
+            labelColor: _Palette.base,
+            unselectedLabelColor: cs.outline,
+            indicatorColor: _Palette.base,
+            indicatorSize: TabBarIndicatorSize.tab,
+            dividerColor: Colors.transparent,
+            labelPadding: const EdgeInsets.symmetric(horizontal: 6),
+            tabs: [
+              Tab(child: _tabLabel(text: '로컬', enabled: true)),
+              Tab(child: _tabLabel(text: '실시간', enabled: _realtimeTabEnabled)),
+            ],
+          ),
         ),
       ),
     );
@@ -516,14 +383,16 @@ class _DoubleParkingCompletedTableSheetState
                   _ParkingCompletedTableTab(
                     controller: _localCtrl,
                     mode: _TableMode.local,
-                    description: '하단 “로컬” 탭을 탭하면 로컬 데이터가 재로드됩니다. 하루 업무가 끝나면 꼭 휴지통을 눌러 데이터를 비워주세요.',
+                    description:
+                    '하단 “로컬” 탭을 탭하면 로컬 데이터가 재로드됩니다. 하루 업무가 끝나면 꼭 휴지통을 눌러 데이터를 비워주세요.',
                     area: widget.area,
                   ),
                   _realtimeTabEnabled
                       ? _ParkingCompletedTableTab(
                     controller: _realtimeCtrl,
                     mode: _TableMode.realtime,
-                    description: '하단 “실시간” 탭을 탭하면 실시간 데이터가 갱신됩니다. 잦은 갱신은 앱에 무리를 줍니다.',
+                    description:
+                    '하단 “실시간” 탭을 탭하면 실시간 데이터가 갱신됩니다. 잦은 갱신은 앱에 무리를 줍니다.',
                     area: widget.area,
                   )
                       : const _RealtimeTabLockedPanel(),
@@ -531,8 +400,8 @@ class _DoubleParkingCompletedTableSheetState
               ),
             ),
 
-            // ✅ 하단 고정 바(삽입 + 탭)
-            _buildBottomBar(cs, textTheme),
+            // ✅ 하단 고정 바(탭만)
+            _buildBottomBar(cs),
           ],
         ),
       ),
@@ -580,7 +449,7 @@ class _RealtimeTabLockedPanel extends StatelessWidget {
   }
 }
 
-/// UI 렌더링 Row VM
+/// ✅ 단일 Row VM (원본 코드의 중복 선언 문제 해결)
 class _RowVM {
   final String plateNumber;
   final String location;
@@ -599,7 +468,7 @@ class _RowVM {
 /// 탭 단위 테이블(로컬/실시간 공통 UI, 데이터 소스만 교체)
 /// - ✅ Refresh 버튼 제거
 /// - ✅ controller 바인딩: 탭 탭 시 (로컬=재로드, 실시간=서버 갱신)
-/// - ✅ Write 토글 제거(footer로 이동)
+/// - ✅ Minor 기준으로: 실시간 탭에서 Write/필터/검색을 “중단 컨트롤 영역”에 배치
 /// ─────────────────────────────────────────────────────────
 class _ParkingCompletedTableTab extends StatefulWidget {
   final _RealtimeTabController controller;
@@ -653,6 +522,9 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab>
 
   bool get _isRefreshBlocked => _realtimeRepo.isRefreshBlocked(widget.area);
   int get _refreshRemainingSec => _realtimeRepo.refreshRemainingSec(widget.area);
+
+  // ✅ Write toggle (Minor 기준: 탭 내부, 실시간 탭에서만 사용)
+  bool _writeToggleLoading = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -757,10 +629,12 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab>
     for (final loc in locations) {
       final leaf = loc.locationName.trim();
       final parent = (loc.parent ?? '').trim();
-      final displayName =
-      loc.type == 'composite' ? (parent.isEmpty ? leaf : '$parent - $leaf') : leaf;
+      final displayName = loc.type == 'composite'
+          ? (parent.isEmpty ? leaf : '$parent - $leaf')
+          : leaf;
 
-      countsByDisplayName[displayName] = rawCounts[displayName] ?? leafCounts[leaf] ?? 0;
+      countsByDisplayName[displayName] =
+          rawCounts[displayName] ?? leafCounts[leaf] ?? 0;
     }
 
     _scheduleApplyPlateCountsAfterFrame(countsByDisplayName);
@@ -780,6 +654,55 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab>
       if (!_isRefreshBlocked) t.cancel();
       setState(() {});
     });
+  }
+
+  Future<void> _loadRealtimeWriteToggle() async {
+    if (!_isRealtime) return;
+    if (!mounted) return;
+
+    setState(() => _writeToggleLoading = true);
+    try {
+      await _realtimeRepo.ensureWriteToggleLoaded();
+    } catch (_) {
+      // no-op
+    } finally {
+      if (!mounted) return;
+      setState(() => _writeToggleLoading = false);
+    }
+  }
+
+  Future<void> _toggleRealtimeWriteEnabled(bool v) async {
+    if (!_isRealtime) return;
+    if (_writeToggleLoading) return;
+
+    setState(() => _writeToggleLoading = true);
+    try {
+      await _realtimeRepo.setRealtimeWriteEnabled(v);
+      if (!mounted) return;
+
+      showSelectedSnackbar(
+        context,
+        v
+            ? '이 기기에서 입차 완료 실시간 삽입(Write)을 ON 했습니다.'
+            : '이 기기에서 입차 완료 실시간 삽입(Write)을 OFF 했습니다.',
+      );
+
+      _trace(
+        '실시간 삽입 토글 저장(탭 내부)',
+        meta: <String, dynamic>{
+          'screen': 'double_parking_completed_table_sheet',
+          'action': 'realtime_write_toggle_saved_in_tab',
+          'area': widget.area,
+          'value': v,
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showFailedSnackbar(context, '설정 저장 실패: $e');
+    } finally {
+      if (!mounted) return;
+      setState(() => _writeToggleLoading = false);
+    }
   }
 
   @override
@@ -810,6 +733,9 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab>
 
       _syncLocationPickerCountsFromRows(_allRows);
       _ensureCooldownTicker();
+
+      // ✅ 실시간 탭 내부에서 Write 토글 로딩
+      _loadRealtimeWriteToggle();
     }
   }
 
@@ -1063,7 +989,9 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: blocked ? Colors.orange.withOpacity(.12) : Colors.teal.withOpacity(.10),
+        color: blocked
+            ? Colors.orange.withOpacity(.12)
+            : Colors.teal.withOpacity(.10),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -1080,6 +1008,51 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab>
             style: text.labelMedium?.copyWith(
               color: blocked ? Colors.orange.shade800 : Colors.teal.shade700,
               fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRealtimeWriteToggle(ColorScheme cs, TextTheme text) {
+    final disabled = _writeToggleLoading;
+    final on = _realtimeRepo.isRealtimeWriteEnabled;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: _Palette.base.withOpacity(.06),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: _Palette.light.withOpacity(.18)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.edit_note_outlined, size: 16, color: _Palette.base),
+          const SizedBox(width: 6),
+          Text(
+            '삽입:',
+            style: text.labelMedium?.copyWith(
+              color: _Palette.base,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            on ? 'ON' : 'OFF',
+            style: text.labelMedium?.copyWith(
+              color: on ? Colors.teal : cs.outline,
+              fontWeight: FontWeight.w800,
+              letterSpacing: .2,
+            ),
+          ),
+          const Spacer(),
+          Transform.scale(
+            scale: 0.85,
+            child: Switch(
+              value: on,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              onChanged: disabled ? null : (v) => _toggleRealtimeWriteEnabled(v),
             ),
           ),
         ],
@@ -1280,7 +1253,9 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab>
                           if (departed) {
                             rowBg = Colors.green.withOpacity(.06);
                           } else {
-                            rowBg = isEven ? Colors.white : _Palette.base.withOpacity(.02);
+                            rowBg = isEven
+                                ? Colors.white
+                                : _Palette.base.withOpacity(.02);
                           }
 
                           return Row(
@@ -1288,27 +1263,40 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab>
                               _td(
                                 Text(
                                   plate,
-                                  style: _cellStyle.copyWith(fontWeight: FontWeight.w600),
+                                  style: _cellStyle.copyWith(
+                                      fontWeight: FontWeight.w600),
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 flex: 2,
                                 bg: rowBg,
                               ),
                               _td(
-                                Text(location, style: _cellStyle, overflow: TextOverflow.ellipsis),
+                                Text(
+                                  location,
+                                  style: _cellStyle,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 flex: 2,
                                 bg: rowBg,
                               ),
                               _td(
-                                Text(created, style: _monoStyle, overflow: TextOverflow.ellipsis),
+                                Text(
+                                  created,
+                                  style: _monoStyle,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 flex: 3,
                                 bg: rowBg,
                               ),
                               _td(
                                 Icon(
-                                  departed ? Icons.check_circle : Icons.radio_button_unchecked,
+                                  departed
+                                      ? Icons.check_circle
+                                      : Icons.radio_button_unchecked,
                                   size: 18,
-                                  color: departed ? Colors.teal : Colors.grey.shade400,
+                                  color: departed
+                                      ? Colors.teal
+                                      : Colors.grey.shade400,
                                 ),
                                 width: 110,
                                 align: TextAlign.center,
@@ -1434,6 +1422,7 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab>
       color: Colors.white,
       child: Column(
         children: [
+          // 설명
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 4),
             child: Row(
@@ -1446,10 +1435,11 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab>
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                // ✅ Refresh 버튼 제거(탭 탭 = 갱신)
               ],
             ),
           ),
+
+          // 상태/액션 라인
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
             child: Row(
@@ -1464,12 +1454,15 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab>
                   _buildCooldownChip(cs, text),
                 ] else ...[
                   IconButton(
-                    tooltip: _hideDepartureCompleted ? '출차 완료 포함하여 보기' : '출차 완료 숨기기',
+                    tooltip:
+                    _hideDepartureCompleted ? '출차 완료 포함하여 보기' : '출차 완료 숨기기',
                     onPressed: (_allRows.isEmpty && !_hideDepartureCompleted)
                         ? null
                         : _toggleHideDepartureCompleted,
                     icon: Icon(
-                      _hideDepartureCompleted ? Icons.visibility_off : Icons.visibility,
+                      _hideDepartureCompleted
+                          ? Icons.visibility_off
+                          : Icons.visibility,
                       color: _hideDepartureCompleted ? Colors.teal : cs.outline,
                       size: 20,
                     ),
@@ -1478,8 +1471,8 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab>
                   IconButton.filledTonal(
                     tooltip: '전체 비우기',
                     style: IconButton.styleFrom(
-                      backgroundColor:
-                      cs.errorContainer.withOpacity((_rows.isEmpty) ? 0.12 : 0.2),
+                      backgroundColor: cs.errorContainer
+                          .withOpacity((_rows.isEmpty) ? 0.12 : 0.2),
                     ),
                     onPressed: _rows.isEmpty ? null : _clearAll,
                     icon: Icon(
@@ -1492,18 +1485,30 @@ class _ParkingCompletedTableTabState extends State<_ParkingCompletedTableTab>
               ],
             ),
           ),
+
+          // ✅ Minor 기준(중단 컨트롤):
+          // - 실시간 탭: (Write + Location) 한 줄
+          // - 검색은 다음 줄(전체폭)
+          if (_isRealtime)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+              child: Row(
+                children: [
+                  Expanded(flex: 5, child: _buildRealtimeWriteToggle(cs, text)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 5,
+                    child: _buildRealtimeLocationFilter(cs, text),
+                  ),
+                ],
+              ),
+            ),
+
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: _isRealtime
-                ? Row(
-              children: [
-                Expanded(flex: 5, child: _buildRealtimeLocationFilter(cs, text)),
-                const SizedBox(width: 8),
-                Expanded(flex: 5, child: _buildSearchField(cs)),
-              ],
-            )
-                : _buildSearchField(cs),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: _buildSearchField(cs),
           ),
+
           const Divider(height: 1),
           Expanded(child: _buildTable(_scrollCtrl)),
         ],
@@ -1525,7 +1530,8 @@ class _ParkingCompletedViewRepository {
   static final Map<String, List<_RowVM>> _cacheByArea = <String, List<_RowVM>>{};
   static final Map<String, DateTime> _cachedAtByArea = <String, DateTime>{};
 
-  static final Map<String, DateTime> _refreshBlockedUntilByArea = <String, DateTime>{};
+  static final Map<String, DateTime> _refreshBlockedUntilByArea =
+  <String, DateTime>{};
 
   static const String _prefsKeyRealtimeWriteEnabled =
       'parking_completed_realtime_write_enabled_v1';
@@ -1566,8 +1572,7 @@ class _ParkingCompletedViewRepository {
   Future<void> ensureWriteToggleLoaded() async {
     if (_prefsLoaded) return;
     _prefs = await SharedPreferences.getInstance();
-    _realtimeWriteEnabled =
-        _prefs!.getBool(_prefsKeyRealtimeWriteEnabled) ?? false;
+    _realtimeWriteEnabled = _prefs!.getBool(_prefsKeyRealtimeWriteEnabled) ?? false;
     _prefsLoaded = true;
   }
 
