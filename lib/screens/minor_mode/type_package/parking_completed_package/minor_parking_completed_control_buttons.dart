@@ -287,8 +287,7 @@ class MinorParkingCompletedControlButtons extends StatelessWidget {
   final bool isStatusMode;
   final bool isLocationPickerMode;
   final bool isSorted;
-  final bool isLocked;
-  final VoidCallback onToggleLock;
+  final VoidCallback onToggleViewMode;
   final VoidCallback showSearchDialog;
   final VoidCallback toggleSortIcon;
   final Function(BuildContext context, String plateNumber, String area)
@@ -301,8 +300,7 @@ class MinorParkingCompletedControlButtons extends StatelessWidget {
     required this.isStatusMode,
     required this.isLocationPickerMode,
     required this.isSorted,
-    required this.isLocked,
-    required this.onToggleLock,
+    required this.onToggleViewMode,
     required this.showSearchDialog,
     required this.toggleSortIcon,
     required this.handleEntryParkingRequest,
@@ -356,7 +354,7 @@ class MinorParkingCompletedControlButtons extends StatelessWidget {
           unselectedItemColor: unselectedItemColor,
           items: (isLocationPickerMode || isStatusMode)
               ? [
-            // ✅ (변경) 화면 잠금 기능은 유지하되, 아이콘 자리에 "입차 요청" aggregation count 표시
+            // ✅ (변경) 모드 전환(현황/테이블) 기능은 유지하되, 아이콘 자리에 "입차 요청" aggregation count 표시
             BottomNavigationBarItem(
               icon: Selector<MinorPageState, int>(
                 selector: (_, s) => s.departureRequestsCountRefreshToken,
@@ -369,7 +367,9 @@ class MinorParkingCompletedControlButtons extends StatelessWidget {
                   );
                 },
               ),
-              label: isLocked ? '화면 잠금' : '잠금 해제',
+              // ✅ 현황 모드: status 화면
+              // ✅ 테이블 모드: locationPicker 화면
+              label: isStatusMode ? '현황 모드' : '테이블 모드',
             ),
 
             // ✅ 출차 요청: aggregation count (refreshToken 기반 재조회)
@@ -453,8 +453,8 @@ class MinorParkingCompletedControlButtons extends StatelessWidget {
             // 상태/로케이션 선택 모드 전용(여기서는 DB 없음)
             if (isLocationPickerMode || isStatusMode) {
               if (index == 0) {
-                // ✅ (유지) 화면 잠금 토글
-                onToggleLock();
+                // ✅ (변경) 현황 ↔ 테이블 모드 토글
+                onToggleViewMode();
               } else if (index == 1) {
                 showSearchDialog();
               } else if (index == 2) {

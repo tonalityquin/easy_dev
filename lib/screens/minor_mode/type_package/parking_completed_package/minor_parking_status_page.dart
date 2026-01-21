@@ -58,9 +58,7 @@ Future<void> _logApiError({
 }
 
 class MinorParkingStatusPage extends StatefulWidget {
-  final bool isLocked;
-
-  const MinorParkingStatusPage({super.key, required this.isLocked});
+  const MinorParkingStatusPage({super.key});
 
   @override
   State<MinorParkingStatusPage> createState() => _MinorParkingStatusPageState();
@@ -380,14 +378,6 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
               );
             },
           ),
-          if (widget.isLocked)
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {},
-                child: const SizedBox.expand(),
-              ),
-            ),
         ],
       ),
     );

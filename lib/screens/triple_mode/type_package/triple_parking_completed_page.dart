@@ -40,7 +40,6 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
   TripleParkingViewMode _mode = TripleParkingViewMode.status; // 기본은 현황 화면
   String? _selectedParkingArea; // 선택된 주차 구역(location) (plateList 보존용)
   bool _isSorted = true; // true=최신순
-  bool _isLocked = true; // 화면 잠금
 
   // ✅ Status 페이지 강제 재생성용 키 시드 (홈 버튼 리셋 시 증가)
   int _statusKeySeed = 0;
@@ -61,15 +60,30 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
   }*/
 
   /// 홈 재탭/진입 시 초기 상태로 되돌림
+  /// ✅ 변경: 잠금 상태 제거. 홈 기본은 현황 모드(status).
   void _resetInternalState() {
     setState(() {
       _mode = TripleParkingViewMode.status;
       _selectedParkingArea = null;
       _isSorted = true;
-      _isLocked = true; // ✅ 요구사항: 홈에서 다시 시작할 때 잠금 ON
       _statusKeySeed++; // ✅ Status 재생성 트리거 → ParkingStatusPage 집계 재실행
     });
     _log('reset page state');
+  }
+
+  /// ✅ 현황 모드 ↔ 테이블 모드 토글
+  /// - 현황 모드: TripleParkingStatusPage
+  /// - 테이블 모드: TripleParkingCompletedLocationPicker
+  void _toggleViewMode() {
+    if (_mode == TripleParkingViewMode.plateList) return; // 안전장치
+
+    setState(() {
+      _mode = (_mode == TripleParkingViewMode.status)
+          ? TripleParkingViewMode.locationPicker
+          : TripleParkingViewMode.status;
+    });
+
+    _log(_mode == TripleParkingViewMode.status ? 'mode → status' : 'mode → locationPicker');
   }
 
   void _toggleSortIcon() {
@@ -121,6 +135,7 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
   }
 
   // ✅ (빌드 에러 방지) 컨트롤 버튼에서 요구하는 입차 요청 콜백 스텁
+  // ※ 트리플 모드에서는 입차 요청 기능이 없지만, 기존 UI/바텀시트 시그니처 호환을 위해 유지
   void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) async {
     _log('stub: entry parking request $plateNumber ($area)');
     showSuccessSnackbar(context, "입차 요청 처리: $plateNumber ($area)");
@@ -175,13 +190,7 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
           isStatusMode: _mode == TripleParkingViewMode.status,
           isLocationPickerMode: _mode == TripleParkingViewMode.locationPicker,
           isSorted: _isSorted,
-          isLocked: _isLocked,
-          onToggleLock: () {
-            setState(() {
-              _isLocked = !_isLocked;
-            });
-            _log(_isLocked ? 'lock ON' : 'lock OFF');
-          },
+          onToggleViewMode: _toggleViewMode,
           showSearchDialog: () => _showSearchDialog(context),
           toggleSortIcon: _toggleSortIcon,
           handleEntryParkingRequest: handleEntryParkingRequest,
@@ -197,17 +206,10 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
 
     switch (_mode) {
       case TripleParkingViewMode.status:
-      // 🔹 현황 화면을 탭하면 위치 선택 화면으로 전환
-        return GestureDetector(
-          onTap: () {
-            setState(() => _mode = TripleParkingViewMode.locationPicker);
-            _log('open location picker');
-          },
-          // ✅ 리셋마다 키가 바뀌어 ParkingStatusPage의 State가 새로 만들어짐 → 집계 재실행
-          child: TripleParkingStatusPage(
-            key: ValueKey('status-$_statusKeySeed'),
-            isLocked: _isLocked,
-          ),
+      // ✅ 변경: status 페이지 탭으로 locationPicker로 전환하는 로직(GestureDetector) 제거
+      // ✅ 리셋마다 키가 바뀌어 ParkingStatusPage의 State가 새로 만들어짐 → 집계 재실행
+        return TripleParkingStatusPage(
+          key: ValueKey('status-$_statusKeySeed'),
         );
 
       case TripleParkingViewMode.locationPicker:
@@ -216,7 +218,6 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
           onLocationSelected: (_) {
             // no-op
           },
-          isLocked: _isLocked,
         );
 
       case TripleParkingViewMode.plateList:

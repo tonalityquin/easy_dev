@@ -58,9 +58,7 @@ Future<void> _logApiError({
 }
 
 class TripleParkingStatusPage extends StatefulWidget {
-  final bool isLocked;
-
-  const TripleParkingStatusPage({super.key, required this.isLocked});
+  const TripleParkingStatusPage({super.key});
 
   @override
   State<TripleParkingStatusPage> createState() => _TripleParkingStatusPageState();
@@ -269,126 +267,113 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          Consumer<LocationState>(
-            builder: (context, locationState, _) {
-              // locations 로딩(용량 합산용) 또는 총합 집계 로딩 중이면 스피너
-              if (locationState.isLoading || _isCountLoading) {
-                return const Center(child: CircularProgressIndicator());
-              }
+      body: Consumer<LocationState>(
+        builder: (context, locationState, _) {
+          // locations 로딩(용량 합산용) 또는 총합 집계 로딩 중이면 스피너
+          if (locationState.isLoading || _isCountLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-              // capacity 합계는 로컬 state로 계산 (요청: 유지)
-              final totalCapacity =
-              locationState.locations.fold<int>(0, (sum, l) => sum + l.capacity);
-              final occupiedCount = _occupiedCount;
+          // capacity 합계는 로컬 state로 계산 (요청: 유지)
+          final totalCapacity =
+          locationState.locations.fold<int>(0, (sum, l) => sum + l.capacity);
+          final occupiedCount = _occupiedCount;
 
-              final double usageRatio = totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
-              final String usagePercent = (usageRatio * 100).toStringAsFixed(1);
+          final double usageRatio = totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
+          final String usagePercent = (usageRatio * 100).toStringAsFixed(1);
 
-              if (_hadError) {
-                // 에러 UI: 간단한 재시도 버튼 제공
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.warning_amber, size: 40, color: Colors.redAccent),
-                        const SizedBox(height: 12),
-                        const Text(
-                          '현황 집계 중 오류가 발생했습니다.',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '영역: $currentArea',
-                          style: const TextStyle(color: Colors.black54),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            _didCountRun = false; // 다시 1회만 돌도록
-                            _runAggregateCount();
-                          },
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('다시 집계'),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
-
-              // ------ 상단 영역: "디자인/텍스트 수정 금지" 요청 반영 ------
-              return ListView(
+          if (_hadError) {
+            // 에러 UI: 간단한 재시도 버튼 제공
+            return Center(
+              child: Padding(
                 padding: const EdgeInsets.all(20),
-                children: [
-                  // ✅ 추가: '📊 현재 주차 현황' 상단 공지 알림바
-                  _TripleParkingNoticeBar(
-                    isLoading: _isNoticeLoading,
-                    message: _noticeMessage,
-                    onRefresh: () {
-                      _didNoticeRun = false;
-                      _runNoticeFetch(forceRefresh: true);
-                    },
-                  ),
-                  if (_noticeMessage.trim().isNotEmpty || _isNoticeLoading)
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.warning_amber, size: 40, color: Colors.redAccent),
                     const SizedBox(height: 12),
-
-                  const Text(
-                    '📊 현재 노말 주차 현황',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '총 $totalCapacity대 중 $occupiedCount대 주차됨',
-                    style: const TextStyle(fontSize: 16),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  LinearProgressIndicator(
-                    value: usageRatio,
-                    backgroundColor: Colors.grey[300],
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      usageRatio >= 0.8 ? Colors.red : Colors.blueAccent,
+                    const Text(
+                      '현황 집계 중 오류가 발생했습니다.',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      textAlign: TextAlign.center,
                     ),
-                    minHeight: 8,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '$usagePercent% 사용 중',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                    textAlign: TextAlign.center,
-                  ),
-                  // ------ 상단 영역 끝 (수정 없음) ------
-
-                  const SizedBox(height: 24),
-
-                  // ⬇️ 지역별 문구가 들어가는 자동 순환 카드
-                  _AutoCyclingReminderCards(area: currentArea),
-
-                  const SizedBox(height: 12),
-
-                  // ⬇️ DashMemo 메모 자동 순환 카드 (1.5초 주기)
-                  const _AutoCyclingMemoCards(),
-
-                  const SizedBox(height: 12),
-                ],
-              );
-            },
-          ),
-          if (widget.isLocked)
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {},
-                child: const SizedBox.expand(),
+                    const SizedBox(height: 8),
+                    Text(
+                      '영역: $currentArea',
+                      style: const TextStyle(color: Colors.black54),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        _didCountRun = false; // 다시 1회만 돌도록
+                        _runAggregateCount();
+                      },
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('다시 집계'),
+                    ),
+                  ],
+                ),
               ),
-            ),
-        ],
+            );
+          }
+
+          // ------ 상단 영역: "디자인/텍스트 수정 금지" 요청 반영 ------
+          return ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              // ✅ 추가: '📊 현재 주차 현황' 상단 공지 알림바
+              _TripleParkingNoticeBar(
+                isLoading: _isNoticeLoading,
+                message: _noticeMessage,
+                onRefresh: () {
+                  _didNoticeRun = false;
+                  _runNoticeFetch(forceRefresh: true);
+                },
+              ),
+              if (_noticeMessage.trim().isNotEmpty || _isNoticeLoading) const SizedBox(height: 12),
+
+              const Text(
+                '📊 현재 노말 주차 현황',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '총 $totalCapacity대 중 $occupiedCount대 주차됨',
+                style: const TextStyle(fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              LinearProgressIndicator(
+                value: usageRatio,
+                backgroundColor: Colors.grey[300],
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  usageRatio >= 0.8 ? Colors.red : Colors.blueAccent,
+                ),
+                minHeight: 8,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '$usagePercent% 사용 중',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                textAlign: TextAlign.center,
+              ),
+              // ------ 상단 영역 끝 (수정 없음) ------
+
+              const SizedBox(height: 24),
+
+              // ⬇️ 지역별 문구가 들어가는 자동 순환 카드
+              _AutoCyclingReminderCards(area: currentArea),
+
+              const SizedBox(height: 12),
+
+              // ⬇️ DashMemo 메모 자동 순환 카드 (1.5초 주기)
+              const _AutoCyclingMemoCards(),
+
+              const SizedBox(height: 12),
+            ],
+          );
+        },
       ),
     );
   }
@@ -505,9 +490,12 @@ class TripleParkingNoticeService {
     final prefs = await SharedPreferences.getInstance();
 
     // ✅ area는 기존 호출부 호환/캐시 분리 용도로만 유지
-    final cacheKey = 'triple_parking_notice_cache_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
-    final cacheAtKey = 'triple_parking_notice_cache_at_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
-    final cacheSidKey = 'triple_parking_notice_cache_sid_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
+    final cacheKey =
+        'triple_parking_notice_cache_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
+    final cacheAtKey =
+        'triple_parking_notice_cache_at_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
+    final cacheSidKey =
+        'triple_parking_notice_cache_sid_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
 
     final nowMs = DateTime.now().millisecondsSinceEpoch;
 

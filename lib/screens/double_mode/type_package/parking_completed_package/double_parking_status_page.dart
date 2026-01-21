@@ -58,9 +58,7 @@ Future<void> _logApiError({
 }
 
 class DoubleParkingStatusPage extends StatefulWidget {
-  final bool isLocked;
-
-  const DoubleParkingStatusPage({super.key, required this.isLocked});
+  const DoubleParkingStatusPage({super.key});
 
   @override
   State<DoubleParkingStatusPage> createState() => _DoubleParkingStatusPageState();
@@ -222,8 +220,6 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
         _isNoticeLoading = false;
       });
     } catch (e) {
-      // fetchNoticeMessage는 기본적으로 캐시 fallback 하도록 구현되어 있어 throw가 드물지만,
-      // 호출부에서도 방어 + 로깅
       await _logApiError(
         tag: 'DoubleParkingStatusPage._runNoticeFetch',
         message: '공지 로드(fetchNoticeMessage) 실패',
@@ -246,13 +242,11 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
 
   @override
   Widget build(BuildContext context) {
-    // 빌드 후에도 가시성 변화가 있으면 한 번 더 시도(이미 실행되었으면 무시됨)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _maybeRunCount();
       _maybeRunNotice();
     });
 
-    // Area 변경 감지 → 재집계 트리거
     final currentArea = context.select<AreaState, String>((s) => s.currentArea.trim());
     if (_lastArea != null && _lastArea != currentArea) {
       _didCountRun = false;
@@ -260,7 +254,6 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
       WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRunCount());
     }
 
-    // ✅ Area 변경 감지 → 공지 재호출 트리거
     if (_lastNoticeArea != null && _lastNoticeArea != currentArea) {
       _didNoticeRun = false;
       _lastNoticeArea = currentArea;
@@ -269,126 +262,108 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
 
     return Scaffold(
       backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          Consumer<LocationState>(
-            builder: (context, locationState, _) {
-              // locations 로딩(용량 합산용) 또는 총합 집계 로딩 중이면 스피너
-              if (locationState.isLoading || _isCountLoading) {
-                return const Center(child: CircularProgressIndicator());
-              }
+      body: Consumer<LocationState>(
+        builder: (context, locationState, _) {
+          if (locationState.isLoading || _isCountLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-              // capacity 합계는 로컬 state로 계산 (요청: 유지)
-              final totalCapacity =
-              locationState.locations.fold<int>(0, (sum, l) => sum + l.capacity);
-              final occupiedCount = _occupiedCount;
+          final totalCapacity =
+          locationState.locations.fold<int>(0, (sum, l) => sum + l.capacity);
+          final occupiedCount = _occupiedCount;
 
-              final double usageRatio = totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
-              final String usagePercent = (usageRatio * 100).toStringAsFixed(1);
+          final double usageRatio = totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
+          final String usagePercent = (usageRatio * 100).toStringAsFixed(1);
 
-              if (_hadError) {
-                // 에러 UI: 간단한 재시도 버튼 제공
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.warning_amber, size: 40, color: Colors.redAccent),
-                        const SizedBox(height: 12),
-                        const Text(
-                          '현황 집계 중 오류가 발생했습니다.',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '영역: $currentArea',
-                          style: const TextStyle(color: Colors.black54),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            _didCountRun = false; // 다시 1회만 돌도록
-                            _runAggregateCount();
-                          },
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('다시 집계'),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
-
-              // ------ 상단 영역: "디자인/텍스트 수정 금지" 요청 반영 ------
-              return ListView(
+          if (_hadError) {
+            return Center(
+              child: Padding(
                 padding: const EdgeInsets.all(20),
-                children: [
-                  // ✅ 추가: '📊 현재 주차 현황' 상단 공지 알림바
-                  _DoubleParkingNoticeBar(
-                    isLoading: _isNoticeLoading,
-                    message: _noticeMessage,
-                    onRefresh: () {
-                      _didNoticeRun = false;
-                      _runNoticeFetch(forceRefresh: true);
-                    },
-                  ),
-                  if (_noticeMessage.trim().isNotEmpty || _isNoticeLoading)
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.warning_amber, size: 40, color: Colors.redAccent),
                     const SizedBox(height: 12),
-
-                  const Text(
-                    '📊 현재 주차 현황',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '총 $totalCapacity대 중 $occupiedCount대 주차됨',
-                    style: const TextStyle(fontSize: 16),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  LinearProgressIndicator(
-                    value: usageRatio,
-                    backgroundColor: Colors.grey[300],
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      usageRatio >= 0.8 ? Colors.red : Colors.blueAccent,
+                    const Text(
+                      '현황 집계 중 오류가 발생했습니다.',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      textAlign: TextAlign.center,
                     ),
-                    minHeight: 8,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '$usagePercent% 사용 중',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                    textAlign: TextAlign.center,
-                  ),
-                  // ------ 상단 영역 끝 (수정 없음) ------
-
-                  const SizedBox(height: 24),
-
-                  // ⬇️ 지역별 문구가 들어가는 자동 순환 카드
-                  _AutoCyclingReminderCards(area: currentArea),
-
-                  const SizedBox(height: 12),
-
-                  // ⬇️ DashMemo 메모 자동 순환 카드 (1.5초 주기)
-                  const _AutoCyclingMemoCards(),
-
-                  const SizedBox(height: 12),
-                ],
-              );
-            },
-          ),
-          if (widget.isLocked)
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {},
-                child: const SizedBox.expand(),
+                    const SizedBox(height: 8),
+                    Text(
+                      '영역: $currentArea',
+                      style: const TextStyle(color: Colors.black54),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        _didCountRun = false;
+                        _runAggregateCount();
+                      },
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('다시 집계'),
+                    ),
+                  ],
+                ),
               ),
-            ),
-        ],
+            );
+          }
+
+          // ------ 상단 영역: "디자인/텍스트 수정 금지" 요청 반영 ------
+          return ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              _DoubleParkingNoticeBar(
+                isLoading: _isNoticeLoading,
+                message: _noticeMessage,
+                onRefresh: () {
+                  _didNoticeRun = false;
+                  _runNoticeFetch(forceRefresh: true);
+                },
+              ),
+              if (_noticeMessage.trim().isNotEmpty || _isNoticeLoading)
+                const SizedBox(height: 12),
+
+              const Text(
+                '📊 현재 주차 현황',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '총 $totalCapacity대 중 $occupiedCount대 주차됨',
+                style: const TextStyle(fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              LinearProgressIndicator(
+                value: usageRatio,
+                backgroundColor: Colors.grey[300],
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  usageRatio >= 0.8 ? Colors.red : Colors.blueAccent,
+                ),
+                minHeight: 8,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '$usagePercent% 사용 중',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                textAlign: TextAlign.center,
+              ),
+              // ------ 상단 영역 끝 (수정 없음) ------
+
+              const SizedBox(height: 24),
+
+              _AutoCyclingReminderCards(area: currentArea),
+
+              const SizedBox(height: 12),
+
+              const _AutoCyclingMemoCards(),
+
+              const SizedBox(height: 12),
+            ],
+          );
+        },
       ),
     );
   }
@@ -457,14 +432,10 @@ class _DoubleParkingNoticeBar extends StatelessWidget {
 class DoubleParkingNoticeService {
   DoubleParkingNoticeService._();
 
-  /// ✅ Header와 동일한 저장 키를 사용
   static const String kNoticeSpreadsheetIdKey = 'notice_spreadsheet_id_v1';
-
-  /// ✅ Header와 동일한 공지 시트/레인지
   static const String kNoticeSheetName = 'noti';
   static const String kNoticeRange = '$kNoticeSheetName!A1:A50';
 
-  /// 캐시 TTL: 10분
   static const Duration cacheTtl = Duration(minutes: 10);
 
   static Future<sheets.SheetsApi> _sheetsApi() async {
@@ -504,20 +475,17 @@ class DoubleParkingNoticeService {
     final trimmedArea = area.trim();
     final prefs = await SharedPreferences.getInstance();
 
-    // ✅ area는 기존 호출부 호환/캐시 분리 용도로만 유지
-    final cacheKey = 'Double_parking_notice_cache_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
-    final cacheAtKey = 'Double_parking_notice_cache_at_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
-    final cacheSidKey = 'Double_parking_notice_cache_sid_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
+    final cacheKey = 'double_parking_notice_cache_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
+    final cacheAtKey = 'double_parking_notice_cache_at_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
+    final cacheSidKey = 'double_parking_notice_cache_sid_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
 
     final nowMs = DateTime.now().millisecondsSinceEpoch;
 
     final spreadsheetId = await _loadSpreadsheetId();
 
-    // 0) 스프레드시트 ID가 비어있으면: 캐시가 있으면 캐시, 없으면 빈 값
     if (spreadsheetId.isEmpty) {
       final fallback = (prefs.getString(cacheKey) ?? '').trim();
 
-      // ✅ 디버그 로그(설정 누락은 운영 이슈 트래킹에 유용)
       if (fallback.isEmpty) {
         await _logApiError(
           tag: 'DoubleParkingNoticeService.fetchNoticeMessage',
@@ -531,7 +499,6 @@ class DoubleParkingNoticeService {
       return fallback;
     }
 
-    // 1) 캐시 사용(강제 갱신이 아니고 TTL 유효 + 같은 sid이면)
     if (!forceRefresh) {
       final cached = (prefs.getString(cacheKey) ?? '').trim();
       final cachedAt = prefs.getInt(cacheAtKey) ?? 0;
@@ -545,7 +512,6 @@ class DoubleParkingNoticeService {
       }
     }
 
-    // 2) Sheets API로 noti!A1:A50 직접 읽기
     try {
       final api = await _sheetsApi();
 
@@ -564,7 +530,6 @@ class DoubleParkingNoticeService {
 
       final msg = lines.join('\n').trim();
 
-      // 3) 캐시 저장(빈 문자열이면 저장하지 않음)
       if (msg.isNotEmpty) {
         await prefs.setString(cacheKey, msg);
         await prefs.setInt(cacheAtKey, nowMs);
@@ -572,11 +537,9 @@ class DoubleParkingNoticeService {
         return msg;
       }
 
-      // 4) 시트가 비어있으면: 캐시가 있으면 캐시를 우선 반환(공지바 “갑자기 사라짐” 방지)
       final fallback = (prefs.getString(cacheKey) ?? '').trim();
       if (fallback.isNotEmpty) return fallback;
 
-      // ✅ 시트가 비어 있고 캐시도 없음(운영상 확인용)
       await _logApiError(
         tag: 'DoubleParkingNoticeService.fetchNoticeMessage',
         message: '공지 시트가 비어있고 캐시도 없음',
@@ -591,7 +554,6 @@ class DoubleParkingNoticeService {
 
       return '';
     } catch (e) {
-      // 토큰 만료/권한 문제/네트워크 문제 등: 캐시 반환
       await _logApiError(
         tag: 'DoubleParkingNoticeService.fetchNoticeMessage',
         message: 'Sheets 공지 로드 실패 → 캐시 fallback',

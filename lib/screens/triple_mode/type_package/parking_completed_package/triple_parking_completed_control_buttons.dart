@@ -64,8 +64,7 @@ class _DepartureRequestsAggregationCountState
   }
 
   @override
-  void didUpdateWidget(
-      covariant DepartureRequestsAggregationCount oldWidget) {
+  void didUpdateWidget(covariant DepartureRequestsAggregationCount oldWidget) {
     super.didUpdateWidget(oldWidget);
 
     final areaChanged = oldWidget.area.trim() != widget.area.trim();
@@ -82,8 +81,7 @@ class _DepartureRequestsAggregationCountState
 
     final agg = FirebaseFirestore.instance
         .collection('plates')
-        .where(PlateFields.type,
-        isEqualTo: PlateType.departureRequests.firestoreValue)
+        .where(PlateFields.type, isEqualTo: PlateType.departureRequests.firestoreValue)
         .where(PlateFields.area, isEqualTo: area)
         .where(PlateFields.isSelected, isEqualTo: false) // ✅ 추가 조건
         .count();
@@ -159,8 +157,10 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
   final bool isStatusMode;
   final bool isLocationPickerMode;
   final bool isSorted;
-  final bool isLocked;
-  final VoidCallback onToggleLock;
+
+  /// ✅ 변경: 잠금 토글 대신 “현황 ↔ 테이블” 모드 토글
+  final VoidCallback onToggleViewMode;
+
   final VoidCallback showSearchDialog;
   final VoidCallback toggleSortIcon;
   final Function(BuildContext context, String plateNumber, String area)
@@ -173,8 +173,7 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
     required this.isStatusMode,
     required this.isLocationPickerMode,
     required this.isSorted,
-    required this.isLocked,
-    required this.onToggleLock,
+    required this.onToggleViewMode,
     required this.showSearchDialog,
     required this.toggleSortIcon,
     required this.handleEntryParkingRequest,
@@ -204,8 +203,7 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
           PlateType.parkingCompleted,
           userName,
         );
-        final isPlateSelected =
-            selectedPlate != null && selectedPlate.isSelected;
+        final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
 
         final departureCountArea = _resolveArea(
           context,
@@ -228,20 +226,21 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
           unselectedItemColor: unselectedItemColor,
           items: (isLocationPickerMode || isStatusMode)
               ? [
+            // ✅ 변경: 현황/테이블 모드 토글 버튼
+            // 트리플 모드는 입차 요청 기능이 없으므로, 잠금 아이콘 대신 “모드 아이콘” 사용
             BottomNavigationBarItem(
               icon: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 200),
                 transitionBuilder: (child, anim) =>
                     ScaleTransition(scale: anim, child: child),
-                child: isLocked
-                    ? const Icon(Icons.lock, key: ValueKey('locked'))
-                    : const Icon(Icons.lock_open,
-                    key: ValueKey('unlocked')),
+                child: isStatusMode
+                    ? const Icon(Icons.analytics, key: ValueKey('status'))
+                    : const Icon(Icons.table_rows, key: ValueKey('table')),
               ),
-              label: isLocked ? '화면 잠금' : '잠금 해제',
+              label: isStatusMode ? '현황 모드' : '테이블 모드',
             ),
 
-            // ✅ 출차 요청: aggregation count (refreshToken 기반 재조회)
+            // ✅ 출차 요청: aggregation count (refreshToken 기반 재조회) — 기존 로직 유지
             BottomNavigationBarItem(
               icon: Selector<TriplePageState, int>(
                 selector: (_, s) => s.departureRequestsCountRefreshToken,
@@ -270,14 +269,21 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
                     ScaleTransition(scale: animation, child: child),
                 child: isPlateSelected
                     ? (selectedPlate.isLockedFee
-                    ? const Icon(Icons.lock_open,
-                    key: ValueKey('unlock'),
-                    color: Color(0xFF37474F))
-                    : const Icon(Icons.lock,
-                    key: ValueKey('lock'),
-                    color: Color(0xFF37474F)))
-                    : Icon(Icons.refresh,
-                    key: const ValueKey('refresh'), color: muted),
+                    ? const Icon(
+                  Icons.lock_open,
+                  key: ValueKey('unlock'),
+                  color: Color(0xFF37474F),
+                )
+                    : const Icon(
+                  Icons.lock,
+                  key: ValueKey('lock'),
+                  color: Color(0xFF37474F),
+                ))
+                    : Icon(
+                  Icons.refresh,
+                  key: const ValueKey('refresh'),
+                  color: muted,
+                ),
               ),
               label: isPlateSelected
                   ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
@@ -288,8 +294,7 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
             BottomNavigationBarItem(
               icon: isPlateSelected
                   ? Selector<TriplePageState, int>(
-                selector: (_, s) =>
-                s.departureRequestsCountRefreshToken,
+                selector: (_, s) => s.departureRequestsCountRefreshToken,
                 builder: (context, token, _) {
                   return DepartureRequestsAggregationCount(
                     area: departureCountArea,
@@ -315,16 +320,15 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
                   ),
                 ),
               ),
-              label: isPlateSelected
-                  ? '상태 수정'
-                  : (isSorted ? '최신순' : '오래된 순'),
+              label: isPlateSelected ? '상태 수정' : (isSorted ? '최신순' : '오래된 순'),
             ),
           ],
           onTap: (index) async {
             // 상태/로케이션 선택 모드 전용(여기서는 DB 없음)
             if (isLocationPickerMode || isStatusMode) {
               if (index == 0) {
-                onToggleLock();
+                // ✅ 변경: 현황 ↔ 테이블 모드 토글
+                onToggleViewMode();
               } else if (index == 1) {
                 showSearchDialog();
               } else if (index == 2) {
@@ -332,8 +336,7 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
                   context: context,
                   isScrollControlled: true,
                   backgroundColor: Colors.transparent,
-                  builder: (context) =>
-                  const TripleDepartureCompletedBottomSheet(),
+                  builder: (context) => const TripleDepartureCompletedBottomSheet(),
                 );
               }
               return;
@@ -354,8 +357,7 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
             final billingType = selectedPlate.billingType;
             final now = DateTime.now();
             final entryTime =
-                selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/
-                    1000;
+                selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
             final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
             final firestore = FirebaseFirestore.instance;
             final documentId = selectedPlate.id;
@@ -368,7 +370,9 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
 
               if (isZeroZero && selectedPlate.isLockedFee) {
                 showFailedSnackbar(
-                    context, '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.');
+                  context,
+                  '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.',
+                );
                 return;
               }
 
@@ -385,13 +389,14 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
                   _reportDbSafe(
                     area: selectedArea,
                     action: 'write',
-                    source:
-                    'parkingCompleted.prebill.autoZero.repo.addOrUpdatePlate',
+                    source: 'parkingCompleted.prebill.autoZero.repo.addOrUpdatePlate',
                     n: 1,
                   );
 
                   await context.read<TriplePlateState>().tripleUpdatePlateLocally(
-                      PlateType.parkingCompleted, updatedPlate);
+                    PlateType.parkingCompleted,
+                    updatedPlate,
+                  );
 
                   final autoLog = {
                     'action': '사전 정산(자동 잠금: 0원)',
@@ -407,21 +412,25 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
                   _reportDbSafe(
                     area: selectedArea,
                     action: 'write',
-                    source:
-                    'parkingCompleted.prebill.autoZero.plates.update.logs.arrayUnion',
+                    source: 'parkingCompleted.prebill.autoZero.plates.update.logs.arrayUnion',
                     n: 1,
                   );
 
                   showSuccessSnackbar(context, '0원 유형이라 자동으로 잠금되었습니다.');
                 } catch (e) {
                   showFailedSnackbar(
-                      context, '자동 잠금 처리에 실패했습니다. 다시 시도해 주세요.');
+                    context,
+                    '자동 잠금 처리에 실패했습니다. 다시 시도해 주세요.',
+                  );
                 }
                 return;
               }
 
               if ((billingType ?? '').trim().isEmpty) {
-                showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
+                showFailedSnackbar(
+                  context,
+                  '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.',
+                );
                 return;
               }
 
@@ -444,13 +453,14 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
                   _reportDbSafe(
                     area: selectedArea,
                     action: 'write',
-                    source:
-                    'parkingCompleted.prebill.unlock.repo.addOrUpdatePlate',
+                    source: 'parkingCompleted.prebill.unlock.repo.addOrUpdatePlate',
                     n: 1,
                   );
 
                   await context.read<TriplePlateState>().tripleUpdatePlateLocally(
-                      PlateType.parkingCompleted, updatedPlate);
+                    PlateType.parkingCompleted,
+                    updatedPlate,
+                  );
 
                   final cancelLog = {
                     'action': '사전 정산 취소',
@@ -464,8 +474,7 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
                   _reportDbSafe(
                     area: selectedArea,
                     action: 'write',
-                    source:
-                    'parkingCompleted.prebill.unlock.plates.update.logs.arrayUnion',
+                    source: 'parkingCompleted.prebill.unlock.plates.update.logs.arrayUnion',
                     n: 1,
                   );
 
@@ -500,13 +509,14 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
                   _reportDbSafe(
                     area: selectedArea,
                     action: 'write',
-                    source:
-                    'parkingCompleted.prebill.lock.repo.addOrUpdatePlate',
+                    source: 'parkingCompleted.prebill.lock.repo.addOrUpdatePlate',
                     n: 1,
                   );
 
                   await context.read<TriplePlateState>().tripleUpdatePlateLocally(
-                      PlateType.parkingCompleted, updatedPlate);
+                    PlateType.parkingCompleted,
+                    updatedPlate,
+                  );
 
                   final log = {
                     'action': '사전 정산',
@@ -524,8 +534,7 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
                   _reportDbSafe(
                     area: selectedArea,
                     action: 'write',
-                    source:
-                    'parkingCompleted.prebill.lock.plates.update.logs.arrayUnion',
+                    source: 'parkingCompleted.prebill.lock.plates.update.logs.arrayUnion',
                     n: 1,
                   );
 
@@ -563,8 +572,7 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
                             selectedPlate.plateNumber,
                             selectedPlate.area,
                           );
-                          showSuccessSnackbar(
-                              context, "삭제 완료: ${selectedPlate.plateNumber}");
+                          showSuccessSnackbar(context, "삭제 완료: ${selectedPlate.plateNumber}");
                         } catch (_) {
                           // DeletePlate 내부에서 실패 처리
                         }

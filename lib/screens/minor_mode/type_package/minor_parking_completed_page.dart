@@ -40,7 +40,6 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
   MinorParkingViewMode _mode = MinorParkingViewMode.status; // 기본은 현황 화면
   String? _selectedParkingArea; // 선택된 주차 구역(location) (plateList 보존용)
   bool _isSorted = true; // true=최신순
-  bool _isLocked = true; // 화면 잠금
 
   // ✅ Status 페이지 강제 재생성용 키 시드 (홈 버튼 리셋 시 증가)
   int _statusKeySeed = 0;
@@ -66,10 +65,24 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
       _mode = MinorParkingViewMode.status;
       _selectedParkingArea = null;
       _isSorted = true;
-      _isLocked = true; // ✅ 요구사항: 홈에서 다시 시작할 때 잠금 ON
       _statusKeySeed++; // ✅ Status 재생성 트리거 → ParkingStatusPage 집계 재실행
     });
     _log('reset page state');
+  }
+
+  /// ✅ 현황 모드 ↔ 테이블 모드 토글
+  /// - 현황 모드: MinorParkingStatusPage
+  /// - 테이블 모드: MinorParkingCompletedLocationPicker
+  void _toggleViewMode() {
+    if (_mode == MinorParkingViewMode.plateList) return; // 안전장치
+
+    setState(() {
+      _mode = (_mode == MinorParkingViewMode.status)
+          ? MinorParkingViewMode.locationPicker
+          : MinorParkingViewMode.status;
+    });
+
+    _log(_mode == MinorParkingViewMode.status ? 'mode → status' : 'mode → locationPicker');
   }
 
   void _toggleSortIcon() {
@@ -175,13 +188,7 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
           isStatusMode: _mode == MinorParkingViewMode.status,
           isLocationPickerMode: _mode == MinorParkingViewMode.locationPicker,
           isSorted: _isSorted,
-          isLocked: _isLocked,
-          onToggleLock: () {
-            setState(() {
-              _isLocked = !_isLocked;
-            });
-            _log(_isLocked ? 'lock ON' : 'lock OFF');
-          },
+          onToggleViewMode: _toggleViewMode,
           showSearchDialog: () => _showSearchDialog(context),
           toggleSortIcon: _toggleSortIcon,
           handleEntryParkingRequest: handleEntryParkingRequest,
@@ -197,17 +204,10 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
 
     switch (_mode) {
       case MinorParkingViewMode.status:
-      // 🔹 현황 화면을 탭하면 위치 선택 화면으로 전환
-        return GestureDetector(
-          onTap: () {
-            setState(() => _mode = MinorParkingViewMode.locationPicker);
-            _log('open location picker');
-          },
-          // ✅ 리셋마다 키가 바뀌어 ParkingStatusPage의 State가 새로 만들어짐 → 집계 재실행
-          child: MinorParkingStatusPage(
-            key: ValueKey('status-$_statusKeySeed'),
-            isLocked: _isLocked,
-          ),
+      // ✅ 리셋마다 키가 바뀌어 ParkingStatusPage의 State가 새로 만들어짐 → 집계 재실행
+      // ✅ (변경) status 페이지 탭으로 locationPicker로 전환하는 로직은 제거
+        return MinorParkingStatusPage(
+          key: ValueKey('status-$_statusKeySeed'),
         );
 
       case MinorParkingViewMode.locationPicker:
@@ -216,7 +216,6 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
           onLocationSelected: (_) {
             // no-op
           },
-          isLocked: _isLocked,
         );
 
       case MinorParkingViewMode.plateList:
