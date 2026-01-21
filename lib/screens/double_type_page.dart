@@ -8,11 +8,9 @@ import '../states/area/area_state.dart';
 import '../states/plate/double_plate_state.dart';
 import '../states/user/user_state.dart';
 
-import 'common_package/chat_package//lite_chat_bottom_sheet.dart';
 import 'double_mode/input_package/double_input_plate_screen.dart';
 import 'double_mode/type_package/common_widgets/dashboard_bottom_sheet/double_home_dash_board_bottom_sheet.dart';
 import 'double_mode/type_package/common_widgets/reverse_sheet_package/double_parking_completed_table_sheet.dart';
-import 'secondary_page.dart';
 import '../utils/snackbar_helper.dart';
 
 import '../services/latest_message_service.dart';
@@ -53,7 +51,7 @@ class _LiteTypePageState extends State<LiteTypePage> {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
+    return ChangeNotifierProvider<DoublePageState>(
       create: (_) => DoublePageState(),
       child: Builder(
         builder: (context) {
@@ -92,7 +90,7 @@ class _LiteTypePageState extends State<LiteTypePage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const _ChatDashboardBar(),
+                    const _EntryDashboardBar(),
                     const _SingleHomeTabBar(),
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -112,8 +110,8 @@ class _LiteTypePageState extends State<LiteTypePage> {
   }
 }
 
-class _ChatDashboardBar extends StatelessWidget {
-  const _ChatDashboardBar();
+class _EntryDashboardBar extends StatelessWidget {
+  const _EntryDashboardBar();
 
   @override
   Widget build(BuildContext context) {
@@ -123,9 +121,9 @@ class _ChatDashboardBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
       child: Row(
         children: [
-          // ✅ 좌측: “채팅 열기” 버튼(말풍선 팝오버)
+          // ✅ 좌측: 입차 화면 열기 버튼 (기존 “채팅 열기” 제거)
           const Expanded(
-            child: ChatOpenButtonLite(),
+            child: _OpenEntryButton(),
           ),
           const SizedBox(width: 8),
 
@@ -159,6 +157,69 @@ class _ChatDashboardBar extends StatelessWidget {
                   Text('대시보드'),
                 ],
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OpenEntryButton extends StatelessWidget {
+  const _OpenEntryButton();
+
+  void _trace(BuildContext context, String name, {Map<String, dynamic>? meta}) {
+    DebugActionRecorder.instance.recordAction(
+      name,
+      route: ModalRoute.of(context)?.settings.name,
+      meta: meta,
+    );
+  }
+
+  Future<void> _openEntryScreen(BuildContext context) async {
+    Navigator.of(context).push(
+      _slidePageRoute(const DoubleInputPlateScreen(), fromLeft: true),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppCardPalette.of(context);
+
+    return ElevatedButton(
+      onPressed: () async {
+        _trace(
+          context,
+          '입차 화면 열기 버튼',
+          meta: <String, dynamic>{
+            'screen': 'lite_type_page',
+            'action': 'open_double_input_plate_screen',
+          },
+        );
+
+        await _openEntryScreen(context);
+      },
+      style: ElevatedButton.styleFrom(
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(color: palette.doubleBase.withOpacity(.35)),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.add_circle_outline, size: 20, color: palette.doubleBase),
+          const SizedBox(width: 8),
+          Text(
+            '입차',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 13,
+              color: palette.doubleBase,
             ),
           ),
         ],
@@ -240,26 +301,12 @@ class RefreshableBody extends StatefulWidget {
 }
 
 class _RefreshableBodyState extends State<RefreshableBody> {
-  double _dragDistance = 0.0;
-
   double _vDragDistance = 0.0;
   bool _topOpening = false;
-
-  static const double _hDistanceThreshold = 80.0;
-  static const double _hVelocityThreshold = 1000.0;
 
   // ✅ 아래로 스와이프(TopSheet)만 유지
   static const double _vDistanceThresholdDown = 50.0;
   static const double _vVelocityThresholdDown = 700.0;
-
-  void _handleHorizontalDragEnd(BuildContext context, double velocity) {
-    if (_dragDistance > _hDistanceThreshold && velocity > _hVelocityThreshold) {
-      Navigator.of(context).push(_slidePage(const DoubleInputPlateScreen(), fromLeft: true));
-    } else if (_dragDistance < -_hDistanceThreshold && velocity < -_hVelocityThreshold) {
-      Navigator.of(context).push(_slidePage(const SecondaryPage(), fromLeft: false));
-    }
-    _dragDistance = 0.0;
-  }
 
   Future<void> _openParkingCompletedTableSheet(BuildContext context) async {
     await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -270,7 +317,6 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   Future<void> _handleVerticalDragEnd(BuildContext context, DragEndDetails details) async {
     final vy = details.primaryVelocity ?? 0.0;
 
-    // ✅ (변경) 위로 스와이프하여 채팅 열기 로직 삭제
     // ✅ 아래로 스와이프(TopSheet)만 유지
     final firedDown = (_vDragDistance > _vDistanceThresholdDown) || (vy > _vVelocityThresholdDown);
 
@@ -283,19 +329,6 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     _vDragDistance = 0.0;
   }
 
-  PageRouteBuilder _slidePage(Widget page, {required bool fromLeft}) {
-    return PageRouteBuilder(
-      transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (_, __, ___) => page,
-      transitionsBuilder: (_, animation, __, child) {
-        final begin = Offset(fromLeft ? -1.0 : 1.0, 0);
-        final end = Offset.zero;
-        final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
-        return SlideTransition(position: animation.drive(tween), child: child);
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final palette = AppCardPalette.of(context);
@@ -303,8 +336,11 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       dragStartBehavior: DragStartBehavior.down,
-      onHorizontalDragUpdate: (details) => _dragDistance += details.delta.dx,
-      onHorizontalDragEnd: (details) => _handleHorizontalDragEnd(context, details.primaryVelocity ?? 0),
+
+      // ✅ [변경] 좌/우 가로 스와이프 기능 전체 삭제
+      // onHorizontalDragUpdate: null
+      // onHorizontalDragEnd: null
+
       onVerticalDragStart: (_) => _vDragDistance = 0.0,
       onVerticalDragUpdate: (details) => _vDragDistance += details.delta.dy,
       onVerticalDragEnd: (details) => _handleVerticalDragEnd(context, details),
@@ -338,4 +374,18 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     final pageInfo = state.pages[state.selectedIndex];
     return pageInfo.builder(context);
   }
+}
+
+/// ✅ 공용 슬라이드 라우트
+PageRouteBuilder _slidePageRoute(Widget page, {required bool fromLeft}) {
+  return PageRouteBuilder(
+    transitionDuration: const Duration(milliseconds: 300),
+    pageBuilder: (_, __, ___) => page,
+    transitionsBuilder: (_, animation, __, child) {
+      final begin = Offset(fromLeft ? -1.0 : 1.0, 0);
+      final end = Offset.zero;
+      final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
+      return SlideTransition(position: animation.drive(tween), child: child);
+    },
+  );
 }

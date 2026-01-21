@@ -13,6 +13,9 @@ import 'widgets/double_dashboard_punch_recorder_section.dart';
 // ✅ [추가] 사진 전송(공용) 페이지
 import 'package:easydev/screens/common_package/camera_package/photo_transfer_mail_page.dart';
 
+// ✅ [추가] 보조 페이지
+import 'package:easydev/screens/secondary_page.dart';
+
 class DoubleHomeDashBoardBottomSheet extends StatefulWidget {
   const DoubleHomeDashBoardBottomSheet({super.key});
 
@@ -71,6 +74,22 @@ class _DoubleHomeDashBoardBottomSheetState extends State<DoubleHomeDashBoardBott
     rootNav.push(
       MaterialPageRoute(
         builder: (_) => const PhotoTransferMailPage(),
+      ),
+    );
+  }
+
+  void _onOpenSecondaryPressed(BuildContext context) {
+    // ✅ 바텀시트 닫고, 루트 네비게이터로 SecondaryPage push
+    final rootNav = Navigator.of(context, rootNavigator: true);
+
+    final nav = Navigator.of(context);
+    if (nav.canPop()) {
+      nav.pop();
+    }
+
+    rootNav.push(
+      MaterialPageRoute(
+        builder: (_) => const SecondaryPage(),
       ),
     );
   }
@@ -182,6 +201,18 @@ class _DoubleHomeDashBoardBottomSheetState extends State<DoubleHomeDashBoardBott
                                   openLeaderDocumentBox(context);
                                 }
                               },
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // ✅ [추가] 보조 페이지 열기 버튼
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.open_in_new),
+                              label: const Text('보조 페이지 열기'),
+                              style: _outlinedWhiteBtnStyle(height: 55),
+                              onPressed: () => _onOpenSecondaryPressed(context),
                             ),
                           ),
                           const SizedBox(height: 16),

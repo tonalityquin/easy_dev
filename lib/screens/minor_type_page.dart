@@ -3,18 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../states/page/minor_page_state.dart';
-import '../states/area/area_state.dart';
 import '../states/plate/minor_plate_state.dart';
 import '../states/user/user_state.dart';
 
-import 'common_package/chat_package/lite_chat_bottom_sheet.dart';
 import 'minor_mode/input_package/minor_input_plate_screen.dart';
 import 'minor_mode/type_package/common_widgets/dashboard_bottom_sheet/minor_home_dash_board_bottom_sheet.dart';
 import 'minor_mode/type_package/common_widgets/reverse_sheet_package/minor_parking_completed_table_sheet.dart';
-import 'secondary_page.dart';
 import '../utils/snackbar_helper.dart';
-
-import '../services/latest_message_service.dart';
 
 // ✅ AppCardPalette ThemeExtension 사용
 import '../theme.dart';
@@ -43,7 +38,7 @@ class _MinorTypePageState extends State<MinorTypePage> {
 
   @override
   void dispose() {
-    // ✅ Triple 이탈: 로드/보류 상태 정리
+    // ✅ Minor 이탈: 로드/보류 상태 정리
     try {
       context.read<MinorPlateState>().minorDisableAll();
     } catch (_) {}
@@ -52,19 +47,13 @@ class _MinorTypePageState extends State<MinorTypePage> {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
+    return ChangeNotifierProvider<MinorPageState>(
       create: (_) => MinorPageState(),
       child: Builder(
         builder: (context) {
-          final normalPlateState = context.read<MinorPlateState>();
+          final plateState = context.read<MinorPlateState>();
           final pageState = context.read<MinorPageState>();
           final userName = context.read<UserState>().name;
-
-          // ★ 현재 area 기반으로 전역 리스너 시작 — idempotent
-          final currentArea = context.read<AreaState>().currentArea.trim();
-          if (currentArea.isNotEmpty) {
-            LatestMessageService.instance.start(currentArea);
-          }
 
           return PopScope(
             canPop: false,
@@ -73,10 +62,11 @@ class _MinorTypePageState extends State<MinorTypePage> {
 
               final currentPage = pageState.pages[pageState.selectedIndex];
               final collection = currentPage.collectionKey;
-              final normalSelectedPlate = normalPlateState.minorGetSelectedPlate(collection, userName);
+              final normalSelectedPlate =
+              plateState.minorGetSelectedPlate(collection, userName);
 
               if (normalSelectedPlate != null && normalSelectedPlate.id.isNotEmpty) {
-                await normalPlateState.minorTogglePlateIsSelected(
+                await plateState.minorTogglePlateIsSelected(
                   collection: collection,
                   plateNumber: normalSelectedPlate.plateNumber,
                   userName: userName,
@@ -91,7 +81,7 @@ class _MinorTypePageState extends State<MinorTypePage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const _ChatDashboardBar(),
+                    const _EntryDashboardBar(),
                     const _SingleHomeTabBar(),
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
@@ -111,8 +101,8 @@ class _MinorTypePageState extends State<MinorTypePage> {
   }
 }
 
-class _ChatDashboardBar extends StatelessWidget {
-  const _ChatDashboardBar();
+class _EntryDashboardBar extends StatelessWidget {
+  const _EntryDashboardBar();
 
   @override
   Widget build(BuildContext context) {
@@ -122,9 +112,9 @@ class _ChatDashboardBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
       child: Row(
         children: [
-          // ✅ 좌측: “채팅 열기” 버튼(말풍선 팝오버)
+          // ✅ 좌측: 입차 화면 열기 버튼
           const Expanded(
-            child: ChatOpenButtonLite(),
+            child: _OpenEntryButton(),
           ),
           const SizedBox(width: 8),
 
@@ -166,6 +156,69 @@ class _ChatDashboardBar extends StatelessWidget {
   }
 }
 
+class _OpenEntryButton extends StatelessWidget {
+  const _OpenEntryButton();
+
+  void _trace(BuildContext context, String name, {Map<String, dynamic>? meta}) {
+    DebugActionRecorder.instance.recordAction(
+      name,
+      route: ModalRoute.of(context)?.settings.name,
+      meta: meta,
+    );
+  }
+
+  Future<void> _openEntryScreen(BuildContext context) async {
+    Navigator.of(context).push(
+      _slidePageRoute(const MinorInputPlateScreen(), fromLeft: true),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = AppCardPalette.of(context);
+
+    return ElevatedButton(
+      onPressed: () async {
+        _trace(
+          context,
+          '입차 화면 열기 버튼',
+          meta: <String, dynamic>{
+            'screen': 'minor_type_page',
+            'action': 'open_minor_input_plate_screen',
+          },
+        );
+
+        await _openEntryScreen(context);
+      },
+      style: ElevatedButton.styleFrom(
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(color: AppCardPalette.of(context).tripleBase.withOpacity(.35)),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.add_circle_outline, size: 20, color: palette.tripleBase),
+          const SizedBox(width: 8),
+          Text(
+            '입차',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 13,
+              color: palette.tripleBase,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SingleHomeTabBar extends StatelessWidget {
   const _SingleHomeTabBar();
 
@@ -195,7 +248,7 @@ class _SingleHomeTabBar extends StatelessWidget {
                   context,
                   '홈 버튼',
                   meta: <String, dynamic>{
-                    'screen': 'triple_type_page',
+                    'screen': 'minor_type_page',
                     'action': 'home_tap',
                     'targetIndex': 0,
                     'selectedIndexBefore': pageState.selectedIndex,
@@ -251,26 +304,12 @@ class RefreshableBody extends StatefulWidget {
 }
 
 class _RefreshableBodyState extends State<RefreshableBody> {
-  double _dragDistance = 0.0;
-
   double _vDragDistance = 0.0;
   bool _topOpening = false;
-
-  static const double _hDistanceThreshold = 80.0;
-  static const double _hVelocityThreshold = 1000.0;
 
   // ✅ 아래로 스와이프(TopSheet)만 유지
   static const double _vDistanceThresholdDown = 50.0;
   static const double _vVelocityThresholdDown = 700.0;
-
-  void _handleHorizontalDragEnd(BuildContext context, double velocity) {
-    if (_dragDistance > _hDistanceThreshold && velocity > _hVelocityThreshold) {
-      Navigator.of(context).push(_slidePage(const MinorInputPlateScreen(), fromLeft: true));
-    } else if (_dragDistance < -_hDistanceThreshold && velocity < -_hVelocityThreshold) {
-      Navigator.of(context).push(_slidePage(const SecondaryPage(), fromLeft: false));
-    }
-    _dragDistance = 0.0;
-  }
 
   Future<void> _openParkingCompletedTableSheet(BuildContext context) async {
     await Future<void>.delayed(const Duration(milliseconds: 10));
@@ -293,19 +332,6 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     _vDragDistance = 0.0;
   }
 
-  PageRouteBuilder _slidePage(Widget page, {required bool fromLeft}) {
-    return PageRouteBuilder(
-      transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (_, __, ___) => page,
-      transitionsBuilder: (_, animation, __, child) {
-        final begin = Offset(fromLeft ? -1.0 : 1.0, 0);
-        final end = Offset.zero;
-        final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
-        return SlideTransition(position: animation.drive(tween), child: child);
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final palette = AppCardPalette.of(context);
@@ -313,17 +339,20 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       dragStartBehavior: DragStartBehavior.down,
-      onHorizontalDragUpdate: (details) => _dragDistance += details.delta.dx,
-      onHorizontalDragEnd: (details) => _handleHorizontalDragEnd(context, details.primaryVelocity ?? 0),
+
+      // ✅ [변경] 가로 스와이프(입차/SecondaryPage) 로직 전부 삭제
+      // onHorizontalDragUpdate: null
+      // onHorizontalDragEnd: null
+
       onVerticalDragStart: (_) => _vDragDistance = 0.0,
       onVerticalDragUpdate: (details) => _vDragDistance += details.delta.dy,
       onVerticalDragEnd: (details) => _handleVerticalDragEnd(context, details),
       child: Consumer2<MinorPageState, MinorPlateState>(
-        builder: (context, pageState, normalPlateState, _) {
+        builder: (context, pageState, plateState, _) {
           return Stack(
             children: [
               _buildCurrentPage(context, pageState),
-              if (normalPlateState.isLoading)
+              if (plateState.isLoading)
                 Container(
                   color: Colors.white.withOpacity(.35),
                   child: Center(
@@ -348,4 +377,18 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     final pageInfo = state.pages[state.selectedIndex];
     return pageInfo.builder(context);
   }
+}
+
+/// ✅ 공용 슬라이드 라우트(중복 제거)
+PageRouteBuilder _slidePageRoute(Widget page, {required bool fromLeft}) {
+  return PageRouteBuilder(
+    transitionDuration: const Duration(milliseconds: 300),
+    pageBuilder: (_, __, ___) => page,
+    transitionsBuilder: (_, animation, __, child) {
+      final begin = Offset(fromLeft ? -1.0 : 1.0, 0);
+      final end = Offset.zero;
+      final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
+      return SlideTransition(position: animation.drive(tween), child: child);
+    },
+  );
 }
