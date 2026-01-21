@@ -12,8 +12,6 @@ import '../../../states/user/user_state.dart';
 
 import '../../../utils/snackbar_helper.dart';
 
-// import '../../utils/usage_reporter.dart';
-
 import '../../../widgets/navigation/minor_top_navigation.dart';
 import 'parking_completed_package/widgets/signature_plate_search_bottom_sheet/minor_parking_completed_search_bottom_sheet.dart';
 import '../../../widgets/container/plate_container.dart';
@@ -51,14 +49,6 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
     if (kDebugMode) debugPrint('[ParkingCompleted] $msg');
   }
 
-  /*void _reportReadDb(String source, {int n = 1}) {
-    try {
-      final area = context.read<AreaState>().currentArea.trim();
-      UsageReporter.instance.report(area: area, action: 'read', n: n, source: source);
-    } catch (_) {
-    }
-  }*/
-
   /// 홈 재탭/진입 시 초기 상태로 되돌림
   void _resetInternalState() {
     setState(() {
@@ -72,7 +62,7 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
 
   /// ✅ 현황 모드 ↔ 테이블 모드 토글
   /// - 현황 모드: MinorParkingStatusPage
-  /// - 테이블 모드: MinorParkingCompletedLocationPicker
+  /// - 테이블 모드: (리팩터링) MinorParkingCompletedLocationPicker = 실시간(view) 테이블 3탭
   void _toggleViewMode() {
     if (_mode == MinorParkingViewMode.plateList) return; // 안전장치
 
@@ -82,7 +72,7 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
           : MinorParkingViewMode.status;
     });
 
-    _log(_mode == MinorParkingViewMode.status ? 'mode → status' : 'mode → locationPicker');
+    _log(_mode == MinorParkingViewMode.status ? 'mode → status' : 'mode → locationPicker(table)');
   }
 
   void _toggleSortIcon() {
@@ -160,10 +150,10 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
           return false;
         }
 
-        // plateList → locationPicker → status 순으로 한 단계씩 되돌기
+        // plateList → locationPicker(table) → status 순으로 한 단계씩 되돌기
         if (_mode == MinorParkingViewMode.plateList) {
           setState(() => _mode = MinorParkingViewMode.locationPicker);
-          _log('back → locationPicker');
+          _log('back → locationPicker(table)');
           return false;
         } else if (_mode == MinorParkingViewMode.locationPicker) {
           setState(() => _mode = MinorParkingViewMode.status);
@@ -182,11 +172,18 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
           foregroundColor: Colors.black,
           elevation: 0,
         ),
+
+        // ✅ 핵심: body는 bottomNavigationBar 위 영역까지만 자동 레이아웃
         body: _buildBody(context),
+
+        // ✅ 요구사항: ControlButtons는 항상 보이기
         bottomNavigationBar: MinorParkingCompletedControlButtons(
           isParkingAreaMode: _mode == MinorParkingViewMode.plateList,
           isStatusMode: _mode == MinorParkingViewMode.status,
+
+          // ✅ locationPicker(=실시간 테이블) 모드에서도 ControlButtons가 “테이블용 3아이템”을 그리도록 true
           isLocationPickerMode: _mode == MinorParkingViewMode.locationPicker,
+
           isSorted: _isSorted,
           onToggleViewMode: _toggleViewMode,
           showSearchDialog: () => _showSearchDialog(context),
@@ -205,16 +202,17 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
     switch (_mode) {
       case MinorParkingViewMode.status:
       // ✅ 리셋마다 키가 바뀌어 ParkingStatusPage의 State가 새로 만들어짐 → 집계 재실행
-      // ✅ (변경) status 페이지 탭으로 locationPicker로 전환하는 로직은 제거
         return MinorParkingStatusPage(
           key: ValueKey('status-$_statusKeySeed'),
         );
 
       case MinorParkingViewMode.locationPicker:
-      // ✅ 요구사항: 주차 구역 선택 시 아무 동작도 하지 않음
+      // ✅ (리팩터링) 기존 주차구역 리스트 대신 “실시간(view) 테이블 3탭”을 body에 임베드
+      // ✅ ControlButtons는 계속 보이므로, LocationPicker는 그 상단까지만 차지하게 됨
         return MinorParkingCompletedLocationPicker(
-          onLocationSelected: (_) {
-            // no-op
+          onClose: () {
+            if (!mounted) return;
+            setState(() => _mode = MinorParkingViewMode.status);
           },
         );
 

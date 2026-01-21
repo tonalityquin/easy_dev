@@ -1,5 +1,3 @@
-// lib/screens/...(동일 경로)/table_share_blocking_dialog.dart
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 

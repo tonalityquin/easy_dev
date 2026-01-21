@@ -51,14 +51,6 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
     if (kDebugMode) debugPrint('[ParkingCompleted] $msg');
   }
 
-  /*void _reportReadDb(String source, {int n = 1}) {
-    try {
-      final area = context.read<AreaState>().currentArea.trim();
-      UsageReporter.instance.report(area: area, action: 'read', n: n, source: source);
-    } catch (_) {
-    }
-  }*/
-
   /// 홈 재탭/진입 시 초기 상태로 되돌림
   /// ✅ 변경: 잠금 상태 제거. 홈 기본은 현황 모드(status).
   void _resetInternalState() {
@@ -73,7 +65,7 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
 
   /// ✅ 현황 모드 ↔ 테이블 모드 토글
   /// - 현황 모드: TripleParkingStatusPage
-  /// - 테이블 모드: TripleParkingCompletedLocationPicker
+  /// - 테이블 모드: (리팩터링) TripleParkingCompletedLocationPicker = 실시간(view) 테이블(입차완료/출차요청)
   void _toggleViewMode() {
     if (_mode == TripleParkingViewMode.plateList) return; // 안전장치
 
@@ -83,7 +75,7 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
           : TripleParkingViewMode.status;
     });
 
-    _log(_mode == TripleParkingViewMode.status ? 'mode → status' : 'mode → locationPicker');
+    _log(_mode == TripleParkingViewMode.status ? 'mode → status' : 'mode → locationPicker(table)');
   }
 
   void _toggleSortIcon() {
@@ -185,6 +177,8 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
           elevation: 0,
         ),
         body: _buildBody(context),
+
+        // ✅ 요구사항 유지: ControlButtons 항상 표시
         bottomNavigationBar: TripleParkingCompletedControlButtons(
           isParkingAreaMode: _mode == TripleParkingViewMode.plateList,
           isStatusMode: _mode == TripleParkingViewMode.status,
@@ -206,17 +200,20 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
 
     switch (_mode) {
       case TripleParkingViewMode.status:
-      // ✅ 변경: status 페이지 탭으로 locationPicker로 전환하는 로직(GestureDetector) 제거
       // ✅ 리셋마다 키가 바뀌어 ParkingStatusPage의 State가 새로 만들어짐 → 집계 재실행
         return TripleParkingStatusPage(
           key: ValueKey('status-$_statusKeySeed'),
         );
 
       case TripleParkingViewMode.locationPicker:
-      // ✅ 요구사항: 주차 구역 선택 시 아무 동작도 하지 않음
+      // ✅ 리팩터링: 기존 “주차 구역 리스트” 대신
+      //    트리플 모드 전용 “실시간(view) 테이블(입차 완료 / 출차 요청)” 임베드 출력
+      // ✅ 내부 Scaffold 제거된 위젯이므로 body 영역을 자연스럽게 채우고,
+      //    bottomNavigationBar(ControlButtons) 상단까지만 렌더링됨.
         return TripleParkingCompletedLocationPicker(
-          onLocationSelected: (_) {
-            // no-op
+          onClose: () {
+            if (!mounted) return;
+            setState(() => _mode = TripleParkingViewMode.status);
           },
         );
 

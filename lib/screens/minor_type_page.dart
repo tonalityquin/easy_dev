@@ -1,4 +1,3 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -8,7 +7,6 @@ import '../states/user/user_state.dart';
 
 import 'minor_mode/input_package/minor_input_plate_screen.dart';
 import 'minor_mode/type_package/common_widgets/dashboard_bottom_sheet/minor_home_dash_board_bottom_sheet.dart';
-import 'minor_mode/type_package/common_widgets/reverse_sheet_package/minor_parking_completed_table_sheet.dart';
 import '../utils/snackbar_helper.dart';
 
 // ✅ AppCardPalette ThemeExtension 사용
@@ -62,8 +60,7 @@ class _MinorTypePageState extends State<MinorTypePage> {
 
               final currentPage = pageState.pages[pageState.selectedIndex];
               final collection = currentPage.collectionKey;
-              final normalSelectedPlate =
-              plateState.minorGetSelectedPlate(collection, userName);
+              final normalSelectedPlate = plateState.minorGetSelectedPlate(collection, userName);
 
               if (normalSelectedPlate != null && normalSelectedPlate.id.isNotEmpty) {
                 await plateState.minorTogglePlateIsSelected(
@@ -304,72 +301,33 @@ class RefreshableBody extends StatefulWidget {
 }
 
 class _RefreshableBodyState extends State<RefreshableBody> {
-  double _vDragDistance = 0.0;
-  bool _topOpening = false;
-
-  // ✅ 아래로 스와이프(TopSheet)만 유지
-  static const double _vDistanceThresholdDown = 50.0;
-  static const double _vVelocityThresholdDown = 700.0;
-
-  Future<void> _openParkingCompletedTableSheet(BuildContext context) async {
-    await Future<void>.delayed(const Duration(milliseconds: 10));
-    if (!mounted) return;
-    await showMinorParkingCompletedTableTopSheet(context);
-  }
-
-  Future<void> _handleVerticalDragEnd(BuildContext context, DragEndDetails details) async {
-    final vy = details.primaryVelocity ?? 0.0;
-
-    // ✅ 아래로 스와이프(TopSheet)만 유지
-    final firedDown = (_vDragDistance > _vDistanceThresholdDown) || (vy > _vVelocityThresholdDown);
-
-    if (firedDown && !_topOpening) {
-      _topOpening = true;
-      await _openParkingCompletedTableSheet(context);
-      _topOpening = false;
-    }
-
-    _vDragDistance = 0.0;
-  }
-
   @override
   Widget build(BuildContext context) {
     final palette = AppCardPalette.of(context);
 
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      dragStartBehavior: DragStartBehavior.down,
-
-      // ✅ [변경] 가로 스와이프(입차/SecondaryPage) 로직 전부 삭제
-      // onHorizontalDragUpdate: null
-      // onHorizontalDragEnd: null
-
-      onVerticalDragStart: (_) => _vDragDistance = 0.0,
-      onVerticalDragUpdate: (details) => _vDragDistance += details.delta.dy,
-      onVerticalDragEnd: (details) => _handleVerticalDragEnd(context, details),
-      child: Consumer2<MinorPageState, MinorPlateState>(
-        builder: (context, pageState, plateState, _) {
-          return Stack(
-            children: [
-              _buildCurrentPage(context, pageState),
-              if (plateState.isLoading)
-                Container(
-                  color: Colors.white.withOpacity(.35),
-                  child: Center(
-                    child: SizedBox(
-                      width: 28,
-                      height: 28,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 3,
-                        valueColor: AlwaysStoppedAnimation<Color>(palette.tripleBase),
-                      ),
+    // ✅ [변경] Vertical Drag(TopSheet) 제스처 로직 완전 제거
+    return Consumer2<MinorPageState, MinorPlateState>(
+      builder: (context, pageState, plateState, _) {
+        return Stack(
+          children: [
+            _buildCurrentPage(context, pageState),
+            if (plateState.isLoading)
+              Container(
+                color: Colors.white.withOpacity(.35),
+                child: Center(
+                  child: SizedBox(
+                    width: 28,
+                    height: 28,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      valueColor: AlwaysStoppedAnimation<Color>(palette.tripleBase),
                     ),
                   ),
                 ),
-            ],
-          );
-        },
-      ),
+              ),
+          ],
+        );
+      },
     );
   }
 

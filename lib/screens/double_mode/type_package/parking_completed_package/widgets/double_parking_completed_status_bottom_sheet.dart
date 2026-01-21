@@ -20,6 +20,33 @@ import '../../../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import '../../../../common_package/log_package/log_viewer_bottom_sheet.dart';
 import '../../../modify_package/double_modify_plate_screen.dart';
 
+/// ✅ 추가: 다이얼로그/테이블에서 “콜백 없이” 바로 열기 위한 wrapper
+/// - 기존 showDoubleParkingCompletedStatusBottomSheet 시그니처(콜백 required)는 유지
+Future<void> showDoubleParkingCompletedStatusBottomSheetFromDialog({
+  required BuildContext context,
+  required PlateModel plate,
+}) async {
+  await showDoubleParkingCompletedStatusBottomSheet(
+    context: context,
+    plate: plate,
+    onRequestEntry: () async {
+      // 안전 기본값: 기존 helper 활용(원하면 여기 정책 변경 가능)
+      final area = context.read<AreaState>().currentArea;
+      await handleEntryParkingRequest(context, plate.plateNumber, area);
+    },
+    onDelete: () {
+      // 안전 기본값: 테이블 상세 → 작업 수행 경로에서는 삭제를 기본 비활성화(원하면 실제 삭제 로직으로 대체)
+      try {
+        showFailedSnackbar(context, '이 경로에서는 삭제 기능을 사용할 수 없습니다.');
+      } catch (_) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(content: Text('이 경로에서는 삭제 기능을 사용할 수 없습니다.')),
+        );
+      }
+    },
+  );
+}
+
 Future<void> showDoubleParkingCompletedStatusBottomSheet({
   required BuildContext context,
   required PlateModel plate,
@@ -72,7 +99,8 @@ class _FullHeightSheet extends StatefulWidget {
   State<_FullHeightSheet> createState() => _FullHeightSheetState();
 }
 
-class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerProviderStateMixin {
+class _FullHeightSheetState extends State<_FullHeightSheet>
+    with SingleTickerProviderStateMixin {
   late PlateModel _plate;
 
   final ScrollController _scrollController = ScrollController();
@@ -98,11 +126,13 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
 
     _attentionPulse = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0, end: 1).chain(CurveTween(curve: Curves.easeOutCubic)),
+        tween: Tween<double>(begin: 0, end: 1)
+            .chain(CurveTween(curve: Curves.easeOutCubic)),
         weight: 45,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1, end: 0).chain(CurveTween(curve: Curves.easeInCubic)),
+        tween: Tween<double>(begin: 1, end: 0)
+            .chain(CurveTween(curve: Curves.easeInCubic)),
         weight: 55,
       ),
     ]).animate(_attentionCtrl);
@@ -118,7 +148,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
   bool get _needsBilling => _plate.isLockedFee != true;
 
   /// ✅ 무료 판정: basicAmount == 0 && addAmount == 0
-  bool get _isFreeBilling => (_plate.basicAmount ?? 0) == 0 && (_plate.addAmount ?? 0) == 0;
+  bool get _isFreeBilling =>
+      (_plate.basicAmount ?? 0) == 0 && (_plate.addAmount ?? 0) == 0;
 
   bool get _overrideActive {
     if (!_departureOverrideArmed || _departureOverrideArmedAt == null) return false;
@@ -135,26 +166,18 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
     _departureOverrideArmedAt = DateTime.now();
   }
 
-  /// ✅ Overlay 기반 커스텀 스낵바가 context/Overlay 구조에 따라 실패할 수 있으므로
-  ///    1) showFailedSnackbar() 시도
-  ///    2) 실패 시 ScaffoldMessenger SnackBar로 폴백
   void _showWarningSafe(String message) {
-    // 1) 기존 커스텀 스낵바(Overlay 기반) 우선 시도
     try {
       showFailedSnackbar(context, message);
       return;
-    } catch (_) {
-      // no-op -> 아래 폴백
-    }
+    } catch (_) {}
 
-    // 2) ScaffoldMessenger 폴백
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger != null) {
       messenger.showSnackBar(SnackBar(content: Text(message)));
       return;
     }
 
-    // 3) 마지막 폴백: rootNavigator 쪽에서 다시 시도
     final nav = Navigator.of(context, rootNavigator: true);
     final messenger2 = ScaffoldMessenger.maybeOf(nav.context);
     if (messenger2 != null) {
@@ -162,7 +185,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
       return;
     }
 
-    // 4) 정말 최후: 다이얼로그(크래시 방지)
     showDialog<void>(
       context: nav.context,
       builder: (_) => AlertDialog(
@@ -181,10 +203,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
   Future<void> _triggerBillingRequiredAttention({
     required String message,
   }) async {
-    // 1) 경고 (✅ 절대 크래시 나지 않게 Safe 경고)
     _showWarningSafe(message);
 
-    // 2) 상단 이동(카드/정산 버튼이 화면에 보이도록)
     if (_scrollController.hasClients) {
       await _scrollController.animateTo(
         0,
@@ -193,17 +213,12 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
       );
     }
 
-    // 3) 임팩트 애니메이션(번호판 카드 + 정산 버튼)
     _attentionCtrl.forward(from: 0);
   }
 
-  /// ✅ 무료면 자동 “사전정산(0원 잠금)” 처리
-  /// - repo 업데이트
-  /// - 로컬 상태 반영
-  /// - logs 기록
   Future<bool> _autoPreBillFreeIfNeeded() async {
-    if (_plate.isLockedFee == true) return true; // 이미 잠금(정산) 상태
-    if (!_isFreeBilling) return false; // 무료가 아니면 여기서 처리하지 않음
+    if (_plate.isLockedFee == true) return true;
+    if (!_isFreeBilling) return false;
 
     final userName = context.read<UserState>().name;
     final repo = context.read<PlateRepository>();
@@ -255,7 +270,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
       if (!mounted) return false;
       setState(() => _plate = updatedPlate);
 
-      // 무료 자동 정산은 “정산 없이 진행” UX와 충돌하면 안 되므로 리셋
       _resetOverride();
 
       return true;
@@ -293,7 +307,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // 헤더
                 Row(
                   children: [
                     Container(
@@ -319,10 +332,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                     ),
                   ],
                 ),
-
                 const SizedBox(height: 12),
-
-                // 메시지 카드(시트의 카드 톤)
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -379,10 +389,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 14),
-
-                // 버튼(중앙 정렬)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -498,7 +505,10 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                 builder: (context, _) {
                   final attention = _attentionPulse.value;
 
-                  final shakeDx = math.sin(_attentionCtrl.value * math.pi * 10) * (1 - _attentionCtrl.value) * 6;
+                  final shakeDx =
+                      math.sin(_attentionCtrl.value * math.pi * 10) *
+                          (1 - _attentionCtrl.value) *
+                          6;
                   final scale = 1 + (attention * 0.012);
 
                   return ListView(
@@ -610,7 +620,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
 
                                         setState(() => _plate = updatedPlate);
 
-                                        // ✅ 정산 성공 시, “정산 없이 진행” 상태 리셋
                                         _resetOverride();
 
                                         try {
@@ -700,7 +709,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
 
                                         setState(() => _plate = updatedPlate);
 
-                                        // ✅ 정산 취소 시 override는 리셋(다시 1차→2차 UX 유지)
                                         _resetOverride();
 
                                         try {
@@ -725,9 +733,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                               title: '출차 완료로 이동',
                               subtitle: '차량을 출차 완료 상태로 전환합니다.',
                               onPressed: () async {
-                                // ✅ 정산 미완료 케이스
                                 if (_needsBilling) {
-                                  // ✅ 무료면: 자동 정산(0원 잠금) 후 바로 출차 완료
                                   if (_isFreeBilling) {
                                     final ok = await _autoPreBillFreeIfNeeded();
                                     if (!ok) return;
@@ -735,7 +741,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                                     return;
                                   }
 
-                                  // 2차 클릭(유효 시간 내): 선택지 제공
                                   if (_overrideActive) {
                                     _resetOverride();
 
@@ -754,11 +759,9 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                                       return;
                                     }
 
-                                    // cancel / null
                                     return;
                                   }
 
-                                  // 1차 클릭: 경고 + 임팩트 + “다시 누르면 선택지” 안내
                                   _armOverride();
                                   await _triggerBillingRequiredAttention(
                                     message: '정산이 필요합니다. 먼저 정산을 진행하세요.\n'
@@ -767,7 +770,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                                   return;
                                 }
 
-                                // ✅ 정산 완료 상태면 기존 로직 그대로 수행
                                 _resetOverride();
                                 await _goDepartureCompleted();
                               },
@@ -884,7 +886,6 @@ class _PlateSummaryCard extends StatelessWidget {
   final int? lockedFee;
   final String paymentMethod;
 
-  /// ✅ 0~1 (정산 필요 시 강조 애니메이션)
   final double attention;
 
   const _PlateSummaryCard({
@@ -903,14 +904,16 @@ class _PlateSummaryCard extends StatelessWidget {
     final badgeColor = isLocked ? Colors.green : Colors.grey.shade600;
     final badgeText = isLocked ? '사전정산 잠김' : '사전정산 없음';
 
-    final feeText =
-    (isLocked && lockedFee != null) ? '₩$lockedFee${paymentMethod.isNotEmpty ? " ($paymentMethod)" : ""}' : '—';
+    final feeText = (isLocked && lockedFee != null)
+        ? '₩$lockedFee${paymentMethod.isNotEmpty ? " ($paymentMethod)" : ""}'
+        : '—';
 
     final billingText = billingType.isNotEmpty ? billingType : '미지정';
 
-    final borderColor = Color.lerp(Colors.black12, Colors.orange, (attention * 0.9).clamp(0, 1))!;
-    final bgColor =
-    Color.lerp(Colors.grey.shade50, Colors.orange.withOpacity(0.06), (attention * 0.8).clamp(0, 1))!;
+    final borderColor =
+    Color.lerp(Colors.black12, Colors.orange, (attention * 0.9).clamp(0, 1))!;
+    final bgColor = Color.lerp(Colors.grey.shade50, Colors.orange.withOpacity(0.06),
+        (attention * 0.8).clamp(0, 1))!;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -978,7 +981,8 @@ class _PlateSummaryCard extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 18),
+                  Icon(Icons.warning_amber_rounded,
+                      color: Colors.orange.shade700, size: 18),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -1084,9 +1088,11 @@ class _SectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+          Text(title,
+              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
           const SizedBox(height: 4),
-          Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 12)),
+          Text(subtitle,
+              style: const TextStyle(color: Colors.black54, fontSize: 12)),
           const SizedBox(height: 12),
           child,
         ],
@@ -1105,7 +1111,6 @@ class _ActionTileButton extends StatelessWidget {
   final String? badgeText;
   final VoidCallback onTap;
 
-  /// ✅ 0~1 강조(정산 버튼 임팩트)
   final double attention;
 
   const _ActionTileButton({
@@ -1120,12 +1125,18 @@ class _ActionTileButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color base = (tone == _ActionTone.positive) ? Colors.green : Colors.grey.shade800;
-    final Color bg = (tone == _ActionTone.positive) ? Colors.green.withOpacity(0.08) : Colors.grey.shade100;
-    final Color border = (tone == _ActionTone.positive) ? Colors.green.withOpacity(0.25) : Colors.black12;
+    final Color base =
+    (tone == _ActionTone.positive) ? Colors.green : Colors.grey.shade800;
+    final Color bg = (tone == _ActionTone.positive)
+        ? Colors.green.withOpacity(0.08)
+        : Colors.grey.shade100;
+    final Color border =
+    (tone == _ActionTone.positive) ? Colors.green.withOpacity(0.25) : Colors.black12;
 
-    final Color attentionBorder = Color.lerp(border, Colors.orange, (attention * 0.9).clamp(0, 1))!;
-    final Color attentionBg = Color.lerp(bg, Colors.orange.withOpacity(0.10), (attention * 0.8).clamp(0, 1))!;
+    final Color attentionBorder =
+    Color.lerp(border, Colors.orange, (attention * 0.9).clamp(0, 1))!;
+    final Color attentionBg =
+    Color.lerp(bg, Colors.orange.withOpacity(0.10), (attention * 0.8).clamp(0, 1))!;
 
     return Material(
       color: Colors.transparent,
@@ -1320,7 +1331,8 @@ class _DangerActionButton extends StatelessWidget {
       width: double.infinity,
       child: OutlinedButton.icon(
         icon: Icon(icon, color: Colors.red.shade700),
-        label: Text(label, style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w900)),
+        label: Text(label,
+            style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w900)),
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(double.infinity, 48),
@@ -1333,7 +1345,6 @@ class _DangerActionButton extends StatelessWidget {
   }
 }
 
-/// UsageReporter: 파이어베이스 DB 작업만 계측 (read / write / delete)
 void _reportDbSafe({
   required String area,
   required String action,
