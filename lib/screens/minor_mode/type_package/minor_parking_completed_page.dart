@@ -17,7 +17,7 @@ import 'parking_completed_package/widgets/signature_plate_search_bottom_sheet/mi
 import '../../../widgets/container/plate_container.dart';
 
 import 'parking_completed_package/minor_parking_completed_control_buttons.dart';
-import 'parking_completed_package/minor_parking_completed_location_picker.dart';
+import 'parking_completed_package/minor_parking_completed_real_time_table.dart';
 import 'parking_completed_package/minor_parking_status_page.dart';
 
 enum MinorParkingViewMode { status, locationPicker, plateList }
@@ -209,7 +209,7 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
       case MinorParkingViewMode.locationPicker:
       // ✅ (리팩터링) 기존 주차구역 리스트 대신 “실시간(view) 테이블 3탭”을 body에 임베드
       // ✅ ControlButtons는 계속 보이므로, LocationPicker는 그 상단까지만 차지하게 됨
-        return MinorParkingCompletedLocationPicker(
+        return MinorParkingCompletedRealTimeTable(
           onClose: () {
             if (!mounted) return;
             setState(() => _mode = MinorParkingViewMode.status);

@@ -254,25 +254,21 @@ class _GenericViewRepository implements _BaseViewRepository {
   }
 }
 
-/// ✅ (임베드 버전) 더블 모드: 입차 요청/출차 요청 없음
-/// - “입차 완료(view)” 단일 화면이지만,
-///   하단에 '입차 완료' 탭을 포함하고 탭을 누르면(재탭 포함) 동일 갱신 로직 수행.
-/// - 내부 Scaffold 제거 → 외부 ControlButtons가 계속 보이고, body 영역까지만 자연스럽게 채움.
-class DoubleParkingCompletedLocationPicker extends StatefulWidget {
+class DoubleParkingCompletedRealTimeTable extends StatefulWidget {
   final VoidCallback? onClose;
 
-  const DoubleParkingCompletedLocationPicker({
+  const DoubleParkingCompletedRealTimeTable({
     super.key,
     this.onClose,
   });
 
   @override
-  State<DoubleParkingCompletedLocationPicker> createState() =>
-      _DoubleParkingCompletedLocationPickerState();
+  State<DoubleParkingCompletedRealTimeTable> createState() =>
+      _DoubleParkingCompletedRealTimeTableState();
 }
 
-class _DoubleParkingCompletedLocationPickerState
-    extends State<DoubleParkingCompletedLocationPicker>
+class _DoubleParkingCompletedRealTimeTableState
+    extends State<DoubleParkingCompletedRealTimeTable>
     with SingleTickerProviderStateMixin {
   late final TabController _tabCtrl;
 

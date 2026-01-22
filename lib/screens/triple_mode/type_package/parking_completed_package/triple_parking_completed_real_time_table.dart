@@ -17,16 +17,9 @@ import '../../../../states/area/area_state.dart';
 import '../../../../states/location/location_state.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../utils/snackbar_helper.dart';
-
-// ✅ 추가: 5초 취소 가능 블로킹 다이얼로그
-import '../../../../utils/block_dialogs/duration_blocking_dialog.dart';
-
-// ✅ 추가: 진행 시 단건 조회를 blocking 로딩 다이얼로그로 감싸기
 import '../../../../utils/block_dialogs/blocking_dialog.dart';
-
-// ✅ 추가: “작업 수행” 시 상태 BottomSheet 오픈(더블/트리플과 동일 흐름)
-// - 경로는 실제 프로젝트 구조에 맞게 조정하세요.
-import 'widgets/minor_parking_completed_status_bottom_sheet.dart';
+import '../../../../utils/block_dialogs/duration_blocking_dialog.dart';
+import 'widgets/triple_parking_completed_status_bottom_sheet.dart';
 
 import '../../../hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
 
@@ -36,22 +29,6 @@ const String _kLocationAll = '전체';
 class DepartureRequestsRealtimeTabGate {
   static const String _prefsKeyRealtimeTabEnabled =
       'departure_requests_realtime_tab_enabled_v1';
-
-  static Future<bool> isEnabled() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool(_prefsKeyRealtimeTabEnabled) ?? false; // 기본 OFF
-  }
-
-  static Future<void> setEnabled(bool v) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_prefsKeyRealtimeTabEnabled, v);
-  }
-}
-
-/// ✅ (분리) 입차 요청 "실시간(view) 탭" 진입 게이트(ON/OFF)
-class ParkingRequestsRealtimeTabGate {
-  static const String _prefsKeyRealtimeTabEnabled =
-      'parking_requests_realtime_tab_enabled_v1';
 
   static Future<bool> isEnabled() async {
     final prefs = await SharedPreferences.getInstance();
@@ -88,10 +65,8 @@ class _Palette {
   static const light = Color(0xFF5472D3);
 }
 
-/// 3개 타입(탭)
-/// ✅ 탭 순서 요구사항 반영: 입차 요청 → 입차 완료 → 출차 요청
+/// ✅ 트리플 모드: 입차 요청 없음 → 2개 탭만 사용
 enum _TabMode {
-  parkingRequestsRealtime, // 입차 요청(view)
   parkingCompletedRealtime, // 입차 완료(view)
   departureRequestsRealtime, // 출차 요청(view)
 }
@@ -157,7 +132,7 @@ abstract class _BaseViewRepository {
 }
 
 /// ─────────────────────────────────────────────────────────
-/// 제너릭 view repository (3개 탭 공용)
+/// 제너릭 view repository (탭 공용)
 /// ─────────────────────────────────────────────────────────
 class _GenericViewRepository implements _BaseViewRepository {
   @override
@@ -281,7 +256,8 @@ class _GenericViewRepository implements _BaseViewRepository {
             (m['plateNumber'] as String?) ?? _fallbackPlateFromDocId(plateDocId);
         final location = _normalizeLocation(m['location'] as String?);
 
-        final createdAt = _toDate(m[primaryTimeField]) ?? _toDate(m['updatedAt']);
+        final createdAt =
+            _toDate(m[primaryTimeField]) ?? _toDate(m['updatedAt']);
 
         if (plateNumber.isEmpty) continue;
 
@@ -301,36 +277,30 @@ class _GenericViewRepository implements _BaseViewRepository {
   }
 }
 
-/// ✅ (임베드 버전) 기존 LocationPicker 자리 대체: “실시간(view) 테이블 3탭”
-/// - 중요: 내부 Scaffold 제거 → 외부 MinorParkingCompletedControlButtons가 계속 보이고,
-///         이 위젯은 그 상단(body 영역)까지만 자연스럽게 채움.
-class MinorParkingCompletedLocationPicker extends StatefulWidget {
+class TripleParkingCompletedRealTimeTable extends StatefulWidget {
   final VoidCallback? onClose;
 
-  const MinorParkingCompletedLocationPicker({
+  const TripleParkingCompletedRealTimeTable({
     super.key,
     this.onClose,
   });
 
   @override
-  State<MinorParkingCompletedLocationPicker> createState() =>
-      _MinorParkingCompletedLocationPickerState();
+  State<TripleParkingCompletedRealTimeTable> createState() =>
+      _TripleParkingCompletedRealTimeTableState();
 }
 
-class _MinorParkingCompletedLocationPickerState
-    extends State<MinorParkingCompletedLocationPicker>
+class _TripleParkingCompletedRealTimeTableState
+    extends State<TripleParkingCompletedRealTimeTable>
     with SingleTickerProviderStateMixin {
   late final TabController _tabCtrl;
 
-  bool _depGate = false;
-  bool _reqGate = false;
   bool _pcGate = false;
+  bool _depGate = false;
   bool _gatesLoaded = false;
 
-  // 탭별 refresh 바인딩(갱신 버튼 삭제 -> 탭 탭 시 갱신)
-  final _RealtimeTabController _depCtrl = _RealtimeTabController();
-  final _RealtimeTabController _reqCtrl = _RealtimeTabController();
   final _RealtimeTabController _pcCtrl = _RealtimeTabController();
+  final _RealtimeTabController _depCtrl = _RealtimeTabController();
 
   void _trace(String name, {Map<String, dynamic>? meta}) {
     DebugActionRecorder.instance.recordAction(
@@ -350,7 +320,7 @@ class _MinorParkingCompletedLocationPickerState
   void initState() {
     super.initState();
 
-    _tabCtrl = TabController(length: 3, vsync: this);
+    _tabCtrl = TabController(length: 2, vsync: this);
     _tabCtrl.addListener(() {
       if (!mounted) return;
       setState(() {});
@@ -365,58 +335,48 @@ class _MinorParkingCompletedLocationPickerState
     super.dispose();
   }
 
-  /// ✅ 탭 기본 진입 우선순위: 입차 요청 → 입차 완료 → 출차 요청
   int _firstEnabledTabOr(int fallback) {
-    if (_reqGate) return 0; // 입차 요청
-    if (_pcGate) return 1; // 입차 완료
-    if (_depGate) return 2; // 출차 요청
+    if (_pcGate) return 0;
+    if (_depGate) return 1;
     return fallback;
   }
 
   Future<void> _loadGates() async {
     try {
-      final dep = await DepartureRequestsRealtimeTabGate.isEnabled();
-      final req = await ParkingRequestsRealtimeTabGate.isEnabled();
       final pc = await ParkingCompletedRealtimeTabGate.isEnabled();
+      final dep = await DepartureRequestsRealtimeTabGate.isEnabled();
 
       if (!mounted) return;
 
       setState(() {
-        _depGate = dep;
-        _reqGate = req;
         _pcGate = pc;
+        _depGate = dep;
         _gatesLoaded = true;
-
         _tabCtrl.index = _firstEnabledTabOr(0);
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _depGate = false;
-        _reqGate = false;
         _pcGate = false;
+        _depGate = false;
         _gatesLoaded = true;
         _tabCtrl.index = 0;
       });
     }
   }
 
-  /// ✅ 인덱스 매핑: 0=입차 요청, 1=입차 완료, 2=출차 요청
   String _titleForIndex(int idx) {
-    if (idx == 0) return '입차 요청 테이블';
-    if (idx == 1) return '입차 완료 테이블';
+    if (idx == 0) return '입차 완료 테이블';
     return '출차 요청 테이블';
   }
 
   bool _isTabEnabled(int idx) {
-    if (idx == 0) return _reqGate;
-    if (idx == 1) return _pcGate;
+    if (idx == 0) return _pcGate;
     return _depGate;
   }
 
   _RealtimeTabController _controllerForIndex(int idx) {
-    if (idx == 0) return _reqCtrl;
-    if (idx == 1) return _pcCtrl;
+    if (idx == 0) return _pcCtrl;
     return _depCtrl;
   }
 
@@ -443,22 +403,17 @@ class _MinorParkingCompletedLocationPickerState
   }
 
   void _onTapTab(int index) {
-    final tabName = (index == 0)
-        ? 'parking_requests'
-        : (index == 1)
-        ? 'parking_completed'
-        : 'departure_requests';
+    final tabName = (index == 0) ? 'parking_completed' : 'departure_requests';
 
     _trace(
       '리버스 테이블 하단 탭 클릭(탭=갱신)',
       meta: <String, dynamic>{
-        'screen': 'minor_reverse_table_embedded',
+        'screen': 'triple_reverse_table_embedded',
         'action': 'tab_tap_refresh',
         'tabIndex': index,
         'tab': tabName,
-        'departureRequestsEnabled': _depGate,
-        'parkingRequestsEnabled': _reqGate,
         'parkingCompletedEnabled': _pcGate,
+        'departureRequestsEnabled': _depGate,
         'area': _area,
       },
     );
@@ -481,10 +436,15 @@ class _MinorParkingCompletedLocationPickerState
     _requestRefreshForIndex(index);
   }
 
-  Widget _tabLabel({
-    required String text,
-    required bool enabled,
-  }) {
+  /// ✅ 탭별 안내 문구(최소 갱신 간격 표시)
+  String _descriptionForMode(_TabMode mode) {
+    if (mode == _TabMode.departureRequestsRealtime) {
+      return '탭을 누르면 해당 데이터가 갱신됩니다. 최소 3초 간격으로만 갱신 가능합니다.';
+    }
+    return '탭을 누르면 해당 데이터가 갱신됩니다. 최소 30초 간격으로만 갱신 가능합니다.';
+  }
+
+  Widget _tabLabel({required String text, required bool enabled}) {
     final cs = Theme.of(context).colorScheme;
 
     return Row(
@@ -494,9 +454,7 @@ class _MinorParkingCompletedLocationPickerState
           Icon(Icons.lock_outline, size: 16, color: cs.outline.withOpacity(.9)),
           const SizedBox(width: 6),
         ],
-        Flexible(
-          child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
-        ),
+        Flexible(child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis)),
       ],
     );
   }
@@ -515,11 +473,7 @@ class _MinorParkingCompletedLocationPickerState
               color: _Palette.base.withOpacity(.08),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(
-              Icons.table_chart_outlined,
-              color: _Palette.base,
-              size: 18,
-            ),
+            child: Icon(Icons.table_chart_outlined, color: _Palette.base, size: 18),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -552,9 +506,7 @@ class _MinorParkingCompletedLocationPickerState
               height: 18,
               child: CircularProgressIndicator(
                 strokeWidth: 2.2,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  _Palette.base.withOpacity(.9),
-                ),
+                valueColor: AlwaysStoppedAnimation<Color>(_Palette.base.withOpacity(.9)),
               ),
             ),
           ],
@@ -600,7 +552,6 @@ class _MinorParkingCompletedLocationPickerState
           dividerColor: Colors.transparent,
           labelPadding: const EdgeInsets.symmetric(horizontal: 6),
           tabs: [
-            Tab(child: _tabLabel(text: '입차 요청', enabled: _reqGate)),
             Tab(child: _tabLabel(text: '입차 완료', enabled: _pcGate)),
             Tab(child: _tabLabel(text: '출차 요청', enabled: _depGate)),
           ],
@@ -625,24 +576,13 @@ class _MinorParkingCompletedLocationPickerState
               controller: _tabCtrl,
               physics: const PageScrollPhysics(),
               children: [
-                _reqGate
-                    ? _UnifiedTableTab(
-                  controller: _reqCtrl,
-                  mode: _TabMode.parkingRequestsRealtime,
-                  description:
-                  '탭을 누르면 해당 데이터가 갱신됩니다. 잦은 갱신은 앱에 무리를 줍니다.',
-                )
-                    : const _RealtimeTabLockedPanel(
-                  title: '입차 요청 실시간 탭이 비활성화되어 있습니다',
-                  message:
-                  '설정에서 “입차 요청 실시간 모드(탭) 사용”을 ON으로 변경한 뒤 다시 시도해 주세요.',
-                ),
                 _pcGate
                     ? _UnifiedTableTab(
                   controller: _pcCtrl,
                   mode: _TabMode.parkingCompletedRealtime,
-                  description:
-                  '탭을 누르면 해당 데이터가 갱신됩니다. 잦은 갱신은 앱에 무리를 줍니다.',
+                  description: _descriptionForMode(
+                    _TabMode.parkingCompletedRealtime,
+                  ),
                 )
                     : const _RealtimeTabLockedPanel(
                   title: '입차 완료 실시간 탭이 비활성화되어 있습니다',
@@ -653,8 +593,9 @@ class _MinorParkingCompletedLocationPickerState
                     ? _UnifiedTableTab(
                   controller: _depCtrl,
                   mode: _TabMode.departureRequestsRealtime,
-                  description:
-                  '탭을 누르면 해당 데이터가 갱신됩니다. 잦은 갱신은 앱에 무리를 줍니다.',
+                  description: _descriptionForMode(
+                    _TabMode.departureRequestsRealtime,
+                  ),
                 )
                     : const _RealtimeTabLockedPanel(
                   title: '출차 요청 실시간 탭이 비활성화되어 있습니다',
@@ -718,7 +659,7 @@ class _RealtimeTabLockedPanel extends StatelessWidget {
 }
 
 /// ─────────────────────────────────────────────────────────
-/// 통합 탭(뷰 전용 3종) + 하이브리드 상세 팝업
+/// 통합 탭(뷰 전용 2종) + 하이브리드 상세 팝업
 /// ─────────────────────────────────────────────────────────
 class _UnifiedTableTab extends StatefulWidget {
   final _RealtimeTabController controller;
@@ -745,6 +686,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
   List<_RowVM> _allRows = <_RowVM>[];
   List<_RowVM> _rows = <_RowVM>[];
 
+  // 검색/필터
   final TextEditingController _searchCtrl = TextEditingController();
   Timer? _debounce;
   static const int _debounceMs = 250;
@@ -753,11 +695,16 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
   String _selectedLocation = _locationAll;
   List<String> _availableLocations = <String>[];
 
+  // 정렬
   bool _sortOldFirst = true;
 
+  // 스크롤
   final ScrollController _scrollCtrl = ScrollController();
+
+  // 쿨다운 표시
   Timer? _cooldownTicker;
 
+  // write toggle
   bool _writeToggleLoading = false;
 
   // ✅ 하이브리드 상세 조회 캐시/인플라이트
@@ -765,22 +712,18 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
   final Map<String, Future<PlateModel?>> _plateDetailInflight =
   <String, Future<PlateModel?>>{};
 
-  // ✅ 추가: 상세 오픈 중복 방지
+  // ✅ 상세 오픈 중복 방지
   bool _openingDetail = false;
 
   String get _primaryTimeField {
     if (widget.mode == _TabMode.departureRequestsRealtime) {
       return 'departureRequestedAt';
     }
-    if (widget.mode == _TabMode.parkingRequestsRealtime) {
-      return 'parkingRequestedAt';
-    }
     return 'parkingCompletedAt';
   }
 
   String get _timeHeaderLabel {
     if (widget.mode == _TabMode.departureRequestsRealtime) return 'Request';
-    if (widget.mode == _TabMode.parkingRequestsRealtime) return 'Entry Req';
     return 'Entry';
   }
 
@@ -788,18 +731,12 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
     if (widget.mode == _TabMode.departureRequestsRealtime) {
       return 'departure_requests_view';
     }
-    if (widget.mode == _TabMode.parkingRequestsRealtime) {
-      return 'parking_requests_view';
-    }
     return 'parking_completed_view';
   }
 
   String get _prefsKeyWriteEnabled {
     if (widget.mode == _TabMode.departureRequestsRealtime) {
       return 'departure_requests_realtime_write_enabled_v1';
-    }
-    if (widget.mode == _TabMode.parkingRequestsRealtime) {
-      return 'parking_requests_realtime_write_enabled_v1';
     }
     return 'parking_completed_realtime_write_enabled_v1';
   }
@@ -812,6 +749,16 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
 
   bool get _isRefreshBlocked => _repo.isRefreshBlocked(_currentArea);
   int get _refreshRemainingSec => _repo.refreshRemainingSec(_currentArea);
+
+  /// ✅ (핵심) 모드별 최소 갱신 간격(쿨다운)
+  /// - 출차 요청: 3초
+  /// - 입차 완료: 30초(기존 유지)
+  Duration get _refreshCooldownDuration {
+    if (widget.mode == _TabMode.departureRequestsRealtime) {
+      return const Duration(seconds: 3);
+    }
+    return const Duration(seconds: 30);
+  }
 
   void _trace(String name, {Map<String, dynamic>? meta}) {
     DebugActionRecorder.instance.recordAction(
@@ -838,6 +785,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
 
     _searchCtrl.addListener(_onSearchChangedDebounced);
 
+    // 캐시 즉시 렌더
     _allRows = List<_RowVM>.of(_repo.getCached(_currentArea));
     _availableLocations = _extractLocations(_allRows);
     _applyFilterAndSort();
@@ -895,7 +843,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
     _trace(
       '탭 탭 갱신',
       meta: <String, dynamic>{
-        'screen': 'minor_reverse_table_embedded',
+        'screen': 'triple_reverse_table_embedded',
         'action': 'tab_tap_refresh',
         'mode': widget.mode.toString(),
         'collection': _collection,
@@ -904,6 +852,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
         'blocked': _isRefreshBlocked,
         'remainingSec': _refreshRemainingSec,
         'hasFetchedFromServer': _hasFetchedFromServer,
+        'cooldownSec': _refreshCooldownDuration.inSeconds, // ✅ 추가
       },
     );
 
@@ -918,7 +867,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
       return;
     }
 
-    _repo.startRefreshCooldown(_currentArea, const Duration(seconds: 30));
+    // ✅ (핵심 변경) 출차 요청=3초 / 입차 완료=30초
+    _repo.startRefreshCooldown(_currentArea, _refreshCooldownDuration);
     _ensureCooldownTicker();
 
     setState(() => _loading = true);
@@ -1022,6 +972,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
     }
   }
 
+  // ✅ 하이브리드: 원본 plates/{plateId} 단건 조회(캐시/인플라이트 포함)
   Future<PlateModel?> _fetchPlateDetail(String plateId) async {
     final id = plateId.trim();
     if (id.isEmpty) return null;
@@ -1034,7 +985,10 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
 
     final fut = () async {
       try {
-        final doc = await FirebaseFirestore.instance.collection('plates').doc(id).get();
+        final doc = await FirebaseFirestore.instance
+            .collection('plates')
+            .doc(id)
+            .get();
 
         if (!doc.exists) return null;
 
@@ -1052,17 +1006,6 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
     return fut;
   }
 
-  FeeMode _parseFeeMode(String? modeString) {
-    switch (modeString) {
-      case 'plus':
-        return FeeMode.plus;
-      case 'minus':
-        return FeeMode.minus;
-      default:
-        return FeeMode.normal;
-    }
-  }
-
   String _formatElapsed(Duration duration) {
     final hours = duration.inHours;
     final minutes = duration.inMinutes.remainder(60);
@@ -1077,6 +1020,17 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
     }
   }
 
+  FeeMode _parseFeeMode(String? modeString) {
+    switch (modeString) {
+      case 'plus':
+        return FeeMode.plus;
+      case 'minus':
+        return FeeMode.minus;
+      default:
+        return FeeMode.normal;
+    }
+  }
+
   String _fmtDate(DateTime? v) {
     if (v == null) return '';
     final y = v.year.toString().padLeft(4, '0');
@@ -1087,17 +1041,11 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
     return '$y-$mo-$d $h:$mi';
   }
 
-  String _viewLabel() {
-    if (widget.mode == _TabMode.parkingRequestsRealtime) return '입차 요청';
-    if (widget.mode == _TabMode.parkingCompletedRealtime) return '입차 완료';
-    return '출차 요청';
-  }
-
-  /// ✅ 리팩터링: Row 탭 흐름을 더블/트리플과 동일하게 통일
-  /// 1) 5초 취소 가능 다이얼로그
-  /// 2) 진행 시에만 plates/{id} 단건 조회 (runWithBlockingDialog로 로딩 UX 통일)
-  /// 3) 상세 다이얼로그(작업 수행 버튼)
-  /// 4) 작업 수행 시 상태 BottomSheet
+  /// ✅ 리팩터링 핵심(더블 모드와 동일 UX):
+  /// - Row 탭 시 "5초 취소 가능" showDurationBlockingDialog를 먼저 실행
+  /// - 사용자가 취소하면 plates 조회(=비용) 자체를 발생시키지 않음
+  /// - 취소하지 않으면 runWithBlockingDialog로 원본 단건 조회 후 상세 dialog 표시
+  /// - ✅ 추가: 상세 dialog 하단에 "작업 수행" 버튼 → 닫힌 뒤 status bottom sheet 오픈
   Future<void> _openHybridDetailPopup(_RowVM r) async {
     if (_openingDetail) return;
     _openingDetail = true;
@@ -1112,7 +1060,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
       _trace(
         '실시간 테이블 행 탭(확인 대기 다이얼로그)',
         meta: <String, dynamic>{
-          'screen': 'minor_reverse_table_embedded',
+          'screen': 'triple_reverse_table_embedded',
           'action': 'row_tap_open_duration_blocking_dialog',
           'mode': widget.mode.toString(),
           'area': _currentArea,
@@ -1123,7 +1071,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
         },
       );
 
-      // ✅ 0) 5초 취소 가능(취소 시 조회/비용 발생 X)
+      // ✅ 0) 5초 취소 가능 다이얼로그(사용자 의도 확인)
       final proceed = await showDurationBlockingDialog(
         context,
         message: '원본 데이터를 불러옵니다.\n(취소하면 조회 비용이 발생하지 않습니다)',
@@ -1136,7 +1084,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
         _trace(
           '원본 조회 취소(사용자)',
           meta: <String, dynamic>{
-            'screen': 'minor_reverse_table_embedded',
+            'screen': 'triple_reverse_table_embedded',
             'action': 'duration_blocking_dialog_cancel',
             'mode': widget.mode.toString(),
             'area': _currentArea,
@@ -1150,7 +1098,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
       _trace(
         '원본 조회 진행(자동/사용자)',
         meta: <String, dynamic>{
-          'screen': 'minor_reverse_table_embedded',
+          'screen': 'triple_reverse_table_embedded',
           'action': 'duration_blocking_dialog_proceed',
           'mode': widget.mode.toString(),
           'area': _currentArea,
@@ -1158,7 +1106,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
         },
       );
 
-      // ✅ 1) 진행 시에만 plates 단건 조회(Blocking 로딩 다이얼로그)
+      // ✅ 1) 원본 단건 조회(plates/{id}.get)를 별도 로딩 다이얼로그로 수행
       final plate = await runWithBlockingDialog<PlateModel?>(
         context: context,
         message: '원본 데이터를 불러오는 중입니다...',
@@ -1167,7 +1115,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
 
       if (!mounted) return;
 
-      // ✅ 2) 원본 없음 → NotFound 다이얼로그(기존 UI 유지)
+      // ✅ 2) 로딩 다이얼로그가 닫힌 뒤, 상세 다이얼로그 표시
       if (plate == null) {
         await showDialog<void>(
           context: context,
@@ -1202,7 +1150,6 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
         return;
       }
 
-      // ✅ 3) 상세 다이얼로그 데이터 구성(기존 로직 유지)
       final billType = billTypeFromString(plate.billingType);
       final bool isRegular = billType == BillType.fixed;
 
@@ -1235,8 +1182,9 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
           ? '${plate.isLockedFee ? (plate.lockedFeeAmount ?? 0) : (plate.regularAmount ?? 0)}원'
           : '$currentFee원';
 
-      final elapsedText =
-      _formatElapsed(DateTime.now().difference(plate.requestTime));
+      final elapsedText = _formatElapsed(
+        DateTime.now().difference(plate.requestTime),
+      );
 
       final backgroundColor =
       ((plate.billingType?.trim().isNotEmpty ?? false) && plate.isLockedFee)
@@ -1247,7 +1195,10 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
       final String displayUser =
       isSelected ? (plate.selectedBy ?? '') : plate.userName;
 
-      // ✅ showDialog<bool>: true=작업 수행, false/null=닫기
+      final String viewLabel =
+      widget.mode == _TabMode.departureRequestsRealtime ? '출차 요청' : '입차 완료';
+
+      // ✅ 변경: showDialog<bool>로 결과를 받아 작업 수행 여부를 판단
       final bool? doWork = await showDialog<bool>(
         context: context,
         barrierDismissible: true,
@@ -1269,7 +1220,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                   content: _PlateDetailBodyDialog(
                     title: '번호판 상세',
                     subtitle:
-                    '${_viewLabel()} VIEW: ${r.location} / ${_fmtDate(r.createdAt)}   ·   '
+                    '$viewLabel VIEW: ${r.location} / ${_fmtDate(r.createdAt)}   ·   '
                         'PLATES: ${plate.location} / ${CustomDateUtils.formatTimestamp(plate.requestTime)}',
                     child: PlateCustomBox(
                       topLeftText: '소속',
@@ -1301,14 +1252,14 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
 
       if (!mounted) return;
 
-      // ✅ 4) 작업 수행 → 상태 BottomSheet
+      // ✅ 작업 수행 선택 시: 다이얼로그 닫힌 뒤 bottom sheet 오픈
       if (doWork == true) {
         final rootCtx = Navigator.of(context, rootNavigator: true).context;
 
         _trace(
           '상세 다이얼로그 작업 수행 버튼 클릭(상태 시트 오픈)',
           meta: <String, dynamic>{
-            'screen': 'minor_reverse_table_embedded',
+            'screen': 'triple_reverse_table_embedded',
             'action': 'detail_dialog_open_status_bottom_sheet',
             'mode': widget.mode.toString(),
             'area': _currentArea,
@@ -1317,7 +1268,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
           },
         );
 
-        await showMinorParkingCompletedStatusBottomSheetFromDialog(
+        await showTripleParkingCompletedStatusBottomSheetFromDialog(
           context: rootCtx,
           plate: plate,
         );
@@ -1341,9 +1292,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
     return true;
   }
 
-  void _scheduleApplyPlateCountsAfterFrame(
-      Map<String, int> countsByDisplayName,
-      ) {
+  void _scheduleApplyPlateCountsAfterFrame(Map<String, int> countsByDisplayName) {
     _pendingPlateCountsByDisplayName = countsByDisplayName;
 
     if (_plateCountsApplyScheduled) return;
@@ -1714,6 +1663,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                 final rowBg =
                 isEven ? Colors.white : _Palette.base.withOpacity(.02);
 
+                // ✅ Row 탭 시 중앙 팝업(하이브리드 상세)
                 return Material(
                   color: rowBg,
                   child: InkWell(
@@ -1987,7 +1937,7 @@ class _PlateDetailBodyDialog extends StatelessWidget {
   final String subtitle;
   final Widget child;
 
-  // ✅ 추가: 작업 수행 버튼 옵션
+  // ✅ 추가: 상세에서 바로 작업 시트로 이어지는 CTA
   final bool showWorkButton;
   final String workButtonText;
 
@@ -2023,7 +1973,7 @@ class _PlateDetailBodyDialog extends StatelessWidget {
                 ),
                 IconButton(
                   tooltip: '닫기',
-                  // ✅ showDialog<bool>에서 false 반환(작업 수행과 구분)
+                  // ✅ 변경: 작업 수행과 구분하기 위해 false 반환(또는 null)
                   onPressed: () => Navigator.of(context).pop(false),
                   icon: const Icon(Icons.close),
                 ),
@@ -2042,13 +1992,16 @@ class _PlateDetailBodyDialog extends StatelessWidget {
             child,
             const SizedBox(height: 8),
 
-            // ✅ 추가: 하단 “작업 수행” 버튼(더블/트리플 동일 UX)
+            // ✅ 추가: 하단 "작업 수행" 버튼
             if (showWorkButton) ...[
               const SizedBox(height: 10),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: () => Navigator.of(context).pop(true),
+                  onPressed: () {
+                    // ✅ showDialog<bool> 결과로 true 반환
+                    Navigator.of(context).pop(true);
+                  },
                   icon: const Icon(Icons.playlist_add_check),
                   label: Text(
                     workButtonText,
@@ -2057,10 +2010,8 @@ class _PlateDetailBodyDialog extends StatelessWidget {
                   style: FilledButton.styleFrom(
                     backgroundColor: _Palette.base,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      vertical: 12,
-                      horizontal: 12,
-                    ),
+                    padding:
+                    const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),

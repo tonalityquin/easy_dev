@@ -18,7 +18,7 @@ import 'parking_completed_package/widgets/signature_plate_search_bottom_sheet/do
 import '../../../widgets/container/plate_container.dart';
 
 import 'parking_completed_package/double_parking_completed_control_buttons.dart';
-import 'parking_completed_package/double_parking_completed_location_picker.dart';
+import 'parking_completed_package/double_parking_completed_real_time_table.dart';
 import 'parking_completed_package/double_parking_status_page.dart';
 
 enum DoubleParkingViewMode { status, locationPicker, plateList }
@@ -189,7 +189,7 @@ class _DoubleParkingCompletedPageState extends State<DoubleParkingCompletedPage>
       // - 기존 “주차 구역 선택 리스트” 제거
       // - 더블 모드 요구사항(입차요청/출차요청 없음)에 따라
       //   “입차 완료(view) 테이블”만 body에 임베드 출력
-        return DoubleParkingCompletedLocationPicker(
+        return DoubleParkingCompletedRealTimeTable(
           onClose: () {
             if (!mounted) return;
             setState(() => _mode = DoubleParkingViewMode.status);

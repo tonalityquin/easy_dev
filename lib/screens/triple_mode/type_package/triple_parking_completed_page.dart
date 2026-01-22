@@ -19,7 +19,7 @@ import 'parking_completed_package/widgets/signature_plate_search_bottom_sheet/tr
 import '../../../widgets/container/plate_container.dart';
 
 import 'parking_completed_package/triple_parking_completed_control_buttons.dart';
-import 'parking_completed_package/triple_parking_completed_location_picker.dart';
+import 'parking_completed_package/triple_parking_completed_real_time_table.dart';
 import 'parking_completed_package/triple_parking_status_page.dart';
 
 enum TripleParkingViewMode { status, locationPicker, plateList }
@@ -210,7 +210,7 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
       //    트리플 모드 전용 “실시간(view) 테이블(입차 완료 / 출차 요청)” 임베드 출력
       // ✅ 내부 Scaffold 제거된 위젯이므로 body 영역을 자연스럽게 채우고,
       //    bottomNavigationBar(ControlButtons) 상단까지만 렌더링됨.
-        return TripleParkingCompletedLocationPicker(
+        return TripleParkingCompletedRealTimeTable(
           onClose: () {
             if (!mounted) return;
             setState(() => _mode = TripleParkingViewMode.status);
