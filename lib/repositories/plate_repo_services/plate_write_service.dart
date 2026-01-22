@@ -1,6 +1,11 @@
 // lib/repositories/plate_repo_services/plate_write_service.dart
 //
 // (요청사항) 기존 주석처리 코드 유지, updatedAt 강제 세팅 반영(생성/업데이트/전환/선택 경로)
+//
+// ✅ (수정안 반영)
+// - Header 단일 스위치로 view 삽입(Write) ON/OFF를 통합 관리하므로,
+//   recordWhoPlateClick의 view 동기화 로직도 "토글 ON일 때만" 삭제/복구를 수행하도록 정합성 강화.
+//   (기존: 선택 시 삭제는 항상 수행, 해제 시 복구는 토글 ON일 때만 → OFF 상태에서 view 불일치 발생 가능)
 
 import 'dart:async';
 import 'dart:developer' as dev;
@@ -16,11 +21,15 @@ import '../../models/plate_model.dart';
 class PlateWriteService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // ✅ departure_requests_view 동기화(선택 시 삭제/해제 시 복구)를 위한 기기 로컬 토글 키
-  static const String _kDepartureRequestsViewWritePrefsKey = 'departure_requests_realtime_write_enabled_v1';
+  // ✅ departure_requests_view 동기화(선택/해제)에 대한 기기 로컬 토글 키
+  // - Header 단일 스위치에서 함께 동기화되는 키
+  static const String _kDepartureRequestsViewWritePrefsKey =
+      'departure_requests_realtime_write_enabled_v1';
 
-  // ✅ parking_requests_view 동기화(선택 시 삭제/해제 시 복구)를 위한 기기 로컬 토글 키
-  static const String _kParkingRequestsViewWritePrefsKey = 'parking_requests_realtime_write_enabled_v1';
+  // ✅ parking_requests_view 동기화(선택/해제)에 대한 기기 로컬 토글 키
+  // - Header 단일 스위치에서 함께 동기화되는 키
+  static const String _kParkingRequestsViewWritePrefsKey =
+      'parking_requests_realtime_write_enabled_v1';
 
   static SharedPreferences? _prefs;
   static Future<void>? _prefsLoading;
@@ -56,7 +65,8 @@ class PlateWriteService {
     final docRef = _firestore.collection('plates').doc(documentId);
 
     try {
-      final docSnapshot = await docRef.get().timeout(const Duration(seconds: 10));
+      final docSnapshot =
+      await docRef.get().timeout(const Duration(seconds: 10));
 
       /*final preArea = (docSnapshot.data()?['area'] ?? plate.area ?? 'unknown') as String;
       await UsageReporter.instance.report(
@@ -73,8 +83,10 @@ class PlateWriteService {
       final existingData = docSnapshot.data() ?? const <String, dynamic>{};
 
       // 비교 시 로그 필드는 제외
-      final compOld = Map<String, dynamic>.from(existingData)..remove(PlateFields.logs);
-      final compNew = Map<String, dynamic>.from(newData)..remove(PlateFields.logs);
+      final compOld = Map<String, dynamic>.from(existingData)
+        ..remove(PlateFields.logs);
+      final compNew = Map<String, dynamic>.from(newData)
+        ..remove(PlateFields.logs);
 
       // 변화 없음이면 조용히 종료(불필요 write 방지)
       if (exists && _isSameData(compOld, compNew)) {
@@ -89,7 +101,9 @@ class PlateWriteService {
       // ✅ 생성이든 업데이트든 실제 write를 수행하는 경우 updatedAt은 반드시 서버 시각으로 갱신
       newData['updatedAt'] = FieldValue.serverTimestamp();
 
-      await docRef.set(newData, SetOptions(merge: true)).timeout(const Duration(seconds: 10));
+      await docRef
+          .set(newData, SetOptions(merge: true))
+          .timeout(const Duration(seconds: 10));
     } on TimeoutException {
       rethrow;
     } on FirebaseException {
@@ -224,10 +238,12 @@ class PlateWriteService {
   /// ✅ ‘주행’ 커밋 트랜잭션: 서버 상태 검증 + 원샷 업데이트
   ///
   /// ✅ (확장)
-  /// - departure_requests 상태: isSelected=true면 departure_requests_view에서 삭제(항상)
-  ///   isSelected=false면 (토글 ON일 때) view 복구(upsert)
-  /// - parking_requests 상태: isSelected=true면 parking_requests_view에서 삭제(항상)
-  ///   isSelected=false면 (토글 ON일 때) view 복구(upsert)
+  /// - departure_requests 상태: 선택/해제에 따라 departure_requests_view 동기화(삭제/복구)
+  /// - parking_requests 상태: 선택/해제에 따라 parking_requests_view 동기화(삭제/복구)
+  ///
+  /// ✅ (수정안 반영: 정합성)
+  /// - 기존: 선택 시 삭제는 항상 수행, 해제 시 복구만 토글 ON일 때 수행 → OFF에서 view 불일치 가능
+  /// - 변경: 토글 ON일 때만 삭제/복구 모두 수행(OFF면 view sync 완전 중지)
   Future<void> recordWhoPlateClick(
       String id,
       bool isSelected, {
@@ -299,10 +315,16 @@ class PlateWriteService {
         // departure_requests_view sync
         // ─────────────────────────────────────────
         if (type == 'departure_requests' && docArea.isNotEmpty) {
-          final viewRef = _firestore.collection('departure_requests_view').doc(docArea);
+          // ✅ 토글 OFF면 departure_requests_view 동기화(삭제/복구) 자체를 수행하지 않음
+          if (!canUpsertDepView) {
+            return;
+          }
+
+          final viewRef =
+          _firestore.collection('departure_requests_view').doc(docArea);
 
           if (isSelected) {
-            // ✅ 요구사항: isSelected == true면 items.{id} 삭제(토글과 무관하게 수행)
+            // ✅ 선택 시: items.{id} 삭제 (토글 ON일 때만)
             tx.set(
               viewRef,
               <String, dynamic>{
@@ -315,41 +337,47 @@ class PlateWriteService {
               SetOptions(merge: true),
             );
           } else {
-            // ✅ 선택 해제 시에는 view에 복구(단, upsert는 토글 ON일 때만)
-            if (canUpsertDepView) {
-              final plateNumber =
-              ((data['plateNumber'] as String?) ?? _fallbackPlateFromDocId(id)).trim();
-              final location = _normalizeLocation(data['location'] as String?);
-              final depRequestedAt = data['departureRequestedAt'];
+            // ✅ 선택 해제 시: view 복구(upsert) (토글 ON일 때만)
+            final plateNumber =
+            ((data['plateNumber'] as String?) ?? _fallbackPlateFromDocId(id))
+                .trim();
+            final location = _normalizeLocation(data['location'] as String?);
+            final depRequestedAt = data['departureRequestedAt'];
 
-              tx.set(
-                viewRef,
-                <String, dynamic>{
-                  'area': docArea,
-                  'updatedAt': FieldValue.serverTimestamp(),
-                  'items': <String, dynamic>{
-                    id: <String, dynamic>{
-                      'plateNumber': plateNumber,
-                      'location': location,
-                      'departureRequestedAt': depRequestedAt ?? FieldValue.serverTimestamp(),
-                      'updatedAt': FieldValue.serverTimestamp(),
-                    }
+            tx.set(
+              viewRef,
+              <String, dynamic>{
+                'area': docArea,
+                'updatedAt': FieldValue.serverTimestamp(),
+                'items': <String, dynamic>{
+                  id: <String, dynamic>{
+                    'plateNumber': plateNumber,
+                    'location': location,
+                    'departureRequestedAt':
+                    depRequestedAt ?? FieldValue.serverTimestamp(),
+                    'updatedAt': FieldValue.serverTimestamp(),
                   }
-                },
-                SetOptions(merge: true),
-              );
-            }
+                }
+              },
+              SetOptions(merge: true),
+            );
           }
         }
 
         // ─────────────────────────────────────────
-        // parking_requests_view sync (신규)
+        // parking_requests_view sync
         // ─────────────────────────────────────────
         if (type == 'parking_requests' && docArea.isNotEmpty) {
-          final viewRef = _firestore.collection('parking_requests_view').doc(docArea);
+          // ✅ 토글 OFF면 parking_requests_view 동기화(삭제/복구) 자체를 수행하지 않음
+          if (!canUpsertReqView) {
+            return;
+          }
+
+          final viewRef =
+          _firestore.collection('parking_requests_view').doc(docArea);
 
           if (isSelected) {
-            // ✅ 요구사항: isSelected == true면 items.{id} 삭제(토글과 무관하게 수행)
+            // ✅ 선택 시: items.{id} 삭제 (토글 ON일 때만)
             tx.set(
               viewRef,
               <String, dynamic>{
@@ -362,35 +390,34 @@ class PlateWriteService {
               SetOptions(merge: true),
             );
           } else {
-            // ✅ 선택 해제 시에는 view에 복구(단, upsert는 토글 ON일 때만)
-            if (canUpsertReqView) {
-              final plateNumber =
-              ((data['plateNumber'] as String?) ?? _fallbackPlateFromDocId(id)).trim();
-              final location = _normalizeLocation(data['location'] as String?);
+            // ✅ 선택 해제 시: view 복구(upsert) (토글 ON일 때만)
+            final plateNumber =
+            ((data['plateNumber'] as String?) ?? _fallbackPlateFromDocId(id))
+                .trim();
+            final location = _normalizeLocation(data['location'] as String?);
 
-              // plates 쪽 시간 필드 우선순위:
-              // 1) requestTime(기존 PlateModel)
-              // 2) parkingRequestedAt(혹시 직접 저장하는 경우)
-              // 3) 서버 시각
-              final reqAt = data['requestTime'] ?? data['parkingRequestedAt'];
+            // plates 쪽 시간 필드 우선순위:
+            // 1) requestTime(기존 PlateModel)
+            // 2) parkingRequestedAt(혹시 직접 저장하는 경우)
+            // 3) 서버 시각
+            final reqAt = data['requestTime'] ?? data['parkingRequestedAt'];
 
-              tx.set(
-                viewRef,
-                <String, dynamic>{
-                  'area': docArea,
-                  'updatedAt': FieldValue.serverTimestamp(),
-                  'items': <String, dynamic>{
-                    id: <String, dynamic>{
-                      'plateNumber': plateNumber,
-                      'location': location,
-                      'parkingRequestedAt': reqAt ?? FieldValue.serverTimestamp(),
-                      'updatedAt': FieldValue.serverTimestamp(),
-                    }
+            tx.set(
+              viewRef,
+              <String, dynamic>{
+                'area': docArea,
+                'updatedAt': FieldValue.serverTimestamp(),
+                'items': <String, dynamic>{
+                  id: <String, dynamic>{
+                    'plateNumber': plateNumber,
+                    'location': location,
+                    'parkingRequestedAt': reqAt ?? FieldValue.serverTimestamp(),
+                    'updatedAt': FieldValue.serverTimestamp(),
                   }
-                },
-                SetOptions(merge: true),
-              );
-            }
+                }
+              },
+              SetOptions(merge: true),
+            );
           }
         }
       });

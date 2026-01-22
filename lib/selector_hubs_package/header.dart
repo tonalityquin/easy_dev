@@ -42,6 +42,15 @@ const String _kNoticeSheetName = 'noti';
 /// ✅ (중요) 공지 Range (noti 시트 A열 1~50행)
 const String _kNoticeSpreadsheetRange = '$_kNoticeSheetName!A1:A50';
 
+/// ✅ (추가) View 삽입(Write) 게이트 키(기기별, 기본 OFF)
+/// - Header 단일 스위치에서 "탭(접근)" + "삽입(동기화 쓰기)"를 함께 ON/OFF 동기화
+const String _kParkingRequestsWriteEnabledKey =
+    'parking_requests_realtime_write_enabled_v1';
+const String _kParkingCompletedWriteEnabledKey =
+    'parking_completed_realtime_write_enabled_v1';
+const String _kDepartureRequestsWriteEnabledKey =
+    'departure_requests_realtime_write_enabled_v1';
+
 /// ✅ 공지 시트 ID 변경을 Header와 Settings Sheet 사이에 공유하기 위한 노티파이어
 final ValueNotifier<String> _noticeSheetIdNotifier = ValueNotifier<String>('');
 
@@ -134,14 +143,16 @@ class _HeaderState extends State<Header> {
       final api = await _sheetsApi();
 
       // ✅ noti 시트에서 읽음
-      final resp = await api.spreadsheets.values.get(id, _kNoticeSpreadsheetRange);
+      final resp =
+      await api.spreadsheets.values.get(id, _kNoticeSpreadsheetRange);
 
       final values = resp.values ?? const [];
 
       // rows -> text lines
       final lines = <String>[];
       for (final row in values) {
-        final rowStrings = row.map((c) => (c ?? '').toString().trim()).toList();
+        final rowStrings =
+        row.map((c) => (c ?? '').toString().trim()).toList();
         final joined = rowStrings.where((s) => s.isNotEmpty).join(' ');
         if (joined.isNotEmpty) lines.add(joined);
       }
@@ -415,9 +426,12 @@ class _TopRow extends StatelessWidget {
                             prefixIcon: const Icon(Icons.password_rounded),
                             suffixIcon: IconButton(
                               tooltip: obscure ? '표시' : '숨김',
-                              onPressed: () => setStateSheet(() => obscure = !obscure),
+                              onPressed: () =>
+                                  setStateSheet(() => obscure = !obscure),
                               icon: Icon(
-                                obscure ? Icons.visibility_off_rounded : Icons.visibility_rounded,
+                                obscure
+                                    ? Icons.visibility_off_rounded
+                                    : Icons.visibility_rounded,
                               ),
                             ),
                           ),
@@ -493,10 +507,21 @@ class _TopRow extends StatelessWidget {
 
     bool commuteTrueFalseEnabled = await CommuteTrueFalseModeConfig.isEnabled();
 
-    // ✅ (변경) 입차완료/출차요청/입차요청 실시간 탭 게이트 각각 로드
-    bool parkingCompletedRealtimeTabEnabled = await ParkingCompletedRealtimeTabModeConfig.isEnabled();
-    bool departureRequestsRealtimeTabEnabled = await DepartureRequestsRealtimeTabModeConfig.isEnabled();
-    bool parkingRequestsRealtimeTabEnabled = await ParkingRequestsRealtimeTabModeConfig.isEnabled();
+    // ✅ 탭 게이트(진입/갱신) 3종 로드
+    bool parkingCompletedRealtimeTabEnabled =
+    await ParkingCompletedRealtimeTabModeConfig.isEnabled();
+    bool departureRequestsRealtimeTabEnabled =
+    await DepartureRequestsRealtimeTabModeConfig.isEnabled();
+    bool parkingRequestsRealtimeTabEnabled =
+    await ParkingRequestsRealtimeTabModeConfig.isEnabled();
+
+    // ✅ (추가) view 삽입(Write) 게이트 3종 로드(기기 로컬, 기본 OFF)
+    bool parkingCompletedRealtimeWriteEnabled =
+        prefs.getBool(_kParkingCompletedWriteEnabledKey) ?? false;
+    bool departureRequestsRealtimeWriteEnabled =
+        prefs.getBool(_kDepartureRequestsWriteEnabledKey) ?? false;
+    bool parkingRequestsRealtimeWriteEnabled =
+        prefs.getBool(_kParkingRequestsWriteEnabledKey) ?? false;
 
     final noticeIdCtrl = TextEditingController(
       text: (prefs.getString(_kNoticeSpreadsheetIdKey) ?? '').trim(),
@@ -570,20 +595,28 @@ class _TopRow extends StatelessWidget {
                                 onPressed: () async {
                                   if (!Platform.isAndroid) {
                                     if (!ctx.mounted) return;
-                                    showFailedSnackbar(context, '안드로이드에서만 지원되는 기능입니다.');
+                                    showFailedSnackbar(
+                                        context, '안드로이드에서만 지원되는 기능입니다.');
                                     return;
                                   }
                                   try {
-                                    final granted = await FlutterOverlayWindow.isPermissionGranted();
+                                    final granted =
+                                    await FlutterOverlayWindow
+                                        .isPermissionGranted();
                                     if (!ctx.mounted) return;
                                     if (granted) {
-                                      showSelectedSnackbar(context, '이미 “다른 앱 위에 표시” 권한이 허용되어 있습니다.');
+                                      showSelectedSnackbar(
+                                          context,
+                                          '이미 “다른 앱 위에 표시” 권한이 허용되어 있습니다.');
                                     } else {
-                                      showFailedSnackbar(context, '현재 “다른 앱 위에 표시” 권한이 허용되지 않았습니다.');
+                                      showFailedSnackbar(
+                                          context,
+                                          '현재 “다른 앱 위에 표시” 권한이 허용되지 않았습니다.');
                                     }
                                   } catch (e) {
                                     if (!ctx.mounted) return;
-                                    showFailedSnackbar(context, '권한 상태를 확인하는 중 오류가 발생했습니다: $e');
+                                    showFailedSnackbar(context,
+                                        '권한 상태를 확인하는 중 오류가 발생했습니다: $e');
                                   }
                                 },
                                 label: const Text('현재 상태 확인'),
@@ -596,28 +629,41 @@ class _TopRow extends StatelessWidget {
                                 onPressed: () async {
                                   if (!Platform.isAndroid) {
                                     if (!ctx.mounted) return;
-                                    showFailedSnackbar(context, '안드로이드에서만 지원되는 기능입니다.');
+                                    showFailedSnackbar(
+                                        context, '안드로이드에서만 지원되는 기능입니다.');
                                     return;
                                   }
                                   try {
-                                    final already = await FlutterOverlayWindow.isPermissionGranted();
+                                    final already =
+                                    await FlutterOverlayWindow
+                                        .isPermissionGranted();
                                     if (already) {
                                       if (!ctx.mounted) return;
-                                      showSelectedSnackbar(context, '이미 권한이 허용되어 있습니다.\n설정 앱에서 언제든지 변경할 수 있습니다.');
+                                      showSelectedSnackbar(
+                                        context,
+                                        '이미 권한이 허용되어 있습니다.\n설정 앱에서 언제든지 변경할 수 있습니다.',
+                                      );
                                       return;
                                     }
 
-                                    final result = await FlutterOverlayWindow.requestPermission();
+                                    final result =
+                                    await FlutterOverlayWindow
+                                        .requestPermission();
 
                                     if (!ctx.mounted) return;
                                     if (result == true) {
-                                      showSuccessSnackbar(context, '권한이 허용되었습니다. 오버레이를 사용할 수 있습니다.');
+                                      showSuccessSnackbar(context,
+                                          '권한이 허용되었습니다. 오버레이를 사용할 수 있습니다.');
                                     } else {
-                                      showFailedSnackbar(context, '권한을 허용하지 않았습니다.\n필요 시 “설정 > 다른 앱 위에 표시”에서 직접 허용해 주세요.');
+                                      showFailedSnackbar(
+                                        context,
+                                        '권한을 허용하지 않았습니다.\n필요 시 “설정 > 다른 앱 위에 표시”에서 직접 허용해 주세요.',
+                                      );
                                     }
                                   } catch (e) {
                                     if (!ctx.mounted) return;
-                                    showFailedSnackbar(context, '권한 설정 화면을 여는 중 오류가 발생했습니다: $e');
+                                    showFailedSnackbar(context,
+                                        '권한 설정 화면을 여는 중 오류가 발생했습니다: $e');
                                   }
                                 },
                                 style: ElevatedButton.styleFrom(
@@ -700,37 +746,46 @@ class _TopRow extends StatelessWidget {
                                 if (!selected) return;
                                 currentOverlayMode = OverlayMode.bubble;
                                 setSheetState(() {});
-                                await OverlayModeConfig.setMode(OverlayMode.bubble);
+                                await OverlayModeConfig.setMode(
+                                    OverlayMode.bubble);
 
                                 try {
                                   if (await FlutterOverlayWindow.isActive()) {
-                                    await FlutterOverlayWindow.shareData('__mode:bubble__');
-                                    await FlutterOverlayWindow.shareData('__collapse__');
+                                    await FlutterOverlayWindow
+                                        .shareData('__mode:bubble__');
+                                    await FlutterOverlayWindow
+                                        .shareData('__collapse__');
                                   }
                                 } catch (_) {}
 
                                 if (!ctx.mounted) return;
-                                showSuccessSnackbar(context, '플로팅 버블 모드가 선택되었습니다.');
+                                showSuccessSnackbar(
+                                    context, '플로팅 버블 모드가 선택되었습니다.');
                               },
                             ),
                             ChoiceChip(
                               label: const Text('상단 50% 포그라운드'),
-                              selected: currentOverlayMode == OverlayMode.topHalf,
+                              selected:
+                              currentOverlayMode == OverlayMode.topHalf,
                               onSelected: (selected) async {
                                 if (!selected) return;
                                 currentOverlayMode = OverlayMode.topHalf;
                                 setSheetState(() {});
-                                await OverlayModeConfig.setMode(OverlayMode.topHalf);
+                                await OverlayModeConfig.setMode(
+                                    OverlayMode.topHalf);
 
                                 try {
                                   if (await FlutterOverlayWindow.isActive()) {
-                                    await FlutterOverlayWindow.shareData('__mode:topHalf__');
-                                    await FlutterOverlayWindow.shareData('__collapse__');
+                                    await FlutterOverlayWindow
+                                        .shareData('__mode:topHalf__');
+                                    await FlutterOverlayWindow
+                                        .shareData('__collapse__');
                                   }
                                 } catch (_) {}
 
                                 if (!ctx.mounted) return;
-                                showSuccessSnackbar(context, '상단 50% 포그라운드 모드가 선택되었습니다.');
+                                showSuccessSnackbar(
+                                    context, '상단 50% 포그라운드 모드가 선택되었습니다.');
                               },
                             ),
                           ],
@@ -738,7 +793,8 @@ class _TopRow extends StatelessWidget {
                         const SizedBox(height: 6),
                         Text(
                           '현재 선택: ${labelFor(currentOverlayMode)}',
-                          style: const TextStyle(fontSize: 12, color: Colors.black54),
+                          style:
+                          const TextStyle(fontSize: 12, color: Colors.black54),
                         ),
                       ],
                     ),
@@ -794,7 +850,9 @@ class _TopRow extends StatelessWidget {
                         const SizedBox(height: 10),
                         SwitchListTile(
                           contentPadding: EdgeInsets.zero,
-                          title: Text(commuteTrueFalseEnabled ? 'ON (기록함)' : 'OFF (기록 안 함)'),
+                          title: Text(commuteTrueFalseEnabled
+                              ? 'ON (기록함)'
+                              : 'OFF (기록 안 함)'),
                           subtitle: Text(
                             commuteTrueFalseEnabled
                                 ? '출근 시 최근 출근 날짜 업데이트가 실행됩니다.'
@@ -820,13 +878,15 @@ class _TopRow extends StatelessWidget {
                   );
                 }
 
-                // ✅ (변경) 실시간 탭 토글: 입차완료 ON이면 출차요청/입차요청도 같이 ON
+                /// ✅ (리팩터링) "실시간(view) 테이블" 통합 스위치
+                /// - 탭(진입/갱신) 게이트 3종 + view 삽입(Write) 게이트 3종을 단일 스위치로 동기화
                 Widget buildRealtimeTabsToggleSection() {
-                  // 단일 스위치로 표현(셋 중 하나라도 ON이면 ON으로 표시)
-                  final combined =
-                      parkingCompletedRealtimeTabEnabled ||
-                          departureRequestsRealtimeTabEnabled ||
-                          parkingRequestsRealtimeTabEnabled;
+                  final combined = parkingCompletedRealtimeTabEnabled ||
+                      departureRequestsRealtimeTabEnabled ||
+                      parkingRequestsRealtimeTabEnabled ||
+                      parkingCompletedRealtimeWriteEnabled ||
+                      departureRequestsRealtimeWriteEnabled ||
+                      parkingRequestsRealtimeWriteEnabled;
 
                   return Container(
                     margin: const EdgeInsets.only(bottom: 16),
@@ -857,7 +917,7 @@ class _TopRow extends StatelessWidget {
                             const SizedBox(width: 10),
                             const Expanded(
                               child: Text(
-                                '출차 요청/입차 요청/입차 완료 테이블: 실시간 탭(서버 조회)',
+                                '실시간(view) 테이블 기능: 탭 + 삽입(Write) 동기화',
                                 style: TextStyle(
                                   fontWeight: FontWeight.w800,
                                   color: Colors.black87,
@@ -869,46 +929,64 @@ class _TopRow extends StatelessWidget {
                         const SizedBox(height: 10),
                         const Text(
                           '이 설정은 “기기별(로컬)”로 저장됩니다.\n'
-                              'ON이면 출차 요청/입차 요청/입차 완료 테이블에 “실시간(view)” 탭이 열립니다.\n'
-                              'OFF이면 세 테이블의 실시간 탭이 모두 잠깁니다.',
+                              'ON이면 입차 요청/입차 완료/출차 요청 실시간(view) 탭이 열리고, '
+                              '동시에 view 컬렉션 동기화 삽입/복구(Write)도 허용됩니다.\n'
+                              'OFF이면 세 테이블의 실시간 탭이 모두 잠기며, view 동기화 쓰기도 모두 중지됩니다.',
                           style: TextStyle(fontSize: 13, color: Colors.black87),
                         ),
                         const SizedBox(height: 10),
                         SwitchListTile(
                           contentPadding: EdgeInsets.zero,
-                          title: Text(combined ? 'ON (실시간 탭 사용)' : 'OFF (실시간 탭 숨김)'),
+                          title: Text(
+                            combined
+                                ? 'ON (탭 + 삽입(Write) 사용)'
+                                : 'OFF (탭 + 삽입(Write) 모두 중지)',
+                          ),
                           subtitle: Text(
                             combined
-                                ? '출차 요청/입차 요청/입차 완료 테이블에서 실시간 탭 진입이 허용됩니다.'
-                                : '출차 요청/입차 요청/입차 완료 테이블에서 실시간 탭 진입이 차단됩니다.',
+                                ? '세 테이블에서 실시간 탭 진입이 허용되고, view 동기화 쓰기도 허용됩니다.'
+                                : '세 테이블에서 실시간 탭 진입이 차단되며, view 동기화 쓰기도 차단됩니다.',
                           ),
                           value: combined,
                           onChanged: (v) async {
-                            // ✅ 세 게이트를 동일 값으로 동기화
+                            // ✅ 6개 게이트를 동일 값으로 동기화
                             parkingCompletedRealtimeTabEnabled = v;
                             departureRequestsRealtimeTabEnabled = v;
                             parkingRequestsRealtimeTabEnabled = v;
 
+                            parkingCompletedRealtimeWriteEnabled = v;
+                            departureRequestsRealtimeWriteEnabled = v;
+                            parkingRequestsRealtimeWriteEnabled = v;
+
                             setSheetState(() {});
 
+                            // 탭 게이트 3종
                             await ParkingCompletedRealtimeTabModeConfig.setEnabled(v);
                             await DepartureRequestsRealtimeTabModeConfig.setEnabled(v);
                             await ParkingRequestsRealtimeTabModeConfig.setEnabled(v);
+
+                            // view 삽입(Write) 게이트 3종
+                            await prefs.setBool(_kParkingCompletedWriteEnabledKey, v);
+                            await prefs.setBool(_kDepartureRequestsWriteEnabledKey, v);
+                            await prefs.setBool(_kParkingRequestsWriteEnabledKey, v);
 
                             if (!ctx.mounted) return;
                             showSuccessSnackbar(
                               context,
                               v
-                                  ? '이 기기에서 출차 요청/입차 요청/입차 완료 “실시간 탭”을 ON으로 설정했습니다.'
-                                  : '이 기기에서 출차 요청/입차 요청/입차 완료 “실시간 탭”을 OFF로 설정했습니다.',
+                                  ? '이 기기에서 실시간(view) 탭 + 삽입(Write)을 모두 ON으로 설정했습니다.'
+                                  : '이 기기에서 실시간(view) 탭 + 삽입(Write)을 모두 OFF로 설정했습니다.',
                             );
                           },
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          '상태: 출차요청=${departureRequestsRealtimeTabEnabled ? "ON" : "OFF"}'
+                          '탭: 출차요청=${departureRequestsRealtimeTabEnabled ? "ON" : "OFF"}'
                               ' / 입차요청=${parkingRequestsRealtimeTabEnabled ? "ON" : "OFF"}'
-                              ' / 입차완료=${parkingCompletedRealtimeTabEnabled ? "ON" : "OFF"}',
+                              ' / 입차완료=${parkingCompletedRealtimeTabEnabled ? "ON" : "OFF"}\n'
+                              '삽입(Write): 출차요청=${departureRequestsRealtimeWriteEnabled ? "ON" : "OFF"}'
+                              ' / 입차요청=${parkingRequestsRealtimeWriteEnabled ? "ON" : "OFF"}'
+                              ' / 입차완료=${parkingCompletedRealtimeWriteEnabled ? "ON" : "OFF"}',
                           style: const TextStyle(fontSize: 12, color: Colors.black54),
                         ),
                       ],
@@ -960,10 +1038,12 @@ class _TopRow extends StatelessWidget {
                                 noticeIdCtrl.text = '';
                                 _noticeSheetIdNotifier.value = '';
                                 if (!ctx.mounted) return;
-                                showSelectedSnackbar(context, '공지 스프레드시트 설정을 초기화했습니다.');
+                                showSelectedSnackbar(
+                                    context, '공지 스프레드시트 설정을 초기화했습니다.');
                                 setSheetState(() {});
                               },
-                              icon: const Icon(Icons.restore, color: Colors.black87),
+                              icon: const Icon(Icons.restore,
+                                  color: Colors.black87),
                             ),
                           ],
                         ),
@@ -971,7 +1051,8 @@ class _TopRow extends StatelessWidget {
                         Text(
                           '공지 내용을 불러올 스프레드시트 ID를 입력하세요.\n'
                               '스프레드시트 URL을 그대로 붙여넣어도 자동으로 ID를 추출합니다.\n',
-                          style: const TextStyle(fontSize: 13, color: Colors.black87),
+                          style: const TextStyle(
+                              fontSize: 13, color: Colors.black87),
                         ),
                         const SizedBox(height: 10),
                         TextField(
@@ -997,15 +1078,18 @@ class _TopRow extends StatelessWidget {
 
                                   if (id.isEmpty) {
                                     if (!ctx.mounted) return;
-                                    showFailedSnackbar(context, '스프레드시트 ID를 입력하세요.');
+                                    showFailedSnackbar(context,
+                                        '스프레드시트 ID를 입력하세요.');
                                     return;
                                   }
 
-                                  await prefs.setString(_kNoticeSpreadsheetIdKey, id);
+                                  await prefs.setString(
+                                      _kNoticeSpreadsheetIdKey, id);
                                   _noticeSheetIdNotifier.value = id;
 
                                   if (!ctx.mounted) return;
-                                  showSuccessSnackbar(context, '공지 스프레드시트 ID를 저장했습니다.');
+                                  showSuccessSnackbar(
+                                      context, '공지 스프레드시트 ID를 저장했습니다.');
                                   setSheetState(() {});
                                 },
                                 label: const Text('저장'),
@@ -1016,10 +1100,13 @@ class _TopRow extends StatelessWidget {
                               child: OutlinedButton.icon(
                                 icon: const Icon(Icons.copy_all_outlined),
                                 onPressed: () async {
-                                  final raw = '공지 Sheet ID: ${noticeIdCtrl.text.trim()}';
-                                  await Clipboard.setData(ClipboardData(text: raw));
+                                  final raw =
+                                      '공지 Sheet ID: ${noticeIdCtrl.text.trim()}';
+                                  await Clipboard.setData(
+                                      ClipboardData(text: raw));
                                   if (!ctx.mounted) return;
-                                  showSuccessSnackbar(context, '공지 스프레드시트 설정을 복사했습니다.');
+                                  showSuccessSnackbar(
+                                      context, '공지 스프레드시트 설정을 복사했습니다.');
                                 },
                                 label: const Text('설정 복사'),
                               ),
@@ -1029,7 +1116,8 @@ class _TopRow extends StatelessWidget {
                         const SizedBox(height: 6),
                         Text(
                           '저장 키: $_kNoticeSpreadsheetIdKey',
-                          style: const TextStyle(fontSize: 11, color: Colors.black54),
+                          style:
+                          const TextStyle(fontSize: 11, color: Colors.black54),
                         ),
                       ],
                     ),
@@ -1080,9 +1168,11 @@ class _TopRow extends StatelessWidget {
                                 final cfg = await EmailConfig.load();
                                 mailToCtrl.text = cfg.to;
                                 if (!ctx.mounted) return;
-                                showSelectedSnackbar(context, '수신자를 기본값(빈 값)으로 복원했습니다.');
+                                showSelectedSnackbar(context,
+                                    '수신자를 기본값(빈 값)으로 복원했습니다.');
                               },
-                              icon: const Icon(Icons.restore, color: Colors.black87),
+                              icon: const Icon(Icons.restore,
+                                  color: Colors.black87),
                             ),
                           ],
                         ),
@@ -1109,12 +1199,14 @@ class _TopRow extends StatelessWidget {
                                   final to = mailToCtrl.text.trim();
                                   if (!EmailConfig.isValidToList(to)) {
                                     if (!ctx.mounted) return;
-                                    showFailedSnackbar(context, '수신자 이메일 형식을 확인해 주세요.');
+                                    showFailedSnackbar(
+                                        context, '수신자 이메일 형식을 확인해 주세요.');
                                     return;
                                   }
                                   await EmailConfig.save(EmailConfig(to: to));
                                   if (!ctx.mounted) return;
-                                  showSuccessSnackbar(context, '수신자 설정을 저장했습니다.');
+                                  showSuccessSnackbar(
+                                      context, '수신자 설정을 저장했습니다.');
                                 },
                                 label: const Text('저장'),
                               ),
@@ -1125,9 +1217,11 @@ class _TopRow extends StatelessWidget {
                                 icon: const Icon(Icons.copy_all_outlined),
                                 onPressed: () async {
                                   final raw = 'To: ${mailToCtrl.text}';
-                                  await Clipboard.setData(ClipboardData(text: raw));
+                                  await Clipboard.setData(
+                                      ClipboardData(text: raw));
                                   if (!ctx.mounted) return;
-                                  showSuccessSnackbar(context, '현재 수신자 설정을 복사했습니다.');
+                                  showSuccessSnackbar(
+                                      context, '현재 수신자 설정을 복사했습니다.');
                                 },
                                 label: const Text('설정 복사'),
                               ),
@@ -1163,7 +1257,8 @@ class _TopRow extends StatelessWidget {
                             const Expanded(
                               child: Text(
                                 '서비스 설정',
-                                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                                style: TextStyle(
+                                    fontWeight: FontWeight.w800, fontSize: 16),
                               ),
                             ),
                             IconButton(
@@ -1176,14 +1271,10 @@ class _TopRow extends StatelessWidget {
                         const SizedBox(height: 8),
                         Divider(height: 1, color: Colors.black.withOpacity(.08)),
                         const SizedBox(height: 16),
-
                         buildOverlayPermissionSection(),
                         buildOverlayModeSection(),
                         buildCommuteTrueFalseToggleSection(),
-
-                        // ✅ (변경) 실시간 탭 토글(출차요청/입차요청/입차완료 동시 동기화)
                         buildRealtimeTabsToggleSection(),
-
                         buildNoticeSpreadsheetSection(),
                         buildGmailSection(),
                       ],
@@ -1296,7 +1387,8 @@ class HeaderBadge extends StatelessWidget {
       duration: const Duration(milliseconds: 600),
       tween: Tween(begin: .92, end: 1),
       curve: Curves.easeOutBack,
-      builder: (context, scale, child) => Transform.scale(scale: scale, child: child),
+      builder: (context, scale, child) =>
+          Transform.scale(scale: scale, child: child),
       child: SizedBox(
         width: size,
         height: size,
@@ -1324,7 +1416,8 @@ class _HeaderBadgeInner extends StatefulWidget {
   State<_HeaderBadgeInner> createState() => _HeaderBadgeInnerState();
 }
 
-class _HeaderBadgeInnerState extends State<_HeaderBadgeInner> with SingleTickerProviderStateMixin {
+class _HeaderBadgeInnerState extends State<_HeaderBadgeInner>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _rotCtrl;
 
   @override
