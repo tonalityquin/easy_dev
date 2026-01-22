@@ -21,6 +21,13 @@ import '../../../../utils/snackbar_helper.dart';
 // ✅ 추가: 5초 취소 가능 블로킹 다이얼로그
 import '../../../../utils/block_dialogs/duration_blocking_dialog.dart';
 
+// ✅ 추가: 진행 시 단건 조회를 blocking 로딩 다이얼로그로 감싸기
+import '../../../../utils/block_dialogs/blocking_dialog.dart';
+
+// ✅ 추가: “작업 수행” 시 상태 BottomSheet 오픈(더블/트리플과 동일 흐름)
+// - 경로는 실제 프로젝트 구조에 맞게 조정하세요.
+import 'widgets/minor_parking_completed_status_bottom_sheet.dart';
+
 import '../../../hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
 
 const String _kLocationAll = '전체';
@@ -274,8 +281,7 @@ class _GenericViewRepository implements _BaseViewRepository {
             (m['plateNumber'] as String?) ?? _fallbackPlateFromDocId(plateDocId);
         final location = _normalizeLocation(m['location'] as String?);
 
-        final createdAt =
-            _toDate(m[primaryTimeField]) ?? _toDate(m['updatedAt']);
+        final createdAt = _toDate(m[primaryTimeField]) ?? _toDate(m['updatedAt']);
 
         if (plateNumber.isEmpty) continue;
 
@@ -1028,10 +1034,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
 
     final fut = () async {
       try {
-        final doc = await FirebaseFirestore.instance
-            .collection('plates')
-            .doc(id)
-            .get();
+        final doc = await FirebaseFirestore.instance.collection('plates').doc(id).get();
 
         if (!doc.exists) return null;
 
@@ -1090,7 +1093,11 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
     return '출차 요청';
   }
 
-  /// ✅ 수정: Row 탭 → showDurationBlockingDialog → (진행 시) 기존 상세 다이얼로그 오픈
+  /// ✅ 리팩터링: Row 탭 흐름을 더블/트리플과 동일하게 통일
+  /// 1) 5초 취소 가능 다이얼로그
+  /// 2) 진행 시에만 plates/{id} 단건 조회 (runWithBlockingDialog로 로딩 UX 통일)
+  /// 3) 상세 다이얼로그(작업 수행 버튼)
+  /// 4) 작업 수행 시 상태 BottomSheet
   Future<void> _openHybridDetailPopup(_RowVM r) async {
     if (_openingDetail) return;
     _openingDetail = true;
@@ -1103,7 +1110,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
       }
 
       _trace(
-        '실시간 테이블 행 탭(조회 전 확인 다이얼로그)',
+        '실시간 테이블 행 탭(확인 대기 다이얼로그)',
         meta: <String, dynamic>{
           'screen': 'minor_reverse_table_embedded',
           'action': 'row_tap_open_duration_blocking_dialog',
@@ -1116,6 +1123,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
         },
       );
 
+      // ✅ 0) 5초 취소 가능(취소 시 조회/비용 발생 X)
       final proceed = await showDurationBlockingDialog(
         context,
         message: '원본 데이터를 불러옵니다.\n(취소하면 조회 비용이 발생하지 않습니다)',
@@ -1150,12 +1158,100 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
         },
       );
 
-      showDialog<void>(
+      // ✅ 1) 진행 시에만 plates 단건 조회(Blocking 로딩 다이얼로그)
+      final plate = await runWithBlockingDialog<PlateModel?>(
+        context: context,
+        message: '원본 데이터를 불러오는 중입니다...',
+        task: () => _fetchPlateDetail(plateId),
+      );
+
+      if (!mounted) return;
+
+      // ✅ 2) 원본 없음 → NotFound 다이얼로그(기존 UI 유지)
+      if (plate == null) {
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: true,
+          builder: (_) {
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 520),
+                child: Material(
+                  color: Colors.transparent,
+                  child: AlertDialog(
+                    backgroundColor: Colors.white,
+                    elevation: 8,
+                    insetPadding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                    content: _PlateDetailNotFoundDialog(
+                      plateId: plateId,
+                      viewPlateNumber: r.plateNumber,
+                      viewLocation: r.location,
+                      viewTimeText: _fmtDate(r.createdAt),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+        return;
+      }
+
+      // ✅ 3) 상세 다이얼로그 데이터 구성(기존 로직 유지)
+      final billType = billTypeFromString(plate.billingType);
+      final bool isRegular = billType == BillType.fixed;
+
+      final int basicStandard = plate.basicStandard ?? 0;
+      final int basicAmount = plate.basicAmount ?? 0;
+      final int addStandard = plate.addStandard ?? 0;
+      final int addAmount = plate.addAmount ?? 0;
+
+      int currentFee = 0;
+      if (!isRegular) {
+        if (plate.isLockedFee && plate.lockedFeeAmount != null) {
+          currentFee = plate.lockedFeeAmount!;
+        } else {
+          currentFee = calculateParkingFee(
+            entryTimeInSeconds: plate.requestTime.millisecondsSinceEpoch ~/ 1000,
+            currentTimeInSeconds: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            basicStandard: basicStandard,
+            basicAmount: basicAmount,
+            addStandard: addStandard,
+            addAmount: addAmount,
+            isLockedFee: plate.isLockedFee,
+            lockedAtTimeInSeconds: plate.lockedAtTimeInSeconds,
+            userAdjustment: plate.userAdjustment ?? 0,
+            mode: _parseFeeMode(plate.feeMode),
+          ).toInt();
+        }
+      }
+
+      final feeText = isRegular
+          ? '${plate.isLockedFee ? (plate.lockedFeeAmount ?? 0) : (plate.regularAmount ?? 0)}원'
+          : '$currentFee원';
+
+      final elapsedText =
+      _formatElapsed(DateTime.now().difference(plate.requestTime));
+
+      final backgroundColor =
+      ((plate.billingType?.trim().isNotEmpty ?? false) && plate.isLockedFee)
+          ? Colors.orange[50]
+          : Colors.white;
+
+      final bool isSelected = plate.isSelected;
+      final String displayUser =
+      isSelected ? (plate.selectedBy ?? '') : plate.userName;
+
+      // ✅ showDialog<bool>: true=작업 수행, false/null=닫기
+      final bool? doWork = await showDialog<bool>(
         context: context,
         barrierDismissible: true,
         builder: (_) {
-          final future = _fetchPlateDetail(plateId);
-
           return Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 520),
@@ -1170,98 +1266,31 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                     borderRadius: BorderRadius.circular(18),
                   ),
                   contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                  content: FutureBuilder<PlateModel?>(
-                    future: future,
-                    builder: (context, snap) {
-                      final done = snap.connectionState == ConnectionState.done;
-
-                      if (!done) {
-                        return const _PlateDetailLoadingDialog();
-                      }
-
-                      final plate = snap.data;
-                      if (plate == null) {
-                        return _PlateDetailNotFoundDialog(
-                          plateId: plateId,
-                          viewPlateNumber: r.plateNumber,
-                          viewLocation: r.location,
-                          viewTimeText: _fmtDate(r.createdAt),
-                        );
-                      }
-
-                      final billType = billTypeFromString(plate.billingType);
-                      final bool isRegular = billType == BillType.fixed;
-
-                      final int basicStandard = plate.basicStandard ?? 0;
-                      final int basicAmount = plate.basicAmount ?? 0;
-                      final int addStandard = plate.addStandard ?? 0;
-                      final int addAmount = plate.addAmount ?? 0;
-
-                      int currentFee = 0;
-                      if (!isRegular) {
-                        if (plate.isLockedFee && plate.lockedFeeAmount != null) {
-                          currentFee = plate.lockedFeeAmount!;
-                        } else {
-                          currentFee = calculateParkingFee(
-                            entryTimeInSeconds:
-                            plate.requestTime.millisecondsSinceEpoch ~/ 1000,
-                            currentTimeInSeconds:
-                            DateTime.now().millisecondsSinceEpoch ~/ 1000,
-                            basicStandard: basicStandard,
-                            basicAmount: basicAmount,
-                            addStandard: addStandard,
-                            addAmount: addAmount,
-                            isLockedFee: plate.isLockedFee,
-                            lockedAtTimeInSeconds: plate.lockedAtTimeInSeconds,
-                            userAdjustment: plate.userAdjustment ?? 0,
-                            mode: _parseFeeMode(plate.feeMode),
-                          ).toInt();
-                        }
-                      }
-
-                      final feeText = isRegular
-                          ? '${plate.isLockedFee ? (plate.lockedFeeAmount ?? 0) : (plate.regularAmount ?? 0)}원'
-                          : '$currentFee원';
-
-                      final elapsedText = _formatElapsed(
-                        DateTime.now().difference(plate.requestTime),
-                      );
-
-                      final backgroundColor =
-                      ((plate.billingType?.trim().isNotEmpty ?? false) &&
-                          plate.isLockedFee)
-                          ? Colors.orange[50]
-                          : Colors.white;
-
-                      final bool isSelected = plate.isSelected;
-                      final String displayUser =
-                      isSelected ? (plate.selectedBy ?? '') : plate.userName;
-
-                      return _PlateDetailBodyDialog(
-                        title: '번호판 상세',
-                        subtitle:
-                        '${_viewLabel()} VIEW: ${r.location} / ${_fmtDate(r.createdAt)}   ·   PLATES: ${plate.location} / ${CustomDateUtils.formatTimestamp(plate.requestTime)}',
-                        child: PlateCustomBox(
-                          topLeftText: '소속',
-                          topCenterText:
-                          '${plate.region ?? '전국'} ${plate.plateNumber}',
-                          topRightUpText: plate.billingType ?? '없음',
-                          topRightDownText: feeText,
-                          midLeftText: plate.location,
-                          midCenterText: displayUser.isEmpty ? '-' : displayUser,
-                          midRightText:
-                          CustomDateUtils.formatTimeForUI(plate.requestTime),
-                          bottomLeftLeftText: plate.statusList.isNotEmpty
-                              ? plate.statusList.join(", ")
-                              : "",
-                          bottomLeftCenterText: plate.customStatus ?? '',
-                          bottomRightText: elapsedText,
-                          isSelected: isSelected,
-                          backgroundColor: backgroundColor,
-                          onTap: () => Navigator.of(context).maybePop(),
-                        ),
-                      );
-                    },
+                  content: _PlateDetailBodyDialog(
+                    title: '번호판 상세',
+                    subtitle:
+                    '${_viewLabel()} VIEW: ${r.location} / ${_fmtDate(r.createdAt)}   ·   '
+                        'PLATES: ${plate.location} / ${CustomDateUtils.formatTimestamp(plate.requestTime)}',
+                    child: PlateCustomBox(
+                      topLeftText: '소속',
+                      topCenterText: '${plate.region ?? '전국'} ${plate.plateNumber}',
+                      topRightUpText: plate.billingType ?? '없음',
+                      topRightDownText: feeText,
+                      midLeftText: plate.location,
+                      midCenterText: displayUser.isEmpty ? '-' : displayUser,
+                      midRightText:
+                      CustomDateUtils.formatTimeForUI(plate.requestTime),
+                      bottomLeftLeftText: plate.statusList.isNotEmpty
+                          ? plate.statusList.join(", ")
+                          : "",
+                      bottomLeftCenterText: plate.customStatus ?? '',
+                      bottomRightText: elapsedText,
+                      isSelected: isSelected,
+                      backgroundColor: backgroundColor,
+                      onTap: () => Navigator.of(context).maybePop(),
+                    ),
+                    showWorkButton: true,
+                    workButtonText: '작업 수행',
                   ),
                 ),
               ),
@@ -1269,6 +1298,30 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
           );
         },
       );
+
+      if (!mounted) return;
+
+      // ✅ 4) 작업 수행 → 상태 BottomSheet
+      if (doWork == true) {
+        final rootCtx = Navigator.of(context, rootNavigator: true).context;
+
+        _trace(
+          '상세 다이얼로그 작업 수행 버튼 클릭(상태 시트 오픈)',
+          meta: <String, dynamic>{
+            'screen': 'minor_reverse_table_embedded',
+            'action': 'detail_dialog_open_status_bottom_sheet',
+            'mode': widget.mode.toString(),
+            'area': _currentArea,
+            'plateId': plate.id,
+            'plateNumber': plate.plateNumber,
+          },
+        );
+
+        await showMinorParkingCompletedStatusBottomSheetFromDialog(
+          context: rootCtx,
+          plate: plate,
+        );
+      }
     } finally {
       _openingDetail = false;
     }
@@ -1664,7 +1717,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                 return Material(
                   color: rowBg,
                   child: InkWell(
-                    onTap: () async => _openHybridDetailPopup(r), // ✅ async 호출
+                    onTap: () async => _openHybridDetailPopup(r),
                     child: Container(
                       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                       decoration: BoxDecoration(
@@ -1849,58 +1902,6 @@ class ExpandedEmpty extends StatelessWidget {
   }
 }
 
-/// ─────────────────────────────────────────────────────────
-/// 하이브리드 상세 팝업(Dialog) UI
-/// ─────────────────────────────────────────────────────────
-
-class _PlateDetailLoadingDialog extends StatelessWidget {
-  const _PlateDetailLoadingDialog();
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return SizedBox(
-      width: 420,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '번호판 상세',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: _Palette.dark,
-                  ),
-                ),
-              ),
-              IconButton(
-                tooltip: '닫기',
-                onPressed: () => Navigator.of(context).maybePop(),
-                icon: const Icon(Icons.close),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          const SizedBox(
-            width: 26,
-            height: 26,
-            child: CircularProgressIndicator(strokeWidth: 3),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '원본 데이터를 불러오는 중입니다…',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: cs.outline,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _PlateDetailNotFoundDialog extends StatelessWidget {
   final String plateId;
   final String viewPlateNumber;
@@ -1986,10 +1987,16 @@ class _PlateDetailBodyDialog extends StatelessWidget {
   final String subtitle;
   final Widget child;
 
+  // ✅ 추가: 작업 수행 버튼 옵션
+  final bool showWorkButton;
+  final String workButtonText;
+
   const _PlateDetailBodyDialog({
     required this.title,
     required this.subtitle,
     required this.child,
+    this.showWorkButton = false,
+    this.workButtonText = '작업 수행',
   });
 
   @override
@@ -2016,7 +2023,8 @@ class _PlateDetailBodyDialog extends StatelessWidget {
                 ),
                 IconButton(
                   tooltip: '닫기',
-                  onPressed: () => Navigator.of(context).maybePop(),
+                  // ✅ showDialog<bool>에서 false 반환(작업 수행과 구분)
+                  onPressed: () => Navigator.of(context).pop(false),
                   icon: const Icon(Icons.close),
                 ),
               ],
@@ -2033,6 +2041,34 @@ class _PlateDetailBodyDialog extends StatelessWidget {
             const SizedBox(height: 12),
             child,
             const SizedBox(height: 8),
+
+            // ✅ 추가: 하단 “작업 수행” 버튼(더블/트리플 동일 UX)
+            if (showWorkButton) ...[
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  icon: const Icon(Icons.playlist_add_check),
+                  label: Text(
+                    workButtonText,
+                    style: const TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _Palette.base,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 2),
+            ],
           ],
         ),
       ),

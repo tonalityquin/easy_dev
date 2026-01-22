@@ -20,6 +20,32 @@ import '../../../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import '../../../../common_package/log_package/log_viewer_bottom_sheet.dart';
 import '../../../modify_package/minor_modify_plate_screen.dart';
 
+/// ✅ 추가: 다이얼로그/테이블에서 “콜백 없이” 바로 열기 위한 wrapper
+/// - 기존 showMinorParkingCompletedStatusBottomSheet 시그니처(콜백 required)는 유지
+Future<void> showMinorParkingCompletedStatusBottomSheetFromDialog({
+  required BuildContext context,
+  required PlateModel plate,
+}) async {
+  await showMinorParkingCompletedStatusBottomSheet(
+    context: context,
+    plate: plate,
+    onRequestEntry: () async {
+      final area = context.read<AreaState>().currentArea;
+      await handleEntryParkingRequest(context, plate.plateNumber, area);
+    },
+    onDelete: () {
+      // 테이블 상세 → 작업 수행 경로에서는 삭제를 기본 비활성화(더블/트리플 동일 정책)
+      try {
+        showFailedSnackbar(context, '이 경로에서는 삭제 기능을 사용할 수 없습니다.');
+      } catch (_) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(content: Text('이 경로에서는 삭제 기능을 사용할 수 없습니다.')),
+        );
+      }
+    },
+  );
+}
+
 Future<void> showMinorParkingCompletedStatusBottomSheet({
   required BuildContext context,
   required PlateModel plate,
@@ -73,7 +99,8 @@ class _FullHeightSheet extends StatefulWidget {
   State<_FullHeightSheet> createState() => _FullHeightSheetState();
 }
 
-class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerProviderStateMixin {
+class _FullHeightSheetState extends State<_FullHeightSheet>
+    with SingleTickerProviderStateMixin {
   late PlateModel _plate;
 
   final ScrollController _scrollController = ScrollController();
@@ -100,11 +127,13 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
 
     _attentionPulse = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0, end: 1).chain(CurveTween(curve: Curves.easeOutCubic)),
+        tween: Tween<double>(begin: 0, end: 1)
+            .chain(CurveTween(curve: Curves.easeOutCubic)),
         weight: 45,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1, end: 0).chain(CurveTween(curve: Curves.easeInCubic)),
+        tween: Tween<double>(begin: 1, end: 0)
+            .chain(CurveTween(curve: Curves.easeInCubic)),
         weight: 55,
       ),
     ]).animate(_attentionCtrl);
@@ -119,12 +148,18 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
 
   PlateType? get _type => _plate.typeEnum;
 
-  bool get _needsBilling => (_type == PlateType.parkingCompleted) && (_plate.isLockedFee != true);
-  bool get _isFreeBilling => (_plate.basicAmount ?? 0) == 0 && (_plate.addAmount ?? 0) == 0;
+  bool get _needsBilling =>
+      (_type == PlateType.parkingCompleted) && (_plate.isLockedFee != true);
+
+  bool get _isFreeBilling =>
+      (_plate.basicAmount ?? 0) == 0 && (_plate.addAmount ?? 0) == 0;
 
   bool get _overrideActive {
-    if (!_departureOverrideArmed || _departureOverrideArmedAt == null) return false;
-    return DateTime.now().difference(_departureOverrideArmedAt!) <= _overrideWindow;
+    if (!_departureOverrideArmed || _departureOverrideArmedAt == null) {
+      return false;
+    }
+    return DateTime.now().difference(_departureOverrideArmedAt!) <=
+        _overrideWindow;
   }
 
   void _resetOverride() {
@@ -142,7 +177,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
     return '${_plate.plateNumber}_${_plate.area}';
   }
 
-  String get _effectiveLocation => _plate.location.trim().isEmpty ? '미지정' : _plate.location.trim();
+  String get _effectiveLocation =>
+      _plate.location.trim().isEmpty ? '미지정' : _plate.location.trim();
 
   Future<void> _runPrimary(Future<void> Function() fn) async {
     if (_primaryBusy) return;
@@ -251,7 +287,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
       _reportDbSafe(
         area: _plate.area,
         action: 'write',
-        source: 'parkingCompletedStatus.freeAutoPrebill.plates.update.logs.arrayUnion',
+        source:
+        'parkingCompletedStatus.freeAutoPrebill.plates.update.logs.arrayUnion',
         n: 1,
       );
 
@@ -302,7 +339,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                       decoration: BoxDecoration(
                         color: Colors.orange.withOpacity(0.10),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.orange.withOpacity(0.28)),
+                        border:
+                        Border.all(color: Colors.orange.withOpacity(0.28)),
                       ),
                       child: Icon(
                         Icons.warning_amber_rounded,
@@ -314,7 +352,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                     const Expanded(
                       child: Text(
                         '정산 없이 출차 요청',
-                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                        style:
+                        TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
                       ),
                     ),
                   ],
@@ -322,7 +361,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                 const SizedBox(height: 12),
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
                     color: Colors.grey.shade50,
                     borderRadius: BorderRadius.circular(14),
@@ -350,15 +390,18 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                       ),
                       const SizedBox(height: 10),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
                         decoration: BoxDecoration(
                           color: Colors.orange.withOpacity(0.08),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.orange.withOpacity(0.30)),
+                          border: Border.all(
+                              color: Colors.orange.withOpacity(0.30)),
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.directions_car_filled, size: 16, color: Colors.orange.shade700),
+                            Icon(Icons.directions_car_filled,
+                                size: 16, color: Colors.orange.shade700),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -381,37 +424,50 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     OutlinedButton(
-                      onPressed: () => Navigator.pop(context, _DepartureOverrideChoice.cancel),
+                      onPressed: () => Navigator.pop(
+                          context, _DepartureOverrideChoice.cancel),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.black87,
                         side: const BorderSide(color: Colors.black12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                       ),
-                      child: const Text('취소', style: TextStyle(fontWeight: FontWeight.w900)),
+                      child: const Text('취소',
+                          style: TextStyle(fontWeight: FontWeight.w900)),
                     ),
                     const SizedBox(width: 10),
                     OutlinedButton(
-                      onPressed: () => Navigator.pop(context, _DepartureOverrideChoice.goBilling),
+                      onPressed: () =>
+                          Navigator.pop(context, _DepartureOverrideChoice.goBilling),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.blueAccent,
-                        side: BorderSide(color: Colors.blueAccent.withOpacity(0.35)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        side: BorderSide(
+                            color: Colors.blueAccent.withOpacity(0.35)),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                         backgroundColor: Colors.blueAccent.withOpacity(0.06),
                       ),
-                      child: const Text('정산하기', style: TextStyle(fontWeight: FontWeight.w900)),
+                      child: const Text('정산하기',
+                          style: TextStyle(fontWeight: FontWeight.w900)),
                     ),
                     const SizedBox(width: 10),
                     FilledButton(
-                      onPressed: () => Navigator.pop(context, _DepartureOverrideChoice.proceed),
+                      onPressed: () =>
+                          Navigator.pop(context, _DepartureOverrideChoice.proceed),
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.orange.shade700,
                         foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                       ),
-                      child: const Text('그래도 출차 요청', style: TextStyle(fontWeight: FontWeight.w900)),
+                      child: const Text('그래도 출차 요청',
+                          style: TextStyle(fontWeight: FontWeight.w900)),
                     ),
                   ],
                 ),
@@ -518,7 +574,9 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
 
       final userName = context.read<UserState>().name;
       final selectedBy = (_plate.selectedBy ?? '').trim();
-      if (_plate.isSelected == true && selectedBy.isNotEmpty && selectedBy != userName) {
+      if (_plate.isSelected == true &&
+          selectedBy.isNotEmpty &&
+          selectedBy != userName) {
         _showWarningSafe('다른 사용자가 이미 주행 중입니다. (선택자: $selectedBy)');
         return;
       }
@@ -583,7 +641,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
             final updated = _plate.copyWith(isSelected: false, selectedBy: null);
             if (mounted) setState(() => _plate = updated);
             try {
-              await plateState.minorUpdatePlateLocally(PlateType.parkingRequests, updated);
+              await plateState.minorUpdatePlateLocally(
+                  PlateType.parkingRequests, updated);
             } catch (_) {}
 
             try {
@@ -628,7 +687,9 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
 
       final userName = context.read<UserState>().name;
       final selectedBy = (_plate.selectedBy ?? '').trim();
-      if (_plate.isSelected == true && selectedBy.isNotEmpty && selectedBy != userName) {
+      if (_plate.isSelected == true &&
+          selectedBy.isNotEmpty &&
+          selectedBy != userName) {
         _showWarningSafe('다른 사용자가 이미 주행 중입니다. (선택자: $selectedBy)');
         return;
       }
@@ -684,7 +745,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
             final updated = _plate.copyWith(isSelected: false, selectedBy: null);
             if (mounted) setState(() => _plate = updated);
             try {
-              await plateState.minorUpdatePlateLocally(PlateType.departureRequests, updated);
+              await plateState.minorUpdatePlateLocally(
+                  PlateType.departureRequests, updated);
             } catch (_) {}
 
             try {
@@ -726,7 +788,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
     final lockedFee = _plate.lockedFeeAmount;
     final paymentMethod = (_plate.paymentMethod ?? '').trim();
     final billingType = (_plate.billingType ?? '').trim();
-    final location = (_plate.location).trim().isEmpty ? '미지정' : _plate.location.trim();
+    final location =
+    (_plate.location).trim().isEmpty ? '미지정' : _plate.location.trim();
 
     IconData primaryIcon = Icons.local_shipping_outlined;
     String primaryTitle = '출차 요청으로 이동';
@@ -825,8 +888,10 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                 builder: (context, _) {
                   final attention = _attentionPulse.value;
 
-                  final shakeDx =
-                      math.sin(_attentionCtrl.value * math.pi * 10) * (1 - _attentionCtrl.value) * 6;
+                  final shakeDx = math
+                      .sin(_attentionCtrl.value * math.pi * 10) *
+                      (1 - _attentionCtrl.value) *
+                      6;
                   final scale = 1 + (attention * 0.012);
 
                   return ListView(
@@ -865,32 +930,48 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                                     tone: _ActionTone.positive,
                                     attention: _needsBilling ? attention : 0,
                                     onTap: () async {
-                                      final userName = context.read<UserState>().name;
-                                      final repo = context.read<PlateRepository>();
-                                      final plateState = context.read<MinorPlateState>();
-                                      final firestore = FirebaseFirestore.instance;
+                                      final userName =
+                                          context.read<UserState>().name;
+                                      final repo =
+                                      context.read<PlateRepository>();
+                                      final plateState =
+                                      context.read<MinorPlateState>();
+                                      final firestore =
+                                          FirebaseFirestore.instance;
 
-                                      final bt = (_plate.billingType ?? '').trim();
+                                      final bt =
+                                      (_plate.billingType ?? '').trim();
                                       if (bt.isEmpty) {
-                                        _showWarningSafe('정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
+                                        _showWarningSafe(
+                                            '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
                                         return;
                                       }
 
                                       final now = DateTime.now();
-                                      final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
-                                      final entryTime = _plate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+                                      final currentTime = now
+                                          .toUtc()
+                                          .millisecondsSinceEpoch ~/
+                                          1000;
+                                      final entryTime = _plate.requestTime
+                                          .toUtc()
+                                          .millisecondsSinceEpoch ~/
+                                          1000;
 
-                                      final result = await showOnTapBillingBottomSheet(
+                                      final result =
+                                      await showOnTapBillingBottomSheet(
                                         context: context,
                                         entryTimeInSeconds: entryTime,
                                         currentTimeInSeconds: currentTime,
-                                        basicStandard: _plate.basicStandard ?? 0,
+                                        basicStandard:
+                                        _plate.basicStandard ?? 0,
                                         basicAmount: _plate.basicAmount ?? 0,
                                         addStandard: _plate.addStandard ?? 0,
                                         addAmount: _plate.addAmount ?? 0,
-                                        billingType: _plate.billingType ?? '변동',
+                                        billingType:
+                                        _plate.billingType ?? '변동',
                                         regularAmount: _plate.regularAmount,
-                                        regularDurationHours: _plate.regularDurationHours,
+                                        regularDurationHours:
+                                        _plate.regularDurationHours,
                                       );
                                       if (result == null) return;
 
@@ -902,11 +983,13 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                                       );
 
                                       try {
-                                        await repo.addOrUpdatePlate(_plate.id, updatedPlate);
+                                        await repo.addOrUpdatePlate(
+                                            _plate.id, updatedPlate);
                                         _reportDbSafe(
                                           area: _plate.area,
                                           action: 'write',
-                                          source: 'parkingCompletedStatus.prebill.repo.addOrUpdatePlate',
+                                          source:
+                                          'parkingCompletedStatus.prebill.repo.addOrUpdatePlate',
                                           n: 1,
                                         );
 
@@ -921,22 +1004,30 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                                           'timestamp': now.toIso8601String(),
                                           'lockedFee': result.lockedFee,
                                           'paymentMethod': result.paymentMethod,
-                                          if (result.reason != null && result.reason!.trim().isNotEmpty)
+                                          if (result.reason != null &&
+                                              result.reason!
+                                                  .trim()
+                                                  .isNotEmpty)
                                             'reason': result.reason!.trim(),
                                         };
-                                        await firestore.collection('plates').doc(_plate.id).update({
+                                        await firestore
+                                            .collection('plates')
+                                            .doc(_plate.id)
+                                            .update({
                                           'logs': FieldValue.arrayUnion([log]),
                                         });
                                         _reportDbSafe(
                                           area: _plate.area,
                                           action: 'write',
-                                          source: 'parkingCompletedStatus.prebill.plates.update.logs.arrayUnion',
+                                          source:
+                                          'parkingCompletedStatus.prebill.plates.update.logs.arrayUnion',
                                           n: 1,
                                         );
 
                                         if (!mounted) return;
 
                                         setState(() => _plate = updatedPlate);
+
                                         _resetOverride();
 
                                         try {
@@ -945,7 +1036,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                                             '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})',
                                           );
                                         } catch (_) {
-                                          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                                          ScaffoldMessenger.maybeOf(context)
+                                              ?.showSnackBar(
                                             SnackBar(
                                               content: Text(
                                                 '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})',
@@ -955,7 +1047,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                                         }
                                       } catch (e) {
                                         if (!mounted) return;
-                                        _showWarningSafe('사전 정산 중 오류가 발생했습니다: $e');
+                                        _showWarningSafe(
+                                            '사전 정산 중 오류가 발생했습니다: $e');
                                       }
                                     },
                                   ),
@@ -969,19 +1062,25 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                                     tone: _ActionTone.neutral,
                                     badgeText: isLocked ? '잠김' : '비잠김',
                                     onTap: () async {
-                                      final userName = context.read<UserState>().name;
-                                      final repo = context.read<PlateRepository>();
-                                      final plateState = context.read<MinorPlateState>();
-                                      final firestore = FirebaseFirestore.instance;
+                                      final userName =
+                                          context.read<UserState>().name;
+                                      final repo =
+                                      context.read<PlateRepository>();
+                                      final plateState =
+                                      context.read<MinorPlateState>();
+                                      final firestore =
+                                          FirebaseFirestore.instance;
 
                                       if (_plate.isLockedFee != true) {
-                                        _showWarningSafe('현재 사전 정산 상태가 아닙니다.');
+                                        _showWarningSafe(
+                                            '현재 사전 정산 상태가 아닙니다.');
                                         return;
                                       }
 
                                       final confirm = await showDialog<bool>(
                                         context: context,
-                                        builder: (_) => const ConfirmCancelFeeDialog(),
+                                        builder: (_) =>
+                                        const ConfirmCancelFeeDialog(),
                                       );
                                       if (confirm != true) return;
 
@@ -994,11 +1093,13 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                                       );
 
                                       try {
-                                        await repo.addOrUpdatePlate(_plate.id, updatedPlate);
+                                        await repo.addOrUpdatePlate(
+                                            _plate.id, updatedPlate);
                                         _reportDbSafe(
                                           area: _plate.area,
                                           action: 'write',
-                                          source: 'parkingCompletedStatus.unlock.repo.addOrUpdatePlate',
+                                          source:
+                                          'parkingCompletedStatus.unlock.repo.addOrUpdatePlate',
                                           n: 1,
                                         );
 
@@ -1012,31 +1113,42 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                                           'performedBy': userName,
                                           'timestamp': now.toIso8601String(),
                                         };
-                                        await firestore.collection('plates').doc(_plate.id).update({
-                                          'logs': FieldValue.arrayUnion([cancelLog]),
+                                        await firestore
+                                            .collection('plates')
+                                            .doc(_plate.id)
+                                            .update({
+                                          'logs': FieldValue.arrayUnion(
+                                              [cancelLog]),
                                         });
                                         _reportDbSafe(
                                           area: _plate.area,
                                           action: 'write',
-                                          source: 'parkingCompletedStatus.unlock.plates.update.logs.arrayUnion',
+                                          source:
+                                          'parkingCompletedStatus.unlock.plates.update.logs.arrayUnion',
                                           n: 1,
                                         );
 
                                         if (!mounted) return;
 
                                         setState(() => _plate = updatedPlate);
+
                                         _resetOverride();
 
                                         try {
-                                          showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
+                                          showSuccessSnackbar(
+                                              context, '사전 정산이 취소되었습니다.');
                                         } catch (_) {
-                                          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                                            const SnackBar(content: Text('사전 정산이 취소되었습니다.')),
+                                          ScaffoldMessenger.maybeOf(context)
+                                              ?.showSnackBar(
+                                            const SnackBar(
+                                                content: Text(
+                                                    '사전 정산이 취소되었습니다.')),
                                           );
                                         }
                                       } catch (e) {
                                         if (!mounted) return;
-                                        _showWarningSafe('정산 취소 중 오류가 발생했습니다: $e');
+                                        _showWarningSafe(
+                                            '정산 취소 중 오류가 발생했습니다: $e');
                                       }
                                     },
                                   ),
@@ -1095,7 +1207,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                                       MaterialPageRoute(
                                         builder: (_) => MinorModifyPlateScreen(
                                           plate: _plate,
-                                          collectionKey: PlateType.parkingCompleted,
+                                          collectionKey:
+                                          PlateType.parkingCompleted,
                                         ),
                                       ),
                                     );
@@ -1203,12 +1316,17 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: (_busy || !widget.canCancel) ? null : () => _run(widget.onCancel),
+                    onPressed: (_busy || !widget.canCancel)
+                        ? null
+                        : () => _run(widget.onCancel),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 14, horizontal: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
                       side: const BorderSide(color: Colors.black12),
-                      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                      textStyle: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w900),
                       foregroundColor: Colors.black87,
                     ),
                     child: Text(_busy ? '처리 중...' : '주행 취소'),
@@ -1219,9 +1337,12 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
                   child: FilledButton(
                     onPressed: _busy ? null : () => _run(widget.onComplete),
                     style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 14, horizontal: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                      textStyle: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w900),
                     ),
                     child: Text(_busy ? '처리 중...' : '주행 완료'),
                   ),
@@ -1286,14 +1407,19 @@ class _PlateSummaryCard extends StatelessWidget {
     final badgeColor = isLocked ? Colors.green : Colors.grey.shade600;
     final badgeText = isLocked ? '사전정산 잠김' : '사전정산 없음';
 
-    final feeText =
-    (isLocked && lockedFee != null) ? '₩$lockedFee${paymentMethod.isNotEmpty ? " ($paymentMethod)" : ""}' : '—';
+    final feeText = (isLocked && lockedFee != null)
+        ? '₩$lockedFee${paymentMethod.isNotEmpty ? " ($paymentMethod)" : ""}'
+        : '—';
 
     final billingText = billingType.isNotEmpty ? billingType : '미지정';
 
-    final borderColor = Color.lerp(Colors.black12, Colors.orange, (attention * 0.9).clamp(0, 1))!;
-    final bgColor =
-    Color.lerp(Colors.grey.shade50, Colors.orange.withOpacity(0.06), (attention * 0.8).clamp(0, 1))!;
+    final borderColor =
+    Color.lerp(Colors.black12, Colors.orange, (attention * 0.9).clamp(0, 1))!;
+    final bgColor = Color.lerp(
+      Colors.grey.shade50,
+      Colors.orange.withOpacity(0.06),
+      (attention * 0.8).clamp(0, 1),
+    )!;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -1332,7 +1458,8 @@ class _PlateSummaryCard extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: badgeColor.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(999),
@@ -1353,7 +1480,8 @@ class _PlateSummaryCard extends StatelessWidget {
           if (attention > 0.001 && !isLocked) ...[
             Container(
               margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.orange.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(12),
@@ -1361,7 +1489,8 @@ class _PlateSummaryCard extends StatelessWidget {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 18),
+                  Icon(Icons.warning_amber_rounded,
+                      color: Colors.orange.shade700, size: 18),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -1467,9 +1596,11 @@ class _SectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+          Text(title,
+              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
           const SizedBox(height: 4),
-          Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 12)),
+          Text(subtitle,
+              style: const TextStyle(color: Colors.black54, fontSize: 12)),
           const SizedBox(height: 12),
           child,
         ],
@@ -1501,12 +1632,18 @@ class _ActionTileButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color base = (tone == _ActionTone.positive) ? Colors.green : Colors.grey.shade800;
-    final Color bg = (tone == _ActionTone.positive) ? Colors.green.withOpacity(0.08) : Colors.grey.shade100;
-    final Color border = (tone == _ActionTone.positive) ? Colors.green.withOpacity(0.25) : Colors.black12;
+    final Color base =
+    (tone == _ActionTone.positive) ? Colors.green : Colors.grey.shade800;
+    final Color bg = (tone == _ActionTone.positive)
+        ? Colors.green.withOpacity(0.08)
+        : Colors.grey.shade100;
+    final Color border =
+    (tone == _ActionTone.positive) ? Colors.green.withOpacity(0.25) : Colors.black12;
 
-    final Color attentionBorder = Color.lerp(border, Colors.orange, (attention * 0.9).clamp(0, 1))!;
-    final Color attentionBg = Color.lerp(bg, Colors.orange.withOpacity(0.10), (attention * 0.8).clamp(0, 1))!;
+    final Color attentionBorder =
+    Color.lerp(border, Colors.orange, (attention * 0.9).clamp(0, 1))!;
+    final Color attentionBg =
+    Color.lerp(bg, Colors.orange.withOpacity(0.10), (attention * 0.8).clamp(0, 1))!;
 
     return Material(
       color: Colors.transparent,
@@ -1539,7 +1676,8 @@ class _ActionTileButton extends StatelessWidget {
                   Expanded(
                     child: Text(
                       title,
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w900, fontSize: 15),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1547,7 +1685,8 @@ class _ActionTileButton extends StatelessWidget {
                   if (badgeText != null) ...[
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: base.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(999),
@@ -1578,7 +1717,8 @@ class _ActionTileButton extends StatelessWidget {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.orange.shade700),
+                    Icon(Icons.arrow_forward_rounded,
+                        size: 16, color: Colors.orange.shade700),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
@@ -1623,7 +1763,8 @@ class _PrimaryCtaButton extends StatelessWidget {
           backgroundColor: Colors.blueAccent,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
         ),
         onPressed: () async => onPressed(),
@@ -1701,7 +1842,9 @@ class _DangerActionButton extends StatelessWidget {
       width: double.infinity,
       child: OutlinedButton.icon(
         icon: Icon(icon, color: Colors.red.shade700),
-        label: Text(label, style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w900)),
+        label: Text(label,
+            style:
+            TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w900)),
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(double.infinity, 48),

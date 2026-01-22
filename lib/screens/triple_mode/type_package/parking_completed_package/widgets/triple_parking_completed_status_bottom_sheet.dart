@@ -20,6 +20,33 @@ import '../../../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import '../../../../common_package/log_package/log_viewer_bottom_sheet.dart';
 import '../../../modify_package/triple_modify_plate_screen.dart';
 
+/// ✅ 추가: 다이얼로그/테이블에서 “콜백 없이” 바로 열기 위한 wrapper
+/// - 기존 showTripleParkingCompletedStatusBottomSheet 시그니처(콜백 required)는 유지
+Future<void> showTripleParkingCompletedStatusBottomSheetFromDialog({
+  required BuildContext context,
+  required PlateModel plate,
+}) async {
+  await showTripleParkingCompletedStatusBottomSheet(
+    context: context,
+    plate: plate,
+    onRequestEntry: () async {
+      // 안전 기본값: 기존 helper 활용(원하면 여기 정책 변경 가능)
+      final area = context.read<AreaState>().currentArea;
+      await handleEntryParkingRequest(context, plate.plateNumber, area);
+    },
+    onDelete: () {
+      // 안전 기본값: 테이블 상세 → 작업 수행 경로에서는 삭제를 기본 비활성화(원하면 실제 삭제 로직으로 대체)
+      try {
+        showFailedSnackbar(context, '이 경로에서는 삭제 기능을 사용할 수 없습니다.');
+      } catch (_) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          const SnackBar(content: Text('이 경로에서는 삭제 기능을 사용할 수 없습니다.')),
+        );
+      }
+    },
+  );
+}
+
 Future<void> showTripleParkingCompletedStatusBottomSheet({
   required BuildContext context,
   required PlateModel plate,
