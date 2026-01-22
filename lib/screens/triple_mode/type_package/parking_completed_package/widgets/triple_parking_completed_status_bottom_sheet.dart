@@ -149,6 +149,20 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
   bool get _needsBilling => (_type == PlateType.parkingCompleted) && (_plate.isLockedFee != true);
   bool get _isFreeBilling => (_plate.basicAmount ?? 0) == 0 && (_plate.addAmount ?? 0) == 0;
 
+
+  /// ✅ 앱 강제 종료/재실행 등으로 '주행 중(선점)' 상태가 남아있을 때,
+  /// 동일 사용자가 다시 진입하면 UI 문구를 '시작'이 아닌 '계속'으로 노출합니다.
+  bool get _isMyDriving {
+    final userName = (context.read<UserState>().name).trim();
+    final selectedBy = (_plate.selectedBy ?? '').trim();
+    final t = _type;
+    return _plate.isSelected == true &&
+        userName.isNotEmpty &&
+        selectedBy.isNotEmpty &&
+        selectedBy == userName &&
+        (t == PlateType.parkingRequests || t == PlateType.departureRequests);
+  }
+
   bool get _overrideActive {
     if (!_departureOverrideArmed || _departureOverrideArmedAt == null) return false;
     return DateTime.now().difference(_departureOverrideArmedAt!) <= _overrideWindow;
@@ -804,13 +818,17 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
 
     if (_type == PlateType.parkingRequests) {
       primaryIcon = Icons.play_circle_fill;
-      primaryTitle = '입차 주행 시작';
-      primarySubtitle = '주행 중으로 전환 후, 완료 시 입차 완료로 변경됩니다.';
+      primaryTitle = _isMyDriving ? '입차 주행 계속' : '입차 주행 시작';
+      primarySubtitle = _isMyDriving
+          ? '이전에 시작된 주행 상태가 유지되었습니다. 완료 또는 취소로 정리하세요.'
+          : '주행 중으로 전환 후, 완료 시 입차 완료로 변경됩니다.';
       primaryOnPressed = _startEntryDriving;
     } else if (_type == PlateType.departureRequests) {
       primaryIcon = Icons.play_circle_fill;
-      primaryTitle = '출차 주행 시작';
-      primarySubtitle = '주행 중으로 전환 후, 완료 시 출차 완료로 변경됩니다.';
+      primaryTitle = _isMyDriving ? '출차 주행 계속' : '출차 주행 시작';
+      primarySubtitle = _isMyDriving
+          ? '이전에 시작된 주행 상태가 유지되었습니다. 완료 또는 취소로 정리하세요.'
+          : '주행 중으로 전환 후, 완료 시 출차 완료로 변경됩니다.';
       primaryOnPressed = _startDepartureDriving;
     }
 

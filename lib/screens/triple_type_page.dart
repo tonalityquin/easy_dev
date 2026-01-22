@@ -17,6 +17,7 @@ import '../theme.dart';
 
 // ✅ Trace 기록용 Recorder
 import 'hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
+import '../services/driving_recovery/driving_recovery_gate.dart';
 
 class TripleTypePage extends StatefulWidget {
   const TripleTypePage({super.key});
@@ -81,7 +82,7 @@ class _TripleTypePageState extends State<TripleTypePage> {
               }
             },
             child: Scaffold(
-              body: const RefreshableBody(),
+              body: DrivingRecoveryGate(mode: DrivingRecoveryMode.triple, child: const RefreshableBody()),
               bottomNavigationBar: SafeArea(
                 top: false,
                 child: Column(

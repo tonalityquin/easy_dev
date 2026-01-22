@@ -14,6 +14,7 @@ import '../theme.dart';
 
 // ✅ Trace 기록용 Recorder
 import 'hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
+import '../services/driving_recovery/driving_recovery_gate.dart';
 
 class MinorTypePage extends StatefulWidget {
   const MinorTypePage({super.key});
@@ -72,7 +73,7 @@ class _MinorTypePageState extends State<MinorTypePage> {
               }
             },
             child: Scaffold(
-              body: const RefreshableBody(),
+              body: DrivingRecoveryGate(mode: DrivingRecoveryMode.minor, child: const RefreshableBody()),
               bottomNavigationBar: SafeArea(
                 top: false,
                 child: Column(
