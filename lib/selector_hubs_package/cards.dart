@@ -199,54 +199,6 @@ class LeadingIcon extends StatelessWidget {
 
 /// 개별 카드들 (팔레트는 theme.dart(AppCardPalette)에서 주입)
 
-class ServiceCard extends StatelessWidget {
-  const ServiceCard({
-    super.key,
-    this.enabled = true,
-    this.devAuthorized = false,
-  });
-
-  final bool enabled;
-  final bool devAuthorized;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = AppCardPalette.of(context);
-    final onBase = Theme.of(context).colorScheme.onPrimary;
-
-    final title = _selectorCardTitle(context, '서비스 로그인', p.serviceDark);
-
-    final bool effectiveEnabled = enabled && devAuthorized;
-    final String hint = !devAuthorized
-        ? '개발자 인증 후 사용할 수 있어요'
-        : '저장된 모드가 service일 때만 선택할 수 있어요';
-
-    return Card(
-      color: Theme.of(context).cardColor,
-      elevation: 1,
-      clipBehavior: Clip.antiAlias,
-      surfaceTintColor: p.serviceLight,
-      child: CardBody(
-        icon: Icons.local_parking,
-        bg: p.serviceBase,
-        iconColor: onBase,
-        titleWidget: title,
-        buttonBg: p.serviceBase,
-        buttonFg: onBase,
-        traceName: '서비스 로그인',
-        traceMeta: {
-          'to': AppRoutes.serviceLogin,
-          'requiredMode': 'service',
-          'requiresDevAuth': true,
-        },
-        onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.serviceLogin),
-        enabled: effectiveEnabled,
-        disabledHint: hint,
-      ),
-    );
-  }
-}
-
 class SingleLoginCard extends StatelessWidget {
   const SingleLoginCard({super.key, this.enabled = true});
 
@@ -332,7 +284,7 @@ class DoubleLoginCard extends StatelessWidget {
   }
 }
 
-/// ✅ 마이너 로그인 카드 (WorkFlow C) - 정합 완료
+/// ✅ 마이너 로그인 카드 (WorkFlow C)
 /// - requiredMode: 'minor'
 /// - redirectAfterLogin: AppRoutes.minorCommute
 class MinorLoginCard extends StatelessWidget {
@@ -345,7 +297,6 @@ class MinorLoginCard extends StatelessWidget {
     final p = AppCardPalette.of(context);
     final onBase = Theme.of(context).colorScheme.onPrimary;
 
-    // ✅ minor 색상 적용
     final title = _selectorCardTitle(context, 'WorkFlow C', p.minorDark);
 
     return Card(

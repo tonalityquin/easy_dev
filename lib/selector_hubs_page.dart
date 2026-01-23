@@ -24,7 +24,7 @@ class SelectorHubsPage extends StatefulWidget {
 }
 
 class _SelectorHubsPageState extends State<SelectorHubsPage> {
-  String? _savedMode; // 'service' | 'tablet' | 'single' | 'double' | 'triple' | null
+  String? _savedMode; // 'tablet' | 'single' | 'double' | 'triple' | 'minor' | null
   bool _devAuthorized = false;
 
   @override
@@ -36,10 +36,21 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
   Future<void> _restorePrefs() async {
     final pref = await DevAuth.restorePrefs();
     if (!mounted) return;
+
+    // ✅ 레거시(service 모드) 저장값 감지: 서비스 로그인 폐기 이후에도 허브가 잠기지 않도록 안내
+    final wasService = (pref.savedMode ?? '').trim().toLowerCase() == 'service';
+
     setState(() {
       _savedMode = pref.savedMode;
       _devAuthorized = pref.devAuthorized;
     });
+
+    if (wasService) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        showSelectedSnackbar(context, '서비스 로그인은 종료되었습니다. 다른 모드를 선택해 주세요.');
+      });
+    }
   }
 
   Future<void> _setDevAuthorized(bool value) async {
@@ -114,7 +125,7 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
     // 리네이밍/하위호환: 기존 값도 수용
     switch (v) {
       case 'service':
-        return 'service';
+        return null; // 서비스 로그인 폐기: 저장값이 service면 모드 제한 해제
       case 'tablet':
         return 'tablet';
       case 'single':
@@ -136,7 +147,6 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
   Widget build(BuildContext context) {
     final mode = _normalizeMode(_savedMode);
 
-    final bool serviceEnabled;
     final bool singleEnabled;
     final bool tabletEnabled;
     final bool doubleEnabled;
@@ -144,52 +154,45 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
     final bool minorEnabled;
 
     if (mode == null) {
-      serviceEnabled = true;
       singleEnabled = true;
       tabletEnabled = true;
       doubleEnabled = true;
       tripleEnabled = true;
       minorEnabled = true;
-    } else if (mode == 'service') {
-      serviceEnabled = true;
-      singleEnabled = false;
-      tabletEnabled = false;
-      doubleEnabled = false;
-      tripleEnabled = false;
-      minorEnabled = false;
     } else if (mode == 'single') {
-      serviceEnabled = false;
       singleEnabled = true;
       tabletEnabled = false;
       doubleEnabled = false;
       tripleEnabled = false;
       minorEnabled = false;
     } else if (mode == 'tablet') {
-      serviceEnabled = false;
       singleEnabled = false;
       tabletEnabled = true;
       doubleEnabled = false;
       tripleEnabled = false;
       minorEnabled = false;
     } else if (mode == 'double') {
-      serviceEnabled = false;
       singleEnabled = false;
       tabletEnabled = false;
       doubleEnabled = true;
       tripleEnabled = false;
       minorEnabled = false;
     } else if (mode == 'triple') {
-      serviceEnabled = false;
+      // ✅ WorkFlow B 로그인 후: triple만 허용 (다른 WorkFlow 로그인 카드 비활성화)
       singleEnabled = false;
       tabletEnabled = false;
       doubleEnabled = false;
       tripleEnabled = true;
-
-      // ✅ 정책: 마이너 로그인은 트리플 계열 접근(트리플 권한 안에서만 노출/활성)
+      minorEnabled = false;
+    } else if (mode == 'minor') {
+      // ✅ WorkFlow C 로그인 후: minor만 허용 (다른 WorkFlow 로그인 카드 비활성화)
+      singleEnabled = false;
+      tabletEnabled = false;
+      doubleEnabled = false;
+      tripleEnabled = false;
       minorEnabled = true;
     } else {
       // 예기치 못한 값이 들어온 경우: 방어적으로 모두 허용
-      serviceEnabled = true;
       singleEnabled = true;
       tabletEnabled = true;
       doubleEnabled = true;
@@ -199,45 +202,39 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
 
     // ✅ 요청하신 카드 배열 순서(페이지/좌우)를 그대로 반영
     final List<List<Widget>> pages = [
-      // 1) 경량 로그인과 로그인
+      // 1) WorkFlow A(더블) / WorkFlow B(트리플)
       [
         DoubleLoginCard(enabled: doubleEnabled),
         TripleLoginCard(enabled: tripleEnabled),
       ],
 
-      // 2) 마이너 로그인과 약식 로그인
+      // 2) WorkFlow C(마이너) / WorkFlow D(싱글)
       [
         MinorLoginCard(enabled: minorEnabled),
         SingleLoginCard(enabled: singleEnabled),
       ],
 
-      // 3) 태블릿 로그인과 본사
+      // 3) 태블릿 로그인 / 본사
       [
         TabletCard(enabled: tabletEnabled),
         const HeadquarterCard(),
       ],
 
-      // 4) 커뮤니티와 FAQ/문의
+      // 4) 커뮤니티 / FAQ
       [
         const CommunityCard(),
         const FaqCard(),
       ],
 
-      // 5) 오프라인 서비스 (단독)
-      [
-        const ParkingCard(),
-        const SizedBox.shrink(),
-      ],
-
-      // 6) 개발과 서비스 로그인
-      [
-        _devAuthorized
-            ? DevCard(
-          onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.devStub),
-        )
-            : const SizedBox.shrink(),
-        ServiceCard(enabled: serviceEnabled),
-      ],
+      // 5) 개발자 전용: Practice Space + 개발 (동일 화면)
+      //    - Practice Space는 개발자 인증 후에만 노출
+      if (_devAuthorized)
+        [
+          const ParkingCard(),
+          DevCard(
+            onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.devStub),
+          ),
+        ],
     ];
 
     final media = MediaQuery.of(context);
