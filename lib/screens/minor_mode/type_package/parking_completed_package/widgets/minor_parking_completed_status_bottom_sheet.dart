@@ -1,12 +1,16 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../../models/location_model.dart';
 import '../../../../../models/plate_model.dart';
 
 import '../../../../../states/area/area_state.dart';
+import '../../../../../states/location/location_state.dart';
 import '../../../../../states/plate/minor_plate_state.dart';
 import '../../../../../states/plate/movement_plate.dart';
 import '../../../../../states/user/user_state.dart';
@@ -153,7 +157,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
 
   bool get _isFreeBilling =>
       (_plate.basicAmount ?? 0) == 0 && (_plate.addAmount ?? 0) == 0;
-
 
   /// ✅ 앱 강제 종료/재실행 등으로 '주행 중(선점)' 상태가 남아있을 때,
   /// 동일 사용자가 다시 진입하면 UI 문구를 '시작'이 아닌 '계속'으로 노출합니다.
@@ -366,8 +369,10 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                     const Expanded(
                       child: Text(
                         '정산 없이 출차 요청',
-                        style:
-                        TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                        ),
                       ),
                     ),
                   ],
@@ -448,13 +453,15 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 12),
                       ),
-                      child: const Text('취소',
-                          style: TextStyle(fontWeight: FontWeight.w900)),
+                      child: const Text(
+                        '취소',
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
                     ),
                     const SizedBox(width: 10),
                     OutlinedButton(
-                      onPressed: () =>
-                          Navigator.pop(context, _DepartureOverrideChoice.goBilling),
+                      onPressed: () => Navigator.pop(
+                          context, _DepartureOverrideChoice.goBilling),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.blueAccent,
                         side: BorderSide(
@@ -465,13 +472,15 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                             horizontal: 14, vertical: 12),
                         backgroundColor: Colors.blueAccent.withOpacity(0.06),
                       ),
-                      child: const Text('정산하기',
-                          style: TextStyle(fontWeight: FontWeight.w900)),
+                      child: const Text(
+                        '정산하기',
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
                     ),
                     const SizedBox(width: 10),
                     FilledButton(
-                      onPressed: () =>
-                          Navigator.pop(context, _DepartureOverrideChoice.proceed),
+                      onPressed: () => Navigator.pop(
+                          context, _DepartureOverrideChoice.proceed),
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.orange.shade700,
                         foregroundColor: Colors.white,
@@ -480,8 +489,10 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 12),
                       ),
-                      child: const Text('그래도 출차 요청',
-                          style: TextStyle(fontWeight: FontWeight.w900)),
+                      child: const Text(
+                        '그래도 출차 요청',
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
                     ),
                   ],
                 ),
@@ -579,6 +590,392 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
     return r;
   }
 
+  // =========================
+  // ✅ 입차 완료: 주차 구역 선택(캐시 기반) 후 완료 처리
+  // =========================
+
+  String _resolveAreaForCache() {
+    final a = _plate.area.trim();
+    if (a.isNotEmpty) return a;
+    final wa = widget.area.trim();
+    return wa.isNotEmpty ? wa : context.read<AreaState>().currentArea.trim();
+  }
+
+  String _locationDisplayName(LocationModel loc) {
+    final t = (loc.type ?? '').trim();
+    final parent = (loc.parent ?? '').trim();
+    final name = loc.locationName.trim();
+
+    if (t == 'composite' && parent.isNotEmpty && name.isNotEmpty) {
+      return '$parent - $name';
+    }
+    return name.isNotEmpty ? name : '미지정';
+  }
+
+  Future<List<LocationModel>> _loadCachedLocationsForArea(String area) async {
+    // 1) LocationState (내부적으로 SharedPreferences 캐시 기반)
+    try {
+      final ls = context.read<LocationState>();
+      final list = ls.locations;
+      if (list.isNotEmpty) return List<LocationModel>.of(list);
+    } catch (_) {}
+
+    // 2) SharedPreferences 직접 fallback
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedJson = prefs.getString('cached_locations_$area');
+      if (cachedJson == null || cachedJson.trim().isEmpty) return [];
+
+      final decoded = json.decode(cachedJson);
+      if (decoded is! List) return [];
+
+      return decoded
+          .map((e) => LocationModel.fromCacheMap(
+          Map<String, dynamic>.from(e as Map<dynamic, dynamic>)))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<String?> _showParkingLocationPickerDialog({
+    required String plateNumber,
+    required String area,
+    required Future<void> Function(String pickedLocation) onConfirm,
+  }) async {
+    final rootContext = Navigator.of(context, rootNavigator: true).context;
+
+    final cached = await _loadCachedLocationsForArea(area);
+    final items = cached
+        .where((e) => e.locationName.trim().isNotEmpty)
+        .toList()
+      ..sort((a, b) => _locationDisplayName(a)
+          .toLowerCase()
+          .compareTo(_locationDisplayName(b).toLowerCase()));
+
+    if (items.isEmpty) {
+      _showWarningSafe(
+        '저장된 주차 구역(캐시)이 없습니다.\n'
+            '설정/개발 메뉴에서 “주차 구역 수동 새로고침” 후 다시 시도해주세요.',
+      );
+      return null;
+    }
+
+    return showDialog<String>(
+      context: rootContext,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withOpacity(0.55),
+      builder: (_) {
+        String query = '';
+        String? selectedId;
+        bool saving = false;
+        String? errorText;
+
+        return StatefulBuilder(
+          builder: (dialogCtx, setDialogState) {
+            final filtered = items.where((loc) {
+              final q = query.trim().toLowerCase();
+              if (q.isEmpty) return true;
+              final dn = _locationDisplayName(loc).toLowerCase();
+              return dn.contains(q);
+            }).toList();
+
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              insetPadding:
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.black12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.12),
+                      blurRadius: 24,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header
+                    Row(
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: Colors.blueAccent.withOpacity(0.10),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                                color: Colors.blueAccent.withOpacity(0.25)),
+                          ),
+                          child: const Icon(
+                            Icons.local_parking_rounded,
+                            color: Colors.blueAccent,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        const Expanded(
+                          child: Text(
+                            '주차 구역 선택',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Info card
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.black12),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.directions_car_filled,
+                              size: 16, color: Colors.blueGrey.shade700),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              '차량: $plateNumber  •  지역: $area',
+                              style: TextStyle(
+                                color: Colors.black.withOpacity(0.80),
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // Search
+                    TextField(
+                      enabled: !saving,
+                      onChanged: (v) => setDialogState(() => query = v),
+                      decoration: InputDecoration(
+                        hintText: '주차 구역 검색',
+                        prefixIcon: const Icon(Icons.search),
+                        isDense: true,
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: Colors.black12),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: Colors.black12),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(
+                              color: Colors.blueAccent.withOpacity(0.6)),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    // List
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 360),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.black12),
+                      ),
+                      child: filtered.isEmpty
+                          ? Padding(
+                        padding: const EdgeInsets.all(14),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline,
+                                color: Colors.grey.shade700),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '검색 결과가 없습니다.',
+                                style: TextStyle(
+                                  color: Colors.black.withOpacity(0.70),
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                          : ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: filtered.length,
+                        separatorBuilder: (_, __) => Divider(
+                          height: 1,
+                          color: Colors.black.withOpacity(0.06),
+                        ),
+                        itemBuilder: (_, i) {
+                          final loc = filtered[i];
+                          final displayName = _locationDisplayName(loc);
+                          final cap = loc.capacity;
+                          final count = loc.plateCount;
+
+                          return RadioListTile<String>(
+                            value: loc.id,
+                            groupValue: selectedId,
+                            onChanged: saving
+                                ? null
+                                : (v) => setDialogState(() {
+                              selectedId = v;
+                              errorText = null;
+                            }),
+                            title: Text(
+                              displayName,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 13,
+                              ),
+                            ),
+                            subtitle: Text(
+                              'capacity: $cap  •  plateCount: $count',
+                              style: TextStyle(
+                                color: Colors.black.withOpacity(0.60),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12,
+                              ),
+                            ),
+                            dense: true,
+                            controlAffinity:
+                            ListTileControlAffinity.trailing,
+                            activeColor: Colors.blueAccent,
+                          );
+                        },
+                      ),
+                    ),
+
+                    if (errorText != null) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(12),
+                          border:
+                          Border.all(color: Colors.red.withOpacity(0.25)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.error_outline,
+                                size: 18, color: Colors.red.shade700),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                errorText!,
+                                style: TextStyle(
+                                  color: Colors.red.shade700,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 14),
+
+                    // Actions
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: saving
+                                ? null
+                                : () => Navigator.of(dialogCtx).pop(),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.black87,
+                              side: const BorderSide(color: Colors.black12),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 12),
+                              textStyle: const TextStyle(
+                                  fontSize: 14, fontWeight: FontWeight.w900),
+                            ),
+                            child: Text(saving ? '처리 중...' : '취소'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: (saving || selectedId == null)
+                                ? null
+                                : () async {
+                              final picked = items
+                                  .firstWhere((e) => e.id == selectedId);
+                              final pickedName =
+                              _locationDisplayName(picked).trim();
+
+                              setDialogState(() {
+                                saving = true;
+                                errorText = null;
+                              });
+
+                              try {
+                                await onConfirm(pickedName);
+                                if (!dialogCtx.mounted) return;
+                                Navigator.of(dialogCtx).pop(pickedName);
+                              } catch (e) {
+                                setDialogState(() {
+                                  saving = false;
+                                  errorText = '저장 중 오류가 발생했습니다: $e';
+                                });
+                              }
+                            },
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.blueAccent,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 12),
+                              textStyle: const TextStyle(
+                                  fontSize: 14, fontWeight: FontWeight.w900),
+                            ),
+                            child: Text(saving ? '처리 중...' : '확인'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Future<void> _startEntryDriving() async {
     await _runPrimary(() async {
       if (_type != PlateType.parkingRequests) {
@@ -626,11 +1023,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
           canCancel: canCancel,
           cancelDisabledHint: '선점자만 주행 취소가 가능합니다.',
           onComplete: () async {
-            await movementPlate.setParkingCompleted(
-              _plate.plateNumber,
-              _plate.area,
-              _effectiveLocation,
-            );
+            // ✅ 변경: "주행 완료"는 다이얼로그를 닫는 역할만 수행
+            // 실제 입차 완료 전환 + location 삽입은 다이얼로그 종료 후 중앙 선택 다이얼로그에서 처리
           },
           onCancel: () async {
             // ✅ 취소 권한 제한(2중 방어)
@@ -666,6 +1060,28 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
         );
 
         if (result == _DrivingResult.completed) {
+          if (!mounted) return;
+
+          // ✅ 변경: 주행 다이얼로그가 닫힌 뒤 → 중앙 "주차 구역 선택" 다이얼로그 표시
+          final area = _resolveAreaForCache();
+          final picked = await _showParkingLocationPickerDialog(
+            plateNumber: _plate.plateNumber,
+            area: area,
+            onConfirm: (pickedLocation) async {
+              await movementPlate.setParkingCompleted(
+                _plate.plateNumber,
+                area,
+                pickedLocation,
+              );
+            },
+          );
+
+          // 선택 취소/실패 시: 주행 상태(선점)는 유지 (워크플로우 미완료)
+          if (picked == null || picked.trim().isEmpty) {
+            return;
+          }
+
+          // ✅ 성공: 시트 닫기
           if (!mounted) return;
           Navigator.pop(context);
           return;
@@ -1206,7 +1622,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                       rootContext,
                                       MaterialPageRoute(
                                         builder: (_) => LogViewerBottomSheet(
-                                          initialPlateNumber: widget.plateNumber,
+                                          initialPlateNumber:
+                                          widget.plateNumber,
                                           division: widget.division,
                                           area: widget.area,
                                           requestTime: _plate.requestTime,
@@ -1476,8 +1893,7 @@ class _PlateSummaryCard extends StatelessWidget {
                 ),
               ),
               Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: badgeColor.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(999),
@@ -1498,8 +1914,7 @@ class _PlateSummaryCard extends StatelessWidget {
           if (attention > 0.001 && !isLocked) ...[
             Container(
               margin: const EdgeInsets.only(bottom: 10),
-              padding:
-              const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
                 color: Colors.orange.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(12),
@@ -1655,13 +2070,17 @@ class _ActionTileButton extends StatelessWidget {
     final Color bg = (tone == _ActionTone.positive)
         ? Colors.green.withOpacity(0.08)
         : Colors.grey.shade100;
-    final Color border =
-    (tone == _ActionTone.positive) ? Colors.green.withOpacity(0.25) : Colors.black12;
+    final Color border = (tone == _ActionTone.positive)
+        ? Colors.green.withOpacity(0.25)
+        : Colors.black12;
 
     final Color attentionBorder =
     Color.lerp(border, Colors.orange, (attention * 0.9).clamp(0, 1))!;
-    final Color attentionBg =
-    Color.lerp(bg, Colors.orange.withOpacity(0.10), (attention * 0.8).clamp(0, 1))!;
+    final Color attentionBg = Color.lerp(
+      bg,
+      Colors.orange.withOpacity(0.10),
+      (attention * 0.8).clamp(0, 1),
+    )!;
 
     return Material(
       color: Colors.transparent,
@@ -1781,8 +2200,7 @@ class _PrimaryCtaButton extends StatelessWidget {
           backgroundColor: Colors.blueAccent,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-          shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
         ),
         onPressed: () async => onPressed(),
@@ -1860,9 +2278,13 @@ class _DangerActionButton extends StatelessWidget {
       width: double.infinity,
       child: OutlinedButton.icon(
         icon: Icon(icon, color: Colors.red.shade700),
-        label: Text(label,
-            style:
-            TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w900)),
+        label: Text(
+          label,
+          style: TextStyle(
+            color: Colors.red.shade700,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(double.infinity, 48),
