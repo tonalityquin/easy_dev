@@ -5,8 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../enums/plate_type.dart';
 import '../../models/plate_model.dart';
 import '../../repositories/plate_repo_services/plate_write_service.dart';
-import '../../screens/service_mode/type_package/common_widgets/reverse_sheet_package/services/parking_completed_logger.dart';
-import '../../screens/service_mode/type_package/common_widgets/reverse_sheet_package/services/status_mapping.dart';
 import '../user/user_state.dart';
 
 /// ✅ parking_completed_view "쓰기(Upsert/Delete)"를 기기 로컬 토글(SharedPreferences)로 제어
@@ -249,7 +247,7 @@ class MovementPlate extends ChangeNotifier {
   }
 
   // ─────────────────────────────────────────
-  // parking_requests_view upsert/remove (신규)
+  // parking_requests_view upsert/remove
   // ─────────────────────────────────────────
 
   /// ✅ View upsert: parking_requests_view/{area}.items.{plateDocId}
@@ -321,24 +319,6 @@ class MovementPlate extends ChangeNotifier {
     }
   }
 
-  /// ✅ 로컬 SQLite: (필요 시) 입차완료 로그를 만들고 출차완료 처리까지 보장
-  Future<void> _ensureLocalEntryAndMarkDepartureCompleted({
-    required String plateNumber,
-    required String location,
-  }) async {
-    await ParkingCompletedLogger.instance.maybeLogEntryCompleted(
-      plateNumber: plateNumber,
-      location: location,
-      oldStatus: kStatusEntryRequest,
-      newStatus: kStatusEntryDone,
-    );
-
-    await ParkingCompletedLogger.instance.markDepartureCompleted(
-      plateNumber: plateNumber,
-      location: location,
-    );
-  }
-
   /// 입차 완료 (parking_requests → parking_completed)
   Future<void> setParkingCompleted(
       String plateNumber,
@@ -375,13 +355,6 @@ class MovementPlate extends ChangeNotifier {
       plateDocId: plateDocId,
       plateNumber: plateNumber,
       location: location,
-    );
-
-    await ParkingCompletedLogger.instance.maybeLogEntryCompleted(
-      plateNumber: plateNumber,
-      location: location,
-      oldStatus: kStatusEntryRequest,
-      newStatus: kStatusEntryDone,
     );
   }
 
@@ -453,11 +426,6 @@ class MovementPlate extends ChangeNotifier {
       area: area,
       plateDocId: plateDocId,
     );
-
-    await _ensureLocalEntryAndMarkDepartureCompleted(
-      plateNumber: plateNumber,
-      location: location,
-    );
   }
 
   /// 출차 완료 (departure_requests → departure_completed)
@@ -489,11 +457,6 @@ class MovementPlate extends ChangeNotifier {
     await _removeDepartureRequestsViewItem(
       area: selectedPlate.area,
       plateDocId: plateDocId,
-    );
-
-    await ParkingCompletedLogger.instance.markDepartureCompleted(
-      plateNumber: selectedPlate.plateNumber,
-      location: selectedPlate.location,
     );
   }
 
@@ -537,7 +500,7 @@ class MovementPlate extends ChangeNotifier {
   }
 
   /// (옵션) 임의 상태 → 입차 요청 되돌리기
-  /// ✅ (요구사항) "입차 요청으로 되돌리면 parking_requests_view에 생성",
+  /// ✅ "입차 요청으로 되돌리면 parking_requests_view에 생성",
   ///    "기존 view(출차요청/입차완료)에서는 제거"
   Future<void> goBackToParkingRequest({
     required PlateType fromType,

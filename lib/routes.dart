@@ -9,9 +9,7 @@ import 'package:easydev/offlines/offline_login_package/offline_login_screen.dart
 // ▼ 일반 화면들
 import 'package:easydev/screens/hubs_mode/dev_stub_page.dart';
 import 'package:easydev/screens/hubs_mode/head_stub_page.dart';
-import 'package:easydev/screens/headquarter_page.dart';
 import 'package:easydev/screens/hubs_mode/login_package/login_screen.dart';
-import 'package:easydev/screens/type_page.dart';
 import 'package:easydev/screens/tablet_mode/tablet_page.dart';
 import 'package:easydev/screens/hubs_mode/faq_page.dart';
 import 'package:easydev/screens/hubs_mode/community_stub_page.dart';
@@ -23,7 +21,6 @@ import 'screens/minor_headquarter_page.dart';
 import 'screens/minor_mode/commute_package/minor_commute_in_screen.dart';
 import 'screens/minor_type_page.dart';
 import 'screens/triple_type_page.dart';
-import 'screens/service_mode/commute_package/commute_inside_screen.dart';
 import 'screens/hubs_mode/dev_package/dev_calendar_page.dart';
 import 'screens/hubs_mode/head_package/company_calendar_page.dart';
 import 'screens/single_mode/single_inside_screen.dart';
@@ -95,7 +92,6 @@ final Map<String, WidgetBuilder> appRoutes = {
     onLoginSucceeded: () => Navigator.of(context).pushReplacementNamed(AppRoutes.offlineCommute),
   ),
 
-  AppRoutes.commute: (context) => const CommuteInsideScreen(),
   AppRoutes.doubleCommute: (context) => const DoubleCommuteInScreen(),
   AppRoutes.singleCommute: (context) => const SingleInsideScreen(),
   AppRoutes.offlineCommute: (context) => const OfflineCommuteInsideScreen(),
@@ -104,8 +100,6 @@ final Map<String, WidgetBuilder> appRoutes = {
   // ✅ minor 출퇴근(임시: triple 출퇴근 재사용)
   AppRoutes.minorCommute: (context) => const MinorCommuteInScreen(),
 
-  AppRoutes.headquarterPage: (context) => const HeadquarterPage(),
-  AppRoutes.typePage: (context) => const TypePage(),
   AppRoutes.doubleHeadquarterPage: (context) => const DoubleHeadquarterPage(),
   AppRoutes.tripleHeadquarterPage: (context) => const TripleHeadquarterPage(),
 

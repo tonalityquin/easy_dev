@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 
-import '../../../../screens/service_mode/modify_package/utils/modify_plate_service.dart';
+import '../../../../screens/double_mode/modify_package/utils/double_modify_plate_service.dart';
 
 class OfflineDepartureCompletedPlateImageDialog extends StatelessWidget {
   final String plateNumber;
@@ -21,7 +21,7 @@ class OfflineDepartureCompletedPlateImageDialog extends StatelessWidget {
         elevation: 1,
       ),
       body: FutureBuilder<List<String>>(
-        future: ModifyPlateService.listPlateImages(
+        future: DoubleModifyPlateService.listPlateImages(
           context: context,
           plateNumber: plateNumber,
         ),

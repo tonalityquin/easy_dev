@@ -5,8 +5,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/plate_model.dart';
 import '../../enums/plate_type.dart';
-import '../../screens/service_mode/type_package/common_widgets/reverse_sheet_package/services/parking_completed_logger.dart';
-import '../../screens/service_mode/type_package/common_widgets/reverse_sheet_package/services/status_mapping.dart';
 
 // ✅ (추가) 비정기 plate_status는 월 단위 샤딩 저장을 PlateStatusService에 위임
 import 'plate_status_service.dart';
@@ -255,7 +253,6 @@ class PlateCreationService {
     );
 
     final docRef = _firestore.collection('plates').doc(plateDocId);
-    bool createdAsParkingCompleted = false;
 
     try {
       await _firestore.runTransaction((tx) async {
@@ -302,7 +299,7 @@ class PlateCreationService {
               PlateFields.logs: mergedLogs,
             };
 
-            // ✅ (요구사항) 타입이 parking_requests가 되면 view에 생성
+            // ✅ 타입이 parking_requests가 되면 view에 생성
             if (plateType == PlateType.parkingRequests) {
               // plates에 requestTime도 정합성 있게 갱신
               partial['requestTime'] = FieldValue.serverTimestamp();
@@ -425,7 +422,7 @@ class PlateCreationService {
             }
           }
 
-          // ✅ 처음부터 parking_completed로 생성되는 경우: view upsert + SQLite(기존 정책)
+          // ✅ 처음부터 parking_completed로 생성되는 경우: view upsert (로컬 SQLite 로깅은 제거됨)
           if (plateType == PlateType.parkingCompleted) {
             map['parkingCompletedAt'] = FieldValue.serverTimestamp();
 
@@ -463,24 +460,11 @@ class PlateCreationService {
                 SetOptions(merge: true),
               );
             }
-
-            createdAsParkingCompleted = true;
           }
 
           tx.set(docRef, map);
         }
       });
-
-      // 트랜잭션 종료 후: 처음부터 parking_completed 로 만든 경우에만 SQLite 기록(기존 유지)
-      if (createdAsParkingCompleted) {
-        // ignore: unawaited_futures
-        ParkingCompletedLogger.instance.maybeLogCompleted(
-          plateNumber: plateNumber,
-          location: location.isNotEmpty ? location : '미지정',
-          oldStatus: kStatusEntryRequest,
-          newStatus: kStatusEntryDone,
-        );
-      }
     } on DuplicatePlateException {
       rethrow;
     } catch (_) {

@@ -22,8 +22,6 @@ import '../states/bill/bill_state.dart';
 import '../states/calendar/field_calendar_state.dart';
 import '../states/head_quarter/calendar_selection_state.dart';
 import '../states/location/location_state.dart';
-import '../states/page/page_info.dart';
-import '../states/page/page_state.dart';
 import '../states/plate/double_filter_plate.dart';
 import '../states/plate/double_plate_state.dart';
 import '../states/plate/input_plate.dart';
@@ -42,9 +40,6 @@ import '../states/secondary/secondary_info.dart';
 import '../models/capability.dart';
 
 final List<SingleChildWidget> stateProviders = [
-  ChangeNotifierProvider(
-    create: (context) => PageState(pages: defaultPages),
-  ),
   ChangeNotifierProvider(create: (_) => AreaState()),
   ChangeNotifierProvider(create: (_) => TabletPadModeState()),
   ChangeNotifierProvider(
