@@ -3,25 +3,14 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../routes.dart';
+import '../selector_hubs_package/dev_auth.dart';
 import '../states/page/triple_hq_state.dart';
 import '../states/page/triple_page_info.dart';
-
-// ✅ Dev Auth (시트는 더 이상 띄우지 않음)
-import '../selector_hubs_package/dev_auth.dart';
-
-// ✅ SecondaryPage (좌 스와이프 시 이동)
-import 'secondary_page.dart';
-
-// ✅ AppCardPalette ThemeExtension 사용
-import '../theme.dart';
-
-// ✅ (추가) 구독 ON을 위해 PlateState 접근
 import '../states/plate/plate_state.dart';
-
 import '../states/plate/triple_plate_state.dart';
-
-// ✅ Trace 기록용 Recorder
+import '../theme.dart';
 import 'hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
+import 'secondary_page.dart';
 
 class TripleHeadquarterPage extends StatelessWidget {
   const TripleHeadquarterPage({super.key});
@@ -37,7 +26,7 @@ class TripleHeadquarterPage extends StatelessWidget {
           return PopScope(
             canPop: false,
             child: Scaffold(
-              body: const RefreshableBody(),
+              body: const _RefreshableBody(),
               bottomNavigationBar: const SafeArea(
                 top: false,
                 child: _BottomArea(),
@@ -62,7 +51,7 @@ class _BottomArea extends StatelessWidget {
       return const Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _TripleHqModeSwitchButton(),
+          _HqModeSwitchButton(),
           _BrandFooter(),
         ],
       );
@@ -71,16 +60,46 @@ class _BottomArea extends StatelessWidget {
     return const Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _TripleHqModeSwitchButton(),
-        PageBottomNavigation(),
+        _HqModeSwitchButton(),
+        _PageBottomNavigation(),
         _BrandFooter(),
       ],
     );
   }
 }
 
-class _TripleHqModeSwitchButton extends StatelessWidget {
-  const _TripleHqModeSwitchButton();
+@immutable
+class _ModeTarget {
+  const _ModeTarget({
+    required this.title,
+    required this.routeName,
+    required this.icon,
+    required this.modeKey,
+  });
+
+  final String title;
+  final String routeName;
+  final IconData icon;
+  final String modeKey;
+}
+
+class _HqModeSwitchButton extends StatelessWidget {
+  const _HqModeSwitchButton();
+
+  static const List<_ModeTarget> _targets = <_ModeTarget>[
+    _ModeTarget(
+      title: '마이너 헤드쿼터로 이동',
+      routeName: AppRoutes.minorHeadquarterPage,
+      icon: Icons.tune,
+      modeKey: 'minor',
+    ),
+    _ModeTarget(
+      title: '더블 헤드쿼터로 이동',
+      routeName: AppRoutes.doubleHeadquarterPage,
+      icon: Icons.view_week,
+      modeKey: 'double',
+    ),
+  ];
 
   void _trace(BuildContext context, String name, {Map<String, dynamic>? meta}) {
     DebugActionRecorder.instance.recordAction(
@@ -90,52 +109,155 @@ class _TripleHqModeSwitchButton extends StatelessWidget {
     );
   }
 
+  Future<_ModeTarget?> _pickTarget(BuildContext context, AppCardPalette palette) {
+    final accent = palette.tripleBase;
+    final border = palette.tripleLight.withOpacity(.65);
+    final textColor = palette.tripleDark;
+
+    return showDialog<_ModeTarget>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '헤드쿼터 모드 전환',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: textColor,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: '닫기',
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      icon: Icon(Icons.close, color: textColor.withOpacity(.75)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                ..._targets.map(
+                      (t) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: _ModeSwitchDialogOption(
+                      title: t.title,
+                      icon: t.icon,
+                      accentColor: accent,
+                      borderColor: border,
+                      textColor: textColor,
+                      onTap: () => Navigator.of(dialogContext).pop(t),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final palette = AppCardPalette.of(context);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
       child: SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
           icon: const Icon(Icons.swap_horiz),
-          label: const Text('노말 헤드쿼터 페이지입니다'),
+          label: const Text('헤드쿼터 모드 전환'),
           style: _switchBtnStyle(context),
-          onPressed: () {
-            // ✅ Trace: "서비스 본사로 전환" 버튼 탭 기록
-            // (기록 중이 아닐 때는 Recorder 내부에서 무시됨)
-            final plateStateForMeta = context.read<PlateState>();
-            final area = plateStateForMeta.currentArea.trim();
-            final withDefaults = area.isNotEmpty;
+          onPressed: () async {
+            final target = await _pickTarget(context, palette);
+            if (target == null) return;
 
             _trace(
               context,
-              '서비스 본사로 전환 버튼',
+              '헤드쿼터 모드 전환',
               meta: <String, dynamic>{
-                'screen': 'Triple_headquarter_page',
-                'action': 'switch_to_service_headquarter',
-                'to': AppRoutes.headquarterPage,
-                'withDefaults': withDefaults,
-                if (area.isNotEmpty) 'area': area,
+                'screen': 'triple_headquarter_page',
+                'action': 'switch_headquarter_mode',
+                'from': 'triple',
+                'to': target.modeKey,
+                'toRoute': target.routeName,
               },
             );
 
-            // ✅ 전환 흐름 완결:
-            final normalPlateState = context.read<TriplePlateState>();
-            normalPlateState.tripleDisableAll();
-
-            // 2) PlateState를 “깨끗한 상태”로 리셋 후
-            // 3) 서비스 구독 엔진 ON(기본 3종 구독 시작)
-            final plateState = context.read<PlateState>();
-            plateState.disableAll();
-
-            plateState.enableForTypePages(withDefaults: withDefaults);
+            context.read<TriplePlateState>().tripleDisableAll();
+            context.read<PlateState>().disableAll();
 
             _replaceWithAnimatedRoute(
               context,
-              AppRoutes.headquarterPage,
+              target.routeName,
               beginOffset: const Offset(-1.0, 0.0),
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+class _ModeSwitchDialogOption extends StatelessWidget {
+  const _ModeSwitchDialogOption({
+    required this.title,
+    required this.icon,
+    required this.accentColor,
+    required this.borderColor,
+    required this.textColor,
+    required this.onTap,
+  });
+
+  final String title;
+  final IconData icon;
+  final Color accentColor;
+  final Color borderColor;
+  final Color textColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: borderColor, width: 1),
+          ),
+          child: Row(
+            children: [
+              Icon(icon, color: accentColor),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: textColor,
+                  ),
+                ),
+              ),
+              Icon(Icons.chevron_right, color: textColor.withOpacity(.6)),
+            ],
+          ),
         ),
       ),
     );
@@ -161,14 +283,14 @@ class _BrandFooter extends StatelessWidget {
   }
 }
 
-class RefreshableBody extends StatefulWidget {
-  const RefreshableBody({super.key});
+class _RefreshableBody extends StatefulWidget {
+  const _RefreshableBody();
 
   @override
-  State<RefreshableBody> createState() => _RefreshableBodyState();
+  State<_RefreshableBody> createState() => _RefreshableBodyState();
 }
 
-class _RefreshableBodyState extends State<RefreshableBody> {
+class _RefreshableBodyState extends State<_RefreshableBody> {
   double _dragDistance = 0.0;
   bool _openingSecondary = false;
 
@@ -176,7 +298,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   static const double _hVelocityThreshold = 1000.0;
 
   Future<bool> _isDevAuthorized() async {
-    final restored = await DevAuth.restorePrefs(); // TTL 만료 처리 포함
+    final restored = await DevAuth.restorePrefs();
     return restored.devAuthorized;
   }
 
@@ -202,8 +324,6 @@ class _RefreshableBodyState extends State<RefreshableBody> {
     try {
       final ok = await _isDevAuthorized();
       if (!mounted) return;
-
-      // ✅ 요구사항: 개발자 인증이 아니면 “아무 반응 없음”
       if (!ok) return;
 
       Navigator.of(context).push(
@@ -215,7 +335,8 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   }
 
   void _handleHorizontalDragEnd(BuildContext context, double velocity) {
-    final fired = (_dragDistance < -_hDistanceThreshold) && (velocity < -_hVelocityThreshold);
+    final fired =
+        (_dragDistance < -_hDistanceThreshold) && (velocity < -_hVelocityThreshold);
 
     if (fired) {
       _openSecondaryIfAuthorized();
@@ -232,14 +353,18 @@ class _RefreshableBodyState extends State<RefreshableBody> {
       behavior: HitTestBehavior.opaque,
       dragStartBehavior: DragStartBehavior.down,
       onHorizontalDragUpdate: (details) => _dragDistance += details.delta.dx,
-      onHorizontalDragEnd: (details) => _handleHorizontalDragEnd(context, details.primaryVelocity ?? 0.0),
+      onHorizontalDragEnd: (details) =>
+          _handleHorizontalDragEnd(context, details.primaryVelocity ?? 0.0),
       child: Consumer<TripleHqState>(
         builder: (context, state, child) {
           final pages = state.pages;
 
-          final safeIndex = pages.isEmpty ? 0 : state.selectedIndex.clamp(0, pages.length - 1);
+          final safeIndex =
+          pages.isEmpty ? 0 : state.selectedIndex.clamp(0, pages.length - 1);
 
-          final children = pages.isEmpty ? const <Widget>[SizedBox.shrink()] : pages.map((p) => p.page).toList();
+          final children = pages.isEmpty
+              ? const <Widget>[SizedBox.shrink()]
+              : pages.map((p) => p.page).toList();
 
           return Stack(
             children: [
@@ -271,8 +396,8 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   }
 }
 
-class PageBottomNavigation extends StatelessWidget {
-  const PageBottomNavigation({super.key});
+class _PageBottomNavigation extends StatelessWidget {
+  const _PageBottomNavigation();
 
   @override
   Widget build(BuildContext context) {
@@ -312,17 +437,15 @@ class PageBottomNavigation extends StatelessWidget {
 }
 
 ButtonStyle _switchBtnStyle(BuildContext context) {
-  // 기존 구현은 “흰색 바탕 + 검정 글자 + 회색 보더”였으므로
-  // 팔레트 적용은 보더/아이콘 정도만 가볍게 반영하고, UX는 유지합니다.
   final palette = AppCardPalette.of(context);
 
   return ElevatedButton.styleFrom(
     backgroundColor: Colors.white,
-    foregroundColor: palette.tripleDark, // 기존 black → liteDark로 통일
+    foregroundColor: palette.tripleDark,
     minimumSize: const Size.fromHeight(48),
     padding: EdgeInsets.zero,
     side: BorderSide(
-      color: palette.tripleLight.withOpacity(.8), // 기존 grey → liteLight 톤
+      color: palette.tripleLight.withOpacity(.8),
       width: 1.0,
     ),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

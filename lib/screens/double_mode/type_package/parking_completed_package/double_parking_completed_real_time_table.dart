@@ -26,6 +26,10 @@ import 'widgets/double_parking_completed_status_bottom_sheet.dart';
 
 const String _kLocationAll = '전체';
 
+/// ✅ 다이얼로그가 "너무 쉽게 닫히는" 문제 방지:
+/// - 배경(바깥) 탭으로 닫히지 않게 통일
+const bool _kDialogBarrierDismissible = false;
+
 /// ✅ Top-level (Dart 규칙 준수)
 enum _ViewMode { plate, zone }
 
@@ -573,6 +577,9 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
   List<_RowVM> _allRows = <_RowVM>[];
   List<_RowVM> _rows = <_RowVM>[];
 
+  // ✅ 추가: 일자별 No(날짜가 바뀌면 1부터)
+  List<int> _displayNos = <int>[];
+
   final TextEditingController _searchCtrl = TextEditingController();
   Timer? _debounce;
   static const int _debounceMs = 250;
@@ -593,7 +600,6 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
   bool _openingDetail = false;
 
   String get _primaryTimeField => 'parkingCompletedAt';
-  String get _timeHeaderLabel => 'Entry';
   String get _collection => 'parking_completed_view';
 
   String get _currentArea {
@@ -613,6 +619,16 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
   bool _loadingLocationMeta = false;
 
   final Map<String, bool> _groupExpanded = <String, bool>{};
+
+  // ✅ createdAt의 로컬 일자 키
+  String _dayKey(DateTime? dt) {
+    if (dt == null) return 'unknown';
+    final d = dt.toLocal();
+    final y = d.year.toString().padLeft(4, '0');
+    final m = d.month.toString().padLeft(2, '0');
+    final day = d.day.toString().padLeft(2, '0');
+    return '$y-$m-$day';
+  }
 
   @override
   bool get wantKeepAlive => true;
@@ -690,7 +706,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
 
       _locationsLoadedArea = area;
 
-      // ✅ 변경: 단독 구역은 그룹 확장 상태가 필요 없으므로 composite parent만 등록
+      // ✅ 단독 구역은 그룹 확장 상태가 필요 없으므로 composite parent만 등록
       for (final loc in _cachedLocations) {
         final g = _groupKeyForLocation(loc);
         if (g.isNotEmpty) {
@@ -703,7 +719,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
     }
   }
 
-  /// ✅ 변경: 단독은 그룹으로 묶지 않음 → '' 반환
+  /// ✅ 단독은 그룹으로 묶지 않음 → '' 반환
   /// 복합(composite + parent 존재)만 parent 그룹 반환
   String _groupKeyForLocation(LocationModel loc) {
     final parent = (loc.parent ?? '').trim();
@@ -850,8 +866,10 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
   }
 
   void _applyFilterAndSort() {
+    // zone 모드에서는 No 계산 불필요
     if (_viewMode != _ViewMode.plate) {
       _rows = List<_RowVM>.of(_allRows);
+      _displayNos = <int>[];
       return;
     }
 
@@ -869,6 +887,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
       return true;
     }).toList();
 
+    // ✅ 정렬 기준 유지: createdAt
     _rows.sort((a, b) {
       final ca = a.createdAt;
       final cb = b.createdAt;
@@ -878,16 +897,32 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
       final cmp = ca.compareTo(cb);
       return _sortOldFirst ? cmp : -cmp;
     });
+
+    // ✅ 일자별 No 계산(날짜가 바뀌면 1부터)
+    _displayNos = List<int>.filled(_rows.length, 0);
+    String prevKey = '';
+    int seq = 0;
+    for (int i = 0; i < _rows.length; i++) {
+      final k = _dayKey(_rows[i].createdAt);
+      if (k != prevKey) {
+        prevKey = k;
+        seq = 1;
+      } else {
+        seq += 1;
+      }
+      _displayNos[i] = seq;
+    }
   }
 
-  void _toggleSortByCreatedAt() {
+  /// ✅ No 헤더 탭으로 정렬 토글(기준: createdAt)
+  void _toggleSortByNo() {
     setState(() {
       _sortOldFirst = !_sortOldFirst;
       _applyFilterAndSort();
     });
     showSelectedSnackbar(
       context,
-      _sortOldFirst ? '시각: 오래된 순으로 정렬' : '시각: 최신 순으로 정렬',
+      _sortOldFirst ? '정렬: 오래된 순' : '정렬: 최신 순',
     );
   }
 
@@ -952,10 +987,6 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
     return '$y-$mo-$d $h:$mi';
   }
 
-  /// ✅ 변경 핵심:
-  /// - 단독 구역: group='' 로 묶어 "헤더 없이" 먼저 보여주기
-  /// - 복합 구역: parent 그룹으로 묶어 tree로 보여주기
-  /// - 기타/미지정: 마지막(단독 리스트 마지막)
   List<_ZoneGroupVM> _buildZoneGroupsFromCurrentData() {
     final rows = List<_RowVM>.of(_allRows);
 
@@ -983,7 +1014,6 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
       final fullName = _displayNameForLocation(loc).trim();
       if (fullName.isEmpty) continue;
 
-      // 우측 드롭다운 필터
       if (_selectedLocation != _locationAll && fullName != _selectedLocation) {
         continue;
       }
@@ -996,7 +1026,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
 
       final remaining = cap > 0 ? (cap - current) : null;
 
-      final parent = _groupKeyForLocation(loc); // 복합이면 parent, 단독이면 ''
+      final parent = _groupKeyForLocation(loc);
       final isCompositeChild = parent.isNotEmpty;
 
       final displayLabel = isCompositeChild ? leaf : fullName;
@@ -1018,7 +1048,6 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
       }
     }
 
-    // 기타/미지정: 캐시에 매칭되지 않은 rows
     final unknown = rows.length - sumKnownCurrent;
     if (unknown > 0 && _selectedLocation == _locationAll) {
       standalones.add(
@@ -1034,7 +1063,6 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
       );
     }
 
-    // 단독 정렬: 기타는 마지막, 나머지는 잔여 오름차순 -> 이름
     standalones.sort((a, b) {
       final aEtc = a.fullName == '기타/미지정';
       final bEtc = b.fullName == '기타/미지정';
@@ -1049,7 +1077,6 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
 
     final out = <_ZoneGroupVM>[];
 
-    // 1) 단독 먼저 (group=='')
     if (standalones.isNotEmpty) {
       final totalCap = standalones.fold<int>(0, (s, z) => s + z.capacity);
       final totalCur = standalones.fold<int>(0, (s, z) => s + z.current);
@@ -1066,7 +1093,6 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
       );
     }
 
-    // 2) 복합 그룹(부모별)
     final parents = compositeByParent.keys.toList()..sort();
     for (final p in parents) {
       final list = compositeByParent[p] ?? <_ZoneVM>[];
@@ -1130,7 +1156,9 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: blocked ? Colors.orange.withOpacity(.12) : Colors.teal.withOpacity(.10),
+        color: blocked
+            ? Colors.orange.withOpacity(.12)
+            : Colors.teal.withOpacity(.10),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Row(
@@ -1309,22 +1337,28 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
     );
   }
 
-  TextStyle get _headStyle => Theme.of(context).textTheme.labelMedium!.copyWith(
-    fontWeight: FontWeight.w800,
-    letterSpacing: .2,
-    color: _Palette.dark,
-  );
+  TextStyle get _headStyle =>
+      Theme.of(context).textTheme.labelMedium!.copyWith(
+        fontWeight: FontWeight.w800,
+        letterSpacing: .2,
+        color: _Palette.dark,
+      );
 
-  TextStyle get _cellStyle => Theme.of(context).textTheme.bodyMedium!.copyWith(
-    height: 1.2,
-    color: _Palette.dark.withOpacity(.9),
-  );
+  TextStyle get _cellStyle =>
+      Theme.of(context).textTheme.bodyMedium!.copyWith(
+        height: 1.2,
+        color: _Palette.dark.withOpacity(.9),
+      );
 
   TextStyle get _monoStyle => _cellStyle.copyWith(
     fontFeatures: const [FontFeature.tabularFigures()],
     fontFamilyFallback: const ['monospace'],
   );
 
+  /// ✅ 변경:
+  /// - No 컬럼 추가(맨 왼쪽), Time 컬럼 제거
+  /// - No는 일자별 1부터, 표기는 01 형식
+  /// - Plate/Location scaleDown 적용 + Plate 폭 확대
   Widget _buildTable() {
     if (_loading) return const _ExpandedLoading();
 
@@ -1349,23 +1383,35 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
           ),
           child: Row(
             children: [
-              Expanded(flex: 3, child: Text('Plate', style: _headStyle, overflow: TextOverflow.ellipsis)),
-              const SizedBox(width: 8),
-              Expanded(flex: 4, child: Text('Location', style: _headStyle, overflow: TextOverflow.ellipsis)),
-              const SizedBox(width: 8),
               Expanded(
-                flex: 4,
+                flex: 2,
                 child: InkWell(
-                  onTap: _toggleSortByCreatedAt,
+                  onTap: _toggleSortByNo,
                   borderRadius: BorderRadius.circular(8),
                   child: Row(
                     children: [
-                      Expanded(child: Text(_timeHeaderLabel, style: _headStyle, overflow: TextOverflow.ellipsis)),
+                      Expanded(
+                        child: Text('No', style: _headStyle, overflow: TextOverflow.ellipsis),
+                      ),
                       const SizedBox(width: 4),
-                      Icon(_sortOldFirst ? Icons.arrow_upward : Icons.arrow_downward, size: 14, color: _Palette.dark.withOpacity(.8)),
+                      Icon(
+                        _sortOldFirst ? Icons.arrow_upward : Icons.arrow_downward,
+                        size: 14,
+                        color: _Palette.dark.withOpacity(.8),
+                      ),
                     ],
                   ),
                 ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 7,
+                child: Text('Plate', style: _headStyle, overflow: TextOverflow.ellipsis),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 5,
+                child: Text('Location', style: _headStyle, overflow: TextOverflow.ellipsis),
               ),
             ],
           ),
@@ -1379,6 +1425,9 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
               itemBuilder: (context, i) {
                 final r = _rows[i];
                 final rowBg = i.isEven ? Colors.white : _Palette.base.withOpacity(.02);
+
+                final rawNo = (i < _displayNos.length) ? _displayNos[i] : (i + 1);
+                final noText = rawNo.toString().padLeft(2, '0'); // ✅ 01 형식
 
                 return Material(
                   color: rowBg,
@@ -1397,32 +1446,40 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                       child: Row(
                         children: [
                           Expanded(
-                            flex: 3,
+                            flex: 2,
                             child: Text(
-                              r.plateNumber,
-                              style: _cellStyle.copyWith(fontWeight: FontWeight.w800),
+                              noText,
+                              style: _monoStyle.copyWith(fontWeight: FontWeight.w800),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           const SizedBox(width: 8),
                           Expanded(
-                            flex: 4,
-                            child: Text(
-                              r.location,
-                              style: _cellStyle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                            flex: 7,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                r.plateNumber,
+                                style: _cellStyle.copyWith(fontWeight: FontWeight.w800),
+                                maxLines: 1,
+                                softWrap: false,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 8),
                           Expanded(
-                            flex: 4,
-                            child: Text(
-                              _fmtDate(r.createdAt),
-                              style: _monoStyle,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                            flex: 5,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                r.location,
+                                style: _cellStyle,
+                                maxLines: 1,
+                                softWrap: false,
+                              ),
                             ),
                           ),
                         ],
@@ -1438,7 +1495,6 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
     );
   }
 
-  /// ✅ 변경: 단독은 헤더 없이, 복합은 부모 헤더 + 들여쓰기 자식 트리
   Widget _buildZoneAccordion(ColorScheme cs, TextTheme text) {
     if (_loadingLocationMeta && _cachedLocations.isEmpty) {
       return const _ExpandedLoading();
@@ -1456,9 +1512,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
     final totalRemAll = totalCapAll > 0 ? (totalCapAll - totalCurAll) : null;
 
     Widget buildZoneRow(_ZoneVM z, {required bool indented}) {
-      final remainText = (z.remaining == null)
-          ? '-'
-          : (z.remaining! >= 0 ? '${z.remaining}대' : '0대');
+      final remainText =
+      (z.remaining == null) ? '-' : (z.remaining! >= 0 ? '${z.remaining}대' : '0대');
       final capText = z.capacity > 0 ? '${z.capacity}대' : '-';
 
       final leftPad = indented ? 28.0 : 12.0;
@@ -1511,7 +1566,6 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
     final children = <Widget>[];
 
     for (final g in groups) {
-      // 1) 단독: group == '' → 헤더 없이 바로 출력 (요구사항)
       if (g.group.isEmpty) {
         for (final z in g.zones) {
           children.add(buildZoneRow(z, indented: false));
@@ -1519,7 +1573,6 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
         continue;
       }
 
-      // 2) 복합: 부모 헤더 + 들여쓰기 자식
       final expanded = _groupExpanded[g.group] ?? true;
 
       final groupRemainText = g.totalRemaining == null
@@ -1542,7 +1595,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
               ),
               child: Row(
                 children: [
-                  Icon(expanded ? Icons.expand_less : Icons.expand_more, color: cs.outline),
+                  Icon(expanded ? Icons.expand_less : Icons.expand_more,
+                      color: cs.outline),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -1555,9 +1609,11 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text('현재 ${g.totalCurrent}대', style: text.bodySmall?.copyWith(color: cs.outline)),
+                  Text('현재 ${g.totalCurrent}대',
+                      style: text.bodySmall?.copyWith(color: cs.outline)),
                   const SizedBox(width: 10),
-                  Text('총 ${g.totalCapacity > 0 ? "${g.totalCapacity}대" : "-"}', style: text.bodySmall?.copyWith(color: cs.outline)),
+                  Text('총 ${g.totalCapacity > 0 ? "${g.totalCapacity}대" : "-"}',
+                      style: text.bodySmall?.copyWith(color: cs.outline)),
                   const SizedBox(width: 10),
                   Text(
                     '잔여 $groupRemainText',
@@ -1628,6 +1684,93 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
     );
   }
 
+  Future<void> _showPlateNotFoundDialog({
+    required String plateId,
+    required _RowVM viewRow,
+  }) async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: _kDialogBarrierDismissible,
+      builder: (_) {
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Material(
+              color: Colors.transparent,
+              child: AlertDialog(
+                backgroundColor: Colors.white,
+                elevation: 8,
+                insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                content: _PlateDetailNotFoundDialog(
+                  plateId: plateId,
+                  viewPlateNumber: viewRow.plateNumber,
+                  viewLocation: viewRow.location,
+                  viewTimeText: _fmtDate(viewRow.createdAt),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<bool?> _showPlateDetailDialog({
+    required _RowVM viewRow,
+    required PlateModel plate,
+    required String feeText,
+    required String elapsedText,
+    required Color? backgroundColor,
+    required String displayUser,
+  }) async {
+    return showDialog<bool>(
+      context: context,
+      barrierDismissible: _kDialogBarrierDismissible,
+      builder: (_) {
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Material(
+              color: Colors.transparent,
+              child: AlertDialog(
+                backgroundColor: Colors.white,
+                elevation: 8,
+                insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                content: _PlateDetailBodyDialog(
+                  title: '번호판 상세',
+                  subtitle: 'VIEW: ${viewRow.location} / ${_fmtDate(viewRow.createdAt)}   ·   '
+                      'PLATES: ${plate.location} / ${CustomDateUtils.formatTimestamp(plate.requestTime)}',
+                  child: PlateCustomBox(
+                    topLeftText: '소속',
+                    topCenterText: '${plate.region ?? '전국'} ${plate.plateNumber}',
+                    topRightUpText: plate.billingType ?? '없음',
+                    topRightDownText: feeText,
+                    midLeftText: plate.location,
+                    midCenterText: displayUser.isEmpty ? '-' : displayUser,
+                    midRightText: CustomDateUtils.formatTimeForUI(plate.requestTime),
+                    bottomLeftLeftText:
+                    plate.statusList.isNotEmpty ? plate.statusList.join(", ") : "",
+                    bottomLeftCenterText: plate.customStatus ?? '',
+                    bottomRightText: elapsedText,
+                    isSelected: plate.isSelected,
+                    backgroundColor: backgroundColor,
+                    onTap: () {},
+                  ),
+                  showWorkButton: true,
+                  workButtonText: '작업 수행',
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _openHybridDetailPopup(_RowVM r) async {
     if (_openingDetail) return;
     _openingDetail = true;
@@ -1660,33 +1803,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
       if (!mounted) return;
 
       if (plate == null) {
-        await showDialog<void>(
-          context: context,
-          barrierDismissible: true,
-          builder: (_) {
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 520),
-                child: Material(
-                  color: Colors.transparent,
-                  child: AlertDialog(
-                    backgroundColor: Colors.white,
-                    elevation: 8,
-                    insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                    contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                    content: _PlateDetailNotFoundDialog(
-                      plateId: plateId,
-                      viewPlateNumber: r.plateNumber,
-                      viewLocation: r.location,
-                      viewTimeText: _fmtDate(r.createdAt),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          },
-        );
+        await _showPlateNotFoundDialog(plateId: plateId, viewRow: r);
         return;
       }
 
@@ -1722,7 +1839,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
           ? '${plate.isLockedFee ? (plate.lockedFeeAmount ?? 0) : (plate.regularAmount ?? 0)}원'
           : '$currentFee원';
 
-      final elapsedText = _formatElapsed(DateTime.now().difference(plate.requestTime));
+      final elapsedText =
+      _formatElapsed(DateTime.now().difference(plate.requestTime));
 
       final backgroundColor =
       ((plate.billingType?.trim().isNotEmpty ?? false) && plate.isLockedFee)
@@ -1730,51 +1848,16 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
           : Colors.white;
 
       final bool isSelected = plate.isSelected;
-      final String displayUser = isSelected ? (plate.selectedBy ?? '') : plate.userName;
+      final String displayUser =
+      isSelected ? (plate.selectedBy ?? '') : plate.userName;
 
-      final bool? doWork = await showDialog<bool>(
-        context: context,
-        barrierDismissible: true,
-        builder: (_) {
-          return Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 520),
-              child: Material(
-                color: Colors.transparent,
-                child: AlertDialog(
-                  backgroundColor: Colors.white,
-                  elevation: 8,
-                  insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                  contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                  content: _PlateDetailBodyDialog(
-                    title: '번호판 상세',
-                    subtitle:
-                    'VIEW: ${r.location} / ${_fmtDate(r.createdAt)}   ·   '
-                        'PLATES: ${plate.location} / ${CustomDateUtils.formatTimestamp(plate.requestTime)}',
-                    child: PlateCustomBox(
-                      topLeftText: '소속',
-                      topCenterText: '${plate.region ?? '전국'} ${plate.plateNumber}',
-                      topRightUpText: plate.billingType ?? '없음',
-                      topRightDownText: feeText,
-                      midLeftText: plate.location,
-                      midCenterText: displayUser.isEmpty ? '-' : displayUser,
-                      midRightText: CustomDateUtils.formatTimeForUI(plate.requestTime),
-                      bottomLeftLeftText: plate.statusList.isNotEmpty ? plate.statusList.join(", ") : "",
-                      bottomLeftCenterText: plate.customStatus ?? '',
-                      bottomRightText: elapsedText,
-                      isSelected: isSelected,
-                      backgroundColor: backgroundColor,
-                      onTap: () => Navigator.of(context).maybePop(),
-                    ),
-                    showWorkButton: true,
-                    workButtonText: '작업 수행',
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
+      final bool? doWork = await _showPlateDetailDialog(
+        viewRow: r,
+        plate: plate,
+        feeText: feeText,
+        elapsedText: elapsedText,
+        backgroundColor: backgroundColor,
+        displayUser: displayUser,
       );
 
       if (!mounted) return;
@@ -1843,7 +1926,9 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
           ),
           const Divider(height: 1),
           Expanded(
-            child: _viewMode == _ViewMode.plate ? _buildTable() : _buildZoneAccordion(cs, text),
+            child: _viewMode == _ViewMode.plate
+                ? _buildTable()
+                : _buildZoneAccordion(cs, text),
           ),
         ],
       ),
@@ -1982,11 +2067,15 @@ class _PlateDetailNotFoundDialog extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text('plateId: $plateId', style: text.bodySmall?.copyWith(color: cs.outline)),
+                Text('plateId: $plateId',
+                    style: text.bodySmall?.copyWith(color: cs.outline)),
                 const SizedBox(height: 6),
-                Text('VIEW Plate: $viewPlateNumber', style: text.bodySmall?.copyWith(color: cs.outline)),
-                Text('VIEW Location: $viewLocation', style: text.bodySmall?.copyWith(color: cs.outline)),
-                Text('VIEW Time: $viewTimeText', style: text.bodySmall?.copyWith(color: cs.outline)),
+                Text('VIEW Plate: $viewPlateNumber',
+                    style: text.bodySmall?.copyWith(color: cs.outline)),
+                Text('VIEW Location: $viewLocation',
+                    style: text.bodySmall?.copyWith(color: cs.outline)),
+                Text('VIEW Time: $viewTimeText',
+                    style: text.bodySmall?.copyWith(color: cs.outline)),
               ],
             ),
           ),
@@ -2068,7 +2157,8 @@ class _PlateDetailBodyDialog extends StatelessWidget {
                   style: FilledButton.styleFrom(
                     backgroundColor: _Palette.base,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                    padding:
+                    const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
