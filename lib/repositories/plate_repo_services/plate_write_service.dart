@@ -16,6 +16,7 @@ import 'package:shared_preferences/shared_preferences.dart'; // ✅ 추가
 
 import '../../models/plate_log_model.dart';
 import '../../models/plate_model.dart';
+import '../../enums/plate_type.dart';
 // import '../../utils/usage_reporter.dart';
 
 class PlateWriteService {
@@ -30,6 +31,20 @@ class PlateWriteService {
   // - Header 단일 스위치에서 함께 동기화되는 키
   static const String _kParkingRequestsViewWritePrefsKey =
       'parking_requests_realtime_write_enabled_v1';
+
+  // ✅ parking_completed_view 동기화(업서트/삭제)에 대한 기기 로컬 토글 키
+  // - MovementPlate / PlateCreationService와 동일 키
+  static const String _kParkingCompletedViewWritePrefsKey =
+      'parking_completed_realtime_write_enabled_v1';
+
+  // ✅ (보조) UI 탭(조회) 활성화 토글 키
+  // - Write 토글이 OFF여도, 사용자가 테이블을 보고 있다면 최소한 정합성은 지키기 위해 OR 조건으로 활용합니다.
+  // - UI 코드(RealTimeTable)와 동일 키를 유지해야 합니다.
+  static const String _kDepartureRequestsViewTabPrefsKey =
+      'departure_requests_realtime_tab_enabled_v1';
+  static const String _kParkingCompletedViewTabPrefsKey =
+      'parking_completed_realtime_tab_enabled_v1';
+
 
   static SharedPreferences? _prefs;
   static Future<void>? _prefsLoading;
@@ -50,10 +65,78 @@ class PlateWriteService {
     return prefs.getBool(_kParkingRequestsViewWritePrefsKey) ?? false; // 기본 OFF
   }
 
+  static Future<bool> _canUpsertParkingCompletedView() async {
+    final prefs = await _ensurePrefs();
+    return prefs.getBool(_kParkingCompletedViewWritePrefsKey) ?? false; // 기본 OFF
+  }
+
+  static Future<bool> _isDepartureRequestsRealtimeTabEnabled() async {
+    final prefs = await _ensurePrefs();
+    return prefs.getBool(_kDepartureRequestsViewTabPrefsKey) ?? false; // 기본 OFF
+  }
+
+  static Future<bool> _isParkingCompletedRealtimeTabEnabled() async {
+    final prefs = await _ensurePrefs();
+    return prefs.getBool(_kParkingCompletedViewTabPrefsKey) ?? false; // 기본 OFF
+  }
+
+  /// ✅ "정합성" 관점에서 view 동기화를 수행할지 결정
+  ///
+  /// - 기본적으로는 Write 토글을 따릅니다.
+  /// - 다만 사용자가 실시간 테이블(탭)을 보고 있는 경우(탭 토글 ON)에는,
+  ///   Modify/Update로 인해 UI-DB 불일치가 발생하지 않도록 view 동기화를 허용합니다.
+  static Future<bool> _shouldSyncDepartureRequestsView() async {
+    final write = await _canUpsertDepartureRequestsView();
+    if (write) return true;
+    return _isDepartureRequestsRealtimeTabEnabled();
+  }
+
+  static Future<bool> _shouldSyncParkingCompletedView() async {
+    final write = await _canUpsertParkingCompletedView();
+    if (write) return true;
+    return _isParkingCompletedRealtimeTabEnabled();
+  }
+
   String _fallbackPlateFromDocId(String docId) {
     final idx = docId.lastIndexOf('_');
     if (idx > 0) return docId.substring(0, idx);
     return docId;
+  }
+
+
+  String _fallbackAreaFromDocId(String docId) {
+    final idx = docId.lastIndexOf('_');
+    if (idx >= 0 && idx + 1 < docId.length) return docId.substring(idx + 1);
+    return '';
+  }
+
+  String _extractPlateNumberFromPlateDoc(Map<String, dynamic> data, String docId) {
+    final v1 = (data['plateNumber'] as String?)?.trim(); // legacy/일부 write 경로
+    if (v1 != null && v1.isNotEmpty) return v1;
+
+    final v2 = (data[PlateFields.plateNumber] as String?)?.trim(); // 표준(plate_number)
+    if (v2 != null && v2.isNotEmpty) return v2;
+
+    return _fallbackPlateFromDocId(docId);
+  }
+
+  String _extractAreaFromPlateDoc(Map<String, dynamic> data, String docId) {
+    final v = (data[PlateFields.area] as String?)?.trim();
+    if (v != null && v.isNotEmpty) return v;
+
+    final fallback = _fallbackAreaFromDocId(docId).trim();
+    return fallback.isNotEmpty ? fallback : '미지정';
+  }
+
+  bool _toBool(dynamic v) {
+    if (v is bool) return v;
+    if (v is int) return v != 0;
+    if (v is num) return v.toInt() != 0;
+    if (v is String) {
+      final t = v.trim().toLowerCase();
+      return t == 'true' || t == '1' || t == 'y' || t == 'yes';
+    }
+    return false;
   }
 
   String _normalizeLocation(String? raw) {
@@ -120,30 +203,258 @@ class PlateWriteService {
       }) async {
     final docRef = _firestore.collection('plates').doc(documentId);
 
-    Map<String, dynamic>? current;
-    try {
-      current = (await docRef.get().timeout(const Duration(seconds: 10))).data();
-    } on FirebaseException {
-      rethrow;
-    } on TimeoutException {
-      rethrow;
-    }
+    // ✅ prefs 접근은 트랜잭션 내부에서 불가 → 사전 결정
+    // - Write 토글(기본) + (보조) 실시간 테이블 탭 토글(조회 ON) OR 조건으로 정합성 유지
+    final bool shouldSyncPcView = await _shouldSyncParkingCompletedView();
+    final bool shouldSyncDepView = await _shouldSyncDepartureRequestsView();
 
-    final fields = _enforceZeroFeeLock(
-      Map<String, dynamic>.from(updatedFields),
-      existing: current,
-    );
-
-    if (log != null) {
-      fields['logs'] = FieldValue.arrayUnion([log.toMap()]);
-    }
-
-    // ✅ 어떤 업데이트든 write가 발생하면 updatedAt을 서버 시각으로 갱신
-    fields['updatedAt'] = FieldValue.serverTimestamp();
+    // parking_requests_view는 본 요청의 핵심(입차 완료/출차 요청 테이블)은 아니지만,
+    // updatePlate를 "단일 진실"로 만들기 위해 동일 패턴으로 확장할 수 있습니다.
+    // 여기서는 기존 recordWhoPlateClick 경로가 있으므로 updatePlate에서는 건드리지 않습니다.
 
     try {
-      await docRef.update(fields);
-      debugPrint("✅ 문서 업데이트 완료: $documentId");
+      await _firestore.runTransaction((tx) async {
+        final snap = await tx.get(docRef); // READ 1
+        if (!snap.exists) {
+          throw FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'not-found',
+            message: 'plate $documentId not found',
+          );
+        }
+
+        final before = snap.data() ?? <String, dynamic>{};
+
+        // ─────────────────────────────────────────
+        // 1) plates 문서 업데이트(기존 정책 유지)
+        // ─────────────────────────────────────────
+        final fields = _enforceZeroFeeLock(
+          Map<String, dynamic>.from(updatedFields),
+          existing: before,
+        );
+
+        if (log != null) {
+          fields['logs'] = FieldValue.arrayUnion([log.toMap()]);
+        }
+
+        // ✅ 어떤 업데이트든 write가 발생하면 updatedAt을 서버 시각으로 갱신
+        fields['updatedAt'] = FieldValue.serverTimestamp();
+
+        tx.update(docRef, fields); // WRITE 1
+
+        // ─────────────────────────────────────────
+        // 2) 변경 전/후 핵심 값 계산(뷰 정합성 판단)
+        // ─────────────────────────────────────────
+        final String beforeType =
+        ((before[PlateFields.type] as String?) ?? '').trim();
+        final String afterType =
+        (((fields[PlateFields.type] as String?) ?? beforeType)).trim();
+
+        final String beforeArea = _extractAreaFromPlateDoc(before, documentId);
+        final String afterArea = ((fields[PlateFields.area] as String?)?.trim().isNotEmpty ?? false)
+            ? (fields[PlateFields.area] as String).trim()
+            : beforeArea;
+
+        final String beforePlateNumber =
+        _extractPlateNumberFromPlateDoc(before, documentId);
+
+        String afterPlateNumber = beforePlateNumber;
+        final String? pn1 = (fields['plateNumber'] as String?)?.trim();
+        final String? pn2 = (fields[PlateFields.plateNumber] as String?)?.trim();
+        if (pn1 != null && pn1.isNotEmpty) {
+          afterPlateNumber = pn1;
+        } else if (pn2 != null && pn2.isNotEmpty) {
+          afterPlateNumber = pn2;
+        }
+
+        final String beforeLocation =
+        _normalizeLocation(before[PlateFields.location] as String?);
+        final String afterLocation = _normalizeLocation(
+          (fields[PlateFields.location] as String?) ??
+              (before[PlateFields.location] as String?),
+        );
+
+        final bool beforeSelected = _toBool(before[PlateFields.isSelected]);
+        final bool afterSelected = fields.containsKey(PlateFields.isSelected)
+            ? _toBool(fields[PlateFields.isSelected])
+            : beforeSelected;
+
+        final bool typeChanged = beforeType != afterType;
+        final bool areaChanged = beforeArea != afterArea;
+        final bool locationChanged = beforeLocation != afterLocation;
+        final bool plateNumberChanged = beforePlateNumber != afterPlateNumber;
+        final bool selectedChanged = beforeSelected != afterSelected;
+
+        // 변경이 view에 영향 없는 경우 빠르게 종료(불필요 write 방지)
+        final bool affectsViews =
+            typeChanged || areaChanged || locationChanged || plateNumberChanged || selectedChanged;
+
+        if (!affectsViews) {
+          return;
+        }
+
+        // ─────────────────────────────────────────
+        // 3) View 동기화(입차 완료/출차 요청)
+        //    - 핵심: Modify 등으로 location/isSelected가 바뀌어도 테이블이 즉시 정합하게 보이도록 함
+        // ─────────────────────────────────────────
+
+        DocumentReference<Map<String, dynamic>> _viewRef(
+            String collection,
+            String area,
+            ) =>
+            _firestore.collection(collection).doc(area);
+
+        void _txRemoveViewItem({
+          required String collection,
+          required String area,
+          required String plateDocId,
+        }) {
+          if (area.trim().isEmpty) return;
+          final ref = _viewRef(collection, area.trim());
+
+          tx.set(
+            ref,
+            <String, dynamic>{
+              'area': area.trim(),
+              'updatedAt': FieldValue.serverTimestamp(),
+              'items': <String, dynamic>{
+                plateDocId: FieldValue.delete(),
+              }
+            },
+            SetOptions(merge: true),
+          );
+        }
+
+        dynamic _extractTimestampFor(String key) {
+          final vNew = fields[key];
+          if (vNew is Timestamp) return vNew;
+
+          final vOld = before[key];
+          if (vOld is Timestamp) return vOld;
+
+          return null;
+        }
+
+        void _txUpsertViewItemFields({
+          required String collection,
+          required String area,
+          required String plateDocId,
+          required String plateNumber,
+          required String location,
+          String? primaryTimeField,
+          dynamic primaryTimeValue,
+        }) {
+          if (area.trim().isEmpty) return;
+
+          final ref = _viewRef(collection, area.trim());
+
+          final item = <String, dynamic>{
+            // 호환성: camelCase / snake_case 모두 기록(읽기 쪽이 어느 키를 쓰든 대응)
+            'plateNumber': plateNumber,
+            PlateFields.plateNumber: plateNumber,
+            'location': location,
+            'updatedAt': FieldValue.serverTimestamp(),
+            if (primaryTimeField != null)
+              primaryTimeField: primaryTimeValue ?? FieldValue.serverTimestamp(),
+          };
+
+          // ✅ set(merge)로 items.{id}를 업서트합니다.
+          // - primaryTimeValue는 plates 문서의 기존 Timestamp를 우선 사용 → 정렬/시간 의미가 리셋되지 않습니다.
+          tx.set(
+            ref,
+            <String, dynamic>{
+              'area': area.trim(),
+              'updatedAt': FieldValue.serverTimestamp(),
+              'items': <String, dynamic>{
+                plateDocId: item,
+              }
+            },
+            SetOptions(merge: true),
+          );
+        }
+
+        const String pcCollection = 'parking_completed_view';
+        const String depCollection = 'departure_requests_view';
+
+        final bool beforeIsPc = beforeType == PlateType.parkingCompleted.firestoreValue;
+        final bool afterIsPc = afterType == PlateType.parkingCompleted.firestoreValue;
+
+        final bool beforeIsDep = beforeType == PlateType.departureRequests.firestoreValue;
+        final bool afterIsDep = afterType == PlateType.departureRequests.firestoreValue;
+
+        // ── 3-A) parking_completed_view 정합성
+        if (shouldSyncPcView) {
+          // ① 이탈(또는 area 이동): 기존 view에서 제거
+          if (beforeIsPc && (!afterIsPc || areaChanged)) {
+            _txRemoveViewItem(
+              collection: pcCollection,
+              area: beforeArea,
+              plateDocId: documentId,
+            );
+          }
+
+          // ② 진입/잔류: location(및 plateNumber) 갱신
+          if (afterIsPc) {
+            if (typeChanged || areaChanged || locationChanged || plateNumberChanged) {
+              final pcAt = _extractTimestampFor('parkingCompletedAt');
+
+              _txUpsertViewItemFields(
+                collection: pcCollection,
+                area: afterArea,
+                plateDocId: documentId,
+                plateNumber: afterPlateNumber,
+                location: afterLocation,
+                primaryTimeField: 'parkingCompletedAt',
+                primaryTimeValue: pcAt,
+              );
+            }
+          }
+        }
+
+        // ── 3-B) departure_requests_view 정합성
+        if (shouldSyncDepView) {
+          // ① 이탈(또는 area 이동): 기존 view에서 제거
+          if (beforeIsDep && (!afterIsDep || areaChanged)) {
+            _txRemoveViewItem(
+              collection: depCollection,
+              area: beforeArea,
+              plateDocId: documentId,
+            );
+          }
+
+          // ② 진입/잔류: 선택 상태에 따라 노출/숨김을 포함해 동기화
+          if (afterIsDep) {
+            // 출차 요청 테이블 정책:
+            // - isSelected == true  → view에서 제거(숨김)
+            // - isSelected == false → view에 upsert(복구)
+            if (afterSelected) {
+              if (typeChanged || areaChanged || selectedChanged || locationChanged || plateNumberChanged) {
+                _txRemoveViewItem(
+                  collection: depCollection,
+                  area: afterArea,
+                  plateDocId: documentId,
+                );
+              }
+            } else {
+              if (typeChanged || areaChanged || selectedChanged || locationChanged || plateNumberChanged) {
+                final depAt = _extractTimestampFor('departureRequestedAt');
+
+                _txUpsertViewItemFields(
+                  collection: depCollection,
+                  area: afterArea,
+                  plateDocId: documentId,
+                  plateNumber: afterPlateNumber,
+                  location: afterLocation,
+                  primaryTimeField: 'departureRequestedAt',
+                  primaryTimeValue: depAt,
+                );
+              }
+            }
+          }
+        }
+      });
+
+      debugPrint("✅ 문서 업데이트 완료(+view sync): $documentId");
     } on FirebaseException catch (e) {
       debugPrint("🔥 문서 업데이트 실패: $e");
       rethrow;
@@ -152,6 +463,8 @@ class PlateWriteService {
       rethrow;
     }
   }
+
+
 
   Future<void> deletePlate(String documentId) async {
     final docRef = _firestore.collection('plates').doc(documentId);
