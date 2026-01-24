@@ -251,7 +251,8 @@ class _GenericViewRepository {
         final plateNumber =
             (m['plateNumber'] as String?) ?? _fallbackPlateFromDocId(plateDocId);
         final location = _normalizeLocation(m['location'] as String?);
-        final createdAt = _toDate(m[primaryTimeField]) ?? _toDate(m['updatedAt']);
+        final createdAt =
+            _toDate(m[primaryTimeField]) ?? _toDate(m['updatedAt']);
 
         if (plateNumber.isEmpty) continue;
 
@@ -465,7 +466,8 @@ class _TripleParkingCompletedRealTimeTableState
               color: _Palette.base.withOpacity(.08),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(Icons.table_chart_outlined, color: _Palette.base, size: 18),
+            child:
+            Icon(Icons.table_chart_outlined, color: _Palette.base, size: 18),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -573,7 +575,8 @@ class _TripleParkingCompletedRealTimeTableState
                     ? _UnifiedTableTab(
                   controller: _pcCtrl,
                   mode: _TabMode.parkingCompletedRealtime,
-                  description: _descriptionForMode(_TabMode.parkingCompletedRealtime),
+                  description: _descriptionForMode(
+                      _TabMode.parkingCompletedRealtime),
                 )
                     : const _RealtimeTabLockedPanel(
                   title: '입차 완료 실시간 탭이 비활성화되어 있습니다',
@@ -584,7 +587,8 @@ class _TripleParkingCompletedRealTimeTableState
                     ? _UnifiedTableTab(
                   controller: _depCtrl,
                   mode: _TabMode.departureRequestsRealtime,
-                  description: _descriptionForMode(_TabMode.departureRequestsRealtime),
+                  description: _descriptionForMode(
+                      _TabMode.departureRequestsRealtime),
                 )
                     : const _RealtimeTabLockedPanel(
                   title: '출차 요청 실시간 탭이 비활성화되어 있습니다',
@@ -825,8 +829,11 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
         if (cachedJson != null && cachedJson.trim().isNotEmpty) {
           final decoded = json.decode(cachedJson) as List;
           _cachedLocations = decoded
-              .map((e) =>
-              LocationModel.fromCacheMap(Map<String, dynamic>.from(e as Map)))
+              .map(
+                (e) => LocationModel.fromCacheMap(
+              Map<String, dynamic>.from(e as Map),
+            ),
+          )
               .toList();
         }
       }
@@ -909,7 +916,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
       final opts = _locationOptionsForDropdown();
       if (!mounted) return;
       setState(() {
-        if (_selectedLocation != _locationAll && !opts.contains(_selectedLocation)) {
+        if (_selectedLocation != _locationAll &&
+            !opts.contains(_selectedLocation)) {
           _selectedLocation = _locationAll;
         }
       });
@@ -1078,6 +1086,333 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
   }
 
   // ─────────────────────────────────────────
+  // ✅ [추가] Zone 행 탭 → 해당 구역 번호판 목록 다이얼로그
+  // ─────────────────────────────────────────
+
+  _ZoneVM _zoneVmFromLocation(LocationModel loc) {
+    final fullName = _displayNameForLocation(loc).trim();
+    final group = _groupKeyForLocation(loc);
+    final leaf = loc.locationName.trim();
+    final displayName = group.isEmpty ? fullName : leaf;
+
+    return _ZoneVM(
+      fullName: fullName,
+      group: group,
+      displayName: displayName,
+      leaf: leaf,
+      capacity: loc.capacity,
+      current: 0,
+      remaining: null,
+    );
+  }
+
+  bool _isCompositeLeafUnique(String leaf) {
+    final l = leaf.trim();
+    if (l.isEmpty) return true;
+
+    final parents = <String>{};
+    for (final loc in _cachedLocations) {
+      final type = (loc.type ?? '').trim();
+      final parent = (loc.parent ?? '').trim();
+      final locLeaf = loc.locationName.trim();
+      if (type == 'composite' && parent.isNotEmpty && locLeaf == l) {
+        parents.add(parent);
+      }
+    }
+    return parents.length <= 1;
+  }
+
+  bool _matchRowToZone(_RowVM r, _ZoneVM z) {
+    final raw = r.location.trim();
+    if (raw.isEmpty) return false;
+
+    final full = z.fullName.trim();
+    final group = z.group.trim();
+    final leaf = z.leaf.trim();
+
+    // 1) 가장 우선: fullName 정합 매칭
+    if (full.isNotEmpty && raw == full) return true;
+
+    // 2) 단독 구역: leaf 단독 저장(편차) 보조 허용
+    if (group.isEmpty) {
+      if (leaf.isNotEmpty && raw == leaf) return true;
+      return false;
+    }
+
+    // 3) composite child
+    if (leaf.isEmpty) return false;
+
+    if (raw.contains(' - ')) {
+      if (!raw.startsWith('$group - ')) return false;
+      return _leafFromLocationLabel(raw) == leaf;
+    }
+
+    // 4) raw가 leaf만 있는 편차 케이스: leaf가 유일할 때만 포함
+    if (raw == leaf && _isCompositeLeafUnique(leaf)) return true;
+
+    return false;
+  }
+
+  List<_RowVM> _rowsForZone(_ZoneVM z) {
+    final zn = z.fullName.trim();
+    if (zn == '기타/미지정') {
+      final metaVms = _cachedLocations
+          .map(_zoneVmFromLocation)
+          .where((e) => e.fullName.trim().isNotEmpty)
+          .toList();
+
+      final out = <_RowVM>[];
+      for (final r in _allRows) {
+        var matched = false;
+        for (final vm in metaVms) {
+          if (_matchRowToZone(r, vm)) {
+            matched = true;
+            break;
+          }
+        }
+        if (!matched) out.add(r);
+      }
+      return out;
+    }
+
+    final out = <_RowVM>[];
+    for (final r in _allRows) {
+      if (_matchRowToZone(r, z)) out.add(r);
+    }
+    return out;
+  }
+
+  Future<void> _openZonePlatesDialog(_ZoneVM z) async {
+    _trace(
+      '구역 탭(번호판 목록 다이얼로그)',
+      meta: <String, dynamic>{
+        'screen': 'triple_reverse_table_embedded',
+        'action': 'zone_tap_open_dialog',
+        'mode': widget.mode.toString(),
+        'collection': _collection,
+        'area': _currentArea,
+        'zoneFullName': z.fullName,
+        'zoneGroup': z.group,
+        'zoneLeaf': z.leaf,
+        'zoneCurrent': z.current,
+        'zoneCapacity': z.capacity,
+      },
+    );
+
+    final rows = _rowsForZone(z);
+
+    rows.sort((a, b) {
+      final ca = a.createdAt;
+      final cb = b.createdAt;
+      if (ca == null && cb == null) return 0;
+      if (ca == null) return _sortOldFirst ? 1 : -1;
+      if (cb == null) return _sortOldFirst ? -1 : 1;
+      final cmp = ca.compareTo(cb);
+      return _sortOldFirst ? cmp : -cmp;
+    });
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: _kDialogBarrierDismissible,
+      builder: (_) {
+        final cs = Theme.of(context).colorScheme;
+        final text = Theme.of(context).textTheme;
+
+        final remainText = (z.remaining == null)
+            ? '-'
+            : (z.remaining! >= 0 ? '${z.remaining}대' : '0대');
+        final capText = z.capacity > 0 ? '${z.capacity}대' : '-';
+
+        final title = '구역: ${z.fullName}';
+        final subtitle = z.fullName == '기타/미지정'
+            ? '메타에 매칭되지 않는 항목 · ${rows.length}대'
+            : '현재 ${rows.length}대 / 총 $capText / 잔여 $remainText';
+
+        TextStyle monoSmall(Color color) => text.labelMedium!.copyWith(
+          fontFeatures: const [FontFeature.tabularFigures()],
+          fontFamilyFallback: const ['monospace'],
+          fontWeight: FontWeight.w900,
+          color: color,
+        );
+
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Material(
+              color: Colors.transparent,
+              child: AlertDialog(
+                backgroundColor: Colors.white,
+                elevation: 8,
+                insetPadding:
+                const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                content: SizedBox(
+                  width: 520,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: text.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                color: _Palette.dark,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: '닫기',
+                            onPressed: () => Navigator.of(context).maybePop(),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          subtitle,
+                          style: text.bodySmall?.copyWith(color: cs.outline),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      if (rows.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 26),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.inbox_outlined,
+                                  size: 40, color: cs.outline),
+                              const SizedBox(height: 10),
+                              Text(
+                                '표시할 번호판이 없습니다.',
+                                style:
+                                text.bodyMedium?.copyWith(color: cs.outline),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        Flexible(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: _Palette.base.withOpacity(.02),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: cs.outline.withOpacity(.15),
+                              ),
+                            ),
+                            child: Scrollbar(
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                itemCount: rows.length,
+                                separatorBuilder: (_, __) => Divider(
+                                  height: 1,
+                                  color: cs.outline.withOpacity(.12),
+                                ),
+                                itemBuilder: (ctx, i) {
+                                  final r = rows[i];
+                                  final timeText = _fmtDate(r.createdAt);
+
+                                  return Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: () {
+                                        Navigator.of(context).pop();
+                                        WidgetsBinding.instance
+                                            .addPostFrameCallback((_) {
+                                          if (!mounted) return;
+                                          _openHybridDetailPopup(r);
+                                        });
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                            10, 10, 10, 10),
+                                        child: Row(
+                                          children: [
+                                            SizedBox(
+                                              width: 30,
+                                              child: Text(
+                                                (i + 1).toString().padLeft(2, '0'),
+                                                style: monoSmall(_Palette.dark),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    r.plateNumber,
+                                                    style: text.bodyMedium
+                                                        ?.copyWith(
+                                                      fontWeight: FontWeight.w900,
+                                                      color: _Palette.dark,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                    TextOverflow.ellipsis,
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    r.location,
+                                                    style: text.bodySmall
+                                                        ?.copyWith(
+                                                      color: cs.outline,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                    TextOverflow.ellipsis,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Text(
+                                              timeText.isEmpty ? '-' : timeText,
+                                              style: text.bodySmall
+                                                  ?.copyWith(color: cs.outline),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 6),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '항목을 탭하면 번호판 상세로 이동합니다.',
+                          style: text.bodySmall?.copyWith(color: cs.outline),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ─────────────────────────────────────────
   // ✅ Zone: 단독 먼저 + 트리
   // ─────────────────────────────────────────
 
@@ -1234,6 +1569,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
     final totalCapAll = _totalCapacityFromPrefs;
     final totalRemAll = totalCapAll > 0 ? (totalCapAll - totalCurAll) : null;
 
+    // ✅ 변경: 구역 행(단독/하위) 탭 시 번호판 목록 다이얼로그 표시
     Widget buildZoneRow(_ZoneVM z, {required bool indented}) {
       final remainText = (z.remaining == null)
           ? '-'
@@ -1242,48 +1578,54 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
 
       final leftPad = indented ? 28.0 : 12.0;
 
-      return Container(
-        width: double.infinity,
-        padding: EdgeInsets.fromLTRB(leftPad, 10, 12, 10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(
-            bottom: BorderSide(color: cs.outline.withOpacity(.10)),
-          ),
-        ),
-        child: Row(
-          children: [
-            if (indented) ...[
-              Icon(Icons.subdirectory_arrow_right_rounded,
-                  size: 18, color: cs.outline.withOpacity(.85)),
-              const SizedBox(width: 6),
-            ],
-            Expanded(
-              child: Text(
-                z.displayName,
-                style: text.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: _Palette.dark,
+      return Material(
+        color: Colors.white,
+        child: InkWell(
+          onTap: _loading ? null : () => _openZonePlatesDialog(z),
+          child: Container(
+            width: double.infinity,
+            padding: EdgeInsets.fromLTRB(leftPad, 10, 12, 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(
+                bottom: BorderSide(color: cs.outline.withOpacity(.10)),
+              ),
+            ),
+            child: Row(
+              children: [
+                if (indented) ...[
+                  Icon(Icons.subdirectory_arrow_right_rounded,
+                      size: 18, color: cs.outline.withOpacity(.85)),
+                  const SizedBox(width: 6),
+                ],
+                Expanded(
+                  child: Text(
+                    z.displayName,
+                    style: text.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: _Palette.dark,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                overflow: TextOverflow.ellipsis,
-              ),
+                const SizedBox(width: 8),
+                Text('현재 ${z.current}대',
+                    style: text.bodySmall?.copyWith(color: cs.outline)),
+                const SizedBox(width: 10),
+                Text('총 $capText', style: text.bodySmall?.copyWith(color: cs.outline)),
+                const SizedBox(width: 10),
+                Text(
+                  '잔여 $remainText',
+                  style: text.bodySmall?.copyWith(
+                    color: (z.remaining != null && z.remaining! <= 0)
+                        ? Colors.redAccent
+                        : Colors.teal.shade700,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Text('현재 ${z.current}대',
-                style: text.bodySmall?.copyWith(color: cs.outline)),
-            const SizedBox(width: 10),
-            Text('총 $capText', style: text.bodySmall?.copyWith(color: cs.outline)),
-            const SizedBox(width: 10),
-            Text(
-              '잔여 $remainText',
-              style: text.bodySmall?.copyWith(
-                color: (z.remaining != null && z.remaining! <= 0)
-                    ? Colors.redAccent
-                    : Colors.teal.shade700,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
+          ),
         ),
       );
     }
@@ -1304,6 +1646,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
           ? '-'
           : (g.totalRemaining! >= 0 ? '${g.totalRemaining}대' : '0대');
 
+      // 상위 그룹 헤더: 기존대로 expand/collapse만 유지
       children.add(
         Material(
           color: Colors.white,
@@ -1554,9 +1897,11 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                     topRightDownText: feeText,
                     midLeftText: plate.location,
                     midCenterText: displayUser.isEmpty ? '-' : displayUser,
-                    midRightText: CustomDateUtils.formatTimeForUI(plate.requestTime),
-                    bottomLeftLeftText:
-                    plate.statusList.isNotEmpty ? plate.statusList.join(", ") : "",
+                    midRightText:
+                    CustomDateUtils.formatTimeForUI(plate.requestTime),
+                    bottomLeftLeftText: plate.statusList.isNotEmpty
+                        ? plate.statusList.join(", ")
+                        : "",
                     bottomLeftCenterText: plate.customStatus ?? '',
                     bottomRightText: elapsedText,
                     isSelected: isSelected,
@@ -1626,7 +1971,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
         } else {
           currentFee = calculateParkingFee(
             entryTimeInSeconds: plate.requestTime.millisecondsSinceEpoch ~/ 1000,
-            currentTimeInSeconds: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            currentTimeInSeconds:
+            DateTime.now().millisecondsSinceEpoch ~/ 1000,
             basicStandard: basicStandard,
             basicAmount: basicAmount,
             addStandard: addStandard,
@@ -1788,7 +2134,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
   // ─────────────────────────────────────────
 
   Widget _buildRowsChip(TextTheme text) {
-    final count = (_viewMode == _ViewMode.plate) ? _rows.length : _allRows.length;
+    final count =
+    (_viewMode == _ViewMode.plate) ? _rows.length : _allRows.length;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -2001,16 +2348,18 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
     );
   }
 
-  TextStyle get _headStyle => Theme.of(context).textTheme.labelMedium!.copyWith(
-    fontWeight: FontWeight.w800,
-    letterSpacing: .2,
-    color: _Palette.dark,
-  );
+  TextStyle get _headStyle =>
+      Theme.of(context).textTheme.labelMedium!.copyWith(
+        fontWeight: FontWeight.w800,
+        letterSpacing: .2,
+        color: _Palette.dark,
+      );
 
-  TextStyle get _cellStyle => Theme.of(context).textTheme.bodyMedium!.copyWith(
-    height: 1.2,
-    color: _Palette.dark.withOpacity(.9),
-  );
+  TextStyle get _cellStyle =>
+      Theme.of(context).textTheme.bodyMedium!.copyWith(
+        height: 1.2,
+        color: _Palette.dark.withOpacity(.9),
+      );
 
   TextStyle get _monoStyle => _cellStyle.copyWith(
     fontFeatures: const [FontFeature.tabularFigures()],
@@ -2053,11 +2402,15 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text('No', style: _headStyle, overflow: TextOverflow.ellipsis),
+                        child: Text('No',
+                            style: _headStyle,
+                            overflow: TextOverflow.ellipsis),
                       ),
                       const SizedBox(width: 4),
                       Icon(
-                        _sortOldFirst ? Icons.arrow_upward : Icons.arrow_downward,
+                        _sortOldFirst
+                            ? Icons.arrow_upward
+                            : Icons.arrow_downward,
                         size: 14,
                         color: _Palette.dark.withOpacity(.8),
                       ),
@@ -2068,12 +2421,14 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
               const SizedBox(width: 8),
               Expanded(
                 flex: 7,
-                child: Text('Plate', style: _headStyle, overflow: TextOverflow.ellipsis),
+                child: Text('Plate',
+                    style: _headStyle, overflow: TextOverflow.ellipsis),
               ),
               const SizedBox(width: 8),
               Expanded(
                 flex: 5,
-                child: Text('Location', style: _headStyle, overflow: TextOverflow.ellipsis),
+                child: Text('Location',
+                    style: _headStyle, overflow: TextOverflow.ellipsis),
               ),
             ],
           ),
@@ -2086,9 +2441,11 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
               itemCount: _rows.length,
               itemBuilder: (context, i) {
                 final r = _rows[i];
-                final rowBg = i.isEven ? Colors.white : _Palette.base.withOpacity(.02);
+                final rowBg =
+                i.isEven ? Colors.white : _Palette.base.withOpacity(.02);
 
-                final rawNo = (i < _displayNos.length) ? _displayNos[i] : (i + 1);
+                final rawNo =
+                (i < _displayNos.length) ? _displayNos[i] : (i + 1);
                 final noText = rawNo.toString().padLeft(2, '0');
 
                 return Material(
@@ -2111,7 +2468,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                             flex: 2,
                             child: Text(
                               noText,
-                              style: _monoStyle.copyWith(fontWeight: FontWeight.w800),
+                              style: _monoStyle.copyWith(
+                                  fontWeight: FontWeight.w800),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -2124,7 +2482,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                               alignment: Alignment.centerLeft,
                               child: Text(
                                 r.plateNumber,
-                                style: _cellStyle.copyWith(fontWeight: FontWeight.w800),
+                                style: _cellStyle.copyWith(
+                                    fontWeight: FontWeight.w800),
                                 maxLines: 1,
                                 softWrap: false,
                               ),

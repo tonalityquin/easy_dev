@@ -341,7 +341,7 @@ class _MinorParkingCompletedRealTimeTableState
   void initState() {
     super.initState();
 
-    // ✅ 변경: 테이블 모드 진입 시 시작 인덱스 = 입차 완료(1)
+    // ✅ 테이블 모드 진입 시 시작 인덱스 = 입차 완료(1)
     _tabCtrl = TabController(length: 3, vsync: this, initialIndex: 1);
     _tabCtrl.addListener(() {
       if (!mounted) return;
@@ -357,7 +357,7 @@ class _MinorParkingCompletedRealTimeTableState
     super.dispose();
   }
 
-  // ✅ 변경: 우선순위를 입차 완료(1) → 입차 요청(0) → 출차 요청(2)
+  // ✅ 우선순위를 입차 완료(1) → 입차 요청(0) → 출차 요청(2)
   int _firstEnabledTabOr(int fallback) {
     if (_pcGate) return 1;
     if (_reqGate) return 0;
@@ -379,7 +379,6 @@ class _MinorParkingCompletedRealTimeTableState
         _pcGate = pc;
         _gatesLoaded = true;
 
-        // ✅ 변경: fallback도 1로 통일
         _tabCtrl.index = _firstEnabledTabOr(1);
       });
     } catch (_) {
@@ -390,7 +389,6 @@ class _MinorParkingCompletedRealTimeTableState
         _pcGate = false;
         _gatesLoaded = true;
 
-        // ✅ 변경: 실패 시에도 입차 완료(1)부터
         _tabCtrl.index = 1;
       });
     }
@@ -469,7 +467,6 @@ class _MinorParkingCompletedRealTimeTableState
         '해당 탭이 비활성화되어 있습니다. 설정에서 ON 후 사용해 주세요.',
       );
 
-      // ✅ 변경: 복귀도 fallback=1로 통일
       _tabCtrl.animateTo(_firstEnabledTabOr(1));
       return;
     }
@@ -516,7 +513,8 @@ class _MinorParkingCompletedRealTimeTableState
               color: _Palette.base.withOpacity(.08),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(Icons.table_chart_outlined, color: _Palette.base, size: 18),
+            child:
+            Icon(Icons.table_chart_outlined, color: _Palette.base, size: 18),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -649,8 +647,8 @@ class _MinorParkingCompletedRealTimeTableState
                     ? _UnifiedTableTab(
                   controller: _depCtrl,
                   mode: _TabMode.departureRequestsRealtime,
-                  description:
-                  _descriptionForMode(_TabMode.departureRequestsRealtime),
+                  description: _descriptionForMode(
+                      _TabMode.departureRequestsRealtime),
                 )
                     : const _RealtimeTabLockedPanel(
                   title: '출차 요청 실시간 탭이 비활성화되어 있습니다',
@@ -716,6 +714,7 @@ class _RealtimeTabLockedPanel extends StatelessWidget {
 /// ─────────────────────────────────────────────────────────
 /// 통합 탭(3종) + 하이브리드 상세 팝업
 /// + ✅ 구역 보기(단독 먼저 + 복합 트리) 적용
+/// + ✅ [변경] 입차 요청 탭: 번호판 보기만 지원
 /// ─────────────────────────────────────────────────────────
 class _UnifiedTableTab extends StatefulWidget {
   final _RealtimeTabController controller;
@@ -773,6 +772,9 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
   String _locationsLoadedArea = '';
   bool _loadingLocationMeta = false;
   final Map<String, bool> _groupExpanded = <String, bool>{};
+
+  // ✅ [추가] 입차 요청 탭에서는 zone 지원 안함
+  bool get _zoneSupported => widget.mode != _TabMode.parkingRequestsRealtime;
 
   String get _primaryTimeField {
     if (widget.mode == _TabMode.departureRequestsRealtime) {
@@ -845,13 +847,21 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
 
     _allRows = List<_RowVM>.of(_repo.getCached(_currentArea));
     _availableLocations = _extractLocations(_allRows);
+
+    // ✅ 입차 요청 탭: 항상 plate 고정
+    if (!_zoneSupported) {
+      _viewMode = _ViewMode.plate;
+    }
+
     _applyFilterAndSort();
     _syncLocationPickerCountsFromRows(_allRows);
 
     _ensureCooldownTicker();
 
-    // zone meta는 지연 로드(필요 시), 단 캐시가 있으면 미리 확보
-    _ensureLocationMetaLoaded();
+    // zone meta는 zone 지원 탭에서만 로드
+    if (_zoneSupported) {
+      _ensureLocationMetaLoaded();
+    }
   }
 
   @override
@@ -869,6 +879,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
   // ─────────────────────────────────────────
 
   Future<void> _ensureLocationMetaLoaded({bool force = false}) async {
+    if (!_zoneSupported) return;
+
     final area = _currentArea.trim();
     if (area.isEmpty) return;
 
@@ -896,9 +908,11 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
         if (cachedJson != null && cachedJson.trim().isNotEmpty) {
           final decoded = json.decode(cachedJson) as List;
           _cachedLocations = decoded
-              .map((e) => LocationModel.fromCacheMap(
-            Map<String, dynamic>.from(e as Map),
-          ))
+              .map(
+                (e) => LocationModel.fromCacheMap(
+              Map<String, dynamic>.from(e as Map),
+            ),
+          )
               .toList();
         }
       }
@@ -964,6 +978,11 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
   // ✅ 보기 토글
   // ─────────────────────────────────────────
   Future<void> _toggleViewMode() async {
+    if (!_zoneSupported) {
+      showSelectedSnackbar(context, '입차 요청 탭에서는 “구역으로 보기” 기능을 지원하지 않습니다.');
+      return;
+    }
+
     final next =
     (_viewMode == _ViewMode.plate) ? _ViewMode.zone : _ViewMode.plate;
 
@@ -1059,10 +1078,14 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
         _allRows = List<_RowVM>.of(rows);
         _availableLocations = _extractLocations(_allRows);
 
-        if (_viewMode == _ViewMode.plate &&
-            _selectedLocation != _locationAll &&
+        if (_selectedLocation != _locationAll &&
             !_availableLocations.contains(_selectedLocation)) {
           _selectedLocation = _locationAll;
+        }
+
+        // 입차 요청 탭이면 항상 plate 유지
+        if (!_zoneSupported) {
+          _viewMode = _ViewMode.plate;
         }
 
         _applyFilterAndSort();
@@ -1070,7 +1093,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
         _hasFetchedFromServer = true;
       });
 
-      if (_viewMode == _ViewMode.zone) {
+      if (_zoneSupported && _viewMode == _ViewMode.zone) {
         await _ensureLocationMetaLoaded();
       }
 
@@ -1093,7 +1116,11 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
   }
 
   void _applyFilterAndSort() {
-    // zone 모드에서는 _rows를 전체로 유지하고, No 계산은 불필요
+    // 입차 요청 탭이면 zone 자체를 쓰지 않으므로 plate 처리만
+    if (!_zoneSupported) {
+      _viewMode = _ViewMode.plate;
+    }
+
     if (_viewMode != _ViewMode.plate) {
       _rows = List<_RowVM>.of(_allRows);
       _displayNos = <int>[];
@@ -1116,7 +1143,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
       return true;
     }).toList();
 
-    // ✅ 기존 정렬 기준 유지: createdAt
+    // ✅ 정렬 기준 유지: createdAt
     _rows.sort((a, b) {
       final ca = a.createdAt;
       final cb = b.createdAt;
@@ -1157,7 +1184,331 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
   }
 
   // ─────────────────────────────────────────
-  // Zone 그룹/트리(기존 유지)
+  // ✅ [Zone] (입차 요청 탭에서는 미사용이지만, 다른 탭에서 필요)
+  // ─────────────────────────────────────────
+
+  _ZoneVM _zoneVmFromLocation(LocationModel loc) {
+    final fullName = _displayNameForLocation(loc).trim();
+    final group = _groupKeyForLocation(loc);
+    final leaf = loc.locationName.trim();
+    final displayName = group.isEmpty ? fullName : leaf;
+
+    return _ZoneVM(
+      fullName: fullName,
+      group: group,
+      displayName: displayName,
+      leaf: leaf,
+      capacity: loc.capacity,
+      current: 0,
+      remaining: null,
+    );
+  }
+
+  bool _isCompositeLeafUnique(String leaf) {
+    final l = leaf.trim();
+    if (l.isEmpty) return true;
+
+    final parents = <String>{};
+    for (final loc in _cachedLocations) {
+      final type = (loc.type ?? '').trim();
+      final parent = (loc.parent ?? '').trim();
+      final locLeaf = loc.locationName.trim();
+      if (type == 'composite' && parent.isNotEmpty && locLeaf == l) {
+        parents.add(parent);
+      }
+    }
+    return parents.length <= 1;
+  }
+
+  bool _matchRowToZone(_RowVM r, _ZoneVM z) {
+    final raw = r.location.trim();
+    if (raw.isEmpty) return false;
+
+    final full = z.fullName.trim();
+    final group = z.group.trim();
+    final leaf = z.leaf.trim();
+
+    if (full.isNotEmpty && raw == full) return true;
+
+    if (group.isEmpty) {
+      if (leaf.isNotEmpty && raw == leaf) return true;
+      return false;
+    }
+
+    if (leaf.isEmpty) return false;
+
+    if (raw.contains(' - ')) {
+      if (!raw.startsWith('$group - ')) return false;
+      return _leafFromLocationLabel(raw) == leaf;
+    }
+
+    if (raw == leaf && _isCompositeLeafUnique(leaf)) return true;
+
+    return false;
+  }
+
+  List<_RowVM> _rowsForZone(_ZoneVM z) {
+    final zn = z.fullName.trim();
+
+    if (zn == '기타/미지정') {
+      final metaVms = _cachedLocations
+          .map(_zoneVmFromLocation)
+          .where((e) => e.fullName.trim().isNotEmpty)
+          .toList();
+
+      final out = <_RowVM>[];
+      for (final r in _allRows) {
+        var matched = false;
+        for (final vm in metaVms) {
+          if (_matchRowToZone(r, vm)) {
+            matched = true;
+            break;
+          }
+        }
+        if (!matched) out.add(r);
+      }
+      return out;
+    }
+
+    final out = <_RowVM>[];
+    for (final r in _allRows) {
+      if (_matchRowToZone(r, z)) out.add(r);
+    }
+    return out;
+  }
+
+  Future<void> _openZonePlatesDialog(_ZoneVM z) async {
+    _trace(
+      '구역 탭(번호판 목록 다이얼로그)',
+      meta: <String, dynamic>{
+        'screen': 'minor_reverse_table_embedded',
+        'action': 'zone_tap_open_dialog',
+        'mode': widget.mode.toString(),
+        'collection': _collection,
+        'area': _currentArea,
+        'zoneFullName': z.fullName,
+        'zoneGroup': z.group,
+        'zoneLeaf': z.leaf,
+        'zoneCurrent': z.current,
+        'zoneCapacity': z.capacity,
+      },
+    );
+
+    final rows = _rowsForZone(z);
+
+    rows.sort((a, b) {
+      final ca = a.createdAt;
+      final cb = b.createdAt;
+      if (ca == null && cb == null) return 0;
+      if (ca == null) return _sortOldFirst ? 1 : -1;
+      if (cb == null) return _sortOldFirst ? -1 : 1;
+      final cmp = ca.compareTo(cb);
+      return _sortOldFirst ? cmp : -cmp;
+    });
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: _kDialogBarrierDismissible,
+      builder: (_) {
+        final cs = Theme.of(context).colorScheme;
+        final text = Theme.of(context).textTheme;
+
+        final remainText = (z.remaining == null)
+            ? '-'
+            : (z.remaining! >= 0 ? '${z.remaining}대' : '0대');
+        final capText = z.capacity > 0 ? '${z.capacity}대' : '-';
+
+        final title = '구역: ${z.fullName}';
+        final subtitle = z.fullName == '기타/미지정'
+            ? '메타에 매칭되지 않는 항목 · ${rows.length}대'
+            : '현재 ${rows.length}대 / 총 $capText / 잔여 $remainText';
+
+        TextStyle monoSmall(Color color) => text.labelMedium!.copyWith(
+          fontFeatures: const [FontFeature.tabularFigures()],
+          fontFamilyFallback: const ['monospace'],
+          fontWeight: FontWeight.w900,
+          color: color,
+        );
+
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Material(
+              color: Colors.transparent,
+              child: AlertDialog(
+                backgroundColor: Colors.white,
+                elevation: 8,
+                insetPadding:
+                const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                content: SizedBox(
+                  width: 520,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: text.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                color: _Palette.dark,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: '닫기',
+                            onPressed: () => Navigator.of(context).maybePop(),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          subtitle,
+                          style: text.bodySmall?.copyWith(color: cs.outline),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      if (rows.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 26),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.inbox_outlined,
+                                  size: 40, color: cs.outline),
+                              const SizedBox(height: 10),
+                              Text(
+                                '표시할 번호판이 없습니다.',
+                                style:
+                                text.bodyMedium?.copyWith(color: cs.outline),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        Flexible(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: _Palette.base.withOpacity(.02),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: cs.outline.withOpacity(.15),
+                              ),
+                            ),
+                            child: Scrollbar(
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                itemCount: rows.length,
+                                separatorBuilder: (_, __) => Divider(
+                                  height: 1,
+                                  color: cs.outline.withOpacity(.12),
+                                ),
+                                itemBuilder: (ctx, i) {
+                                  final r = rows[i];
+                                  final timeText = _fmtDate(r.createdAt);
+
+                                  return Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: () {
+                                        Navigator.of(context).pop();
+                                        WidgetsBinding.instance
+                                            .addPostFrameCallback((_) {
+                                          if (!mounted) return;
+                                          _openHybridDetailPopup(r);
+                                        });
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                            10, 10, 10, 10),
+                                        child: Row(
+                                          children: [
+                                            SizedBox(
+                                              width: 30,
+                                              child: Text(
+                                                (i + 1).toString().padLeft(2, '0'),
+                                                style: monoSmall(_Palette.dark),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    r.plateNumber,
+                                                    style: text.bodyMedium
+                                                        ?.copyWith(
+                                                      fontWeight: FontWeight.w900,
+                                                      color: _Palette.dark,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                    TextOverflow.ellipsis,
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    r.location,
+                                                    style: text.bodySmall
+                                                        ?.copyWith(
+                                                      color: cs.outline,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                    TextOverflow.ellipsis,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Text(
+                                              timeText.isEmpty ? '-' : timeText,
+                                              style: text.bodySmall
+                                                  ?.copyWith(color: cs.outline),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 6),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '항목을 탭하면 번호판 상세로 이동합니다.',
+                          style: text.bodySmall?.copyWith(color: cs.outline),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ─────────────────────────────────────────
+  // Zone 그룹/트리
   // ─────────────────────────────────────────
   List<_ZoneGroupVM> _buildZoneGroupsFromCurrentData() {
     final rows = List<_RowVM>.of(_allRows);
@@ -1313,6 +1664,12 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
   }
 
   Widget _buildZoneTree(ColorScheme cs, TextTheme text) {
+    if (!_zoneSupported) {
+      return const ExpandedEmpty(
+        message: '입차 요청 탭에서는 구역 보기를 지원하지 않습니다.',
+      );
+    }
+
     if (_loadingLocationMeta && _cachedLocations.isEmpty) {
       return const ExpandedLoading();
     }
@@ -1337,48 +1694,55 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
 
       final leftPad = indented ? 28.0 : 12.0;
 
-      return Container(
-        width: double.infinity,
-        padding: EdgeInsets.fromLTRB(leftPad, 10, 12, 10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(
-            bottom: BorderSide(color: cs.outline.withOpacity(.10)),
-          ),
-        ),
-        child: Row(
-          children: [
-            if (indented) ...[
-              Icon(Icons.subdirectory_arrow_right_rounded,
-                  size: 18, color: cs.outline.withOpacity(.85)),
-              const SizedBox(width: 6),
-            ],
-            Expanded(
-              child: Text(
-                z.displayName,
-                style: text.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: _Palette.dark,
+      return Material(
+        color: Colors.white,
+        child: InkWell(
+          onTap: _loading ? null : () => _openZonePlatesDialog(z),
+          child: Container(
+            width: double.infinity,
+            padding: EdgeInsets.fromLTRB(leftPad, 10, 12, 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(
+                bottom: BorderSide(color: cs.outline.withOpacity(.10)),
+              ),
+            ),
+            child: Row(
+              children: [
+                if (indented) ...[
+                  Icon(Icons.subdirectory_arrow_right_rounded,
+                      size: 18, color: cs.outline.withOpacity(.85)),
+                  const SizedBox(width: 6),
+                ],
+                Expanded(
+                  child: Text(
+                    z.displayName,
+                    style: text.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: _Palette.dark,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                overflow: TextOverflow.ellipsis,
-              ),
+                const SizedBox(width: 8),
+                Text('현재 ${z.current}대',
+                    style: text.bodySmall?.copyWith(color: cs.outline)),
+                const SizedBox(width: 10),
+                Text('총 $capText',
+                    style: text.bodySmall?.copyWith(color: cs.outline)),
+                const SizedBox(width: 10),
+                Text(
+                  '잔여 $remainText',
+                  style: text.bodySmall?.copyWith(
+                    color: (z.remaining != null && z.remaining! <= 0)
+                        ? Colors.redAccent
+                        : Colors.teal.shade700,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Text('현재 ${z.current}대',
-                style: text.bodySmall?.copyWith(color: cs.outline)),
-            const SizedBox(width: 10),
-            Text('총 $capText', style: text.bodySmall?.copyWith(color: cs.outline)),
-            const SizedBox(width: 10),
-            Text(
-              '잔여 $remainText',
-              style: text.bodySmall?.copyWith(
-                color: (z.remaining != null && z.remaining! <= 0)
-                    ? Colors.redAccent
-                    : Colors.teal.shade700,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
+          ),
         ),
       );
     }
@@ -1399,6 +1763,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
           ? '-'
           : (g.totalRemaining! >= 0 ? '${g.totalRemaining}대' : '0대');
 
+      // 부모 헤더: expand/collapse 유지
       children.add(
         Material(
           color: Colors.white,
@@ -1432,7 +1797,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                   Text('현재 ${g.totalCurrent}대',
                       style: text.bodySmall?.copyWith(color: cs.outline)),
                   const SizedBox(width: 10),
-                  Text('총 ${g.totalCapacity > 0 ? "${g.totalCapacity}대" : "-"}',
+                  Text(
+                      '총 ${g.totalCapacity > 0 ? "${g.totalCapacity}대" : "-"}',
                       style: text.bodySmall?.copyWith(color: cs.outline)),
                   const SizedBox(width: 10),
                   Text(
@@ -1567,9 +1933,13 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
   }
 
   Widget _buildViewModeTogglePill(ColorScheme cs, TextTheme text) {
-    final disabled = _loading;
-    final toggleLabel =
-    (_viewMode == _ViewMode.plate) ? '구역으로 보기' : '번호판으로 보기';
+    final disabled = _loading || !_zoneSupported;
+
+    final toggleLabel = !_zoneSupported
+        ? '번호판으로 보기(고정)'
+        : (_viewMode == _ViewMode.plate)
+        ? '구역으로 보기'
+        : '번호판으로 보기';
 
     return Container(
       width: double.infinity,
@@ -1599,6 +1969,11 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                 padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                 child: Row(
                   children: [
+                    if (!_zoneSupported) ...[
+                      Icon(Icons.lock_outline,
+                          size: 16, color: cs.outline.withOpacity(.9)),
+                      const SizedBox(width: 6),
+                    ],
                     Expanded(
                       child: Text(
                         toggleLabel,
@@ -1614,7 +1989,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                     Icon(
                       Icons.swap_horiz_rounded,
                       size: 18,
-                      color: disabled ? cs.outline : cs.outline,
+                      color: cs.outline,
                     ),
                   ],
                 ),
@@ -1697,9 +2072,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
       controller: _searchCtrl,
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
-        hintText: _viewMode == _ViewMode.zone
-            ? '주차 구역명 또는 상위 구역명 검색'
-            : '번호판 또는 주차 구역으로 검색',
+        hintText: '번호판 또는 주차 구역으로 검색',
         prefixIcon: Icon(Icons.search, color: _Palette.dark.withOpacity(.7)),
         suffixIcon: _searchCtrl.text.isEmpty
             ? null
@@ -1721,16 +2094,18 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
     );
   }
 
-  TextStyle get _headStyle => Theme.of(context).textTheme.labelMedium!.copyWith(
-    fontWeight: FontWeight.w800,
-    letterSpacing: .2,
-    color: _Palette.dark,
-  );
+  TextStyle get _headStyle =>
+      Theme.of(context).textTheme.labelMedium!.copyWith(
+        fontWeight: FontWeight.w800,
+        letterSpacing: .2,
+        color: _Palette.dark,
+      );
 
-  TextStyle get _cellStyle => Theme.of(context).textTheme.bodyMedium!.copyWith(
-    height: 1.2,
-    color: _Palette.dark.withOpacity(.9),
-  );
+  TextStyle get _cellStyle =>
+      Theme.of(context).textTheme.bodyMedium!.copyWith(
+        height: 1.2,
+        color: _Palette.dark.withOpacity(.9),
+      );
 
   TextStyle get _monoStyle => _cellStyle.copyWith(
     fontFeatures: const [FontFeature.tabularFigures()],
@@ -1791,7 +2166,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
               ),
               const SizedBox(width: 8),
               Expanded(
-                flex: 7, // Plate 폭 확대
+                flex: 7,
                 child: Text(
                   'Plate',
                   style: _headStyle,
@@ -1821,8 +2196,9 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                 final rowBg =
                 i.isEven ? Colors.white : _Palette.base.withOpacity(.02);
 
-                final rawNo = (i < _displayNos.length) ? _displayNos[i] : (i + 1);
-                final noText = rawNo.toString().padLeft(2, '0'); // ✅ 01 형식
+                final rawNo =
+                (i < _displayNos.length) ? _displayNos[i] : (i + 1);
+                final noText = rawNo.toString().padLeft(2, '0');
 
                 return Material(
                   color: rowBg,
@@ -1844,7 +2220,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                             flex: 2,
                             child: Text(
                               noText,
-                              style: _monoStyle.copyWith(fontWeight: FontWeight.w800),
+                              style:
+                              _monoStyle.copyWith(fontWeight: FontWeight.w800),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -1857,7 +2234,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                               alignment: Alignment.centerLeft,
                               child: Text(
                                 r.plateNumber,
-                                style: _cellStyle.copyWith(fontWeight: FontWeight.w800),
+                                style: _cellStyle.copyWith(
+                                    fontWeight: FontWeight.w800),
                                 maxLines: 1,
                                 softWrap: false,
                               ),
@@ -1980,7 +2358,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                 elevation: 8,
                 insetPadding:
                 const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
                 contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                 content: _PlateDetailNotFoundDialog(
                   plateId: plateId,
@@ -2020,7 +2399,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                 elevation: 8,
                 insetPadding:
                 const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
                 contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                 content: _PlateDetailBodyDialog(
                   title: '번호판 상세',
@@ -2043,7 +2423,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                     bottomRightText: elapsedText,
                     isSelected: isSelected,
                     backgroundColor: backgroundColor,
-                    onTap: () {}, // ✅ 내부 탭으로 닫히지 않음
+                    onTap: () {},
                   ),
                   showWorkButton: true,
                   workButtonText: '작업 수행',
@@ -2320,7 +2700,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
           ),
           const Divider(height: 1),
           Expanded(
-            child: (_viewMode == _ViewMode.plate)
+            child: (!_zoneSupported || _viewMode == _ViewMode.plate)
                 ? _buildTable()
                 : _buildZoneTree(cs, text),
           ),

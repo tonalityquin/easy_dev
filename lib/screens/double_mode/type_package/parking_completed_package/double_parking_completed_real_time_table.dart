@@ -223,7 +223,8 @@ class _GenericViewRepository {
         final plateNumber =
             (m['plateNumber'] as String?) ?? _fallbackPlateFromDocId(plateDocId);
         final location = _normalizeLocation(m['location'] as String?);
-        final createdAt = _toDate(m[primaryTimeField]) ?? _toDate(m['updatedAt']);
+        final createdAt =
+            _toDate(m[primaryTimeField]) ?? _toDate(m['updatedAt']);
 
         if (plateNumber.isEmpty) continue;
 
@@ -630,6 +631,14 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
     return '$y-$m-$day';
   }
 
+  void _trace(String name, {Map<String, dynamic>? meta}) {
+    DebugActionRecorder.instance.recordAction(
+      name,
+      route: ModalRoute.of(context)?.settings.name,
+      meta: meta,
+    );
+  }
+
   @override
   bool get wantKeepAlive => true;
 
@@ -695,8 +704,11 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
         if (cachedJson != null && cachedJson.trim().isNotEmpty) {
           final decoded = json.decode(cachedJson) as List;
           _cachedLocations = decoded
-              .map((e) =>
-              LocationModel.fromCacheMap(Map<String, dynamic>.from(e as Map)))
+              .map(
+                (e) => LocationModel.fromCacheMap(
+              Map<String, dynamic>.from(e as Map),
+            ),
+          )
               .toList();
         }
       }
@@ -758,8 +770,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
   }
 
   Future<void> _toggleViewMode() async {
-    final next =
-    (_viewMode == _ViewMode.plate) ? _ViewMode.zone : _ViewMode.plate;
+    final next = (_viewMode == _ViewMode.plate) ? _ViewMode.zone : _ViewMode.plate;
 
     setState(() {
       _viewMode = next;
@@ -925,6 +936,342 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
       _sortOldFirst ? '정렬: 오래된 순' : '정렬: 최신 순',
     );
   }
+
+  // ─────────────────────────────────────────────────────────
+  // ✅ [추가] Zone 행 탭 → 해당 구역 번호판 목록 다이얼로그
+  // ─────────────────────────────────────────────────────────
+
+  _ZoneVM _zoneVmFromLocation(LocationModel loc) {
+    final fullName = _displayNameForLocation(loc).trim();
+    final parent = _groupKeyForLocation(loc);
+    final leaf = loc.locationName.trim();
+    final isCompositeChild = parent.isNotEmpty;
+    final displayLabel = isCompositeChild ? leaf : fullName;
+
+    return _ZoneVM(
+      fullName: fullName,
+      group: parent,
+      displayName: displayLabel,
+      leaf: leaf,
+      capacity: loc.capacity,
+      current: 0,
+      remaining: null,
+    );
+  }
+
+  bool _isCompositeLeafUnique(String leaf) {
+    final l = leaf.trim();
+    if (l.isEmpty) return true;
+
+    final parents = <String>{};
+    for (final loc in _cachedLocations) {
+      final type = (loc.type ?? '').trim();
+      final parent = (loc.parent ?? '').trim();
+      final locLeaf = loc.locationName.trim();
+      if (type == 'composite' && parent.isNotEmpty && locLeaf == l) {
+        parents.add(parent);
+      }
+    }
+    // leaf가 여러 parent에 중복되면, row.location이 leaf만 있을 때 어느 parent인지 단정 불가
+    return parents.length <= 1;
+  }
+
+  bool _matchRowToZone(_RowVM r, _ZoneVM z) {
+    final raw = r.location.trim();
+    if (raw.isEmpty) return false;
+
+    final full = z.fullName.trim();
+    final group = z.group.trim();
+    final leaf = z.leaf.trim();
+
+    // 1) 가장 우선: fullName 정합 매칭
+    if (full.isNotEmpty && raw == full) return true;
+
+    // 2) 단독 구역: leaf 단독 저장 케이스(레거시)까지 보조 허용
+    if (group.isEmpty) {
+      if (leaf.isNotEmpty && raw == leaf) return true;
+      return false;
+    }
+
+    // 3) composite child
+    if (leaf.isEmpty) return false;
+
+    if (raw.contains(' - ')) {
+      // "부모 - 자식" 형태면, parent 및 leaf 모두 확인
+      if (!raw.startsWith('$group - ')) return false;
+      return _leafFromLocationLabel(raw) == leaf;
+    }
+
+    // 4) row.location이 leaf만 있는 편차 케이스: leaf가 유일할 때만 포함
+    if (raw == leaf && _isCompositeLeafUnique(leaf)) return true;
+
+    return false;
+  }
+
+  List<_RowVM> _rowsForZone(_ZoneVM z) {
+    final zn = z.fullName.trim();
+    if (zn == '기타/미지정') {
+      // "기타/미지정": 메타에 매칭되지 않는 rows를 모아 보여줌
+      final metaVms = _cachedLocations.map(_zoneVmFromLocation).where((e) {
+        final fn = e.fullName.trim();
+        return fn.isNotEmpty;
+      }).toList();
+
+      final out = <_RowVM>[];
+      for (final r in _allRows) {
+        var matched = false;
+        for (final vm in metaVms) {
+          if (_matchRowToZone(r, vm)) {
+            matched = true;
+            break;
+          }
+        }
+        if (!matched) out.add(r);
+      }
+      return out;
+    }
+
+    final out = <_RowVM>[];
+    for (final r in _allRows) {
+      if (_matchRowToZone(r, z)) out.add(r);
+    }
+    return out;
+  }
+
+  Future<void> _openZonePlatesDialog(_ZoneVM z) async {
+    if (!mounted) return;
+
+    _trace(
+      '구역 탭(번호판 목록 다이얼로그)',
+      meta: <String, dynamic>{
+        'screen': 'double_parking_completed_view_embedded',
+        'action': 'zone_tap_open_dialog',
+        'area': _currentArea,
+        'zoneFullName': z.fullName,
+        'zoneGroup': z.group,
+        'zoneLeaf': z.leaf,
+        'zoneCurrent': z.current,
+        'zoneCapacity': z.capacity,
+      },
+    );
+
+    final rows = _rowsForZone(z);
+
+    rows.sort((a, b) {
+      final ca = a.createdAt;
+      final cb = b.createdAt;
+      if (ca == null && cb == null) return 0;
+      if (ca == null) return _sortOldFirst ? 1 : -1;
+      if (cb == null) return _sortOldFirst ? -1 : 1;
+      final cmp = ca.compareTo(cb);
+      return _sortOldFirst ? cmp : -cmp;
+    });
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: _kDialogBarrierDismissible,
+      builder: (_) {
+        final cs = Theme.of(context).colorScheme;
+        final text = Theme.of(context).textTheme;
+
+        final remainText = (z.remaining == null)
+            ? '-'
+            : (z.remaining! >= 0 ? '${z.remaining}대' : '0대');
+        final capText = z.capacity > 0 ? '${z.capacity}대' : '-';
+
+        final title = '구역: ${z.fullName}';
+        final subtitle = z.fullName == '기타/미지정'
+            ? '메타에 매칭되지 않는 항목 · ${rows.length}대'
+            : '현재 ${rows.length}대 / 총 $capText / 잔여 $remainText';
+
+        TextStyle monoSmall(Color color) => text.labelMedium!.copyWith(
+          fontFeatures: const [FontFeature.tabularFigures()],
+          fontFamilyFallback: const ['monospace'],
+          fontWeight: FontWeight.w900,
+          color: color,
+        );
+
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 520),
+            child: Material(
+              color: Colors.transparent,
+              child: AlertDialog(
+                backgroundColor: Colors.white,
+                elevation: 8,
+                insetPadding:
+                const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                content: SizedBox(
+                  width: 520,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: text.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                color: _Palette.dark,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: '닫기',
+                            onPressed: () => Navigator.of(context).maybePop(),
+                            icon: const Icon(Icons.close),
+                          ),
+                        ],
+                      ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          subtitle,
+                          style: text.bodySmall?.copyWith(color: cs.outline),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      if (rows.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 26),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.inbox_outlined,
+                                  size: 40, color: cs.outline),
+                              const SizedBox(height: 10),
+                              Text(
+                                '표시할 번호판이 없습니다.',
+                                style:
+                                text.bodyMedium?.copyWith(color: cs.outline),
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        Flexible(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: _Palette.base.withOpacity(.02),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: cs.outline.withOpacity(.15),
+                              ),
+                            ),
+                            child: Scrollbar(
+                              child: ListView.separated(
+                                shrinkWrap: true,
+                                itemCount: rows.length,
+                                separatorBuilder: (_, __) => Divider(
+                                  height: 1,
+                                  color: cs.outline.withOpacity(.12),
+                                ),
+                                itemBuilder: (ctx, i) {
+                                  final r = rows[i];
+                                  final timeText = _fmtDate(r.createdAt);
+
+                                  return Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: () {
+                                        Navigator.of(context).pop();
+                                        WidgetsBinding.instance
+                                            .addPostFrameCallback((_) {
+                                          if (!mounted) return;
+                                          _openHybridDetailPopup(r);
+                                        });
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.fromLTRB(
+                                            10, 10, 10, 10),
+                                        child: Row(
+                                          children: [
+                                            SizedBox(
+                                              width: 30,
+                                              child: Text(
+                                                (i + 1).toString().padLeft(2, '0'),
+                                                style: monoSmall(_Palette.dark),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    r.plateNumber,
+                                                    style: text.bodyMedium
+                                                        ?.copyWith(
+                                                      fontWeight: FontWeight.w900,
+                                                      color: _Palette.dark,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                    TextOverflow.ellipsis,
+                                                  ),
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    r.location,
+                                                    style: text.bodySmall
+                                                        ?.copyWith(
+                                                      color: cs.outline,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                    TextOverflow.ellipsis,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Text(
+                                              timeText.isEmpty ? '-' : timeText,
+                                              style: text.bodySmall
+                                                  ?.copyWith(color: cs.outline),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      const SizedBox(height: 6),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          '항목을 탭하면 번호판 상세로 이동합니다.',
+                          style: text.bodySmall?.copyWith(color: cs.outline),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // 기존: plate 상세 / fee 계산 / table 렌더링
+  // ─────────────────────────────────────────────────────────
 
   Future<PlateModel?> _fetchPlateDetail(String plateId) async {
     final id = plateId.trim();
@@ -1391,7 +1738,9 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text('No', style: _headStyle, overflow: TextOverflow.ellipsis),
+                        child: Text('No',
+                            style: _headStyle,
+                            overflow: TextOverflow.ellipsis),
                       ),
                       const SizedBox(width: 4),
                       Icon(
@@ -1406,12 +1755,14 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
               const SizedBox(width: 8),
               Expanded(
                 flex: 7,
-                child: Text('Plate', style: _headStyle, overflow: TextOverflow.ellipsis),
+                child: Text('Plate',
+                    style: _headStyle, overflow: TextOverflow.ellipsis),
               ),
               const SizedBox(width: 8),
               Expanded(
                 flex: 5,
-                child: Text('Location', style: _headStyle, overflow: TextOverflow.ellipsis),
+                child: Text('Location',
+                    style: _headStyle, overflow: TextOverflow.ellipsis),
               ),
             ],
           ),
@@ -1424,7 +1775,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
               itemCount: _rows.length,
               itemBuilder: (context, i) {
                 final r = _rows[i];
-                final rowBg = i.isEven ? Colors.white : _Palette.base.withOpacity(.02);
+                final rowBg =
+                i.isEven ? Colors.white : _Palette.base.withOpacity(.02);
 
                 final rawNo = (i < _displayNos.length) ? _displayNos[i] : (i + 1);
                 final noText = rawNo.toString().padLeft(2, '0'); // ✅ 01 형식
@@ -1449,7 +1801,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                             flex: 2,
                             child: Text(
                               noText,
-                              style: _monoStyle.copyWith(fontWeight: FontWeight.w800),
+                              style:
+                              _monoStyle.copyWith(fontWeight: FontWeight.w800),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -1462,7 +1815,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                               alignment: Alignment.centerLeft,
                               child: Text(
                                 r.plateNumber,
-                                style: _cellStyle.copyWith(fontWeight: FontWeight.w800),
+                                style: _cellStyle.copyWith(
+                                    fontWeight: FontWeight.w800),
                                 maxLines: 1,
                                 softWrap: false,
                               ),
@@ -1512,53 +1866,63 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
     final totalRemAll = totalCapAll > 0 ? (totalCapAll - totalCurAll) : null;
 
     Widget buildZoneRow(_ZoneVM z, {required bool indented}) {
-      final remainText =
-      (z.remaining == null) ? '-' : (z.remaining! >= 0 ? '${z.remaining}대' : '0대');
+      final remainText = (z.remaining == null)
+          ? '-'
+          : (z.remaining! >= 0 ? '${z.remaining}대' : '0대');
       final capText = z.capacity > 0 ? '${z.capacity}대' : '-';
 
       final leftPad = indented ? 28.0 : 12.0;
 
-      return Container(
-        width: double.infinity,
-        padding: EdgeInsets.fromLTRB(leftPad, 10, 12, 10),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          border: Border(
-            bottom: BorderSide(color: cs.outline.withOpacity(.10)),
-          ),
-        ),
-        child: Row(
-          children: [
-            if (indented) ...[
-              Icon(Icons.subdirectory_arrow_right_rounded,
-                  size: 18, color: cs.outline.withOpacity(.85)),
-              const SizedBox(width: 6),
-            ],
-            Expanded(
-              child: Text(
-                z.displayName,
-                style: text.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  color: _Palette.dark,
+      // ✅ 변경: 단독/하위 구역 탭 가능(구역 번호판 목록 다이얼로그)
+      return Material(
+        color: Colors.white,
+        child: InkWell(
+          onTap: _loading ? null : () => _openZonePlatesDialog(z),
+          child: Container(
+            width: double.infinity,
+            padding: EdgeInsets.fromLTRB(leftPad, 10, 12, 10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border(
+                bottom: BorderSide(color: cs.outline.withOpacity(.10)),
+              ),
+            ),
+            child: Row(
+              children: [
+                if (indented) ...[
+                  Icon(Icons.subdirectory_arrow_right_rounded,
+                      size: 18, color: cs.outline.withOpacity(.85)),
+                  const SizedBox(width: 6),
+                ],
+                Expanded(
+                  child: Text(
+                    z.displayName,
+                    style: text.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: _Palette.dark,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                overflow: TextOverflow.ellipsis,
-              ),
+                const SizedBox(width: 8),
+                Text('현재 ${z.current}대',
+                    style: text.bodySmall?.copyWith(color: cs.outline)),
+                const SizedBox(width: 10),
+                Text('총 $capText',
+                    style: text.bodySmall?.copyWith(color: cs.outline)),
+                const SizedBox(width: 10),
+                Text(
+                  '잔여 $remainText',
+                  style: text.bodySmall?.copyWith(
+                    color: (z.remaining != null && z.remaining! <= 0)
+                        ? Colors.redAccent
+                        : Colors.teal.shade700,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(width: 8),
-            Text('현재 ${z.current}대', style: text.bodySmall?.copyWith(color: cs.outline)),
-            const SizedBox(width: 10),
-            Text('총 $capText', style: text.bodySmall?.copyWith(color: cs.outline)),
-            const SizedBox(width: 10),
-            Text(
-              '잔여 $remainText',
-              style: text.bodySmall?.copyWith(
-                color: (z.remaining != null && z.remaining! <= 0)
-                    ? Colors.redAccent
-                    : Colors.teal.shade700,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-          ],
+          ),
         ),
       );
     }
@@ -1579,6 +1943,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
           ? '-'
           : (g.totalRemaining! >= 0 ? '${g.totalRemaining}대' : '0대');
 
+      // 상위 그룹 헤더: 기존대로 expand/collapse만 유지
       children.add(
         Material(
           color: Colors.white,
@@ -1612,7 +1977,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                   Text('현재 ${g.totalCurrent}대',
                       style: text.bodySmall?.copyWith(color: cs.outline)),
                   const SizedBox(width: 10),
-                  Text('총 ${g.totalCapacity > 0 ? "${g.totalCapacity}대" : "-"}',
+                  Text(
+                      '총 ${g.totalCapacity > 0 ? "${g.totalCapacity}대" : "-"}',
                       style: text.bodySmall?.copyWith(color: cs.outline)),
                   const SizedBox(width: 10),
                   Text(
@@ -1700,8 +2066,10 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
               child: AlertDialog(
                 backgroundColor: Colors.white,
                 elevation: 8,
-                insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                insetPadding:
+                const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
                 contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                 content: _PlateDetailNotFoundDialog(
                   plateId: plateId,
@@ -1737,12 +2105,15 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
               child: AlertDialog(
                 backgroundColor: Colors.white,
                 elevation: 8,
-                insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                insetPadding:
+                const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
                 contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                 content: _PlateDetailBodyDialog(
                   title: '번호판 상세',
-                  subtitle: 'VIEW: ${viewRow.location} / ${_fmtDate(viewRow.createdAt)}   ·   '
+                  subtitle:
+                  'VIEW: ${viewRow.location} / ${_fmtDate(viewRow.createdAt)}   ·   '
                       'PLATES: ${plate.location} / ${CustomDateUtils.formatTimestamp(plate.requestTime)}',
                   child: PlateCustomBox(
                     topLeftText: '소속',
@@ -1751,9 +2122,11 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                     topRightDownText: feeText,
                     midLeftText: plate.location,
                     midCenterText: displayUser.isEmpty ? '-' : displayUser,
-                    midRightText: CustomDateUtils.formatTimeForUI(plate.requestTime),
-                    bottomLeftLeftText:
-                    plate.statusList.isNotEmpty ? plate.statusList.join(", ") : "",
+                    midRightText:
+                    CustomDateUtils.formatTimeForUI(plate.requestTime),
+                    bottomLeftLeftText: plate.statusList.isNotEmpty
+                        ? plate.statusList.join(", ")
+                        : "",
                     bottomLeftCenterText: plate.customStatus ?? '',
                     bottomRightText: elapsedText,
                     isSelected: plate.isSelected,
@@ -1822,7 +2195,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
         } else {
           currentFee = calculateParkingFee(
             entryTimeInSeconds: plate.requestTime.millisecondsSinceEpoch ~/ 1000,
-            currentTimeInSeconds: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            currentTimeInSeconds:
+            DateTime.now().millisecondsSinceEpoch ~/ 1000,
             basicStandard: basicStandard,
             basicAmount: basicAmount,
             addStandard: addStandard,
@@ -2157,8 +2531,8 @@ class _PlateDetailBodyDialog extends StatelessWidget {
                   style: FilledButton.styleFrom(
                     backgroundColor: _Palette.base,
                     foregroundColor: Colors.white,
-                    padding:
-                    const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 12, horizontal: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
