@@ -43,7 +43,7 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
 
     // ✅ 경량 로그인 버튼 Trace 기록
     _trace(
-      '경량 로그인 버튼',
+      'WorkFlow A 로그인 버튼',
       meta: <String, dynamic>{
         'screen': 'lite_login',
         'action': 'login',
@@ -159,9 +159,9 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
                   child: Padding(
                     padding: const EdgeInsets.only(left: 4, bottom: 8),
                     child: Semantics(
-                      label: 'screen_tag: lite login',
+                      label: 'screen_tag: WorkFlow A login',
                       child: Text(
-                        'lite login',
+                        'WorkFlow A login',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -238,7 +238,7 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.login),
                     label: Text(
-                      _controller.isLoading ? '로딩 중...' : '경량 로그인',
+                      _controller.isLoading ? '로딩 중...' : '로그인',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,

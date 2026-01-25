@@ -81,7 +81,10 @@ class TabletTopNavigation extends StatelessWidget {
           },
           style: OutlinedButton.styleFrom(
             minimumSize: const Size.fromHeight(56),
-            side: BorderSide(color: selected ? Colors.blue : Colors.grey.shade400, width: selected ? 1.5 : 1.0),
+            side: BorderSide(
+              color: selected ? Colors.blue : Colors.grey.shade400,
+              width: selected ? 1.5 : 1.0,
+            ),
             backgroundColor: background,
             foregroundColor: Colors.black,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -148,7 +151,9 @@ class TabletTopNavigation extends StatelessWidget {
                     if (depBusy.value) return;
                     depBusy.value = true;
                     try {
-                      final isSubscribedDeparture = plateState.isSubscribed(PlateType.departureRequests);
+                      final isSubscribedDeparture =
+                      plateState.isSubscribed(PlateType.departureRequests);
+
                       if (!isSubscribedDeparture) {
                         await Future.sync(() => plateState.tabletSubscribeDeparture());
                         final currentArea = plateState.currentArea;
@@ -159,7 +164,8 @@ class TabletTopNavigation extends StatelessWidget {
                       } else {
                         await Future.sync(() => plateState.tabletUnsubscribeDeparture());
                         final unsubscribedArea =
-                            plateState.getSubscribedArea(PlateType.departureRequests) ?? '알 수 없음';
+                            plateState.getSubscribedArea(PlateType.departureRequests) ??
+                                '알 수 없음';
                         showSelectedSnackbar(
                           innerCtx,
                           '⏹ [출차 요청] 구독 해제됨\n지역: $unsubscribedArea',
@@ -213,7 +219,10 @@ class TabletTopNavigation extends StatelessWidget {
                                     Expanded(
                                       child: Text(
                                         '현재 지역: ${(area.trim().isNotEmpty) ? area : "지역 없음"}',
-                                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
@@ -244,6 +253,7 @@ class TabletTopNavigation extends StatelessWidget {
                                 background: Colors.blue.shade50,
                               ),
                               const SizedBox(height: 8),
+
                               modeButton(
                                 target: PadMode.small,
                                 title: 'Small Pad',
@@ -252,12 +262,23 @@ class TabletTopNavigation extends StatelessWidget {
                                 background: Colors.green.shade50,
                               ),
                               const SizedBox(height: 8),
+
                               modeButton(
                                 target: PadMode.show,
                                 title: 'Show',
                                 subtitle: '왼쪽 패널만 전체 화면(출차 요청 차량만 표시)',
                                 icon: Icons.view_list_outlined,
                                 background: Colors.amber.shade50,
+                              ),
+                              const SizedBox(height: 8),
+
+                              // ✅ 추가: Mobile 모드
+                              modeButton(
+                                target: PadMode.mobile,
+                                title: 'Mobile',
+                                subtitle: '단일 화면: 상단 입력 표시 + 하단 키패드(좌/우 패널 분할 없음)',
+                                icon: Icons.phone_iphone_outlined,
+                                background: Colors.indigo.shade50,
                               ),
 
                               const SizedBox(height: 20),
@@ -315,7 +336,9 @@ class TabletTopNavigation extends StatelessWidget {
                                                 ),
                                               const SizedBox(width: 8),
                                               Text(
-                                                isSubscribedDeparture ? '출차 요청 구독 해제' : '출차 요청 구독 시작',
+                                                isSubscribedDeparture
+                                                    ? '출차 요청 구독 해제'
+                                                    : '출차 요청 구독 시작',
                                                 style: const TextStyle(fontWeight: FontWeight.w700),
                                               ),
                                             ],
@@ -340,7 +363,9 @@ class TabletTopNavigation extends StatelessWidget {
                                     foregroundColor: Colors.black,
                                     elevation: 0,
                                     side: const BorderSide(color: Colors.grey, width: 1.0),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
                                   ),
                                   onPressed: () async {
                                     Navigator.of(dialogCtx).pop();
@@ -372,7 +397,9 @@ class TabletTopNavigation extends StatelessWidget {
                                     foregroundColor: Colors.black,
                                     elevation: 0,
                                     side: const BorderSide(color: Colors.grey, width: 1.0),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
                                   ),
                                 ),
                               ),

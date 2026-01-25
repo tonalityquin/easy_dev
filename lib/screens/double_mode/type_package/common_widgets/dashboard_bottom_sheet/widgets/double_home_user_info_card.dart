@@ -2,14 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../../states/user/user_state.dart';
-
-/// BlueGrey 팔레트(double 계열과 동일 톤)
-class _Palette {
-  static const base  = Color(0xFF546E7A); // BlueGrey 600
-  static const dark  = Color(0xFF37474F); // BlueGrey 800
-  static const light = Color(0xFFB0BEC5); // BlueGrey 200
-  static const fg    = Colors.white;      // 전경(아이콘/텍스트)
-}
+import '../../../../../../theme.dart';
 
 class DoubleHomeUserInfoCard extends StatelessWidget {
   const DoubleHomeUserInfoCard({super.key});
@@ -18,16 +11,26 @@ class DoubleHomeUserInfoCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final userState = context.watch<UserState>();
 
+    // ✅ ThemeExtension(AppCardPalette)에서 double 계열 팔레트 사용
+    final palette = AppCardPalette.of(context);
+    final base = palette.doubleBase;
+    final dark = palette.doubleDark;
+    final light = palette.doubleLight;
+    const fg = Colors.white;
+
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: () => debugPrint('📄 사용자 상세 정보 보기'),
       child: Card(
         elevation: 2,
+        // 기존과 동일하게 흰색 서피스 유지(디자인 유지 목적)
         color: Colors.white,
-        surfaceTintColor: _Palette.light, // 살짝 블루그레이 틴트
+        // ✅ 기존 _Palette.light → Theme 팔레트 light로 대체
+        surfaceTintColor: light,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: _Palette.light.withOpacity(.35)),
+          // ✅ 기존 _Palette.light → Theme 팔레트 light로 대체
+          side: BorderSide(color: light.withOpacity(.35)),
         ),
         margin: const EdgeInsets.symmetric(vertical: 12),
         child: Padding(
@@ -38,13 +41,13 @@ class DoubleHomeUserInfoCard extends StatelessWidget {
               // 헤더 라벨
               Row(
                 children: [
-                  Icon(Icons.badge, size: 14, color: _Palette.dark.withOpacity(.9)),
+                  Icon(Icons.badge, size: 14, color: dark.withOpacity(.9)),
                   const SizedBox(width: 4),
                   Text(
                     '근무자 정보',
                     style: TextStyle(
                       fontSize: 12,
-                      color: _Palette.dark.withOpacity(.9),
+                      color: dark.withOpacity(.9),
                       fontWeight: FontWeight.w600,
                       letterSpacing: .2,
                     ),
@@ -59,8 +62,8 @@ class DoubleHomeUserInfoCard extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 24,
-                    backgroundColor: _Palette.base,
-                    child: const Icon(Icons.person, color: _Palette.fg),
+                    backgroundColor: base,
+                    child: const Icon(Icons.person, color: fg),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -68,7 +71,7 @@ class DoubleHomeUserInfoCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          (userState.name).isNotEmpty ? userState.name : '-',
+                          userState.name.isNotEmpty ? userState.name : '-',
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
@@ -79,7 +82,7 @@ class DoubleHomeUserInfoCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          (userState.position).isNotEmpty ? userState.position : '-',
+                          userState.position.isNotEmpty ? userState.position : '-',
                           style: TextStyle(
                             fontSize: 13,
                             color: Colors.grey[700],
@@ -93,17 +96,17 @@ class DoubleHomeUserInfoCard extends StatelessWidget {
                   const SizedBox(width: 8),
                   Icon(
                     Icons.qr_code,
-                    color: _Palette.dark.withOpacity(.85),
+                    color: dark.withOpacity(.85),
                   ),
                 ],
               ),
 
               const SizedBox(height: 16),
-              Divider(color: _Palette.light.withOpacity(.35), height: 1),
+              Divider(color: light.withOpacity(.35), height: 1),
               const SizedBox(height: 12),
 
-              _infoRow(Icons.phone, userState.phone),
-              _infoRow(Icons.location_on, userState.area),
+              _infoRow(dark: dark, icon: Icons.phone, value: userState.phone),
+              _infoRow(dark: dark, icon: Icons.location_on, value: userState.area),
             ],
           ),
         ),
@@ -111,12 +114,16 @@ class DoubleHomeUserInfoCard extends StatelessWidget {
     );
   }
 
-  Widget _infoRow(IconData icon, String value) {
+  Widget _infoRow({
+    required Color dark,
+    required IconData icon,
+    required String value,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: _Palette.dark.withOpacity(.9)),
+          Icon(icon, size: 18, color: dark.withOpacity(.9)),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
