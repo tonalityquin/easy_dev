@@ -70,33 +70,25 @@ class MinorCommuteInController {
       UserState userState,
       ) async {
     try {
-      // 1) 오늘 출근 여부 캐시 보장 (실제 Firestore read는 UserState에서 하루 1번)
       await userState.ensureTodayClockInStatus();
 
-      // 2) 이미 오늘 출근한 상태라면 중복 출근 방지
       if (userState.hasClockInToday) {
         showFailedSnackbar(context, '이미 오늘 출근 기록이 있습니다.');
         return MinorCommuteDestination.none;
       }
 
-      // 3) 출근 로그 저장 + 로컬 isWorking prefs/알림 세팅
       final uploadResult = await _uploadAttendanceSilently(context);
 
-      // 저장 실패/취소 시에는 여기서 종료
       if (uploadResult == null || uploadResult.success != true) {
         return MinorCommuteDestination.none;
       }
 
-      // 4) 출근 성공 시: Firestore user_accounts.isWorking 토글(false → true)
       await userState.isHeWorking();
 
-      // 5) 출근 성공 시: 오늘 출근했다는 사실을 캐시에 반영
       userState.markClockInToday();
 
-      // 6) commute_true_false 에 "출근 시각" 기록 (Timestamp) - 설정 OFF면 스킵
       await _recordClockInAtToCommuteTrueFalse(userState);
 
-      // 상태가 true면 목적지 결정
       return _minorDecideDestination(context, userState);
     } catch (e, st) {
       debugPrint('[Minor] handleWorkStatusAndDecide error: $e\n$st');
@@ -105,7 +97,6 @@ class MinorCommuteInController {
     }
   }
 
-  // ✅ 자동 경로: 현재 근무중이면 목적지 판단 후 즉시 라우팅
   void redirectIfWorking(BuildContext context, UserState userState) {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final dest = await _minorDecideDestination(context, userState);
@@ -143,9 +134,7 @@ class MinorCommuteInController {
 
     final result = await MinorCommuteInClockInSave.uploadAttendanceJson(
       context: context,
-      data: {
-        'recordedTime': nowTime,
-      },
+      data: {'recordedTime': nowTime},
     );
 
     if (!context.mounted) return null;
@@ -153,7 +142,6 @@ class MinorCommuteInController {
     if (result.success == true) {
       showSuccessSnackbar(context, result.message);
 
-      // ✅ 출근 상태를 로컬에 저장하고, 알림을 즉시 반영
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(kIsWorkingPrefsKey, true);
 

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../routes.dart';
-import '../../../../../theme.dart';
 import '../minor_login_controller.dart';
 
 // ✅ Trace 기록용 Recorder
@@ -82,65 +81,41 @@ class _MinorLoginFormState extends State<MinorLoginForm> {
   @override
   Widget build(BuildContext context) {
     final baseTheme = Theme.of(context);
+    final cs = baseTheme.colorScheme;
 
-    final palette = AppCardPalette.of(context);
-    // ✅ minor 색상만 반영 (UI 레이아웃은 그대로)
-    final base = palette.minorBase;
-    final light = palette.minorLight;
+    // ✅ 컨셉 테마(ColorScheme)에 맞춰 버튼/아이콘/selection만 정돈
+    final themed = baseTheme.copyWith(
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: cs.primary,
+          foregroundColor: cs.onPrimary,
+          minimumSize: const Size.fromHeight(55),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          elevation: 1.5,
+          shadowColor: cs.primary.withOpacity(0.25),
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          foregroundColor: cs.primary,
+          splashFactory: InkRipple.splashFactory,
+        ),
+      ),
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: cs.primary,
+        selectionColor: cs.primaryContainer.withOpacity(.35),
+        selectionHandleColor: cs.primary,
+      ),
+    );
 
     return Material(
       color: Colors.transparent,
       child: SafeArea(
         child: Theme(
-          data: baseTheme.copyWith(
-            colorScheme: baseTheme.colorScheme.copyWith(
-              primary: base,
-              onPrimary: Colors.white,
-              primaryContainer: light,
-              onPrimaryContainer: Colors.white,
-            ),
-            elevatedButtonTheme: ElevatedButtonThemeData(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: base,
-                foregroundColor: Colors.white,
-                minimumSize: const Size.fromHeight(55),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                elevation: 1.5,
-                shadowColor: base.withOpacity(0.25),
-              ),
-            ),
-            iconButtonTheme: IconButtonThemeData(
-              style: IconButton.styleFrom(
-                foregroundColor: base,
-                splashFactory: InkRipple.splashFactory,
-              ),
-            ),
-            inputDecorationTheme: InputDecorationTheme(
-              focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: base, width: 1.6),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.black.withOpacity(0.15)),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              prefixIconColor: MaterialStateColor.resolveWith(
-                    (states) => states.contains(MaterialState.focused) ? base : Colors.black54,
-              ),
-              suffixIconColor: MaterialStateColor.resolveWith(
-                    (states) => states.contains(MaterialState.focused) ? base : Colors.black54,
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            ),
-            textSelectionTheme: TextSelectionThemeData(
-              cursorColor: base,
-              selectionColor: light.withOpacity(.35),
-              selectionHandleColor: base,
-            ),
-          ),
+          data: themed,
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Column(
@@ -153,12 +128,12 @@ class _MinorLoginFormState extends State<MinorLoginForm> {
                     padding: const EdgeInsets.only(left: 4, bottom: 8),
                     child: Semantics(
                       label: 'screen_tag: minor login',
-                      child: const Text(
+                      child: Text(
                         'minor login',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: Colors.black54,
+                          color: cs.onSurfaceVariant.withOpacity(0.80),
                           letterSpacing: 0.2,
                         ),
                       ),

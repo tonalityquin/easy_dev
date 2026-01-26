@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../../theme.dart'; // ✅ AppCardPalette 사용 (theme.dart 연결)
 import '../../../../../states/user/user_state.dart';
 
 class DoubleCommuteInInfoCardWidget extends StatelessWidget {
@@ -10,15 +9,7 @@ class DoubleCommuteInInfoCardWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final userState = context.watch<UserState>();
-
-    // ✅ theme.dart(AppCardPalette)에서 double 팔레트 획득
-    final palette = AppCardPalette.of(context);
-    final base = palette.doubleBase;
-    final dark = palette.doubleDark;
-    final light = palette.doubleLight;
-
-    // 전경(아이콘/텍스트) - 기존 코드 유지(화이트)
-    const fg = Colors.white;
+    final cs = Theme.of(context).colorScheme;
 
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -26,11 +17,12 @@ class DoubleCommuteInInfoCardWidget extends StatelessWidget {
         debugPrint('📄 사용자 상세 정보 보기');
       },
       child: Card(
-        elevation: 2,
-        color: Colors.white,
+        elevation: 1,
+        color: cs.surfaceContainerLow,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: light.withOpacity(.45)),
+          side: BorderSide(color: cs.outlineVariant.withOpacity(.8)),
         ),
         margin: const EdgeInsets.symmetric(vertical: 12),
         child: Padding(
@@ -40,14 +32,14 @@ class DoubleCommuteInInfoCardWidget extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Icon(Icons.badge, size: 14, color: dark.withOpacity(.7)),
+                  Icon(Icons.badge, size: 14, color: cs.onSurfaceVariant.withOpacity(.8)),
                   const SizedBox(width: 4),
                   Text(
                     '근무자 카드',
                     style: TextStyle(
                       fontSize: 12,
-                      color: dark.withOpacity(.7),
-                      fontWeight: FontWeight.w500,
+                      color: cs.onSurfaceVariant.withOpacity(.8),
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],
@@ -58,8 +50,8 @@ class DoubleCommuteInInfoCardWidget extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 24,
-                    backgroundColor: base,
-                    child: const Icon(Icons.person, color: fg),
+                    backgroundColor: cs.primaryContainer,
+                    child: Icon(Icons.person, color: cs.onPrimaryContainer),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -68,31 +60,41 @@ class DoubleCommuteInInfoCardWidget extends StatelessWidget {
                       children: [
                         Text(
                           userState.name,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Colors.black,
+                            color: cs.onSurface,
                           ),
                         ),
                         Text(
                           userState.position,
                           style: TextStyle(
                             fontSize: 13,
-                            color: dark.withOpacity(.7),
+                            color: cs.onSurfaceVariant,
                           ),
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Icon(Icons.qr_code, color: dark.withOpacity(.7)),
+                  Icon(Icons.qr_code, color: cs.onSurfaceVariant.withOpacity(.85)),
                 ],
               ),
               const SizedBox(height: 16),
-              Divider(color: light.withOpacity(.35), height: 1),
+              Divider(color: cs.outlineVariant.withOpacity(.6), height: 1),
               const SizedBox(height: 12),
-              _infoRow(dark: dark, icon: Icons.phone, label: 'Tel.', value: formatPhoneNumber(userState.phone)),
-              _infoRow(dark: dark, icon: Icons.location_on, label: 'Sector.', value: userState.area),
+              _infoRow(
+                cs: cs,
+                icon: Icons.phone,
+                label: 'Tel.',
+                value: formatPhoneNumber(userState.phone),
+              ),
+              _infoRow(
+                cs: cs,
+                icon: Icons.location_on,
+                label: 'Sector.',
+                value: userState.area,
+              ),
             ],
           ),
         ),
@@ -101,7 +103,7 @@ class DoubleCommuteInInfoCardWidget extends StatelessWidget {
   }
 
   Widget _infoRow({
-    required Color dark,
+    required ColorScheme cs,
     required IconData icon,
     required String label,
     required String value,
@@ -110,13 +112,13 @@ class DoubleCommuteInInfoCardWidget extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: dark.withOpacity(.7)),
+          Icon(icon, size: 18, color: cs.onSurfaceVariant.withOpacity(.85)),
           const SizedBox(width: 8),
           Text(
             label,
             style: TextStyle(
               fontSize: 13,
-              color: dark.withOpacity(.6),
+              color: cs.onSurfaceVariant.withOpacity(.75),
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -124,10 +126,10 @@ class DoubleCommuteInInfoCardWidget extends StatelessWidget {
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w500,
-                color: Colors.black87,
+                color: cs.onSurface,
               ),
               overflow: TextOverflow.ellipsis,
             ),

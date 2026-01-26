@@ -87,6 +87,10 @@ class _CardsPagerState extends State<CardsPager> {
     final total = widget.pages.length;
     if (total <= 1) return const SizedBox.shrink();
 
+    final cs = Theme.of(context).colorScheme;
+    final activeColor = cs.primary;
+    final inactiveColor = cs.outlineVariant;
+
     return Wrap(
       spacing: 6,
       children: List<Widget>.generate(total, (i) {
@@ -96,7 +100,7 @@ class _CardsPagerState extends State<CardsPager> {
           width: active ? 18 : 6,
           height: 6,
           decoration: BoxDecoration(
-            color: active ? Colors.black.withOpacity(0.55) : Colors.black.withOpacity(0.18),
+            color: active ? activeColor : inactiveColor,
             borderRadius: BorderRadius.circular(999),
           ),
         );
@@ -114,7 +118,6 @@ class _CardsPagerState extends State<CardsPager> {
     return LayoutBuilder(
       builder: (context, cons) {
         final usable = cons.maxWidth;
-        // ✅ 아주 좁은 폭에서도 음수 폭이 나오지 않도록 방어
         final double half = (((usable - _gap) / 2).clamp(0.0, double.infinity)).floorToDouble();
 
         final total = widget.pages.length;

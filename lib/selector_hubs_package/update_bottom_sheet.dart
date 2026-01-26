@@ -210,7 +210,7 @@ class _UpdateTile extends StatelessWidget {
 
             // Highlights
             ...entry.highlights.map(
-              (h) => Padding(
+                  (h) => Padding(
                 padding: const EdgeInsets.only(bottom: 6),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,

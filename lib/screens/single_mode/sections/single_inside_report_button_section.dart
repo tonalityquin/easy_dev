@@ -12,6 +12,8 @@ class SingleInsideReportButtonSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return ElevatedButton.icon(
       icon: const Icon(Icons.report),
       label: const Text(
@@ -23,19 +25,17 @@ class SingleInsideReportButtonSection extends StatelessWidget {
         ),
       ),
       style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: cs.primary,
+        foregroundColor: cs.onPrimary,
         minimumSize: const Size.fromHeight(55),
         padding: EdgeInsets.zero,
-        side: const BorderSide(color: Colors.grey, width: 1.0),
+        side: BorderSide(color: cs.primary, width: 1.0),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),
+        elevation: 0,
       ),
-      // 🔹 문서철 스타일의 선택 시트 → 선택 결과에 따라 시작/종료 보고서 폼 오픈
-      onPressed: isDisabled
-          ? null
-          : () => openSingleInsideReportSelectorSheet(context),
+      onPressed: isDisabled ? null : () => openSingleInsideReportSelectorSheet(context),
     );
   }
 }

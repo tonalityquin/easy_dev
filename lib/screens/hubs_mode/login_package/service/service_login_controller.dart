@@ -47,7 +47,6 @@ class ServiceLoginController {
   }
 
   /// ✅ 자동 로그인 게이트(기존 initState 역할)
-  /// - Firestore로 계정 검증에 성공하면 onLoginSucceeded() 호출 (네비게이션은 화면이 담당)
   void initState() {
     Provider.of<UserState>(context, listen: false).loadUserToLogIn().then((_) {
       final userState = Provider.of<UserState>(context, listen: false);
@@ -56,7 +55,6 @@ class ServiceLoginController {
 
       if (!isLoggedIn || !context.mounted) return;
 
-      // ✅ 추가: modes 권한 체크 (service 권한 없으면 자동진입 차단)
       final user = userState.user;
       final allowed = user != null && _hasModeAccess(user.modes, _requiredMode);
       if (!allowed) {
@@ -67,7 +65,6 @@ class ServiceLoginController {
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         debugPrint('[LOGIN-SERVICE][${_ts()}] autoLogin → onLoginSucceeded()');
-        // 콜백이 없으면 기존 기본값(/commute)로 이동해 하위 호환 유지
         if (onLoginSucceeded != null) {
           onLoginSucceeded!();
         } else {
@@ -78,13 +75,11 @@ class ServiceLoginController {
   }
 
   /// 수동 로그인
-  /// - 성공 시 onLoginSucceeded() 호출
   Future<void> login(StateSetter setState) async {
     final name = nameController.text.trim();
     final phone = phoneController.text.trim().replaceAll(RegExp(r'\D'), '');
     final password = passwordController.text.trim();
 
-    // 백도어(테스트용) – 기존 동작 유지
     if (name.isEmpty && phone.isEmpty && password == '00000') {
       debugPrint('[LOGIN-SERVICE][${_ts()}] backdoor bypass');
       return;
@@ -123,20 +118,15 @@ class ServiceLoginController {
       final user = await userRepository.getUserByPhone(phone);
 
       if (context.mounted) {
-        debugPrint(
-          "[LOGIN-SERVICE][${_ts()}] 입력값 name=\"$name\" phone=\"$phone\" pwLen=${password.length}",
-        );
+        debugPrint('[LOGIN-SERVICE][${_ts()}] 입력값 name="$name" phone="$phone" pwLen=${password.length}');
         if (user != null) {
-          debugPrint(
-            "[LOGIN-SERVICE][${_ts()}] DB 유저: name=${user.name}, phone=${user.phone}",
-          );
+          debugPrint('[LOGIN-SERVICE][${_ts()}] DB 유저: name=${user.name}, phone=${user.phone}');
         } else {
-          debugPrint("[LOGIN-SERVICE][${_ts()}] DB에서 사용자 정보 없음");
+          debugPrint('[LOGIN-SERVICE][${_ts()}] DB에서 사용자 정보 없음');
         }
       }
 
       if (user != null && user.name == name && user.password == password) {
-        // ✅ 추가: modes 권한 체크 (service 권한 없으면 로그인 차단)
         final allowed = _hasModeAccess(user.modes, _requiredMode);
         if (!allowed) {
           debugPrint('[LOGIN-SERVICE][${_ts()}] login blocked: modes missing "$_requiredMode"');
@@ -158,7 +148,6 @@ class ServiceLoginController {
         await prefs.setString('division', updatedUser.divisions.firstOrNull ?? '');
         await prefs.setString('startTime', _timeToString(updatedUser.startTime));
 
-        // ✅ endTime 저장 + 즉시 예약/갱신
         final endHHmm = _timeToString(updatedUser.endTime);
         await prefs.setString('endTime', endHHmm);
         if (endHHmm.isNotEmpty) {
@@ -170,21 +159,16 @@ class ServiceLoginController {
         await prefs.setString('role', updatedUser.role);
         await prefs.setString('position', updatedUser.position ?? '');
         await prefs.setStringList('fixedHolidays', updatedUser.fixedHolidays);
-        await prefs.setString('mode', 'service'); // ✅ 로그인 모드 저장
+        await prefs.setString('mode', 'service');
 
-        // ✅ 오너십: 포그라운드가 Plate TTS를 담당하도록 설정
         await TtsOwnership.setOwner(TtsOwner.foreground);
-        debugPrint(
-          "[LOGIN-SERVICE][${_ts()}] SharedPreferences 저장 완료: phone=${prefs.getString('phone')}",
-        );
+        debugPrint('[LOGIN-SERVICE][${_ts()}] SharedPreferences 저장 완료: phone=${prefs.getString('phone')}');
 
-        // ✅ 현재 앱의 지역 컨텍스트 업데이트 (await로 보장)
         final areaToSet = updatedUser.areas.firstOrNull ?? '';
-        await areaState.updateArea(areaToSet); // ← 반드시 await
+        await areaState.updateArea(areaToSet);
         debugPrint('[LOGIN-SERVICE][${_ts()}] areaState.updateArea("$areaToSet")');
 
-        // ✅ 서비스 모드: currentArea 기준으로 TTS 구독 영역 + 필터 전달 (네비게이션 전에)
-        final a = context.read<AreaState>().currentArea; // ← '' 방지
+        final a = context.read<AreaState>().currentArea;
         debugPrint('[LOGIN-SERVICE][${_ts()}] send area to FG (currentArea="$a")');
         if (a.isNotEmpty) {
           final filters = await TtsUserFilters.load();
@@ -203,15 +187,13 @@ class ServiceLoginController {
             if (onLoginSucceeded != null) {
               onLoginSucceeded!();
             } else {
-              Navigator.pushReplacementNamed(context, '/commute'); // 하위 호환
+              Navigator.pushReplacementNamed(context, '/commute');
             }
           });
         }
       } else {
         if (context.mounted) {
-          debugPrint(
-            '[LOGIN-SERVICE][${_ts()}] auth failed (name/password mismatch or no user)',
-          );
+          debugPrint('[LOGIN-SERVICE][${_ts()}] auth failed (name/password mismatch or no user)');
           showFailedSnackbar(context, '이름 또는 비밀번호가 올바르지 않습니다.');
         }
       }
@@ -255,11 +237,14 @@ class ServiceLoginController {
     });
   }
 
+  /// ✅ 컨셉 테마 반영: 하드코딩 제거, ColorScheme 기반으로 전환
   InputDecoration inputDecoration({
     required String label,
     IconData? icon,
     Widget? suffixIcon,
   }) {
+    final cs = Theme.of(context).colorScheme;
+
     return InputDecoration(
       labelText: label,
       hintText: label,
@@ -267,9 +252,25 @@ class ServiceLoginController {
       suffixIcon: suffixIcon,
       contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
       filled: true,
-      fillColor: Colors.grey.shade100,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+      fillColor: cs.surfaceContainerLow,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.outlineVariant),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.outlineVariant),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.primary, width: 1.6),
+      ),
+      prefixIconColor: MaterialStateColor.resolveWith(
+            (states) => states.contains(MaterialState.focused) ? cs.primary : cs.onSurfaceVariant,
+      ),
+      suffixIconColor: MaterialStateColor.resolveWith(
+            (states) => states.contains(MaterialState.focused) ? cs.primary : cs.onSurfaceVariant,
+      ),
     );
   }
 

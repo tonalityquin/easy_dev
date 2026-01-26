@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../routes.dart';
-import '../../../../../theme.dart';
 import '../lite_login_controller.dart';
 
 // ✅ Trace 기록용 Recorder
@@ -22,10 +21,9 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
   @override
   void initState() {
     super.initState();
-    _controller = widget.controller; // ✅ init은 상위(LoginScreen)에서만 수행
+    _controller = widget.controller;
   }
 
-  // ✅ 공통 Trace 기록 헬퍼
   void _trace(String name, {Map<String, dynamic>? meta}) {
     DebugActionRecorder.instance.recordAction(
       name,
@@ -41,7 +39,6 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
   void _onLoginButtonPressed() {
     if (_controller.isLoading) return;
 
-    // ✅ 경량 로그인 버튼 Trace 기록
     _trace(
       'WorkFlow A 로그인 버튼',
       meta: <String, dynamic>{
@@ -54,7 +51,6 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
   }
 
   void _onTopCompanyLogoTapped() {
-    // ✅ 상단 회사 로고 탭 Trace 기록 (기존 동작 없음 유지)
     _trace(
       '회사 로고(상단)',
       meta: <String, dynamic>{
@@ -66,7 +62,6 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
   }
 
   void _onPelicanLogoTapped() {
-    // ✅ 하단 펠리컨 로고 탭 Trace 기록 + 기존 네비게이션 유지
     _trace(
       '회사 로고(펠리컨)',
       meta: <String, dynamic>{
@@ -86,74 +81,47 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
   @override
   Widget build(BuildContext context) {
     final baseTheme = Theme.of(context);
+    final cs = baseTheme.colorScheme;
 
-    // ✅ theme.dart(AppCardPalette)에서 Lite 팔레트 획득
-    final palette = AppCardPalette.of(context);
-    final base = palette.doubleBase; // 기존 _base
-    final dark = palette.doubleDark; // 기존 _dark
-    final light = palette.doubleLight; // 기존 _light
+    // ✅ 로컬 스타일은 “현재 컨셉 테마(ColorScheme)”를 그대로 사용
+    final themed = baseTheme.copyWith(
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: cs.primary,
+          foregroundColor: cs.onPrimary,
+          minimumSize: const Size.fromHeight(55),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          elevation: 1.5,
+          shadowColor: cs.primary.withOpacity(0.25),
+        ),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          foregroundColor: cs.primary,
+          splashFactory: InkRipple.splashFactory,
+        ),
+      ),
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: cs.primary,
+        selectionColor: cs.primaryContainer.withOpacity(.35),
+        selectionHandleColor: cs.primary,
+      ),
+    );
 
     return Material(
       color: Colors.transparent,
       child: SafeArea(
         child: Theme(
-          // ✅ 서비스 로그인 폼과 동일한 UI 구조 + Lite 팔레트만 theme.dart 기반으로 적용
-          data: baseTheme.copyWith(
-            colorScheme: baseTheme.colorScheme.copyWith(
-              primary: base,
-              onPrimary: Colors.white,
-              primaryContainer: light,
-              onPrimaryContainer: dark,
-            ),
-            elevatedButtonTheme: ElevatedButtonThemeData(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: base,
-                foregroundColor: Colors.white,
-                minimumSize: const Size.fromHeight(55),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                elevation: 1.5,
-                shadowColor: base.withOpacity(0.25),
-              ),
-            ),
-            iconButtonTheme: IconButtonThemeData(
-              style: IconButton.styleFrom(
-                foregroundColor: base,
-                splashFactory: InkRipple.splashFactory,
-              ),
-            ),
-            inputDecorationTheme: InputDecorationTheme(
-              focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: base, width: 1.6),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.black.withOpacity(0.15)),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              prefixIconColor: MaterialStateColor.resolveWith(
-                    (states) => states.contains(MaterialState.focused) ? base : Colors.black54,
-              ),
-              suffixIconColor: MaterialStateColor.resolveWith(
-                    (states) => states.contains(MaterialState.focused) ? base : Colors.black54,
-              ),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            ),
-            textSelectionTheme: TextSelectionThemeData(
-              cursorColor: base,
-              selectionColor: light.withOpacity(.35),
-              selectionHandleColor: base,
-            ),
-          ),
+          data: themed,
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Column(
               children: [
                 const SizedBox(height: 12),
 
-                // ⬇️ 화면 식별 태그 (Lite 팔레트의 dark로 톤 맞춤)
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Padding(
@@ -165,7 +133,7 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: dark.withOpacity(0.75),
+                          color: cs.onSurfaceVariant.withOpacity(0.80),
                           letterSpacing: 0.2,
                         ),
                       ),
@@ -173,7 +141,6 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
                   ),
                 ),
 
-                // ✅ 로고 탭 Trace 기록 (기존: onTap 빈 함수) → 기록만 남기도록 개선
                 GestureDetector(
                   onTap: _onTopCompanyLogoTapped,
                   child: SizedBox(
@@ -184,7 +151,6 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
 
                 const SizedBox(height: 12),
 
-                // 이름
                 TextField(
                   controller: _controller.nameController,
                   focusNode: _controller.nameFocus,
@@ -197,7 +163,6 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
                 ),
                 const SizedBox(height: 16),
 
-                // 전화번호
                 TextField(
                   controller: _controller.phoneController,
                   focusNode: _controller.phoneFocus,
@@ -212,7 +177,6 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
                 ),
                 const SizedBox(height: 16),
 
-                // 비밀번호
                 TextField(
                   controller: _controller.passwordController,
                   focusNode: _controller.passwordFocus,
@@ -232,7 +196,6 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
 
                 const SizedBox(height: 32),
 
-                // ▶ 버튼 라벨 (경량 로그인)
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
@@ -251,7 +214,6 @@ class _LiteLoginFormState extends State<LiteLoginForm> {
 
                 const SizedBox(height: 1),
 
-                // ▼ 펠리컨: 탭하면 Selector로 복귀 + Trace 기록
                 Center(
                   child: InkWell(
                     onTap: _onPelicanLogoTapped,

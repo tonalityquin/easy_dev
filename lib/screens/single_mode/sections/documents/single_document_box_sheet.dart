@@ -30,6 +30,8 @@ class _SingleDocumentBoxSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final userState = context.watch<UserState>();
     final repo = SingleDocumentInventoryRepository.instance;
 
@@ -47,56 +49,52 @@ class _SingleDocumentBoxSheet extends StatelessWidget {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8F5EB),
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(24),
-                    ),
+                    color: cs.surface,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
+                        color: cs.shadow.withOpacity(0.10),
                         blurRadius: 12,
                         offset: const Offset(0, -2),
                       ),
                     ],
+                    border: Border.all(color: cs.outlineVariant.withOpacity(0.7)),
                   ),
                   child: Row(
                     children: [
                       const _BinderSpine(),
-                      const VerticalDivider(
+                      VerticalDivider(
                         width: 0,
-                        thickness: 0.6,
-                        color: Color(0xFFE0D7C5),
+                        thickness: 0.8,
+                        color: cs.outlineVariant.withOpacity(0.8),
                       ),
                       Expanded(
                         child: Column(
                           children: [
                             const _SheetHeader(),
-                            const Divider(
+                            Divider(
                               height: 1,
                               thickness: 0.8,
-                              color: Color(0xFFE5DFD0),
+                              color: cs.outlineVariant.withOpacity(0.8),
                             ),
                             Expanded(
                               child: StreamBuilder<List<SingleDocumentItem>>(
                                 stream: repo.streamForUser(userState),
                                 builder: (context, snapshot) {
                                   if (snapshot.connectionState == ConnectionState.waiting) {
-                                    return const Center(
-                                      child: CircularProgressIndicator(),
+                                    return Center(
+                                      child: CircularProgressIndicator(color: cs.primary),
                                     );
                                   }
 
                                   final items = snapshot.data ?? const <SingleDocumentItem>[];
-
                                   if (items.isEmpty) {
                                     return const _EmptyState();
                                   }
 
                                   return ListView.builder(
                                     controller: scrollController,
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 12,
-                                    ),
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
                                     itemCount: items.length,
                                     itemBuilder: (context, index) {
                                       final item = items[index];
@@ -105,12 +103,7 @@ class _SingleDocumentBoxSheet extends StatelessWidget {
                                         onTap: () async {
                                           switch (item.type) {
                                             case SingleDocumentType.statementForm:
-                                            // ✅ statementForm 안에서 id 기준으로 분기
                                               if (item.id == 'template-commute-record') {
-                                                // 출퇴근 기록 제출:
-                                                // 1) 5초 카운트다운 dialog 표시
-                                                // 2) 사용자가 취소하지 않으면 SQLite → Firestore 업로드
-                                                // 3) 업로드/중복 처리된 데이터는 SQLite에서 삭제(리팩터링 반영)
                                                 final proceed = await showWorkEndDurationBlockingDialog(
                                                   context,
                                                   message: '단말기에 저장된 출퇴근 기록을\n서버에 제출합니다.\n\n'
@@ -118,15 +111,8 @@ class _SingleDocumentBoxSheet extends StatelessWidget {
                                                   duration: const Duration(seconds: 5),
                                                 );
                                                 if (!proceed) return;
-
-                                                await _submitCommuteRecordsFromSqlite(
-                                                  context,
-                                                );
+                                                await _submitCommuteRecordsFromSqlite(context);
                                               } else if (item.id == 'template-resttime-record') {
-                                                // 휴게시간 기록 제출:
-                                                // 1) 5초 카운트다운 dialog 표시
-                                                // 2) 사용자가 취소하지 않으면 SQLite → Firestore 업로드
-                                                // 3) 업로드/중복 처리된 데이터는 SQLite에서 삭제(리팩터링 반영)
                                                 final proceed = await showBreakDurationBlockingDialog(
                                                   context,
                                                   message: '단말기에 저장된 휴게시간 기록을\n서버에 제출합니다.\n\n'
@@ -134,12 +120,8 @@ class _SingleDocumentBoxSheet extends StatelessWidget {
                                                   duration: const Duration(seconds: 5),
                                                 );
                                                 if (!proceed) return;
-
-                                                await _submitRestTimeRecordsFromSqlite(
-                                                  context,
-                                                );
+                                                await _submitRestTimeRecordsFromSqlite(context);
                                               } else {
-                                                // 그 외(경위서 양식 등)는 기존처럼 경위서 작성 화면
                                                 Navigator.of(context).push(
                                                   MaterialPageRoute(
                                                     builder: (_) => const UserStatementFormPage(),
@@ -150,40 +132,30 @@ class _SingleDocumentBoxSheet extends StatelessWidget {
                                               break;
 
                                             case SingleDocumentType.handoverForm:
-                                            // ✅ (안씀) 인수인계: Single 모드에선 안내만
                                               ScaffoldMessenger.of(context).showSnackBar(
                                                 const SnackBar(
-                                                  content: Text(
-                                                    '인수인계 양식은 현재 Single 모드에서 사용하지 않습니다.',
-                                                  ),
+                                                  content: Text('인수인계 양식은 현재 Single 모드에서 사용하지 않습니다.'),
                                                 ),
                                               );
                                               break;
 
                                             case SingleDocumentType.workEndReportForm:
-                                            // ✅ (안씀) 퇴근/업무 종료: Single 모드에선 안내만
                                               ScaffoldMessenger.of(context).showSnackBar(
                                                 const SnackBar(
-                                                  content: Text(
-                                                    '업무 종료/퇴근 보고 양식은 현재 Single 모드에서 사용하지 않습니다.',
-                                                  ),
+                                                  content: Text('업무 종료/퇴근 보고 양식은 현재 Single 모드에서 사용하지 않습니다.'),
                                                 ),
                                               );
                                               break;
 
                                             case SingleDocumentType.workStartReportForm:
-                                            // ✅ (안씀) 업무 시작 보고: Single 모드에선 안내만
                                               ScaffoldMessenger.of(context).showSnackBar(
                                                 const SnackBar(
-                                                  content: Text(
-                                                    '업무 시작 보고 양식은 현재 Single 모드에서 사용하지 않습니다.',
-                                                  ),
+                                                  content: Text('업무 시작 보고 양식은 현재 Single 모드에서 사용하지 않습니다.'),
                                                 ),
                                               );
                                               break;
 
                                             case SingleDocumentType.generic:
-                                            // ✅ generic 문서 중 연차(결근) 지원 신청서 연결
                                               if (item.id == 'template-annual-leave-application') {
                                                 Navigator.of(context).push(
                                                   MaterialPageRoute(
@@ -192,7 +164,6 @@ class _SingleDocumentBoxSheet extends StatelessWidget {
                                                   ),
                                                 );
                                               }
-                                              // ✅ generic 문서 중 사직서 연결
                                               break;
                                           }
                                         },
@@ -223,13 +194,14 @@ class _SheetHandle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Center(
       child: Container(
         width: 64,
         height: 6,
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
-          color: Colors.brown.withOpacity(0.25),
+          color: cs.outlineVariant.withOpacity(0.9),
           borderRadius: BorderRadius.circular(999),
         ),
       ),
@@ -243,13 +215,13 @@ class _BinderSpine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       width: 32,
-      decoration: const BoxDecoration(
-        color: Color(0xFFE0D7C5),
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(24),
-        ),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: const BorderRadius.only(topLeft: Radius.circular(24)),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -261,11 +233,11 @@ class _BinderSpine extends StatelessWidget {
               width: 10,
               height: 10,
               decoration: BoxDecoration(
-                color: Colors.brown[200],
+                color: cs.outlineVariant.withOpacity(0.9),
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
+                    color: cs.shadow.withOpacity(0.15),
                     blurRadius: 2,
                     offset: const Offset(0, 1),
                   ),
@@ -279,12 +251,13 @@ class _BinderSpine extends StatelessWidget {
   }
 }
 
-/// 상단 헤더(문서철 제목/설명)
+/// 상단 헤더
 class _SheetHeader extends StatelessWidget {
   const _SheetHeader();
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
     return Padding(
@@ -294,13 +267,13 @@ class _SheetHeader extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.brown.withOpacity(0.12),
+              color: cs.primaryContainer.withOpacity(0.75),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.folder_special_outlined,
               size: 22,
-              color: Colors.brown,
+              color: cs.onPrimaryContainer,
             ),
           ),
           const SizedBox(width: 10),
@@ -314,17 +287,16 @@ class _SheetHeader extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF4A3A28),
+                    color: cs.onSurface,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  // ⚙️ 경위서 + 출퇴근/휴게 기록 + 신청/사직서까지 포함하도록 문구 조정
                   '경위서, 출퇴근·휴게 기록, 신청/사직서 양식을 한 곳에 모았어요.',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF8A7A65),
+                    color: cs.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -332,11 +304,7 @@ class _SheetHeader extends StatelessWidget {
           ),
           IconButton(
             tooltip: '닫기',
-            icon: const Icon(
-              Icons.close,
-              size: 20,
-              color: Color(0xFF7A6A55),
-            ),
+            icon: Icon(Icons.close, size: 20, color: cs.onSurfaceVariant),
             onPressed: () => Navigator.of(context).maybePop(),
           ),
         ],
@@ -345,7 +313,7 @@ class _SheetHeader extends StatelessWidget {
   }
 }
 
-/// 각각의 문서를 카드 형태로 보여주는 위젯
+/// 문서 리스트 아이템
 class _DocumentListItem extends StatelessWidget {
   final SingleDocumentItem item;
   final VoidCallback onTap;
@@ -357,9 +325,10 @@ class _DocumentListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accentColor = _accentColorForItem(item); // ← item 기준 색상
-    final typeLabel = _typeLabelForItem(item); // ← item 기준 라벨
-    final iconData = _iconForItem(item); // ← item 기준 아이콘
+    final cs = Theme.of(context).colorScheme;
+    final accentColor = _accentColorForItem(context, item);
+    final typeLabel = _typeLabelForItem(item);
+    final iconData = _iconForItem(item);
     final textTheme = Theme.of(context).textTheme;
 
     return Padding(
@@ -369,11 +338,12 @@ class _DocumentListItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: Ink(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: cs.surfaceContainerLow,
             borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: cs.outlineVariant.withOpacity(0.65)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
+                color: cs.shadow.withOpacity(0.06),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -382,35 +352,25 @@ class _DocumentListItem extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // 좌측 컬러 인덱스 바
               Container(
                 width: 6,
                 height: 80,
                 decoration: BoxDecoration(
                   color: accentColor,
-                  borderRadius: const BorderRadius.horizontal(
-                    left: Radius.circular(16),
-                  ),
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 12,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       CircleAvatar(
                         radius: 20,
-                        backgroundColor: accentColor.withOpacity(0.15),
-                        child: Icon(
-                          iconData,
-                          color: accentColor,
-                          size: 20,
-                        ),
+                        backgroundColor: accentColor.withOpacity(0.16),
+                        child: Icon(iconData, color: accentColor, size: 20),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -423,7 +383,7 @@ class _DocumentListItem extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: textTheme.bodyLarge?.copyWith(
                                 fontWeight: FontWeight.w700,
-                                color: const Color(0xFF3C342A),
+                                color: cs.onSurface,
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -432,19 +392,16 @@ class _DocumentListItem extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: textTheme.bodySmall?.copyWith(
-                                color: const Color(0xFF7A6F63),
+                                color: cs.onSurfaceVariant,
                               ),
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 6),
                             Row(
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 3,
-                                  ),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(
-                                    color: accentColor.withOpacity(0.14),
+                                    color: accentColor.withOpacity(0.16),
                                     borderRadius: BorderRadius.circular(999),
                                   ),
                                   child: Text(
@@ -452,8 +409,8 @@ class _DocumentListItem extends StatelessWidget {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: textTheme.labelSmall?.copyWith(
-                                      color: accentColor.darken(0.1),
-                                      fontWeight: FontWeight.w600,
+                                      color: accentColor,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                 ),
@@ -467,12 +424,12 @@ class _DocumentListItem extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 4),
-              const Padding(
-                padding: EdgeInsets.only(right: 10),
+              Padding(
+                padding: const EdgeInsets.only(right: 10),
                 child: Icon(
                   Icons.chevron_right,
                   size: 22,
-                  color: Color(0xFF9A8C7A),
+                  color: cs.onSurfaceVariant.withOpacity(0.75),
                 ),
               ),
             ],
@@ -488,6 +445,7 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
     return Center(
@@ -503,14 +461,14 @@ class _EmptyState extends StatelessWidget {
                   width: 90,
                   height: 64,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEDE5D4),
+                    color: cs.surfaceContainerHigh,
                     borderRadius: BorderRadius.circular(16),
                   ),
                 ),
-                const Icon(
+                Icon(
                   Icons.folder_open,
                   size: 40,
-                  color: Color(0xFFB09A7A),
+                  color: cs.onSurfaceVariant.withOpacity(0.85),
                 ),
               ],
             ),
@@ -518,15 +476,15 @@ class _EmptyState extends StatelessWidget {
             Text(
               '표시할 서류가 없어요',
               style: textTheme.titleMedium?.copyWith(
-                color: const Color(0xFF4A3A28),
-                fontWeight: FontWeight.w600,
+                color: cs.onSurface,
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 6),
             Text(
               '필요한 서류 양식이 생성되면\n이 문서철에 차곡차곡 꽂혀요.',
               style: textTheme.bodyMedium?.copyWith(
-                color: const Color(0xFF8A7A65),
+                color: cs.onSurfaceVariant,
               ),
               textAlign: TextAlign.center,
             ),
@@ -538,24 +496,14 @@ class _EmptyState extends StatelessWidget {
 }
 
 /// ─────────────────────────
-/// SQLite → Firestore 동기화용 모델/함수
+/// SQLite → Firestore 동기화용 모델/함수 (기능 변경 없음)
 /// ─────────────────────────
 
-/// SQLite에서 읽어 온 출근/퇴근/휴게 1건
 class LocalCommuteRecord {
-  /// Firestore 상태 라벨: "출근" / "퇴근" / "휴게"
   final String status;
-
-  /// 실제 이벤트 시각 (date + time 기준)
   final DateTime dateTime;
-
-  /// 로컬 SQLite 테이블명 (Single_work_attendance / Single_break_attendance)
   final String localTable;
-
-  /// 로컬 SQLite date 값(yyyy-MM-dd)
   final String localDate;
-
-  /// 로컬 SQLite type 값(work_in/work_out/start)
   final String localType;
 
   LocalCommuteRecord({
@@ -567,23 +515,16 @@ class LocalCommuteRecord {
   });
 }
 
-/// SQLite(single_work_attendance / single_break_attendance)에서
-/// 출근/퇴근/휴게 데이터를 전부 읽어 오는 함수.
-///
-/// [statuses] 는 Firestore 상태 라벨 기준:
-///   - ["출근", "퇴근"]
-///   - ["휴게"]
 Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
   required BuildContext context,
   required List<String> statuses,
-  required String userId, // 현재 스키마상 userId 컬럼은 없으므로 필터에는 사용하지 않음
+  required String userId,
 }) async {
   final db = await AttBrkModeDb.instance.database;
   final result = <LocalCommuteRecord>[];
 
   final dateTimeParser = DateFormat('yyyy-MM-dd HH:mm');
 
-  // 1) 출근/퇴근 (simple_work_attendance)
   final needWorkIn = statuses.contains('출근');
   final needWorkOut = statuses.contains('퇴근');
 
@@ -596,8 +537,8 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
 
     for (final row in workRows) {
       final typeCode = row['type'] as String;
-      final dateStr = row['date'] as String; // yyyy-MM-dd
-      final timeStr = row['time'] as String; // HH:mm
+      final dateStr = row['date'] as String;
+      final timeStr = row['time'] as String;
 
       String? statusLabel;
       if (typeCode == 'work_in' && needWorkIn) {
@@ -620,13 +561,11 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
           ),
         );
       } catch (_) {
-        // 파싱 실패는 무시
         continue;
       }
     }
   }
 
-  // 2) 휴게 (simple_break_attendance)
   final needBreak = statuses.contains('휴게');
   if (needBreak) {
     final breakRows = await db.query(
@@ -660,8 +599,6 @@ Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
   return result;
 }
 
-/// 업로드(또는 서버 중복으로 간주)된 로컬 행을 삭제합니다.
-/// - (date, type) PK 기반으로 1건 삭제
 Future<int> _deleteLocalAttendanceRow(LocalCommuteRecord record) async {
   final db = await AttBrkModeDb.instance.database;
 
@@ -672,14 +609,9 @@ Future<int> _deleteLocalAttendanceRow(LocalCommuteRecord record) async {
   );
 }
 
-/// 출퇴근 기록 제출:
-/// - SQLite(simple_work_attendance)에 있는 출근/퇴근 전체 →
-///   Firestore(commute_user_logs)의 "출근"/"퇴근" 로그로 업로드
-/// - 업로드 완료(또는 서버 중복)된 데이터는 SQLite에서 삭제(리팩터링 반영)
 Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
   final messenger = ScaffoldMessenger.of(context);
 
-  // 사용자/근무지 정보
   final userState = context.read<UserState>();
   final areaState = context.read<AreaState>();
 
@@ -701,7 +633,6 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
   }
 
   try {
-    // 1) SQLite에서 출근/퇴근 전체 로딩
     final records = await _loadLocalCommuteRecordsFromSqlite(
       context: context,
       statuses: const ['출근', '퇴근'],
@@ -709,11 +640,7 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
     );
 
     if (records.isEmpty) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('제출할 출퇴근 기록이 없습니다.'),
-        ),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('제출할 출퇴근 기록이 없습니다.')));
       return;
     }
 
@@ -726,9 +653,8 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
     var failedCount = 0;
     var deletedCount = 0;
 
-    // 2) Firestore commute_user_logs 에 업로드 + 로컬 삭제
     for (final record in records) {
-      final status = record.status; // "출근" 또는 "퇴근"
+      final status = record.status;
       final eventDateTime = record.dateTime;
 
       final dateStr = dateFormatter.format(eventDateTime);
@@ -741,7 +667,6 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
       );
 
       if (alreadyExists) {
-        // 서버 중복: 업로드 없이 스킵하되, 로컬은 정리(삭제)
         skippedCount++;
         deletedCount += await _deleteLocalAttendanceRow(record);
         continue;
@@ -758,7 +683,6 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
         dateTime: eventDateTime,
       );
 
-      // addLog 내부에서 예외를 삼키므로, 업로드 여부 재검증 후 삭제
       final nowExists = await repo.hasLogForDate(
         status: status,
         userId: userId,
@@ -786,9 +710,6 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
     );
   } catch (e) {
     debugPrint('❌ 출퇴근 기록 제출 중 오류: $e');
-
-    // ✅ DebugDatabaseLogger 로직 삭제
-
     messenger.showSnackBar(
       const SnackBar(
         content: Text(
@@ -800,10 +721,6 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
   }
 }
 
-/// 휴게시간 기록 제출:
-/// - SQLite(simple_break_attendance)에 있는 휴게 로그 전체 →
-///   Firestore(commute_user_logs)의 "휴게" 로그로 업로드
-/// - 업로드 완료(또는 서버 중복)된 데이터는 SQLite에서 삭제(리팩터링 반영)
 Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
   final messenger = ScaffoldMessenger.of(context);
 
@@ -828,7 +745,6 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
   }
 
   try {
-    // 1) SQLite에서 휴게 로그 전체 로딩
     final records = await _loadLocalCommuteRecordsFromSqlite(
       context: context,
       statuses: const ['휴게'],
@@ -836,11 +752,7 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
     );
 
     if (records.isEmpty) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('제출할 휴게시간 기록이 없습니다.'),
-        ),
-      );
+      messenger.showSnackBar(const SnackBar(content: Text('제출할 휴게시간 기록이 없습니다.')));
       return;
     }
 
@@ -908,9 +820,6 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
     );
   } catch (e) {
     debugPrint('❌ 휴게시간 기록 제출 중 오류: $e');
-
-    // ✅ DebugDatabaseLogger 로직 삭제
-
     messenger.showSnackBar(
       const SnackBar(
         content: Text(
@@ -921,10 +830,6 @@ Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
     );
   }
 }
-
-/// ─────────────────────────
-/// 디자인/텍스트 헬퍼 함수 모음
-/// ─────────────────────────
 
 String _buildSubtitle(SingleDocumentItem item) {
   final parts = <String>[];
@@ -937,84 +842,41 @@ String _buildSubtitle(SingleDocumentItem item) {
 
 String _formatDateTime(DateTime dt) {
   String two(int n) => n.toString().padLeft(2, '0');
-  return '${dt.year}-${two(dt.month)}-${two(dt.day)} '
-      '${two(dt.hour)}:${two(dt.minute)}';
+  return '${dt.year}-${two(dt.month)}-${two(dt.day)} ${two(dt.hour)}:${two(dt.minute)}';
 }
 
-/// 기본 type 기준 색상
-Color _accentColorForType(SingleDocumentType type) {
-  switch (type) {
-    case SingleDocumentType.statementForm:
-      return const Color(0xFF5C6BC0); // 기본 블루 (경위서 계열)
-    case SingleDocumentType.generic:
-      return const Color(0xFF757575);
-    default:
-    // 이 문서철에서 직접 쓰지 않는 타입(workStartReportForm 등)은 공통 회색으로 처리
-      return const Color(0xFF757575);
-  }
-}
+Color _accentColorForItem(BuildContext context, SingleDocumentItem item) {
+  final cs = Theme.of(context).colorScheme;
 
-/// type + id 기준으로 색상 세분화
-///
-/// - 경위서 / 출퇴근 기록 / 휴게시간 기록을 시각적으로 구분
-/// - 퇴근 vs 업무 종료 보고도 기존 로직 유지
-Color _accentColorForItem(SingleDocumentItem item) {
-  // 1) statementForm 계열 세분화
   if (item.type == SingleDocumentType.statementForm) {
     switch (item.id) {
       case 'template-statement':
-      // 경위서: 기본 블루톤 유지
-        return const Color(0xFF5C6BC0);
+        return cs.primary;
       case 'template-commute-record':
-      // 출퇴근 기록: 통근/이동 느낌의 청록 계열
-        return const Color(0xFF26A69A);
+        return cs.secondary;
       case 'template-resttime-record':
-      // 휴게시간 기록: 휴식/커피 느낌의 따뜻한 오렌지 계열
-        return const Color(0xFFFFB74D);
+        return cs.tertiary;
     }
+    return cs.primary;
   }
 
-  // 2) 퇴근 vs 업무 종료 세분화 (다른 곳에서 사용할 수도 있으므로 로직 유지)
-  if (item.type == SingleDocumentType.workEndReportForm) {
-    if (item.id == 'template-work-end-report') {
-      // 퇴근 보고 양식: 기존 오렌지톤
-      return const Color(0xFFEF6C53);
+  if (item.type == SingleDocumentType.generic) {
+    // 연차/결근 신청서는 중립톤(보더 계열)로
+    if (item.id == 'template-annual-leave-application') {
+      return cs.outline;
     }
-    if (item.id == 'template-end-work-report') {
-      // 업무 종료 보고서: 좀 더 진한 레드톤
-      return const Color(0xFFD84315);
-    }
+    return cs.outline;
   }
 
-  // 3) 그 외는 type 기본색
-  return _accentColorForType(item.type);
+  return cs.outline;
 }
 
-/// type 기준 기본 아이콘
-IconData _iconForType(SingleDocumentType type) {
-  switch (type) {
-    case SingleDocumentType.statementForm:
-      return Icons.description_outlined;
-    case SingleDocumentType.generic:
-      return Icons.insert_drive_file_outlined;
-    default:
-    // 사용 빈도 낮은 타입들은 공통 문서 아이콘으로 fallback
-      return Icons.insert_drive_file_outlined;
-  }
-}
-
-/// type + id 기준으로 아이콘 세분화
-///
-/// - 출퇴근 기록: 시계 아이콘
-/// - 휴게시간 기록: 커피/휴식 아이콘
 IconData _iconForItem(SingleDocumentItem item) {
   if (item.type == SingleDocumentType.statementForm) {
     switch (item.id) {
       case 'template-commute-record':
-      // 출퇴근 기록: 시간/근태 느낌
         return Icons.access_time;
       case 'template-resttime-record':
-      // 휴게시간 기록: 커피/휴식 느낌
         return Icons.coffee_outlined;
       case 'template-statement':
       default:
@@ -1022,22 +884,14 @@ IconData _iconForItem(SingleDocumentItem item) {
     }
   }
 
-  return _iconForType(item.type);
-}
-
-/// type + id 기준으로 라벨을 세분화
-String _typeLabelForItem(SingleDocumentItem item) {
-  // 1) 퇴근 vs 업무 종료 (혹시 다른 곳에서 재사용될 수 있으므로 유지)
-  if (item.type == SingleDocumentType.workEndReportForm) {
-    if (item.id == 'template-work-end-report') {
-      return '퇴근 보고';
-    }
-    if (item.id == 'template-end-work-report') {
-      return '업무 종료 보고';
-    }
+  if (item.type == SingleDocumentType.generic) {
+    return Icons.insert_drive_file_outlined;
   }
 
-  // 2) 경위서 계열(경위서 / 출퇴근 기록 / 휴게시간 기록)
+  return Icons.insert_drive_file_outlined;
+}
+
+String _typeLabelForItem(SingleDocumentItem item) {
   if (item.type == SingleDocumentType.statementForm) {
     switch (item.id) {
       case 'template-statement':
@@ -1049,34 +903,9 @@ String _typeLabelForItem(SingleDocumentItem item) {
     }
   }
 
-  // 3) 그 외는 type 기본 라벨
-  return _typeLabelForType(item.type);
-}
-
-/// type 기준 기본 라벨
-String _typeLabelForType(SingleDocumentType type) {
-  switch (type) {
-    case SingleDocumentType.statementForm:
-      return '경위서';
-    case SingleDocumentType.generic:
-      return '기타 문서';
-    default:
-    // workStartReportForm / workEndReportForm / handoverForm 등
-    // 이 문서철에서는 직접 사용하지 않으므로 공통 라벨로 fallback
-      return '기타 문서';
+  if (item.type == SingleDocumentType.generic) {
+    return '기타 문서';
   }
-}
 
-/// Color 확장: 약간 어둡게
-extension _ColorShadeExtension on Color {
-  Color darken(double amount) {
-    assert(amount >= 0 && amount <= 1);
-    final f = 1 - amount;
-    return Color.fromARGB(
-      alpha,
-      (red * f).round(),
-      (green * f).round(),
-      (blue * f).round(),
-    );
-  }
+  return '기타 문서';
 }

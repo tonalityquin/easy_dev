@@ -128,8 +128,10 @@ class TabletLoginController {
         final areaState = context.read<AreaState>();
 
         // 표시/저장용 지역명 결정(한글 지역명 우선)
-        final areaName =
-        (tablet.selectedArea ?? tablet.currentArea ?? (tablet.areas.isNotEmpty ? tablet.areas.first : '')).trim();
+        final areaName = (tablet.selectedArea ??
+            tablet.currentArea ??
+            (tablet.areas.isNotEmpty ? tablet.areas.first : ''))
+            .trim();
         debugPrint('[LOGIN-TABLET][${_ts()}] resolved areaName="$areaName" from tablet.selected/current/areas');
 
         if (areaName.isEmpty) {
@@ -167,6 +169,7 @@ class TabletLoginController {
         await prefs.setString('selectedArea', areaName); // 한글 지역명
         await prefs.setString('englishSelectedAreaName', englishAreaName);
         await prefs.setString('mode', 'tablet'); // ✅ 로그인 모드 저장
+
         // ✅ 오너십: 포그라운드가 Plate TTS를 담당하도록 설정
         await TtsOwnership.setOwner(TtsOwner.foreground);
         debugPrint('[LOGIN-TABLET][${_ts()}] prefs saved (handle/selectedArea/englishSelectedAreaName/mode & owner=foreground)');
@@ -183,10 +186,10 @@ class TabletLoginController {
         final current = context.read<AreaState>().currentArea;
         debugPrint('[LOGIN-TABLET][${_ts()}] send area to FG (currentArea="$current")');
         if (current.isNotEmpty) {
-          final filters = await TtsUserFilters.load(); // ⬅️ 추가
+          final filters = await TtsUserFilters.load();
           FlutterForegroundTask.sendDataToTask({
             'area': current,
-            'ttsFilters': filters.toMap(), // ⬅️ 추가
+            'ttsFilters': filters.toMap(),
           });
           debugPrint('[LOGIN-TABLET][${_ts()}] sendDataToTask ok (with filters ${filters.toMap()})');
         } else {
@@ -231,11 +234,14 @@ class TabletLoginController {
     });
   }
 
+  /// ✅ 컨셉 테마/다크모드 반영: 하드코딩 제거, ColorScheme 기반
   InputDecoration inputDecoration({
     required String label,
     IconData? icon,
     Widget? suffixIcon,
   }) {
+    final cs = Theme.of(context).colorScheme;
+
     return InputDecoration(
       labelText: label,
       hintText: label,
@@ -243,10 +249,32 @@ class TabletLoginController {
       suffixIcon: suffixIcon,
       contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
       filled: true,
-      fillColor: Colors.grey.shade100,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+      fillColor: cs.surfaceContainerLow,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.outlineVariant),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.outlineVariant),
+      ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.primary, width: 1.8),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.error),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.error, width: 1.8),
+      ),
+      prefixIconColor: MaterialStateColor.resolveWith(
+            (states) => states.contains(MaterialState.focused) ? cs.primary : cs.onSurfaceVariant,
+      ),
+      suffixIconColor: MaterialStateColor.resolveWith(
+            (states) => states.contains(MaterialState.focused) ? cs.primary : cs.onSurfaceVariant,
       ),
     );
   }

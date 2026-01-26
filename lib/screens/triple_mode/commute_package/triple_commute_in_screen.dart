@@ -19,8 +19,6 @@ class TripleCommuteInScreen extends StatefulWidget {
 
 class _TripleCommuteInScreenState extends State<TripleCommuteInScreen> {
   final controller = TripleCommuteInController();
-  String? kakaoUrl;
-  bool loadingUrl = true;
   bool _isLoading = false;
 
   @override
@@ -28,44 +26,35 @@ class _TripleCommuteInScreenState extends State<TripleCommuteInScreen> {
     super.initState();
     controller.initialize(context);
 
-    // OPTION A: 자동 라우팅은 최초 진입 시 1회만 수행
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
 
       final userState = context.read<UserState>();
 
-      // 1) 오늘 출근 여부 캐시 보장 (Firestore read는 UserState 내부에서 1일 1회)
       await userState.ensureTodayClockInStatus();
       if (!mounted) return;
 
-      // 2) isWorking=true인데 오늘 출근 로그가 없다면
-      //    → 어제(또는 그 이전)부터 이어진 잘못된 상태로 간주하고 자동 리셋
       if (userState.isWorking && !userState.hasClockInToday) {
         await _resetStaleWorkingState(userState);
       }
       if (!mounted) return;
 
-      // 3) 최종 상태 기준으로만 자동 라우팅
       if (userState.isWorking) {
         controller.redirectIfWorking(context, userState);
       }
     });
   }
 
-  /// 🔹 "어제 출근만 하고 퇴근 안 누른 상태" 등을 오늘 앱 실행 시 자동으로 정리
   Future<void> _resetStaleWorkingState(UserState userState) async {
-    // Firestore user_accounts.isWorking 토글(true → false)
     await userState.isHeWorking();
 
-    // 로컬 SharedPreferences 의 isWorking 도 false 로 맞춤
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('isWorking', false);
 
-    // 남아 있을 수 있는 퇴근 알림도 취소
     await EndTimeReminderService.instance.cancel();
   }
+
   Future<void> _handleLogout(BuildContext context) async {
-    // 앱 종료 대신 공통 정책: 허브(Selector)로 이동 + prefs('mode') 초기화
     await LogoutHelper.logoutAndGoToLogin(
       context,
       checkWorking: false,
@@ -73,17 +62,17 @@ class _TripleCommuteInScreenState extends State<TripleCommuteInScreen> {
     );
   }
 
-  // ⬇️ 좌측 상단(11시) 고정 라벨: 'commute screen'
   Widget _buildScreenTag(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final base = Theme.of(context).textTheme.labelSmall;
+
     final style = (base ??
         const TextStyle(
           fontSize: 11,
-          color: Colors.black54,
           fontWeight: FontWeight.w600,
         ))
         .copyWith(
-      color: Colors.black54,
+      color: cs.onSurfaceVariant.withOpacity(0.80),
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
     );
@@ -102,18 +91,16 @@ class _TripleCommuteInScreenState extends State<TripleCommuteInScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ 이 화면에서만 뒤로가기로 앱 종료되지 않도록 차단 (스낵바 안내 없음)
+    final cs = Theme.of(context).colorScheme;
+
     return PopScope(
       canPop: false,
       child: Scaffold(
         body: Consumer<UserState>(
           builder: (context, userState, _) {
-            // 자동 라우팅은 initState의 addPostFrameCallback에서 1회 수행
-
             return SafeArea(
               child: Stack(
                 children: [
-                  // 11시 라벨
                   _buildScreenTag(context),
 
                   SingleChildScrollView(
@@ -125,8 +112,6 @@ class _TripleCommuteInScreenState extends State<TripleCommuteInScreen> {
                             const TripleCommuteInHeaderWidget(),
                             const TripleCommuteInInfoCardWidget(),
                             const SizedBox(height: 12),
-
-                            // 🔹 업무 보고 버튼 제거 → 근무 버튼만 전체 폭으로 배치
                             SizedBox(
                               width: double.infinity,
                               child: TripleCommuteInWorkButtonWidget(
@@ -138,14 +123,11 @@ class _TripleCommuteInScreenState extends State<TripleCommuteInScreen> {
                                 },
                               ),
                             ),
-
                             const SizedBox(height: 8),
                             Center(
                               child: SizedBox(
                                 height: 80,
-                                child: Image.asset(
-                                  'assets/images/pelican.png',
-                                ),
+                                child: Image.asset('assets/images/pelican.png'),
                               ),
                             ),
                           ],
@@ -153,6 +135,7 @@ class _TripleCommuteInScreenState extends State<TripleCommuteInScreen> {
                       ),
                     ),
                   ),
+
                   Positioned(
                     top: 16,
                     right: 16,
@@ -162,14 +145,14 @@ class _TripleCommuteInScreenState extends State<TripleCommuteInScreen> {
                           _handleLogout(context);
                         }
                       },
-                      itemBuilder: (context) => const [
+                      itemBuilder: (context) => [
                         PopupMenuItem(
                           value: 'logout',
                           child: Row(
                             children: [
-                              Icon(Icons.logout, color: Colors.redAccent),
-                              SizedBox(width: 8),
-                              Text('로그아웃'),
+                              Icon(Icons.logout, color: cs.error),
+                              const SizedBox(width: 8),
+                              const Text('로그아웃'),
                             ],
                           ),
                         ),
@@ -177,14 +160,15 @@ class _TripleCommuteInScreenState extends State<TripleCommuteInScreen> {
                       icon: const Icon(Icons.more_vert),
                     ),
                   ),
+
                   if (_isLoading || userState.isWorking)
                     Positioned.fill(
                       child: AbsorbPointer(
                         absorbing: true,
                         child: Container(
-                          color: Colors.black.withOpacity(0.2),
-                          child: const Center(
-                            child: CircularProgressIndicator(),
+                          color: cs.scrim.withOpacity(0.35),
+                          child: Center(
+                            child: CircularProgressIndicator(color: cs.primary),
                           ),
                         ),
                       ),

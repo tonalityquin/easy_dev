@@ -3,24 +3,72 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../routes.dart';
-import '../theme.dart';
-
-// ✅ Trace 기록용 Recorder
 import '../screens/hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
 
-Text _selectorCardTitle(BuildContext context, String text, Color color) {
+@immutable
+class _SelectorCardTokens {
+  const _SelectorCardTokens({
+    required this.cardSurface,
+    required this.cardBorder,
+    required this.iconBg,
+    required this.iconFg,
+    required this.titleFg,
+    required this.featureFg,
+    required this.ctaBg,
+    required this.ctaFg,
+    required this.disabledOpacity,
+  });
+
+  final Color cardSurface;
+  final Color cardBorder;
+
+  final Color iconBg;
+  final Color iconFg;
+
+  final Color titleFg;
+  final Color featureFg;
+
+  final Color ctaBg;
+  final Color ctaFg;
+
+  final double disabledOpacity;
+
+  factory _SelectorCardTokens.of(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return _SelectorCardTokens(
+      cardSurface: cs.surfaceContainerLow,
+      cardBorder: cs.outlineVariant.withOpacity(0.55),
+
+      // ✅ 변경점: 아이콘 원형 배경만 컨셉 톤으로
+      iconBg: cs.primaryContainer,
+      iconFg: cs.onPrimaryContainer,
+
+      titleFg: cs.onSurface,
+      featureFg: cs.onSurfaceVariant,
+
+      // CTA는 컨셉(primary)
+      ctaBg: cs.primary,
+      ctaFg: cs.onPrimary,
+
+      disabledOpacity: 0.48,
+    );
+  }
+}
+
+Text _selectorCardTitle(BuildContext context, String text) {
+  final t = _SelectorCardTokens.of(context);
   return Text(
     text,
     style: Theme.of(context).textTheme.titleMedium?.copyWith(
       fontWeight: FontWeight.w700,
-      color: color,
+      color: t.titleFg,
     ),
   );
 }
 
-/// ✅ 카드에 표시할 기능 요약(서브 타이틀) 스타일
 Widget _selectorCardFeatureText(BuildContext context, String text) {
-  final cs = Theme.of(context).colorScheme;
+  final t = _SelectorCardTokens.of(context);
   return Text(
     text,
     textAlign: TextAlign.center,
@@ -28,7 +76,7 @@ Widget _selectorCardFeatureText(BuildContext context, String text) {
     overflow: TextOverflow.ellipsis,
     style: Theme.of(context).textTheme.bodySmall?.copyWith(
       fontWeight: FontWeight.w600,
-      color: cs.onSurface.withOpacity(0.62),
+      color: t.featureFg,
     ),
   );
 }
@@ -37,40 +85,23 @@ class CardBody extends StatefulWidget {
   const CardBody({
     super.key,
     required this.icon,
-    required this.bg,
-    required this.iconColor,
-    this.buttonBg,
-    this.buttonFg,
     required this.titleWidget,
-
-    // ✅ 기능 안내 문구(선택)
-    this.featureText,
-
     required this.onPressed,
     this.enabled = true,
     this.disabledHint,
-
-    // ✅ Trace 기록용
+    this.featureText,
     required this.traceName,
     this.traceMeta,
   });
 
   final IconData icon;
-  final Color bg;
-  final Color iconColor;
-  final Color? buttonBg;
-  final Color? buttonFg;
-
   final Widget titleWidget;
-
-  /// ✅ 카드에 “제공 기능”을 보여주기 위한 서브 타이틀(없으면 표시하지 않음)
   final String? featureText;
 
   final VoidCallback? onPressed;
   final bool enabled;
   final String? disabledHint;
 
-  // ✅ Trace 기록용
   final String traceName;
   final Map<String, dynamic>? traceMeta;
 
@@ -98,12 +129,11 @@ class _CardBodyState extends State<CardBody> {
 
       HapticFeedback.selectionClick();
 
-      // ✅ Trace 기록: 기록 중이 아닐 때는 Recorder 내부에서 무시됨
       DebugActionRecorder.instance.recordAction(
         widget.traceName,
         route: ModalRoute.of(context)?.settings.name,
         meta: <String, dynamic>{
-          'source': source, // 'card' or 'arrow'
+          'source': source,
           if (widget.featureText != null && widget.featureText!.trim().isNotEmpty)
             'featureText': widget.featureText,
           if (widget.traceMeta != null) ...widget.traceMeta!,
@@ -119,6 +149,7 @@ class _CardBodyState extends State<CardBody> {
 
   @override
   Widget build(BuildContext context) {
+    final t = _SelectorCardTokens.of(context);
     final hasFeature = widget.featureText != null && widget.featureText!.trim().isNotEmpty;
 
     final content = Padding(
@@ -127,13 +158,12 @@ class _CardBodyState extends State<CardBody> {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           LeadingIcon(
-            bg: widget.bg,
+            bg: t.iconBg,
             icon: widget.icon,
-            iconColor: widget.iconColor,
+            iconColor: t.iconFg,
           ),
           const SizedBox(height: 12),
           widget.titleWidget,
-
           if (hasFeature) ...[
             const SizedBox(height: 6),
             _selectorCardFeatureText(context, widget.featureText!.trim()),
@@ -141,16 +171,13 @@ class _CardBodyState extends State<CardBody> {
           ] else ...[
             const SizedBox(height: 12),
           ],
-
           Tooltip(
-            message: widget.enabled
-                ? '이동'
-                : (widget.disabledHint ?? '현재 저장된 모드에서만 선택할 수 있어요'),
+            message: widget.enabled ? '이동' : (widget.disabledHint ?? '현재 저장된 모드에서만 선택할 수 있어요'),
             child: IconButton.filled(
               onPressed: widget.enabled ? () => _animateThenNavigate(source: 'arrow') : null,
               style: IconButton.styleFrom(
-                backgroundColor: widget.buttonBg ?? Theme.of(context).colorScheme.primary,
-                foregroundColor: widget.buttonFg ?? Theme.of(context).colorScheme.onPrimary,
+                backgroundColor: t.ctaBg,
+                foregroundColor: t.ctaFg,
               ),
               icon: const Icon(Icons.arrow_forward_rounded),
             ),
@@ -160,7 +187,7 @@ class _CardBodyState extends State<CardBody> {
     );
 
     return Opacity(
-      opacity: widget.enabled ? 1.0 : 0.48,
+      opacity: widget.enabled ? 1.0 : t.disabledOpacity,
       child: AnimatedScale(
         scale: _pressed ? _pressScale : 1.0,
         duration: _duration,
@@ -197,32 +224,37 @@ class LeadingIcon extends StatelessWidget {
   }
 }
 
-/// 개별 카드들 (팔레트는 theme.dart(AppCardPalette)에서 주입)
+Widget _selectorCardShell({
+  required BuildContext context,
+  required Widget child,
+}) {
+  final t = _SelectorCardTokens.of(context);
+
+  return Card(
+    color: t.cardSurface,
+    elevation: 1,
+    clipBehavior: Clip.antiAlias,
+    shape: RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(16),
+      side: BorderSide(color: t.cardBorder),
+    ),
+    child: child,
+  );
+}
 
 class SingleLoginCard extends StatelessWidget {
   const SingleLoginCard({super.key, this.enabled = true});
-
   final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    final p = AppCardPalette.of(context);
-    final onBase = Theme.of(context).colorScheme.onPrimary;
+    final title = _selectorCardTitle(context, 'WorkFlow D');
 
-    final title = _selectorCardTitle(context, 'WorkFlow D', p.singleDark);
-
-    return Card(
-      color: Theme.of(context).cardColor,
-      elevation: 1,
-      clipBehavior: Clip.antiAlias,
-      surfaceTintColor: p.singleLight,
+    return _selectorCardShell(
+      context: context,
       child: CardBody(
         icon: Icons.access_time_filled_rounded,
-        bg: p.singleBase,
-        iconColor: onBase,
         titleWidget: title,
-        buttonBg: p.singleBase,
-        buttonFg: onBase,
         featureText: '출/퇴근 · 휴게시간',
         traceName: 'WorkFlow D',
         traceMeta: {
@@ -232,10 +264,7 @@ class SingleLoginCard extends StatelessWidget {
         },
         onPressed: () => Navigator.of(context).pushReplacementNamed(
           AppRoutes.singleLogin,
-          arguments: {
-            'redirectAfterLogin': AppRoutes.singleCommute,
-            'requiredMode': 'single',
-          },
+          arguments: {'redirectAfterLogin': AppRoutes.singleCommute, 'requiredMode': 'single'},
         ),
         enabled: enabled,
         disabledHint: '저장된 모드가 single일 때만 선택할 수 있어요',
@@ -246,36 +275,23 @@ class SingleLoginCard extends StatelessWidget {
 
 class DoubleLoginCard extends StatelessWidget {
   const DoubleLoginCard({super.key, this.enabled = true});
-
   final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    final p = AppCardPalette.of(context);
-    final onBase = Theme.of(context).colorScheme.onPrimary;
+    final title = _selectorCardTitle(context, 'WorkFlow A');
 
-    final title = _selectorCardTitle(context, 'WorkFlow A', p.doubleDark);
-
-    return Card(
-      color: Theme.of(context).cardColor,
-      elevation: 1,
-      clipBehavior: Clip.antiAlias,
-      surfaceTintColor: p.doubleLight,
+    return _selectorCardShell(
+      context: context,
       child: CardBody(
         icon: Icons.bolt_rounded,
-        bg: p.doubleBase,
-        iconColor: onBase,
         titleWidget: title,
-        buttonBg: p.doubleBase,
-        buttonFg: onBase,
         featureText: '입차 완료 · 출차 완료',
         traceName: 'WorkFlow A',
         traceMeta: {'to': AppRoutes.doubleLogin, 'requiredMode': 'double'},
         onPressed: () => Navigator.of(context).pushReplacementNamed(
           AppRoutes.doubleLogin,
-          arguments: {
-            'requiredMode': 'double',
-          },
+          arguments: {'requiredMode': 'double'},
         ),
         enabled: enabled,
         disabledHint: '저장된 모드가 double일 때만 선택할 수 있어요',
@@ -284,33 +300,19 @@ class DoubleLoginCard extends StatelessWidget {
   }
 }
 
-/// ✅ 마이너 로그인 카드 (WorkFlow C)
-/// - requiredMode: 'minor'
-/// - redirectAfterLogin: AppRoutes.minorCommute
 class MinorLoginCard extends StatelessWidget {
   const MinorLoginCard({super.key, this.enabled = true});
-
   final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    final p = AppCardPalette.of(context);
-    final onBase = Theme.of(context).colorScheme.onPrimary;
+    final title = _selectorCardTitle(context, 'WorkFlow C');
 
-    final title = _selectorCardTitle(context, 'WorkFlow C', p.minorDark);
-
-    return Card(
-      color: Theme.of(context).cardColor,
-      elevation: 1,
-      clipBehavior: Clip.antiAlias,
-      surfaceTintColor: p.minorLight,
+    return _selectorCardShell(
+      context: context,
       child: CardBody(
         icon: Icons.tune_rounded,
-        bg: p.minorBase,
-        iconColor: onBase,
         titleWidget: title,
-        buttonBg: p.minorBase,
-        buttonFg: onBase,
         featureText: '입차 요청 · 입차 완료 · 출차 요청 · 출차 완료',
         traceName: 'WorkFlow C',
         traceMeta: {
@@ -320,10 +322,7 @@ class MinorLoginCard extends StatelessWidget {
         },
         onPressed: () => Navigator.of(context).pushReplacementNamed(
           AppRoutes.minorLogin,
-          arguments: {
-            'redirectAfterLogin': AppRoutes.minorCommute,
-            'requiredMode': 'minor',
-          },
+          arguments: {'redirectAfterLogin': AppRoutes.minorCommute, 'requiredMode': 'minor'},
         ),
         enabled: enabled,
         disabledHint: '저장된 모드가 minor일 때만 선택할 수 있어요',
@@ -334,28 +333,17 @@ class MinorLoginCard extends StatelessWidget {
 
 class TabletCard extends StatelessWidget {
   const TabletCard({super.key, this.enabled = true});
-
   final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    final p = AppCardPalette.of(context);
-    final onBase = Theme.of(context).colorScheme.onPrimary;
+    final title = _selectorCardTitle(context, 'Tablet Mode');
 
-    final title = _selectorCardTitle(context, 'Tablet Mode', p.tabletDark);
-
-    return Card(
-      color: Theme.of(context).cardColor,
-      elevation: 1,
-      clipBehavior: Clip.antiAlias,
-      surfaceTintColor: p.tabletLight,
+    return _selectorCardShell(
+      context: context,
       child: CardBody(
         icon: Icons.tablet_mac_rounded,
-        bg: p.tabletBase,
-        iconColor: onBase,
         titleWidget: title,
-        buttonBg: p.tabletBase,
-        buttonFg: onBase,
         traceName: '태블릿 로그인',
         traceMeta: {'to': AppRoutes.tabletLogin, 'requiredMode': 'tablet'},
         onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.tabletLogin),
@@ -371,23 +359,13 @@ class CommunityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = AppCardPalette.of(context);
-    final onBase = Theme.of(context).colorScheme.onPrimary;
+    final title = _selectorCardTitle(context, 'Community');
 
-    final title = _selectorCardTitle(context, 'Community', p.communityDark);
-
-    return Card(
-      color: Theme.of(context).cardColor,
-      elevation: 1,
-      clipBehavior: Clip.antiAlias,
-      surfaceTintColor: p.communityLight,
+    return _selectorCardShell(
+      context: context,
       child: CardBody(
         icon: Icons.groups_rounded,
-        bg: p.communityBase,
-        iconColor: onBase,
         titleWidget: title,
-        buttonBg: p.communityBase,
-        buttonFg: onBase,
         traceName: 'Community',
         traceMeta: {'to': AppRoutes.communityStub},
         onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.communityStub),
@@ -401,23 +379,13 @@ class FaqCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = AppCardPalette.of(context);
-    final onBase = Theme.of(context).colorScheme.onPrimary;
+    final title = _selectorCardTitle(context, 'FAQ');
 
-    final title = _selectorCardTitle(context, 'FAQ', p.faqDark);
-
-    return Card(
-      color: Theme.of(context).cardColor,
-      elevation: 1,
-      clipBehavior: Clip.antiAlias,
-      surfaceTintColor: p.faqLight,
+    return _selectorCardShell(
+      context: context,
       child: CardBody(
         icon: Icons.help_center_rounded,
-        bg: p.faqBase,
-        iconColor: onBase,
         titleWidget: title,
-        buttonBg: p.faqBase,
-        buttonFg: onBase,
         traceName: 'FAQ',
         traceMeta: {'to': AppRoutes.faq},
         onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.faq),
@@ -432,49 +400,33 @@ class HeadquarterCard extends StatelessWidget {
   Future<void> _handleTap(BuildContext context) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-
       final division = prefs.getString('division') ?? '';
       final selectedArea = prefs.getString('selectedArea') ?? '';
-
       final allowed = division.isNotEmpty && selectedArea.isNotEmpty && division == selectedArea;
 
       if (allowed) {
         Navigator.of(context).pushReplacementNamed(AppRoutes.headStub);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('본사 접근 권한이 없는 계정입니다. 관리자에게 문의하세요.'),
-          ),
+          const SnackBar(content: Text('본사 접근 권한이 없는 계정입니다. 관리자에게 문의하세요.')),
         );
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('본사 접근 여부 확인 중 오류가 발생했습니다: $e'),
-        ),
+        SnackBar(content: Text('본사 접근 여부 확인 중 오류가 발생했습니다: $e')),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final p = AppCardPalette.of(context);
-    final onBase = Theme.of(context).colorScheme.onPrimary;
+    final title = _selectorCardTitle(context, 'HeadQuarter');
 
-    final title = _selectorCardTitle(context, 'HeadQuarter', p.headquarterDark);
-
-    return Card(
-      color: Theme.of(context).cardColor,
-      elevation: 1,
-      clipBehavior: Clip.antiAlias,
-      surfaceTintColor: p.headquarterLight,
+    return _selectorCardShell(
+      context: context,
       child: CardBody(
         icon: Icons.apartment_rounded,
-        bg: p.headquarterBase,
-        iconColor: onBase,
         titleWidget: title,
-        buttonBg: p.headquarterBase,
-        buttonFg: onBase,
         traceName: 'HeadQuarter',
         traceMeta: {'to': AppRoutes.headStub},
         onPressed: () => _handleTap(context),
@@ -485,28 +437,17 @@ class HeadquarterCard extends StatelessWidget {
 
 class DevCard extends StatelessWidget {
   const DevCard({super.key, required this.onTap});
-
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final p = AppCardPalette.of(context);
-    final onBase = Theme.of(context).colorScheme.onPrimary;
+    final title = _selectorCardTitle(context, '개발');
 
-    final title = _selectorCardTitle(context, '개발', p.devDark);
-
-    return Card(
-      color: Theme.of(context).cardColor,
-      elevation: 1,
-      clipBehavior: Clip.antiAlias,
-      surfaceTintColor: p.devLight,
+    return _selectorCardShell(
+      context: context,
       child: CardBody(
         icon: Icons.developer_mode_rounded,
-        bg: p.devBase,
-        iconColor: onBase,
         titleWidget: title,
-        buttonBg: p.devBase,
-        buttonFg: onBase,
         traceName: '개발',
         traceMeta: {'to': 'dev'},
         onPressed: onTap,
@@ -517,28 +458,17 @@ class DevCard extends StatelessWidget {
 
 class TripleLoginCard extends StatelessWidget {
   const TripleLoginCard({super.key, this.enabled = true});
-
   final bool enabled;
 
   @override
   Widget build(BuildContext context) {
-    final p = AppCardPalette.of(context);
-    final onBase = Theme.of(context).colorScheme.onPrimary;
+    final title = _selectorCardTitle(context, 'WorkFlow B');
 
-    final title = _selectorCardTitle(context, 'WorkFlow B', p.tripleDark);
-
-    return Card(
-      color: Theme.of(context).cardColor,
-      elevation: 1,
-      clipBehavior: Clip.antiAlias,
-      surfaceTintColor: p.tripleLight,
+    return _selectorCardShell(
+      context: context,
       child: CardBody(
         icon: Icons.apps_rounded,
-        bg: p.tripleBase,
-        iconColor: onBase,
         titleWidget: title,
-        buttonBg: p.tripleBase,
-        buttonFg: onBase,
         featureText: '입차 완료 · 출차 요청 · 출차 완료',
         traceName: 'WorkFlow B',
         traceMeta: {
@@ -548,10 +478,7 @@ class TripleLoginCard extends StatelessWidget {
         },
         onPressed: () => Navigator.of(context).pushReplacementNamed(
           AppRoutes.tripleLogin,
-          arguments: {
-            'redirectAfterLogin': AppRoutes.tripleCommute,
-            'requiredMode': 'triple',
-          },
+          arguments: {'redirectAfterLogin': AppRoutes.tripleCommute, 'requiredMode': 'triple'},
         ),
         enabled: enabled,
         disabledHint: '저장된 모드가 triple일 때만 선택할 수 있어요',
@@ -565,23 +492,13 @@ class ParkingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final p = AppCardPalette.of(context);
-    final onBase = Theme.of(context).colorScheme.onPrimary;
+    final title = _selectorCardTitle(context, 'Practice Space');
 
-    final title = _selectorCardTitle(context, 'Practice Space', p.parkingDark);
-
-    return Card(
-      color: Theme.of(context).cardColor,
-      elevation: 1,
-      clipBehavior: Clip.antiAlias,
-      surfaceTintColor: p.parkingLight,
+    return _selectorCardShell(
+      context: context,
       child: CardBody(
         icon: Icons.location_city,
-        bg: p.parkingBase,
-        iconColor: onBase,
         titleWidget: title,
-        buttonBg: p.parkingBase,
-        buttonFg: onBase,
         traceName: '오프라인 서비스',
         traceMeta: {'to': AppRoutes.offlineLogin},
         onPressed: () => Navigator.of(context).pushReplacementNamed(AppRoutes.offlineLogin),

@@ -19,14 +19,14 @@ import '../theme.dart';
 // ✅ Trace 기록용 Recorder
 import 'hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
 
-class LiteTypePage extends StatefulWidget {
-  const LiteTypePage({super.key});
+class DoubleTypePage extends StatefulWidget {
+  const DoubleTypePage({super.key});
 
   @override
-  State<LiteTypePage> createState() => _LiteTypePageState();
+  State<DoubleTypePage> createState() => _DoubleTypePageState();
 }
 
-class _LiteTypePageState extends State<LiteTypePage> {
+class _DoubleTypePageState extends State<DoubleTypePage> {
   @override
   void initState() {
     super.initState();

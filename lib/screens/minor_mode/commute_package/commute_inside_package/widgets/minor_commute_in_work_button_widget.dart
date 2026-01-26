@@ -30,9 +30,15 @@ class MinorCommuteInWorkButtonWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final userState = context.watch<UserState>();
     final isWorking = userState.isWorking;
     final label = isWorking ? '출근 중' : '출근하기';
+
+    final bg = isWorking ? cs.surfaceContainerLow : cs.primary;
+    final fg = isWorking ? cs.onSurfaceVariant : cs.onPrimary;
+    final border = isWorking ? cs.outlineVariant : cs.primary;
 
     return ElevatedButton.icon(
       icon: const Icon(Icons.access_time),
@@ -45,14 +51,15 @@ class MinorCommuteInWorkButtonWidget extends StatelessWidget {
         ),
       ),
       style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: bg,
+        foregroundColor: fg,
         minimumSize: const Size.fromHeight(55),
         padding: EdgeInsets.zero,
-        side: const BorderSide(color: Colors.grey, width: 1.0),
+        side: BorderSide(color: border, width: 1.0),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),
+        elevation: 0,
       ),
       onPressed: isWorking
           ? null

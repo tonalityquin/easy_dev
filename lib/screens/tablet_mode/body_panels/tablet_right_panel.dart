@@ -17,7 +17,6 @@ import '../states/tablet_pad_mode_state.dart';
 class _Palette {
   static const base = Color(0xFF0D47A1);
   static const dark = Color(0xFF09367D);
-  static const light = Color(0xFF5472D3);
 }
 
 /// 결과 다이얼로그 종료 사유(명시적으로 구분)

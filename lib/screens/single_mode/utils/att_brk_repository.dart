@@ -1,6 +1,6 @@
 // lib/time_record/simple_mode/simple_mode_attendance_repository.dart
 import 'package:intl/intl.dart';
-import 'package:sqflite/sqflite.dart'; // ✅ ConflictAlgorithm 사용
+import 'package:sqflite/sqflite.dart';
 
 import 'att_brk_mode_db.dart';
 import '../../../../repositories/commute_repo_services/commute_log_repository.dart';
@@ -9,7 +9,7 @@ import '../../../../repositories/commute_repo_services/commute_log_repository.da
 enum AttBrkModeType {
   workIn, // 출근
   workOut, // 퇴근
-  breakTime // 휴게 버튼
+  breakTime, // 휴게
 }
 
 extension AttBrkTypeX on AttBrkModeType {
@@ -25,7 +25,7 @@ extension AttBrkTypeX on AttBrkModeType {
     }
   }
 
-  /// Firestore에 사용하는 상태 라벨 (CommuteLogRepository.status 용)
+  /// Firestore(commute_user_logs) status 라벨
   String get statusLabel {
     switch (this) {
       case AttBrkModeType.workIn:
@@ -52,7 +52,7 @@ extension AttBrkTypeX on AttBrkModeType {
   bool get isBreak => this == AttBrkModeType.breakTime;
 }
 
-/// DB에 저장된 type 문자열 → Enum 매핑 헬퍼
+/// DB에 저장된 type 문자열 → Enum 매핑
 AttBrkModeType? singleModeAttBrkTypeFromCode(String code) {
   switch (code) {
     case 'work_in':
@@ -65,69 +65,62 @@ AttBrkModeType? singleModeAttBrkTypeFromCode(String code) {
   return null;
 }
 
+/// 약식 모드 펀칭 로그(Local SQLite) + (선택) Firestore 업로드 브리지
 class AttBrkRepository {
   AttBrkRepository._({
     CommuteLogRepository? commuteLogRepository,
   }) : _commuteLogRepository = commuteLogRepository ?? CommuteLogRepository();
 
-  static final AttBrkRepository instance =
-  AttBrkRepository._();
+  static final AttBrkRepository instance = AttBrkRepository._();
 
-  /// Firestore 로그용 레포지토리
+  /// Firestore 로그 레포지토리
   final CommuteLogRepository _commuteLogRepository;
 
-  // 예: 2025-12-08
+  /// 예: 2025-12-08
   final DateFormat _dateFormatter = DateFormat('yyyy-MM-dd');
 
-  // 예: 09:00 (항상 두 자리 시각)
+  /// 예: 09:00
   final DateFormat _timeFormatter = DateFormat('HH:mm');
 
   static const String _breakTypeStart = 'start';
 
-  /// 내부 공용 DB 게터
   Future<Database> get _database async => AttBrkModeDb.instance.database;
 
-  /// 버튼을 누른 시각을 그대로 한 줄 INSERT (로컬 SQLite 전용)
+  /// 버튼을 누른 시각을 로컬 SQLite에 저장
   ///
-  /// - v3/v4 스키마:
-  ///   - 출근/퇴근: simple_work_attendance 테이블 사용
-  ///   - 휴게: simple_break_attendance 테이블 사용
-  ///   - 각각 PRIMARY KEY 제약으로 동일 날짜/타입은 항상 마지막 값만 유지
+  /// - 출근/퇴근: simple_work_attendance
+  /// - 휴게: simple_break_attendance (type="start" 고정)
   ///
-  /// ⚠️ Firestore에는 아무 것도 쓰지 않는 순수 로컬 메서드입니다.
+  /// ConflictAlgorithm.replace로 동일 날짜/타입은 마지막 값만 유지
+  ///
+  /// ⚠️ 이 메서드는 로컬 전용(네트워크/Firestore 호출 없음)
   Future<void> insertEvent({
     required DateTime dateTime,
     required AttBrkModeType type,
   }) async {
     final db = await _database;
 
-    // 'yyyy-MM-dd'
     final date = _dateFormatter.format(dateTime);
-
-    // 'HH:mm' → 9시도 09:00 형식으로 저장
     final time = _timeFormatter.format(dateTime);
-
     final createdAt = dateTime.toIso8601String();
 
     if (type.isWork) {
-      // 출근/퇴근 → simple_work_attendance
       await db.insert(
         'simple_work_attendance',
         <String, Object?>{
           'date': date,
-          'type': type.code, // 'work_in' / 'work_out'
+          'type': type.code,
           'time': time,
           'created_at': createdAt,
         },
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     } else if (type.isBreak) {
-      // 휴게 → simple_break_attendance
       await db.insert(
         'simple_break_attendance',
         <String, Object?>{
           'date': date,
-          'type': _breakTypeStart, // 항상 "start" 로만 저장
+          'type': _breakTypeStart,
           'time': time,
           'created_at': createdAt,
         },
@@ -136,22 +129,16 @@ class AttBrkRepository {
     }
   }
 
-  /// 특정 날짜의 출근/휴게/퇴근 기록을 한 번에 조회 (로컬 SQLite)
+  /// 특정 날짜의 출근/휴게/퇴근 기록 조회 (로컬 SQLite)
   ///
-  /// - 출근/퇴근: simple_work_attendance 에서 조회
-  /// - 휴게: simple_break_attendance 에서 type="start" 한 건 조회
-  ///
-  /// 반환: { SimpleModeAttendanceType.workIn: '09:12', ... } 형식
-  Future<Map<AttBrkModeType, String>> getEventsForDate(
-      DateTime dateTime,
-      ) async {
+  /// 반환: { AttBrkModeType.workIn: '09:12', ... }
+  Future<Map<AttBrkModeType, String>> getEventsForDate(DateTime dateTime) async {
     final db = await _database;
-
-    final date = _dateFormatter.format(dateTime); // 'yyyy-MM-dd'
+    final date = _dateFormatter.format(dateTime);
 
     final result = <AttBrkModeType, String>{};
 
-    // 1) 출근/퇴근 테이블 조회
+    // 출근/퇴근
     final workRows = await db.query(
       'simple_work_attendance',
       columns: ['type', 'time'],
@@ -163,19 +150,15 @@ class AttBrkRepository {
       final typeCode = row['type'] as String;
       final time = row['time'] as String;
 
-      // nullable → non-null 변환
       final maybeType = singleModeAttBrkTypeFromCode(typeCode);
-      if (maybeType == null) {
-        continue;
-      }
+      if (maybeType == null) continue;
 
-      if (maybeType == AttBrkModeType.workIn ||
-          maybeType == AttBrkModeType.workOut) {
+      if (maybeType == AttBrkModeType.workIn || maybeType == AttBrkModeType.workOut) {
         result[maybeType] = time;
       }
     }
 
-    // 2) 휴게 테이블 조회 (type = "start" 인 행만 사용)
+    // 휴게(type="start")
     final breakRows = await db.query(
       'simple_break_attendance',
       columns: ['time'],
@@ -192,25 +175,13 @@ class AttBrkRepository {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // ✅ SQLite + Firestore를 동시에 업데이트하는 브리지 메서드
+  // ✅ SQLite + Firestore 동시 업데이트 브리지
   // ─────────────────────────────────────────────────────────────
 
-  /// 약식 모드 펀칭 1회에 대해:
-  ///  1) 로컬 SQLite(출근/퇴근/휴게용 분리 테이블)에 저장
-  ///  2) Firestore(commute_user_logs)에 동일한 시각으로 로그 적재
+  /// 1) 로컬 SQLite 저장
+  /// 2) Firestore(commute_user_logs) 업로드(중복이면 스킵)
   ///
-  /// - Firestore 쪽은 CommuteLogRepository를 사용
-  /// - 이미 해당 날짜/상태에 로그가 있으면 Firestore에는 다시 쓰지 않음
-  ///
-  /// 사용 예:
-  ///   await SimpleModeAttendanceRepository.instance.insertEventAndUpload(
-  ///     dateTime: now,
-  ///     type: SimpleModeAttendanceType.workIn,
-  ///     userId: userId,
-  ///     userName: userName,
-  ///     area: area,
-  ///     division: division,
-  ///   );
+  /// ⚠️ Firestore 처리 실패는 CommuteLogRepository 내부 정책에 따라 로깅 후 무시될 수 있음.
   Future<void> insertEventAndUpload({
     required DateTime dateTime,
     required AttBrkModeType type,
@@ -219,28 +190,23 @@ class AttBrkRepository {
     required String area,
     required String division,
   }) async {
-    // 1) 항상 먼저 로컬 SQLite에 기록 (오프라인에서도 동작)
+    // 1) 로컬 먼저
     await insertEvent(dateTime: dateTime, type: type);
 
-    // 2) Firestore 에 쓸 공통 포맷
-    final dateStr = _dateFormatter.format(dateTime); // "2025-12-09"
-    final recordedTime = _timeFormatter.format(dateTime); // "09:30"
-    final statusLabel = type.statusLabel; // "출근"/"휴게"/"퇴근"
+    final dateStr = _dateFormatter.format(dateTime);
+    final recordedTime = _timeFormatter.format(dateTime);
+    final statusLabel = type.statusLabel;
 
-    // 3) 해당 날짜에 이미 로그 있는지 확인
+    // 2) 중복 체크
     final alreadyExists = await _commuteLogRepository.hasLogForDate(
       status: statusLabel,
       userId: userId,
       dateStr: dateStr,
     );
 
-    if (alreadyExists) {
-      // 이미 Firestore에 존재하면 추가 업로드는 생략
-      return;
-    }
+    if (alreadyExists) return;
 
-    // 4) Firestore에 업로드
-    //    (CommuteLogRepository 내부에서 예외는 swallow + DebugDatabaseLogger 기록)
+    // 3) 업로드
     await _commuteLogRepository.addLog(
       status: statusLabel,
       userId: userId,
@@ -253,20 +219,7 @@ class AttBrkRepository {
     );
   }
 
-  /// (선택) 특정 날짜의 약식 모드 로컬 데이터를
-  /// Firestore로 재동기화하는 유틸리티 메서드.
-  ///
-  /// - 오프라인 상태에서 쌓인 SQLite 로그를
-  ///   나중에 한 번에 Firestore에 반영하는 용도로 사용 가능.
-  ///
-  /// 사용 예:
-  ///   await SimpleModeAttendanceRepository.instance.syncDateToRemote(
-  ///     date: DateTime(2025, 12, 9),
-  ///     userId: userId,
-  ///     userName: userName,
-  ///     area: area,
-  ///     division: division,
-  ///   );
+  /// 특정 날짜의 로컬 데이터를 Firestore로 재동기화
   Future<void> syncDateToRemote({
     required DateTime date,
     required String userId,
@@ -274,17 +227,14 @@ class AttBrkRepository {
     required String area,
     required String division,
   }) async {
-    // 분리된 두 테이블(simple_work_attendance, simple_break_attendance)을
-    // getEventsForDate 가 한 번에 조합해 주므로,
-    // 기존 구현을 그대로 사용할 수 있음.
     final localEvents = await getEventsForDate(date);
     if (localEvents.isEmpty) return;
 
+    final dateStr = _dateFormatter.format(date);
+
     for (final entry in localEvents.entries) {
       final type = entry.key;
-      final timeStr = entry.value; // "HH:mm"
-
-      final dateStr = _dateFormatter.format(date);
+      final timeStr = entry.value;
       final statusLabel = type.statusLabel;
 
       final alreadyExists = await _commuteLogRepository.hasLogForDate(
@@ -292,14 +242,12 @@ class AttBrkRepository {
         userId: userId,
         dateStr: dateStr,
       );
-      if (alreadyExists) {
-        continue;
-      }
+      if (alreadyExists) continue;
 
-      // timeStr 을 DateTime 의 시/분으로 합성해서 dateTime 생성 (초는 0으로 가정)
       final parts = timeStr.split(':');
       final hour = int.tryParse(parts.elementAt(0)) ?? 0;
       final minute = int.tryParse(parts.elementAt(1)) ?? 0;
+
       final dateTime = DateTime(
         date.year,
         date.month,

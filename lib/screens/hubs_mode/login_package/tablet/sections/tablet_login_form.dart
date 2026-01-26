@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../../routes.dart';
-import '../../../../../theme.dart'; // ✅ AppCardPalette 사용 (theme.dart 연결)
 import '../tablet_login_controller.dart';
 
 // ✅ Trace 기록용 Recorder
@@ -27,7 +26,6 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
   }
 
   void _trace(String name, {Map<String, dynamic>? meta}) {
-    // ✅ Trace 기록 (기록 중이 아닐 때는 Recorder 내부에서 무시됨)
     DebugActionRecorder.instance.recordAction(
       name,
       route: ModalRoute.of(context)?.settings.name,
@@ -42,7 +40,6 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
   void _onLoginButtonPressed() {
     if (_controller.isLoading) return;
 
-    // ✅ 태블릿 로그인 버튼 Trace 기록
     _trace(
       '태블릿 로그인 버튼',
       meta: <String, dynamic>{
@@ -55,7 +52,6 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
   }
 
   void _onTopCompanyLogoTapped() {
-    // ✅ 상단 회사 로고 탭 Trace 기록 (기존 동작 변경 없이 기록만)
     _trace(
       '회사 로고(상단)',
       meta: <String, dynamic>{
@@ -69,7 +65,6 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
   }
 
   void _onPelicanLogoTapped() {
-    // ✅ 하단 펠리컨 로고 탭 Trace 기록 + 기존 네비게이션 유지
     _trace(
       '회사 로고(펠리컨)',
       meta: <String, dynamic>{
@@ -90,85 +85,58 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ theme.dart(AppCardPalette)에서 Tablet 팔레트 획득
-    final palette = AppCardPalette.of(context);
-    final base = palette.tabletBase; // 기존 _base
-    final dark = palette.tabletDark; // 기존 _dark
+    final baseTheme = Theme.of(context);
+    final cs = baseTheme.colorScheme;
 
-    // 이 폼 하위에만 적용되는 테마(입력창/아이콘/라벨 컬러 조정)
-    final themed = Theme.of(context).copyWith(
-      inputDecorationTheme: InputDecorationTheme(
-        // 라벨
-        labelStyle: const TextStyle(color: Colors.black87),
-        floatingLabelStyle: TextStyle(
-          color: dark,
-          fontWeight: FontWeight.w700,
-        ),
-        // 아이콘 컬러(Decoration의 icon / prefix/suffix)
-        iconColor: base,
-        prefixIconColor: base,
-        suffixIconColor: base,
-        // 보더
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: Colors.grey.shade300, width: 1.0),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: base, width: 1.8),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Colors.redAccent),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Colors.redAccent, width: 1.8),
-        ),
-        // 내용 패딩 기본값
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      ),
-      // 버튼 계열 대비(아이콘 버튼 등) 미세 톤
-      iconTheme: IconThemeData(color: base),
-      // 버튼 배경/전경 기본
+    // ✅ 컨셉 테마(ColorScheme)에 맞춰 버튼/아이콘/selection만 정돈
+    final themed = baseTheme.copyWith(
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: base,
-          foregroundColor: Colors.white,
+          backgroundColor: cs.primary,
+          foregroundColor: cs.onPrimary,
           minimumSize: const Size.fromHeight(55),
           padding: EdgeInsets.zero,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           elevation: 0,
         ),
       ),
+      iconTheme: IconThemeData(color: cs.primary),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(
+          foregroundColor: cs.primary,
+          splashFactory: InkRipple.splashFactory,
+        ),
+      ),
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: cs.primary,
+        selectionColor: cs.primaryContainer.withOpacity(.35),
+        selectionHandleColor: cs.primary,
+      ),
     );
 
     return Theme(
       data: themed,
       child: Material(
-        // ✅ Material ancestor 보장
         color: Colors.transparent,
         child: SafeArea(
           child: SingleChildScrollView(
-            // ✅ overflow 방지
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Column(
               children: [
                 const SizedBox(height: 12),
 
-                // ⬇️ 화면 식별 태그(11시 고정 느낌으로 상단에 작게 표기)
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Padding(
                     padding: const EdgeInsets.only(left: 4, bottom: 8),
                     child: Semantics(
                       label: 'screen_tag: tablet login',
-                      child: const Text(
+                      child: Text(
                         'tablet login',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: Colors.black54,
+                          color: cs.onSurfaceVariant.withOpacity(0.80),
                           letterSpacing: 0.2,
                         ),
                       ),
@@ -176,7 +144,6 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
                   ),
                 ),
 
-                // ✅ 상단 회사 로고 탭 시 Trace 기록
                 GestureDetector(
                   onTap: _onTopCompanyLogoTapped,
                   child: SizedBox(
@@ -201,18 +168,17 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
 
                 TextField(
                   controller: _controller.phoneController,
-                  // 핸들 입력용 컨트롤러 유지
                   focusNode: _controller.phoneFocus,
-                  keyboardType: TextInputType.text, // ← 텍스트(핸들)
-                  textCapitalization: TextCapitalization.none, // ← 자동 대문자 방지
-                  autocorrect: false, // ← 자동 교정 끔
-                  enableSuggestions: false, // ← 추천 끔
+                  keyboardType: TextInputType.text,
+                  textCapitalization: TextCapitalization.none,
+                  autocorrect: false,
+                  enableSuggestions: false,
                   textInputAction: TextInputAction.next,
                   onChanged: (value) => _controller.formatPhoneNumber(value, setState),
                   onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.passwordFocus),
                   decoration: _controller.inputDecoration(
-                    label: "영어 아이디(핸들)", // ← 라벨 명확화
-                    icon: Icons.alternate_email, // ← 핸들 느낌 아이콘
+                    label: "영어 아이디(핸들)",
+                    icon: Icons.alternate_email,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -228,12 +194,13 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
                     icon: Icons.lock,
                     suffixIcon: IconButton(
                       style: IconButton.styleFrom(
-                        foregroundColor: base, // ✅ tabletBase로 톤 맞춤
+                        foregroundColor: cs.primary,
                       ),
                       icon: Icon(
                         _controller.obscurePassword ? Icons.visibility_off : Icons.visibility,
                       ),
                       onPressed: () => setState(() => _controller.togglePassword()),
+                      tooltip: _controller.obscurePassword ? '표시' : '숨기기',
                     ),
                   ),
                 ),
@@ -252,14 +219,12 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
                         letterSpacing: 1.1,
                       ),
                     ),
-                    // 버튼 스타일은 Theme.elevatedButtonTheme로 통일
                     onPressed: _controller.isLoading ? null : _onLoginButtonPressed,
                   ),
                 ),
 
                 const SizedBox(height: 1),
 
-                // ▼ 펠리컨: 탭하면 LoginSelectorPage로 복귀 + Trace 기록
                 Center(
                   child: InkWell(
                     onTap: _onPelicanLogoTapped,

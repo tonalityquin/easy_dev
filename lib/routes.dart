@@ -106,7 +106,7 @@ final Map<String, WidgetBuilder> appRoutes = {
   // ✅ minor 본사(임시: triple 본사 재사용)
   AppRoutes.minorHeadquarterPage: (context) => const MinorHeadquarterPage(),
 
-  AppRoutes.doubleTypePage: (context) => const LiteTypePage(),
+  AppRoutes.doubleTypePage: (context) => const DoubleTypePage(),
   AppRoutes.tripleTypePage: (context) => const TripleTypePage(),
 
   // ✅ minor 타입(임시: triple 타입 재사용)

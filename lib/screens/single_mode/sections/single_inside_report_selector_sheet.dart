@@ -7,12 +7,14 @@ enum _SingleReportSheetResult {
   workStart,
   workEnd,
 }
+
 Future<void> openSingleInsideReportSelectorSheet(
-  BuildContext context,
-) async {
+    BuildContext context,
+    ) async {
   final rootContext = context;
 
-  final _SingleReportSheetResult? result = await showModalBottomSheet<_SingleReportSheetResult>(
+  final _SingleReportSheetResult? result =
+  await showModalBottomSheet<_SingleReportSheetResult>(
     context: context,
     useRootNavigator: false,
     isScrollControlled: true,
@@ -20,30 +22,25 @@ Future<void> openSingleInsideReportSelectorSheet(
     builder: (ctx) => const _SingleReportSelectorSheet(),
   );
 
-  if (result == null) {
-    // 유저가 그냥 닫은 경우
-    return;
-  }
+  if (result == null) return;
 
-  // 선택 결과에 따라 기존 풀스크린 바텀시트 헬퍼 호출
   switch (result) {
     case _SingleReportSheetResult.workStart:
-      // ✅ 업무 시작 보고서 폼 (SingleInsideWorkFormPage)
       showSingleInsideWorkFullScreenBottomSheet(rootContext);
       break;
     case _SingleReportSheetResult.workEnd:
-      // ✅ 업무 종료 보고서 폼 (SingleInsideReportFormPage)
       showSingleInsideReportFullScreenBottomSheet(rootContext);
       break;
   }
 }
 
-/// 문서철 스타일의 "업무 보고 선택" 시트
 class _SingleReportSelectorSheet extends StatelessWidget {
   const _SingleReportSelectorSheet();
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.86,
@@ -52,15 +49,14 @@ class _SingleReportSelectorSheet extends StatelessWidget {
       builder: (ctx, scrollController) {
         final textTheme = Theme.of(context).textTheme;
 
-        // 선택 가능한 옵션 2개 (업무 시작 / 업무 종료)
         final options = <_ReportOption>[
           _ReportOption(
             result: _SingleReportSheetResult.workStart,
             title: '업무 시작 보고서',
             subtitle: '근무 시작 시 작성하는 보고서',
             tagLabel: '업무 시작 보고',
-            accentColor: const Color(0xFF4F9A94),
-            // 문서철과 동일한 청록톤
+            // ✅ 옵션 accent는 의미상 유지(단, 시트 전체 틴트는 ColorScheme 기반)
+            accentColor: cs.primary,
             iconData: Icons.wb_sunny_outlined,
           ),
           _ReportOption(
@@ -68,8 +64,7 @@ class _SingleReportSelectorSheet extends StatelessWidget {
             title: '업무 종료 보고서',
             subtitle: '근무 종료 시 작성하는 보고서',
             tagLabel: '업무 종료 보고',
-            accentColor: const Color(0xFFD84315),
-            // 종료 보고서용 진한 레드톤
+            accentColor: cs.error,
             iconData: Icons.nights_stay_outlined,
           ),
         ];
@@ -82,13 +77,12 @@ class _SingleReportSelectorSheet extends StatelessWidget {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8F5EB),
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(24),
-                    ),
+                    // ✅ 시트 배경: 중립 표면 컨테이너
+                    color: cs.surface,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.08),
+                        color: cs.shadow.withOpacity(0.10),
                         blurRadius: 12,
                         offset: const Offset(0, -2),
                       ),
@@ -97,19 +91,19 @@ class _SingleReportSelectorSheet extends StatelessWidget {
                   child: Row(
                     children: [
                       const _BinderSpine(),
-                      const VerticalDivider(
+                      VerticalDivider(
                         width: 0,
-                        thickness: 0.6,
-                        color: Color(0xFFE0D7C5),
+                        thickness: 0.8,
+                        color: cs.outlineVariant.withOpacity(0.8),
                       ),
                       Expanded(
                         child: Column(
                           children: [
                             const _SheetHeader(),
-                            const Divider(
+                            Divider(
                               height: 1,
                               thickness: 0.8,
-                              color: Color(0xFFE5DFD0),
+                              color: cs.outlineVariant.withOpacity(0.8),
                             ),
                             Expanded(
                               child: ListView.builder(
@@ -122,7 +116,6 @@ class _SingleReportSelectorSheet extends StatelessWidget {
                                     option: option,
                                     textTheme: textTheme,
                                     onTap: () {
-                                      // 선택 시, 해당 enum을 넘기며 시트 닫기
                                       Navigator.of(context).pop(option.result);
                                     },
                                   );
@@ -144,19 +137,20 @@ class _SingleReportSelectorSheet extends StatelessWidget {
   }
 }
 
-/// 상단 드래그 핸들 (문서철과 동일 디자인)
 class _SheetHandle extends StatelessWidget {
   const _SheetHandle();
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Center(
       child: Container(
         width: 64,
         height: 6,
         margin: const EdgeInsets.only(bottom: 10),
         decoration: BoxDecoration(
-          color: Colors.brown.withOpacity(0.25),
+          color: cs.outlineVariant.withOpacity(0.9),
           borderRadius: BorderRadius.circular(999),
         ),
       ),
@@ -164,35 +158,34 @@ class _SheetHandle extends StatelessWidget {
   }
 }
 
-/// 문서철 왼쪽 스파인(바인더 느낌) – 문서철과 동일 디자인
 class _BinderSpine extends StatelessWidget {
   const _BinderSpine();
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       width: 32,
-      decoration: const BoxDecoration(
-        color: Color(0xFFE0D7C5),
-        borderRadius: BorderRadius.only(
-          topLeft: Radius.circular(24),
-        ),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: const BorderRadius.only(topLeft: Radius.circular(24)),
       ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: List.generate(
           5,
-          (index) => Padding(
+              (index) => Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Container(
               width: 10,
               height: 10,
               decoration: BoxDecoration(
-                color: Colors.brown[200],
+                color: cs.outlineVariant.withOpacity(0.9),
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.15),
+                    color: cs.shadow.withOpacity(0.15),
                     blurRadius: 2,
                     offset: const Offset(0, 1),
                   ),
@@ -206,12 +199,12 @@ class _BinderSpine extends StatelessWidget {
   }
 }
 
-/// 상단 헤더(문서철 제목/설명) – 텍스트만 "업무 보고"에 맞게 수정
 class _SheetHeader extends StatelessWidget {
   const _SheetHeader();
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
     return Padding(
@@ -221,13 +214,13 @@ class _SheetHeader extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.brown.withOpacity(0.12),
+              color: cs.primaryContainer.withOpacity(0.75),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(
+            child: Icon(
               Icons.assignment_outlined,
               size: 22,
-              color: Colors.brown,
+              color: cs.onPrimaryContainer,
             ),
           ),
           const SizedBox(width: 10),
@@ -241,7 +234,7 @@ class _SheetHeader extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF4A3A28),
+                    color: cs.onSurface,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -250,7 +243,7 @@ class _SheetHeader extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFF8A7A65),
+                    color: cs.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -258,10 +251,10 @@ class _SheetHeader extends StatelessWidget {
           ),
           IconButton(
             tooltip: '닫기',
-            icon: const Icon(
+            icon: Icon(
               Icons.close,
               size: 20,
-              color: Color(0xFF7A6A55),
+              color: cs.onSurfaceVariant,
             ),
             onPressed: () => Navigator.of(context).maybePop(),
           ),
@@ -271,7 +264,6 @@ class _SheetHeader extends StatelessWidget {
   }
 }
 
-/// 선택 가능한 옵션 1개를 표현하는 내부 모델
 class _ReportOption {
   final _SingleReportSheetResult result;
   final String title;
@@ -290,8 +282,6 @@ class _ReportOption {
   });
 }
 
-/// 각각의 옵션을 카드 형태로 보여주는 위젯
-/// (single_document_box_sheet 의 _DocumentListItem 과 동일한 레이아웃/스타일)
 class _SingleReportListItem extends StatelessWidget {
   final _ReportOption option;
   final TextTheme? textTheme;
@@ -305,6 +295,7 @@ class _SingleReportListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final accentColor = option.accentColor;
     final theme = textTheme ?? Theme.of(context).textTheme;
 
@@ -315,11 +306,12 @@ class _SingleReportListItem extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: Ink(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: cs.surfaceContainerLow,
             borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: cs.outlineVariant.withOpacity(0.65)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.04),
+                color: cs.shadow.withOpacity(0.06),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -328,30 +320,24 @@ class _SingleReportListItem extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // 좌측 컬러 인덱스 바
               Container(
                 width: 6,
                 height: 80,
                 decoration: BoxDecoration(
                   color: accentColor,
-                  borderRadius: const BorderRadius.horizontal(
-                    left: Radius.circular(16),
-                  ),
+                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 12,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       CircleAvatar(
                         radius: 20,
-                        backgroundColor: accentColor.withOpacity(0.15),
+                        backgroundColor: accentColor.withOpacity(0.16),
                         child: Icon(
                           option.iconData,
                           color: accentColor,
@@ -369,7 +355,7 @@ class _SingleReportListItem extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: theme.bodyLarge?.copyWith(
                                 fontWeight: FontWeight.w700,
-                                color: const Color(0xFF3C342A),
+                                color: cs.onSurface,
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -378,19 +364,16 @@ class _SingleReportListItem extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: theme.bodySmall?.copyWith(
-                                color: const Color(0xFF7A6F63),
+                                color: cs.onSurfaceVariant,
                               ),
                             ),
-                            const SizedBox(height: 4),
+                            const SizedBox(height: 6),
                             Row(
                               children: [
                                 Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 3,
-                                  ),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                                   decoration: BoxDecoration(
-                                    color: accentColor.withOpacity(0.14),
+                                    color: accentColor.withOpacity(0.16),
                                     borderRadius: BorderRadius.circular(999),
                                   ),
                                   child: Text(
@@ -398,8 +381,8 @@ class _SingleReportListItem extends StatelessWidget {
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: theme.labelSmall?.copyWith(
-                                      color: accentColor.darken(0.1),
-                                      fontWeight: FontWeight.w600,
+                                      color: accentColor,
+                                      fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                 ),
@@ -413,32 +396,18 @@ class _SingleReportListItem extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 4),
-              const Padding(
-                padding: EdgeInsets.only(right: 10),
+              Padding(
+                padding: const EdgeInsets.only(right: 10),
                 child: Icon(
                   Icons.chevron_right,
                   size: 22,
-                  color: Color(0xFF9A8C7A),
+                  color: cs.onSurfaceVariant.withOpacity(0.75),
                 ),
               ),
             ],
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Color 확장: 약간 어둡게 (문서철 코드와 동일)
-extension _ColorShadeExtension on Color {
-  Color darken(double amount) {
-    assert(amount >= 0 && amount <= 1);
-    final f = 1 - amount;
-    return Color.fromARGB(
-      alpha,
-      (red * f).round(),
-      (green * f).round(),
-      (blue * f).round(),
     );
   }
 }

@@ -15,19 +15,6 @@ import '../../../../../repositories/commute_repo_services/commute_true_false_rep
 // ✅ 추가: 기기별 commute_true_false Firestore 업데이트 ON/OFF
 import '../../../../utils/commute_true_false_mode_config.dart';
 
-/// Teal Palette (Simple 전용)
-class _Palette {
-  static const Color dark = Color(0xFF00695C); // 강조 텍스트/아이콘
-  static const Color light = Color(0xFF80CBC4); // 톤 변형/보더
-}
-
-/// 대시보드 모드용 출퇴근 기록기 카드
-/// - 출근 / 휴게 / 퇴근 3개 펀칭
-/// - 헤더의 날짜를 바꿔 과거 기록 수정 가능
-/// - 펀칭 시 로컬 SQLite에만 기록
-/// - 추가 정책:
-///   - 출근(workIn) 시에만 commute_true_false 컬렉션에 "출근 시각(Timestamp)" 기록
-///   - 퇴근(workOut) 시에는 commute_true_false 와 무관 (절대 호출하지 않음)
 class SingleInsidePunchRecorderSection extends StatefulWidget {
   const SingleInsidePunchRecorderSection({
     super.key,
@@ -43,12 +30,10 @@ class SingleInsidePunchRecorderSection extends StatefulWidget {
   final String division;
 
   @override
-  State<SingleInsidePunchRecorderSection> createState() =>
-      _SingleInsidePunchRecorderSectionState();
+  State<SingleInsidePunchRecorderSection> createState() => _SingleInsidePunchRecorderSectionState();
 }
 
-class _SingleInsidePunchRecorderSectionState
-    extends State<SingleInsidePunchRecorderSection> {
+class _SingleInsidePunchRecorderSectionState extends State<SingleInsidePunchRecorderSection> {
   late DateTime _selectedDate;
 
   String? _workInTime;
@@ -56,8 +41,7 @@ class _SingleInsidePunchRecorderSectionState
   String? _workOutTime;
   bool _loading = true;
 
-  final CommuteTrueFalseRepository _commuteTrueFalseRepo =
-  CommuteTrueFalseRepository();
+  final CommuteTrueFalseRepository _commuteTrueFalseRepo = CommuteTrueFalseRepository();
 
   bool get _hasWorkIn => _workInTime != null && _workInTime!.isNotEmpty;
   bool get _hasBreak => _breakTime != null && _breakTime!.isNotEmpty;
@@ -74,8 +58,7 @@ class _SingleInsidePunchRecorderSectionState
       _loading = true;
     });
 
-    final events =
-    await AttBrkRepository.instance.getEventsForDate(date);
+    final events = await AttBrkRepository.instance.getEventsForDate(date);
 
     setState(() {
       _selectedDate = date;
@@ -96,9 +79,7 @@ class _SingleInsidePunchRecorderSectionState
       initialDate: init,
       firstDate: first,
       lastDate: last,
-      builder: (context, child) {
-        return child ?? const SizedBox.shrink();
-      },
+      builder: (context, child) => child ?? const SizedBox.shrink(),
     );
 
     if (picked == null) return;
@@ -111,14 +92,10 @@ class _SingleInsidePunchRecorderSectionState
     messenger?.showSnackBar(SnackBar(content: Text(message)));
   }
 
-  /// ✅ 출근(workIn) 시에만 commute_true_false 에 "출근 시각" 기록
   Future<void> _recordClockInAtToCommuteTrueFalse(DateTime clockInAt) async {
-    // ✅ 기기 설정이 OFF면 Firestore 업데이트 스킵 (SQLite는 이미 저장됨)
     final enabled = await CommuteTrueFalseModeConfig.isEnabled();
     if (!enabled) {
-      debugPrint(
-        '[SimpleInsidePunchRecorder] commute_true_false OFF(기기 설정) → 업데이트 스킵',
-      );
+      debugPrint('[SimpleInsidePunchRecorder] commute_true_false OFF(기기 설정) → 업데이트 스킵');
       return;
     }
 
@@ -158,9 +135,7 @@ class _SingleInsidePunchRecorderSectionState
             final stopped = await FlutterForegroundTask.stopService();
             if (stopped != true && context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('포그라운드 서비스 중지 실패(플러그인 반환값 false)'),
-                ),
+                const SnackBar(content: Text('포그라운드 서비스 중지 실패(플러그인 반환값 false)')),
               );
             }
           } catch (e) {
@@ -186,6 +161,28 @@ class _SingleInsidePunchRecorderSectionState
     }
   }
 
+  Color _accentForType(ColorScheme cs, AttBrkModeType type) {
+    switch (type) {
+      case AttBrkModeType.workIn:
+        return cs.primary;
+      case AttBrkModeType.breakTime:
+        return cs.tertiary;
+      case AttBrkModeType.workOut:
+        return cs.error;
+    }
+  }
+
+  IconData _iconForType(AttBrkModeType type) {
+    switch (type) {
+      case AttBrkModeType.workIn:
+        return Icons.login;
+      case AttBrkModeType.breakTime:
+        return Icons.free_breakfast;
+      case AttBrkModeType.workOut:
+        return Icons.logout;
+    }
+  }
+
   Future<void> _punch(AttBrkModeType type) async {
     if (_loading) return;
 
@@ -199,7 +196,6 @@ class _SingleInsidePunchRecorderSectionState
       return;
     }
 
-    // ✅ 출근/퇴근 시 Duration Blocking Dialog 분리 적용
     if (type == AttBrkModeType.workIn) {
       final proceed = await showWorkStartDurationBlockingDialog(
         context,
@@ -231,29 +227,23 @@ class _SingleInsidePunchRecorderSectionState
       now.microsecond,
     );
 
-    // 1) SQLite 저장
     await AttBrkRepository.instance.insertEvent(
       dateTime: targetDateTime,
       type: type,
     );
 
-    // 2) 피드백 UI
     await showSinglePunchCardFeedback(
       context,
       type: type,
       dateTime: targetDateTime,
     );
 
-    // 3) ✅ 출근(workIn)일 때만 commute_true_false에 출근시각 기록
-    //    ✅ 퇴근(workOut)은 이 컬렉션과 무관: 호출 금지
     if (type == AttBrkModeType.workIn) {
       await _recordClockInAtToCommuteTrueFalse(targetDateTime);
     }
 
-    // 4) 카드 갱신
     await _loadForDate(_selectedDate);
 
-    // 5) 퇴근 시 앱 종료
     if (type == AttBrkModeType.workOut) {
       await _exitAppAfterClockOut(context);
     }
@@ -261,21 +251,23 @@ class _SingleInsidePunchRecorderSectionState
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     final monthStr = DateFormat('yyyy.MM').format(_selectedDate);
     final dateStr = DateFormat('MM.dd').format(_selectedDate);
-
-    final textTheme = Theme.of(context).textTheme;
 
     final bool canPunchWorkIn = true;
     final bool canPunchBreak = _hasWorkIn;
     final bool canPunchWorkOut = _hasWorkIn && _hasBreak;
 
     return Card(
-      elevation: 2,
-      color: Colors.white,
+      elevation: 1,
+      color: cs.surfaceContainerLow,
+      surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: _Palette.light.withOpacity(.45)),
+        side: BorderSide(color: cs.outlineVariant.withOpacity(.8)),
       ),
       margin: const EdgeInsets.symmetric(vertical: 12),
       child: Padding(
@@ -285,18 +277,13 @@ class _SingleInsidePunchRecorderSectionState
           children: [
             Row(
               children: [
-                Icon(
-                  Icons.access_time,
-                  size: 16,
-                  color: _Palette.dark.withOpacity(.8),
-                ),
+                Icon(Icons.access_time, size: 16, color: cs.onSurfaceVariant.withOpacity(.9)),
                 const SizedBox(width: 4),
                 Text(
                   '출퇴근 기록기',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: _Palette.dark.withOpacity(.85),
-                    fontWeight: FontWeight.w700,
+                  style: textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: cs.onSurface,
                   ),
                 ),
                 const Spacer(),
@@ -304,25 +291,17 @@ class _SingleInsidePunchRecorderSectionState
                   borderRadius: BorderRadius.circular(999),
                   onTap: _pickDate,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          Icons.calendar_today_rounded,
-                          size: 14,
-                          color: _Palette.dark.withOpacity(.8),
-                        ),
+                        Icon(Icons.calendar_today_rounded, size: 14, color: cs.onSurfaceVariant),
                         const SizedBox(width: 4),
                         Text(
                           '$monthStr · $dateStr',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: _Palette.dark.withOpacity(.7),
-                            fontWeight: FontWeight.w500,
+                          style: textTheme.labelMedium?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
@@ -334,20 +313,17 @@ class _SingleInsidePunchRecorderSectionState
             const SizedBox(height: 4),
             Text(
               '선택한 날짜($dateStr) 기준으로 출근 · 휴게 · 퇴근을 순서대로 펀칭하세요.',
-              style: TextStyle(
-                fontSize: 11,
-                color: _Palette.dark.withOpacity(.6),
-              ),
+              style: textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
             ),
             const SizedBox(height: 12),
             if (_loading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Center(
                   child: SizedBox(
                     height: 20,
                     width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
                   ),
                 ),
               )
@@ -356,17 +332,14 @@ class _SingleInsidePunchRecorderSectionState
                 children: [
                   Container(
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF7FBFA),
+                      color: cs.surfaceContainerHigh,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: _Palette.light.withOpacity(.6),
+                        color: cs.outlineVariant.withOpacity(.8),
                         width: 0.8,
                       ),
                     ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 10,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                     child: Row(
                       children: [
                         Expanded(
@@ -376,6 +349,8 @@ class _SingleInsidePunchRecorderSectionState
                             time: _workInTime,
                             enabled: canPunchWorkIn,
                             onTap: () => _punch(AttBrkModeType.workIn),
+                            accent: _accentForType(cs, AttBrkModeType.workIn),
+                            icon: _iconForType(AttBrkModeType.workIn),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -385,8 +360,9 @@ class _SingleInsidePunchRecorderSectionState
                             type: AttBrkModeType.breakTime,
                             time: _breakTime,
                             enabled: canPunchBreak,
-                            onTap: () =>
-                                _punch(AttBrkModeType.breakTime),
+                            onTap: () => _punch(AttBrkModeType.breakTime),
+                            accent: _accentForType(cs, AttBrkModeType.breakTime),
+                            icon: _iconForType(AttBrkModeType.breakTime),
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -396,8 +372,9 @@ class _SingleInsidePunchRecorderSectionState
                             type: AttBrkModeType.workOut,
                             time: _workOutTime,
                             enabled: canPunchWorkOut,
-                            onTap: () =>
-                                _punch(AttBrkModeType.workOut),
+                            onTap: () => _punch(AttBrkModeType.workOut),
+                            accent: _accentForType(cs, AttBrkModeType.workOut),
+                            icon: _iconForType(AttBrkModeType.workOut),
                           ),
                         ),
                       ],
@@ -408,9 +385,7 @@ class _SingleInsidePunchRecorderSectionState
                     alignment: Alignment.centerRight,
                     child: Text(
                       '날짜를 선택해 과거 기록도 수정/재펀칭할 수 있습니다.',
-                      style: textTheme.labelSmall?.copyWith(
-                        color: _Palette.dark.withOpacity(.55),
-                      ),
+                      style: textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant),
                     ),
                   ),
                 ],
@@ -429,46 +404,30 @@ class _PunchSlot extends StatelessWidget {
   final bool enabled;
   final VoidCallback onTap;
 
+  final Color accent;
+  final IconData icon;
+
   const _PunchSlot({
     required this.label,
     required this.type,
     required this.time,
     required this.enabled,
     required this.onTap,
+    required this.accent,
+    required this.icon,
   });
-
-  Color get _accent {
-    switch (type) {
-      case AttBrkModeType.workIn:
-        return const Color(0xFF4F9A94);
-      case AttBrkModeType.breakTime:
-        return const Color(0xFFF2A93B);
-      case AttBrkModeType.workOut:
-        return const Color(0xFFEF6C53);
-    }
-  }
-
-  IconData get _icon {
-    switch (type) {
-      case AttBrkModeType.workIn:
-        return Icons.login;
-      case AttBrkModeType.breakTime:
-        return Icons.free_breakfast;
-      case AttBrkModeType.workOut:
-        return Icons.logout;
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+
     final bool punched = time != null && time!.isNotEmpty;
 
-    final borderColor = punched
-        ? _accent.withOpacity(0.9)
-        : _Palette.light.withOpacity(enabled ? .7 : .35);
+    final borderColor =
+    punched ? accent.withOpacity(0.95) : cs.outlineVariant.withOpacity(enabled ? .85 : .45);
 
-    final bgColor = punched ? _accent.withOpacity(0.07) : Colors.white;
+    final bgColor = punched ? accent.withOpacity(0.10) : cs.surface;
 
     final content = Ink(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
@@ -477,7 +436,7 @@ class _PunchSlot extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: borderColor,
-          width: punched ? 1.1 : 0.8,
+          width: punched ? 1.1 : 0.9,
         ),
       ),
       child: Column(
@@ -486,11 +445,9 @@ class _PunchSlot extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                _icon,
+                icon,
                 size: 14,
-                color: enabled
-                    ? _accent.withOpacity(0.9)
-                    : _Palette.dark.withOpacity(0.3),
+                color: enabled ? accent.withOpacity(0.95) : cs.onSurfaceVariant.withOpacity(0.35),
               ),
               const SizedBox(width: 4),
               Text(
@@ -498,9 +455,7 @@ class _PunchSlot extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
-                  color: enabled
-                      ? _accent.withOpacity(0.9)
-                      : _Palette.dark.withOpacity(0.3),
+                  color: enabled ? accent.withOpacity(0.95) : cs.onSurfaceVariant.withOpacity(0.35),
                 ),
               ),
             ],
@@ -509,17 +464,15 @@ class _PunchSlot extends StatelessWidget {
           Icon(
             punched ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
             size: 18,
-            color: punched
-                ? _accent.withOpacity(0.95)
-                : _Palette.light.withOpacity(enabled ? .9 : .4),
+            color: punched ? accent.withOpacity(0.95) : cs.outlineVariant.withOpacity(enabled ? .95 : .5),
           ),
           const SizedBox(height: 2),
           Text(
             punched ? '펀칭 완료' : '미펀칭',
             style: textTheme.labelSmall?.copyWith(
               fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: punched ? const Color(0xFF2E2720) : const Color(0xFF8C8680),
+              fontWeight: FontWeight.w700,
+              color: punched ? cs.onSurface : cs.onSurfaceVariant,
             ),
           ),
         ],

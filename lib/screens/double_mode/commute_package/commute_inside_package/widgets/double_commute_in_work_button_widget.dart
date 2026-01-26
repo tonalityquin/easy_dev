@@ -19,7 +19,6 @@ class DoubleCommuteInWorkButtonWidget extends StatelessWidget {
     required this.onLoadingChanged,
   });
 
-  // ✅ 공통 Trace 기록 헬퍼
   void _trace(BuildContext context, String name, {Map<String, dynamic>? meta}) {
     DebugActionRecorder.instance.recordAction(
       name,
@@ -30,9 +29,15 @@ class DoubleCommuteInWorkButtonWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final userState = context.watch<UserState>();
     final isWorking = userState.isWorking;
     final label = isWorking ? '출근 중' : '출근하기';
+
+    final bg = isWorking ? cs.surfaceContainerLow : cs.primary;
+    final fg = isWorking ? cs.onSurfaceVariant : cs.onPrimary;
+    final border = isWorking ? cs.outlineVariant : cs.primary;
 
     return ElevatedButton.icon(
       icon: const Icon(Icons.access_time),
@@ -45,19 +50,19 @@ class DoubleCommuteInWorkButtonWidget extends StatelessWidget {
         ),
       ),
       style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: bg,
+        foregroundColor: fg,
         minimumSize: const Size.fromHeight(55),
         padding: EdgeInsets.zero,
-        side: const BorderSide(color: Colors.grey, width: 1.0),
+        side: BorderSide(color: border, width: 1.0),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
         ),
+        elevation: 0,
       ),
       onPressed: isWorking
-          ? null // 이미 출근 상태일 경우 버튼 비활성화
+          ? null
           : () async {
-        // ✅ 버튼 탭 Trace 기록 (핸들러 진입 즉시)
         _trace(
           context,
           '출근하기 버튼',
@@ -71,14 +76,12 @@ class DoubleCommuteInWorkButtonWidget extends StatelessWidget {
         bool loadingTurnedOn = false;
 
         try {
-          // 1) 출근 시작 전에 5초 카운트다운 + 취소 가능한 다이얼로그
           final proceed = await showWorkStartDurationBlockingDialog(
             context,
             message: '출근을 펀칭하면 근무가 시작됩니다.\n약 5초 정도 소요됩니다.',
             duration: const Duration(seconds: 5),
           );
 
-          // ✅ 다이얼로그 결과 기록 (취소/진행)
           _trace(
             context,
             '출근 다이얼로그 결과',
@@ -90,9 +93,7 @@ class DoubleCommuteInWorkButtonWidget extends StatelessWidget {
             },
           );
 
-          // 취소 또는 false 반환 시, 실제 출근 로직은 수행하지 않음
           if (!proceed) {
-            // ✅ 취소 종료 기록(선택적)
             _trace(
               context,
               '출근 처리 종료',
@@ -107,7 +108,6 @@ class DoubleCommuteInWorkButtonWidget extends StatelessWidget {
 
           if (!context.mounted) return;
 
-          // 2) 실제 출근 처리 로직 실행 구간에서만 상위 로딩 오버레이 표시
           onLoadingChanged(true);
           loadingTurnedOn = true;
 
@@ -118,7 +118,6 @@ class DoubleCommuteInWorkButtonWidget extends StatelessWidget {
 
           if (!context.mounted) return;
 
-          // ✅ 출근 처리 결과 기록 (라우팅 목적지 포함)
           _trace(
             context,
             '출근 처리 결과',
@@ -129,7 +128,6 @@ class DoubleCommuteInWorkButtonWidget extends StatelessWidget {
             },
           );
 
-          // 3) 출근 처리 결과에 따른 라우팅
           switch (dest) {
             case DoubleCommuteDestination.headquarter:
               _trace(
@@ -166,7 +164,6 @@ class DoubleCommuteInWorkButtonWidget extends StatelessWidget {
               break;
 
             case DoubleCommuteDestination.none:
-            // ✅ 라우팅 없음 기록(선택적)
               _trace(
                 context,
                 '출근 라우팅',
@@ -176,11 +173,9 @@ class DoubleCommuteInWorkButtonWidget extends StatelessWidget {
                   'dest': 'none',
                 },
               );
-              // 아무 라우팅도 하지 않음
               break;
           }
         } catch (e) {
-          // ✅ 예외 발생 기록(선택적)
           _trace(
             context,
             '출근 처리 오류',
@@ -192,12 +187,9 @@ class DoubleCommuteInWorkButtonWidget extends StatelessWidget {
           );
           rethrow;
         } finally {
-          // 안전하게 로딩 상태 해제
           if (context.mounted && loadingTurnedOn) {
             onLoadingChanged(false);
           } else if (context.mounted && !loadingTurnedOn) {
-            // 기존 코드의 "항상 false" 정책을 유지하려면 아래 줄을 살릴 수 있으나,
-            // 실제로 로딩을 켠 경우에만 끄는 것이 더 정확합니다.
             onLoadingChanged(false);
           }
         }

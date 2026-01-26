@@ -68,9 +68,7 @@ Future<void> _logApiError({
       level: 'error',
       tags: tags,
     );
-  } catch (_) {
-    // 로깅 실패는 UX에 영향 없도록 무시
-  }
+  } catch (_) {}
 }
 
 Future<sheets.SheetsApi> _sheetsApi() async {
@@ -116,7 +114,6 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
     super.initState();
     controller.initialize(context);
 
-    // ✅ 공지 스프레드시트 ID 부트스트랩 + 로드
     _bootstrapNoticeSheetId();
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
@@ -153,7 +150,6 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
       if (saved.isEmpty) return;
       await _loadNotice();
     } catch (e) {
-      // 부트스트랩 실패는 공지 영역에만 영향
       await _logApiError(
         tag: 'SingleInsideScreen._bootstrapNoticeSheetId',
         message: '공지 SpreadsheetId 부트스트랩 실패(SharedPreferences)',
@@ -183,13 +179,10 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
 
     try {
       final api = await _sheetsApi();
-
-      // ✅ noti 시트에서 읽음
       final resp = await api.spreadsheets.values.get(id, _kNoticeSpreadsheetRange);
 
       final values = resp.values ?? const [];
 
-      // rows -> text lines
       final lines = <String>[];
       for (final row in values) {
         final rowStrings = row.map((c) => (c ?? '').toString().trim()).toList();
@@ -229,15 +222,18 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
   }
 
   Widget _buildNoticeSection(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+
     final hasId = _noticeSheetId.trim().isNotEmpty;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surfaceContainerLow,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black.withOpacity(.08)),
+        border: Border.all(color: cs.outlineVariant.withOpacity(.7)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -248,22 +244,22 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(.06),
+                  color: cs.surfaceContainerHighest.withOpacity(.7),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.campaign_outlined,
                   size: 18,
-                  color: Colors.black87,
+                  color: cs.onSurface,
                 ),
               ),
               const SizedBox(width: 10),
-              const Expanded(
+              Expanded(
                 child: Text(
                   '공지',
-                  style: TextStyle(
+                  style: text.titleSmall?.copyWith(
                     fontWeight: FontWeight.w800,
-                    color: Colors.black87,
+                    color: cs.onSurface,
                   ),
                 ),
               ),
@@ -271,10 +267,10 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
                 tooltip: '새로고침',
                 onPressed: hasId ? _loadNotice : null,
                 icon: _noticeLoading
-                    ? const SizedBox(
+                    ? SizedBox(
                   width: 18,
                   height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary),
                 )
                     : const Icon(Icons.refresh_rounded),
               ),
@@ -282,9 +278,9 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
           ),
           const SizedBox(height: 8),
           if (!hasId)
-            const Text(
+            Text(
               '공지 스프레드시트 ID가 설정되어 있지 않습니다.\n(설정 화면에서 notice_spreadsheet_id_v1 저장 후 적용됩니다.)',
-              style: TextStyle(fontSize: 13, color: Colors.black87),
+              style: text.bodyMedium?.copyWith(fontSize: 13, color: cs.onSurface),
             )
           else if (_noticeError != null)
             Column(
@@ -292,7 +288,7 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
               children: [
                 Text(
                   _noticeError!,
-                  style: const TextStyle(fontSize: 13, color: Colors.redAccent),
+                  style: text.bodyMedium?.copyWith(fontSize: 13, color: cs.error),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
@@ -303,14 +299,14 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
               ],
             )
           else if (_noticeLoading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 10),
-                child: Center(child: CircularProgressIndicator()),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Center(child: CircularProgressIndicator(color: cs.primary)),
               )
             else if (_noticeLines.isEmpty)
-                const Text(
+                Text(
                   '공지 내용이 없습니다.',
-                  style: TextStyle(fontSize: 13, color: Colors.black87),
+                  style: text.bodyMedium?.copyWith(fontSize: 13, color: cs.onSurface),
                 )
               else
                 Column(
@@ -325,9 +321,9 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
                           controller: _noticeScroll,
                           child: Text(
                             _noticeLines.map((e) => '• $e').join('\n'),
-                            style: const TextStyle(
+                            style: text.bodyMedium?.copyWith(
                               fontSize: 13,
-                              color: Colors.black87,
+                              color: cs.onSurface,
                               height: 1.35,
                             ),
                           ),
@@ -379,15 +375,16 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
   }
 
   Widget _buildScreenTag(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final base = Theme.of(context).textTheme.labelSmall;
+
     final style = (base ??
         const TextStyle(
           fontSize: 11,
-          color: Colors.black54,
           fontWeight: FontWeight.w600,
         ))
         .copyWith(
-      color: Colors.black54,
+      color: cs.onSurfaceVariant.withOpacity(0.80),
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
     );
@@ -408,11 +405,9 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
     if (widget.mode != null) return widget.mode!;
 
     String role = '';
-
     final user = userState.user;
     if (user != null) {
-      final rawRole = user.role;
-      role = rawRole.trim();
+      role = user.role.trim();
     }
 
     debugPrint('[SingleInsideScreen] resolved role="$role"');
@@ -426,10 +421,11 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return PopScope(
       canPop: false,
       child: Scaffold(
-        // ✅ 하단 고정 채팅 버튼(누르기 쉬운 위치)
         bottomNavigationBar: const _SingleInsideChatDock(),
         body: Consumer<UserState>(
           builder: (context, userState, _) {
@@ -437,13 +433,12 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
 
             final user = userState.user;
             if (user == null) {
-              return const Center(child: CircularProgressIndicator());
+              return Center(child: CircularProgressIndicator(color: cs.primary));
             }
 
             final String userId = user.id;
             final String userName = user.name;
 
-            // 🔹 여기서 area = 현재 근무 지역, division = 회사/법인(또는 본사명)으로 사용
             final String area = userState.currentArea;
             final String division = userState.division;
 
@@ -465,11 +460,9 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
                             const SingleInsideHeaderWidgetSection(),
                             const SizedBox(height: 12),
 
-                            // ✅ (추가) PunchRecorder 상단 공지
                             _buildNoticeSection(context),
                             const SizedBox(height: 12),
 
-                            // 🔹 간편 모드 출퇴근 카드에 회사/지역/유저 정보 전달
                             SingleInsidePunchRecorderSection(
                               userId: userId,
                               userName: userName,
@@ -488,13 +481,9 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
                             Center(
                               child: SizedBox(
                                 height: 80,
-                                child: Image.asset(
-                                  'assets/images/pelican.png',
-                                ),
+                                child: Image.asset('assets/images/pelican.png'),
                               ),
                             ),
-
-                            // ✅ 하단 고정 바와 겹치지 않도록 여유
                             const SizedBox(height: 24),
                           ],
                         ),
@@ -510,14 +499,14 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
                           _handleLogout(context);
                         }
                       },
-                      itemBuilder: (context) => const [
+                      itemBuilder: (context) => [
                         PopupMenuItem(
                           value: 'logout',
                           child: Row(
                             children: [
-                              Icon(Icons.logout, color: Colors.redAccent),
-                              SizedBox(width: 8),
-                              Text('로그아웃'),
+                              Icon(Icons.logout, color: cs.error),
+                              const SizedBox(width: 8),
+                              const Text('로그아웃'),
                             ],
                           ),
                         ),
@@ -535,7 +524,6 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
   }
 }
 
-/// ✅ SimpleInsideScreen 전용: 하단 고정 채팅 도크
 class _SingleInsideChatDock extends StatelessWidget {
   const _SingleInsideChatDock();
 

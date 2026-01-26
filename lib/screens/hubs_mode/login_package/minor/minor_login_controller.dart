@@ -116,13 +116,11 @@ class MinorLoginController {
       final user = await userRepository.getUserByPhone(phone);
 
       if (context.mounted) {
-        debugPrint(
-          "[LOGIN-MINOR][${_ts()}] 입력값 name=\"$name\" phone=\"$phone\" pwLen=${password.length}",
-        );
+        debugPrint('[LOGIN-MINOR][${_ts()}] 입력값 name="$name" phone="$phone" pwLen=${password.length}');
         if (user != null) {
-          debugPrint("[LOGIN-MINOR][${_ts()}] DB 유저: name=${user.name}, phone=${user.phone}");
+          debugPrint('[LOGIN-MINOR][${_ts()}] DB 유저: name=${user.name}, phone=${user.phone}');
         } else {
-          debugPrint("[LOGIN-MINOR][${_ts()}] DB에서 사용자 정보 없음");
+          debugPrint('[LOGIN-MINOR][${_ts()}] DB에서 사용자 정보 없음');
         }
       }
 
@@ -166,9 +164,7 @@ class MinorLoginController {
 
         await TtsOwnership.setOwner(TtsOwner.foreground);
 
-        debugPrint(
-          "[LOGIN-MINOR][${_ts()}] SharedPreferences 저장 완료: phone=${prefs.getString('phone')}",
-        );
+        debugPrint('[LOGIN-MINOR][${_ts()}] SharedPreferences 저장 완료: phone=${prefs.getString('phone')}');
 
         final areaToSet = updatedUser.areas.firstOrNull ?? '';
         await areaState.updateArea(areaToSet);
@@ -243,11 +239,14 @@ class MinorLoginController {
     });
   }
 
+  /// ✅ 컨셉 테마/다크모드 반영: 하드코딩 제거, ColorScheme 기반
   InputDecoration inputDecoration({
     required String label,
     IconData? icon,
     Widget? suffixIcon,
   }) {
+    final cs = Theme.of(context).colorScheme;
+
     return InputDecoration(
       labelText: label,
       hintText: label,
@@ -255,9 +254,33 @@ class MinorLoginController {
       suffixIcon: suffixIcon,
       contentPadding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
       filled: true,
-      fillColor: Colors.grey.shade100,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+      fillColor: cs.surfaceContainerLow,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.outlineVariant),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.outlineVariant),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.primary, width: 1.6),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.error),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: cs.error, width: 1.6),
+      ),
+      prefixIconColor: MaterialStateColor.resolveWith(
+            (states) => states.contains(MaterialState.focused) ? cs.primary : cs.onSurfaceVariant,
+      ),
+      suffixIconColor: MaterialStateColor.resolveWith(
+            (states) => states.contains(MaterialState.focused) ? cs.primary : cs.onSurfaceVariant,
+      ),
     );
   }
 

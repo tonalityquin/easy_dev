@@ -32,17 +32,14 @@ class _MinorCommuteInScreenState extends State<MinorCommuteInScreen> {
 
       final userState = context.read<UserState>();
 
-      // 1) 오늘 출근 여부 캐시 보장 (Firestore read는 UserState 내부에서 1일 1회)
       await userState.ensureTodayClockInStatus();
       if (!mounted) return;
 
-      // 2) isWorking=true인데 오늘 출근 로그가 없다면 → stale 상태로 보고 자동 리셋
       if (userState.isWorking && !userState.hasClockInToday) {
         await _resetStaleWorkingState(userState);
       }
       if (!mounted) return;
 
-      // 3) 최종 상태 기준으로만 자동 라우팅
       if (userState.isWorking) {
         controller.redirectIfWorking(context, userState);
       }
@@ -67,15 +64,16 @@ class _MinorCommuteInScreenState extends State<MinorCommuteInScreen> {
   }
 
   Widget _buildScreenTag(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final base = Theme.of(context).textTheme.labelSmall;
+
     final style = (base ??
         const TextStyle(
           fontSize: 11,
-          color: Colors.black54,
           fontWeight: FontWeight.w600,
         ))
         .copyWith(
-      color: Colors.black54,
+      color: cs.onSurfaceVariant.withOpacity(0.80),
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
     );
@@ -94,6 +92,8 @@ class _MinorCommuteInScreenState extends State<MinorCommuteInScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return PopScope(
       canPop: false,
       child: Scaffold(
@@ -148,14 +148,14 @@ class _MinorCommuteInScreenState extends State<MinorCommuteInScreen> {
                           _handleLogout(context);
                         }
                       },
-                      itemBuilder: (context) => const [
+                      itemBuilder: (context) => [
                         PopupMenuItem(
                           value: 'logout',
                           child: Row(
                             children: [
-                              Icon(Icons.logout, color: Colors.redAccent),
-                              SizedBox(width: 8),
-                              Text('로그아웃'),
+                              Icon(Icons.logout, color: cs.error),
+                              const SizedBox(width: 8),
+                              const Text('로그아웃'),
                             ],
                           ),
                         ),
@@ -169,9 +169,9 @@ class _MinorCommuteInScreenState extends State<MinorCommuteInScreen> {
                       child: AbsorbPointer(
                         absorbing: true,
                         child: Container(
-                          color: Colors.black.withOpacity(0.2),
-                          child: const Center(
-                            child: CircularProgressIndicator(),
+                          color: cs.scrim.withOpacity(0.35),
+                          child: Center(
+                            child: CircularProgressIndicator(color: cs.primary),
                           ),
                         ),
                       ),
