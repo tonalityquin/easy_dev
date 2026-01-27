@@ -1,13 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
-/// Deep Blue 팔레트(서비스 카드 계열과 통일)
-class _Palette {
-  static const base = Color(0xFF0D47A1); // primary
-  static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
-  static const light = Color(0xFF5472D3); // 톤 변형/보더
-}
-
 /// 5초 동안 유지되는 취소 가능 blocking dialog
 /// - [duration] 동안 카운트다운 후 자동으로 true 반환
 /// - '취소' 버튼 누르면 false 반환
@@ -87,7 +80,7 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
         side: BorderSide(
-          color: _Palette.light.withOpacity(0.25),
+          color: cs.outlineVariant.withOpacity(0.85),
         ),
       ),
       child: ConstrainedBox(
@@ -100,9 +93,9 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center, // 중앙 정렬
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // 상단 아이콘 + 로딩 링 (Deep Blue 톤)
+              // 상단 아이콘 + 로딩 링 (전역 테마 primary 기반)
               Stack(
                 alignment: Alignment.center,
                 children: [
@@ -111,19 +104,19 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
                     height: 64,
                     child: CircularProgressIndicator(
                       strokeWidth: 3,
-                      color: _Palette.base,
+                      valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
                     ),
                   ),
                   Container(
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: _Palette.base.withOpacity(0.08),
+                      color: cs.primary.withOpacity(0.10),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.schedule,
-                      color: _Palette.base,
+                      color: cs.primary,
                     ),
                   ),
                 ],
@@ -141,39 +134,39 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
               ),
               const SizedBox(height: 12),
 
-              // 남은 시간 표시 (필칩 스타일)
+              // 남은 시간 표시 (pill)
               Container(
                 padding: const EdgeInsets.symmetric(
                   vertical: 6,
                   horizontal: 12,
                 ),
                 decoration: BoxDecoration(
-                  color: _Palette.light.withOpacity(0.08),
+                  color: cs.surfaceContainerLow,
                   borderRadius: BorderRadius.circular(999),
                   border: Border.all(
-                    color: _Palette.light.withOpacity(0.4),
+                    color: cs.outlineVariant.withOpacity(0.85),
                   ),
                 ),
                 child: Text(
                   '자동 진행까지 약 $_remainingSeconds초',
                   textAlign: TextAlign.center,
                   style: textTheme.bodySmall?.copyWith(
-                    color: _Palette.dark.withOpacity(0.9),
-                    fontWeight: FontWeight.w500,
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
 
               const SizedBox(height: 16),
 
-              // 액션 버튼 (가운데 정렬)
+              // 액션 버튼
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   TextButton(
                     onPressed: _handleCancel,
                     style: TextButton.styleFrom(
-                      foregroundColor: _Palette.dark,
+                      foregroundColor: cs.onSurface,
                       padding: const EdgeInsets.symmetric(
                         horizontal: 20,
                         vertical: 10,
@@ -181,7 +174,7 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(999),
                         side: BorderSide(
-                          color: _Palette.light.withOpacity(0.6),
+                          color: cs.outlineVariant.withOpacity(0.85),
                         ),
                       ),
                     ),

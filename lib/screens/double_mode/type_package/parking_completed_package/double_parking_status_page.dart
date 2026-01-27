@@ -14,8 +14,6 @@ import '../../../../utils/google_auth_session.dart';
 import '../../../../states/location/location_state.dart';
 import '../../../../states/area/area_state.dart';
 
-// import '../../../../utils/usage_reporter.dart';;
-
 import '../../../common_package/memo_package/dash_memo.dart';
 import 'double_parking_reminder_contents.dart';
 
@@ -52,9 +50,7 @@ Future<void> _logApiError({
       level: 'error',
       tags: tags,
     );
-  } catch (_) {
-    // 로깅 실패는 UX에 영향 없도록 무시
-  }
+  } catch (_) {}
 }
 
 class DoubleParkingStatusPage extends StatefulWidget {
@@ -67,19 +63,13 @@ class DoubleParkingStatusPage extends StatefulWidget {
 class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  int _occupiedCount = 0; // 영역 전체의 주차 완료 총합
-  bool _isCountLoading = true; // 총합 집계 로딩 상태
+  int _occupiedCount = 0;
+  bool _isCountLoading = true;
 
-  // 🔒 UI 표시 시점에만 1회 집계하도록 제어
   bool _didCountRun = false;
-
-  // Area 변경 감지용
   String? _lastArea;
-
-  // 에러 상태 플래그
   bool _hadError = false;
 
-  // ✅ 상단 공지(관리자 공지) 상태
   String _noticeMessage = '';
   bool _isNoticeLoading = true;
   bool _didNoticeRun = false;
@@ -88,7 +78,6 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
   @override
   void initState() {
     super.initState();
-    // 첫 프레임 이후에 라우트 가시성 확인 → 표시 중일 때만 집계/공지 호출
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _maybeRunCount();
       _maybeRunNotice();
@@ -98,7 +87,6 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 라우트 바인딩이 늦게 잡히는 경우를 대비해 한 번 더 시도
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _maybeRunCount();
       _maybeRunNotice();
@@ -107,7 +95,6 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
 
   void _maybeRunCount() {
     if (_didCountRun) return;
-    // 현재 라우트가 실제로 화면에 표시될 때만 실행
     final route = ModalRoute.of(context);
     final isVisible = route == null ? true : (route.isCurrent || route.isActive);
     if (!isVisible) return;
@@ -117,7 +104,6 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
 
   void _maybeRunNotice() {
     if (_didNoticeRun) return;
-    // 현재 라우트가 실제로 화면에 표시될 때만 실행
     final route = ModalRoute.of(context);
     final isVisible = route == null ? true : (route.isCurrent || route.isActive);
     if (!isVisible) return;
@@ -130,7 +116,7 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
 
     final area = context.read<AreaState>().currentArea.trim();
     final division = context.read<AreaState>().currentDivision.trim();
-    _lastArea = area; // 최신 area 기억
+    _lastArea = area;
 
     setState(() {
       _isCountLoading = true;
@@ -147,17 +133,6 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
       final snap = await aggQuery.get();
       final cnt = (snap.count ?? 0);
 
-      try {
-        /*await UsageReporter.instance.report(
-          area: area,
-          action: 'read', // 읽기
-          n: 1, // ← 고정(집계 1회당 read 1회)
-          source: 'parkingStatus.count.query(parking_completed).aggregate',
-        );*/
-      } catch (_) {
-        // 계측 실패는 UX에 영향 없음
-      }
-
       if (!mounted) return;
       setState(() {
         _occupiedCount = cnt;
@@ -165,7 +140,6 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
         _hadError = false;
       });
     } catch (e) {
-      // ✅ DebugApiLogger 로깅
       await _logApiError(
         tag: 'DoubleParkingStatusPage._runAggregateCount',
         message: 'Firestore aggregate count 실패(parking_completed)',
@@ -179,20 +153,11 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
         tags: const <String>[_tParking, _tParkingStatus, _tFirestore, _tFirestoreAgg],
       );
 
-      try {
-        /*await UsageReporter.instance.report(
-          area: context.read<AreaState>().currentArea.trim(),
-          action: 'read',
-          n: 1, // ← 실패여도 1회 시도로 고정
-          source: 'parkingStatus.count.query(parking_completed).aggregate.error',
-        );*/
-      } catch (_) {}
-
       if (!mounted) return;
       setState(() {
         _occupiedCount = 0;
         _isCountLoading = false;
-        _hadError = true; // 에러 플래그 ON
+        _hadError = true;
       });
     }
   }
@@ -247,6 +212,8 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
       _maybeRunNotice();
     });
 
+    final cs = Theme.of(context).colorScheme;
+
     final currentArea = context.select<AreaState, String>((s) => s.currentArea.trim());
     if (_lastArea != null && _lastArea != currentArea) {
       _didCountRun = false;
@@ -261,11 +228,15 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: cs.surface,
       body: Consumer<LocationState>(
         builder: (context, locationState, _) {
           if (locationState.isLoading || _isCountLoading) {
-            return const Center(child: CircularProgressIndicator());
+            return Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+              ),
+            );
           }
 
           final totalCapacity =
@@ -282,17 +253,21 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.warning_amber, size: 40, color: Colors.redAccent),
+                    Icon(Icons.warning_amber, size: 40, color: cs.error),
                     const SizedBox(height: 12),
-                    const Text(
+                    Text(
                       '현황 집계 중 오류가 발생했습니다.',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: cs.onSurface,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
                     Text(
                       '영역: $currentArea',
-                      style: const TextStyle(color: Colors.black54),
+                      style: TextStyle(color: cs.onSurfaceVariant),
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
@@ -302,6 +277,12 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
                       },
                       icon: const Icon(Icons.refresh),
                       label: const Text('다시 집계'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: cs.primary,
+                        foregroundColor: cs.onPrimary,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
                     ),
                   ],
                 ),
@@ -310,6 +291,7 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
           }
 
           // ------ 상단 영역: "디자인/텍스트 수정 금지" 요청 반영 ------
+          // ✅ 문구/레이아웃은 유지. 색상만 ColorScheme로 치환.
           return ListView(
             padding: const EdgeInsets.all(20),
             children: [
@@ -338,9 +320,9 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
               const SizedBox(height: 8),
               LinearProgressIndicator(
                 value: usageRatio,
-                backgroundColor: Colors.grey[300],
+                backgroundColor: cs.outlineVariant.withOpacity(0.6),
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  usageRatio >= 0.8 ? Colors.red : Colors.blueAccent,
+                  usageRatio >= 0.8 ? cs.error : cs.primary,
                 ),
                 minHeight: 8,
               ),
@@ -350,7 +332,7 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
                 style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                 textAlign: TextAlign.center,
               ),
-              // ------ 상단 영역 끝 (수정 없음) ------
+              // ------ 상단 영역 끝 (레이아웃/문구 유지) ------
 
               const SizedBox(height: 24),
 
@@ -369,7 +351,7 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
   }
 }
 
-/// ✅ 상단 알림바(관리자 공지)
+/// ✅ 상단 알림바(관리자 공지) — ColorScheme 기반
 class _DoubleParkingNoticeBar extends StatelessWidget {
   final bool isLoading;
   final String message;
@@ -383,6 +365,8 @@ class _DoubleParkingNoticeBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final text = message.trim();
     if (!isLoading && text.isEmpty) {
       return const SizedBox.shrink();
@@ -394,31 +378,39 @@ class _DoubleParkingNoticeBar extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.04),
+          color: cs.surfaceContainerLow,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.black.withOpacity(0.08)),
+          border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
         ),
         child: Row(
           children: [
-            const Icon(Icons.info_outline, size: 18),
+            Icon(Icons.info_outline, size: 18, color: cs.onSurfaceVariant),
             const SizedBox(width: 10),
             Expanded(
               child: isLoading
-                  ? const Text(
+                  ? Text(
                 '공지 불러오는 중...',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurface,
+                ),
               )
                   : Text(
                 text,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurface,
+                ),
               ),
             ),
             const SizedBox(width: 8),
             InkWell(
               onTap: onRefresh,
-              child: const Padding(
-                padding: EdgeInsets.all(4),
-                child: Icon(Icons.refresh, size: 18),
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(Icons.refresh, size: 18, color: cs.onSurfaceVariant),
               ),
             ),
           ],
@@ -573,7 +565,6 @@ class DoubleParkingNoticeService {
   }
 }
 
-/// 하단에 표시되는 자동 순환 카드 뷰
 class _AutoCyclingReminderCards extends StatefulWidget {
   final String area;
 
@@ -656,6 +647,7 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final cards = parkingRemindersForArea(widget.area);
 
     return SizedBox(
@@ -676,10 +668,11 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
                   final c = cards[index];
                   return Center(
                     child: Card(
-                      color: Colors.white,
-                      elevation: 2,
+                      color: cs.surface,
+                      elevation: 0,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
                       ),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
@@ -690,13 +683,14 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.fact_check, size: 18),
+                                Icon(Icons.fact_check, size: 18, color: cs.primary),
                                 const SizedBox(width: 8),
                                 Text(
                                   c.title,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 16,
-                                    fontWeight: FontWeight.w700,
+                                    fontWeight: FontWeight.w800,
+                                    color: cs.onSurface,
                                   ),
                                   textAlign: TextAlign.center,
                                 ),
@@ -709,7 +703,7 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
                                 child: Text(
                                   t,
                                   textAlign: TextAlign.center,
-                                  style: const TextStyle(fontSize: 14),
+                                  style: TextStyle(fontSize: 14, color: cs.onSurface),
                                 ),
                               ),
                             ),
@@ -734,7 +728,7 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
                   width: active ? 10 : 6,
                   height: 6,
                   decoration: BoxDecoration(
-                    color: active ? Colors.black87 : Colors.black26,
+                    color: active ? cs.onSurface : cs.onSurfaceVariant.withOpacity(0.5),
                     borderRadius: BorderRadius.circular(3),
                   ),
                 );
@@ -747,7 +741,6 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
   }
 }
 
-// ⬇️ DashMemo 메모를 1.5초 주기로 넘기는 자동 순환 카드
 class _AutoCyclingMemoCards extends StatefulWidget {
   const _AutoCyclingMemoCards();
 
@@ -824,6 +817,8 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return SizedBox(
       height: 170,
       child: ValueListenableBuilder<List<String>>(
@@ -856,13 +851,14 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                       if (list.isEmpty) {
                         return Center(
                           child: Card(
-                            color: Colors.white,
-                            elevation: 2,
+                            color: cs.surface,
+                            elevation: 0,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
                             ),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -870,23 +866,24 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(Icons.notes_rounded, size: 18),
-                                      SizedBox(width: 8),
+                                      Icon(Icons.notes_rounded, size: 18, color: cs.primary),
+                                      const SizedBox(width: 8),
                                       Text(
                                         '메모',
                                         style: TextStyle(
                                           fontSize: 16,
-                                          fontWeight: FontWeight.w700,
+                                          fontWeight: FontWeight.w800,
+                                          color: cs.onSurface,
                                         ),
                                         textAlign: TextAlign.center,
                                       ),
                                     ],
                                   ),
-                                  SizedBox(height: 12),
+                                  const SizedBox(height: 12),
                                   Text(
                                     '저장된 메모가 없습니다.',
                                     textAlign: TextAlign.center,
-                                    style: TextStyle(fontSize: 14),
+                                    style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant),
                                   ),
                                 ],
                               ),
@@ -898,10 +895,11 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                       final (time, text) = _parseLine(list[index]);
                       return Center(
                         child: Card(
-                          color: Colors.white,
-                          elevation: 2,
+                          color: cs.surface,
+                          elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
                           ),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
@@ -911,14 +909,15 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                               children: [
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
-                                    Icon(Icons.notes_rounded, size: 18),
-                                    SizedBox(width: 8),
+                                  children: [
+                                    Icon(Icons.notes_rounded, size: 18, color: cs.primary),
+                                    const SizedBox(width: 8),
                                     Text(
                                       '메모',
                                       style: TextStyle(
                                         fontSize: 16,
-                                        fontWeight: FontWeight.w700,
+                                        fontWeight: FontWeight.w800,
+                                        color: cs.onSurface,
                                       ),
                                       textAlign: TextAlign.center,
                                     ),
@@ -931,7 +930,7 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                                     child: Text(
                                       text,
                                       textAlign: TextAlign.center,
-                                      style: const TextStyle(fontSize: 14),
+                                      style: TextStyle(fontSize: 14, color: cs.onSurface),
                                       maxLines: 3,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -940,7 +939,7 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                                   Text(
                                     time,
                                     textAlign: TextAlign.center,
-                                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                                   ),
                               ],
                             ),
@@ -963,7 +962,7 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                       width: active ? 10 : 6,
                       height: 6,
                       decoration: BoxDecoration(
-                        color: active ? Colors.black87 : Colors.black26,
+                        color: active ? cs.onSurface : cs.onSurfaceVariant.withOpacity(0.5),
                         borderRadius: BorderRadius.circular(3),
                       ),
                     );

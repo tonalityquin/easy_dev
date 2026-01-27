@@ -16,7 +16,8 @@ class DoubleModifyAnimatedParkingButton extends StatefulWidget {
   State<DoubleModifyAnimatedParkingButton> createState() => _DoubleModifyAnimatedParkingButtonState();
 }
 
-class _DoubleModifyAnimatedParkingButtonState extends State<DoubleModifyAnimatedParkingButton> with SingleTickerProviderStateMixin {
+class _DoubleModifyAnimatedParkingButtonState extends State<DoubleModifyAnimatedParkingButton>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
@@ -50,32 +51,41 @@ class _DoubleModifyAnimatedParkingButtonState extends State<DoubleModifyAnimated
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final isSelected = widget.isLocationSelected;
 
     final label = widget.buttonLabel ?? (isSelected ? '구역 수정' : '주차 구역 선택');
+
+    // ✅ 선택 전/후 톤을 테마로 분리
+    final bg = isSelected ? cs.primary.withOpacity(0.08) : cs.surfaceContainerLow;
+    final fg = isSelected ? cs.primary : cs.onSurface;
+    final border = isSelected ? cs.primary.withOpacity(0.55) : cs.outlineVariant.withOpacity(0.85);
 
     return ScaleTransition(
       scale: _scaleAnimation,
       child: ElevatedButton(
         onPressed: _handleTap,
         style: ElevatedButton.styleFrom(
-          backgroundColor: isSelected ? Colors.indigo[50] : Colors.blueGrey[50],
-          foregroundColor: isSelected ? Colors.indigo[800] : Colors.blueGrey[800],
+          backgroundColor: bg,
+          foregroundColor: fg,
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16.0),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(
-              color: isSelected ? Colors.indigo : Colors.blueGrey,
-              width: 1.5,
-            ),
+            side: BorderSide(color: border, width: 1.5),
+          ),
+        ).copyWith(
+          overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                (states) => states.contains(MaterialState.pressed)
+                ? (isSelected ? cs.primary.withOpacity(0.10) : cs.outlineVariant.withOpacity(0.12))
+                : null,
           ),
         ),
         child: Text(
           label,
           style: const TextStyle(
             fontSize: 16,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),

@@ -23,30 +23,38 @@ class DoubleModifyBillSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final billState = context.watch<BillState>();
     final isLoading = billState.isLoading;
     final generalBills = billState.generalBills;
     final regularBills = billState.regularBills;
 
-    // ✅ 버튼 삭제: 현재 selectedBillType 기준으로만 표시
     final isGeneral = selectedBillType == '변동';
     final filteredBills = isGeneral ? generalBills : regularBills;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '정산 유형',
-          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 18.0,
+            fontWeight: FontWeight.w900,
+            color: cs.onSurface,
+          ),
         ),
         const SizedBox(height: 12.0),
 
-        // ✅ 변동/고정 버튼 Row 제거
-
         if (isLoading)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+              ),
+            ),
           )
         else if (filteredBills.isEmpty)
           Padding(
@@ -54,7 +62,7 @@ class DoubleModifyBillSection extends StatelessWidget {
             child: Center(
               child: Text(
                 '${isGeneral ? '변동' : '고정'} 정산 유형이 없습니다.',
-                style: const TextStyle(color: Colors.grey),
+                style: TextStyle(color: cs.onSurfaceVariant),
               ),
             ),
           )
@@ -62,10 +70,10 @@ class DoubleModifyBillSection extends StatelessWidget {
           OutlinedButton(
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-              side: const BorderSide(color: Colors.black),
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+              backgroundColor: cs.surface,
+              foregroundColor: cs.onSurface,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
             onPressed: () {
               showModalBottomSheet(
@@ -73,15 +81,18 @@ class DoubleModifyBillSection extends StatelessWidget {
                 isScrollControlled: true,
                 backgroundColor: Colors.transparent,
                 builder: (_) {
+                  final cs2 = Theme.of(context).colorScheme;
+
                   return DraggableScrollableSheet(
                     initialChildSize: 0.5,
                     minChildSize: 0.3,
                     maxChildSize: 0.9,
                     builder: (context, scrollController) {
                       return Container(
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                        decoration: BoxDecoration(
+                          color: cs2.surface,
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                          border: Border.all(color: cs2.outlineVariant.withOpacity(0.85)),
                         ),
                         padding: const EdgeInsets.all(16),
                         child: ListView(
@@ -93,14 +104,18 @@ class DoubleModifyBillSection extends StatelessWidget {
                                 height: 4,
                                 margin: const EdgeInsets.only(bottom: 16),
                                 decoration: BoxDecoration(
-                                  color: Colors.grey,
+                                  color: cs2.outlineVariant.withOpacity(0.9),
                                   borderRadius: BorderRadius.circular(2),
                                 ),
                               ),
                             ),
                             Text(
                               '${isGeneral ? '변동' : '고정'} 정산 선택',
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                                color: cs2.onSurface,
+                              ),
                             ),
                             const SizedBox(height: 24),
 
@@ -109,10 +124,18 @@ class DoubleModifyBillSection extends StatelessWidget {
                                   ? (bill as BillModel).countType
                                   : (bill as RegularBillModel).countType;
 
+                              final selected = countType == selectedBill;
+
                               return ListTile(
-                                title: Text(countType),
-                                trailing: countType == selectedBill
-                                    ? const Icon(Icons.check, color: Colors.green)
+                                title: Text(
+                                  countType,
+                                  style: TextStyle(
+                                    color: cs2.onSurface,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                trailing: selected
+                                    ? Icon(Icons.check, color: cs2.tertiary)
                                     : null,
                                 onTap: () {
                                   Navigator.pop(context);
@@ -131,8 +154,11 @@ class DoubleModifyBillSection extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(selectedBill ?? '정산 선택'),
-                const Icon(Icons.arrow_drop_down),
+                Text(
+                  selectedBill ?? '정산 선택',
+                  style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w800),
+                ),
+                Icon(Icons.arrow_drop_down, color: cs.onSurfaceVariant),
               ],
             ),
           ),

@@ -1,5 +1,3 @@
-// lib/screens/simple_package/simple_inside_package/sections/user_statement_signature_painter.dart
-
 import 'package:flutter/material.dart';
 
 class UserStatementSignaturePainter extends CustomPainter {
@@ -10,6 +8,11 @@ class UserStatementSignaturePainter extends CustomPainter {
     required this.background,
     required this.overlayName,
     required this.overlayDateText,
+
+    // ✅ 테마 기반 색 주입(하드코딩 제거)
+    required this.guideColor,
+    required this.hintColor,
+    required this.overlayTextColor,
   });
 
   final List<Offset?> points;
@@ -19,6 +22,10 @@ class UserStatementSignaturePainter extends CustomPainter {
   final String overlayName;
   final String overlayDateText;
 
+  final Color guideColor;
+  final Color hintColor;
+  final Color overlayTextColor;
+
   @override
   void paint(Canvas canvas, Size size) {
     // 배경
@@ -27,7 +34,7 @@ class UserStatementSignaturePainter extends CustomPainter {
 
     // 가이드 라인
     final guide = Paint()
-      ..color = Colors.black12
+      ..color = guideColor
       ..strokeWidth = 1;
     canvas.drawLine(
       const Offset(8, 40),
@@ -59,10 +66,10 @@ class UserStatementSignaturePainter extends CustomPainter {
     // 아무 서명도 없을 때 안내 문구
     final hasAny = points.any((e) => e != null);
     if (!hasAny) {
-      const hint = TextSpan(
+      final hint = TextSpan(
         text: '화면 전체가 서명 영역입니다. 서명을 시작해 주세요.',
         style: TextStyle(
-          color: Colors.black38,
+          color: hintColor,
           fontSize: 14,
         ),
       );
@@ -83,8 +90,8 @@ class UserStatementSignaturePainter extends CustomPainter {
     final overlayTP = TextPainter(
       text: TextSpan(
         text: '서명자: $overlayName   서명일시: $overlayDateText',
-        style: const TextStyle(
-          color: Colors.black45,
+        style: TextStyle(
+          color: overlayTextColor,
           fontSize: 12,
         ),
       ),
@@ -104,6 +111,9 @@ class UserStatementSignaturePainter extends CustomPainter {
         old.color != color ||
         old.background != background ||
         old.overlayName != overlayName ||
-        old.overlayDateText != overlayDateText;
+        old.overlayDateText != overlayDateText ||
+        old.guideColor != guideColor ||
+        old.hintColor != hintColor ||
+        old.overlayTextColor != overlayTextColor;
   }
 }

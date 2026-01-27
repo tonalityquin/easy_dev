@@ -21,29 +21,28 @@ class DoubleDepartureCompletedBottomSheet extends StatefulWidget {
 }
 
 class _DoubleDepartureCompletedBottomSheetState extends State<DoubleDepartureCompletedBottomSheet> {
-  // 화면 식별 태그(FAQ/에러 리포트 연계용)
   static const String screenTag = 'departure completed';
 
   final bool _isSorted = true;
 
   bool _areaEquals(String a, String b) => a.trim().toLowerCase() == b.trim().toLowerCase();
 
-  // 좌측 상단(11시) 태그 위젯
   Widget _buildScreenTag(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final base = Theme.of(context).textTheme.labelSmall;
     final style = (base ??
         const TextStyle(
           fontSize: 11,
-          color: Colors.black54,
           fontWeight: FontWeight.w600,
         ))
         .copyWith(
-      color: Colors.black54,
+      color: cs.onSurfaceVariant,
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
     );
 
-    return IgnorePointer( // 시트 제스처와의 간섭 방지
+    return IgnorePointer(
       child: Align(
         alignment: Alignment.topLeft,
         child: Padding(
@@ -59,12 +58,15 @@ class _DoubleDepartureCompletedBottomSheetState extends State<DoubleDepartureCom
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final plateState = context.watch<DoublePlateState>();
     final userName = context.read<UserState>().name;
     final areaState = context.watch<AreaState>();
 
     final division = areaState.currentDivision;
     final area = areaState.currentArea.trim();
+
     final selectedDateRaw = context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now();
     final selectedDate = DateTime(selectedDateRaw.year, selectedDateRaw.month, selectedDateRaw.day);
 
@@ -75,7 +77,7 @@ class _DoubleDepartureCompletedBottomSheetState extends State<DoubleDepartureCom
 
     List<PlateModel> firestorePlates = baseList.where((p) {
       final sameArea = _areaEquals(p.area, area);
-      return !p.isLockedFee && sameArea; // 일반 모드: 미정산만
+      return !p.isLockedFee && sameArea; // 미정산만
     }).toList();
 
     firestorePlates.sort(
@@ -101,9 +103,10 @@ class _DoubleDepartureCompletedBottomSheetState extends State<DoubleDepartureCom
       child: SizedBox(
         height: MediaQuery.of(context).size.height * 0.95,
         child: Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
           ),
           child: DefaultTabController(
             length: 2,
@@ -120,36 +123,44 @@ class _DoubleDepartureCompletedBottomSheetState extends State<DoubleDepartureCom
                       body: Column(
                         children: [
                           const SizedBox(height: 12),
+
                           // 상단 드래그 핸들
                           Center(
                             child: Container(
                               width: 60,
                               height: 6,
                               decoration: BoxDecoration(
-                                color: Colors.grey[300],
+                                color: cs.outlineVariant.withOpacity(0.9),
                                 borderRadius: BorderRadius.circular(3),
                               ),
                             ),
                           ),
-                          // ⬇️ 좌측 상단(11시) 화면 태그
+
+                          // 좌측 상단(11시) 화면 태그
                           _buildScreenTag(context),
 
                           const SizedBox(height: 8),
+
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 8.0),
                             child: TabBar(
-                              labelColor: Colors.black87,
-                              unselectedLabelColor: Colors.grey[600],
-                              indicatorColor: Theme.of(context).primaryColor,
+                              labelColor: cs.onSurface,
+                              unselectedLabelColor: cs.onSurfaceVariant,
+                              indicatorColor: cs.primary,
+                              dividerColor: cs.outlineVariant.withOpacity(0.85),
                               tabs: const [
                                 Tab(text: '미정산'),
                                 Tab(text: '정산'),
                               ],
                             ),
                           ),
+
                           const SizedBox(height: 8),
+
                           DoubleDepartureCompletedSelectedDateBar(visible: !isSettled),
+
                           const SizedBox(height: 8),
+
                           Expanded(
                             child: TabBarView(
                               children: [

@@ -1,4 +1,3 @@
-
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -93,8 +92,7 @@ class _UserStatementSignatureFullScreenDialogState
       }
 
       final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-      final byteData =
-      await image.toByteData(format: ui.ImageByteFormat.png);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('PNG 변환에 실패했습니다.')),
@@ -118,23 +116,31 @@ class _UserStatementSignatureFullScreenDialogState
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     final name = widget.name.isEmpty ? '이름 미입력' : widget.name;
-    final timeText =
-    _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
+    final timeText = _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
+
+    // ✅ 서명 패드도 전역 테마 기반
+    final penColor = cs.onSurface;
+    final padBg = cs.surface;
 
     return Material(
-      color: Colors.black54,
+      // ✅ 하드코딩 black54 제거 → scrim 기반
+      color: cs.scrim.withOpacity(0.55),
       child: SafeArea(
         child: Scaffold(
-          backgroundColor: Colors.white,
+          backgroundColor: cs.surface,
           appBar: AppBar(
-            backgroundColor: Colors.white,
+            backgroundColor: cs.surface,
+            foregroundColor: cs.onSurface,
             title: const Text('전자서명'),
             centerTitle: true,
             elevation: 0,
             surfaceTintColor: Colors.transparent,
-            shape: const Border(
-              bottom: BorderSide(color: Colors.black12, width: 1),
+            shape: Border(
+              bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.9), width: 1),
             ),
             leading: IconButton(
               icon: const Icon(Icons.close),
@@ -159,17 +165,19 @@ class _UserStatementSignatureFullScreenDialogState
             children: [
               // 상단 서명자 정보 바
               Container(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 10,
-                  horizontal: 16,
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  border: Border(
+                    bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.6), width: 1),
+                  ),
                 ),
-                decoration: const BoxDecoration(color: Colors.white),
                 child: Row(
                   children: [
                     Expanded(
                       child: Row(
                         children: [
-                          const Icon(Icons.person_outline, size: 18),
+                          Icon(Icons.person_outline, size: 18, color: cs.onSurfaceVariant),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
@@ -177,6 +185,7 @@ class _UserStatementSignatureFullScreenDialogState
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               softWrap: false,
+                              style: textTheme.bodyMedium?.copyWith(color: cs.onSurface),
                             ),
                           ),
                         ],
@@ -186,7 +195,7 @@ class _UserStatementSignatureFullScreenDialogState
                     Expanded(
                       child: Row(
                         children: [
-                          const Icon(Icons.access_time, size: 18),
+                          Icon(Icons.access_time, size: 18, color: cs.onSurfaceVariant),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
@@ -194,6 +203,7 @@ class _UserStatementSignatureFullScreenDialogState
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               softWrap: false,
+                              style: textTheme.bodyMedium?.copyWith(color: cs.onSurface),
                             ),
                           ),
                         ],
@@ -201,14 +211,14 @@ class _UserStatementSignatureFullScreenDialogState
                     ),
                     const SizedBox(width: 8),
                     TextButton.icon(
-                      onPressed: () =>
-                          setState(() => _signDateTime = DateTime.now()),
+                      onPressed: () => setState(() => _signDateTime = DateTime.now()),
                       icon: const Icon(Icons.schedule),
                       label: const Text('지금'),
                     ),
                   ],
                 ),
               ),
+
               // 서명 캔버스
               Expanded(
                 child: Padding(
@@ -217,34 +227,43 @@ class _UserStatementSignatureFullScreenDialogState
                     key: _boundaryKey,
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          return GestureDetector(
-                            behavior: HitTestBehavior.translucent,
-                            onPanStart: (d) =>
-                                setState(() => _points.add(d.localPosition)),
-                            onPanUpdate: (d) =>
-                                setState(() => _points.add(d.localPosition)),
-                            onPanEnd: (_) =>
-                                setState(() => _points.add(null)),
-                            child: CustomPaint(
-                              painter: UserStatementSignaturePainter(
-                                points: _points,
-                                strokeWidth: _strokeWidth,
-                                color: Colors.black87,
-                                background: Colors.white,
-                                overlayName: name,
-                                overlayDateText: timeText,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: padBg,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+                        ),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            return GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onPanStart: (d) => setState(() => _points.add(d.localPosition)),
+                              onPanUpdate: (d) => setState(() => _points.add(d.localPosition)),
+                              onPanEnd: (_) => setState(() => _points.add(null)),
+                              child: CustomPaint(
+                                painter: UserStatementSignaturePainter(
+                                  points: _points,
+                                  strokeWidth: _strokeWidth,
+                                  color: penColor,
+                                  background: padBg,
+                                  overlayName: name,
+                                  overlayDateText: timeText,
+                                  // ✅ painter 내부 하드코딩 제거용 토큰 전달
+                                  guideColor: cs.outlineVariant.withOpacity(0.9),
+                                  hintColor: cs.onSurfaceVariant.withOpacity(0.55),
+                                  overlayTextColor: cs.onSurfaceVariant.withOpacity(0.7),
+                                ),
+                                child: const SizedBox.expand(),
                               ),
-                              child: const SizedBox.expand(),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
+
               // 하단 버튼
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -255,7 +274,8 @@ class _UserStatementSignatureFullScreenDialogState
                         onPressed: () => Navigator.of(context).pop(),
                         icon: const Icon(Icons.cancel_outlined),
                         label: const Text('취소'),
-                        style: UserStatementButtonStyles.outlined(),
+                        // ✅ context 기반 스타일(전역 테마 반영)
+                        style: UserStatementButtonStyles.outlined(context),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -264,7 +284,8 @@ class _UserStatementSignatureFullScreenDialogState
                         onPressed: _hasAny ? _save : null,
                         icon: const Icon(Icons.save_alt),
                         label: const Text('저장'),
-                        style: UserStatementButtonStyles.primary(),
+                        // ✅ context 기반 스타일(전역 테마 반영)
+                        style: UserStatementButtonStyles.primary(context),
                       ),
                     ),
                   ],

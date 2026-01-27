@@ -23,6 +23,8 @@ class DoubleDepartureCompletedSelectedDateBar extends StatelessWidget {
   Widget build(BuildContext context) {
     if (!visible) return const SizedBox.shrink();
 
+    final cs = Theme.of(context).colorScheme;
+
     final selected = context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now();
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -35,18 +37,22 @@ class DoubleDepartureCompletedSelectedDateBar extends StatelessWidget {
         margin: const EdgeInsets.fromLTRB(12, 6, 12, 0),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.grey[100],
+          color: cs.surfaceContainerLow,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.grey[300]!),
+          border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
         ),
         child: Row(
           children: [
-            Icon(Icons.event, size: 18, color: Colors.grey[700]),
+            Icon(Icons.event, size: 18, color: cs.onSurfaceVariant),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 '선택일: ${_format(selected)}',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurface,
+                ),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
               ),
@@ -58,20 +64,23 @@ class DoubleDepartureCompletedSelectedDateBar extends StatelessWidget {
                 onPressed: isToday
                     ? null
                     : () {
-                        final n = DateTime.now();
-                        final todayYmd = DateTime(n.year, n.month, n.day);
-                        context.read<FieldSelectedDateState>().setSelectedDate(todayYmd);
-                      },
+                  final n = DateTime.now();
+                  final todayYmd = DateTime(n.year, n.month, n.day);
+                  context.read<FieldSelectedDateState>().setSelectedDate(todayYmd);
+                },
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   minimumSize: const Size(0, 32),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  foregroundColor: cs.primary,
+                  disabledForegroundColor: cs.onSurfaceVariant,
                 ),
                 child: Text(
                   '오늘',
                   style: TextStyle(
                     fontSize: 13,
-                    color: isToday ? Colors.grey : null,
+                    color: isToday ? cs.onSurfaceVariant : cs.primary,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),

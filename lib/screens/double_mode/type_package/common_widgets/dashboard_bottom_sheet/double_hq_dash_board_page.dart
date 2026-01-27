@@ -49,17 +49,13 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
     AppExitFlag.beginExit();
 
     // ✅ 앱 종료 직전, Trace 기록이 실제로 파일에 남도록 자동 저장(기록 중일 때만)
-    // - stopAndSave는 기록 중이 아니면 null 반환 → 안전
-    // - 앱이 종료되면 Trace 탭에서 수동 저장할 기회가 없으므로 유실 방지 목적
     try {
       if (DebugActionRecorder.instance.isRecording) {
         await DebugActionRecorder.instance.stopAndSave(
           titleOverride: 'auto:clockout_exit',
         );
       }
-    } catch (_) {
-      // auto-save 실패는 앱 종료를 막지 않음
-    }
+    } catch (_) {}
 
     try {
       if (Platform.isAndroid) {
@@ -103,20 +99,10 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
   }
 
   /// ✅ 퇴근 확정 후 실제로 실행할 "퇴근 처리" 로직
-  ///
-  /// 순서:
-  ///  1) 기존 컨트롤러 로직으로 userState.isWorking → false 처리
-  ///  2) isWorking=false 확인 후 SQLite(simple_mode_attendance)에 workOut 이벤트 기록(+필요시 업로드)
-  ///  3) 앱 종료 플로우 실행
-  ///
-  /// ⚠️ 정책 변경:
-  ///   - commute_true_false 는 출근 시각 기록용이며,
-  ///     퇴근(workOut) 시에는 이 컬렉션을 절대 수정하지 않습니다.
   Future<void> _handleClockOutFlow(
-    BuildContext context,
-    UserState userState,
-  ) async {
-    // ✅ 퇴근 플로우 시작 Trace
+      BuildContext context,
+      UserState userState,
+      ) async {
     _trace(
       '퇴근 처리 시작',
       meta: <String, dynamic>{
@@ -131,7 +117,6 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
 
     if (!mounted) return;
 
-    // ✅ 퇴근 처리 후 상태 Trace(선택)
     _trace(
       '퇴근 상태 반영',
       meta: <String, dynamic>{
@@ -152,7 +137,6 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
         final String area = userState.currentArea; // 기존 로직 유지
         final String division = userState.division;
 
-        // ✅ workOut 기록 직전 Trace(선택)
         _trace(
           '퇴근 이벤트 기록',
           meta: <String, dynamic>{
@@ -175,7 +159,6 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
         );
       }
 
-      // ✅ 앱 종료 직전 Trace(선택)
       _trace(
         '앱 종료 진행',
         meta: <String, dynamic>{
@@ -187,7 +170,6 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
       // 3) 퇴근 처리 완료 → 앱 종료
       await _exitAppAfterClockOut(context);
     } else {
-      // ✅ 퇴근 실패/미반영 Trace(선택)
       _trace(
         '퇴근 처리 미완료',
         meta: <String, dynamic>{
@@ -200,7 +182,6 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
   }
 
   Future<void> _onClockOutPressed(BuildContext context, UserState userState) async {
-    // ✅ 퇴근하기 버튼 Trace 기록(진입 즉시)
     _trace(
       '퇴근하기 버튼',
       meta: <String, dynamic>{
@@ -217,7 +198,6 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
         duration: const Duration(seconds: 5),
       );
 
-      // ✅ 다이얼로그 결과 Trace 기록
       _trace(
         '퇴근 다이얼로그 결과',
         meta: <String, dynamic>{
@@ -229,7 +209,6 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
       );
 
       if (!confirmed) {
-        // ✅ 취소 Trace(선택)
         _trace(
           '퇴근 처리 취소',
           meta: <String, dynamic>{
@@ -247,8 +226,10 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: cs.surface,
       body: Consumer<UserState>(
         builder: (context, userState, _) {
           return SingleChildScrollView(
@@ -263,7 +244,7 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
                   child: ElevatedButton.icon(
                     icon: Icon(_layerHidden ? Icons.layers : Icons.layers_clear),
                     label: Text(_layerHidden ? '작업 버튼 펼치기' : '작업 버튼 숨기기'),
-                    style: _layerToggleBtnStyle(),
+                    style: _layerToggleBtnStyle(context),
                     onPressed: () => setState(() => _layerHidden = !_layerHidden),
                   ),
                 ),
@@ -282,7 +263,7 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
                         child: ElevatedButton.icon(
                           icon: const Icon(Icons.exit_to_app),
                           label: const Text('퇴근하기'),
-                          style: _clockOutBtnStyle(),
+                          style: _clockOutBtnStyle(context),
                           onPressed: () => _onClockOutPressed(context, userState),
                         ),
                       ),
@@ -292,7 +273,7 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
                         child: ElevatedButton.icon(
                           icon: const Icon(Icons.logout),
                           label: const Text('로그아웃'),
-                          style: _logoutBtnStyle(),
+                          style: _logoutBtnStyle(context),
                           onPressed: () => _handleLogout(context),
                         ),
                       ),
@@ -302,7 +283,7 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
                         child: ElevatedButton.icon(
                           icon: const Icon(Icons.folder_open),
                           label: const Text('서류함 열기'),
-                          style: _docBoxBtnStyle(),
+                          style: _docBoxBtnStyle(context),
                           onPressed: () => openLeaderDocumentBox(context),
                         ),
                       ),
@@ -320,46 +301,75 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
   }
 }
 
-ButtonStyle _layerToggleBtnStyle() {
+ButtonStyle _layerToggleBtnStyle(BuildContext context) {
+  final cs = Theme.of(context).colorScheme;
+
   return ElevatedButton.styleFrom(
-    backgroundColor: Colors.white,
-    foregroundColor: Colors.black,
+    backgroundColor: cs.surface,
+    foregroundColor: cs.onSurface,
     minimumSize: const Size.fromHeight(48),
     padding: EdgeInsets.zero,
-    side: const BorderSide(color: Colors.grey, width: 1.0),
+    side: BorderSide(color: cs.outlineVariant.withOpacity(0.9), width: 1.0),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    elevation: 0,
+  ).copyWith(
+    overlayColor: MaterialStateProperty.resolveWith<Color?>(
+          (states) => states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(0.18) : null,
+    ),
   );
 }
 
-ButtonStyle _clockOutBtnStyle() {
+ButtonStyle _clockOutBtnStyle(BuildContext context) {
+  final cs = Theme.of(context).colorScheme;
+
+  // ✅ 위험/확정 액션: error 토큰을 border/overlay로만 사용(배경은 surface 유지)
   return ElevatedButton.styleFrom(
-    backgroundColor: Colors.white,
-    foregroundColor: Colors.black,
+    backgroundColor: cs.surface,
+    foregroundColor: cs.onSurface,
     minimumSize: const Size.fromHeight(55),
     padding: EdgeInsets.zero,
-    side: const BorderSide(color: Colors.redAccent, width: 1.0),
+    side: BorderSide(color: cs.error.withOpacity(0.85), width: 1.0),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    elevation: 0,
+  ).copyWith(
+    overlayColor: MaterialStateProperty.resolveWith<Color?>(
+          (states) => states.contains(MaterialState.pressed) ? cs.error.withOpacity(0.10) : null,
+    ),
   );
 }
 
-ButtonStyle _logoutBtnStyle() {
+ButtonStyle _logoutBtnStyle(BuildContext context) {
+  final cs = Theme.of(context).colorScheme;
+
   return ElevatedButton.styleFrom(
-    backgroundColor: Colors.white,
-    foregroundColor: Colors.black,
+    backgroundColor: cs.surface,
+    foregroundColor: cs.onSurface,
     minimumSize: const Size.fromHeight(55),
     padding: EdgeInsets.zero,
-    side: const BorderSide(color: Colors.grey, width: 1.0),
+    side: BorderSide(color: cs.outlineVariant.withOpacity(0.9), width: 1.0),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    elevation: 0,
+  ).copyWith(
+    overlayColor: MaterialStateProperty.resolveWith<Color?>(
+          (states) => states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(0.18) : null,
+    ),
   );
 }
 
-ButtonStyle _docBoxBtnStyle() {
+ButtonStyle _docBoxBtnStyle(BuildContext context) {
+  final cs = Theme.of(context).colorScheme;
+
   return ElevatedButton.styleFrom(
-    backgroundColor: Colors.white,
-    foregroundColor: Colors.black,
+    backgroundColor: cs.surface,
+    foregroundColor: cs.onSurface,
     minimumSize: const Size.fromHeight(55),
     padding: EdgeInsets.zero,
-    side: const BorderSide(color: Colors.grey, width: 1.0),
+    side: BorderSide(color: cs.outlineVariant.withOpacity(0.9), width: 1.0),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    elevation: 0,
+  ).copyWith(
+    overlayColor: MaterialStateProperty.resolveWith<Color?>(
+          (states) => states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(0.18) : null,
+    ),
   );
 }

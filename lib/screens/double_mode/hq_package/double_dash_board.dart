@@ -9,15 +9,26 @@ class DoubleDashBoard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return WillPopScope(
       onWillPop: () async => false, // 뒤로가기 차단(기존 동작 유지)
       child: Scaffold(
         appBar: AppBar(
           title: const DoubleTopNavigation(),
           centerTitle: true,
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
+
+          // ✅ 전역 테마 반영
+          backgroundColor: cs.surface,
+          foregroundColor: cs.onSurface,
           elevation: 0,
+          surfaceTintColor: Colors.transparent,
+          shape: Border(
+            bottom: BorderSide(
+              color: cs.outlineVariant.withOpacity(0.85),
+              width: 1,
+            ),
+          ),
 
           // ⬇️ 좌측 상단(11시 방향)에 HeadQuarter 텍스트 고정
           flexibleSpace: SafeArea(
@@ -33,13 +44,13 @@ class DoubleDashBoard extends StatelessWidget {
                     child: Text(
                       screenTag,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Colors.black54,
+                        color: cs.onSurfaceVariant,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.2,
                       ) ??
-                          const TextStyle(
+                          TextStyle(
                             fontSize: 11,
-                            color: Colors.black54,
+                            color: cs.onSurfaceVariant,
                             fontWeight: FontWeight.w600,
                           ),
                     ),

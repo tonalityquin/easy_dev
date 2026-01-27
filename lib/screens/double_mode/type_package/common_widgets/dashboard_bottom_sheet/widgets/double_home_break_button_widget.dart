@@ -30,15 +30,17 @@ class _DoubleHomeBreakButtonWidgetState extends State<DoubleHomeBreakButtonWidge
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return ElevatedButton.icon(
       onPressed: _submitting ? null : _onTap,
       icon: _submitting
-          ? const SizedBox(
+          ? SizedBox(
         width: 20,
         height: 20,
         child: CircularProgressIndicator(
           strokeWidth: 2,
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+          valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
         ),
       )
           : const Icon(Icons.coffee),
@@ -51,12 +53,17 @@ class _DoubleHomeBreakButtonWidgetState extends State<DoubleHomeBreakButtonWidge
         ),
       ),
       style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
         minimumSize: const Size.fromHeight(55),
         padding: EdgeInsets.zero,
-        side: const BorderSide(color: Colors.grey, width: 1.0),
+        side: BorderSide(color: cs.outlineVariant.withOpacity(0.9), width: 1.0),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        elevation: 0,
+      ).copyWith(
+        overlayColor: MaterialStateProperty.resolveWith<Color?>(
+              (states) => states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(0.18) : null,
+        ),
       ),
     );
   }

@@ -5,9 +5,7 @@ import '../../../../utils/plate_limit/status_mapping_helper.dart';
 
 class DoubleModifyStatusOnTapSection extends StatefulWidget {
   final List<String>? initialSelectedStatuses;
-
   final String? initialCategory;
-
   final ValueChanged<List<String>>? onSelectionChanged;
 
   const DoubleModifyStatusOnTapSection({
@@ -64,13 +62,13 @@ class _DoubleModifyStatusOnTapSectionState extends State<DoubleModifyStatusOnTap
 
     final currentStatuses = StatusMappingHelper.getStatuses(selectedCategory!);
     final selectedNames =
-        selectedIndexes.where((i) => i < currentStatuses.length).map((i) => currentStatuses[i]).toList();
+    selectedIndexes.where((i) => i < currentStatuses.length).map((i) => currentStatuses[i]).toList();
     widget.onSelectionChanged!(selectedNames);
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final cs = Theme.of(context).colorScheme;
     final currentStatuses = StatusMappingHelper.getStatuses(selectedCategory);
 
     return Column(
@@ -79,14 +77,28 @@ class _DoubleModifyStatusOnTapSectionState extends State<DoubleModifyStatusOnTap
         DropdownButtonFormField<String>(
           value: selectedCategory,
           hint: const Text('업종 선택'),
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: '업종',
-            border: OutlineInputBorder(),
+            filled: true,
+            fillColor: cs.surfaceContainerLow,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: cs.primary, width: 1.6),
+            ),
           ),
+          dropdownColor: cs.surface,
           items: StatusMappingHelper.categories.map((category) {
             return DropdownMenuItem(
               value: category,
-              child: Text(category),
+              child: Text(category, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w700)),
             );
           }).toList(),
           onChanged: (value) async {
@@ -99,26 +111,30 @@ class _DoubleModifyStatusOnTapSectionState extends State<DoubleModifyStatusOnTap
           },
         ),
         const SizedBox(height: 16),
-        const Text(
+        Text(
           '차량 상태',
           style: TextStyle(
             fontSize: 18,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w900,
+            color: cs.onSurface,
           ),
         ),
         const SizedBox(height: 8),
+
         if (currentStatuses.isEmpty)
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(8),
+              color: cs.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
             ),
-            child: const Text(
+            child: Text(
               '업종을 선택하세요.',
               style: TextStyle(
-                color: Colors.black54,
+                color: cs.onSurfaceVariant,
                 fontSize: 14,
+                fontWeight: FontWeight.w700,
               ),
             ),
           )
@@ -128,12 +144,17 @@ class _DoubleModifyStatusOnTapSectionState extends State<DoubleModifyStatusOnTap
             runSpacing: 8,
             children: List.generate(currentStatuses.length, (index) {
               final selected = selectedIndexes.contains(index);
+
+              final fg = selected ? cs.primary : cs.onSurface;
+              final bg = selected ? cs.primary.withOpacity(0.12) : cs.surfaceContainerLow;
+              final border = selected ? cs.primary.withOpacity(0.55) : cs.outlineVariant.withOpacity(0.85);
+
               return ChoiceChip(
                 label: Text(
                   currentStatuses[index],
                   style: TextStyle(
-                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                    color: selected ? theme.primaryColor : Colors.black87,
+                    fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                    color: fg,
                   ),
                 ),
                 selected: selected,
@@ -147,29 +168,26 @@ class _DoubleModifyStatusOnTapSectionState extends State<DoubleModifyStatusOnTap
                   });
                   _notifySelection();
                 },
-                selectedColor: theme.primaryColor.withOpacity(0.2),
-                backgroundColor: Colors.grey.shade100,
+                selectedColor: bg,
+                backgroundColor: bg,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(
-                    color: selected ? theme.primaryColor : Colors.grey.shade300,
-                  ),
+                  borderRadius: BorderRadius.circular(10),
+                  side: BorderSide(color: border),
                 ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               );
             }),
           ),
+
         const SizedBox(height: 16),
+
         if (selectedCategory != null && selectedIndexes.isNotEmpty)
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 '선택된 상태:',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: cs.onSurface),
               ),
               const SizedBox(height: 4),
               Wrap(
@@ -177,10 +195,11 @@ class _DoubleModifyStatusOnTapSectionState extends State<DoubleModifyStatusOnTap
                 children: selectedIndexes
                     .map(
                       (i) => Chip(
-                        label: Text(currentStatuses[i]),
-                        backgroundColor: theme.primaryColor.withOpacity(0.1),
-                      ),
-                    )
+                    label: Text(currentStatuses[i], style: TextStyle(color: cs.onSurface)),
+                    backgroundColor: cs.primary.withOpacity(0.10),
+                    side: BorderSide(color: cs.primary.withOpacity(0.35)),
+                  ),
+                )
                     .toList(),
               ),
             ],

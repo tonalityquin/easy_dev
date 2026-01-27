@@ -45,12 +45,15 @@ class _DoubleDepartureCompletedFullHeightSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return SafeArea(
       top: false,
       child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: ListView(
@@ -61,25 +64,29 @@ class _DoubleDepartureCompletedFullHeightSheet extends StatelessWidget {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 20),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade400,
+                  color: cs.outlineVariant.withOpacity(0.9),
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
             ),
             Row(
               children: [
-                const Icon(Icons.settings, color: Colors.blueAccent),
+                Icon(Icons.settings, color: cs.primary),
                 const SizedBox(width: 8),
-                const Expanded(
+                Expanded(
                   child: Text(
                     '출차 완료 상태 처리',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: cs.onSurface,
+                    ),
                   ),
                 ),
                 IconButton(
                   tooltip: '닫기',
                   onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
+                  icon: Icon(Icons.close, color: cs.onSurface),
                 ),
               ],
             ),
@@ -108,11 +115,17 @@ class _DoubleDepartureCompletedFullHeightSheet extends StatelessWidget {
               },
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 52),
-                backgroundColor: _isLocked ? Colors.grey.shade200 : Colors.blueAccent,
-                foregroundColor: _isLocked ? Colors.grey.shade600 : Colors.white,
+                backgroundColor: _isLocked ? cs.surfaceContainerLow : cs.primary,
+                foregroundColor: _isLocked ? cs.onSurfaceVariant : cs.onPrimary,
                 elevation: 0,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
+                ),
+              ).copyWith(
+                overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                      (states) => states.contains(MaterialState.pressed)
+                      ? (_isLocked ? cs.outlineVariant.withOpacity(0.12) : cs.onPrimary.withOpacity(0.10))
+                      : null,
                 ),
               ),
             ),
@@ -142,12 +155,18 @@ class _DoubleDepartureCompletedFullHeightSheet extends StatelessWidget {
               },
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 52),
-                backgroundColor: _isLocked ? Colors.orange.shade400 : Colors.grey.shade100,
-                foregroundColor: _isLocked ? Colors.white : Colors.black38,
+                backgroundColor: _isLocked ? cs.tertiary : cs.surfaceContainerLow,
+                foregroundColor: _isLocked ? cs.onTertiary : cs.onSurfaceVariant,
                 elevation: 0,
-                side: _isLocked ? null : const BorderSide(color: Colors.black12),
+                side: _isLocked ? null : BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
+                ),
+              ).copyWith(
+                overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                      (states) => states.contains(MaterialState.pressed)
+                      ? (_isLocked ? cs.onTertiary.withOpacity(0.10) : cs.outlineVariant.withOpacity(0.12))
+                      : null,
                 ),
               ),
             ),
@@ -170,10 +189,10 @@ class _DoubleDepartureCompletedFullHeightSheet extends StatelessWidget {
               },
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 52),
-                backgroundColor: Colors.grey.shade100,
-                foregroundColor: Colors.black87,
+                backgroundColor: cs.surfaceContainerLow,
+                foregroundColor: cs.onSurface,
                 elevation: 0,
-                side: const BorderSide(color: Colors.black12),
+                side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -189,10 +208,10 @@ class _DoubleDepartureCompletedFullHeightSheet extends StatelessWidget {
               onPressed: null,
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 52),
-                backgroundColor: Colors.grey.shade100,
-                foregroundColor: Colors.black38,
+                backgroundColor: cs.surfaceContainerLow,
+                foregroundColor: cs.onSurfaceVariant,
                 elevation: 0,
-                side: const BorderSide(color: Colors.black12),
+                side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -203,8 +222,8 @@ class _DoubleDepartureCompletedFullHeightSheet extends StatelessWidget {
 
             // 닫기
             TextButton.icon(
-              icon: const Icon(Icons.close, color: Colors.black54),
-              label: const Text('닫기', style: TextStyle(color: Colors.black54)),
+              icon: Icon(Icons.close, color: cs.onSurfaceVariant),
+              label: Text('닫기', style: TextStyle(color: cs.onSurfaceVariant)),
               onPressed: () => Navigator.pop(context),
             ),
           ],
@@ -220,6 +239,7 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final bool isLocked = plate.isLockedFee == true;
 
     final String area = (plate.area).trim();
@@ -227,41 +247,47 @@ class _SummaryCard extends StatelessWidget {
     final String billingType =
     (plate.billingType ?? '').trim().isEmpty ? '미지정' : (plate.billingType ?? '').trim();
 
+    final stateColor = isLocked ? cs.tertiary : cs.error;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: cs.surfaceContainerLow,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black12),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             plate.plateNumber,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+              color: cs.onSurface,
+            ),
           ),
           const SizedBox(height: 6),
-          Text('지역: $area', style: const TextStyle(fontWeight: FontWeight.w700)),
+          Text('지역: $area', style: TextStyle(fontWeight: FontWeight.w800, color: cs.onSurface)),
           const SizedBox(height: 2),
-          Text('위치: $location', style: const TextStyle(fontWeight: FontWeight.w700)),
+          Text('위치: $location', style: TextStyle(fontWeight: FontWeight.w800, color: cs.onSurface)),
           const SizedBox(height: 2),
-          Text('정산 타입: $billingType', style: const TextStyle(fontWeight: FontWeight.w700)),
+          Text('정산 타입: $billingType', style: TextStyle(fontWeight: FontWeight.w800, color: cs.onSurface)),
           const SizedBox(height: 8),
           Row(
             children: [
               Icon(
                 isLocked ? Icons.check_circle : Icons.error_outline,
                 size: 16,
-                color: isLocked ? Colors.green.shade700 : Colors.redAccent,
+                color: stateColor,
               ),
               const SizedBox(width: 6),
               Text(
                 isLocked ? '정산 완료' : '미정산',
                 style: TextStyle(
                   fontWeight: FontWeight.w900,
-                  color: isLocked ? Colors.green.shade700 : Colors.redAccent,
+                  color: stateColor,
                 ),
               ),
             ],
@@ -273,19 +299,26 @@ class _SummaryCard extends StatelessWidget {
 }
 
 Future<bool> _confirmCancelSettlement(BuildContext context) async {
+  final cs = Theme.of(context).colorScheme;
+
   final result = await showDialog<bool>(
     context: context,
     barrierDismissible: true,
     builder: (_) => AlertDialog(
-      title: const Text('정산 취소'),
-      content: const Text('정산 정보를 취소(해제)하시겠습니까?\n이 작업은 로그에 기록됩니다.'),
+      backgroundColor: cs.surface,
+      title: Text('정산 취소', style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900)),
+      content: Text(
+        '정산 정보를 취소(해제)하시겠습니까?\n이 작업은 로그에 기록됩니다.',
+        style: TextStyle(color: cs.onSurface),
+      ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context, false),
-          child: const Text('아니오'),
+          child: Text('아니오', style: TextStyle(color: cs.onSurfaceVariant)),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, true),
+          style: FilledButton.styleFrom(backgroundColor: cs.primary, foregroundColor: cs.onPrimary),
           child: const Text('예'),
         ),
       ],

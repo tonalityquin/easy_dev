@@ -1,16 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
-/// Deep Blue 팔레트(서비스 카드 계열과 통일)
-class _Palette {
-  static const base = Color(0xFF0D47A1); // primary
-  static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
-  static const light = Color(0xFF5472D3); // 톤 변형/보더
-}
-
 /// 5초 동안 유지되는 취소 가능 blocking dialog
 /// - [duration] 동안 카운트다운 후 자동으로 true 반환
 /// - '취소' 버튼 누르면 false 반환
+///
+/// ✅ 리팩터링 포인트
+/// - 하드코딩 팔레트 제거(Deep Blue 상수 제거)
+/// - Theme(ColorScheme) 기반으로 primary/surface/outlineVariant 등을 사용
 Future<bool> showDashboardDurationBlockingDialog(
     BuildContext context, {
       required String message,
@@ -53,9 +50,11 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
 
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) return;
+
       setState(() {
         _remainingSeconds--;
       });
+
       if (_remainingSeconds <= 0) {
         t.cancel();
         if (mounted) {
@@ -78,17 +77,29 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final textTheme = theme.textTheme;
+
+    // ✅ Deep Blue 하드코딩 대신 테마 primary 계열로 통일
+    final accent = cs.primary;
+    final accentOn = cs.onPrimary;
+
+    // dialog surface / border
+    final surface = cs.surface;
+    final border = cs.outlineVariant.withOpacity(0.6);
+
+    // chip(남은 시간) 톤
+    final chipBg = cs.primaryContainer.withOpacity(0.35);
+    final chipBorder = cs.primary.withOpacity(0.35);
+    final chipFg = cs.onPrimaryContainer;
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
-      backgroundColor: cs.surface,
+      backgroundColor: surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        side: BorderSide(
-          color: _Palette.light.withOpacity(0.25),
-        ),
+        side: BorderSide(color: border),
       ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(
@@ -100,9 +111,9 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center, // 중앙 정렬
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // 상단 아이콘 + 로딩 링 (Deep Blue 톤)
+              // 상단 아이콘 + 로딩 링 (테마 primary 톤)
               Stack(
                 alignment: Alignment.center,
                 children: [
@@ -111,19 +122,22 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
                     height: 64,
                     child: CircularProgressIndicator(
                       strokeWidth: 3,
-                      color: _Palette.base,
+                      // ✅ 기존 _Palette.base → cs.primary
+                      color: accent,
                     ),
                   ),
                   Container(
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: _Palette.base.withOpacity(0.08),
+                      // ✅ 기존 _Palette.base.withOpacity(0.08) → primaryContainer 기반
+                      color: cs.primaryContainer.withOpacity(0.45),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.schedule,
-                      color: _Palette.base,
+                      // ✅ 기존 _Palette.base → cs.primary
+                      color: accent,
                     ),
                   ),
                 ],
@@ -143,47 +157,40 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
 
               // 남은 시간 표시 (필칩 스타일)
               Container(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 6,
-                  horizontal: 12,
-                ),
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
                 decoration: BoxDecoration(
-                  color: _Palette.light.withOpacity(0.08),
+                  // ✅ 기존 _Palette.light.withOpacity(...) → primaryContainer/primary 기반
+                  color: chipBg,
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: _Palette.light.withOpacity(0.4),
-                  ),
+                  border: Border.all(color: chipBorder),
                 ),
                 child: Text(
                   '자동 진행까지 약 $_remainingSeconds초',
                   textAlign: TextAlign.center,
                   style: textTheme.bodySmall?.copyWith(
-                    color: _Palette.dark.withOpacity(0.9),
-                    fontWeight: FontWeight.w500,
+                    color: chipFg,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
 
               const SizedBox(height: 16),
 
-              // 액션 버튼 (가운데 정렬)
+              // 액션 버튼(취소)
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   TextButton(
                     onPressed: _handleCancel,
                     style: TextButton.styleFrom(
-                      foregroundColor: _Palette.dark,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 10,
-                      ),
+                      foregroundColor: cs.onSurface,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(999),
-                        side: BorderSide(
-                          color: _Palette.light.withOpacity(0.6),
-                        ),
+                        side: BorderSide(color: cs.outlineVariant.withOpacity(0.9)),
                       ),
+                      // ✅ pressed overlay도 테마 기반
+                      overlayColor: cs.outlineVariant.withOpacity(0.12),
                     ),
                     child: const Text('취소'),
                   ),

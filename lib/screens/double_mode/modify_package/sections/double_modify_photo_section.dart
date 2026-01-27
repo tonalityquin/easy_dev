@@ -23,7 +23,6 @@ class DoubleModifyPhotoSection extends StatelessWidget {
     return '${utcNow.year.toString().padLeft(4, '0')}-${_twoDigits(utcNow.month)}';
   }
 
-  /// 최근 N개월(UTC) yyyy-MM 리스트 생성 (현재월 포함)
   List<String> _recentUtcYearMonths({int count = 12}) {
     final nowUtc = DateTime.now().toUtc();
     final result = <String>[];
@@ -36,20 +35,27 @@ class DoubleModifyPhotoSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final totalItems = [...imageUrls, ...capturedImages.map((e) => e.path)];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '촬영 사진',
-          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.w900, color: cs.onSurface),
         ),
         const SizedBox(height: 8.0),
         SizedBox(
           height: 100,
           child: totalItems.isEmpty
-              ? const Center(child: Text('촬영된 사진 없음'))
+              ? Center(
+            child: Text(
+              '촬영된 사진 없음',
+              style: TextStyle(color: cs.onSurfaceVariant),
+            ),
+          )
               : ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: totalItems.length,
@@ -68,41 +74,55 @@ class DoubleModifyPhotoSection extends StatelessWidget {
                   padding: const EdgeInsets.all(4.0),
                   child: Hero(
                     tag: tag,
-                    child: isUrl
-                        ? Image.network(
-                      imageUrls[index],
-                      width: 100,
-                      height: 100,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) =>
-                      const Icon(Icons.broken_image, color: Colors.red),
-                    )
-                        : FutureBuilder<bool>(
-                      future: File(capturedImages[index - imageUrls.length].path).exists(),
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState != ConnectionState.done) {
-                          return const SizedBox(
-                            width: 100,
-                            height: 100,
-                            child: Center(child: CircularProgressIndicator()),
-                          );
-                        }
-                        if (snapshot.hasError || !(snapshot.data ?? false)) {
-                          return const SizedBox(
-                            width: 100,
-                            height: 100,
-                            child: Center(child: Icon(Icons.broken_image, color: Colors.red)),
-                          );
-                        }
-
-                        return Image.file(
-                          File(capturedImages[index - imageUrls.length].path),
-                          key: ValueKey(capturedImages[index - imageUrls.length].path),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+                        ),
+                        child: isUrl
+                            ? Image.network(
+                          imageUrls[index],
                           width: 100,
                           height: 100,
                           fit: BoxFit.cover,
-                        );
-                      },
+                          errorBuilder: (_, __, ___) =>
+                              Icon(Icons.broken_image, color: cs.error),
+                        )
+                            : FutureBuilder<bool>(
+                          future: File(capturedImages[index - imageUrls.length].path).exists(),
+                          builder: (context, snapshot) {
+                            if (snapshot.connectionState != ConnectionState.done) {
+                              return SizedBox(
+                                width: 100,
+                                height: 100,
+                                child: Center(
+                                  child: CircularProgressIndicator(
+                                    valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                                  ),
+                                ),
+                              );
+                            }
+                            if (snapshot.hasError || !(snapshot.data ?? false)) {
+                              return SizedBox(
+                                width: 100,
+                                height: 100,
+                                child: Center(
+                                  child: Icon(Icons.broken_image, color: cs.error),
+                                ),
+                              );
+                            }
+
+                            return Image.file(
+                              File(capturedImages[index - imageUrls.length].path),
+                              key: ValueKey(capturedImages[index - imageUrls.length].path),
+                              width: 100,
+                              height: 100,
+                              fit: BoxFit.cover,
+                            );
+                          },
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -111,18 +131,17 @@ class DoubleModifyPhotoSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12.0),
+
         Center(
           child: SizedBox(
             width: double.infinity,
             child: OutlinedButton(
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.black,
-                backgroundColor: Colors.white,
-                side: const BorderSide(color: Colors.black),
+                foregroundColor: cs.onSurface,
+                backgroundColor: cs.surface,
+                side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.zero,
-                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
               onPressed: () {
                 showModalBottomSheet(
@@ -130,6 +149,8 @@ class DoubleModifyPhotoSection extends StatelessWidget {
                   isScrollControlled: true,
                   backgroundColor: Colors.transparent,
                   builder: (_) {
+                    final cs2 = Theme.of(context).colorScheme;
+
                     final yearMonths = _recentUtcYearMonths(count: 12);
                     final defaultYm = _utcYearMonth(DateTime.now().toUtc());
 
@@ -137,7 +158,7 @@ class DoubleModifyPhotoSection extends StatelessWidget {
                     Future<List<String>> future = DoubleModifyPlateService.listPlateImages(
                       context: context,
                       plateNumber: plateNumber,
-                      yearMonth: selectedYearMonth, // ✅ 월 단위 조회 기본 적용
+                      yearMonth: selectedYearMonth,
                     );
 
                     return DraggableScrollableSheet(
@@ -147,7 +168,7 @@ class DoubleModifyPhotoSection extends StatelessWidget {
                       builder: (context, scrollController) {
                         return SafeArea(
                           child: Material(
-                            color: Colors.white,
+                            color: cs2.surface,
                             borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                             child: Padding(
                               padding: const EdgeInsets.all(16.0),
@@ -155,45 +176,63 @@ class DoubleModifyPhotoSection extends StatelessWidget {
                                 builder: (context, setModalState) {
                                   return Column(
                                     children: [
-                                      Container(
-                                        width: 40,
-                                        height: 4,
-                                        margin: const EdgeInsets.only(bottom: 16),
-                                        decoration: BoxDecoration(
-                                          color: Colors.grey.shade300,
-                                          borderRadius: BorderRadius.circular(2),
+                                      Center(
+                                        child: Container(
+                                          width: 40,
+                                          height: 4,
+                                          margin: const EdgeInsets.only(bottom: 16),
+                                          decoration: BoxDecoration(
+                                            color: cs2.outlineVariant.withOpacity(0.9),
+                                            borderRadius: BorderRadius.circular(2),
+                                          ),
                                         ),
                                       ),
-                                      const Text(
+                                      Text(
                                         '저장된 사진 목록',
-                                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w900,
+                                          color: cs2.onSurface,
+                                        ),
                                       ),
                                       const SizedBox(height: 12),
 
-                                      // ✅ 월 선택(UTC 기준)
                                       Row(
                                         children: [
-                                          const Text(
+                                          Text(
                                             '월(UTC): ',
-                                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w800,
+                                              color: cs2.onSurface,
+                                            ),
                                           ),
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 12),
                                               decoration: BoxDecoration(
-                                                border: Border.all(color: Colors.grey.shade300),
-                                                borderRadius: BorderRadius.circular(8),
+                                                color: cs2.surfaceContainerLow,
+                                                border: Border.all(color: cs2.outlineVariant.withOpacity(0.85)),
+                                                borderRadius: BorderRadius.circular(12),
                                               ),
                                               child: DropdownButtonHideUnderline(
                                                 child: DropdownButton<String>(
                                                   value: selectedYearMonth,
                                                   isExpanded: true,
+                                                  dropdownColor: cs2.surface,
+                                                  icon: Icon(Icons.expand_more, color: cs2.onSurfaceVariant),
                                                   items: yearMonths
                                                       .map(
                                                         (ym) => DropdownMenuItem<String>(
                                                       value: ym,
-                                                      child: Text(ym),
+                                                      child: Text(
+                                                        ym,
+                                                        style: TextStyle(
+                                                          color: cs2.onSurface,
+                                                          fontWeight: FontWeight.w700,
+                                                        ),
+                                                      ),
                                                     ),
                                                   )
                                                       .toList(),
@@ -201,7 +240,6 @@ class DoubleModifyPhotoSection extends StatelessWidget {
                                                     if (value == null) return;
                                                     setModalState(() {
                                                       selectedYearMonth = value;
-                                                      // ✅ 월 변경 시 해당 월 prefix로만 다시 조회
                                                       future = DoubleModifyPlateService.listPlateImages(
                                                         context: context,
                                                         plateNumber: plateNumber,
@@ -223,14 +261,29 @@ class DoubleModifyPhotoSection extends StatelessWidget {
                                           future: future,
                                           builder: (context, snapshot) {
                                             if (snapshot.connectionState == ConnectionState.waiting) {
-                                              return const Center(child: CircularProgressIndicator());
+                                              return Center(
+                                                child: CircularProgressIndicator(
+                                                  valueColor: AlwaysStoppedAnimation<Color>(cs2.primary),
+                                                ),
+                                              );
                                             }
                                             if (snapshot.hasError) {
-                                              return const Center(child: Text('이미지 불러오기 실패'));
+                                              return Center(
+                                                child: Text(
+                                                  '이미지 불러오기 실패',
+                                                  style: TextStyle(color: cs2.onSurfaceVariant),
+                                                ),
+                                              );
                                             }
+
                                             final urls = snapshot.data ?? [];
                                             if (urls.isEmpty) {
-                                              return const Center(child: Text('DB에 저장된 이미지가 없습니다.'));
+                                              return Center(
+                                                child: Text(
+                                                  'DB에 저장된 이미지가 없습니다.',
+                                                  style: TextStyle(color: cs2.onSurfaceVariant),
+                                                ),
+                                              );
                                             }
 
                                             return ListView.builder(
@@ -239,7 +292,6 @@ class DoubleModifyPhotoSection extends StatelessWidget {
                                               itemBuilder: (context, index) {
                                                 final url = urls[index];
 
-                                                // URL 마지막 세그먼트는 파일명(월 폴더 추가되어도 동일)
                                                 final fileName = url.split('/').last;
                                                 final segments = fileName.split('_');
 
@@ -263,15 +315,16 @@ class DoubleModifyPhotoSection extends StatelessWidget {
                                                           width: MediaQuery.of(context).size.width * 0.2,
                                                           height: 80,
                                                           decoration: BoxDecoration(
-                                                            borderRadius: BorderRadius.circular(4),
-                                                            border: Border.all(color: Colors.grey.shade300),
+                                                            borderRadius: BorderRadius.circular(8),
+                                                            border: Border.all(color: cs2.outlineVariant.withOpacity(0.85)),
+                                                            color: cs2.surfaceContainerLow,
                                                           ),
                                                           clipBehavior: Clip.hardEdge,
                                                           child: Image.network(
                                                             url,
                                                             fit: BoxFit.cover,
                                                             errorBuilder: (_, __, ___) =>
-                                                            const Icon(Icons.broken_image, color: Colors.red),
+                                                                Icon(Icons.broken_image, color: cs2.error),
                                                           ),
                                                         ),
                                                         const SizedBox(width: 12),
@@ -279,9 +332,9 @@ class DoubleModifyPhotoSection extends StatelessWidget {
                                                           child: Column(
                                                             crossAxisAlignment: CrossAxisAlignment.start,
                                                             children: [
-                                                              Text('📅 $date', style: const TextStyle(fontSize: 14)),
-                                                              Text('🚘 $number', style: const TextStyle(fontSize: 14)),
-                                                              Text('👤 $user', style: const TextStyle(fontSize: 14)),
+                                                              Text('📅 $date', style: TextStyle(fontSize: 14, color: cs2.onSurface)),
+                                                              Text('🚘 $number', style: TextStyle(fontSize: 14, color: cs2.onSurface)),
+                                                              Text('👤 $user', style: TextStyle(fontSize: 14, color: cs2.onSurface)),
                                                             ],
                                                           ),
                                                         ),

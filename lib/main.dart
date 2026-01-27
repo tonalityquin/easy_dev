@@ -12,7 +12,6 @@ import 'providers/providers.dart';
 
 // import 'screens/dev_package/dev_memo.dart'; // ⬅️ DevMemo 더 이상 사용 안 함
 import 'screens/hubs_mode/head_package/head_memo.dart';
-import 'theme.dart';
 
 import 'utils/tts/foreground_task_handler.dart';
 import 'utils/app_navigator.dart';

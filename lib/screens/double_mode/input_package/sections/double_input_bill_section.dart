@@ -23,6 +23,8 @@ class DoubleInputBillSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final billState = context.watch<BillState>();
     final isLoading = billState.isLoading;
     final generalBills = billState.generalBills;
@@ -37,20 +39,25 @@ class DoubleInputBillSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '정산 유형',
-          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w900,
+            color: cs.onSurface,
+          ),
         ),
         const SizedBox(height: 12.0),
         Row(
           children: [
             _buildTypeButton(
+              context: context,
               label: '변동',
               isSelected: isGeneral,
               onTap: () => onTypeChanged('변동'),
             ),
             const SizedBox(width: 8),
             _buildTypeButton(
+              context: context,
               label: '정기',
               isSelected: isMonthly,
               onTap: () => onTypeChanged('정기'),
@@ -61,24 +68,39 @@ class DoubleInputBillSection extends StatelessWidget {
         if (isMonthly) ...[
           TextField(
             controller: countTypeController,
-            // ✅ 사용자 수정 불가
+            // ✅ 사용자 수정 불가(동작 유지)
             readOnly: true,
-            enabled: false,
+            // enabled: false는 시스템이 강제로 회색 처리하므로,
+            // readOnly만으로 잠그고 테마 컬러는 유지
+            enabled: true,
             decoration: InputDecoration(
               labelText: '정기 - 호실/구분(=countType)',
               hintText: '예: 1901호',
-              border: const OutlineInputBorder(),
               filled: true,
-              fillColor: Colors.grey.shade100,
-              labelStyle: TextStyle(color: Colors.grey.shade600),
-              hintStyle: TextStyle(color: Colors.grey.shade500),
+              fillColor: cs.surfaceContainerLow,
+              labelStyle: TextStyle(color: cs.onSurfaceVariant),
+              hintStyle: TextStyle(color: cs.onSurfaceVariant.withOpacity(0.85)),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: cs.primary, width: 1.6),
+              ),
             ),
           ),
         ] else ...[
           if (isLoading)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              child: Center(
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                ),
+              ),
             )
           else if (filteredBills.isEmpty)
             Padding(
@@ -86,7 +108,7 @@ class DoubleInputBillSection extends StatelessWidget {
               child: Center(
                 child: Text(
                   '$normalizedType 정산 유형이 없습니다.',
-                  style: const TextStyle(color: Colors.grey),
+                  style: TextStyle(color: cs.onSurfaceVariant),
                 ),
               ),
             )
@@ -94,10 +116,16 @@ class DoubleInputBillSection extends StatelessWidget {
             OutlinedButton(
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                side: const BorderSide(color: Colors.black),
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+                backgroundColor: cs.surface,
+                foregroundColor: cs.onSurface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ).copyWith(
+                overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                      (states) => states.contains(MaterialState.pressed)
+                      ? cs.outlineVariant.withOpacity(0.12)
+                      : null,
+                ),
               ),
               onPressed: () {
                 showModalBottomSheet(
@@ -110,10 +138,13 @@ class DoubleInputBillSection extends StatelessWidget {
                       minChildSize: 0.3,
                       maxChildSize: 0.9,
                       builder: (context, scrollController) {
+                        final cs2 = Theme.of(context).colorScheme;
+
                         return Container(
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                          decoration: BoxDecoration(
+                            color: cs2.surface,
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                            border: Border.all(color: cs2.outlineVariant.withOpacity(0.85)),
                           ),
                           padding: const EdgeInsets.all(16),
                           child: ListView(
@@ -125,23 +156,29 @@ class DoubleInputBillSection extends StatelessWidget {
                                   height: 4,
                                   margin: const EdgeInsets.only(bottom: 16),
                                   decoration: BoxDecoration(
-                                    color: Colors.grey.shade300,
+                                    color: cs2.outlineVariant.withOpacity(0.9),
                                     borderRadius: BorderRadius.circular(2),
                                   ),
                                 ),
                               ),
                               Text(
                                 '$normalizedType 정산 선택',
-                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                  color: cs2.onSurface,
+                                ),
                               ),
                               const SizedBox(height: 24),
                               ...filteredBills.map((bill) {
-                                final countType = (bill).countType;
+                                final countType = bill.countType;
 
                                 return ListTile(
-                                  title: Text(countType),
+                                  title: Text(
+                                    countType,
+                                    style: TextStyle(color: cs2.onSurface, fontWeight: FontWeight.w700),
+                                  ),
                                   trailing: countType == selectedBill
-                                      ? const Icon(Icons.check, color: Colors.green)
+                                      ? Icon(Icons.check, color: cs2.primary)
                                       : null,
                                   onTap: () {
                                     Navigator.pop(context);
@@ -161,7 +198,7 @@ class DoubleInputBillSection extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(selectedBill ?? '정산 선택'),
-                  const Icon(Icons.arrow_drop_down),
+                  Icon(Icons.arrow_drop_down, color: cs.onSurfaceVariant),
                 ],
               ),
             ),
@@ -171,26 +208,39 @@ class DoubleInputBillSection extends StatelessWidget {
   }
 
   Widget _buildTypeButton({
+    required BuildContext context,
     required String label,
     required bool isSelected,
     required VoidCallback onTap,
   }) {
+    final cs = Theme.of(context).colorScheme;
+
+    final bg = isSelected ? cs.primary : cs.surface;
+    final fg = isSelected ? cs.onPrimary : cs.onSurface;
+    final border = isSelected ? cs.primary.withOpacity(0.55) : cs.outlineVariant.withOpacity(0.85);
+
     return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isSelected ? Colors.black : Colors.white,
-            border: Border.all(color: Colors.black),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isSelected ? Colors.white : Colors.black,
-              fontWeight: FontWeight.bold,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: bg,
+              border: Border.all(color: border),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: fg,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ),
         ),

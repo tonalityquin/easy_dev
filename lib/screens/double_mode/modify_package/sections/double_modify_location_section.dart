@@ -11,12 +11,18 @@ class DoubleModifyLocationSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start, // 왼쪽 정렬
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '주차 구역',
-          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 18.0,
+            fontWeight: FontWeight.w900,
+            color: cs.onSurface,
+          ),
         ),
         const SizedBox(height: 8.0),
         Center(

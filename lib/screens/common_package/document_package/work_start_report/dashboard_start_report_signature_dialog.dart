@@ -7,8 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
-import 'dashboard_start_report_styles.dart';
 import 'dashboard_start_report_signature_painter.dart';
+import 'dashboard_start_report_styles.dart';
 
 class SignatureResult {
   SignatureResult({required this.pngBytes, required this.signDateTime});
@@ -54,6 +54,7 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
   void _undo() {
     HapticFeedback.selectionClick();
     if (_points.isEmpty) return;
+
     int i = _points.length - 1;
     if (_points[i] == null) {
       _points.removeAt(i);
@@ -84,6 +85,7 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
         );
         return;
       }
+
       final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) {
@@ -92,6 +94,7 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
         );
         return;
       }
+
       final png = byteData.buffer.asUint8List();
       Navigator.of(context).pop(
         SignatureResult(
@@ -108,22 +111,30 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     final name = widget.name.isEmpty ? '이름 미입력' : widget.name;
     final timeText = _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
 
+    // ✅ 테마 기반 서명 패드 색상
+    final penColor = cs.onSurface;
+    final padBg = cs.surface;
+
     return Material(
-      color: Colors.black54,
+      color: cs.scrim.withOpacity(0.55),
       child: SafeArea(
         child: Scaffold(
-          backgroundColor: Colors.white,
+          backgroundColor: cs.surface,
           appBar: AppBar(
-            backgroundColor: Colors.white,
+            backgroundColor: cs.surface,
+            foregroundColor: cs.onSurface,
             title: const Text('전자서명'),
             centerTitle: true,
             elevation: 0,
             surfaceTintColor: Colors.transparent,
-            shape: const Border(
-              bottom: BorderSide(color: Colors.black12, width: 1),
+            shape: Border(
+              bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.9), width: 1),
             ),
             leading: IconButton(
               icon: const Icon(Icons.close),
@@ -147,17 +158,19 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
           body: Column(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 10,
-                  horizontal: 16,
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  border: Border(
+                    bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.6)),
+                  ),
                 ),
-                decoration: const BoxDecoration(color: Colors.white),
                 child: Row(
                   children: [
                     Expanded(
                       child: Row(
                         children: [
-                          const Icon(Icons.person_outline, size: 18),
+                          Icon(Icons.person_outline, size: 18, color: cs.onSurfaceVariant),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
@@ -165,6 +178,7 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               softWrap: false,
+                              style: textTheme.bodyMedium?.copyWith(color: cs.onSurface),
                             ),
                           ),
                         ],
@@ -174,7 +188,7 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
                     Expanded(
                       child: Row(
                         children: [
-                          const Icon(Icons.access_time, size: 18),
+                          Icon(Icons.access_time, size: 18, color: cs.onSurfaceVariant),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
@@ -182,6 +196,7 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               softWrap: false,
+                              style: textTheme.bodyMedium?.copyWith(color: cs.onSurface),
                             ),
                           ),
                         ],
@@ -192,6 +207,9 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
                       onPressed: () => setState(() => _signDateTime = DateTime.now()),
                       icon: const Icon(Icons.schedule),
                       label: const Text('지금'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: cs.primary,
+                      ),
                     ),
                   ],
                 ),
@@ -203,26 +221,33 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
                     key: _boundaryKey,
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          return GestureDetector(
-                            behavior: HitTestBehavior.translucent,
-                            onPanStart: (d) => setState(() => _points.add(d.localPosition)),
-                            onPanUpdate: (d) => setState(() => _points.add(d.localPosition)),
-                            onPanEnd: (_) => setState(() => _points.add(null)),
-                            child: CustomPaint(
-                              painter: SignaturePainter(
-                                points: _points,
-                                strokeWidth: _strokeWidth,
-                                color: Colors.black87,
-                                background: Colors.white,
-                                overlayName: name,
-                                overlayDateText: timeText,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: padBg,
+                          border: Border.all(color: cs.outlineVariant.withOpacity(0.8)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            return GestureDetector(
+                              behavior: HitTestBehavior.translucent,
+                              onPanStart: (d) => setState(() => _points.add(d.localPosition)),
+                              onPanUpdate: (d) => setState(() => _points.add(d.localPosition)),
+                              onPanEnd: (_) => setState(() => _points.add(null)),
+                              child: CustomPaint(
+                                painter: SignaturePainter(
+                                  points: _points,
+                                  strokeWidth: _strokeWidth,
+                                  color: penColor,
+                                  background: padBg,
+                                  overlayName: name,
+                                  overlayDateText: timeText,
+                                ),
+                                child: const SizedBox.expand(),
                               ),
-                              child: const SizedBox.expand(),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ),
@@ -237,7 +262,7 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
                         onPressed: () => Navigator.of(context).pop(),
                         icon: const Icon(Icons.cancel_outlined),
                         label: const Text('취소'),
-                        style: DashboardReportButtonStyles.outlined(),
+                        style: DashboardReportButtonStyles.outlined(context),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -246,7 +271,7 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
                         onPressed: _hasAny ? _save : null,
                         icon: const Icon(Icons.save_alt),
                         label: const Text('저장'),
-                        style: DashboardReportButtonStyles.primary(),
+                        style: DashboardReportButtonStyles.primary(context),
                       ),
                     ),
                   ],

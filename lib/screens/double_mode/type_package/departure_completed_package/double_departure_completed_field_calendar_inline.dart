@@ -13,10 +13,12 @@ class DoubleDepartureCompletedFieldCalendarInline extends StatefulWidget {
   const DoubleDepartureCompletedFieldCalendarInline({super.key});
 
   @override
-  State<DoubleDepartureCompletedFieldCalendarInline> createState() => _DoubleDepartureCompletedFieldCalendarInlineState();
+  State<DoubleDepartureCompletedFieldCalendarInline> createState() =>
+      _DoubleDepartureCompletedFieldCalendarInlineState();
 }
 
-class _DoubleDepartureCompletedFieldCalendarInlineState extends State<DoubleDepartureCompletedFieldCalendarInline> {
+class _DoubleDepartureCompletedFieldCalendarInlineState
+    extends State<DoubleDepartureCompletedFieldCalendarInline> {
   late FieldCalendarState calendar;
   late DateTime _focusedDay;
 
@@ -33,18 +35,21 @@ class _DoubleDepartureCompletedFieldCalendarInlineState extends State<DoubleDepa
     });
   }
 
-  String _dateKey(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
-      '${d.month.toString().padLeft(2, '0')}-'
-      '${d.day.toString().padLeft(2, '0')}';
+  String _dateKey(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+          '${d.month.toString().padLeft(2, '0')}-'
+          '${d.day.toString().padLeft(2, '0')}';
 
   Map<String, int> _unsettledCountByDay({
     required Iterable<PlateModel> plates,
     required String area,
   }) {
     final map = <String, int>{};
+    final areaKey = area.trim().toLowerCase();
+
     for (final p in plates) {
       if (p.isLockedFee) continue;
-      if (p.area.trim().toLowerCase() != area.trim().toLowerCase()) continue;
+      if (p.area.trim().toLowerCase() != areaKey) continue;
 
       final dt = p.requestTime;
       final ymd = DateTime(dt.year, dt.month, dt.day);
@@ -56,6 +61,8 @@ class _DoubleDepartureCompletedFieldCalendarInlineState extends State<DoubleDepa
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final area = context.watch<AreaState>().currentArea;
     final plateState = context.watch<DoublePlateState>();
 
@@ -87,12 +94,31 @@ class _DoubleDepartureCompletedFieldCalendarInlineState extends State<DoubleDepa
         final count = unsettledMap[key] ?? 0;
         return count > 0 ? const ['UNSETTLED'] : const [];
       },
-      calendarStyle: const CalendarStyle(
-        todayDecoration: BoxDecoration(color: Colors.indigoAccent, shape: BoxShape.circle),
-        selectedDecoration: BoxDecoration(color: Colors.indigo, shape: BoxShape.circle),
-        markerDecoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+
+      // ✅ 하드코딩 제거: ColorScheme 기반
+      calendarStyle: CalendarStyle(
+        todayDecoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
+        selectedDecoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
+        markerDecoration: BoxDecoration(color: cs.error, shape: BoxShape.circle),
         markersAlignment: Alignment.bottomCenter,
+
+        // 기본 텍스트/주말/오늘 외 텍스트 톤도 테마 기반으로 정리(필수는 아니지만 일관성↑)
+        defaultTextStyle: TextStyle(color: cs.onSurface),
+        weekendTextStyle: TextStyle(color: cs.onSurfaceVariant),
+        outsideTextStyle: TextStyle(color: cs.onSurfaceVariant.withOpacity(0.6)),
+        disabledTextStyle: TextStyle(color: cs.onSurfaceVariant.withOpacity(0.5)),
       ),
+
+      headerStyle: HeaderStyle(
+        titleTextStyle: TextStyle(
+          color: cs.onSurface,
+          fontWeight: FontWeight.w800,
+        ),
+        formatButtonVisible: false,
+        leftChevronIcon: Icon(Icons.chevron_left, color: cs.onSurfaceVariant),
+        rightChevronIcon: Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
+      ),
+
       availableGestures: AvailableGestures.horizontalSwipe,
     );
   }

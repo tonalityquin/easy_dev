@@ -9,19 +9,6 @@ import '../../../../utils/init/date_utils.dart';
 import 'departure_completed_plate_search_bottom_sheet/double_departure_completed_search_bottom_sheet.dart';
 
 /// Double / 출차완료 / 미정산 탭
-///
-/// 정책/기능
-/// - 미정산(isLockedFee == false)만 표시
-/// - 정렬/그룹핑 기준: requestTime 고정
-/// - 오래된 순(오름차순)
-/// - 날짜 그룹 헤더: Divider 가운데 라벨 `YYYY.MM.DD (요일) · N건`
-/// - 상단 안내 배너:
-///   - 정산은 "번호판 검색"으로 진행 안내
-///   - 마지막 갱신 시간 표시 + 색상 정책
-///     - 날짜가 오늘과 다르면 빨간색
-///     - 오늘이지만 1시간 이상 경과하면 주황색
-/// - 하단: "데이터 갱신" + "번호판 검색"
-/// - Pull-to-refresh 지원
 class DoubleDepartureCompletedUnsettledTab extends StatefulWidget {
   const DoubleDepartureCompletedUnsettledTab({
     super.key,
@@ -37,7 +24,6 @@ class DoubleDepartureCompletedUnsettledTab extends StatefulWidget {
 }
 
 class _DoubleDepartureCompletedUnsettledTabState extends State<DoubleDepartureCompletedUnsettledTab> {
-  // ✅ 날짜/정렬 기준을 requestTime으로 고정
   DateTime _sortTime(PlateModel p) => p.requestTime;
 
   DateTime _ymd(DateTime t) => DateTime(t.year, t.month, t.day);
@@ -63,14 +49,12 @@ class _DoubleDepartureCompletedUnsettledTabState extends State<DoubleDepartureCo
   void initState() {
     super.initState();
 
-    // ✅ 화면 최초 진입 시에도 한 번 갱신 트리거(상위에서 이미 로드했더라도 무해)
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
       final plateState = context.read<DoublePlateState>();
       final area = context.read<AreaState>().currentArea.trim();
       if (area.isEmpty) return;
 
-      // 이미 로딩 중이면 중복 호출 방지
       if (!plateState.isLoadingType(PlateType.departureCompleted)) {
         await plateState.doubleRefreshType(PlateType.departureCompleted);
       }
@@ -95,13 +79,11 @@ class _DoubleDepartureCompletedUnsettledTabState extends State<DoubleDepartureCo
       backgroundColor: Colors.transparent,
       builder: (_) => DoubleDepartureCompletedSearchBottomSheet(
         area: area,
-        // 이 탭은 "검색 결과 선택/상태토글" 로직을 제거했으므로 no-op
         onSearch: (_) {},
       ),
     );
   }
 
-  /// ✅ 데이터 갱신 로직: DoublePlateState에 출차완료 1회 재조회 요청
   Future<void> _refreshUnsettled() async {
     final plateState = context.read<DoublePlateState>();
     final area = context.read<AreaState>().currentArea.trim();
@@ -131,21 +113,18 @@ class _DoubleDepartureCompletedUnsettledTabState extends State<DoubleDepartureCo
   @override
   Widget build(BuildContext context) {
     final plateState = context.watch<DoublePlateState>();
+    final cs = Theme.of(context).colorScheme;
 
-    // ✅ 이 탭은 "state의 최신 데이터"를 기준으로 렌더링 (갱신 반영 보장)
     final raw = plateState.dataOfType(PlateType.departureCompleted);
 
-    // departureCompleted는 state 쿼리에서 이미 isLockedFee=false로 제한하지만,
-    // 방어적으로 한 번 더 필터링
     final plates = raw.where((p) => p.isLockedFee == false).toList()
-      ..sort((a, b) => _sortTime(a).compareTo(_sortTime(b))); // 오래된 순
+      ..sort((a, b) => _sortTime(a).compareTo(_sortTime(b)));
 
     final lastRefreshAt = plateState.doubleLastRefreshAtOf(PlateType.departureCompleted);
     final sourceLabel = plateState.doubleLastRefreshSourceLabelOf(PlateType.departureCompleted);
 
     final bool isRefreshing = plateState.isLoadingType(PlateType.departureCompleted);
 
-    // ✅ 날짜별(YYYY-MM-DD) 미정산 건수 사전 계산
     final Map<DateTime, int> dateCounts = <DateTime, int>{};
     for (final p in plates) {
       final d = _ymd(_sortTime(p));
@@ -174,6 +153,7 @@ class _DoubleDepartureCompletedUnsettledTabState extends State<DoubleDepartureCo
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: RefreshIndicator(
+        color: cs.primary,
         onRefresh: _refreshUnsettled,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -223,12 +203,6 @@ class _DoubleDepartureCompletedUnsettledTabState extends State<DoubleDepartureCo
 }
 
 /// ✅ 상단 안내 + 마지막 갱신 시간 표시 배너
-///
-/// 색상 정책:
-/// - lastRefreshAt == null: 빨간색(갱신 이력 없음)
-/// - 오늘 날짜와 다름: 빨간색
-/// - 오늘이지만 1시간 이상 경과: 주황색
-/// - 그 외: 기본 회색
 class _TopNoticeBanner extends StatelessWidget {
   const _TopNoticeBanner({
     required this.lastRefreshAt,
@@ -248,22 +222,19 @@ class _TopNoticeBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final now = DateTime.now();
 
     final bool hasValue = lastRefreshAt != null;
-
     final bool isNotToday = hasValue ? !_isSameYmd(lastRefreshAt!, now) : true;
-
     final bool over1Hour = hasValue ? now.difference(lastRefreshAt!).inMinutes >= 60 : true;
 
-    // ✅ 우선순위: 날짜 다름/없음(빨강) > 오늘이지만 1시간 경과(주황) > 기본
-    final Color dataColor = isNotToday
-        ? Colors.redAccent
-        : (over1Hour ? Colors.orange.shade700 : Colors.black54);
+    // ✅ 우선순위: 날짜 다름/없음(error) > 오늘이지만 1시간 경과(tertiary) > 기본(onSurfaceVariant)
+    final Color dataColor = isNotToday ? cs.error : (over1Hour ? cs.tertiary : cs.onSurfaceVariant);
 
     final Color borderColor = isNotToday
-        ? Colors.redAccent.withOpacity(0.35)
-        : (over1Hour ? Colors.orange.shade700.withOpacity(0.35) : Colors.black12);
+        ? cs.error.withOpacity(0.35)
+        : (over1Hour ? cs.tertiary.withOpacity(0.35) : cs.outlineVariant.withOpacity(0.85));
 
     final IconData icon = isRefreshing
         ? Icons.sync
@@ -279,21 +250,25 @@ class _TopNoticeBanner extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
+        color: cs.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.info_outline, size: 16, color: Colors.black54),
-              SizedBox(width: 8),
+              Icon(Icons.info_outline, size: 16, color: cs.onSurfaceVariant),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   '정산은 하단의 “번호판 검색”을 눌러 진행해 주세요.',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.black87),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: cs.onSurface,
+                  ),
                 ),
               ),
             ],
@@ -317,7 +292,14 @@ class _TopNoticeBanner extends StatelessWidget {
               ),
               if (isRefreshing) ...[
                 const SizedBox(width: 8),
-                const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+                SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                  ),
+                ),
               ],
             ],
           ),
@@ -340,8 +322,10 @@ class _BottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return BottomAppBar(
-      color: Colors.white,
+      color: cs.surface,
       elevation: 0,
       child: SafeArea(
         top: false,
@@ -355,20 +339,24 @@ class _BottomBar extends StatelessWidget {
                   child: TextButton.icon(
                     onPressed: onRefreshPressed,
                     icon: isRefreshing
-                        ? const SizedBox(
+                        ? SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                      ),
                     )
-                        : Icon(Icons.refresh, color: Colors.grey[800]),
+                        : Icon(Icons.refresh, color: cs.onSurface),
                     label: Text(
                       isRefreshing ? '갱신 중' : '데이터 갱신',
                       style: TextStyle(
-                        color: onRefreshPressed == null ? Colors.grey[500] : Colors.grey[800],
+                        color: onRefreshPressed == null ? cs.onSurfaceVariant : cs.onSurface,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     style: TextButton.styleFrom(
+                      foregroundColor: cs.onSurface,
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     ),
                   ),
@@ -377,15 +365,16 @@ class _BottomBar extends StatelessWidget {
                 Expanded(
                   child: TextButton.icon(
                     onPressed: onSearchPressed,
-                    icon: Icon(Icons.search, color: Colors.grey[800]),
+                    icon: Icon(Icons.search, color: cs.onSurface),
                     label: Text(
                       '번호판 검색',
                       style: TextStyle(
-                        color: Colors.grey[800],
+                        color: cs.onSurface,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     style: TextButton.styleFrom(
+                      foregroundColor: cs.onSurface,
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                     ),
                   ),
@@ -410,21 +399,22 @@ class _DateDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final style = Theme.of(context).textTheme.labelMedium?.copyWith(
       fontWeight: FontWeight.w900,
-      color: Colors.black54,
+      color: cs.onSurfaceVariant,
     );
 
     final text = '$label · ${count}건';
 
     return Row(
       children: [
-        const Expanded(child: Divider(height: 1)),
+        Expanded(child: Divider(height: 1, color: cs.outlineVariant.withOpacity(0.85))),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10),
           child: Text(text, style: style),
         ),
-        const Expanded(child: Divider(height: 1)),
+        Expanded(child: Divider(height: 1, color: cs.outlineVariant.withOpacity(0.85))),
       ],
     );
   }
@@ -446,60 +436,80 @@ class _UnsettledPlateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final plateNo = _safe(plate.plateNumber);
     final location = _safe(plate.location, fallback: '미지정');
     final area = _safe(plate.area);
 
     return Material(
-      color: Colors.white,
-      elevation: 1.2,
+      color: cs.surface,
+      elevation: 0,
       borderRadius: BorderRadius.circular(12),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Icon(Icons.directions_car, size: 18, color: Colors.black54),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          plateNo,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.directions_car, size: 18, color: cs.onSurfaceVariant),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            plateNo,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                              color: cs.onSurface,
+                            ),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        CustomDateUtils.formatTimeForUI(requestTime),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[700],
-                          fontWeight: FontWeight.w800,
+                        const SizedBox(width: 8),
+                        Text(
+                          CustomDateUtils.formatTimeForUI(requestTime),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: cs.onSurfaceVariant,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '지역: $area',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    '지역: $area',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[700], fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '위치: $location',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[700], fontWeight: FontWeight.w700),
-                  ),
-                ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '위치: $location',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -519,24 +529,30 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 32, 16, 32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 36, color: Colors.grey[500]),
+            Icon(icon, size: 36, color: cs.onSurfaceVariant),
             const SizedBox(height: 10),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+                color: cs.onSurface,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
             ),
           ],
         ),

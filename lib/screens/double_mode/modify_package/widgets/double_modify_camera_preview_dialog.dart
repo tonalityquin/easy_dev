@@ -1,15 +1,10 @@
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // HapticFeedback, DeviceOrientation
+import 'package:flutter/services.dart';
+
 import '../utils/double_modify_camera_helper.dart';
 
-/// 프리뷰가 촬영 결과와 동일한 비율로 보이도록:
-/// - controller.value.previewSize로 종횡비 계산(세로에서 가로/세로 바꿔치기)
-/// - AspectRatio + contain 렌더링(크롭 없음) → 촬영 결과와 동일 프레이밍
-/// - 초기화 후 세로 잠금(lockCaptureOrientation)으로 회전 튐 방지
-/// - 갤러리 진입 시 pausePreview / 복귀 시 resumePreview
-/// - 탭 포커스/노출 좌표 정확화(LayoutBuilder 사용)
 class DoubleModifyCameraPreviewDialog extends StatefulWidget {
   final void Function(List<XFile>)? onCaptureComplete;
   final void Function(XFile)? onImageCaptured;
@@ -42,7 +37,7 @@ class _DoubleModifyCameraPreviewDialogState
 
     _cameraHelper = DoubleModifyCameraHelper(
       jpegQuality: 75,
-      maxLongSide: 2560, // 촬영 파일 다운스케일(옵션)
+      maxLongSide: 2560,
       keepOriginalAlso: false,
       resolution: ResolutionPreset.medium,
     );
@@ -59,7 +54,7 @@ class _DoubleModifyCameraPreviewDialogState
     _initFuture = _cameraHelper.initializeInputCamera();
     try {
       await _initFuture;
-      await _cameraHelper.lockPortrait(); // 세로 고정(선택)
+      await _cameraHelper.lockPortrait();
       if (!mounted) return;
       setState(() {
         _isCameraReady = true;
@@ -155,8 +150,8 @@ class _DoubleModifyCameraPreviewDialogState
     }
   }
 
-  /// 프리뷰를 촬영 결과와 동일한 종횡비로 렌더링(Contain: 크롭 없음)
   Widget _buildPreview() {
+    final cs = Theme.of(context).colorScheme;
     final ctrl = _cameraHelper.cameraController;
 
     if (_initFailed) {
@@ -166,16 +161,20 @@ class _DoubleModifyCameraPreviewDialogState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 48),
+              Icon(Icons.warning_amber_rounded, color: cs.error, size: 48),
               const SizedBox(height: 12),
-              const Text(
+              Text(
                 '카메라를 초기화할 수 없습니다.\n권한을 확인한 뒤 다시 시도해 주세요.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white),
+                style: TextStyle(color: cs.onSurface),
               ),
               const SizedBox(height: 12),
-              ElevatedButton(
+              FilledButton(
                 onPressed: _initializeCamera,
+                style: FilledButton.styleFrom(
+                  backgroundColor: cs.primary,
+                  foregroundColor: cs.onPrimary,
+                ),
                 child: const Text('다시 시도'),
               ),
             ],
@@ -185,13 +184,15 @@ class _DoubleModifyCameraPreviewDialogState
     }
 
     if (!_isCameraReady || ctrl == null || !ctrl.value.isInitialized) {
-      return const Center(child: CircularProgressIndicator());
+      return Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+        ),
+      );
     }
 
-    // ✅ previewSize를 이용해 현재 화면 방향에 맞는 종횡비 계산
     final sizeV = ctrl.value.previewSize;
     if (sizeV == null || sizeV.width == 0 || sizeV.height == 0) {
-      // 희귀 케이스 폴백: aspectRatio 사용
       final fallbackRatio = 1 / ctrl.value.aspectRatio;
       return Center(
         child: AspectRatio(
@@ -203,14 +204,12 @@ class _DoubleModifyCameraPreviewDialogState
 
     final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
 
-    // camera previewSize는 보통 landscape 기준 → 세로면 반전
     final previewW = isPortrait ? sizeV.height : sizeV.width;
-    final previewH = isPortrait ? sizeV.width  : sizeV.height;
+    final previewH = isPortrait ? sizeV.width : sizeV.height;
     final previewRatio = previewW / previewH;
 
     return Stack(
       children: [
-        // Contain(크롭 없음) → 촬영 결과와 동일한 프레이밍
         Center(
           child: AspectRatio(
             aspectRatio: previewRatio,
@@ -237,7 +236,6 @@ class _DoubleModifyCameraPreviewDialogState
           ),
         ),
 
-        // 상단 썸네일 스트립
         if (_capturedImages.isNotEmpty)
           Positioned(
             top: 16,
@@ -252,13 +250,21 @@ class _DoubleModifyCameraPreviewDialogState
                 itemBuilder: (context, index) {
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: Image.file(
-                      File(_capturedImages[index].path),
-                      width: 70,
-                      height: 70,
-                      fit: BoxFit.cover,
-                      cacheWidth: 160, // 저해상 썸네일
-                      filterQuality: FilterQuality.low,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+                        ),
+                        child: Image.file(
+                          File(_capturedImages[index].path),
+                          width: 70,
+                          height: 70,
+                          fit: BoxFit.cover,
+                          cacheWidth: 160,
+                          filterQuality: FilterQuality.low,
+                        ),
+                      ),
                     ),
                   );
                 },
@@ -271,6 +277,7 @@ class _DoubleModifyCameraPreviewDialogState
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final ctrl = _cameraHelper.cameraController;
 
     return WillPopScope(
@@ -285,7 +292,8 @@ class _DoubleModifyCameraPreviewDialogState
       },
       child: SafeArea(
         child: Scaffold(
-          backgroundColor: Colors.black,
+          // ✅ 배경: 완전 검정 대신 scrim 사용(테마 일관)
+          backgroundColor: cs.scrim,
           body: _buildPreview(),
           bottomNavigationBar: Padding(
             padding: const EdgeInsets.only(bottom: 20, top: 12),
@@ -305,8 +313,8 @@ class _DoubleModifyCameraPreviewDialogState
                   style: ElevatedButton.styleFrom(
                     shape: const CircleBorder(),
                     padding: const EdgeInsets.all(20),
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
+                    backgroundColor: cs.surface,
+                    foregroundColor: cs.onSurface,
                     elevation: 4,
                   ),
                   child: const Icon(Icons.camera_alt, size: 30),
@@ -317,8 +325,8 @@ class _DoubleModifyCameraPreviewDialogState
                   OutlinedButton.icon(
                     onPressed: _openGalleryView,
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Colors.white54),
+                      foregroundColor: cs.surface, // scrim 위에서 흰 톤
+                      side: BorderSide(color: cs.surface.withOpacity(0.55)),
                     ),
                     icon: const Icon(Icons.photo_library_outlined),
                     label: const Text('갤러리'),
@@ -344,12 +352,17 @@ class GalleryView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('촬영된 사진'),
-        backgroundColor: Colors.black,
+        backgroundColor: cs.scrim,
+        foregroundColor: cs.surface,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
       ),
-      backgroundColor: Colors.black,
+      backgroundColor: cs.scrim,
       body: GridView.builder(
         padding: const EdgeInsets.all(12),
         itemCount: images.length,
@@ -375,11 +388,14 @@ class GalleryView extends StatelessWidget {
                 ),
               );
             },
-            child: Image.file(
-              File(images[index].path),
-              fit: BoxFit.cover,
-              cacheWidth: 360,
-              filterQuality: FilterQuality.low,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.file(
+                File(images[index].path),
+                fit: BoxFit.cover,
+                cacheWidth: 360,
+                filterQuality: FilterQuality.low,
+              ),
             ),
           );
         },
@@ -421,11 +437,15 @@ class _FullScreenGalleryViewState extends State<FullScreenGalleryView> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: cs.scrim,
       appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
+        backgroundColor: cs.scrim,
+        foregroundColor: cs.surface,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
         actions: [
           if (widget.onDelete != null)
             IconButton(
@@ -447,7 +467,7 @@ class _FullScreenGalleryViewState extends State<FullScreenGalleryView> {
               maxScale: 4.0,
               child: Image.file(
                 File(widget.images[index].path),
-                fit: BoxFit.contain, // 촬영 결과와 동일 프레이밍(크롭 없음)
+                fit: BoxFit.contain,
               ),
             ),
           );

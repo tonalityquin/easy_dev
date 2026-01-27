@@ -15,17 +15,19 @@ class DoubleInputLocationBottomSheet extends StatefulWidget {
     required this.onLocationSelected,
   });
 
-  static Future<void> show(BuildContext context, TextEditingController controller, Function(String) onSelected) async {
+  static Future<void> show(
+      BuildContext context,
+      TextEditingController controller,
+      Function(String) onSelected,
+      ) async {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) {
-        return DoubleInputLocationBottomSheet(
-          locationController: controller,
-          onLocationSelected: onSelected,
-        );
-      },
+      builder: (_) => DoubleInputLocationBottomSheet(
+        locationController: controller,
+        onLocationSelected: onSelected,
+      ),
     );
   }
 
@@ -56,6 +58,8 @@ class _DoubleInputLocationBottomSheetState extends State<DoubleInputLocationBott
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return SafeArea(
       child: Material(
         color: Colors.transparent,
@@ -65,21 +69,30 @@ class _DoubleInputLocationBottomSheetState extends State<DoubleInputLocationBott
           maxChildSize: 0.9,
           builder: (context, scrollController) {
             return Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
               ),
               child: Consumer<LocationState>(
                 builder: (context, locationState, _) {
                   if (locationState.isLoading) {
-                    return const Center(child: CircularProgressIndicator());
+                    return Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                      ),
+                    );
                   }
 
                   return FutureBuilder<List<LocationModel>>(
                     future: _futureLocations,
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
+                        return Center(
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                          ),
+                        );
                       }
 
                       if (!snapshot.hasData || snapshot.data!.isEmpty) {
@@ -88,6 +101,13 @@ class _DoubleInputLocationBottomSheetState extends State<DoubleInputLocationBott
                             icon: const Icon(Icons.refresh),
                             label: const Text('주차 구역 갱신하기'),
                             onPressed: () => Navigator.pop(context),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: cs.primary,
+                              foregroundColor: cs.onPrimary,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            ),
                           ),
                         );
                       }
@@ -95,45 +115,42 @@ class _DoubleInputLocationBottomSheetState extends State<DoubleInputLocationBott
                       final locations = snapshot.data!;
                       final singles = locations.where((l) => l.type == 'single').toList();
                       final composites = locations.where((l) => l.type == 'composite').toList();
-                      final parentSet = composites.map((e) => e.parent).toSet().toList();
+                      final parentSet = composites.map((e) => (e.parent ?? '').trim()).where((s) => s.isNotEmpty).toSet().toList();
 
                       return ListView(
                         controller: scrollController,
                         padding: const EdgeInsets.all(16),
                         children: [
-                          Container(
-                            width: 40,
-                            height: 4,
-                            margin: const EdgeInsets.only(bottom: 16),
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade300,
-                              borderRadius: BorderRadius.circular(2),
+                          Center(
+                            child: Container(
+                              width: 40,
+                              height: 4,
+                              margin: const EdgeInsets.only(bottom: 16),
+                              decoration: BoxDecoration(
+                                color: cs.outlineVariant.withOpacity(0.9),
+                                borderRadius: BorderRadius.circular(2),
+                              ),
                             ),
                           ),
-                          const Text(
+                          Text(
                             '주차 구역 선택',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
-                            ),
+                            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: cs.onSurface),
                           ),
                           const SizedBox(height: 16),
+
                           if (selectedParent != null) ...[
                             ListTile(
-                              leading: const Icon(Icons.arrow_back),
-                              title: const Text('뒤로가기'),
+                              leading: Icon(Icons.arrow_back, color: cs.onSurfaceVariant),
+                              title: Text('뒤로가기', style: TextStyle(color: cs.onSurface)),
                               onTap: () => setState(() => selectedParent = null),
                             ),
-                            const Divider(),
-                            ...composites
-                                .where((loc) => loc.parent == selectedParent)
-                                .map((loc) {
+                            Divider(color: cs.outlineVariant.withOpacity(0.85)),
+                            ...composites.where((loc) => (loc.parent ?? '').trim() == selectedParent).map((loc) {
                               final name = '${loc.parent} - ${loc.locationName}';
                               return ListTile(
-                                leading: const Icon(Icons.subdirectory_arrow_right),
-                                title: Text(name),
-                                subtitle: Text('공간 ${loc.capacity}'),
+                                leading: Icon(Icons.subdirectory_arrow_right, color: cs.onSurfaceVariant),
+                                title: Text(name, style: TextStyle(color: cs.onSurface)),
+                                subtitle: Text('공간 ${loc.capacity}', style: TextStyle(color: cs.onSurfaceVariant)),
                                 onTap: () {
                                   widget.onLocationSelected(name);
                                   Navigator.pop(context);
@@ -141,36 +158,37 @@ class _DoubleInputLocationBottomSheetState extends State<DoubleInputLocationBott
                               );
                             }),
                           ] else ...[
-                            const Text(
+                            Text(
                               '단일 주차 구역',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: cs.onSurface),
                             ),
                             const SizedBox(height: 8),
                             ...singles.map((loc) {
                               return ListTile(
-                                leading: const Icon(Icons.place),
-                                title: Text(loc.locationName),
-                                subtitle: Text('공간 ${loc.capacity}'),
+                                leading: Icon(Icons.place, color: cs.primary),
+                                title: Text(loc.locationName, style: TextStyle(color: cs.onSurface)),
+                                subtitle: Text('공간 ${loc.capacity}', style: TextStyle(color: cs.onSurfaceVariant)),
                                 onTap: () {
                                   widget.onLocationSelected(loc.locationName);
                                   Navigator.pop(context);
                                 },
                               );
                             }),
-                            const Divider(height: 32),
-                            const Text(
+                            const SizedBox(height: 8),
+                            Divider(height: 32, color: cs.outlineVariant.withOpacity(0.85)),
+                            Text(
                               '복합 주차 구역',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: cs.onSurface),
                             ),
                             const SizedBox(height: 8),
                             ...parentSet.map((parent) {
-                              final sub = composites.where((l) => l.parent == parent).toList();
+                              final sub = composites.where((l) => (l.parent ?? '').trim() == parent).toList();
                               final totalCapacity = sub.fold(0, (sum, l) => sum + l.capacity);
                               return ListTile(
-                                leading: const Icon(Icons.layers),
-                                title: Text('복합 구역: $parent'),
-                                subtitle: Text('총 공간 $totalCapacity'),
-                                trailing: const Icon(Icons.chevron_right),
+                                leading: Icon(Icons.layers, color: cs.primary),
+                                title: Text('복합 구역: $parent', style: TextStyle(color: cs.onSurface)),
+                                subtitle: Text('총 공간 $totalCapacity', style: TextStyle(color: cs.onSurfaceVariant)),
+                                trailing: Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
                                 onTap: () => setState(() => selectedParent = parent),
                               );
                             }),
@@ -178,6 +196,7 @@ class _DoubleInputLocationBottomSheetState extends State<DoubleInputLocationBott
                             Center(
                               child: TextButton(
                                 onPressed: () => Navigator.pop(context),
+                                style: TextButton.styleFrom(foregroundColor: cs.onSurfaceVariant),
                                 child: const Text('닫기'),
                               ),
                             ),

@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // ✅ 추가
+import 'package:shared_preferences/shared_preferences.dart';
 
-// 기존 프로젝트 상태/섹션/위젯 import 그대로 유지
 import '../../../states/bill/bill_state.dart';
 import '../../../states/area/area_state.dart';
 
 import '../../../repositories/plate_repo_services/firestore_plate_repository.dart';
 
-import '../../../theme.dart';
 import 'double_input_plate_controller.dart';
 import 'sections/double_input_bill_section.dart';
 import 'sections/double_input_location_section.dart';
@@ -43,37 +41,26 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirestorePlateRepository _plateRepo = FirestorePlateRepository();
 
-  // ⬇️ 화면 식별 태그(FAQ/에러 리포트 연계용)
   static const String screenTag = 'double plate input';
 
-  // ✅ DashboardSetting에서 저장한 단일 플래그 키
   static const String _prefsHasMonthlyKey = 'has_monthly_parking';
 
-  // ✅ Firestore 경로 상수(정책 고정)
   static const String _plateStatusRoot = 'plate_status';
   static const String _monthsSub = 'months';
   static const String _platesSub = 'plates';
   static const String _monthlyPlateStatusRoot = 'monthly_plate_status';
 
-  // ─────────────────────────────
-  // ✅ Usage 계측
-  // - useSourceOnlyKey=true 이므로 source가 집계 키(userKey)에 직접 반영
-  // - Double vs Service 차이는 source 프리픽스로 구분(double. / svc.)
-  // ─────────────────────────────
   static const bool _usageUseSourceOnlyKey = true;
   static const int _usageSourceShardCount = 10;
 
-  /// ✅ (변경) Double 화면에서 번호판 입력 완료 시 plate_status 조회 → UI 프리필
   static const String _usageSrcDoublePlateStatusLookupOnComplete =
       'Double.plate_status.lookup.on_complete';
 
-  // 아래 2개는 기존 문자열을 유지(대시보드/집계 호환성)
   static const String _usageSrcMonthlyLookup =
       'DoubleInputPlateScreen._fetchMonthlyPlateStatus/monthly_plate_status.lookup';
   static const String _usageSrcMonthlyUpdate =
       'DoubleInputPlateScreen._applyMonthlyMemoAndStatusOnly/monthly_plate_status.doc.update';
 
-  // ✅ 현재 기기 로컬 플래그(정기 선택 가능 여부)
   bool _hasMonthlyParking = false;
   bool _hasMonthlyLoaded = false;
 
@@ -82,63 +69,41 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
 
   bool _openedScannerOnce = false;
 
-  final DraggableScrollableController _sheetController =
-  DraggableScrollableController();
-  bool _sheetOpen = false; // 현재 열림 상태
+  final DraggableScrollableController _sheetController = DraggableScrollableController();
+  bool _sheetOpen = false;
 
-  // ✅ 시트 내부 스크롤 컨트롤러(닫힘에서 스크롤 잠금/원복을 위해 보관)
   ScrollController? _sheetScrollController;
 
-  // 도크에서 편집 시작 여부(완료 시 키패드 닫기 위한 플래그)
   _DockField? _dockEditing;
 
-  static const double _sheetClosed = 0.16; // 헤더만 살짝
-  static const double _sheetOpened = 1.00; // 최상단까지
+  static const double _sheetClosed = 0.16;
+  static const double _sheetOpened = 1.00;
 
-  // ✅ 월정기 문서 존재 여부(정기에서 불러오기 성공했는지)
   bool _monthlyDocExists = false;
-
-  // ✅ monthly_plate_status "메모/상태 반영" 처리 중 플래그(중복 클릭 방지)
   bool _monthlyApplying = false;
-
-  // ✅ 월정기 로드 시 실제로 사용한 단일 docId 저장 (후속 update 대상 docId 보장)
   String? _resolvedMonthlyDocId;
 
-  // ─────────────────────────────
-  // ✅ 도커 내부 페이지(정산 유형 / 추가 상태·메모) 전환
-  //    - 헤더 탭 선택 + (기존) 스와이프 전환 유지
-  // ─────────────────────────────
   static const int _dockPageBill = 0;
   static const int _dockPageMemo = 1;
 
   int _dockPageIndex = _dockPageBill;
   bool _dockSlideFromRight = true;
 
-  // ─────────────────────────────
-  // ✅ (리팩터링) plate_status get 성공 시 사용자 인지용 다이얼로그 제어
-  //    - 동일 plate/area로 연속 호출될 때 중복 표시 방지
-  // ─────────────────────────────
   String? _lastPlateStatusDialogKey;
   bool _plateStatusDialogShowing = false;
 
   // ─────────────────────────────
-  // ✅ 문서명 정책 유틸 (후보/레거시 제거, 단일 docId만 사용)
+  // ✅ 문서명 정책 유틸
   // ─────────────────────────────
 
-  /// area가 비어있으면 Firestore doc('') 불가/정책 일관성 깨짐 → 안전 처리
   String _safeArea(String area) {
     final a = area.trim();
     return a.isEmpty ? 'unknown' : a;
   }
 
-  /// yyyyMM
   String _monthKey(DateTime dt) =>
       '${dt.year}${dt.month.toString().padLeft(2, '0')}';
 
-  /// ✅ 번호판 문자열을 정책 형태로 정규화: "59-라-3974" 형태(하이픈 포함)
-  /// - 입력이 이미 "59-라-3974"면 그대로 유지
-  /// - 입력이 "59라3974"처럼 들어오면 "59-라-3974"로 변환
-  /// - 정규식에 맞지 않으면 원문(trim/공백 제거) 사용
   String _canonicalPlateNumber(String plateNumber) {
     final t = plateNumber.trim().replaceAll(' ', '');
     final raw = t.replaceAll('-', '');
@@ -147,7 +112,6 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
     return '${m.group(1)}-${m.group(2)}-${m.group(3)}';
   }
 
-  /// ✅ 단일 docId 규칙: "{plate(하이픈 포함)}_{area}"
   String _plateDocId(String plateNumber, String area) {
     final a = _safeArea(area);
     final p = _canonicalPlateNumber(plateNumber);
@@ -174,7 +138,6 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
     }
   }
 
-  // ✅ SharedPreferences에서 has_monthly_parking 로드
   Future<void> _loadHasMonthlyParkingFlag() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -206,9 +169,7 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
         if (sc != null && sc.hasClients) {
           sc.jumpTo(0);
         }
-      } catch (_) {
-        // ignore
-      }
+      } catch (_) {}
     });
   }
 
@@ -233,8 +194,7 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
     _jumpSheetScrollToTop();
   }
 
-  void _handleDockHorizontalSwipe(DragEndDetails details,
-      {required bool canSwipe}) {
+  void _handleDockHorizontalSwipe(DragEndDetails details, {required bool canSwipe}) {
     if (!canSwipe) return;
 
     final v = details.primaryVelocity ?? 0.0;
@@ -259,21 +219,17 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
   Future<void> _animateSheet({required bool open}) async {
     final target = open ? _sheetOpened : _sheetClosed;
 
-    // ✅ 열 때마다 항상 정산 유형 페이지에서 시작
     if (open) {
       _resetDockToBillPage();
     }
 
-    // ✅ 닫을 때는 내부 스크롤을 최상단으로 되돌림
     if (!open) {
       try {
         final sc = _sheetScrollController;
         if (sc != null && sc.hasClients) {
           sc.jumpTo(0);
         }
-      } catch (_) {
-        // ignore
-      }
+      } catch (_) {}
     }
 
     try {
@@ -301,10 +257,6 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
     _setDockPage(_dockPageMemo);
   }
 
-  /// ✅ (UI/UX 리팩터링) plate_status get 성공 시 사용자 인지용 Modern Dialog
-  /// - 요구사항: Dialog에서는 countType/statusList를 보여주지 않음
-  /// - 표시: area, plate, customStatus(메모)만 표시
-  /// - CTA: "상태 메모 보기" → 시트 열고 메모 탭 이동
   Future<void> _showPlateStatusLoadedDialog({
     required String plateNumber,
     required String area,
@@ -312,15 +264,16 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
   }) async {
     if (!mounted) return;
 
+    final cs = Theme.of(context).colorScheme;
+
     final safeArea = _safeArea(area);
-    final customStatusText =
-    (customStatus ?? '').trim().isEmpty ? '-' : customStatus!.trim();
+    final customStatusText = (customStatus ?? '').trim().isEmpty ? '-' : customStatus!.trim();
 
     await showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
       barrierLabel: 'plate_status_loaded',
-      barrierColor: Colors.black.withOpacity(0.55),
+      barrierColor: cs.scrim.withOpacity(0.55),
       transitionDuration: const Duration(milliseconds: 220),
       pageBuilder: (ctx, a1, a2) {
         return Center(
@@ -337,8 +290,7 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
         );
       },
       transitionBuilder: (ctx, animation, secondary, child) {
-        final curved =
-        CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
         return FadeTransition(
           opacity: curved,
           child: ScaleTransition(
@@ -350,9 +302,7 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
     );
   }
 
-  // ─────────────────────────────
-  // ✅ (FIX) Navigator pop 재진입 방지
-  // ─────────────────────────────
+  // ✅ Navigator pop 재진입 방지
   bool _exitInProgress = false;
   bool _exitPostFrameScheduled = false;
 
@@ -390,16 +340,12 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
   void initState() {
     super.initState();
 
-    // ✅ 화면 진입 시 로컬 플래그 로드
     _loadHasMonthlyParkingFlag();
 
-    // '고정' 제거 이후: 과거 값이 남아있으면 '변동'으로 정규화
-    if (controller.selectedBillType == '고정' ||
-        controller.selectedBillType.trim().isEmpty) {
+    if (controller.selectedBillType == '고정' || controller.selectedBillType.trim().isEmpty) {
       controller.selectedBillType = '변동';
     }
 
-    // ⬇️ 시트 사이즈 변화에 따라 _sheetOpen 동기화 (드래그로 여닫을 때도 반영)
     _sheetController.addListener(() {
       try {
         final s = _sheetController.size;
@@ -409,7 +355,6 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
           setState(() {
             _sheetOpen = openNow;
 
-            // ✅ 드래그로 열려도 항상 bill 페이지로 시작
             if (openNow) {
               _dockSlideFromRight = false;
               _dockPageIndex = _dockPageBill;
@@ -421,16 +366,13 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
           }
         }
 
-        // ✅ 완전 닫힘 상태에서는 내부 스크롤 offset을 0으로 강제
         if (_isSheetFullyClosed()) {
           final sc = _sheetScrollController;
           if (sc != null && sc.hasClients && sc.offset != 0) {
             sc.jumpTo(0);
           }
         }
-      } catch (_) {
-        // ignore
-      }
+      } catch (_) {}
     });
 
     controller.controllerBackDigit.addListener(() async {
@@ -439,16 +381,11 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
         final plateNumber = controller.buildPlateNumber();
         final area = context.read<AreaState>().currentArea;
 
-        // ✅ 입력 완료 시에는 "plate_status" 조회 (월샤딩 + 단일 docId)
         final data = await _fetchPlateStatus(plateNumber, area);
-
         if (!mounted || data == null) return;
 
         final fetchedStatus = (data['customStatus'] as String?)?.trim();
-        final fetchedList = (data['statusList'] as List<dynamic>?)
-            ?.map((e) => e.toString())
-            .toList() ??
-            [];
+        final fetchedList = (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
         final String? fetchedCountType = (data['countType'] as String?)?.trim();
 
         setState(() {
@@ -457,13 +394,11 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
           selectedStatusNames = fetchedList;
           statusSectionKey = UniqueKey();
 
-          // ✅ plate_status에 countType이 있으면 정기 상태로 전환 + countType 표시
           if (fetchedCountType != null && fetchedCountType.isNotEmpty) {
             controller.countTypeController.text = fetchedCountType;
             controller.selectedBillType = '정기';
             controller.selectedBill = fetchedCountType;
 
-            // monthly 문서 존재 여부는 "정기 불러오기"로 확정
             _monthlyDocExists = false;
             _resolvedMonthlyDocId = null;
           } else {
@@ -472,7 +407,6 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
           }
         });
 
-        // ✅ Dialog 중복 표시 방지 (단일 docId 기반 키)
         final dialogKey = _plateDocId(plateNumber, area);
         if (_plateStatusDialogShowing) return;
         if (_lastPlateStatusDialogKey == dialogKey) return;
@@ -481,7 +415,6 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
         _lastPlateStatusDialogKey = dialogKey;
 
         try {
-          // ✅ Dialog에는 customStatus(메모)만 전달/표시
           await _showPlateStatusLoadedDialog(
             plateNumber: plateNumber,
             area: area,
@@ -493,18 +426,15 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
       }
     });
 
-    // 기존 bill 캐시 로드
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final billState = context.read<BillState>();
       await billState.loadFromBillCache();
       if (!mounted) return;
       setState(() {
-        controller.isLocationSelected =
-            controller.locationController.text.isNotEmpty;
+        controller.isLocationSelected = controller.locationController.text.isNotEmpty;
       });
     });
 
-    // ⬇️ 첫 빌드 직후 한 번만 자동으로 DoubleLiveOcrPage 열기
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (_openedScannerOnce) return;
       _openedScannerOnce = true;
@@ -515,7 +445,6 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // ✅ 다른 화면에서 refresh 후 돌아오는 경우를 대비해 재로드(비용 매우 낮음)
     _loadHasMonthlyParkingFlag();
   }
 
@@ -526,22 +455,7 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
     super.dispose();
   }
 
-  /// plate_status 단건 조회 (월 단위 샤딩 구조 + 단일 docId)
-  ///
-  /// ✅ 저장 구조:
-  ///   plate_status/{area}/months/{yyyyMM}/plates/{plateDocId}
-  ///
-  /// ✅ (핵심) plateDocId 정책(단일):
-  ///   plateDocId = "{plate(하이픈 포함)}_{area}"
-  ///
-  /// ✅ 조회 정책:
-  ///   - 현재월 → 직전월(최대 2개월) 우선
-  ///   - 실패 시 collectionGroup('plates')로 전체월 폴백(단일 docId로만, 규칙/인덱스 제한 시 자동 무시)
-  ///
-  /// ✅ 계측 정책(요구사항 반영):
-  ///   - 실제 Firestore get 횟수와 무관하게 UsageReporter에는 항상 n=1로 보고
-  Future<Map<String, dynamic>?> _fetchPlateStatus(
-      String plateNumber, String area) async {
+  Future<Map<String, dynamic>?> _fetchPlateStatus(String plateNumber, String area) async {
     final safeArea = _safeArea(area);
     final docId = _plateDocId(plateNumber, safeArea);
 
@@ -552,7 +466,6 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
     ];
 
     try {
-      // 1) 빠른 경로: 현재월/전월 (단일 docId만 get)
       for (final m in monthsToTry) {
         final mk = _monthKey(m);
 
@@ -568,8 +481,6 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
         if (doc.exists) return doc.data();
       }
 
-      // 2) 느린 경로: 최근 2개월에 없으면 전체 월에서 검색(collectionGroup)
-      //    - 규칙/인덱스 미지원이면 FirebaseException 발생 가능 → 캐치 후 무시
       try {
         final qs = await _firestore
             .collectionGroup(_platesSub)
@@ -581,11 +492,8 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
           int bestMonth = -1;
 
           for (final d in qs.docs) {
-            final path = d.reference
-                .path; // plate_status/{area}/months/{yyyyMM}/plates/{docId}
-            if (!path.contains('$_plateStatusRoot/$safeArea/$_monthsSub/')) {
-              continue;
-            }
+            final path = d.reference.path;
+            if (!path.contains('$_plateStatusRoot/$safeArea/$_monthsSub/')) continue;
 
             final parts = path.split('/');
             final monthsIndex = parts.indexOf(_monthsSub);
@@ -615,7 +523,6 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
       debugPrint('[_fetchPlateStatus] error: $e');
       return null;
     } finally {
-      // ✅ 요구사항: 계측은 무조건 1 read
       await _reportUsage(
         area: safeArea,
         action: 'read',
@@ -625,22 +532,19 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
     }
   }
 
-  Future<Map<String, dynamic>?> _fetchMonthlyPlateStatus(
-      String plateNumber, String area) async {
+  Future<Map<String, dynamic>?> _fetchMonthlyPlateStatus(String plateNumber, String area) async {
     final safeArea = _safeArea(area);
     final docId = _plateDocId(plateNumber, safeArea);
 
     try {
-      final doc =
-      await _firestore.collection(_monthlyPlateStatusRoot).doc(docId).get();
+      final doc = await _firestore.collection(_monthlyPlateStatusRoot).doc(docId).get();
       if (doc.exists) {
-        _resolvedMonthlyDocId = docId; // ✅ 단일 docId 확정
+        _resolvedMonthlyDocId = docId;
         return doc.data();
       }
       return null;
     } on FirebaseException catch (e) {
-      debugPrint(
-          '[_fetchMonthlyPlateStatus] FirebaseException: ${e.code} ${e.message}');
+      debugPrint('[_fetchMonthlyPlateStatus] FirebaseException: ${e.code} ${e.message}');
       return null;
     } catch (e) {
       debugPrint('[_fetchMonthlyPlateStatus] error: $e');
@@ -686,10 +590,7 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
     }
 
     final fetchedStatus = (data['customStatus'] as String?)?.trim();
-    final fetchedList = (data['statusList'] as List<dynamic>?)
-        ?.map((e) => e.toString())
-        .toList() ??
-        [];
+    final fetchedList = (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
     final fetchedCountType = (data['countType'] as String?)?.trim();
 
     setState(() {
@@ -727,12 +628,10 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
       return;
     }
 
-    if (!_monthlyDocExists ||
-        (_resolvedMonthlyDocId == null || _resolvedMonthlyDocId!.trim().isEmpty)) {
+    if (!_monthlyDocExists || (_resolvedMonthlyDocId == null || _resolvedMonthlyDocId!.trim().isEmpty)) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('정기(월정기) 문서가 없습니다. 먼저 정기 정보를 불러오거나 등록해 주세요.')),
+        const SnackBar(content: Text('정기(월정기) 문서가 없습니다. 먼저 정기 정보를 불러오거나 등록해 주세요.')),
       );
       return;
     }
@@ -767,8 +666,7 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
         const SnackBar(content: Text('월정기(정기) 메모/상태가 반영되었습니다.')),
       );
     } on FirebaseException catch (e) {
-      debugPrint(
-          '[_applyMonthlyMemoAndStatusOnly] FirebaseException: ${e.code} ${e.message}');
+      debugPrint('[_applyMonthlyMemoAndStatusOnly] FirebaseException: ${e.code} ${e.message}');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('반영 실패: ${e.message ?? e.code}')),
@@ -785,12 +683,13 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
   }
 
   Widget _buildMonthlyApplyButton() {
+    final cs = Theme.of(context).colorScheme;
+
     if (controller.selectedBillType != '정기') {
       return const SizedBox.shrink();
     }
 
-    final enabled =
-        !_monthlyApplying && _monthlyDocExists && (_resolvedMonthlyDocId != null);
+    final enabled = !_monthlyApplying && _monthlyDocExists && (_resolvedMonthlyDocId != null);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -801,25 +700,26 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
           child: ElevatedButton(
             onPressed: enabled ? _applyMonthlyMemoAndStatusOnly : null,
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.black,
-              foregroundColor: Colors.white,
-              disabledBackgroundColor: Colors.grey.shade300,
-              disabledForegroundColor: Colors.grey.shade600,
+              backgroundColor: enabled ? cs.primary : cs.surfaceContainerLow,
+              foregroundColor: enabled ? cs.onPrimary : cs.onSurfaceVariant,
               elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              side: BorderSide(
+                color: enabled ? cs.primary.withOpacity(0.25) : cs.outlineVariant.withOpacity(0.85),
               ),
             ),
             child: _monthlyApplying
-                ? const SizedBox(
+                ? SizedBox(
               width: 18,
               height: 18,
               child: CircularProgressIndicator(
-                  strokeWidth: 2, color: Colors.white),
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(enabled ? cs.onPrimary : cs.onSurfaceVariant),
+              ),
             )
                 : const Text(
               '반영',
-              style: TextStyle(fontWeight: FontWeight.w800),
+              style: TextStyle(fontWeight: FontWeight.w900),
             ),
           ),
         ),
@@ -827,7 +727,7 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
           const SizedBox(height: 8),
           Text(
             '정기(월정기) 문서를 불러온 경우에만 반영할 수 있습니다.',
-            style: TextStyle(fontSize: 12, color: Colors.black.withOpacity(0.55)),
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
           ),
         ],
       ],
@@ -835,67 +735,18 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
   }
 
   // ─────────────────────────────
-  // 🔽 가운데 임의문자/누락 허용 파서 + 폴백
+  // OCR 폴백 파서(원문 유지)
   // ─────────────────────────────
   static const List<String> _allowedKoreanMids = [
-    '가',
-    '나',
-    '다',
-    '라',
-    '마',
-    '거',
-    '너',
-    '더',
-    '러',
-    '머',
-    '버',
-    '서',
-    '어',
-    '저',
-    '고',
-    '노',
-    '도',
-    '로',
-    '모',
-    '보',
-    '소',
-    '오',
-    '조',
-    '구',
-    '누',
-    '두',
-    '루',
-    '무',
-    '부',
-    '수',
-    '우',
-    '주',
-    '하',
-    '허',
-    '호',
-    '배'
+    '가','나','다','라','마','거','너','더','러','머','버','서','어','저','고','노','도','로','모','보','소','오','조','구','누','두','루','무','부','수','우','주','하','허','호','배'
   ];
 
   static const Map<String, String> _charMap = {
-    'O': '0',
-    'o': '0',
-    'I': '1',
-    'l': '1',
-    'B': '8',
-    'S': '5',
+    'O': '0','o': '0','I': '1','l': '1','B': '8','S': '5',
   };
 
   static const Map<String, String> _midNormalize = {
-    '리': '러',
-    '이': '어',
-    '지': '저',
-    '히': '허',
-    '기': '거',
-    '니': '너',
-    '디': '더',
-    '미': '머',
-    '비': '버',
-    '시': '서',
+    '리': '러','이': '어','지': '저','히': '허','기': '거','니': '너','디': '더','미': '머','비': '버','시': '서',
   };
 
   String _normalize(String s) {
@@ -973,18 +824,15 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
       controller.controllerMidDigit.text = mid;
       controller.controllerBackDigit.text = back;
 
-      // ✅ 번호판을 OCR로 새로 채우면 월정기 로딩 확정 상태는 초기화
       _monthlyDocExists = false;
       _resolvedMonthlyDocId = null;
 
-      // ✅ 번호판이 새로 채워졌으므로 안내 다이얼로그 중복 키 초기화
       _lastPlateStatusDialogKey = null;
 
       if (promptMid || mid.isEmpty) {
         controller.showKeypad = true;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('가운데 글자가 누락되었습니다. 가운데 한 글자를 입력해 주세요.')),
+          const SnackBar(content: Text('가운데 글자가 누락되었습니다. 가운데 한 글자를 입력해 주세요.')),
         );
       } else {
         controller.showKeypad = false;
@@ -997,7 +845,6 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
       MaterialPageRoute(builder: (_) => const DoubleLiveOcrPage()),
     );
     if (plate == null) return;
-
     _applyPlateWithFallback(plate);
   }
 
@@ -1008,7 +855,6 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
       _monthlyDocExists = false;
       _resolvedMonthlyDocId = null;
 
-      // ✅ 편집 시작 → 안내 다이얼로그 중복 키 초기화
       _lastPlateStatusDialogKey = null;
 
       switch (field) {
@@ -1085,8 +931,6 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
           _dockEditing = null;
           _monthlyDocExists = false;
           _resolvedMonthlyDocId = null;
-
-          // ✅ 입력 초기화 → 안내 다이얼로그 중복 키 초기화
           _lastPlateStatusDialogKey = null;
         });
       },
@@ -1103,6 +947,8 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
   }
 
   Widget _buildBottomBar() {
+    final cs = Theme.of(context).colorScheme;
+
     final actionButton = DoubleInputBottomActionSection(
       controller: controller,
       mountedContext: mounted,
@@ -1111,18 +957,22 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
 
     final Widget ocrButton = Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-      child: ElevatedButton.icon(
-        onPressed: _openLiveScanner,
-        icon: const Icon(Icons.camera_alt_outlined),
-        label: const Text('실시간 OCR 다시 스캔'),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          minimumSize: const Size.fromHeight(55),
-          padding: EdgeInsets.zero,
-          side: const BorderSide(color: Colors.grey, width: 1.0),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: _openLiveScanner,
+          icon: const Icon(Icons.camera_alt_outlined),
+          label: const Text('실시간 OCR 다시 스캔'),
+          style: OutlinedButton.styleFrom(
+            backgroundColor: cs.surface,
+            foregroundColor: cs.onSurface,
+            side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+            minimumSize: const Size.fromHeight(55),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ).copyWith(
+            overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                  (states) => states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(0.12) : null,
+            ),
           ),
         ),
       ),
@@ -1152,8 +1002,7 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Padding(
-            padding:
-            const EdgeInsets.only(left: 12, right: 12, top: 6, bottom: 8),
+            padding: const EdgeInsets.only(left: 12, right: 12, top: 6, bottom: 8),
             child: _buildDock(),
           ),
           DoubleInputBottomNavigation(
@@ -1168,15 +1017,16 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
   }
 
   Widget _buildScreenTag(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final base = Theme.of(context).textTheme.labelSmall;
     final style = (base ??
         const TextStyle(
           fontSize: 11,
-          color: Colors.black54,
           fontWeight: FontWeight.w600,
         ))
         .copyWith(
-      color: Colors.black54,
+      color: cs.onSurfaceVariant,
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
     );
@@ -1202,11 +1052,12 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
       _animateSheet(open: false);
       return;
     }
-    // ✅ FIX: exit 경로를 단일화(중복 pop 방지)
     _requestExit(defer: false);
   }
 
   Widget _buildDockPagedBody({required bool canSwipe}) {
+    final cs = Theme.of(context).colorScheme;
+
     final Widget page = (_dockPageIndex == _dockPageBill)
         ? Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1215,31 +1066,26 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
           Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF8E1),
+                color: cs.tertiaryContainer.withOpacity(0.55),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFFFECB3)),
+                border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
               ),
-              child: const Text(
+              child: Text(
                 '정기 주차가 제한된 근무지입니다.',
-                style: TextStyle(fontSize: 12, height: 1.25),
+                style: TextStyle(fontSize: 12, height: 1.25, color: cs.onSurface),
               ),
             ),
           ),
         DoubleInputBillSection(
           selectedBill: controller.selectedBill,
-          onChanged: (value) =>
-              setState(() => controller.selectedBill = value),
+          onChanged: (value) => setState(() => controller.selectedBill = value),
           selectedBillType: controller.selectedBillType,
           onTypeChanged: (newType) {
-            if (newType == '정기' &&
-                _hasMonthlyLoaded &&
-                !_hasMonthlyParking) {
+            if (newType == '정기' && _hasMonthlyLoaded && !_hasMonthlyParking) {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text('현재 지역에서는 정기(월주차) 기능을 사용할 수 없습니다.')),
+                const SnackBar(content: Text('현재 지역에서는 정기(월주차) 기능을 사용할 수 없습니다.')),
               );
               return;
             }
@@ -1289,11 +1135,8 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
       transitionBuilder: (child, animation) {
-        final begin = _dockSlideFromRight
-            ? const Offset(0.10, 0)
-            : const Offset(-0.10, 0);
-        final offsetAnim =
-        Tween<Offset>(begin: begin, end: Offset.zero).animate(animation);
+        final begin = _dockSlideFromRight ? const Offset(0.10, 0) : const Offset(-0.10, 0);
+        final offsetAnim = Tween<Offset>(begin: begin, end: Offset.zero).animate(animation);
         return SlideTransition(
           position: offsetAnim,
           child: FadeTransition(opacity: animation, child: child),
@@ -1309,32 +1152,29 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onHorizontalDragEnd: (d) =>
-          _handleDockHorizontalSwipe(d, canSwipe: canSwipe),
+      onHorizontalDragEnd: (d) => _handleDockHorizontalSwipe(d, canSwipe: canSwipe),
       child: content,
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final viewInset = MediaQuery.of(context).viewInsets.bottom;
     final sysBottom = MediaQuery.of(context).padding.bottom;
-    final bottomSafePadding =
-        (controller.showKeypad ? 280.0 : 140.0) + viewInset + sysBottom;
+    final bottomSafePadding = (controller.showKeypad ? 280.0 : 140.0) + viewInset + sysBottom;
 
     return PopScope(
       canPop: false,
       onPopInvoked: (didPop) async {
-        // ✅ FIX 1) 이미 pop이 완료된(또는 진행된) 콜백이면 재진입 금지
         if (didPop) return;
 
-        // ✅ FIX 2) 시트가 열려 있으면 먼저 닫기
         if (_sheetOpen) {
           await _animateSheet(open: false);
           return;
         }
 
-        // ✅ FIX 3) PopScope 콜스택에서 즉시 pop 호출하면 _debugLocked로 터질 수 있어 defer
         if (mounted) {
           _requestExit(defer: true);
         }
@@ -1343,9 +1183,11 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
         appBar: AppBar(
           automaticallyImplyLeading: false,
           centerTitle: true,
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          elevation: 1,
+          backgroundColor: cs.surface,
+          foregroundColor: cs.onSurface,
+          elevation: 0,
+          surfaceTintColor: Colors.transparent,
+          shape: Border(bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.85), width: 1)),
           flexibleSpace: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: _handleBackButtonPressed,
@@ -1359,27 +1201,25 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
                       children: [
                         Text(
                           '뒤로가기',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.blueGrey,
+                            fontWeight: FontWeight.w700,
+                            color: cs.onSurfaceVariant,
                           ),
                         ),
                         const SizedBox(width: 8),
                         Container(
                           width: 1,
                           height: 16,
-                          color: Colors.grey.shade400,
+                          color: cs.outlineVariant.withOpacity(0.85),
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          controller.isThreeDigit
-                              ? '현재 앞자리: 세자리'
-                              : '현재 앞자리: 두자리',
-                          style: const TextStyle(
+                          controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리',
+                          style: TextStyle(
                             fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black,
+                            fontWeight: FontWeight.w900,
+                            color: cs.onSurface,
                           ),
                         ),
                       ],
@@ -1397,8 +1237,7 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
                 Positioned.fill(
                   child: SingleChildScrollView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
+                    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: EdgeInsets.fromLTRB(16, 16, 16, bottomSafePadding),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1413,13 +1252,10 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
                           onKeypadStateChanged: (_) {
                             setState(() {
                               controller.clearInput();
-                              controller.setActiveController(
-                                  controller.controllerFrontDigit);
+                              controller.setActiveController(controller.controllerFrontDigit);
                               _dockEditing = null;
                               _monthlyDocExists = false;
                               _resolvedMonthlyDocId = null;
-
-                              // ✅ 입력 초기화 → 안내 다이얼로그 중복 키 초기화
                               _lastPlateStatusDialogKey = null;
                             });
                           },
@@ -1431,8 +1267,7 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
                           isThreeDigit: controller.isThreeDigit,
                         ),
                         const SizedBox(height: 16),
-                        DoubleInputLocationSection(
-                            locationController: controller.locationController),
+                        DoubleInputLocationSection(locationController: controller.locationController),
                         const SizedBox(height: 16),
                         DoubleInputPhotoSection(
                           capturedImages: controller.capturedImages,
@@ -1443,6 +1278,7 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
                     ),
                   ),
                 ),
+
                 DraggableScrollableSheet(
                   controller: _sheetController,
                   initialChildSize: _sheetClosed,
@@ -1451,8 +1287,6 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
                   snap: true,
                   snapSizes: const [_sheetClosed, _sheetOpened],
                   builder: (context, scrollController) {
-                    const sheetBg = Color(0xFFF6F8FF);
-
                     _sheetScrollController = scrollController;
 
                     final bool lockScroll = _isSheetFullyClosed();
@@ -1461,77 +1295,66 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
                     final sheetBottomPadding = 16.0 + viewInset;
 
                     return Container(
-                      decoration: const BoxDecoration(
-                        borderRadius:
-                        BorderRadius.vertical(top: Radius.circular(16)),
+                      decoration: BoxDecoration(
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                        border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+                        color: cs.surface,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black26,
+                            color: cs.shadow.withOpacity(0.12),
                             blurRadius: 10,
-                            offset: Offset(0, -4),
+                            offset: const Offset(0, -4),
                           ),
                         ],
                       ),
                       child: ClipRRect(
-                        borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(16)),
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                         clipBehavior: Clip.antiAlias,
-                        child: ColoredBox(
-                          color: sheetBg,
-                          child: SafeArea(
-                            top: true,
-                            bottom: false,
-                            child: NotificationListener<ScrollNotification>(
-                              onNotification: (notification) {
-                                if (!lockScroll) return false;
+                        child: SafeArea(
+                          top: true,
+                          bottom: false,
+                          child: NotificationListener<ScrollNotification>(
+                            onNotification: (notification) {
+                              if (!lockScroll) return false;
 
-                                if (notification is ScrollUpdateNotification ||
-                                    notification is OverscrollNotification ||
-                                    notification is UserScrollNotification) {
-                                  try {
-                                    if (scrollController.hasClients &&
-                                        scrollController.offset != 0) {
-                                      scrollController.jumpTo(0);
-                                    }
-                                  } catch (_) {
-                                    // ignore
+                              if (notification is ScrollUpdateNotification ||
+                                  notification is OverscrollNotification ||
+                                  notification is UserScrollNotification) {
+                                try {
+                                  if (scrollController.hasClients && scrollController.offset != 0) {
+                                    scrollController.jumpTo(0);
                                   }
-                                  return true;
-                                }
-                                return false;
-                              },
-                              child: CustomScrollView(
-                                controller: scrollController,
-                                physics: const ClampingScrollPhysics(),
-                                slivers: [
-                                  SliverPersistentHeader(
-                                    pinned: true,
-                                    delegate: _SheetHeaderDelegate(
-                                      backgroundColor: sheetBg,
-                                      sheetOpen: _sheetOpen,
-                                      plateText: controller.buildPlateNumber(),
-                                      onToggle: _toggleSheet,
-                                      currentPageIndex: _dockPageIndex,
-                                      onSelectBill: () =>
-                                          _setDockPage(_dockPageBill),
-                                      onSelectMemo: () =>
-                                          _setDockPage(_dockPageMemo),
+                                } catch (_) {}
+                                return true;
+                              }
+                              return false;
+                            },
+                            child: CustomScrollView(
+                              controller: scrollController,
+                              physics: const ClampingScrollPhysics(),
+                              slivers: [
+                                SliverPersistentHeader(
+                                  pinned: true,
+                                  delegate: _SheetHeaderDelegate(
+                                    sheetOpen: _sheetOpen,
+                                    plateText: controller.buildPlateNumber(),
+                                    onToggle: _toggleSheet,
+                                    currentPageIndex: _dockPageIndex,
+                                    onSelectBill: () => _setDockPage(_dockPageBill),
+                                    onSelectMemo: () => _setDockPage(_dockPageMemo),
+                                  ),
+                                ),
+                                SliverPadding(
+                                  padding: EdgeInsets.fromLTRB(16, 12, 16, sheetBottomPadding),
+                                  sliver: SliverList(
+                                    delegate: SliverChildListDelegate(
+                                      [
+                                        _buildDockPagedBody(canSwipe: canSwipe),
+                                      ],
                                     ),
                                   ),
-                                  SliverPadding(
-                                    padding: EdgeInsets.fromLTRB(
-                                        16, 12, 16, sheetBottomPadding),
-                                    sliver: SliverList(
-                                      delegate: SliverChildListDelegate(
-                                        [
-                                          _buildDockPagedBody(
-                                              canSwipe: canSwipe),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           ),
                         ),
@@ -1554,6 +1377,7 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
     );
   }
 }
+
 class _PlateStatusLoadedDialog extends StatelessWidget {
   final String safeArea;
   final String plateNumber;
@@ -1569,78 +1393,14 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
     required this.onGoMemo,
   });
 
-  Color _onColorFor(Color bg, {Color fallback = Colors.white}) {
-    // 단순 대비(명도 기준)
-    return bg.computeLuminance() > 0.55 ? Colors.black : fallback;
-  }
-
-  Widget _infoCard({
-    required BuildContext context,
-    required IconData icon,
-    required String label,
-    required Widget value,
-  }) {
-    final palette = AppCardPalette.of(context);
-    final base = palette.doubleBase;
-    final dark = palette.doubleDark;
-    final light = palette.doubleLight;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: light.withOpacity(0.35),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: dark.withOpacity(0.25)),
-      ),
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: base.withOpacity(0.14),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: base.withOpacity(0.22)),
-            ),
-            alignment: Alignment.center,
-            child: Icon(icon, size: 18, color: dark),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: dark.withOpacity(0.78),
-                    letterSpacing: 0.2,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                value,
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
-    final palette = AppCardPalette.of(context);
-    final base = palette.doubleBase;
-    final dark = palette.doubleDark;
-    final light = palette.doubleLight;
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
-      backgroundColor: Colors.white,
+      backgroundColor: cs.surface,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
@@ -1649,19 +1409,18 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Top bar: leading status + close
               Row(
                 children: [
                   Container(
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: light.withOpacity(0.55),
+                      color: cs.primary.withOpacity(0.10),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: base.withOpacity(0.18)),
+                      border: Border.all(color: cs.primary.withOpacity(0.18)),
                     ),
                     alignment: Alignment.center,
-                    child: Icon(Icons.check_rounded, color: dark, size: 20),
+                    child: Icon(Icons.check_rounded, color: cs.primary, size: 20),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
@@ -1670,14 +1429,14 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w900,
                         letterSpacing: 0.2,
-                        color: Colors.black,
+                        color: cs.onSurface,
                       ),
                     ),
                   ),
                   IconButton(
                     tooltip: '닫기',
                     onPressed: onClose,
-                    icon: const Icon(Icons.close_rounded),
+                    icon: Icon(Icons.close_rounded, color: cs.onSurface),
                   ),
                 ],
               ),
@@ -1687,22 +1446,20 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
                 child: Text(
                   '저장된 메모를 화면에 반영했습니다.',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: Colors.black.withOpacity(0.70),
+                    color: cs.onSurfaceVariant,
                     height: 1.35,
                   ),
                 ),
               ),
               const SizedBox(height: 14),
 
-              // Meta row
               Container(
                 width: double.infinity,
-                padding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                 decoration: BoxDecoration(
-                  color: light.withOpacity(0.20),
+                  color: cs.surfaceContainerLow,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: dark.withOpacity(0.18)),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
                 ),
                 child: Row(
                   children: [
@@ -1714,7 +1471,7 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
-                          color: Colors.black.withOpacity(0.88),
+                          color: cs.onSurface,
                         ),
                       ),
                     ),
@@ -1727,7 +1484,7 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w800,
-                          color: Colors.black.withOpacity(0.78),
+                          color: cs.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -1737,25 +1494,61 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
 
               const SizedBox(height: 12),
 
-              // ✅ 메모만 표시
-              _infoCard(
-                context: context,
-                icon: Icons.note_alt_rounded,
-                label: '메모',
-                value: Text(
-                  customStatusText,
-                  style: TextStyle(
-                    fontSize: 13,
-                    height: 1.35,
-                    color: Colors.black.withOpacity(0.86),
-                    fontWeight: FontWeight.w700,
-                  ),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: cs.primary.withOpacity(0.10),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: cs.primary.withOpacity(0.18)),
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(Icons.note_alt_rounded, size: 18, color: cs.primary),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '메모',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900,
+                              color: cs.onSurfaceVariant,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            customStatusText,
+                            style: TextStyle(
+                              fontSize: 13,
+                              height: 1.35,
+                              color: cs.onSurface,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
               ),
 
               const SizedBox(height: 16),
 
-              // Actions
               Row(
                 children: [
                   Expanded(
@@ -1763,13 +1556,11 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
                       onPressed: onClose,
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
-                        side: BorderSide(color: base.withOpacity(0.45)),
-                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+                        foregroundColor: cs.onSurface,
                       ),
-                      child: const Text('닫기',
-                          style: TextStyle(fontWeight: FontWeight.w800)),
+                      child: const Text('닫기', style: TextStyle(fontWeight: FontWeight.w900)),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -1778,14 +1569,11 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
                       onPressed: onGoMemo,
                       style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
-                        backgroundColor: base,
-                        foregroundColor:
-                        _onColorFor(base, fallback: Colors.white),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        backgroundColor: cs.primary,
+                        foregroundColor: cs.onPrimary,
                       ),
-                      child: const Text('상태 메모 보기',
-                          style: TextStyle(fontWeight: FontWeight.w900)),
+                      child: const Text('상태 메모 보기', style: TextStyle(fontWeight: FontWeight.w900)),
                     ),
                   ),
                 ],
@@ -1798,9 +1586,7 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
   }
 }
 
-/// ✅ 카드 헤더(핸들/세그먼트 탭) 고정
 class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
-  final Color backgroundColor;
   final bool sheetOpen;
   final String plateText;
 
@@ -1810,7 +1596,6 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
   final VoidCallback onSelectMemo;
 
   _SheetHeaderDelegate({
-    required this.backgroundColor,
     required this.sheetOpen,
     required this.plateText,
     required this.onToggle,
@@ -1831,13 +1616,11 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
     required bool selected,
     required VoidCallback? onTap,
   }) {
-    final selectedBg = Colors.white;
-    final normalBg = Colors.transparent;
+    final cs = Theme.of(context).colorScheme;
 
-    final border = Border.all(
-      color: selected ? Colors.black87 : Colors.black26,
-      width: selected ? 1.4 : 1.0,
-    );
+    final bg = selected ? cs.surface : Colors.transparent;
+    final border = selected ? cs.primary.withOpacity(0.55) : cs.outlineVariant.withOpacity(0.85);
+    final fg = selected ? cs.onSurface : cs.onSurfaceVariant;
 
     return Material(
       color: Colors.transparent,
@@ -1850,9 +1633,9 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
           height: 36,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: selected ? selectedBg : normalBg,
+            color: bg,
             borderRadius: BorderRadius.circular(10),
-            border: border,
+            border: Border.all(color: border, width: selected ? 1.4 : 1.0),
           ),
           child: Text(
             label,
@@ -1860,8 +1643,8 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               fontSize: 13,
-              fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
-              color: selected ? Colors.black : Colors.black54,
+              fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+              color: fg,
               letterSpacing: 0.2,
             ),
           ),
@@ -1872,15 +1655,15 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    final cs = Theme.of(context).colorScheme;
+
     final VoidCallback? outerTap = sheetOpen ? null : onToggle;
 
-    final bool billSelected =
-        currentPageIndex == _DoubleInputPlateScreenState._dockPageBill;
-    final bool memoSelected =
-        currentPageIndex == _DoubleInputPlateScreenState._dockPageMemo;
+    final bool billSelected = currentPageIndex == _DoubleInputPlateScreenState._dockPageBill;
+    final bool memoSelected = currentPageIndex == _DoubleInputPlateScreenState._dockPageMemo;
 
     return Material(
-      color: backgroundColor,
+      color: cs.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -1894,10 +1677,10 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
               InkWell(
                 onTap: sheetOpen ? onToggle : null,
                 borderRadius: BorderRadius.circular(12),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 3),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
                   child: Center(
-                    child: _SheetHandle(),
+                    child: _SheetHandle(color: cs.outlineVariant.withOpacity(0.9)),
                   ),
                 ),
               ),
@@ -1936,7 +1719,7 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: Colors.black.withOpacity(0.55),
+                        color: cs.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -1946,10 +1729,10 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
                       plateText,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
-                        color: Colors.black54,
+                        color: cs.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -1966,13 +1749,14 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
   bool shouldRebuild(covariant _SheetHeaderDelegate oldDelegate) {
     return oldDelegate.sheetOpen != sheetOpen ||
         oldDelegate.plateText != plateText ||
-        oldDelegate.backgroundColor != backgroundColor ||
         oldDelegate.currentPageIndex != currentPageIndex;
   }
 }
 
 class _SheetHandle extends StatelessWidget {
-  const _SheetHandle();
+  final Color color;
+
+  const _SheetHandle({required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -1981,7 +1765,7 @@ class _SheetHandle extends StatelessWidget {
       height: 4,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: Colors.black38,
+          color: color,
           borderRadius: BorderRadius.circular(2),
         ),
       ),
@@ -1989,7 +1773,6 @@ class _SheetHandle extends StatelessWidget {
   }
 }
 
-/// 하단 도크: 번호판 입력 3분할을 키패드/액션바 주변에 배치
 class _PlateDock extends StatelessWidget {
   final DoubleInputPlateController controller;
   final VoidCallback onActivateFront;
@@ -2004,23 +1787,25 @@ class _PlateDock extends StatelessWidget {
   });
 
   InputDecoration _dec(BuildContext context, bool active) {
+    final cs = Theme.of(context).colorScheme;
+
     return InputDecoration(
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       filled: true,
-      fillColor: active ? Colors.yellow.shade50 : Colors.white,
+      fillColor: active ? cs.primary.withOpacity(0.08) : cs.surface,
       counterText: '',
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(
-          color: active ? Colors.amber : Colors.grey.shade300,
+          color: active ? cs.primary.withOpacity(0.75) : cs.outlineVariant.withOpacity(0.85),
           width: active ? 2 : 1,
         ),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(
-          color: Colors.amber.shade700,
+          color: cs.primary,
           width: 2,
         ),
       ),
@@ -2034,7 +1819,9 @@ class _PlateDock extends StatelessWidget {
     required VoidCallback onTap,
     required int maxLength,
   }) {
-    final chipColor = isActive ? Colors.amber.shade700 : Colors.grey.shade500;
+    final cs = Theme.of(context).colorScheme;
+
+    final chipColor = isActive ? cs.primary : cs.onSurfaceVariant;
 
     return GestureDetector(
       onTap: onTap,
@@ -2046,33 +1833,33 @@ class _PlateDock extends StatelessWidget {
               readOnly: true,
               maxLength: maxLength,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+                color: cs.onSurface,
+              ),
               decoration: _dec(context, isActive),
             ),
             Positioned(
               right: 8,
               top: 8,
               child: Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: chipColor.withOpacity(isActive ? 0.18 : 0.10),
+                  color: chipColor.withOpacity(isActive ? 0.14 : 0.10),
                   borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: chipColor.withOpacity(0.22)),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.edit_outlined,
-                      size: 12,
-                      color: chipColor,
-                    ),
+                    Icon(Icons.edit_outlined, size: 12, color: chipColor),
                     const SizedBox(width: 2),
                     Text(
                       isActive ? '편집중' : '편집',
                       style: TextStyle(
                         fontSize: 10,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
                         color: chipColor,
                       ),
                     ),
@@ -2088,27 +1875,31 @@ class _PlateDock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isFrontActive =
-        controller.activeController == controller.controllerFrontDigit;
-    final isMidActive =
-        controller.activeController == controller.controllerMidDigit;
-    final isBackActive =
-        controller.activeController == controller.controllerBackDigit;
+    final cs = Theme.of(context).colorScheme;
+
+    final isFrontActive = controller.activeController == controller.controllerFrontDigit;
+    final isMidActive = controller.activeController == controller.controllerMidDigit;
+    final isBackActive = controller.activeController == controller.controllerBackDigit;
 
     final labelStyle = TextStyle(
       fontSize: 11,
-      fontWeight: FontWeight.w600,
-      color: Colors.grey.shade700,
+      fontWeight: FontWeight.w700,
+      color: cs.onSurfaceVariant,
     );
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 12),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
         boxShadow: [
-          BoxShadow(color: Colors.black12, blurRadius: 8, offset: Offset(0, -2)),
+          BoxShadow(
+            color: cs.shadow.withOpacity(0.08),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
+          ),
         ],
       ),
       child: Column(
@@ -2175,19 +1966,12 @@ class _PlateDock extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.touch_app,
-                size: 14,
-                color: Colors.grey.shade600,
-              ),
+              Icon(Icons.touch_app, size: 14, color: cs.onSurfaceVariant),
               const SizedBox(width: 4),
               Flexible(
                 child: Text(
                   '번호판 각 칸을 탭하면 해당 자리를 수정할 수 있습니다.',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Colors.grey.shade700,
-                  ),
+                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
                   textAlign: TextAlign.center,
                   overflow: TextOverflow.ellipsis,
                   maxLines: 1,

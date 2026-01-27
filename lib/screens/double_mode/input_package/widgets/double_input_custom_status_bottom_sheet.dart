@@ -17,8 +17,10 @@ String _formatAnyDate(dynamic v) {
   return v.toString();
 }
 
-Widget _infoRow(String label, String? value) {
+Widget _infoRow(BuildContext context, String label, String? value) {
+  final cs = Theme.of(context).colorScheme;
   if (value == null || value.isEmpty) return const SizedBox.shrink();
+
   return Padding(
     padding: const EdgeInsets.only(bottom: 8),
     child: Row(
@@ -28,13 +30,17 @@ Widget _infoRow(String label, String? value) {
           width: 130,
           child: Text(
             label,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+              color: cs.onSurface,
+            ),
           ),
         ),
         Expanded(
           child: Text(
             value,
-            style: const TextStyle(fontSize: 18),
+            style: TextStyle(fontSize: 16, color: cs.onSurface),
           ),
         ),
       ],
@@ -43,18 +49,14 @@ Widget _infoRow(String label, String? value) {
 }
 
 /// ✅ 정산 유형에 따라 조회 컬렉션을 분기하는 BottomSheet
-/// - selectedBillType == '정기'  → monthly_plate_status
-/// - 그 외                     → plate_status
-///
-/// 주의: 이 함수는 "조회/표시"만 합니다(쓰기 없음).
 Future<Map<String, dynamic>?> doubleInputCustomStatusBottomSheet(
     BuildContext context,
     String plateNumber,
     String area, {
       required String selectedBillType,
     }) async {
-  final docId = '${plateNumber}_$area';
 
+  final docId = '${plateNumber}_$area';
   final bool isMonthly = selectedBillType.trim() == '정기';
   final String collectionName = isMonthly ? 'monthly_plate_status' : 'plate_status';
 
@@ -106,6 +108,10 @@ Future<Map<String, dynamic>?> doubleInputCustomStatusBottomSheet(
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     builder: (context) {
+      final cs2 = Theme.of(context).colorScheme;
+
+      final bool hasWarning = customStatus != null && customStatus.isNotEmpty;
+
       return DraggableScrollableSheet(
         initialChildSize: 0.6,
         minChildSize: 0.3,
@@ -113,9 +119,10 @@ Future<Map<String, dynamic>?> doubleInputCustomStatusBottomSheet(
         builder: (context, scrollController) {
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            decoration: BoxDecoration(
+              color: cs2.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              border: Border.all(color: cs2.outlineVariant.withOpacity(0.85)),
             ),
             child: ListView(
               controller: scrollController,
@@ -126,74 +133,65 @@ Future<Map<String, dynamic>?> doubleInputCustomStatusBottomSheet(
                     height: 5,
                     margin: const EdgeInsets.only(bottom: 24),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
+                      color: cs2.outlineVariant.withOpacity(0.9),
                       borderRadius: BorderRadius.circular(2.5),
                     ),
                   ),
                 ),
 
-                // 상단 타이틀
                 Row(
                   children: [
                     Icon(
-                      (customStatus != null && customStatus.isNotEmpty)
-                          ? Icons.warning_amber_rounded
-                          : Icons.info_outline,
-                      color: (customStatus != null && customStatus.isNotEmpty)
-                          ? Colors.redAccent
-                          : Colors.blueAccent,
+                      hasWarning ? Icons.warning_amber_rounded : Icons.info_outline,
+                      color: hasWarning ? cs2.error : cs2.primary,
                       size: 28,
                     ),
                     const SizedBox(width: 10),
                     Text(
-                      (customStatus != null && customStatus.isNotEmpty) ? '주의사항' : '상세 정보',
-                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                      hasWarning ? '주의사항' : '상세 정보',
+                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: cs2.onSurface),
                     ),
                   ],
                 ),
 
                 const SizedBox(height: 12),
 
-                // ✅ 어떤 컬렉션을 보고 있는지 표기(디버깅/오해 방지)
                 Text(
                   '데이터 출처: $collectionName',
-                  style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+                  style: TextStyle(fontSize: 13, color: cs2.onSurfaceVariant),
                 ),
 
                 const SizedBox(height: 20),
 
-                // 메인 상태 텍스트
-                if (customStatus != null && customStatus.isNotEmpty) ...[
+                if (hasWarning) ...[
                   Text(
                     customStatus,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: cs2.onSurface,
                       height: 1.5,
                     ),
                   ),
                   const SizedBox(height: 16),
                 ],
 
-                // 업데이트 시간
                 Row(
                   children: [
-                    const Icon(Icons.access_time, size: 20, color: Colors.grey),
+                    Icon(Icons.access_time, size: 20, color: cs2.onSurfaceVariant),
                     const SizedBox(width: 8),
                     Text(
                       '최종 수정: $formattedUpdatedAt',
-                      style: const TextStyle(fontSize: 16, color: Colors.grey),
+                      style: TextStyle(fontSize: 14, color: cs2.onSurfaceVariant),
                     ),
                   ],
                 ),
 
-                // 저장된 상태 리스트
                 if (statusList.isNotEmpty) ...[
                   const SizedBox(height: 20),
-                  const Text(
+                  Text(
                     '저장된 상태',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: cs2.onSurface),
                   ),
                   const SizedBox(height: 10),
                   Wrap(
@@ -204,9 +202,14 @@ Future<Map<String, dynamic>?> doubleInputCustomStatusBottomSheet(
                           (s) => Chip(
                         label: Text(
                           s,
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                            color: cs2.onSurface,
+                          ),
                         ),
-                        backgroundColor: Colors.orange.withOpacity(0.15),
+                        backgroundColor: cs2.tertiaryContainer.withOpacity(0.55),
+                        side: BorderSide(color: cs2.outlineVariant.withOpacity(0.85)),
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       ),
                     )
@@ -214,28 +217,26 @@ Future<Map<String, dynamic>?> doubleInputCustomStatusBottomSheet(
                   ),
                 ],
 
-                // 정기/부가 메타 정보
                 const SizedBox(height: 24),
-                const Text(
+                Text(
                   '상세 정보',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: cs2.onSurface),
                 ),
                 const SizedBox(height: 12),
-                _infoRow('Type', type),
-                _infoRow('Count Type', countType),
-                _infoRow('Regular Type', regularType),
-                _infoRow('Regular Amount', regularAmount?.toString()),
-                _infoRow('Regular Duration (hours)', regularDurationHours?.toString()),
-                _infoRow('Period Unit', periodUnit),
-                _infoRow('Start Date', startDate),
-                _infoRow('End Date', endDate),
+                _infoRow(context, 'Type', type),
+                _infoRow(context, 'Count Type', countType),
+                _infoRow(context, 'Regular Type', regularType),
+                _infoRow(context, 'Regular Amount', regularAmount?.toString()),
+                _infoRow(context, 'Regular Duration (hours)', regularDurationHours?.toString()),
+                _infoRow(context, 'Period Unit', periodUnit),
+                _infoRow(context, 'Start Date', startDate),
+                _infoRow(context, 'End Date', endDate),
 
-                // 결제 내역
                 if (paymentHistory.isNotEmpty) ...[
                   const SizedBox(height: 24),
-                  const Text(
+                  Text(
                     '결제 내역',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: cs2.onSurface),
                   ),
                   const SizedBox(height: 10),
                   ...paymentHistory.map((p) {
@@ -248,21 +249,22 @@ Future<Map<String, dynamic>?> doubleInputCustomStatusBottomSheet(
                     return Container(
                       margin: const EdgeInsets.only(bottom: 10),
                       decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
-                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: cs2.outlineVariant.withOpacity(0.85)),
+                        borderRadius: BorderRadius.circular(12),
+                        color: cs2.surfaceContainerLow,
                       ),
                       child: ListTile(
                         title: Text(
                           '금액: ${amount ?? '-'}',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                          style: TextStyle(fontWeight: FontWeight.w900, color: cs2.onSurface),
                         ),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (paidAt.isNotEmpty) Text('결제시간: $paidAt'),
-                            if (paidBy != null && paidBy.isNotEmpty) Text('결제자: $paidBy'),
-                            if (extended != null) Text('연장결제: $extended'),
-                            if (note != null && note.toString().isNotEmpty) Text('비고: $note'),
+                            if (paidAt.isNotEmpty) Text('결제시간: $paidAt', style: TextStyle(color: cs2.onSurfaceVariant)),
+                            if (paidBy != null && paidBy.isNotEmpty) Text('결제자: $paidBy', style: TextStyle(color: cs2.onSurfaceVariant)),
+                            if (extended != null) Text('연장결제: $extended', style: TextStyle(color: cs2.onSurfaceVariant)),
+                            if (note != null && note.toString().isNotEmpty) Text('비고: $note', style: TextStyle(color: cs2.onSurfaceVariant)),
                           ],
                         ),
                         dense: true,
@@ -274,13 +276,14 @@ Future<Map<String, dynamic>?> doubleInputCustomStatusBottomSheet(
                 const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
-                  child: TextButton(
+                  child: FilledButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.black87,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: cs2.primary,
+                      foregroundColor: cs2.onPrimary,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),
                     child: const Text('확인'),
                   ),

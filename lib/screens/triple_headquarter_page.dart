@@ -110,6 +110,8 @@ class _HqModeSwitchButton extends StatelessWidget {
   }
 
   Future<_ModeTarget?> _pickTarget(BuildContext context, AppCardPalette palette) {
+    final cs = Theme.of(context).colorScheme;
+
     final accent = palette.tripleBase;
     final border = palette.tripleLight.withOpacity(.65);
     final textColor = palette.tripleDark;
@@ -118,9 +120,14 @@ class _HqModeSwitchButton extends StatelessWidget {
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
+        final cs2 = Theme.of(dialogContext).colorScheme;
+
         return Dialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          backgroundColor: cs2.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: cs2.outlineVariant.withOpacity(0.85)),
+          ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
             child: Column(
@@ -133,7 +140,7 @@ class _HqModeSwitchButton extends StatelessWidget {
                         '헤드쿼터 모드 전환',
                         style: TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w800,
                           color: textColor,
                         ),
                       ),
@@ -141,7 +148,7 @@ class _HqModeSwitchButton extends StatelessWidget {
                     IconButton(
                       tooltip: '닫기',
                       onPressed: () => Navigator.of(dialogContext).pop(),
-                      icon: Icon(Icons.close, color: textColor.withOpacity(.75)),
+                      icon: Icon(Icons.close, color: cs.onSurfaceVariant.withOpacity(.85)),
                     ),
                   ],
                 ),
@@ -229,15 +236,21 @@ class _ModeSwitchDialogOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Material(
-      color: Colors.white,
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
+        overlayColor: MaterialStateProperty.resolveWith<Color?>(
+              (states) => states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(0.14) : null,
+        ),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           decoration: BoxDecoration(
+            color: cs.surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: borderColor, width: 1),
           ),
@@ -250,12 +263,12 @@ class _ModeSwitchDialogOption extends StatelessWidget {
                   title,
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                     color: textColor,
                   ),
                 ),
               ),
-              Icon(Icons.chevron_right, color: textColor.withOpacity(.6)),
+              Icon(Icons.chevron_right, color: cs.onSurfaceVariant.withOpacity(.75)),
             ],
           ),
         ),
@@ -335,8 +348,7 @@ class _RefreshableBodyState extends State<_RefreshableBody> {
   }
 
   void _handleHorizontalDragEnd(BuildContext context, double velocity) {
-    final fired =
-        (_dragDistance < -_hDistanceThreshold) && (velocity < -_hVelocityThreshold);
+    final fired = (_dragDistance < -_hDistanceThreshold) && (velocity < -_hVelocityThreshold);
 
     if (fired) {
       _openSecondaryIfAuthorized();
@@ -348,23 +360,23 @@ class _RefreshableBodyState extends State<_RefreshableBody> {
   @override
   Widget build(BuildContext context) {
     final palette = AppCardPalette.of(context);
+    final cs = Theme.of(context).colorScheme;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       dragStartBehavior: DragStartBehavior.down,
       onHorizontalDragUpdate: (details) => _dragDistance += details.delta.dx,
-      onHorizontalDragEnd: (details) =>
-          _handleHorizontalDragEnd(context, details.primaryVelocity ?? 0.0),
+      onHorizontalDragEnd: (details) => _handleHorizontalDragEnd(
+        context,
+        details.primaryVelocity ?? 0.0,
+      ),
       child: Consumer<TripleHqState>(
         builder: (context, state, child) {
           final pages = state.pages;
 
-          final safeIndex =
-          pages.isEmpty ? 0 : state.selectedIndex.clamp(0, pages.length - 1);
+          final safeIndex = pages.isEmpty ? 0 : state.selectedIndex.clamp(0, pages.length - 1);
 
-          final children = pages.isEmpty
-              ? const <Widget>[SizedBox.shrink()]
-              : pages.map((p) => p.page).toList();
+          final children = pages.isEmpty ? const <Widget>[SizedBox.shrink()] : pages.map((p) => p.page).toList();
 
           return Stack(
             children: [
@@ -374,16 +386,14 @@ class _RefreshableBodyState extends State<_RefreshableBody> {
               ),
               if (state.isLoading)
                 Container(
-                  color: Colors.white.withOpacity(.35),
+                  color: cs.scrim.withOpacity(.20),
                   child: Center(
                     child: SizedBox(
                       width: 28,
                       height: 28,
                       child: CircularProgressIndicator(
                         strokeWidth: 3,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          palette.tripleBase,
-                        ),
+                        valueColor: AlwaysStoppedAnimation<Color>(palette.tripleBase),
                       ),
                     ),
                   ),
@@ -402,6 +412,7 @@ class _PageBottomNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = AppCardPalette.of(context);
+    final cs = Theme.of(context).colorScheme;
 
     return Consumer<TripleHqState>(
       builder: (context, state, child) {
@@ -427,7 +438,7 @@ class _PageBottomNavigation extends StatelessWidget {
               .toList(),
           selectedItemColor: palette.tripleBase,
           unselectedItemColor: palette.tripleDark.withOpacity(.55),
-          backgroundColor: Colors.white,
+          backgroundColor: cs.surface,
           elevation: 0,
           showUnselectedLabels: true,
         );
@@ -437,18 +448,24 @@ class _PageBottomNavigation extends StatelessWidget {
 }
 
 ButtonStyle _switchBtnStyle(BuildContext context) {
+  final cs = Theme.of(context).colorScheme;
   final palette = AppCardPalette.of(context);
 
   return ElevatedButton.styleFrom(
-    backgroundColor: Colors.white,
-    foregroundColor: palette.tripleDark,
+    backgroundColor: cs.surface,
+    foregroundColor: cs.onSurface,
     minimumSize: const Size.fromHeight(48),
     padding: EdgeInsets.zero,
     side: BorderSide(
-      color: palette.tripleLight.withOpacity(.8),
+      color: palette.tripleLight.withOpacity(.80),
       width: 1.0,
     ),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    elevation: 0,
+  ).copyWith(
+    overlayColor: MaterialStateProperty.resolveWith<Color?>(
+          (states) => states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(0.12) : null,
+    ),
   );
 }
 

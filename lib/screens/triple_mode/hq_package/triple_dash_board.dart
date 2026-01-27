@@ -9,38 +9,39 @@ class TripleDashBoard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return WillPopScope(
       onWillPop: () async => false, // 뒤로가기 차단(기존 동작 유지)
       child: Scaffold(
         appBar: AppBar(
           title: const TripleTopNavigation(),
           centerTitle: true,
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
+          backgroundColor: cs.surface,
+          foregroundColor: cs.onSurface,
           elevation: 0,
+          surfaceTintColor: Colors.transparent,
 
           // ⬇️ 좌측 상단(11시 방향)에 HeadQuarter 텍스트 고정
           flexibleSpace: SafeArea(
             child: IgnorePointer(
-              // 탭 이벤트 간섭 방지
               child: Align(
                 alignment: Alignment.topLeft,
                 child: Padding(
                   padding: const EdgeInsets.only(left: 12, top: 4),
                   child: Semantics(
-                    // 접근성/로그 수집에 유용
                     label: 'screen_tag: TripleDashBoard C',
                     child: Text(
                       screenTag,
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Colors.black54,
-                        fontWeight: FontWeight.w600,
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
                         letterSpacing: 0.2,
                       ) ??
-                          const TextStyle(
+                          TextStyle(
                             fontSize: 11,
-                            color: Colors.black54,
-                            fontWeight: FontWeight.w600,
+                            color: cs.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
                           ),
                     ),
                   ),
@@ -49,7 +50,7 @@ class TripleDashBoard extends StatelessWidget {
             ),
           ),
         ),
-        body: const TripleHqDashBoardPage(), // 단일 콘텐츠
+        body: const TripleHqDashBoardPage(),
       ),
     );
   }

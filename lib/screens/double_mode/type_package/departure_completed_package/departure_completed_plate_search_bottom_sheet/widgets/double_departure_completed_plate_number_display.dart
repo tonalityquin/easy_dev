@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 
 class DoubleDepartureCompletedPlateNumberDisplay extends StatelessWidget {
-  // ✅ 요청 팔레트 (BlueGrey)
-  static const Color _base = Color(0xFF546E7A); // BlueGrey 600
-
   final TextEditingController controller;
   final bool Function(String) isValidPlate;
 
@@ -15,6 +12,8 @@ class DoubleDepartureCompletedPlateNumberDisplay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return ValueListenableBuilder<TextEditingValue>(
       valueListenable: controller,
       builder: (context, value, child) {
@@ -22,17 +21,17 @@ class DoubleDepartureCompletedPlateNumberDisplay extends StatelessWidget {
         final valid = isValidPlate(text);
 
         final tone = text.isEmpty
-            ? Colors.black54
-            : (valid ? Colors.green.shade700 : Colors.redAccent);
+            ? cs.onSurfaceVariant
+            : (valid ? cs.tertiary : cs.error);
 
         final border = text.isEmpty
-            ? Colors.black12
-            : (valid ? Colors.green.withOpacity(0.45) : Colors.redAccent.withOpacity(0.55));
+            ? cs.outlineVariant.withOpacity(0.85)
+            : (valid ? cs.tertiary.withOpacity(0.45) : cs.error.withOpacity(0.55));
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 4자리 박스 표시(직관적)
+            // 4자리 박스 표시
             Row(
               children: List.generate(4, (i) {
                 final char = (i < text.length) ? text[i] : '';
@@ -44,12 +43,12 @@ class DoubleDepartureCompletedPlateNumberDisplay extends StatelessWidget {
                     margin: EdgeInsets.only(right: i == 3 ? 0 : 8),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     decoration: BoxDecoration(
-                      color: filled ? Colors.white : Colors.grey.shade50,
+                      color: filled ? cs.surface : cs.surfaceContainerLow,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: border, width: 1.2),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.03),
+                          color: cs.shadow.withOpacity(0.06),
                           blurRadius: 10,
                           offset: const Offset(0, 6),
                         ),
@@ -61,7 +60,9 @@ class DoubleDepartureCompletedPlateNumberDisplay extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
-                          color: char.isEmpty ? Colors.black26 : Colors.black87,
+                          color: char.isEmpty
+                              ? cs.onSurfaceVariant.withOpacity(0.45)
+                              : cs.onSurface,
                         ),
                       ),
                     ),
@@ -101,12 +102,12 @@ class DoubleDepartureCompletedPlateNumberDisplay extends StatelessWidget {
               ),
             ),
 
-            // 입력 가이드 (BlueGrey 톤으로 살짝 강조)
+            // 입력 가이드
             if (text.isEmpty) ...[
               const SizedBox(height: 8),
               Row(
                 children: [
-                  Icon(Icons.info_outline, size: 14, color: _base.withOpacity(0.85)),
+                  Icon(Icons.info_outline, size: 14, color: cs.onSurfaceVariant),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -114,7 +115,7 @@ class DoubleDepartureCompletedPlateNumberDisplay extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: _base.withOpacity(0.85),
+                        color: cs.onSurfaceVariant,
                       ),
                     ),
                   ),

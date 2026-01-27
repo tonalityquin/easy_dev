@@ -1,25 +1,25 @@
 import 'package:flutter/material.dart';
 
 class DoubleParkingCompletedPlateSearchHeader extends StatelessWidget {
-  // ✅ 요청 팔레트 (BlueGrey)
-  static const Color _base = Color(0xFF546E7A); // BlueGrey 600
-
   const DoubleParkingCompletedPlateSearchHeader({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Icon(Icons.directions_car, color: _base),
+            Icon(Icons.directions_car, color: cs.primary),
             const SizedBox(width: 8),
-            const Text(
+            Text(
               '번호판 검색',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w900,
+                color: cs.onSurface,
               ),
             ),
           ],
@@ -30,7 +30,7 @@ class DoubleParkingCompletedPlateSearchHeader extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: Colors.black54,
+            color: cs.onSurfaceVariant,
           ),
         ),
       ],

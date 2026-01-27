@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../utils/double_input_plate_field.dart';
 import '../widgets/double_input_region_bottom_sheet.dart';
 
@@ -28,34 +29,56 @@ class DoubleInputPlateSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('번호 입력', style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)),
+        Text(
+          '번호 입력',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w900,
+            color: cs.onSurface,
+          ),
+        ),
         const SizedBox(height: 8),
         Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            GestureDetector(
-              onTap: () {
-                doubleInputRegionPickerBottomSheet(
-                  context: context,
-                  selectedRegion: dropdownValue,
-                  regions: regions,
-                  onConfirm: onRegionChanged,
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.transparent),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(dropdownValue, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                  ],
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () {
+                  doubleInputRegionPickerBottomSheet(
+                    context: context,
+                    selectedRegion: dropdownValue,
+                    regions: regions,
+                    onConfirm: onRegionChanged,
+                  );
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceContainerLow,
+                    border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        dropdownValue,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Icon(Icons.expand_more, color: cs.onSurfaceVariant),
+                    ],
+                  ),
                 ),
               ),
             ),

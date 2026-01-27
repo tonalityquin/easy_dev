@@ -13,13 +13,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../../../utils/google_auth_v7.dart';
 import '../../../../../../../utils/api/email_config.dart';
-import 'dashboard_start_report_styles.dart';
-import 'dashboard_start_report_signature_dialog.dart';
+
+
 
 // ✅ API 디버그(통합 에러 로그) 로거 + (옵션) 디버그 UI
-// 프로젝트 패키지명에 맞게 수정하세요.
 import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
 import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_bottom_sheet.dart';
+
+import 'dashboard_start_report_signature_dialog.dart';
+import 'dashboard_start_report_styles.dart';
 
 class DashboardStartReportFormPage extends StatefulWidget {
   const DashboardStartReportFormPage({super.key});
@@ -72,7 +74,6 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
   // ✅ API 디버그 로직: 표준 태그 / 로깅 헬퍼
   // ─────────────────────────────────────────────────────────────
 
-  // DebugBottomSheet에서 tag 기준으로 바로 필터링 가능하도록 "/" 네임스페이스 사용
   static const String _tStart = 'start_report';
   static const String _tStartUi = 'start_report/ui';
   static const String _tStartPrefs = 'start_report/prefs';
@@ -134,7 +135,7 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
       final area = prefs.getString('selectedArea') ?? '';
       if (!mounted) return;
       setState(() {
-        _selectedArea = area.isEmpty ? null : area;
+        _selectedArea = area.trim().isEmpty ? null : area.trim();
       });
 
       // 사용자가 아직 제목을 입력하지 않은 경우에만 자동 채움
@@ -245,9 +246,7 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
       suffixSpecial = _hasSpecialNote! ? ' - 특이사항 있음' : ' - 특이사항 없음';
     }
 
-    final area = (_selectedArea != null && _selectedArea!.trim().isNotEmpty)
-        ? _selectedArea!.trim()
-        : '업무';
+    final area = (_selectedArea != null && _selectedArea!.trim().isNotEmpty) ? _selectedArea!.trim() : '업무';
 
     _mailSubjectCtrl.text = '$area 업무 시작 보고서 – ${month}월 ${day}일자$suffixSpecial';
   }
@@ -302,32 +301,32 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
     final signTimeText = _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
     final createdAtText = _fmtDT(context, DateTime.now());
 
-    Widget _infoPill(IconData icon, String label, String value) {
+    Widget infoPill(ColorScheme cs, TextTheme t, IconData icon, String label, String value) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: const Color(0xFFF3F4F6),
+          color: cs.surfaceContainerLow,
           borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: cs.outlineVariant.withOpacity(0.8)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: Colors.grey[700]),
+            Icon(icon, size: 16, color: cs.onSurfaceVariant),
             const SizedBox(width: 6),
             Text(
               '$label ',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey[700],
-                fontWeight: FontWeight.w500,
+              style: t.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
               ),
             ),
             Flexible(
               child: Text(
                 value,
-                style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+                style: t.bodySmall?.copyWith(
+                  color: cs.onSurface,
+                  fontWeight: FontWeight.w700,
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -341,7 +340,48 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
       context: context,
       barrierDismissible: true,
       builder: (ctx) {
-        final theme = Theme.of(ctx);
+        final cs = Theme.of(ctx).colorScheme;
+        final t = Theme.of(ctx).textTheme;
+
+        final borderColor = cs.outlineVariant.withOpacity(0.8);
+
+        Widget section({
+          required IconData icon,
+          required String title,
+          required Widget child,
+          Color? background,
+        }) {
+          return Container(
+            decoration: BoxDecoration(
+              color: background ?? cs.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borderColor),
+            ),
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(icon, size: 18, color: cs.primary),
+                    const SizedBox(width: 6),
+                    Text(
+                      title,
+                      style: t.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Divider(height: 20, color: borderColor),
+                const SizedBox(height: 2),
+                child,
+              ],
+            ),
+          );
+        }
 
         return Dialog(
           backgroundColor: Colors.transparent,
@@ -358,19 +398,18 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(20),
                     child: Material(
-                      color: Colors.white,
+                      color: cs.surface,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          // 헤더
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.fromLTRB(20, 14, 16, 12),
-                            decoration: const BoxDecoration(
-                              color: DashboardReportColors.dark,
-                            ),
+                            decoration: BoxDecoration(color: cs.primary),
                             child: Row(
                               children: [
-                                const Icon(Icons.visibility_outlined, color: Colors.white),
+                                Icon(Icons.visibility_outlined, color: cs.onPrimary),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Column(
@@ -378,16 +417,16 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
                                     children: [
                                       Text(
                                         '업무 시작 보고서 미리보기',
-                                        style: theme.textTheme.titleMedium?.copyWith(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w600,
+                                        style: t.titleMedium?.copyWith(
+                                          color: cs.onPrimary,
+                                          fontWeight: FontWeight.w800,
                                         ),
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
                                         '전송 전 보고서 내용을 한 번 더 확인해 주세요.',
-                                        style: theme.textTheme.bodySmall?.copyWith(
-                                          color: Colors.white.withOpacity(0.8),
+                                        style: t.bodySmall?.copyWith(
+                                          color: cs.onPrimary.withOpacity(0.85),
                                         ),
                                       ),
                                     ],
@@ -395,13 +434,14 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
                                 ),
                                 IconButton(
                                   onPressed: () => Navigator.of(ctx).pop(),
-                                  icon: const Icon(Icons.close, color: Colors.white),
+                                  icon: Icon(Icons.close, color: cs.onPrimary),
                                   tooltip: '닫기',
                                 ),
                               ],
                             ),
                           ),
 
+                          // 본문
                           Flexible(
                             child: Scrollbar(
                               child: SingleChildScrollView(
@@ -413,56 +453,40 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
                                       spacing: 8,
                                       runSpacing: 8,
                                       children: [
-                                        _infoPill(Icons.calendar_today_outlined, '작성일', createdAtText),
-                                        _infoPill(Icons.label_important_outline, '특이사항', specialText),
+                                        infoPill(cs, t, Icons.calendar_today_outlined, '작성일', createdAtText),
+                                        infoPill(cs, t, Icons.label_important_outline, '특이사항', specialText),
                                       ],
                                     ),
                                     const SizedBox(height: 16),
 
-                                    Container(
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFF9FAFB),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: Colors.grey.withOpacity(0.3)),
-                                      ),
-                                      padding: const EdgeInsets.all(12),
+                                    section(
+                                      icon: Icons.email_outlined,
+                                      title: '메일 전송 정보',
+                                      background: cs.surfaceContainerLow,
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Row(
-                                            children: [
-                                              const Icon(Icons.email_outlined, size: 18, color: DashboardReportColors.dark),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                '메일 전송 정보',
-                                                style: theme.textTheme.bodyMedium?.copyWith(
-                                                  fontWeight: FontWeight.w600,
-                                                  color: DashboardReportColors.dark,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 8),
-                                          const Divider(height: 20),
-                                          const SizedBox(height: 2),
                                           Text(
                                             '제목',
-                                            style: theme.textTheme.bodySmall?.copyWith(
-                                              color: Colors.grey[700],
-                                              fontWeight: FontWeight.w600,
+                                            style: t.bodySmall?.copyWith(
+                                              color: cs.onSurfaceVariant,
+                                              fontWeight: FontWeight.w700,
                                             ),
                                           ),
                                           const SizedBox(height: 2),
                                           Text(
                                             _mailSubjectCtrl.text,
-                                            style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                                            style: t.bodyMedium?.copyWith(
+                                              color: cs.onSurface,
+                                              fontWeight: FontWeight.w600,
+                                            ),
                                           ),
                                           const SizedBox(height: 10),
                                           Text(
                                             '본문 (자동 생성)',
-                                            style: theme.textTheme.bodySmall?.copyWith(
-                                              color: Colors.grey[700],
-                                              fontWeight: FontWeight.w600,
+                                            style: t.bodySmall?.copyWith(
+                                              color: cs.onSurfaceVariant,
+                                              fontWeight: FontWeight.w700,
                                             ),
                                           ),
                                           const SizedBox(height: 2),
@@ -470,58 +494,13 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
                                             width: double.infinity,
                                             padding: const EdgeInsets.all(10),
                                             decoration: BoxDecoration(
-                                              color: Colors.white,
+                                              color: cs.surface,
                                               borderRadius: BorderRadius.circular(10),
-                                              border: Border.all(color: Colors.grey.withOpacity(0.2)),
-                                            ),
-                                            child: Text(_mailBodyCtrl.text, style: theme.textTheme.bodyMedium),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-
-                                    const SizedBox(height: 16),
-
-                                    Container(
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: Colors.grey.withOpacity(0.3)),
-                                      ),
-                                      padding: const EdgeInsets.all(12),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              const Icon(Icons.report_problem_outlined, size: 18, color: DashboardReportColors.dark),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                '특이 사항 상세 내용',
-                                                style: theme.textTheme.bodyMedium?.copyWith(
-                                                  fontWeight: FontWeight.w600,
-                                                  color: DashboardReportColors.dark,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 8),
-                                          const Divider(height: 20),
-                                          const SizedBox(height: 2),
-                                          Container(
-                                            width: double.infinity,
-                                            padding: const EdgeInsets.all(10),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFFBFBFB),
-                                              borderRadius: BorderRadius.circular(10),
-                                              border: Border.all(color: Colors.grey.withOpacity(0.2)),
+                                              border: Border.all(color: borderColor.withOpacity(0.8)),
                                             ),
                                             child: Text(
-                                              _contentCtrl.text.trim().isEmpty ? '입력된 특이 사항이 없습니다.' : _contentCtrl.text,
-                                              style: theme.textTheme.bodyMedium?.copyWith(
-                                                height: 1.4,
-                                                color: _contentCtrl.text.trim().isEmpty ? Colors.grey[600] : Colors.black,
-                                              ),
+                                              _mailBodyCtrl.text,
+                                              style: t.bodyMedium?.copyWith(color: cs.onSurface),
                                             ),
                                           ),
                                         ],
@@ -530,32 +509,35 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
 
                                     const SizedBox(height: 16),
 
-                                    Container(
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                                    section(
+                                      icon: Icons.report_problem_outlined,
+                                      title: '특이 사항 상세 내용',
+                                      child: Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: cs.surfaceContainerLow,
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: borderColor.withOpacity(0.8)),
+                                        ),
+                                        child: Text(
+                                          _contentCtrl.text.trim().isEmpty ? '입력된 특이 사항이 없습니다.' : _contentCtrl.text,
+                                          style: t.bodyMedium?.copyWith(
+                                            height: 1.4,
+                                            color: _contentCtrl.text.trim().isEmpty ? cs.onSurfaceVariant : cs.onSurface,
+                                          ),
+                                        ),
                                       ),
-                                      padding: const EdgeInsets.all(12),
+                                    ),
+
+                                    const SizedBox(height: 16),
+
+                                    section(
+                                      icon: Icons.edit_outlined,
+                                      title: '전자서명 정보',
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Row(
-                                            children: [
-                                              const Icon(Icons.edit_outlined, size: 18, color: DashboardReportColors.dark),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                '전자서명 정보',
-                                                style: theme.textTheme.bodyMedium?.copyWith(
-                                                  fontWeight: FontWeight.w600,
-                                                  color: DashboardReportColors.dark,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 8),
-                                          const Divider(height: 20),
-                                          const SizedBox(height: 2),
                                           Row(
                                             children: [
                                               Expanded(
@@ -564,15 +546,18 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
                                                   children: [
                                                     Text(
                                                       '서명자',
-                                                      style: theme.textTheme.bodySmall?.copyWith(
-                                                        color: Colors.grey[700],
-                                                        fontWeight: FontWeight.w600,
+                                                      style: t.bodySmall?.copyWith(
+                                                        color: cs.onSurfaceVariant,
+                                                        fontWeight: FontWeight.w700,
                                                       ),
                                                     ),
                                                     const SizedBox(height: 2),
                                                     Text(
                                                       signName,
-                                                      style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                                                      style: t.bodyMedium?.copyWith(
+                                                        color: cs.onSurface,
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
                                                     ),
                                                   ],
                                                 ),
@@ -584,15 +569,18 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
                                                   children: [
                                                     Text(
                                                       '서명 일시',
-                                                      style: theme.textTheme.bodySmall?.copyWith(
-                                                        color: Colors.grey[700],
-                                                        fontWeight: FontWeight.w600,
+                                                      style: t.bodySmall?.copyWith(
+                                                        color: cs.onSurfaceVariant,
+                                                        fontWeight: FontWeight.w700,
                                                       ),
                                                     ),
                                                     const SizedBox(height: 2),
                                                     Text(
                                                       signTimeText,
-                                                      style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
+                                                      style: t.bodyMedium?.copyWith(
+                                                        color: cs.onSurface,
+                                                        fontWeight: FontWeight.w600,
+                                                      ),
                                                     ),
                                                   ],
                                                 ),
@@ -605,14 +593,14 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
                                             width: double.infinity,
                                             decoration: BoxDecoration(
                                               borderRadius: BorderRadius.circular(12),
-                                              border: Border.all(color: Colors.grey.withOpacity(0.4)),
-                                              color: const Color(0xFFFAFAFA),
+                                              border: Border.all(color: borderColor.withOpacity(0.9)),
+                                              color: cs.surfaceContainerLow,
                                             ),
                                             child: _signaturePngBytes == null
                                                 ? Center(
                                               child: Text(
                                                 '서명 이미지가 없습니다. (전자서명 완료 후 제출할 수 있습니다.)',
-                                                style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+                                                style: t.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                                                 textAlign: TextAlign.center,
                                               ),
                                             )
@@ -630,18 +618,23 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
                                     Container(
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
-                                        color: const Color(0xFFEEF2FF),
+                                        color: cs.primaryContainer,
                                         borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: borderColor.withOpacity(0.7)),
                                       ),
                                       child: Row(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          const Icon(Icons.info_outline, size: 18, color: Color(0xFF4F46E5)),
+                                          Icon(Icons.info_outline, size: 18, color: cs.onPrimaryContainer),
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Text(
                                               '하단의 "텍스트 복사" 버튼을 누르면 이 미리보기 내용을 텍스트 형태로 복사하여 메신저 등에 붙여넣을 수 있습니다.',
-                                              style: theme.textTheme.bodySmall?.copyWith(height: 1.4, color: const Color(0xFF1F2937)),
+                                              style: t.bodySmall?.copyWith(
+                                                height: 1.4,
+                                                color: cs.onPrimaryContainer,
+                                                fontWeight: FontWeight.w600,
+                                              ),
                                             ),
                                           ),
                                         ],
@@ -653,12 +646,13 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
                             ),
                           ),
 
+                          // 푸터
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFAFAFA),
-                              border: Border(top: BorderSide(color: Colors.grey.withOpacity(0.2))),
+                              color: cs.surfaceContainerLow,
+                              border: Border(top: BorderSide(color: borderColor.withOpacity(0.9))),
                             ),
                             child: Row(
                               children: [
@@ -673,11 +667,13 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
                                   },
                                   icon: const Icon(Icons.copy_rounded, size: 18),
                                   label: const Text('텍스트 복사'),
+                                  style: TextButton.styleFrom(foregroundColor: cs.primary),
                                 ),
                                 const SizedBox(width: 4),
                                 TextButton(
                                   onPressed: () => Navigator.of(ctx).pop(),
                                   child: const Text('닫기'),
+                                  style: TextButton.styleFrom(foregroundColor: cs.onSurface),
                                 ),
                               ],
                             ),
@@ -940,7 +936,7 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
   }
 
   // ─────────────────────────────────────────────────────────────
-  // ✅ Gmail MIME helpers (CRLF + base64 wrap + RFC2047 Subject)
+  // ✅ Gmail MIME helpers
   // ─────────────────────────────────────────────────────────────
 
   String _wrapBase64Lines(String b64, {int lineLength = _mimeB64LineLength}) {
@@ -1025,51 +1021,53 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
   // UI helpers
   // ─────────────────────────────────────────────────────────────
 
-  InputDecoration _inputDec({
-    required String labelText,
-    String? hintText,
-  }) {
+  InputDecoration _inputDec(
+      BuildContext context, {
+        required String labelText,
+        String? hintText,
+      }) {
+    final cs = Theme.of(context).colorScheme;
+
     return InputDecoration(
       labelText: labelText,
       hintText: hintText,
       filled: true,
-      fillColor: Colors.white,
+      fillColor: cs.surfaceContainerLow,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.grey),
+        borderSide: BorderSide(color: cs.outlineVariant),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.grey),
+        borderSide: BorderSide(color: cs.outlineVariant),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: DashboardReportColors.base,
-          width: 1.6,
-        ),
+        borderSide: BorderSide(color: cs.primary, width: 1.6),
       ),
-      contentPadding: const EdgeInsets.symmetric(
-        vertical: 14,
-        horizontal: 12,
-      ),
+      contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
     );
   }
 
-  Widget _sectionCard({
-    required String title,
-    required Widget child,
-    EdgeInsetsGeometry padding = const EdgeInsets.all(12),
-    EdgeInsetsGeometry? margin,
-  }) {
+  Widget _sectionCard(
+      BuildContext context, {
+        required String title,
+        required Widget child,
+        EdgeInsetsGeometry padding = const EdgeInsets.all(12),
+        EdgeInsetsGeometry? margin,
+      }) {
+    final cs = Theme.of(context).colorScheme;
+    final t = Theme.of(context).textTheme;
+
     return Card(
       elevation: 0,
       margin: margin ?? const EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Colors.black12),
+        side: BorderSide(color: cs.outlineVariant.withOpacity(0.8)),
       ),
-      color: Colors.white,
+      color: cs.surfaceContainerLow,
+      surfaceTintColor: Colors.transparent,
       child: Padding(
         padding: padding,
         child: Column(
@@ -1077,7 +1075,7 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
           children: [
             Text(
               title,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800, color: cs.onSurface),
             ),
             const SizedBox(height: 10),
             child,
@@ -1091,12 +1089,14 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
 
   Future<void> _openSignatureDialog() async {
     HapticFeedback.selectionClick();
+    final cs = Theme.of(context).colorScheme;
+
     try {
       final result = await showGeneralDialog<SignatureResult>(
         context: context,
         barrierLabel: '서명',
         barrierDismissible: false,
-        barrierColor: Colors.black54,
+        barrierColor: cs.scrim.withOpacity(0.55),
         pageBuilder: (ctx, animation, secondaryAnimation) {
           return SignatureFullScreenDialog(
             name: _signerName,
@@ -1131,52 +1131,60 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
   // ===== 섹션별 본문 위젯들 =====
 
   Widget _buildSpecialNoteBody() {
+    final cs = Theme.of(context).colorScheme;
+    final t = Theme.of(context).textTheme;
+
+    Widget choice({required bool value, required String label}) {
+      final selected = _hasSpecialNote == value;
+
+      return Expanded(
+        child: selected
+            ? ElevatedButton(
+          onPressed: () {
+            HapticFeedback.selectionClick();
+            setState(() {
+              _hasSpecialNote = value;
+              _updateMailSubject();
+            });
+            _pageController.nextPage(duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+          },
+          style: DashboardReportButtonStyles.primary(context),
+          child: Text(label),
+        )
+            : OutlinedButton(
+          onPressed: () {
+            HapticFeedback.selectionClick();
+            setState(() {
+              _hasSpecialNote = value;
+              _updateMailSubject();
+            });
+            _pageController.nextPage(duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+          },
+          style: DashboardReportButtonStyles.outlined(context),
+          child: Text(label),
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '오늘 업무 진행 중 특이사항이 있었는지 선택해 주세요.\n'
-              '(예: 장애, 클레임, 일정 지연, 긴급 지원 등)',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4),
+          '오늘 업무 진행 중 특이사항이 있었는지 선택해 주세요.\n(예: 장애, 클레임, 일정 지연, 긴급 지원 등)',
+          style: t.bodyMedium?.copyWith(height: 1.4, color: cs.onSurface),
         ),
         const SizedBox(height: 12),
         Row(
           children: [
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () {
-                  HapticFeedback.selectionClick();
-                  setState(() {
-                    _hasSpecialNote = false;
-                    _updateMailSubject();
-                  });
-                  _pageController.nextPage(duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
-                },
-                style: _hasSpecialNote == false ? DashboardReportButtonStyles.primary() : DashboardReportButtonStyles.outlined(),
-                child: const Text('특이사항 없음'),
-              ),
-            ),
+            choice(value: false, label: '특이사항 없음'),
             const SizedBox(width: 12),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () {
-                  HapticFeedback.selectionClick();
-                  setState(() {
-                    _hasSpecialNote = true;
-                    _updateMailSubject();
-                  });
-                  _pageController.nextPage(duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
-                },
-                style: _hasSpecialNote == true ? DashboardReportButtonStyles.primary() : DashboardReportButtonStyles.outlined(),
-                child: const Text('특이사항 있음'),
-              ),
-            ),
+            choice(value: true, label: '특이사항 있음'),
           ],
         ),
         const SizedBox(height: 6),
         Text(
           '※ 선택 결과는 메일 제목에 자동으로 반영되며, 다음 항목으로 자동 이동합니다.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black54),
+          style: t.bodySmall?.copyWith(color: cs.onSurfaceVariant),
         ),
       ],
     );
@@ -1188,6 +1196,7 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
       controller: _contentCtrl,
       focusNode: _contentNode,
       decoration: _inputDec(
+        context,
         labelText: '특이 사항',
         hintText: '예)\n'
             '- 육하원칙에 맞춰서 작성하세요.\n'
@@ -1223,6 +1232,7 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
           readOnly: true,
           enableInteractiveSelection: true,
           decoration: _inputDec(
+            context,
             labelText: '메일 제목(자동 생성)',
             hintText: '예: 콜센터 업무 시작 보고서 – 11월 25일자 - 특이사항 있음',
           ),
@@ -1233,7 +1243,7 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
           controller: _mailBodyCtrl,
           readOnly: true,
           enableInteractiveSelection: true,
-          decoration: _inputDec(labelText: '메일 본문(자동 생성)', hintText: '작성 시각 정보가 자동으로 입력됩니다.'),
+          decoration: _inputDec(context, labelText: '메일 본문(자동 생성)', hintText: '작성 시각 정보가 자동으로 입력됩니다.'),
           minLines: 3,
           maxLines: 8,
         ),
@@ -1242,14 +1252,17 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
   }
 
   Widget _buildSignatureBody() {
+    final cs = Theme.of(context).colorScheme;
+    final t = Theme.of(context).textTheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
           decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: Colors.black12),
+            color: cs.surfaceContainerLow,
+            border: Border.all(color: cs.outlineVariant.withOpacity(0.8)),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Wrap(
@@ -1260,22 +1273,22 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.person_outline, size: 18),
+                  Icon(Icons.person_outline, size: 18, color: cs.onSurfaceVariant),
                   const SizedBox(width: 6),
                   Text(
                     '서명자: ${_signerName.isEmpty ? "이름 미입력" : _signerName}',
-                    style: const TextStyle(fontWeight: FontWeight.w500),
+                    style: t.bodyMedium?.copyWith(fontWeight: FontWeight.w700, color: cs.onSurface),
                   ),
                 ],
               ),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.access_time, size: 18),
+                  Icon(Icons.access_time, size: 18, color: cs.onSurfaceVariant),
                   const SizedBox(width: 6),
                   Text(
                     '서명 일시: ${_signDateTime == null ? "저장 시 자동" : _fmtCompact(_signDateTime!)}',
-                    style: const TextStyle(color: Colors.black87),
+                    style: t.bodyMedium?.copyWith(color: cs.onSurface),
                   ),
                 ],
               ),
@@ -1283,7 +1296,7 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
                 onPressed: _openSignatureDialog,
                 icon: const Icon(Icons.border_color),
                 label: const Text('서명하기'),
-                style: DashboardReportButtonStyles.smallPrimary(),
+                style: DashboardReportButtonStyles.smallPrimary(context),
               ),
               if (_signaturePngBytes != null)
                 OutlinedButton.icon(
@@ -1296,7 +1309,7 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
                   },
                   icon: const Icon(Icons.delete_outline),
                   label: const Text('서명 삭제'),
-                  style: DashboardReportButtonStyles.smallOutlined(),
+                  style: DashboardReportButtonStyles.smallOutlined(context),
                 ),
             ],
           ),
@@ -1305,7 +1318,8 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
         if (_signaturePngBytes != null)
           Container(
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.black12),
+              color: cs.surface,
+              border: Border.all(color: cs.outlineVariant.withOpacity(0.8)),
               borderRadius: BorderRadius.circular(12),
             ),
             padding: const EdgeInsets.all(8),
@@ -1325,6 +1339,8 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
     required String sectionTitle,
     required Widget sectionBody,
   }) {
+    final cs = Theme.of(context).colorScheme;
+    final t = Theme.of(context).textTheme;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Scrollbar(
@@ -1341,26 +1357,27 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
                 Text(
                   '업무 시작 보고서',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 4,
+                  style: t.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 3,
+                    color: cs.onSurface,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'WORK START REPORT',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: Colors.black54,
-                    letterSpacing: 3,
+                  style: t.labelMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    letterSpacing: 2.4,
                   ),
                 ),
                 const SizedBox(height: 16),
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: cs.surface,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: DashboardReportColors.light.withOpacity(0.8), width: 1),
+                    border: Border.all(color: cs.outlineVariant.withOpacity(0.8), width: 1),
                   ),
                   padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
                   child: Column(
@@ -1368,49 +1385,54 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.edit_note_rounded, size: 22, color: DashboardReportColors.dark),
+                          Icon(Icons.edit_note_rounded, size: 22, color: cs.onSurfaceVariant),
                           const SizedBox(width: 8),
                           Text(
                             '업무 시작 보고서 양식',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: DashboardReportColors.dark,
+                            style: t.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: cs.onSurface,
                             ),
                           ),
                           const Spacer(),
                           Text(
                             '작성일 ${_fmtCompact(DateTime.now())}',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black54),
+                            style: t.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                           ),
                         ],
                       ),
                       const SizedBox(height: 8),
-                      const Divider(height: 24),
+                      Divider(height: 24, color: cs.outlineVariant.withOpacity(0.7)),
                       const SizedBox(height: 4),
                       Container(
                         decoration: BoxDecoration(
-                          color: DashboardReportColors.light.withOpacity(0.12),
+                          color: cs.surfaceContainerLow,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: DashboardReportColors.light.withOpacity(0.8)),
+                          border: Border.all(color: cs.outlineVariant.withOpacity(0.8)),
                         ),
                         padding: const EdgeInsets.all(12),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.info_outline, size: 18, color: DashboardReportColors.dark),
+                            Icon(Icons.info_outline, size: 18, color: cs.onSurfaceVariant),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 '해당 업무의 수행 내용과 결과를 사실에 근거하여 간결하게 작성해 주세요.\n'
                                     '문제 발생 시 상단 “API 디버그”에서 에러 로그를 확인할 수 있습니다.',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.4),
+                                style: t.bodySmall?.copyWith(height: 1.4, color: cs.onSurface),
                               ),
                             ),
                           ],
                         ),
                       ),
                       _gap(20),
-                      _sectionCard(title: sectionTitle, margin: const EdgeInsets.only(bottom: 0), child: sectionBody),
+                      _sectionCard(
+                        context,
+                        title: sectionTitle,
+                        margin: const EdgeInsets.only(bottom: 0),
+                        child: sectionBody,
+                      ),
                       _gap(12),
                       Row(
                         children: [
@@ -1419,7 +1441,7 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
                               onPressed: _sending ? null : _reset,
                               icon: const Icon(Icons.refresh_outlined),
                               label: const Text('초기화'),
-                              style: DashboardReportButtonStyles.outlined(),
+                              style: DashboardReportButtonStyles.outlined(context),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -1428,7 +1450,7 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
                               onPressed: _sending ? null : _showPreview,
                               icon: const Icon(Icons.visibility_outlined),
                               label: const Text('미리보기'),
-                              style: DashboardReportButtonStyles.primary(),
+                              style: DashboardReportButtonStyles.primary(context),
                             ),
                           ),
                         ],
@@ -1447,16 +1469,19 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      backgroundColor: const Color(0xFFEFF3F6),
+      backgroundColor: cs.surface,
       appBar: AppBar(
         title: const Text('업무 시작 보고서 작성'),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        shape: const Border(bottom: BorderSide(color: Colors.black12, width: 1)),
+        shape: Border(bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.8), width: 1)),
         actions: [
           IconButton(
             tooltip: 'API 디버그',
@@ -1469,7 +1494,7 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
               onPressed: _showPreview,
               icon: const Icon(Icons.visibility_outlined),
               label: const Text('미리보기'),
-              style: DashboardReportButtonStyles.smallPrimary(),
+              style: DashboardReportButtonStyles.smallPrimary(context),
             ),
           ),
         ],
@@ -1486,26 +1511,29 @@ class _DashboardStartReportFormPageState extends State<DashboardStartReportFormP
             top: 10,
             bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
           ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(top: BorderSide(color: Colors.black12, width: 1)),
+          decoration: BoxDecoration(
+            color: cs.surface,
+            border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(0.8), width: 1)),
           ),
           child: SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: (!_sending && _signaturePngBytes != null) ? _submit : null,
               icon: _sending
-                  ? const SizedBox(
+                  ? SizedBox(
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                  valueColor: AlwaysStoppedAnimation<Color>(cs.onPrimary),
                 ),
               )
                   : const Icon(Icons.send_outlined),
-              label: Text(_sending ? '전송 중…' : '제출', style: const TextStyle(fontWeight: FontWeight.bold)),
-              style: DashboardReportButtonStyles.primary(),
+              label: Text(
+                _sending ? '전송 중…' : '제출',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              style: DashboardReportButtonStyles.primary(context),
             ),
           ),
         ),

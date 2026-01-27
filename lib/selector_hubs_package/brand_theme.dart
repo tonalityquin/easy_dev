@@ -142,7 +142,6 @@ ColorScheme buildConceptScheme({
   final Color outlineVariant = dark ? const Color(0xFF1F2937) : const Color(0xFFE2E8F0);
 
   final Color surfaceContainerLow = dark ? const Color(0xFF111827) : const Color(0xFFF1F5F9);
-  final Color surfaceContainerHigh = dark ? const Color(0xFF0B1220) : const Color(0xFFF8FAFC);
 
   // Accent: primary only
   final Color primary = accent;

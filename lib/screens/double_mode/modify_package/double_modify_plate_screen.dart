@@ -35,7 +35,6 @@ class DoubleModifyPlateScreen extends StatefulWidget {
 }
 
 class _DoubleModifyPlateScreenState extends State<DoubleModifyPlateScreen> {
-  // ⬇️ 화면 식별 태그(FAQ/에러 리포트 연계용)
   static const String screenTag = 'plate modify';
 
   late DoubleModifyPlateController _controller;
@@ -52,11 +51,10 @@ class _DoubleModifyPlateScreenState extends State<DoubleModifyPlateScreen> {
   bool isLoading = false;
   late List<String> selectedStatusNames;
 
-  // ───── DraggableScrollableSheet 상태/애니메이션 ─────
   final DraggableScrollableController _sheetController = DraggableScrollableController();
-  bool _sheetOpen = false; // 현재 열림 상태
-  static const double _sheetClosed = 0.16; // 헤더만 보이게
-  static const double _sheetOpened = 1.00; // 최상단까지(가득)
+  bool _sheetOpen = false;
+  static const double _sheetClosed = 0.16;
+  static const double _sheetOpened = 1.00;
 
   Future<void> _animateSheet({required bool open}) async {
     final target = open ? _sheetOpened : _sheetClosed;
@@ -68,7 +66,6 @@ class _DoubleModifyPlateScreenState extends State<DoubleModifyPlateScreen> {
       );
       if (mounted) setState(() => _sheetOpen = open);
     } catch (_) {
-      // attach 전일 수 있으므로 프레임 이후 보정
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _sheetController.jumpTo(target);
         if (mounted) setState(() => _sheetOpen = open);
@@ -98,7 +95,6 @@ class _DoubleModifyPlateScreenState extends State<DoubleModifyPlateScreen> {
 
     _cameraHelper = DoubleModifyCameraHelper();
 
-    // ✅ mounted 체크 보강
     _cameraHelper.initializeInputCamera().then((_) {
       if (mounted) setState(() {});
     });
@@ -108,7 +104,6 @@ class _DoubleModifyPlateScreenState extends State<DoubleModifyPlateScreen> {
 
     selectedStatusNames = List<String>.from(widget.plate.statusList);
 
-    // ✅ 드래그로 열고/닫을 때도 _sheetOpen 동기화(원본 Modify와 동일하게 보강)
     _sheetController.addListener(() {
       try {
         final s = _sheetController.size;
@@ -116,9 +111,7 @@ class _DoubleModifyPlateScreenState extends State<DoubleModifyPlateScreen> {
         if (mounted && openNow != _sheetOpen) {
           setState(() => _sheetOpen = openNow);
         }
-      } catch (_) {
-        // ignore
-      }
+      } catch (_) {}
     });
   }
 
@@ -171,22 +164,22 @@ class _DoubleModifyPlateScreenState extends State<DoubleModifyPlateScreen> {
 
   // 좌측 상단(11시) 화면 태그 위젯
   Widget _buildScreenTag(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final base = Theme.of(context).textTheme.labelSmall;
     final style = (base ??
         const TextStyle(
           fontSize: 11,
-          color: Colors.black54,
           fontWeight: FontWeight.w600,
         ))
         .copyWith(
-      color: Colors.black54,
+      color: cs.onSurfaceVariant,
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
     );
 
     return SafeArea(
       child: IgnorePointer(
-        // 제스처 간섭 방지
         child: Align(
           alignment: Alignment.topLeft,
           child: Padding(
@@ -203,8 +196,9 @@ class _DoubleModifyPlateScreenState extends State<DoubleModifyPlateScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final viewInset = MediaQuery.of(context).viewInsets.bottom;
-    // 본문이 하단 내비/시트와 겹치지 않도록 여유 패딩
     final bottomSafePadding = 140.0 + viewInset;
 
     final readOnlyCountType = _controller.selectedBillCountType ??
@@ -214,23 +208,26 @@ class _DoubleModifyPlateScreenState extends State<DoubleModifyPlateScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: false, // ⬅️ 뒤로가기 화살표 제거
+        automaticallyImplyLeading: false,
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 1,
-        // ⬇️ 좌측 상단(11시)에 'plate modify' 텍스트 고정
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        shape: Border(
+          bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.85), width: 1),
+        ),
         flexibleSpace: _buildScreenTag(context),
-        title: const Text(
+        title: Text(
           "번호판 수정",
-          style: TextStyle(color: Colors.grey, fontSize: 16),
+          style: TextStyle(color: cs.onSurfaceVariant, fontSize: 16, fontWeight: FontWeight.w700),
         ),
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
           return Stack(
             children: [
-              // ─── 상단 본문: 번호판 / 위치 / 사진 (작은 폰 보완: 스크롤 허용) ───
+              // 상단 본문
               Positioned.fill(
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -263,23 +260,26 @@ class _DoubleModifyPlateScreenState extends State<DoubleModifyPlateScreen> {
                 ),
               ),
 
-              // ─── 하단 시트: 정산(읽기 전용) / 메모 ───
+              // 하단 시트
               DraggableScrollableSheet(
                 controller: _sheetController,
                 initialChildSize: _sheetClosed,
                 minChildSize: _sheetClosed,
-                maxChildSize: _sheetOpened, // 최상단까지
+                maxChildSize: _sheetOpened,
                 snap: true,
                 snapSizes: const [_sheetClosed, _sheetOpened],
                 builder: (context, scrollController) {
-                  const sheetBg = Color(0xFFF6F8FF);
-
                   return Container(
-                    decoration: const BoxDecoration(
-                      color: sheetBg,
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                    decoration: BoxDecoration(
+                      color: cs.surface,
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                      border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
                       boxShadow: [
-                        BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, -4)),
+                        BoxShadow(
+                          color: cs.shadow.withOpacity(0.12),
+                          blurRadius: 10,
+                          offset: const Offset(0, -4),
+                        ),
                       ],
                     ),
                     child: SafeArea(
@@ -287,15 +287,15 @@ class _DoubleModifyPlateScreenState extends State<DoubleModifyPlateScreen> {
                       bottom: false,
                       child: ListView(
                         controller: scrollController,
-                        physics: const NeverScrollableScrollPhysics(), // 내부 스크롤 금지(요청 유지)
+                        physics: const NeverScrollableScrollPhysics(),
                         padding: EdgeInsets.fromLTRB(
                           16,
                           8,
                           16,
-                          16 + 100 + viewInset, // 하단 내비와 겹치지 않도록 여유
+                          16 + 100 + viewInset,
                         ),
                         children: [
-                          // 헤더(탭으로 열고/닫기 + 애니메이션)
+                          // 헤더(탭으로 열고/닫기)
                           GestureDetector(
                             behavior: HitTestBehavior.opaque,
                             onTap: _toggleSheet,
@@ -307,7 +307,7 @@ class _DoubleModifyPlateScreenState extends State<DoubleModifyPlateScreen> {
                                     width: 40,
                                     height: 4,
                                     decoration: BoxDecoration(
-                                      color: Colors.black38,
+                                      color: cs.outlineVariant.withOpacity(0.9),
                                       borderRadius: BorderRadius.circular(2),
                                     ),
                                   ),
@@ -317,14 +317,15 @@ class _DoubleModifyPlateScreenState extends State<DoubleModifyPlateScreen> {
                                     children: [
                                       Text(
                                         _sheetOpen ? '정산 / 상태 (탭하여 닫기)' : '정산 / 상태 (탭하여 열기)',
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 16,
-                                          fontWeight: FontWeight.w700,
+                                          fontWeight: FontWeight.w900,
+                                          color: cs.onSurface,
                                         ),
                                       ),
                                       Text(
                                         widget.plate.plateNumber,
-                                        style: const TextStyle(color: Colors.black54),
+                                        style: TextStyle(color: cs.onSurfaceVariant),
                                       ),
                                     ],
                                   ),
@@ -334,7 +335,7 @@ class _DoubleModifyPlateScreenState extends State<DoubleModifyPlateScreen> {
                           ),
                           const SizedBox(height: 12),
 
-                          // ✅ 정산: 사용자 수정 불가(읽기 전용)
+                          // 정산(읽기 전용)
                           _ReadOnlyBillSection(
                             billTypeLabel: _controller.selectedBillType,
                             countTypeLabel: readOnlyCountType,
@@ -342,10 +343,9 @@ class _DoubleModifyPlateScreenState extends State<DoubleModifyPlateScreen> {
 
                           const SizedBox(height: 24),
 
-                          // 추가 상태 메모
-                          const Text(
+                          Text(
                             '추가 상태 메모 (최대 20자)',
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                            style: TextStyle(fontWeight: FontWeight.w900, color: cs.onSurface),
                           ),
                           const SizedBox(height: 8),
                           TextField(
@@ -353,9 +353,21 @@ class _DoubleModifyPlateScreenState extends State<DoubleModifyPlateScreen> {
                             maxLength: 20,
                             decoration: InputDecoration(
                               hintText: '예: 뒷범퍼 손상',
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                              contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              filled: true,
+                              fillColor: cs.surfaceContainerLow,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide(color: cs.primary, width: 1.4),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                             ),
                           ),
 
@@ -460,21 +472,27 @@ class _ReadOnlyBillSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '정산 유형',
-          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 18.0,
+            fontWeight: FontWeight.w900,
+            color: cs.onSurface,
+          ),
         ),
         const SizedBox(height: 12.0),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
           decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: Colors.black26),
-            borderRadius: BorderRadius.circular(8),
+            color: cs.surface,
+            border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -483,23 +501,23 @@ class _ReadOnlyBillSection extends StatelessWidget {
                 child: Text(
                   countTypeLabel.isEmpty ? '-' : countTypeLabel,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.black87),
+                  style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w700),
                 ),
               ),
               Text(
                 billTypeLabel,
-                style: const TextStyle(
-                  color: Colors.black54,
-                  fontWeight: FontWeight.w600,
+                style: TextStyle(
+                  color: cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
           ),
         ),
         const SizedBox(height: 8),
-        const Text(
+        Text(
           '정산 유형은 이 화면에서 변경할 수 없습니다.',
-          style: TextStyle(fontSize: 12, color: Colors.black54),
+          style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
         ),
       ],
     );

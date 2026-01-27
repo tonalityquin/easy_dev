@@ -359,7 +359,6 @@ class _SingleInsideEndReportFormPageState extends State<SingleInsideEndReportFor
     _updateMailBody();
     final text = _buildPreviewText(context);
 
-    final cs = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
     await showDialog(

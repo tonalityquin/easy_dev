@@ -5,11 +5,6 @@ import 'package:intl/intl.dart';
 import '../../../../../../../models/plate_model.dart';
 
 class DoubleDepartureCompletedPlateSearchResults extends StatelessWidget {
-  // ✅ 요청 팔레트 (BlueGrey)
-  static const Color _base = Color(0xFF546E7A); // BlueGrey 600
-  static const Color _dark = Color(0xFF37474F); // BlueGrey 800
-  static const Color _light = Color(0xFFB0BEC5); // BlueGrey 200
-
   final List<PlateModel> results;
   final void Function(PlateModel) onSelect;
   final VoidCallback? onRefresh;
@@ -23,14 +18,19 @@ class DoubleDepartureCompletedPlateSearchResults extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final currency = NumberFormat("#,###", "ko_KR");
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '검색 결과',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w900,
+            color: cs.onSurface,
+          ),
         ),
         const SizedBox(height: 8),
         ListView.separated(
@@ -50,38 +50,41 @@ class DoubleDepartureCompletedPlateSearchResults extends StatelessWidget {
 
             final locationText = plate.location.trim().isEmpty ? '-' : plate.location.trim();
 
-            final backgroundColor = plate.isSelected ? Colors.green.shade50 : Colors.white;
-            final borderColor = plate.isSelected ? Colors.green : Colors.black12;
+            final selected = plate.isSelected == true;
+            final backgroundColor = selected ? cs.tertiaryContainer.withOpacity(0.45) : cs.surface;
+            final borderColor = selected ? cs.tertiary.withOpacity(0.75) : cs.outlineVariant.withOpacity(0.85);
 
-            final labelColor = _getLabelColor(plate.typeEnum);
-            final labelBgColor = _getLabelBackground(plate.typeEnum);
+            final (typeFg, typeBg) = _typeChipColors(cs, plate.typeEnum);
 
             final typeChip = _buildChip(
+              cs: cs,
               text: typeLabel,
-              fg: labelColor,
-              bg: labelBgColor,
-              borderColor: labelColor.withOpacity(0.55),
+              fg: typeFg,
+              bg: typeBg,
+              borderColor: typeFg.withOpacity(0.55),
             );
 
             final settledChip = isLocked
                 ? _buildChip(
+              cs: cs,
               text: lockedFeeAmount != null
                   ? '사전 정산 ₩${currency.format(lockedFeeAmount)}'
                   : '사전 정산',
-              fg: Colors.teal,
-              bg: Colors.teal.shade50,
-              borderColor: Colors.teal.withOpacity(0.55),
+              fg: cs.tertiary,
+              bg: cs.tertiaryContainer.withOpacity(0.55),
+              borderColor: cs.tertiary.withOpacity(0.55),
               icon: Icons.lock,
             )
                 : _buildChip(
+              cs: cs,
               text: '미정산',
-              fg: Colors.grey.shade700,
-              bg: Colors.grey.shade200,
-              borderColor: Colors.grey.shade500.withOpacity(0.7),
+              fg: cs.onSurfaceVariant,
+              bg: cs.surfaceContainerLow,
+              borderColor: cs.outlineVariant.withOpacity(0.85),
               icon: Icons.lock_open,
             );
 
-            final showDetailSection = plate.isSelected ||
+            final showDetailSection = selected ||
                 (plate.selectedBy?.isNotEmpty ?? false) ||
                 (plate.billingType?.isNotEmpty ?? false) ||
                 (plate.customStatus?.isNotEmpty ?? false) ||
@@ -104,7 +107,7 @@ class DoubleDepartureCompletedPlateSearchResults extends StatelessWidget {
                     border: Border.all(color: borderColor),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
+                        color: cs.shadow.withOpacity(0.06),
                         blurRadius: 12,
                         offset: const Offset(0, 8),
                       ),
@@ -121,11 +124,11 @@ class DoubleDepartureCompletedPlateSearchResults extends StatelessWidget {
                             width: 34,
                             height: 34,
                             decoration: BoxDecoration(
-                              color: _base.withOpacity(0.10),
+                              color: cs.primary.withOpacity(0.10),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: _base.withOpacity(0.25)),
+                              border: Border.all(color: cs.primary.withOpacity(0.25)),
                             ),
-                            child: Icon(Icons.directions_car, size: 18, color: _base),
+                            child: Icon(Icons.directions_car, size: 18, color: cs.primary),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -134,9 +137,10 @@ class DoubleDepartureCompletedPlateSearchResults extends StatelessWidget {
                               children: [
                                 Text(
                                   plate.plateNumber,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w900,
+                                    color: cs.onSurface,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -154,7 +158,6 @@ class DoubleDepartureCompletedPlateSearchResults extends StatelessWidget {
 
                       const SizedBox(height: 12),
 
-                      // 요약 정보(요청시간 / 주차구역)
                       _InfoRow(
                         icon: Icons.access_time,
                         text: '요청 시간: $formattedTime',
@@ -171,20 +174,20 @@ class DoubleDepartureCompletedPlateSearchResults extends StatelessWidget {
                           width: double.infinity,
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade50,
+                            color: cs.surfaceContainerLow,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.black12),
+                            border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (plate.isSelected)
-                                const Text(
+                              if (selected)
+                                Text(
                                   '✅ 선택됨',
                                   style: TextStyle(
                                     fontSize: 13,
-                                    color: Colors.green,
-                                    fontWeight: FontWeight.w800,
+                                    color: cs.tertiary,
+                                    fontWeight: FontWeight.w900,
                                   ),
                                 ),
 
@@ -194,34 +197,39 @@ class DoubleDepartureCompletedPlateSearchResults extends StatelessWidget {
                                   icon: Icons.person,
                                   label: '선택자',
                                   value: plate.selectedBy!,
-                                  toneColor: _dark,
+                                  toneColor: cs.onSurface,
                                 ),
                               ],
 
                               if (plate.billingType != null && plate.billingType!.isNotEmpty) ...[
                                 const SizedBox(height: 8),
-                                Text('과금 유형: ${plate.billingType}', style: const TextStyle(fontSize: 13)),
+                                Text(
+                                  '과금 유형: ${plate.billingType}',
+                                  style: TextStyle(fontSize: 13, color: cs.onSurface),
+                                ),
                               ],
 
                               if (plate.customStatus != null && plate.customStatus!.isNotEmpty) ...[
                                 const SizedBox(height: 4),
-                                Text('커스텀 상태: ${plate.customStatus}', style: const TextStyle(fontSize: 13)),
+                                Text(
+                                  '커스텀 상태: ${plate.customStatus}',
+                                  style: TextStyle(fontSize: 13, color: cs.onSurface),
+                                ),
                               ],
 
                               if (isLocked) ...[
                                 const SizedBox(height: 10),
                                 _InfoRow(
                                   icon: Icons.receipt_long,
-                                  iconColor: Colors.teal,
-                                  text:
-                                  '정산 금액: ${lockedFeeAmount != null ? '₩${currency.format(lockedFeeAmount)}' : '-'}',
+                                  iconColor: cs.tertiary,
+                                  text: '정산 금액: ${lockedFeeAmount != null ? '₩${currency.format(lockedFeeAmount)}' : '-'}',
                                   strong: true,
                                 ),
                                 if (paymentMethod != null && paymentMethod.isNotEmpty) ...[
                                   const SizedBox(height: 4),
                                   _InfoRow(
                                     icon: Icons.payment,
-                                    iconColor: Colors.teal,
+                                    iconColor: cs.tertiary,
                                     text: '결제 수단: $paymentMethod',
                                   ),
                                 ],
@@ -229,7 +237,7 @@ class DoubleDepartureCompletedPlateSearchResults extends StatelessWidget {
                                   const SizedBox(height: 4),
                                   _InfoRow(
                                     icon: Icons.lock_clock,
-                                    iconColor: Colors.teal,
+                                    iconColor: cs.tertiary,
                                     text: '정산 시각: $lockedAtText',
                                   ),
                                 ],
@@ -255,37 +263,23 @@ class DoubleDepartureCompletedPlateSearchResults extends StatelessWidget {
         '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:${time.second.toString().padLeft(2, '0')}';
   }
 
-  Color _getLabelColor(PlateType? type) {
+  (Color fg, Color bg) _typeChipColors(ColorScheme cs, PlateType? type) {
     switch (type) {
       case PlateType.parkingRequests:
-        return _base;
+        return (cs.primary, cs.primary.withOpacity(0.10));
       case PlateType.parkingCompleted:
-        return Colors.green;
+        return (cs.tertiary, cs.tertiaryContainer.withOpacity(0.55));
       case PlateType.departureRequests:
-        return Colors.orange;
+        return (cs.error, cs.errorContainer.withOpacity(0.55));
       case PlateType.departureCompleted:
-        return Colors.grey;
+        return (cs.onSurfaceVariant, cs.surfaceContainerLow);
       default:
-        return _base;
-    }
-  }
-
-  Color _getLabelBackground(PlateType? type) {
-    switch (type) {
-      case PlateType.parkingRequests:
-        return _light.withOpacity(0.35);
-      case PlateType.parkingCompleted:
-        return Colors.green.shade50;
-      case PlateType.departureRequests:
-        return Colors.orange.shade50;
-      case PlateType.departureCompleted:
-        return Colors.grey.shade200;
-      default:
-        return _light.withOpacity(0.35);
+        return (cs.primary, cs.primary.withOpacity(0.10));
     }
   }
 
   Widget _buildChip({
+    required ColorScheme cs,
     required String text,
     required Color fg,
     required Color bg,
@@ -335,7 +329,9 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = iconColor ?? Colors.grey;
+    final cs = Theme.of(context).colorScheme;
+    final c = iconColor ?? cs.onSurfaceVariant;
+
     return Row(
       children: [
         Icon(icon, size: 16, color: c),
@@ -345,8 +341,8 @@ class _InfoRow extends StatelessWidget {
             text,
             style: TextStyle(
               fontSize: 13,
-              fontWeight: strong ? FontWeight.w800 : FontWeight.w600,
-              color: Colors.black.withOpacity(strong ? 0.90 : 0.75),
+              fontWeight: strong ? FontWeight.w900 : FontWeight.w600,
+              color: strong ? cs.onSurface : cs.onSurfaceVariant,
             ),
             overflow: TextOverflow.ellipsis,
           ),

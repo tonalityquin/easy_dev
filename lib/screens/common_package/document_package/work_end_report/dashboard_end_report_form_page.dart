@@ -24,95 +24,77 @@ import '../../../../../../../utils/block_dialogs/blocking_dialog.dart';
 import '../../../../../../../utils/block_dialogs/duration_blocking_dialog.dart';
 import '../../../common_package/document_package/backup/backup_signature_dialog.dart';
 
-// ✅ API 디버그(통합 에러 로그) 로거 + (옵션) 디버그 UI
-// 프로젝트 패키지명이 easydev인 경우(기존 코드에 package:easydev 사용 사례가 있어 package import 권장)
 import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
 import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_bottom_sheet.dart';
 
-/// end-report 전용 컬러 팔레트
-class EndReportColors {
-  EndReportColors._();
-
-  static const Color primary = Color(0xFFEF6C53);
-  static const Color primaryDark = Color(0xFFE15233);
-  static const Color primaryLight = Color(0xFFFFD2BC);
-  static const Color primarySoft = Color(0xFFFFF3EC);
-  static const Color pageBackground = Color(0xFFF6F2EF);
-}
-
-/// end-report 전용 버튼 스타일
+/// ✅ end-report 전용 버튼 스타일 (ColorScheme 기반)
+/// - 하드코딩 팔레트 제거
+/// - 전역 프리셋/다크모드 자동 반영
 class EndReportButtonStyles {
   EndReportButtonStyles._();
 
-  static ButtonStyle primary() {
+  static ButtonStyle primary(
+      BuildContext context, {
+        bool compact = false,
+      }) {
+    final cs = Theme.of(context).colorScheme;
+
     return ElevatedButton.styleFrom(
-      backgroundColor: EndReportColors.primary,
-      foregroundColor: Colors.white,
-      disabledBackgroundColor: EndReportColors.primaryLight,
-      disabledForegroundColor: Colors.white70,
+      backgroundColor: cs.primary,
+      foregroundColor: cs.onPrimary,
+      disabledBackgroundColor: cs.primary.withOpacity(0.45),
+      disabledForegroundColor: cs.onPrimary.withOpacity(0.55),
       elevation: 0,
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      padding: compact
+          ? const EdgeInsets.symmetric(vertical: 6, horizontal: 10)
+          : const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      minimumSize: compact ? const Size(0, 32) : null,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(compact ? 999 : 12),
+      ),
+      textStyle: compact
+          ? const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)
+          : const TextStyle(fontWeight: FontWeight.w700),
+    ).copyWith(
+      overlayColor: MaterialStateProperty.resolveWith<Color?>(
+            (states) => states.contains(MaterialState.pressed) ? cs.onPrimary.withOpacity(0.10) : null,
       ),
     );
   }
 
-  static ButtonStyle outlined() {
-    return ElevatedButton.styleFrom(
-      backgroundColor: Colors.white,
-      foregroundColor: EndReportColors.primaryDark,
-      disabledForegroundColor: Colors.black38,
-      elevation: 0,
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-      side: const BorderSide(
-        color: EndReportColors.primaryLight,
-        width: 1,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-    );
-  }
+  static ButtonStyle outlined(
+      BuildContext context, {
+        bool compact = false,
+      }) {
+    final cs = Theme.of(context).colorScheme;
 
-  static ButtonStyle smallPrimary() {
-    return ElevatedButton.styleFrom(
-      backgroundColor: EndReportColors.primary,
-      foregroundColor: Colors.white,
-      disabledBackgroundColor: EndReportColors.primaryLight,
-      disabledForegroundColor: Colors.white70,
-      elevation: 0,
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
-      minimumSize: const Size(0, 32),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(999),
-      ),
-      textStyle: const TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-      ),
-    );
-  }
-
-  static ButtonStyle smallOutlined() {
     return OutlinedButton.styleFrom(
-      foregroundColor: EndReportColors.primaryDark,
-      disabledForegroundColor: Colors.black38,
-      side: const BorderSide(
-        color: EndReportColors.primaryLight,
+      foregroundColor: cs.onSurface,
+      disabledForegroundColor: cs.onSurface.withOpacity(0.35),
+      backgroundColor: cs.surface,
+      side: BorderSide(
+        color: cs.outlineVariant.withOpacity(0.9),
         width: 1,
       ),
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
-      minimumSize: const Size(0, 32),
+      padding: compact
+          ? const EdgeInsets.symmetric(vertical: 6, horizontal: 10)
+          : const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+      minimumSize: compact ? const Size(0, 32) : null,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(compact ? 999 : 12),
       ),
-      textStyle: const TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w500,
+      textStyle: compact
+          ? const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)
+          : const TextStyle(fontWeight: FontWeight.w700),
+    ).copyWith(
+      overlayColor: MaterialStateProperty.resolveWith<Color?>(
+            (states) => states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(0.18) : null,
       ),
     );
   }
+
+  static ButtonStyle smallPrimary(BuildContext context) => primary(context, compact: true);
+  static ButtonStyle smallOutlined(BuildContext context) => outlined(context, compact: true);
 }
 
 class SimpleEndWorkReportResult {
@@ -231,8 +213,7 @@ class SimpleEndWorkReportService {
     try {
       for (final p in plates) {
         final data = p.data;
-        num? fee =
-        (data['lockedFeeAmount'] is num) ? data['lockedFeeAmount'] as num : null;
+        num? fee = (data['lockedFeeAmount'] is num) ? data['lockedFeeAmount'] as num : null;
 
         if (fee == null) {
           final logs = data['logs'];
@@ -460,13 +441,12 @@ class DashboardEndReportFormPage extends StatefulWidget {
 class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage> {
   final _formKey = GlobalKey<FormState>();
 
-  // 기본 정보 컨트롤러 (현재 UI에서는 사용하지 않지만, 향후 확장 고려해 유지)
   final _deptCtrl = TextEditingController();
   final _nameCtrl = TextEditingController();
   final _positionCtrl = TextEditingController();
 
   final _contentCtrl = TextEditingController();
-  final _vehicleCountCtrl = TextEditingController(); // 차량 대수 입력
+  final _vehicleCountCtrl = TextEditingController();
 
   final _mailSubjectCtrl = TextEditingController();
   final _mailBodyCtrl = TextEditingController();
@@ -484,9 +464,9 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
 
   String get _signerName => _nameCtrl.text.trim();
 
-  bool _sending = false; // 최종 메일 제출 중 여부
-  bool _firstSubmitting = false; // 1차 서버 보고 중 여부
-  bool _firstSubmittedCompleted = false; // 1차 서버 보고 성공 여부
+  bool _sending = false;
+  bool _firstSubmitting = false;
+  bool _firstSubmittedCompleted = false;
 
   bool _isVehicleCountValid = false;
 
@@ -570,7 +550,7 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
       final area = prefs.getString('selectedArea') ?? '';
       if (!mounted) return;
       setState(() {
-        _selectedArea = area.isEmpty ? null : area;
+        _selectedArea = area.trim().isEmpty ? null : area.trim();
       });
 
       if (_mailSubjectCtrl.text.trim().isEmpty) {
@@ -784,32 +764,34 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
     final signTimeText = _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
     final createdAtText = _fmtDT(context, DateTime.now());
 
-    Widget _infoPill(IconData icon, String label, String value) {
+    Widget infoPill(ColorScheme cs, TextTheme t, IconData icon, String label, String value) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: const Color(0xFFF3F4F6),
+          color: cs.surfaceContainerLow,
           borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: Colors.grey[700]),
+            Icon(icon, size: 16, color: cs.onSurfaceVariant),
             const SizedBox(width: 6),
             Text(
               '$label ',
-              style: TextStyle(
+              style: t.bodySmall?.copyWith(
                 fontSize: 12,
-                color: Colors.grey[700],
-                fontWeight: FontWeight.w500,
+                color: cs.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
               ),
             ),
             Flexible(
               child: Text(
                 value,
-                style: const TextStyle(
+                style: t.bodySmall?.copyWith(
                   fontSize: 12,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurface,
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -823,7 +805,48 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
       context: context,
       barrierDismissible: true,
       builder: (ctx) {
-        final theme = Theme.of(ctx);
+        final cs = Theme.of(ctx).colorScheme;
+        final t = Theme.of(ctx).textTheme;
+
+        final borderColor = cs.outlineVariant.withOpacity(0.85);
+
+        Widget section({
+          required IconData icon,
+          required String title,
+          required Widget child,
+          Color? background,
+        }) {
+          return Container(
+            decoration: BoxDecoration(
+              color: background ?? cs.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: borderColor),
+            ),
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(icon, size: 18, color: cs.primary),
+                    const SizedBox(width: 6),
+                    Text(
+                      title,
+                      style: t.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Divider(height: 20, color: borderColor),
+                const SizedBox(height: 2),
+                child,
+              ],
+            ),
+          );
+        }
 
         return Dialog(
           backgroundColor: Colors.transparent,
@@ -840,19 +863,17 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(20),
                     child: Material(
-                      color: Colors.white,
+                      color: cs.surface,
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.fromLTRB(20, 14, 16, 12),
-                            decoration: const BoxDecoration(
-                              color: EndReportColors.primaryDark,
-                            ),
+                            decoration: BoxDecoration(color: cs.primary),
                             child: Row(
                               children: [
-                                const Icon(Icons.visibility_outlined, color: Colors.white),
+                                Icon(Icons.visibility_outlined, color: cs.onPrimary),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Column(
@@ -860,16 +881,16 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                                     children: [
                                       Text(
                                         '업무 종료 보고서 미리보기',
-                                        style: theme.textTheme.titleMedium?.copyWith(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.w600,
+                                        style: t.titleMedium?.copyWith(
+                                          color: cs.onPrimary,
+                                          fontWeight: FontWeight.w800,
                                         ),
                                       ),
                                       const SizedBox(height: 2),
                                       Text(
                                         '전송 전 보고서 내용을 한 번 더 확인해 주세요.',
-                                        style: theme.textTheme.bodySmall?.copyWith(
-                                          color: Colors.white.withOpacity(0.8),
+                                        style: t.bodySmall?.copyWith(
+                                          color: cs.onPrimary.withOpacity(0.85),
                                         ),
                                       ),
                                     ],
@@ -877,7 +898,7 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                                 ),
                                 IconButton(
                                   onPressed: () => Navigator.of(ctx).pop(),
-                                  icon: const Icon(Icons.close, color: Colors.white),
+                                  icon: Icon(Icons.close, color: cs.onPrimary),
                                   tooltip: '닫기',
                                 ),
                               ],
@@ -894,122 +915,108 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                                       spacing: 8,
                                       runSpacing: 8,
                                       children: [
-                                        _infoPill(Icons.calendar_today_outlined, '작성일', createdAtText),
-                                        _infoPill(Icons.label_important_outline, '특이사항', specialText),
-                                        _infoPill(Icons.directions_car_outlined, '일일 차량 입고 대수', vehicleText),
-                                        _infoPill(Icons.person_outline, '서명자', signName),
-                                        _infoPill(Icons.access_time, '서명 일시', signTimeText),
+                                        infoPill(cs, t, Icons.calendar_today_outlined, '작성일', createdAtText),
+                                        infoPill(cs, t, Icons.label_important_outline, '특이사항', specialText),
+                                        infoPill(cs, t, Icons.directions_car_outlined, '일일 차량 입고 대수', vehicleText),
+                                        infoPill(cs, t, Icons.person_outline, '서명자', signName),
+                                        infoPill(cs, t, Icons.access_time, '서명 일시', signTimeText),
                                       ],
                                     ),
                                     const SizedBox(height: 16),
-                                    Container(
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFF9FAFB),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: Colors.grey.withOpacity(0.3)),
-                                      ),
-                                      padding: const EdgeInsets.all(12),
+
+                                    section(
+                                      icon: Icons.email_outlined,
+                                      title: '메일 전송 정보',
+                                      background: cs.surfaceContainerLow,
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Row(
-                                            children: [
-                                              const Icon(Icons.email_outlined, size: 18, color: EndReportColors.primaryDark),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                '메일 전송 정보',
-                                                style: theme.textTheme.bodyMedium?.copyWith(
-                                                  fontWeight: FontWeight.w600,
-                                                  color: EndReportColors.primaryDark,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 8),
-                                          const Divider(height: 20),
-                                          const SizedBox(height: 2),
-                                          Text('제목', style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[700], fontWeight: FontWeight.w600)),
-                                          const SizedBox(height: 2),
-                                          Text(_mailSubjectCtrl.text, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500)),
-                                          const SizedBox(height: 10),
-                                          Text('본문 (자동 생성)', style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[700], fontWeight: FontWeight.w600)),
-                                          const SizedBox(height: 2),
-                                          Container(
-                                            width: double.infinity,
-                                            padding: const EdgeInsets.all(10),
-                                            decoration: BoxDecoration(
-                                              color: Colors.white,
-                                              borderRadius: BorderRadius.circular(10),
-                                              border: Border.all(color: Colors.grey.withOpacity(0.2)),
+                                          Text(
+                                            '제목',
+                                            style: t.bodySmall?.copyWith(
+                                              color: cs.onSurfaceVariant,
+                                              fontWeight: FontWeight.w700,
                                             ),
-                                            child: Text(_mailBodyCtrl.text, style: theme.textTheme.bodyMedium),
                                           ),
-                                        ],
-                                      ),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Container(
-                                      decoration: BoxDecoration(
-                                        color: Colors.white,
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: Colors.grey.withOpacity(0.3)),
-                                      ),
-                                      padding: const EdgeInsets.all(12),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              const Icon(Icons.report_problem_outlined, size: 18, color: EndReportColors.primaryDark),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                '특이 사항 상세 내용',
-                                                style: theme.textTheme.bodyMedium?.copyWith(
-                                                  fontWeight: FontWeight.w600,
-                                                  color: EndReportColors.primaryDark,
-                                                ),
-                                              ),
-                                            ],
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            _mailSubjectCtrl.text,
+                                            style: t.bodyMedium?.copyWith(
+                                              fontWeight: FontWeight.w600,
+                                              color: cs.onSurface,
+                                            ),
                                           ),
-                                          const SizedBox(height: 8),
-                                          const Divider(height: 20),
+                                          const SizedBox(height: 10),
+                                          Text(
+                                            '본문 (자동 생성)',
+                                            style: t.bodySmall?.copyWith(
+                                              color: cs.onSurfaceVariant,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
                                           const SizedBox(height: 2),
                                           Container(
                                             width: double.infinity,
                                             padding: const EdgeInsets.all(10),
                                             decoration: BoxDecoration(
-                                              color: const Color(0xFFFBFBFB),
+                                              color: cs.surface,
                                               borderRadius: BorderRadius.circular(10),
-                                              border: Border.all(color: Colors.grey.withOpacity(0.2)),
+                                              border: Border.all(color: borderColor),
                                             ),
                                             child: Text(
-                                              _contentCtrl.text.trim().isEmpty ? '입력된 특이 사항이 없습니다.' : _contentCtrl.text,
-                                              style: theme.textTheme.bodyMedium?.copyWith(
-                                                height: 1.4,
-                                                color: _contentCtrl.text.trim().isEmpty ? Colors.grey[600] : Colors.black,
-                                              ),
+                                              _mailBodyCtrl.text,
+                                              style: t.bodyMedium?.copyWith(color: cs.onSurface),
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
+
+                                    const SizedBox(height: 16),
+
+                                    section(
+                                      icon: Icons.report_problem_outlined,
+                                      title: '특이 사항 상세 내용',
+                                      child: Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(10),
+                                        decoration: BoxDecoration(
+                                          color: cs.surfaceContainerLow,
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(color: borderColor),
+                                        ),
+                                        child: Text(
+                                          _contentCtrl.text.trim().isEmpty ? '입력된 특이 사항이 없습니다.' : _contentCtrl.text,
+                                          style: t.bodyMedium?.copyWith(
+                                            height: 1.4,
+                                            color: _contentCtrl.text.trim().isEmpty ? cs.onSurfaceVariant : cs.onSurface,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+
                                     const SizedBox(height: 12),
+
                                     Container(
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
-                                        color: EndReportColors.primarySoft,
+                                        color: cs.primaryContainer,
                                         borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: EndReportColors.primaryLight),
+                                        border: Border.all(color: borderColor),
                                       ),
                                       child: Row(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          const Icon(Icons.info_outline, size: 18, color: EndReportColors.primaryDark),
+                                          Icon(Icons.info_outline, size: 18, color: cs.onPrimaryContainer),
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Text(
                                               '하단의 "텍스트 복사" 버튼을 누르면 이 미리보기 내용을 텍스트 형태로 복사하여 메신저 등에 붙여넣을 수 있습니다.',
-                                              style: theme.textTheme.bodySmall?.copyWith(height: 1.4, color: const Color(0xFF1F2937)),
+                                              style: t.bodySmall?.copyWith(
+                                                height: 1.4,
+                                                color: cs.onPrimaryContainer,
+                                                fontWeight: FontWeight.w600,
+                                              ),
                                             ),
                                           ),
                                         ],
@@ -1025,8 +1032,8 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                             width: double.infinity,
                             padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFFAFAFA),
-                              border: Border(top: BorderSide(color: Colors.grey.withOpacity(0.2))),
+                              color: cs.surfaceContainerLow,
+                              border: Border(top: BorderSide(color: borderColor)),
                             ),
                             child: Row(
                               children: [
@@ -1035,15 +1042,19 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                                     HapticFeedback.selectionClick();
                                     await Clipboard.setData(ClipboardData(text: text));
                                     if (!mounted) return;
-                                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('텍스트가 클립보드에 복사되었습니다.')));
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('텍스트가 클립보드에 복사되었습니다.')),
+                                    );
                                   },
                                   icon: const Icon(Icons.copy_rounded, size: 18),
                                   label: const Text('텍스트 복사'),
+                                  style: TextButton.styleFrom(foregroundColor: cs.primary),
                                 ),
                                 const SizedBox(width: 4),
                                 TextButton(
                                   onPressed: () => Navigator.of(ctx).pop(),
                                   child: const Text('닫기'),
+                                  style: TextButton.styleFrom(foregroundColor: cs.onSurface),
                                 ),
                               ],
                             ),
@@ -1315,9 +1326,6 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
     return s.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // ✅ PDF 생성: 실패 시 DebugApiLogger 기록
-  // ─────────────────────────────────────────────────────────────
   Future<Uint8List> _buildPdfBytes() async {
     try {
       pw.Font? regular;
@@ -1475,9 +1483,6 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
     }
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // ✅ Gmail MIME helpers (CRLF + base64 wrap + RFC2047 Subject)
-  // ─────────────────────────────────────────────────────────────
   String _wrapBase64Lines(String b64, {int lineLength = _mimeB64LineLength}) {
     if (b64.isEmpty) return '';
     final sb = StringBuffer();
@@ -1555,51 +1560,53 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
     }
   }
 
-  InputDecoration _inputDec({
-    required String labelText,
-    String? hintText,
-  }) {
+  InputDecoration _inputDec(
+      BuildContext context, {
+        required String labelText,
+        String? hintText,
+      }) {
+    final cs = Theme.of(context).colorScheme;
+
     return InputDecoration(
       labelText: labelText,
       hintText: hintText,
       filled: true,
-      fillColor: Colors.white,
+      fillColor: cs.surfaceContainerLow,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.grey),
+        borderSide: BorderSide(color: cs.outlineVariant),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Colors.grey),
+        borderSide: BorderSide(color: cs.outlineVariant),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(
-          color: EndReportColors.primary,
-          width: 1.6,
-        ),
+        borderSide: BorderSide(color: cs.primary, width: 1.6),
       ),
-      contentPadding: const EdgeInsets.symmetric(
-        vertical: 14,
-        horizontal: 12,
-      ),
+      contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
     );
   }
 
-  Widget _sectionCard({
-    required String title,
-    required Widget child,
-    EdgeInsetsGeometry padding = const EdgeInsets.all(12),
-    EdgeInsetsGeometry? margin,
-  }) {
+  Widget _sectionCard(
+      BuildContext context, {
+        required String title,
+        required Widget child,
+        EdgeInsetsGeometry padding = const EdgeInsets.all(12),
+        EdgeInsetsGeometry? margin,
+      }) {
+    final cs = Theme.of(context).colorScheme;
+    final t = Theme.of(context).textTheme;
+
     return Card(
       elevation: 0,
       margin: margin ?? const EdgeInsets.only(bottom: 16),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: Colors.black12),
+        side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
       ),
-      color: Colors.white,
+      color: cs.surfaceContainerLow,
+      surfaceTintColor: Colors.transparent,
       child: Padding(
         padding: padding,
         child: Column(
@@ -1607,7 +1614,10 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
           children: [
             Text(
               title,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              style: t.titleMedium?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: cs.onSurface,
+              ),
             ),
             const SizedBox(height: 10),
             child,
@@ -1624,21 +1634,22 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
       String value, {
         bool isEmphasis = false,
       }) {
-    final textTheme = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    final t = Theme.of(context).textTheme;
 
     return Row(
       children: [
         Expanded(
           child: Text(
             label,
-            style: textTheme.bodySmall?.copyWith(color: Colors.black54),
+            style: t.bodySmall?.copyWith(color: cs.onSurfaceVariant),
           ),
         ),
         Text(
           value,
-          style: textTheme.bodySmall?.copyWith(
-            fontWeight: isEmphasis ? FontWeight.w700 : FontWeight.w600,
-            color: isEmphasis ? EndReportColors.primaryDark : Colors.black87,
+          style: t.bodySmall?.copyWith(
+            fontWeight: isEmphasis ? FontWeight.w800 : FontWeight.w600,
+            color: cs.onSurface,
           ),
         ),
       ],
@@ -1647,12 +1658,14 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
 
   Future<void> _openSignatureDialog() async {
     HapticFeedback.selectionClick();
+    final cs = Theme.of(context).colorScheme;
+
     try {
       final result = await showGeneralDialog<SignatureResult>(
         context: context,
         barrierLabel: '서명',
         barrierDismissible: false,
-        barrierColor: Colors.black54,
+        barrierColor: cs.scrim.withOpacity(0.55),
         pageBuilder: (ctx, animation, secondaryAnimation) {
           return SignatureFullScreenDialog(
             name: _signerName,
@@ -1685,71 +1698,80 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
   }
 
   Widget _buildSpecialNoteBody() {
+    final cs = Theme.of(context).colorScheme;
+    final t = Theme.of(context).textTheme;
+
+    Widget choice({required bool value, required String label}) {
+      final selected = _hasSpecialNote == value;
+      return Expanded(
+        child: selected
+            ? ElevatedButton(
+          onPressed: () {
+            HapticFeedback.selectionClick();
+            setState(() {
+              _hasSpecialNote = value;
+              _updateMailSubject();
+            });
+            _pageController.nextPage(duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+          },
+          style: EndReportButtonStyles.primary(context),
+          child: Text(label),
+        )
+            : OutlinedButton(
+          onPressed: () {
+            HapticFeedback.selectionClick();
+            setState(() {
+              _hasSpecialNote = value;
+              _updateMailSubject();
+            });
+            _pageController.nextPage(duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+          },
+          style: EndReportButtonStyles.outlined(context),
+          child: Text(label),
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           '오늘 업무 진행 중 특이사항이 있었는지 선택해 주세요.\n(예: 장애, 클레임, 일정 지연, 긴급 지원 등)',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4),
+          style: t.bodyMedium?.copyWith(height: 1.4, color: cs.onSurface),
         ),
         const SizedBox(height: 12),
         Row(
           children: [
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () {
-                  HapticFeedback.selectionClick();
-                  setState(() {
-                    _hasSpecialNote = false;
-                    _updateMailSubject();
-                  });
-                  _pageController.nextPage(duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
-                },
-                style: _hasSpecialNote == false ? EndReportButtonStyles.primary() : EndReportButtonStyles.outlined(),
-                child: const Text('특이사항 없음'),
-              ),
-            ),
+            choice(value: false, label: '특이사항 없음'),
             const SizedBox(width: 12),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () {
-                  HapticFeedback.selectionClick();
-                  setState(() {
-                    _hasSpecialNote = true;
-                    _updateMailSubject();
-                  });
-                  _pageController.nextPage(duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
-                },
-                style: _hasSpecialNote == true ? EndReportButtonStyles.primary() : EndReportButtonStyles.outlined(),
-                child: const Text('특이사항 있음'),
-              ),
-            ),
+            choice(value: true, label: '특이사항 있음'),
           ],
         ),
         const SizedBox(height: 6),
         Text(
           '※ 선택 결과는 메일 제목에 자동으로 반영되며, 다음 항목으로 자동 이동합니다.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black54),
+          style: t.bodySmall?.copyWith(color: cs.onSurfaceVariant),
         ),
       ],
     );
   }
 
   Widget _buildVehicleBody() {
-    final textTheme = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    final t = Theme.of(context).textTheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           '오늘 하루 동안 해당 업무로 입고된 차량 대수를 입력해 주세요.',
-          style: textTheme.bodyMedium?.copyWith(height: 1.4),
+          style: t.bodyMedium?.copyWith(height: 1.4, color: cs.onSurface),
         ),
         const SizedBox(height: 12),
         TextFormField(
           key: _vehicleFieldKey,
           controller: _vehicleCountCtrl,
-          decoration: _inputDec(labelText: '일일 차량 입고 대수', hintText: '예: 12'),
+          decoration: _inputDec(context, labelText: '일일 차량 입고 대수', hintText: '예: 12'),
           keyboardType: TextInputType.number,
           onTap: () {
             Future.delayed(const Duration(milliseconds: 150), () {
@@ -1767,13 +1789,15 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
           },
         ),
         const SizedBox(height: 8),
+
+        // 시스템 집계(참고용)
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: EndReportColors.primarySoft,
+            color: cs.surfaceContainerHigh,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: EndReportColors.primaryLight),
+            border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1781,26 +1805,30 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const Icon(Icons.info_outline, size: 18, color: EndReportColors.primaryDark),
+                  Icon(Icons.info_outline, size: 18, color: cs.onSurfaceVariant),
                   const SizedBox(width: 8),
                   Text(
                     '시스템 집계 기준 (참고용)',
-                    style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600, color: EndReportColors.primaryDark),
+                    style: t.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: cs.onSurface,
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 8),
               Text(
                 '아래 수치는 시스템에서 집계한 값이며, 실제 보고용 "일일 차량 입고 대수"는 반드시 직접 입력해 주세요.',
-                style: textTheme.bodySmall?.copyWith(color: Colors.black87, height: 1.4),
+                style: t.bodySmall?.copyWith(color: cs.onSurfaceVariant, height: 1.4),
               ),
               const SizedBox(height: 10),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: cs.surface,
                   borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1810,7 +1838,7 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                     _buildMetricRow('출차', '$_sysVehicleOutput대'),
                     const SizedBox(height: 4),
                     _buildMetricRow('중복 입차', '$_sysDepartureExtra대'),
-                    const Divider(height: 16),
+                    Divider(height: 16, color: cs.outlineVariant.withOpacity(0.8)),
                     _buildMetricRow('시스템 합산(입차+출차+중복 입차)', '${_sysVehicleFieldTotal}대', isEmphasis: true),
                   ],
                 ),
@@ -1818,25 +1846,34 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
               const SizedBox(height: 6),
               Text(
                 '※ 위 값은 참고용이며, "일일 차량 입고 대수" 입력란에는 자동으로 채워지지 않습니다.',
-                style: textTheme.bodySmall?.copyWith(color: Colors.black54, height: 1.3),
+                style: t.bodySmall?.copyWith(color: cs.onSurfaceVariant, height: 1.3),
               ),
             ],
           ),
         ),
+
         const SizedBox(height: 12),
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
             onPressed: (_firstSubmitting || !_isVehicleCountValid) ? null : _submitFirstEndReport,
-            style: EndReportButtonStyles.primary(),
+            style: EndReportButtonStyles.primary(context),
             icon: _firstSubmitting
-                ? const SizedBox(
+                ? SizedBox(
               width: 18,
               height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(cs.onPrimary),
+              ),
             )
                 : const Icon(Icons.cloud_upload_outlined),
-            label: Text(_firstSubmitting ? '1차 제출 중…' : '1차 제출', style: const TextStyle(fontWeight: FontWeight.w600)),
+            label: Text(
+              _firstSubmitting
+                  ? '1차 제출 중…'
+                  : (_firstSubmittedCompleted ? '1차 제출 완료(재제출 가능)' : '1차 제출'),
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
           ),
         ),
         const SizedBox(height: 4),
@@ -1850,6 +1887,7 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
       controller: _contentCtrl,
       focusNode: _contentNode,
       decoration: _inputDec(
+        context,
         labelText: '특이 사항',
         hintText: '예)\n'
             '- 육하원칙에 맞춰서 작성하세요.\n'
@@ -1885,6 +1923,7 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
           readOnly: true,
           enableInteractiveSelection: true,
           decoration: _inputDec(
+            context,
             labelText: '메일 제목(자동 생성)',
             hintText: '예: 콜센터 업무 종료 보고서 – 11월 25일자 12대 - 특이사항 있음',
           ),
@@ -1895,7 +1934,7 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
           controller: _mailBodyCtrl,
           readOnly: true,
           enableInteractiveSelection: true,
-          decoration: _inputDec(labelText: '메일 본문(자동 생성)', hintText: '작성 시각 정보가 자동으로 입력됩니다.'),
+          decoration: _inputDec(context, labelText: '메일 본문(자동 생성)', hintText: '작성 시각 정보가 자동으로 입력됩니다.'),
           minLines: 3,
           maxLines: 8,
         ),
@@ -1904,14 +1943,17 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
   }
 
   Widget _buildSignatureBody() {
+    final cs = Theme.of(context).colorScheme;
+    final t = Theme.of(context).textTheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
           padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
           decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: Colors.black12),
+            color: cs.surfaceContainerLow,
+            border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Wrap(
@@ -1922,26 +1964,28 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.person_outline, size: 18),
+                  Icon(Icons.person_outline, size: 18, color: cs.onSurfaceVariant),
                   const SizedBox(width: 6),
                   Text(
                     '서명자: ${_signerName.isEmpty ? "이름 미입력" : _signerName}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     softWrap: false,
+                    style: t.bodyMedium?.copyWith(fontWeight: FontWeight.w700, color: cs.onSurface),
                   ),
                 ],
               ),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.access_time, size: 18),
+                  Icon(Icons.access_time, size: 18, color: cs.onSurfaceVariant),
                   const SizedBox(width: 6),
                   Text(
                     '서명 일시: ${_signDateTime == null ? "저장 시 자동" : _fmtCompact(_signDateTime!)}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     softWrap: false,
+                    style: t.bodyMedium?.copyWith(color: cs.onSurface),
                   ),
                 ],
               ),
@@ -1949,7 +1993,7 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                 onPressed: _openSignatureDialog,
                 icon: const Icon(Icons.border_color),
                 label: const Text('서명하기'),
-                style: EndReportButtonStyles.smallPrimary(),
+                style: EndReportButtonStyles.smallPrimary(context),
               ),
               if (_signaturePngBytes != null)
                 OutlinedButton.icon(
@@ -1962,7 +2006,7 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                   },
                   icon: const Icon(Icons.delete_outline),
                   label: const Text('서명 삭제'),
-                  style: EndReportButtonStyles.smallOutlined(),
+                  style: EndReportButtonStyles.smallOutlined(context),
                 ),
             ],
           ),
@@ -1971,7 +2015,8 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
         if (_signaturePngBytes != null)
           Container(
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.black12),
+              color: cs.surface,
+              border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
               borderRadius: BorderRadius.circular(12),
             ),
             padding: const EdgeInsets.all(8),
@@ -1991,6 +2036,8 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
     required String sectionTitle,
     required Widget sectionBody,
   }) {
+    final cs = Theme.of(context).colorScheme;
+    final t = Theme.of(context).textTheme;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Scrollbar(
@@ -2007,20 +2054,27 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                 Text(
                   '업무 종료 보고서',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 4),
+                  style: t.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 3,
+                    color: cs.onSurface,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'WORK COMPLETION REPORT',
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(color: Colors.black54, letterSpacing: 3),
+                  style: t.labelMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    letterSpacing: 2.4,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: cs.surface,
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: EndReportColors.primaryLight.withOpacity(0.8), width: 1),
+                    border: Border.all(color: cs.outlineVariant.withOpacity(0.85), width: 1),
                   ),
                   padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
                   child: Column(
@@ -2028,46 +2082,54 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.edit_note_rounded, size: 22, color: EndReportColors.primaryDark),
+                          Icon(Icons.edit_note_rounded, size: 22, color: cs.onSurfaceVariant),
                           const SizedBox(width: 8),
                           Text(
                             '업무 종료 보고서 양식',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600, color: EndReportColors.primaryDark),
+                            style: t.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: cs.onSurface,
+                            ),
                           ),
                           const Spacer(),
                           Text(
                             '작성일 ${_fmtCompact(DateTime.now())}',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black54),
+                            style: t.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                           ),
                         ],
                       ),
                       const SizedBox(height: 8),
-                      const Divider(height: 24),
+                      Divider(height: 24, color: cs.outlineVariant.withOpacity(0.75)),
                       const SizedBox(height: 4),
                       Container(
                         decoration: BoxDecoration(
-                          color: EndReportColors.primarySoft,
+                          color: cs.surfaceContainerLow,
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: EndReportColors.primaryLight),
+                          border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
                         ),
                         padding: const EdgeInsets.all(12),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.info_outline, size: 18, color: EndReportColors.primaryDark),
+                            Icon(Icons.info_outline, size: 18, color: cs.onSurfaceVariant),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 '해당 업무의 수행 내용과 결과를 사실에 근거하여 간결하게 작성해 주세요.\n'
                                     '문제 발생 시 상단 “API 디버그”에서 에러 로그를 확인할 수 있습니다.',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.4),
+                                style: t.bodySmall?.copyWith(height: 1.4, color: cs.onSurface),
                               ),
                             ),
                           ],
                         ),
                       ),
                       _gap(20),
-                      _sectionCard(title: sectionTitle, margin: const EdgeInsets.only(bottom: 0), child: sectionBody),
+                      _sectionCard(
+                        context,
+                        title: sectionTitle,
+                        margin: const EdgeInsets.only(bottom: 0),
+                        child: sectionBody,
+                      ),
                       _gap(12),
                       Row(
                         children: [
@@ -2076,7 +2138,7 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                               onPressed: _sending ? null : _reset,
                               icon: const Icon(Icons.refresh_outlined),
                               label: const Text('초기화'),
-                              style: EndReportButtonStyles.outlined(),
+                              style: EndReportButtonStyles.outlined(context),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -2085,7 +2147,7 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
                               onPressed: _sending ? null : _showPreview,
                               icon: const Icon(Icons.visibility_outlined),
                               label: const Text('미리보기'),
-                              style: EndReportButtonStyles.primary(),
+                              style: EndReportButtonStyles.primary(context),
                             ),
                           ),
                         ],
@@ -2104,16 +2166,19 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      backgroundColor: EndReportColors.pageBackground,
+      backgroundColor: cs.surface,
       appBar: AppBar(
         title: const Text('업무 종료 보고서 작성'),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        shape: const Border(bottom: BorderSide(color: Colors.black12, width: 1)),
+        shape: Border(bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.85), width: 1)),
         actions: [
           IconButton(
             tooltip: 'API 디버그',
@@ -2126,7 +2191,7 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
               onPressed: _showPreview,
               icon: const Icon(Icons.visibility_outlined),
               label: const Text('미리보기'),
-              style: EndReportButtonStyles.smallPrimary(),
+              style: EndReportButtonStyles.smallPrimary(context),
             ),
           ),
         ],
@@ -2143,26 +2208,26 @@ class _DashboardEndReportFormPageState extends State<DashboardEndReportFormPage>
             top: 10,
             bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
           ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(top: BorderSide(color: Colors.black12, width: 1)),
+          decoration: BoxDecoration(
+            color: cs.surface,
+            border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(0.85), width: 1)),
           ),
           child: SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: (!_sending && _signaturePngBytes != null) ? _submit : null,
               icon: _sending
-                  ? const SizedBox(
+                  ? SizedBox(
                 width: 20,
                 height: 20,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                  valueColor: AlwaysStoppedAnimation<Color>(cs.onPrimary),
                 ),
               )
                   : const Icon(Icons.send_outlined),
               label: Text(_sending ? '전송 중…' : '제출', style: const TextStyle(fontWeight: FontWeight.bold)),
-              style: EndReportButtonStyles.primary(),
+              style: EndReportButtonStyles.primary(context),
             ),
           ),
         ),

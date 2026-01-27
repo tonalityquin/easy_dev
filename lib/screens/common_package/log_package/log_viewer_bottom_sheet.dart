@@ -2,22 +2,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../../models/plate_log_model.dart';
-// import '../../utils/usage_reporter.dart';
 
 class LogViewerBottomSheet extends StatefulWidget {
-  /// plateNumber (문서 ID 폴백 조합에 사용)
   final String? initialPlateNumber;
-
-  /// 현재 Firestore 조회에는 사용하지 않지만 호환성 유지를 위해 남겨둠
   final String division;
-
-  /// 문서 ID 폴백 조합에 사용
   final String area;
-
-  /// 호환성 유지를 위해 남겨둠 (조회에는 사용하지 않음)
   final DateTime requestTime;
-
-  /// 가능하면 실제 Firestore 문서 ID를 넘겨주세요 (가장 정확)
   final String? plateId;
 
   const LogViewerBottomSheet({
@@ -37,6 +27,8 @@ class LogViewerBottomSheet extends StatefulWidget {
         String? initialPlateNumber,
         String? plateId,
       }) async {
+    final cs = Theme.of(context).colorScheme;
+
     if (Navigator.canPop(context)) {
       Navigator.pop(context);
       await Future.delayed(const Duration(milliseconds: 150));
@@ -46,7 +38,7 @@ class LogViewerBottomSheet extends StatefulWidget {
     await showGeneralDialog(
       context: context,
       barrierDismissible: true,
-      barrierColor: Colors.black54,
+      barrierColor: cs.scrim.withOpacity(0.55),
       barrierLabel: '닫기',
       transitionDuration: const Duration(milliseconds: 300),
       pageBuilder: (_, __, ___) {
@@ -79,10 +71,8 @@ class LogViewerBottomSheet extends StatefulWidget {
 }
 
 class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
-  /// 화면 식별 태그(FAQ/에러 리포트용)
   static const String screenTag = 'plate log';
 
-  /// true: 최신순, false: 오래된순 (기본: 오래된순)
   bool _desc = false;
 
   bool _isLoading = true;
@@ -96,11 +86,9 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
   }
 
   String _buildDocId() {
-    // 1순위: plateId 직접 제공
     final pid = widget.plateId?.trim();
     if (pid != null && pid.isNotEmpty) return pid;
 
-    // 2순위: plateNumber_area 규칙
     final p = widget.initialPlateNumber?.trim() ?? '';
     final a = widget.area.trim();
 
@@ -145,7 +133,6 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
         }
       }
 
-      // 현재 원하는 정렬(_desc)에 맞춰 "한 번만" 정렬하고 상태 플래그 갱신
       logs.sort((a, b) => _desc ? b.timestamp.compareTo(a.timestamp) : a.timestamp.compareTo(b.timestamp));
 
       setState(() {
@@ -162,20 +149,9 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
         _isLoading = false;
         _errorMessage = e is StateError ? e.message : '로그를 불러오는 중 오류가 발생했습니다. ($e)';
       });
-    } finally {
-      try {
-        /*await UsageReporter.instance.report(
-          area: (widget.area.isEmpty ? 'unknown' : widget.area),
-          action: 'read',
-          n: 1,
-          source: 'LogViewerBottomSheet._loadLogs/plates.doc.get',
-        );*/
-      } catch (_) {
-      }
     }
   }
 
-  // intl 없이 직접 포맷팅(로컬 타임존)
   String _formatTs(dynamic ts) {
     DateTime? dt;
     if (ts is Timestamp) {
@@ -191,7 +167,6 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
     return '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}:${two(d.second)}';
   }
 
-  // 원화 간단 포맷 (intl 없이 콤마만)
   String _formatIntWithComma(int n) {
     final s = n.toString();
     final buf = StringBuffer();
@@ -218,30 +193,30 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
     return Icons.history;
   }
 
-  Color _actionColor(String action) {
-    if (action.contains('사전 정산')) return Colors.teal;
-    if (action.contains('출차')) return Colors.orange;
-    if (action.contains('취소')) return Colors.redAccent;
-    if (action.contains('생성')) return Colors.indigo;
-    return Colors.blueGrey;
+  Color _actionColor(ColorScheme cs, String action) {
+    if (action.contains('사전 정산')) return cs.tertiary;
+    if (action.contains('출차')) return cs.primary;
+    if (action.contains('취소')) return cs.error;
+    if (action.contains('생성')) return cs.primary;
+    return cs.onSurfaceVariant;
   }
 
-  // 좌측 상단(11시) 고정 태그
   Widget _buildScreenTag(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final base = Theme.of(context).textTheme.labelSmall;
+
     final style = (base ??
         const TextStyle(
           fontSize: 11,
-          color: Colors.black54,
           fontWeight: FontWeight.w600,
         ))
         .copyWith(
-      color: Colors.black54,
+      color: cs.onSurfaceVariant,
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
     );
 
-    return IgnorePointer( // 제스처 간섭 방지
+    return IgnorePointer(
       child: Align(
         alignment: Alignment.topLeft,
         child: Padding(
@@ -257,9 +232,9 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final plateTitle = widget.initialPlateNumber != null ? '${widget.initialPlateNumber} 로그' : '번호판 로그';
 
-    // ★ 풀스크린 화이트 시트
     final size = MediaQuery.of(context).size;
 
     return SafeArea(
@@ -268,17 +243,18 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
         child: Align(
           alignment: Alignment.bottomCenter,
           child: SizedBox(
-            height: size.height, // 화면 전체 높이
+            height: size.height,
             width: double.infinity,
             child: Container(
-              decoration: const BoxDecoration(
-                color: Colors.white, // 전면 흰 배경
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
                 boxShadow: [
                   BoxShadow(
-                    color: Color(0x1F000000),
+                    color: cs.shadow.withOpacity(0.10),
                     blurRadius: 16,
-                    offset: Offset(0, -2),
+                    offset: const Offset(0, -2),
                   ),
                 ],
               ),
@@ -292,65 +268,73 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
                       height: 4,
                       margin: const EdgeInsets.only(top: 12, bottom: 8),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade300,
+                        color: cs.outlineVariant.withOpacity(0.9),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
-                    // ⬇️ 좌측 상단(11시) 화면 태그
+
+                    // 화면 태그
                     _buildScreenTag(context),
 
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0),
                       child: Row(
                         children: [
-                          const Icon(Icons.list_alt, color: Colors.blueAccent),
+                          Icon(Icons.list_alt, color: cs.primary),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               plateTitle,
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                              style: TextStyle(
+                                fontWeight: FontWeight.w900,
+                                fontSize: 18,
+                                color: cs.onSurface,
+                              ),
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                          // 정렬 토글 (불필요한 재정렬 없이 reverse만 수행)
                           TextButton.icon(
                             onPressed: () {
                               setState(() {
-                                _desc = !_desc; // 원하는 정렬 상태 변경
-                                _logs = _logs.reversed.toList(); // 리스트 뒤집기만
+                                _desc = !_desc;
+                                _logs = _logs.reversed.toList();
                               });
                             },
                             icon: Icon(_desc ? Icons.south : Icons.north, size: 18),
                             label: Text(_desc ? '최신순' : '오래된순'),
                             style: TextButton.styleFrom(
-                              foregroundColor: Colors.grey[800],
+                              foregroundColor: cs.onSurface,
                               padding: const EdgeInsets.symmetric(horizontal: 8),
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.close),
+                            icon: Icon(Icons.close, color: cs.onSurface),
                             onPressed: () => Navigator.pop(context),
                           ),
                         ],
                       ),
                     ),
-                    const Divider(height: 1),
+                    Divider(height: 1, color: cs.outlineVariant.withOpacity(0.85)),
 
-                    // 콘텐츠
                     Expanded(
                       child: _isLoading
-                          ? const Center(child: CircularProgressIndicator())
+                          ? Center(
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                        ),
+                      )
                           : (_errorMessage != null)
                           ? _ErrorState(message: _errorMessage!)
                           : (_logs.isEmpty)
                           ? const _EmptyState(text: '📭 로그가 없습니다.')
                           : ListView.separated(
                         itemCount: _logs.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        separatorBuilder: (_, __) =>
+                            Divider(height: 1, color: cs.outlineVariant.withOpacity(0.65)),
                         itemBuilder: (_, index) {
                           final log = _logs[index];
                           final tsText = _formatTs(log.timestamp);
-                          final color = _actionColor(log.action);
+                          final color = _actionColor(cs, log.action);
 
                           final String? feeText =
                           (log.lockedFee != null) ? _formatWon(log.lockedFee) : null;
@@ -365,7 +349,7 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
                             leading: Icon(_actionIcon(log.action), color: color),
                             title: Text(
                               log.action,
-                              style: TextStyle(color: color),
+                              style: TextStyle(color: color, fontWeight: FontWeight.w800),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -377,31 +361,32 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
                                     '${log.from} → ${log.to}',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(color: cs.onSurfaceVariant),
                                   ),
                                 if (log.performedBy.isNotEmpty) const SizedBox(height: 2),
                                 if (log.performedBy.isNotEmpty)
                                   Text(
                                     '담당자: ${log.performedBy}',
-                                    style: const TextStyle(fontSize: 12),
+                                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-
-                                // 사전 정산 관련 정보 (있을 때만 표시)
                                 if (feeText != null || payText != null || reasonText != null)
                                   const SizedBox(height: 2),
                                 if (feeText != null)
-                                  Text('확정요금: $feeText', style: const TextStyle(fontSize: 12)),
+                                  Text('확정요금: $feeText', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
                                 if (payText != null)
-                                  Text('결제수단: $payText', style: const TextStyle(fontSize: 12)),
+                                  Text('결제수단: $payText', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
                                 if (reasonText != null)
-                                  Text('사유: $reasonText',
-                                      style: const TextStyle(fontSize: 12),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis),
+                                  Text(
+                                    '사유: $reasonText',
+                                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                               ],
                             ),
-                            trailing: Text(tsText, style: const TextStyle(fontSize: 12)),
+                            trailing: Text(tsText, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
                             isThreeLine: true,
                             dense: true,
                           );
@@ -409,17 +394,19 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
                       ),
                     ),
 
-                    // 하단 액션
                     Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: ElevatedButton.icon(
-                        onPressed: _loadLogs, // 필요할 때만 네트워크 읽기
+                        onPressed: _loadLogs,
                         icon: const Icon(Icons.refresh),
                         label: const Text("새로고침"),
                         style: ElevatedButton.styleFrom(
                           minimumSize: const Size.fromHeight(48),
+                          backgroundColor: cs.primary,
+                          foregroundColor: cs.onPrimary,
+                          elevation: 0,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
                       ),
@@ -442,10 +429,11 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Center(
-        child: Text(text, style: const TextStyle(color: Colors.grey)),
+        child: Text(text, style: TextStyle(color: cs.onSurfaceVariant)),
       ),
     );
   }
@@ -458,10 +446,11 @@ class _ErrorState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Center(
-        child: Text(message, style: const TextStyle(color: Colors.redAccent)),
+        child: Text(message, style: TextStyle(color: cs.error)),
       ),
     );
   }

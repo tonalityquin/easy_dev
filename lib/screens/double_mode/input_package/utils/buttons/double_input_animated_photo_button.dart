@@ -9,9 +9,10 @@ class DoubleInputAnimatedPhotoButton extends StatefulWidget {
   State<DoubleInputAnimatedPhotoButton> createState() => _DoubleInputAnimatedPhotoButtonState();
 }
 
-class _DoubleInputAnimatedPhotoButtonState extends State<DoubleInputAnimatedPhotoButton> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
+class _DoubleInputAnimatedPhotoButtonState extends State<DoubleInputAnimatedPhotoButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scaleAnimation;
 
   @override
   void initState() {
@@ -22,14 +23,10 @@ class _DoubleInputAnimatedPhotoButtonState extends State<DoubleInputAnimatedPhot
       lowerBound: 0.95,
       upperBound: 1.0,
     );
-
-    _scaleAnimation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOut,
-    );
+    _scaleAnimation = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
   }
 
-  void _handleTap() async {
+  Future<void> _handleTap() async {
     await _controller.reverse();
     await _controller.forward();
     widget.onPressed();
@@ -43,26 +40,32 @@ class _DoubleInputAnimatedPhotoButtonState extends State<DoubleInputAnimatedPhot
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    // ✅ 사진 버튼은 “보조 액션” → tertiary 계열로 분리(브랜드 프리셋 반영)
+    final bg = cs.tertiaryContainer;
+    final fg = cs.onTertiaryContainer;
+    final border = cs.tertiary.withOpacity(0.55);
+
     return ScaleTransition(
       scale: _scaleAnimation,
-      child: ElevatedButton(
+      child: OutlinedButton(
         onPressed: _handleTap,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.green[50],
-          foregroundColor: Colors.green[800],
+        style: OutlinedButton.styleFrom(
+          backgroundColor: bg,
+          foregroundColor: fg,
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16.0),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: Colors.green, width: 1.5),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          side: BorderSide(color: border, width: 1.5),
+        ).copyWith(
+          overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                (states) => states.contains(MaterialState.pressed) ? cs.tertiary.withOpacity(0.08) : null,
           ),
         ),
         child: const Text(
           '사진 촬영',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
         ),
       ),
     );

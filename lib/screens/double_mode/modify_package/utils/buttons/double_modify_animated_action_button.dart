@@ -42,7 +42,6 @@ class _DoubleModifyAnimatedActionButtonState extends State<DoubleModifyAnimatedA
   Future<void> _handleTap() async {
     await _controller.reverse();
     await _controller.forward();
-
     await widget.onPressed();
   }
 
@@ -54,29 +53,35 @@ class _DoubleModifyAnimatedActionButtonState extends State<DoubleModifyAnimatedA
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final bool isLoading = widget.isLoading;
     final bool isLocationSelected = widget.isLocationSelected;
 
-    final String label = widget.buttonLabel ??
-        (isLocationSelected ? '입차 완료' : '입차 요청');
+    final String label = widget.buttonLabel ?? (isLocationSelected ? '입차 완료' : '입차 요청');
+
+    // ✅ 메인 CTA는 primary로 통일 (전역 프리셋 반영)
+    final bg = cs.primary;
+    final fg = cs.onPrimary;
 
     return ScaleTransition(
       scale: _scaleAnimation,
       child: ElevatedButton(
         onPressed: isLoading ? null : _handleTap,
         style: ElevatedButton.styleFrom(
-          backgroundColor:
-          isLocationSelected ? Colors.indigo[50] : Colors.blueGrey[50],
-          foregroundColor:
-          isLocationSelected ? Colors.indigo[800] : Colors.blueGrey[800],
+          backgroundColor: bg,
+          foregroundColor: fg,
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 80),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(
-              color: isLocationSelected ? Colors.indigo : Colors.blueGrey,
-              width: 1.5,
-            ),
+            side: BorderSide(color: cs.primary.withOpacity(0.25), width: 1.5),
+          ),
+          disabledBackgroundColor: cs.surfaceContainerLow,
+          disabledForegroundColor: cs.onSurfaceVariant,
+        ).copyWith(
+          overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                (states) => states.contains(MaterialState.pressed) ? cs.onPrimary.withOpacity(0.10) : null,
           ),
         ),
         child: AnimatedSwitcher(
@@ -85,21 +90,21 @@ class _DoubleModifyAnimatedActionButtonState extends State<DoubleModifyAnimatedA
             return ScaleTransition(scale: animation, child: child);
           },
           child: isLoading
-              ? const SizedBox(
-            key: ValueKey('loading'),
+              ? SizedBox(
+            key: const ValueKey('loading'),
             width: 20,
             height: 20,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              color: Colors.black,
+              valueColor: AlwaysStoppedAnimation<Color>(fg),
             ),
           )
               : Text(
-            key: const ValueKey('buttonText'),
             label,
+            key: const ValueKey('buttonText'),
             style: const TextStyle(
               fontSize: 16,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ),

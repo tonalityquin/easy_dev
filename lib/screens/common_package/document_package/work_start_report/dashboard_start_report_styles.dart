@@ -2,27 +2,26 @@
 
 import 'package:flutter/material.dart';
 
-/// 경위서 화면 전용 컬러 팔레트
-class DashboardReportColors {
-  static const Color base = Color(0xFF00897B); // primary
-  static const Color dark = Color(0xFF00695C); // 강조 텍스트/아이콘
-  static const Color light = Color(0xFF80CBC4); // 톤 변형/보더
-  static const Color fg = Color(0xFFFFFFFF); // 전경(아이콘/텍스트)
-}
-
 /// 경위서 화면에서 공통으로 사용하는 버튼 스타일 모음
+/// - 하드코딩 팔레트 제거
+/// - ColorScheme 기반으로 전역 프리셋/다크모드를 자동 반영
 class DashboardReportButtonStyles {
   static const double _radius = 8.0;
 
   /// 메인 액션 버튼
-  static ButtonStyle primary({double minHeight = 55}) {
+  static ButtonStyle primary(
+      BuildContext context, {
+        double minHeight = 55,
+      }) {
+    final cs = Theme.of(context).colorScheme;
+
     return ElevatedButton.styleFrom(
-      backgroundColor: DashboardReportColors.base,
-      foregroundColor: DashboardReportColors.fg,
+      backgroundColor: cs.primary,
+      foregroundColor: cs.onPrimary,
       minimumSize: Size(0, minHeight),
       padding: EdgeInsets.zero,
-      side: const BorderSide(
-        color: DashboardReportColors.dark,
+      side: BorderSide(
+        color: cs.primary,
         width: 1.0,
       ),
       shape: RoundedRectangleBorder(
@@ -31,18 +30,23 @@ class DashboardReportButtonStyles {
       elevation: 0,
     ).copyWith(
       overlayColor: MaterialStateProperty.resolveWith<Color?>(
-            (states) => states.contains(MaterialState.pressed) ? DashboardReportColors.dark.withOpacity(.10) : null,
+            (states) => states.contains(MaterialState.pressed) ? cs.primary.withOpacity(.12) : null,
       ),
     );
   }
 
   /// 서브/보조 액션 버튼
-  static ButtonStyle outlined({double minHeight = 55}) {
+  static ButtonStyle outlined(
+      BuildContext context, {
+        double minHeight = 55,
+      }) {
+    final cs = Theme.of(context).colorScheme;
+
     return OutlinedButton.styleFrom(
-      foregroundColor: DashboardReportColors.dark,
-      backgroundColor: Colors.white,
-      side: const BorderSide(
-        color: DashboardReportColors.light,
+      foregroundColor: cs.onSurface,
+      backgroundColor: cs.surface,
+      side: BorderSide(
+        color: cs.outlineVariant,
         width: 1.0,
       ),
       minimumSize: Size(0, minHeight),
@@ -51,12 +55,12 @@ class DashboardReportButtonStyles {
       ),
     ).copyWith(
       overlayColor: MaterialStateProperty.resolveWith<Color?>(
-            (states) => states.contains(MaterialState.pressed) ? DashboardReportColors.light.withOpacity(.16) : null,
+            (states) => states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(.18) : null,
       ),
     );
   }
 
-  static ButtonStyle smallPrimary() => primary(minHeight: 44);
+  static ButtonStyle smallPrimary(BuildContext context) => primary(context, minHeight: 44);
 
-  static ButtonStyle smallOutlined() => outlined(minHeight: 44);
+  static ButtonStyle smallOutlined(BuildContext context) => outlined(context, minHeight: 44);
 }

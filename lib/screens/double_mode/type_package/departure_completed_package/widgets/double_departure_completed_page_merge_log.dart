@@ -6,13 +6,8 @@ import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 import 'package:googleapis/storage/v1.dart' as gcs;
 import 'package:http/http.dart' as http;
 
-// 사진 다이얼로그(프로젝트 구조에 맞게 조정)
 import 'double_departure_completed_plate_image_dialog.dart';
-
-// ✅ OAuth 헬퍼 (패키지 import로 고정; 필요 시 상대경로로 교체 가능)
 import 'package:easydev/utils/google_auth_v7.dart';
-
-// ✅ API 디버그(통합 에러 로그) 로거
 import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
 
 /// === GCS 설정 ===
@@ -20,9 +15,9 @@ const String kBucketName = 'easydev-image';
 
 /// === 내부 레이아웃 상수 ===
 const double _kRowHeight = 56.0;
-const double _kTimeColWidth = 84.0; // HH:mm:ss 고정폭
-const double _kFeeColWidth = 108.0; // 요금/결제 표시
-const double _kChevronWidth = 28.0; // 펼침 아이콘
+const double _kTimeColWidth = 84.0;
+const double _kFeeColWidth = 108.0;
+const double _kChevronWidth = 28.0;
 
 // ─────────────────────────────────────────────────────────────
 // ✅ API 디버그 로직: 표준 태그 / 로깅 헬퍼 (file-scope)
@@ -55,16 +50,12 @@ Future<void> _logApiError({
       level: 'error',
       tags: tags,
     );
-  } catch (_) {
-    // 로깅 실패는 기능에 영향 없도록 무시
-  }
+  } catch (_) {}
 }
 
 /// === GCS 헬퍼 (OAuth 사용) ===
 class _GcsHelper {
-  /// prefix 하위 object 목록 (페이지네이션 대응)
   Future<List<String>> listObjects(String prefix) async {
-    // OAuth client 생성 실패도 로깅
     late final http.Client client;
     try {
       client = await GoogleAuthV7.authedClient(
@@ -122,9 +113,6 @@ class _GcsHelper {
     }
   }
 
-  /// public URL로 JSON 로드(버킷이 공개라면 그대로 사용).
-  /// 비공개 버킷이면 주석의 objects.get(fullMedia) 방식으로 교체하세요.
-  /// (웹 호환을 위해 package:http 사용)
   Future<Map<String, dynamic>> loadJsonByObjectName(String objectName) async {
     final url = Uri.parse('https://storage.googleapis.com/$kBucketName/$objectName');
 
@@ -163,7 +151,7 @@ class _GcsHelper {
     try {
       final decoded = jsonDecode(utf8.decode(resp.bodyBytes));
       if (decoded is Map<String, dynamic>) return decoded;
-      // 형태가 map이 아니면 빈 map 반환(기존 정책 유지)
+
       await _logApiError(
         tag: '_GcsHelper.loadJsonByObjectName',
         message: 'JSON이 Map 형태가 아님',
@@ -182,29 +170,6 @@ class _GcsHelper {
       );
       rethrow;
     }
-
-    /*
-    // 🔒 비공개 버킷일 때는 아래처럼 OAuth 클라이언트로 직접 다운(캐스팅 주의)
-    final client = await GoogleAuthV7.authedClient(
-      [gcs.StorageApi.devstorageReadOnlyScope],
-    );
-    try {
-      final storage = gcs.StorageApi(client);
-      final dynamic res = await storage.objects.get(
-        kBucketName,
-        objectName,
-        downloadOptions: gcs.DownloadOptions.fullMedia,
-      );
-      if (res is! gcs.Media) {
-        throw StateError('Unexpected response type: ${res.runtimeType}');
-      }
-      final bytes = await res.stream.expand((e) => e).toList();
-      final decoded = jsonDecode(utf8.decode(bytes));
-      return (decoded is Map<String, dynamic>) ? decoded : <String, dynamic>{};
-    } finally {
-      client.close();
-    }
-    */
   }
 }
 
@@ -242,6 +207,8 @@ class RangeControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return SizedBox(
       height: 44,
       child: Row(
@@ -255,6 +222,11 @@ class RangeControls extends StatelessWidget {
                 fit: BoxFit.scaleDown,
                 child: Text('${_ymd(start)}  ~  ${_ymd(end)}', maxLines: 1),
               ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: cs.onSurface,
+                side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+                backgroundColor: cs.surface,
+              ),
             ),
           ),
           const SizedBox(width: 8),
@@ -263,13 +235,20 @@ class RangeControls extends StatelessWidget {
             child: FilledButton.icon(
               onPressed: loading ? null : onLoad,
               icon: loading
-                  ? const SizedBox(
+                  ? SizedBox(
                 width: 16,
                 height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(cs.onPrimary),
+                ),
               )
                   : const Icon(Icons.download),
               label: const FittedBox(child: Text('불러오기', maxLines: 1)),
+              style: FilledButton.styleFrom(
+                backgroundColor: cs.primary,
+                foregroundColor: cs.onPrimary,
+              ),
             ),
           ),
         ],
@@ -296,23 +275,19 @@ class DoubleMergedLogSection extends StatefulWidget {
 }
 
 class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
-  // 날짜 범위(기본: 최근 7일)
   DateTime _start = DateTime.now().subtract(const Duration(days: 6));
   DateTime _end = DateTime.now();
 
-  // 상태
   bool _loading = false;
   String? _error;
 
   final List<_DayBundle> _days = [];
   final Set<String> _expandedDocIds = {};
 
-  // 검색
   final _tailCtrl = TextEditingController();
   List<_SearchHit> _hits = [];
   _SearchHit? _selectedHit;
 
-  // 내부 페이지(0: 목록, 1: 검색)
   final PageController _pageController = PageController(initialPage: 0);
   int _currentPage = 0;
 
@@ -335,7 +310,6 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
     if (v == null) return null;
     final s = v.toString().trim();
     return s.isEmpty ? null : s;
-    // ignore: dead_code
   }
 
   num? _toNum(dynamic v) {
@@ -387,29 +361,23 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
     return Icons.history;
   }
 
-  Color _actionColor(String action) {
-    if (action.contains('사전 정산')) return Colors.teal;
-    if (action.contains('출차')) return Colors.orange;
-    if (action.contains('취소')) return Colors.redAccent;
-    if (action.contains('생성')) return Colors.indigo;
-    return Colors.blueGrey;
+  Color _actionColor(ColorScheme cs, String action) {
+    if (action.contains('사전 정산')) return cs.tertiary;
+    if (action.contains('출차')) return cs.primary; // "이동/액션" 톤
+    if (action.contains('취소')) return cs.error;
+    if (action.contains('생성')) return cs.primary;
+    return cs.onSurfaceVariant;
   }
 
-  // ===== 파싱/호환 리팩터링 =====
-
+  // ===== 파싱/호환 =====
   Map<String, dynamic>? _asMap(dynamic v) {
     if (v is Map<String, dynamic>) return v;
     if (v is Map) return Map<String, dynamic>.from(v);
     return null;
   }
 
-  /// item의 root 필드 + data 필드를 병합하여 meta로 만든다.
-  /// - root/data 어느 쪽에 있어도 UI에서 동일하게 접근 가능
-  /// - data가 우선(override)되도록 병합
   Map<String, dynamic> _extractMeta(Map<String, dynamic> item) {
     final meta = <String, dynamic>{};
-
-    // root에서 docId/data/logs는 제외하고 meta로 편입
     item.forEach((k, v) {
       if (k == 'docId' || k == 'data' || k == 'logs') return;
       meta[k] = v;
@@ -418,19 +386,13 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
     final dataMap = _asMap(item['data']);
     if (dataMap != null) {
       dataMap.forEach((k, v) {
-        if (k == 'logs') return; // logs는 별도 추출
-        meta[k] = v; // data가 root를 override
+        if (k == 'logs') return;
+        meta[k] = v;
       });
     }
     return meta;
   }
 
-  /// plate 후보 추출 (혼재 스키마 호환)
-  /// 우선순위:
-  /// 1) root.plateNumber
-  /// 2) meta.plateNumber
-  /// 3) meta.plate_number
-  /// 4) docId prefix
   String _extractPlate(Map<String, dynamic> item, Map<String, dynamic> meta, String docId) {
     final v = item['plateNumber'] ??
         meta['plateNumber'] ??
@@ -439,8 +401,6 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
     return (v ?? '').toString();
   }
 
-  /// logs 후보 추출 (혼재 스키마 호환)
-  /// 우선순위: root.logs -> data.logs
   List<Map<String, dynamic>> _extractLogs(Map<String, dynamic> item) {
     final dataMap = _asMap(item['data']);
     final raw = item['logs'] ?? dataMap?['logs'];
@@ -449,7 +409,6 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
 
     final logs = raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
 
-    // 오름차순(과거->최근) 정렬
     logs.sort((a, b) {
       final at = _parseTs(a['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
       final bt = _parseTs(b['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
@@ -589,7 +548,7 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
 
     final mergedMeta = <String, dynamic>{};
     mergedMeta.addAll(secondary.meta);
-    mergedMeta.addAll(primary.meta); // primary override
+    mergedMeta.addAll(primary.meta);
 
     final mergedLogs = _mergeLogs(a.logs, b.logs);
 
@@ -613,7 +572,6 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
     return acc;
   }
 
-  // ===== 사진 다이얼로그 열기 =====
   void _openPlateImageDialog(String plateNumber) {
     try {
       showGeneralDialog(
@@ -634,7 +592,6 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
     }
   }
 
-  // ===== GCS 로드 (월 prefix 최적화 + 혼재 스키마 + 날짜/문서 병합) =====
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -646,14 +603,12 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
     });
 
     try {
-      // 1) 기본 가드: division/area 필수
       final division = widget.division.trim();
       final area = widget.area.trim();
       if (division.isEmpty || area.isEmpty) {
         throw StateError('지역/사업부가 설정되지 않았습니다. (division/area)');
       }
 
-      // 2) 날짜 범위 유효화(swap)
       final s0 = DateTime(_start.year, _start.month, _start.day);
       final e0 = DateTime(_end.year, _end.month, _end.day);
       final start = s0.isAfter(e0) ? e0 : s0;
@@ -661,7 +616,6 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
 
       final gcsHelper = _GcsHelper();
 
-      // 3) 월 단위 prefix로 먼저 리스트업 (속도 개선)
       final monthKeys = _monthKeysBetween(start, end);
 
       final names = <String>[];
@@ -671,14 +625,12 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
         names.addAll(partial);
       }
 
-      // 3-1) 월 prefix 결과가 전혀 없으면 구형 구조 fallback
       if (names.isEmpty) {
         final legacyPrefix = '$division/$area/logs/';
         final legacy = await gcsHelper.listObjects(legacyPrefix);
         names.addAll(legacy);
       }
 
-      // 4) endsWith("_ToDoLogs_YYYY-MM-DD.json") 매칭
       final wantedSuffix = <String>{};
       for (DateTime d = start; !d.isAfter(end); d = d.add(const Duration(days: 1))) {
         wantedSuffix.add('_ToDoLogs_${_yyyymmdd(d)}.json');
@@ -691,7 +643,6 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
         throw StateError('해당 기간에 파일이 없습니다.\nprefix=$prefixHint\nrange=${_yyyymmdd(start)}~${_yyyymmdd(end)}');
       }
 
-      // 5) 날짜별(docId별) 병합 구조
       final Map<String, Map<String, _DocBundle>> dayDocMap = {};
 
       for (final objectName in inRange) {
@@ -730,7 +681,6 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
         }
       }
 
-      // 6) _days 생성(날짜 오름차순)
       final dayKeys = dayDocMap.keys.toList()..sort();
       for (final dateStr in dayKeys) {
         final docs = dayDocMap[dateStr]!.values.toList();
@@ -766,7 +716,6 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
     }
   }
 
-  // ===== 검색 =====
   Future<void> _search() async {
     final q = _tailCtrl.text.trim();
 
@@ -817,18 +766,17 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
     }
   }
 
-  // ===== UI 헬퍼: 문서 요약 =====
-  Widget _infoChip(String label, String value) {
+  Widget _infoChip(ColorScheme cs, String label, String value) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: Colors.grey.shade300),
+        color: cs.surface,
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         '$label: $value',
-        style: const TextStyle(fontSize: 12, color: Colors.black87),
+        style: TextStyle(fontSize: 12, color: cs.onSurface),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
@@ -836,6 +784,8 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
   }
 
   Widget _buildDocSummary(_DocBundle doc) {
+    final cs = Theme.of(context).colorScheme;
+
     final feeText = _fmtWon(doc.lockedFeeAmount);
     final payText = doc.paymentMethod ?? '—';
 
@@ -860,20 +810,19 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        border: Border.all(color: Colors.grey.shade300),
+        color: cs.surfaceContainerLow,
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1) 상단: 번호판 + 요금/결제
           Row(
             children: [
               Expanded(
                 child: Text(
                   doc.plateNumber.isNotEmpty ? doc.plateNumber : doc.docId,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: cs.onSurface),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -882,64 +831,55 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(feeText, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                  Text(payText, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                  Text(feeText, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: cs.onSurface)),
+                  Text(payText, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
                 ],
               ),
             ],
           ),
-
           const SizedBox(height: 10),
-
-          // 2) 칩: 주요 메타
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              _infoChip('상태', typeText),
-              _infoChip('과금', billingText),
-              _infoChip('위치', locText),
-              _infoChip('담당', userText),
-              _infoChip('메모', customText),
+              _infoChip(cs, '상태', typeText),
+              _infoChip(cs, '과금', billingText),
+              _infoChip(cs, '위치', locText),
+              _infoChip(cs, '담당', userText),
+              _infoChip(cs, '메모', customText),
             ],
           ),
-
           const SizedBox(height: 10),
-
-          // 3) 금액 상세
           Wrap(
             spacing: 8,
             runSpacing: 8,
             children: [
-              _infoChip('기본', basicText),
-              _infoChip('추가', addText),
-              _infoChip('정규', regularText),
-              _infoChip('조정', adjText),
+              _infoChip(cs, '기본', basicText),
+              _infoChip(cs, '추가', addText),
+              _infoChip(cs, '정규', regularText),
+              _infoChip(cs, '조정', adjText),
             ],
           ),
-
           const SizedBox(height: 10),
-
-          // 4) 시간 필드
-          Text('요청: $reqText', style: const TextStyle(fontSize: 12, color: Colors.black54)),
-          Text('업데이트: $updText', style: const TextStyle(fontSize: 12, color: Colors.black54)),
-          Text('입차완료: $parkText', style: const TextStyle(fontSize: 12, color: Colors.black54)),
-          Text('출차완료: $depText', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+          Text('요청: $reqText', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+          Text('업데이트: $updText', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+          Text('입차완료: $parkText', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+          Text('출차완료: $depText', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
         ],
       ),
     );
   }
 
-  // ===== UI =====
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final mono = const TextStyle(fontFeatures: [FontFeature.tabularFigures()]);
+
     final hasData = !_loading && _days.isNotEmpty;
-    final mono = const TextStyle(fontFeatures: [FontFeature.tabularFigures()]); // 시간 숫자 정렬
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 상단 컨트롤
         Row(
           children: [
             Expanded(
@@ -986,29 +926,35 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
                     );
                   }
                 },
-                icon: Icon(_currentPage == 0 ? Icons.search : Icons.list),
+                icon: Icon(_currentPage == 0 ? Icons.search : Icons.list, color: cs.onSurface),
                 visualDensity: VisualDensity.compact,
               ),
             ),
           ],
         ),
-
         if (_error != null) ...[
           const SizedBox(height: 8),
-          Text(_error!, style: const TextStyle(color: Colors.red)),
+          Text(_error!, style: TextStyle(color: cs.error)),
         ],
         const SizedBox(height: 8),
-
         Expanded(
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? Center(
+            child: CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+            ),
+          )
               : !hasData
-              ? const Center(child: Text('기간을 설정하고 불러오기를 눌러주세요.'))
+              ? Center(
+            child: Text(
+              '기간을 설정하고 불러오기를 눌러주세요.',
+              style: TextStyle(color: cs.onSurfaceVariant),
+            ),
+          )
               : PageView(
             controller: _pageController,
             onPageChanged: (i) => setState(() => _currentPage = i),
             children: [
-              // 페이지 0: 날짜/문서 목록
               Scrollbar(
                 child: ListView.builder(
                   padding: const EdgeInsets.only(bottom: 12),
@@ -1018,46 +964,49 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // 날짜 헤더 + 컬럼 헤더
                         Container(
-                          color: Colors.grey.shade200,
+                          color: cs.surfaceContainerLow,
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(day.dateStr, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              Text(day.dateStr, style: TextStyle(fontWeight: FontWeight.w900, color: cs.onSurface)),
                               const SizedBox(height: 8),
                               SizedBox(
                                 height: 24,
                                 child: Row(
-                                  children: const [
+                                  children: [
                                     SizedBox(
                                       width: _kTimeColWidth,
-                                      child: Text('시간',
-                                          style: TextStyle(fontSize: 12, color: Colors.black54),
-                                          textAlign: TextAlign.center),
+                                      child: Text(
+                                        '시간',
+                                        style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                                        textAlign: TextAlign.center,
+                                      ),
                                     ),
-                                    SizedBox(width: 8),
+                                    const SizedBox(width: 8),
                                     Expanded(
-                                      child: Text('번호판',
-                                          style: TextStyle(fontSize: 12, color: Colors.black54),
-                                          textAlign: TextAlign.center),
+                                      child: Text(
+                                        '번호판',
+                                        style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                                        textAlign: TextAlign.center,
+                                      ),
                                     ),
                                     SizedBox(
                                       width: _kFeeColWidth,
-                                      child: Text('요금/결제',
-                                          style: TextStyle(fontSize: 12, color: Colors.black54),
-                                          textAlign: TextAlign.center),
+                                      child: Text(
+                                        '요금/결제',
+                                        style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                                        textAlign: TextAlign.center,
+                                      ),
                                     ),
-                                    SizedBox(width: _kChevronWidth),
+                                    const SizedBox(width: _kChevronWidth),
                                   ],
                                 ),
                               ),
                             ],
                           ),
                         ),
-
-                        // 데이터 행들
                         ...day.docs.map((doc) {
                           final expanded = _expandedDocIds.contains(doc.docId);
                           final lastTs = doc.lastLogTime;
@@ -1080,8 +1029,8 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
                                 child: Container(
                                   height: _kRowHeight,
                                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                                  decoration: const BoxDecoration(
-                                    border: Border(bottom: BorderSide(color: Color(0xFFE0E0E0))),
+                                  decoration: BoxDecoration(
+                                    border: Border(bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.65))),
                                   ),
                                   child: Row(
                                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -1094,7 +1043,7 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
                                           softWrap: false,
                                           overflow: TextOverflow.clip,
                                           textAlign: TextAlign.center,
-                                          style: mono.copyWith(fontSize: 15),
+                                          style: mono.copyWith(fontSize: 15, color: cs.onSurface),
                                         ),
                                       ),
                                       const SizedBox(width: 8),
@@ -1105,7 +1054,7 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
                                           softWrap: false,
                                           overflow: TextOverflow.ellipsis,
                                           textAlign: TextAlign.center,
-                                          style: const TextStyle(fontSize: 16),
+                                          style: TextStyle(fontSize: 16, color: cs.onSurface),
                                         ),
                                       ),
                                       SizedBox(
@@ -1113,12 +1062,20 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
                                         child: Column(
                                           mainAxisAlignment: MainAxisAlignment.center,
                                           children: [
-                                            Text(feeText,
-                                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                                            Text(payText,
-                                                style: const TextStyle(fontSize: 11, color: Colors.black54),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis),
+                                            Text(
+                                              feeText,
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w900,
+                                                color: cs.onSurface,
+                                              ),
+                                            ),
+                                            Text(
+                                              payText,
+                                              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
                                           ],
                                         ),
                                       ),
@@ -1127,15 +1084,13 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
                                         child: Icon(
                                           expanded ? Icons.expand_less : Icons.expand_more,
                                           size: 20,
-                                          color: Colors.black54,
+                                          color: cs.onSurfaceVariant,
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
                               ),
-
-                              // 펼침부: 요약 + 로그 상세
                               if (expanded) ...[
                                 _buildDocSummary(doc),
                                 _buildLogsDetail(doc.logs, plateNumber: doc.plateNumber, scrollable: false),
@@ -1148,14 +1103,10 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
                   },
                 ),
               ),
-
-              // 페이지 1: 검색
               _buildSearchPage(),
             ],
           ),
         ),
-
-        // 페이지 인디케이터
         Padding(
           padding: const EdgeInsets.only(top: 6.0),
           child: Row(
@@ -1171,12 +1122,12 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
     );
   }
 
-  // ===== 검색 페이지 구성 =====
   Widget _buildSearchPage() {
+    final cs = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 검색 입력줄
         Row(
           children: [
             Expanded(
@@ -1184,11 +1135,24 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
                 controller: _tailCtrl,
                 maxLength: 4,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   counterText: '',
                   labelText: '번호판 4자리',
                   hintText: '예) 4444',
-                  border: OutlineInputBorder(),
+                  filled: true,
+                  fillColor: cs.surfaceContainerLow,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: cs.primary, width: 1.4),
+                  ),
                 ),
                 onSubmitted: (_) => _search(),
               ),
@@ -1198,20 +1162,24 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
               onPressed: _loading || _days.isEmpty ? null : _search,
               icon: const Icon(Icons.search),
               label: const Text('검색'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: cs.primary,
+                foregroundColor: cs.onPrimary,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
             ),
           ],
         ),
         const SizedBox(height: 8),
-
-        // 결과/상세
         Expanded(
           child: _hits.isEmpty
-              ? const Center(child: Text('검색 결과가 없습니다.'))
+              ? Center(child: Text('검색 결과가 없습니다.', style: TextStyle(color: cs.onSurfaceVariant)))
               : (_selectedHit == null
-          // 결과 리스트
               ? ListView.separated(
             itemCount: _hits.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
+            separatorBuilder: (_, __) => Divider(height: 1, color: cs.outlineVariant.withOpacity(0.65)),
             itemBuilder: (_, i) {
               final h = _hits[i];
               final feeText = _fmtWon(h.doc.lockedFeeAmount);
@@ -1219,25 +1187,30 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
               final lastTs = h.doc.lastLogTime;
               return ListTile(
                 dense: true,
-                title: Text(h.doc.plateNumber.isNotEmpty ? h.doc.plateNumber : h.doc.docId),
-                subtitle: Text('${h.dateStr} • $feeText • $payText'),
-                trailing: Text(_fmtTime(lastTs), style: const TextStyle(fontSize: 12)),
+                title: Text(
+                  h.doc.plateNumber.isNotEmpty ? h.doc.plateNumber : h.doc.docId,
+                  style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text(
+                  '${h.dateStr} • $feeText • $payText',
+                  style: TextStyle(color: cs.onSurfaceVariant),
+                ),
+                trailing: Text(_fmtTime(lastTs), style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
                 onTap: () => setState(() => _selectedHit = h),
               );
             },
           )
-          // 선택된 문서 상세
               : Column(
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                color: Colors.grey.shade100,
+                color: cs.surfaceContainerLow,
                 child: Row(
                   children: [
                     IconButton(
                       tooltip: '선택 해제',
                       onPressed: () => setState(() => _selectedHit = null),
-                      icon: const Icon(Icons.close),
+                      icon: Icon(Icons.close, color: cs.onSurface),
                     ),
                     const SizedBox(width: 4),
                     Expanded(
@@ -1245,15 +1218,17 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _selectedHit!.doc.plateNumber.isNotEmpty ? _selectedHit!.doc.plateNumber : _selectedHit!.doc.docId,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
+                            _selectedHit!.doc.plateNumber.isNotEmpty
+                                ? _selectedHit!.doc.plateNumber
+                                : _selectedHit!.doc.docId,
+                            style: TextStyle(fontWeight: FontWeight.w900, color: cs.onSurface),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 2),
                           Text(
                             '${_selectedHit!.dateStr} • ${_selectedHit!.doc.docId}',
-                            style: const TextStyle(fontSize: 12, color: Colors.black54),
+                            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1261,7 +1236,6 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
                       ),
                     ),
                     const SizedBox(width: 8),
-                    // 사진 보기 버튼
                     ElevatedButton.icon(
                       onPressed: () {
                         final plate = _selectedHit!.doc.plateNumber.isNotEmpty
@@ -1270,9 +1244,11 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
                         _openPlateImageDialog(plate);
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey.shade100,
-                        foregroundColor: Colors.black87,
+                        backgroundColor: cs.surface,
+                        foregroundColor: cs.onSurface,
+                        elevation: 0,
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
                       ),
                       icon: const Icon(Icons.photo, size: 18),
                       label: const Text('사진', style: TextStyle(fontSize: 13)),
@@ -1280,10 +1256,7 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
                   ],
                 ),
               ),
-
-              // ✅ 요약 표시 추가
               _buildDocSummary(_selectedHit!.doc),
-
               Expanded(
                 child: _buildLogsDetail(
                   _selectedHit!.doc.logs,
@@ -1298,16 +1271,17 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
     );
   }
 
-  /// 로그 상세 리스트
   Widget _buildLogsDetail(
       List<Map<String, dynamic>> logs, {
         required String plateNumber,
         bool scrollable = false,
       }) {
+    final cs = Theme.of(context).colorScheme;
+
     if (logs.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(12),
-        child: Text('로그가 없습니다.'),
+      return Padding(
+        padding: const EdgeInsets.all(12),
+        child: Text('로그가 없습니다.', style: TextStyle(color: cs.onSurfaceVariant)),
       );
     }
 
@@ -1315,7 +1289,7 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
       physics: scrollable ? const AlwaysScrollableScrollPhysics() : const NeverScrollableScrollPhysics(),
       shrinkWrap: !scrollable,
       itemCount: logs.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
+      separatorBuilder: (_, __) => Divider(height: 1, color: cs.outlineVariant.withOpacity(0.65)),
       itemBuilder: (_, i) {
         final e = logs[i];
         final action = (e['action'] ?? '-').toString();
@@ -1326,38 +1300,44 @@ class _DoubleMergedLogSectionState extends State<DoubleMergedLogSection> {
         final tsText = _fmtDateTime(ts);
 
         final feeNum = (e['lockedFee'] ?? e['lockedFeeAmount']);
-        final fee = (feeNum is num) ? _fmtWon(feeNum) : (feeNum is String ? _fmtWon(num.tryParse(feeNum)) : null);
-        final pay = (e['paymentMethod']?.toString().trim().isNotEmpty ?? false) ? e['paymentMethod'].toString() : null;
-        final reason = (e['reason']?.toString().trim().isNotEmpty ?? false) ? e['reason'].toString() : null;
+        final fee = (feeNum is num)
+            ? _fmtWon(feeNum)
+            : (feeNum is String ? _fmtWon(num.tryParse(feeNum)) : null);
+        final pay = (e['paymentMethod']?.toString().trim().isNotEmpty ?? false)
+            ? e['paymentMethod'].toString()
+            : null;
+        final reason = (e['reason']?.toString().trim().isNotEmpty ?? false)
+            ? e['reason'].toString()
+            : null;
 
-        final color = _actionColor(action);
+        final color = _actionColor(cs, action);
 
         return ListTile(
           dense: true,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           leading: Icon(_actionIcon(action), color: color),
-          title: Text(action, style: TextStyle(fontWeight: FontWeight.w600, color: color)),
+          title: Text(action, style: TextStyle(fontWeight: FontWeight.w800, color: color)),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (from.isNotEmpty || to.isNotEmpty) Text('$from → $to'),
+              if (from.isNotEmpty || to.isNotEmpty) Text('$from → $to', style: TextStyle(color: cs.onSurfaceVariant)),
               if (by.isNotEmpty) const SizedBox(height: 2),
-              if (by.isNotEmpty) const Text('담당자:', style: TextStyle(fontSize: 12)),
-              if (by.isNotEmpty) Text(by, style: const TextStyle(fontSize: 12)),
+              if (by.isNotEmpty) Text('담당자:', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+              if (by.isNotEmpty) Text(by, style: TextStyle(fontSize: 12, color: cs.onSurface)),
               if (fee != null || pay != null || reason != null) const SizedBox(height: 2),
-              if (fee != null) Text('확정요금: $fee', style: const TextStyle(fontSize: 12)),
-              if (pay != null) Text('결제수단: $pay', style: const TextStyle(fontSize: 12)),
-              if (reason != null) Text('사유: $reason', style: const TextStyle(fontSize: 12)),
+              if (fee != null) Text('확정요금: $fee', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+              if (pay != null) Text('결제수단: $pay', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+              if (reason != null) Text('사유: $reason', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             ],
           ),
-          trailing: Text(tsText, style: const TextStyle(fontSize: 12)),
+          trailing: Text(tsText, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
           isThreeLine: true,
         );
       },
     );
 
     return Container(
-      color: Colors.grey.shade50,
+      color: cs.surfaceContainerLow,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: listView,
     );
@@ -1398,7 +1378,7 @@ class _DocBundle {
   final DateTime? lastLogTime;
 
   final Map<String, dynamic> meta;
-  final List<Map<String, dynamic>> logs; // 시간 오름차순
+  final List<Map<String, dynamic>> logs;
 
   _DocBundle({
     required this.docId,
@@ -1439,12 +1419,14 @@ class _Dot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       width: active ? 20 : 8,
       height: 8,
       decoration: BoxDecoration(
-        color: active ? Colors.black87 : Colors.black26,
+        color: active ? cs.onSurface : cs.onSurfaceVariant.withOpacity(0.5),
         borderRadius: BorderRadius.circular(999),
       ),
     );

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../../utils/init/app_colors.dart';
-
 class DoubleInputBottomNavigation extends StatelessWidget {
   final bool showKeypad;
   final Widget keypad;
@@ -20,11 +18,16 @@ class DoubleInputBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return GestureDetector(
       onTap: onTap ?? () {},
       child: Container(
         decoration: BoxDecoration(
-          color: backgroundColor ?? AppColors.bottomNavBackground,
+          color: backgroundColor ?? cs.surface,
+          border: Border(
+            top: BorderSide(color: cs.outlineVariant.withOpacity(0.85), width: 1),
+          ),
         ),
         padding: const EdgeInsets.all(16.0),
         child: _buildContent(),

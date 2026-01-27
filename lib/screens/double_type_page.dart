@@ -1,4 +1,3 @@
-// lib/screens/lite_type_page.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -12,9 +11,6 @@ import 'double_mode/type_package/common_widgets/dashboard_bottom_sheet/double_ho
 import '../utils/snackbar_helper.dart';
 
 import '../services/latest_message_service.dart';
-
-// ✅ AppCardPalette ThemeExtension 사용
-import '../theme.dart';
 
 // ✅ Trace 기록용 Recorder
 import 'hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
@@ -31,8 +27,6 @@ class _DoubleTypePageState extends State<DoubleTypePage> {
   void initState() {
     super.initState();
 
-    // ✅ Lite 진입: PlateState 절대 금지(구독 시작됨)
-    // ✅ LitePlateState만 1회 로드(get) 수행
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<DoublePlateState>().doubleEnableForTypePages(withDefaults: true);
     });
@@ -40,7 +34,6 @@ class _DoubleTypePageState extends State<DoubleTypePage> {
 
   @override
   void dispose() {
-    // ✅ Lite 이탈: 로드/보류 상태 정리
     try {
       context.read<DoublePlateState>().doubleDisableAll();
     } catch (_) {}
@@ -57,7 +50,6 @@ class _DoubleTypePageState extends State<DoubleTypePage> {
           final pageState = context.read<DoublePageState>();
           final userName = context.read<UserState>().name;
 
-          // ★ 현재 area 기반으로 전역 리스너 시작 — idempotent
           final currentArea = context.read<AreaState>().currentArea.trim();
           if (currentArea.isNotEmpty) {
             LatestMessageService.instance.start(currentArea);
@@ -94,7 +86,11 @@ class _DoubleTypePageState extends State<DoubleTypePage> {
                       padding: const EdgeInsets.symmetric(vertical: 8),
                       child: SizedBox(
                         height: 48,
-                        child: Image.asset('assets/images/pelican.png'),
+                        child: Semantics(
+                          label: 'Pelican 브랜드 로고',
+                          image: true,
+                          child: Image.asset('assets/images/pelican.png'),
+                        ),
                       ),
                     ),
                   ],
@@ -113,19 +109,15 @@ class _EntryDashboardBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
+    final cs = Theme.of(context).colorScheme;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
       child: Row(
         children: [
-          // ✅ 좌측: 입차 화면 열기 버튼 (기존 “채팅 열기” 제거)
-          const Expanded(
-            child: _OpenEntryButton(),
-          ),
+          const Expanded(child: _OpenEntryButton()),
           const SizedBox(width: 8),
 
-          // ── 대시보드(기존)
           Expanded(
             child: ElevatedButton(
               onPressed: () {
@@ -138,14 +130,15 @@ class _EntryDashboardBar extends StatelessWidget {
                 );
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: palette.doubleBase,
-                foregroundColor: palette.doubleLight,
+                backgroundColor: cs.primary,
+                foregroundColor: cs.onPrimary,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                elevation: 0,
+              ).copyWith(
+                overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                      (states) => states.contains(MaterialState.pressed) ? cs.onPrimary.withOpacity(0.10) : null,
                 ),
-                elevation: 2,
-                shadowColor: palette.doubleDark.withOpacity(.25),
               ),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -182,7 +175,7 @@ class _OpenEntryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
+    final cs = Theme.of(context).colorScheme;
 
     return ElevatedButton(
       onPressed: () async {
@@ -199,25 +192,29 @@ class _OpenEntryButton extends StatelessWidget {
       },
       style: ElevatedButton.styleFrom(
         elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
-          side: BorderSide(color: palette.doubleBase.withOpacity(.35)),
+          side: BorderSide(color: cs.outlineVariant.withOpacity(.85)),
+        ),
+      ).copyWith(
+        overlayColor: MaterialStateProperty.resolveWith<Color?>(
+              (states) => states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(0.18) : null,
         ),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.add_circle_outline, size: 20, color: palette.doubleBase),
+          Icon(Icons.add_circle_outline, size: 20, color: cs.primary),
           const SizedBox(width: 8),
           Text(
             '입차',
             style: TextStyle(
               fontWeight: FontWeight.w800,
               fontSize: 13,
-              color: palette.doubleBase,
+              color: cs.primary,
             ),
           ),
         ],
@@ -229,7 +226,6 @@ class _OpenEntryButton extends StatelessWidget {
 class _SingleHomeTabBar extends StatelessWidget {
   const _SingleHomeTabBar();
 
-  // ✅ 공통 Trace 기록 헬퍼 (StatelessWidget용)
   void _trace(BuildContext context, String name, {Map<String, dynamic>? meta}) {
     DebugActionRecorder.instance.recordAction(
       name,
@@ -240,17 +236,16 @@ class _SingleHomeTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
+    final cs = Theme.of(context).colorScheme;
 
     return Consumer<DoublePageState>(
       builder: (context, pageState, _) {
         return SizedBox(
           height: kBottomNavigationBarHeight,
           child: Material(
-            color: Colors.white,
+            color: cs.surface,
             child: InkWell(
               onTap: () {
-                // ✅ 홈 버튼 탭 Trace 기록
                 _trace(
                   context,
                   '홈 버튼',
@@ -271,14 +266,14 @@ class _SingleHomeTabBar extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.home, color: palette.doubleBase),
+                  Icon(Icons.home, color: cs.primary),
                   const SizedBox(width: 8),
                   Text(
                     '홈',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
-                      color: palette.doubleBase,
+                      color: cs.primary,
                     ),
                   ),
                 ],
@@ -301,9 +296,8 @@ class RefreshableBody extends StatefulWidget {
 class _RefreshableBodyState extends State<RefreshableBody> {
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
+    final cs = Theme.of(context).colorScheme;
 
-    // ✅ [변경] Vertical Drag(TopSheet) 제스처 로직 완전 제거
     return Consumer2<DoublePageState, DoublePlateState>(
       builder: (context, pageState, litePlateState, _) {
         return Stack(
@@ -311,14 +305,14 @@ class _RefreshableBodyState extends State<RefreshableBody> {
             _buildCurrentPage(context, pageState),
             if (litePlateState.isLoading)
               Container(
-                color: Colors.white.withOpacity(.35),
+                color: cs.scrim.withOpacity(.10),
                 child: Center(
                   child: SizedBox(
                     width: 28,
                     height: 28,
                     child: CircularProgressIndicator(
                       strokeWidth: 3,
-                      valueColor: AlwaysStoppedAnimation<Color>(palette.doubleBase),
+                      valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
                     ),
                   ),
                 ),
@@ -335,7 +329,6 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   }
 }
 
-/// ✅ 공용 슬라이드 라우트
 PageRouteBuilder _slidePageRoute(Widget page, {required bool fromLeft}) {
   return PageRouteBuilder(
     transitionDuration: const Duration(milliseconds: 300),

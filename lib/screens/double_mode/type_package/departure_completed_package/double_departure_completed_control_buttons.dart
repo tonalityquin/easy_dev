@@ -23,7 +23,6 @@ class DoubleDepartureCompletedControlButtons extends StatelessWidget {
   Future<void> _openPlateSearchBottomSheet(BuildContext context) async {
     final area = context.read<AreaState>().currentArea.trim();
 
-    // area가 비어있으면 검색 불가(방어)
     if (area.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('현재 지역(area)이 설정되지 않아 검색을 열 수 없습니다.')),
@@ -38,7 +37,6 @@ class DoubleDepartureCompletedControlButtons extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (_) => DoubleDepartureCompletedSearchBottomSheet(
         area: area,
-        // ✅ 이 화면에서는 별도 상태 토글이 없으므로 no-op
         onSearch: (_) {},
       ),
     );
@@ -46,6 +44,8 @@ class DoubleDepartureCompletedControlButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final plateState = context.watch<DoublePlateState>();
     final userName = context.read<UserState>().name;
 
@@ -55,8 +55,14 @@ class DoubleDepartureCompletedControlButtons extends StatelessWidget {
     );
     final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
 
+    // 상태 수정 / 검색 버튼 공통 스타일
+    final baseStyle = TextButton.styleFrom(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      foregroundColor: cs.onSurface,
+    );
+
     return BottomAppBar(
-      color: Colors.white,
+      color: cs.surface,
       elevation: 0,
       child: SafeArea(
         top: false,
@@ -69,43 +75,38 @@ class DoubleDepartureCompletedControlButtons extends StatelessWidget {
                 await showDoubleDepartureCompletedStatusBottomSheet(
                   context: context,
                   plate: selectedPlate,
-                  performedBy: userName, // ✅ 추가 반영
+                  performedBy: userName,
                 );
               },
-              icon: const Icon(Icons.settings, color: Colors.black87),
-              label: const Text(
+              icon: Icon(Icons.settings, color: cs.onSurface),
+              label: Text(
                 '상태 수정',
                 style: TextStyle(
-                  color: Colors.black87,
-                  fontWeight: FontWeight.w600,
+                  color: cs.onSurface,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              ),
+              style: baseStyle,
             )
                 : TextButton.icon(
               onPressed: isSearchMode
                   ? onResetSearch
                   : () async {
-                // ✅ 기존: onShowSearchDialog (상위에서 구현 필요)
-                // ✅ 변경: 컨트롤 버튼에서 직접 검색 바텀시트를 띄워 기능 복구
                 await _openPlateSearchBottomSheet(context);
               },
               icon: Icon(
                 isSearchMode ? Icons.cancel : Icons.search,
-                color: isSearchMode ? Colors.orange[600] : Colors.grey[800],
+                // ✅ 검색 초기화는 "주의" 톤(tertiary), 검색은 기본 톤(onSurface)
+                color: isSearchMode ? cs.tertiary : cs.onSurface,
               ),
               label: Text(
                 isSearchMode ? '검색 초기화' : '번호판 검색',
                 style: TextStyle(
-                  color: isSearchMode ? Colors.orange[600] : Colors.grey[800],
-                  fontWeight: FontWeight.w600,
+                  color: isSearchMode ? cs.tertiary : cs.onSurface,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              ),
+              style: baseStyle,
             ),
           ),
         ),

@@ -8,13 +8,7 @@ import '../../states/area/area_state.dart';
 import '../../states/plate/triple_plate_state.dart';
 import '../../states/user/user_state.dart';
 
-// ── triple Palette
-const base = Color(0xFF546E7A); // primary
-const dark = Color(0xFF37474F); // 강조 텍스트/아이콘
-const light = Color(0xFFF48FB1); // 톤 변형/보더
-const fg = Color(0xFFFFFFFF); // onPrimary
-
-const String _modeKey = 'triple'; // ✅ Triple 시트는 Triple 포함 지역만 노출
+const String _tripleModeKey = 'triple'; // ✅ Triple 모드만 노출
 
 class _AreaPickData {
   final List<String> selectableAreas;
@@ -35,7 +29,6 @@ Future<_AreaPickData> _fetchSelectableAreasForMode({
       .where('division', isEqualTo: userDivision)
       .get(const GetOptions(source: Source.serverAndCache));
 
-  // ✅ modes가 "없는" 지역은 불러오지 못하도록: modesByName에는 modes가 있는 문서만 적재
   final Map<String, List<String>> modesByName = {};
   final Map<String, bool> isHQByName = {};
 
@@ -45,19 +38,10 @@ Future<_AreaPickData> _fetchSelectableAreasForMode({
     if (name == null || name.isEmpty) continue;
 
     final dynamic modesRaw = data['modes'];
-    if (modesRaw is! List) {
-      continue;
-    }
+    if (modesRaw is! List) continue;
 
-    final modes = modesRaw
-        .whereType<String>()
-        .map((e) => e.trim())
-        .where((e) => e.isNotEmpty)
-        .toList();
-
-    if (modes.isEmpty) {
-      continue;
-    }
+    final modes = modesRaw.whereType<String>().map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    if (modes.isEmpty) continue;
 
     modesByName[name] = modes;
     isHQByName[name] = (data['isHeadquarter'] == true);
@@ -69,14 +53,9 @@ Future<_AreaPickData> _fetchSelectableAreasForMode({
     if (name.isEmpty) continue;
 
     final modes = modesByName[name];
-    if (modes == null) {
-      // ✅ modes가 없는 지역은 불러오지 못하도록 제외
-      continue;
-    }
+    if (modes == null) continue; // ✅ modes 없는 지역은 제외
 
-    if (modes.contains(modeKey)) {
-      filtered.add(name);
-    }
+    if (modes.contains(modeKey)) filtered.add(name);
   }
 
   return _AreaPickData(
@@ -109,7 +88,7 @@ void tripleAreaPickerBottomSheet({
   final Future<_AreaPickData> future = _fetchSelectableAreasForMode(
     userDivision: userDivision,
     userAreas: userAreas,
-    modeKey: _modeKey,
+    modeKey: _tripleModeKey,
   );
 
   showModalBottomSheet(
@@ -118,6 +97,8 @@ void tripleAreaPickerBottomSheet({
     useSafeArea: true,
     backgroundColor: Colors.transparent,
     builder: (modalCtx) {
+      final cs = Theme.of(modalCtx).colorScheme;
+
       return FractionallySizedBox(
         heightFactor: 1,
         child: DraggableScrollableSheet(
@@ -129,12 +110,12 @@ void tripleAreaPickerBottomSheet({
               top: false,
               child: Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: cs.surface,
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                  border: Border.all(color: light.withOpacity(.35)),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
                   boxShadow: [
                     BoxShadow(
-                      color: base.withOpacity(.06),
+                      color: cs.shadow.withOpacity(0.14),
                       blurRadius: 20,
                       offset: const Offset(0, -6),
                     ),
@@ -148,28 +129,37 @@ void tripleAreaPickerBottomSheet({
                       height: 4,
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: light.withOpacity(.35),
+                        color: cs.outlineVariant.withOpacity(0.9),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
                     Text(
                       '지역 선택',
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                      ).copyWith(color: dark),
+                      style: Theme.of(sheetCtx).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        color: cs.onSurface,
+                      ),
                     ),
                     const SizedBox(height: 16),
-
                     Expanded(
                       child: FutureBuilder<_AreaPickData>(
                         future: future,
                         builder: (context, snap) {
                           if (snap.connectionState == ConnectionState.waiting) {
-                            return const Center(child: CircularProgressIndicator());
+                            return Center(
+                              child: CircularProgressIndicator(
+                                valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                              ),
+                            );
                           }
+
                           if (!snap.hasData) {
-                            return const Center(child: Text('지역 목록을 불러오지 못했습니다.'));
+                            return Center(
+                              child: Text(
+                                '지역 목록을 불러오지 못했습니다.',
+                                style: TextStyle(color: cs.onSurfaceVariant),
+                              ),
+                            );
                           }
 
                           final data = snap.data!;
@@ -180,12 +170,17 @@ void tripleAreaPickerBottomSheet({
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Text('이 모드에서 선택 가능한 지역이 없습니다.'),
+                                  Text('이 모드에서 선택 가능한 지역이 없습니다.', style: TextStyle(color: cs.onSurface)),
                                   const SizedBox(height: 12),
                                   SizedBox(
                                     width: 180,
                                     child: OutlinedButton(
                                       onPressed: () => Navigator.of(sheetCtx).pop(),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: cs.onSurface,
+                                        side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                      ),
                                       child: const Text('닫기'),
                                     ),
                                   ),
@@ -197,11 +192,9 @@ void tripleAreaPickerBottomSheet({
                           String tempSelected = areaState.currentArea.trim().isNotEmpty
                               ? areaState.currentArea.trim()
                               : selectable.first;
-                          if (!selectable.contains(tempSelected)) {
-                            tempSelected = selectable.first;
-                          }
+                          if (!selectable.contains(tempSelected)) tempSelected = selectable.first;
 
-                          return _PickerWithConfirmButton(
+                          return _TriplePickerWithConfirmButton(
                             selectableAreas: selectable,
                             initialSelected: tempSelected,
                             onConfirm: (selected) async {
@@ -254,22 +247,22 @@ void tripleAreaPickerBottomSheet({
   );
 }
 
-class _PickerWithConfirmButton extends StatefulWidget {
+class _TriplePickerWithConfirmButton extends StatefulWidget {
   final List<String> selectableAreas;
   final String initialSelected;
   final Future<void> Function(String selected) onConfirm;
 
-  const _PickerWithConfirmButton({
+  const _TriplePickerWithConfirmButton({
     required this.selectableAreas,
     required this.initialSelected,
     required this.onConfirm,
   });
 
   @override
-  State<_PickerWithConfirmButton> createState() => _PickerWithConfirmButtonState();
+  State<_TriplePickerWithConfirmButton> createState() => _TriplePickerWithConfirmButtonState();
 }
 
-class _PickerWithConfirmButtonState extends State<_PickerWithConfirmButton> {
+class _TriplePickerWithConfirmButtonState extends State<_TriplePickerWithConfirmButton> {
   late String _tempSelected;
 
   @override
@@ -280,6 +273,8 @@ class _PickerWithConfirmButtonState extends State<_PickerWithConfirmButton> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final initialIndex = widget.selectableAreas.contains(_tempSelected)
         ? widget.selectableAreas.indexOf(_tempSelected)
         : 0;
@@ -287,46 +282,56 @@ class _PickerWithConfirmButtonState extends State<_PickerWithConfirmButton> {
     return Column(
       children: [
         Expanded(
-          child: CupertinoPicker(
-            scrollController: FixedExtentScrollController(initialItem: initialIndex),
-            itemExtent: 48,
-            magnification: 1.05,
-            useMagnifier: true,
-            squeeze: 1.1,
-            onSelectedItemChanged: (index) {
-              setState(() => _tempSelected = widget.selectableAreas[index]);
-            },
-            children: widget.selectableAreas
-                .map(
-                  (area) => Center(
-                child: Text(
-                  area,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
+          child: CupertinoTheme(
+            data: CupertinoThemeData(
+              primaryColor: cs.primary,
+              brightness: cs.brightness,
+              textTheme: CupertinoTextThemeData(
+                pickerTextStyle: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: cs.onSurface,
                 ),
               ),
-            )
-                .toList(),
+            ),
+            child: CupertinoPicker(
+              scrollController: FixedExtentScrollController(initialItem: initialIndex),
+              itemExtent: 48,
+              magnification: 1.05,
+              useMagnifier: true,
+              squeeze: 1.1,
+              onSelectedItemChanged: (index) {
+                setState(() => _tempSelected = widget.selectableAreas[index]);
+              },
+              children: widget.selectableAreas
+                  .map(
+                    (area) => Center(
+                  child: Text(
+                    area,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                ),
+              )
+                  .toList(),
+            ),
           ),
         ),
         const SizedBox(height: 12),
-        Divider(height: 1, color: light.withOpacity(.35)),
+        Divider(height: 1, color: cs.outlineVariant.withOpacity(0.85)),
         const SizedBox(height: 16),
         SizedBox(
           width: double.infinity,
           child: FilledButton.icon(
             style: FilledButton.styleFrom(
-              backgroundColor: base,
-              foregroundColor: fg,
+              backgroundColor: cs.primary,
+              foregroundColor: cs.onPrimary,
               padding: const EdgeInsets.symmetric(vertical: 14),
               shape: const StadiumBorder(),
-              textStyle: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-              ),
+              textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
             ),
             icon: const Icon(Icons.check_rounded),
             label: const Text('확인'),

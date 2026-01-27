@@ -77,9 +77,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
         showFailedSnackbar(context, message);
       }
       return;
-    } catch (_) {
-      // no-op -> ScaffoldMessenger fallback
-    }
+    } catch (_) {}
 
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger != null) {
@@ -138,7 +136,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
         n: 1,
       );
 
-      // ✅ 출차 완료 탭 로컬 반영
       await plateState.doubleUpdatePlateLocally(
         PlateType.departureCompleted,
         updatedPlate,
@@ -181,7 +178,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
       return;
     }
 
-    // ✅ 무료면 자동 처리
     if (_isFreeBilling) {
       await _autoPrebillFreeIfNeeded();
       return;
@@ -232,7 +228,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
         n: 1,
       );
 
-      // ✅ 출차 완료 탭 로컬 반영
       await plateState.doubleUpdatePlateLocally(
         PlateType.departureCompleted,
         updatedPlate,
@@ -273,6 +268,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final rootContext = Navigator.of(context, rootNavigator: true).context;
 
     final lockedFee = _plate.lockedFeeAmount;
@@ -283,9 +279,10 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
     return SafeArea(
       top: false,
       child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
         ),
         child: Column(
           children: [
@@ -299,12 +296,12 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
                       height: 4,
                       margin: const EdgeInsets.only(bottom: 12),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade400,
+                        color: cs.outlineVariant.withOpacity(0.9),
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
                   ),
-                  const _SheetTitleRow(
+                  _SheetTitleRow(
                     title: '출차 완료 상태 처리',
                     icon: Icons.settings,
                   ),
@@ -312,7 +309,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
                 ],
               ),
             ),
-
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -327,7 +323,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
                     paymentMethod: paymentMethod,
                   ),
                   const SizedBox(height: 14),
-
                   _SectionCard(
                     title: '정산',
                     subtitle: '출차 완료 상태에서도 사전 정산을 처리할 수 있습니다.',
@@ -345,9 +340,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 14),
-
                   _SectionCard(
                     title: '기타',
                     subtitle: '로그 확인 및 닫기',
@@ -365,7 +358,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
                               icon: Icons.history,
                               label: '로그 확인',
                               onPressed: () {
-                                Navigator.pop(context); // 현재 시트 닫고
+                                Navigator.pop(context);
                                 Navigator.push(
                                   rootContext,
                                   MaterialPageRoute(
@@ -389,7 +382,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 8),
                 ],
               ),
@@ -412,13 +404,19 @@ class _SheetTitleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Row(
       children: [
-        Icon(icon, color: Colors.blueAccent),
+        Icon(icon, color: cs.primary),
         const SizedBox(width: 8),
         Text(
           title,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+            color: cs.onSurface,
+          ),
         ),
       ],
     );
@@ -446,20 +444,23 @@ class _PlateSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final badgeColor = isLocked ? Colors.green : Colors.grey.shade600;
+    final cs = Theme.of(context).colorScheme;
+
+    final badgeColor = isLocked ? cs.tertiary : cs.onSurfaceVariant;
     final badgeText = isLocked ? '사전정산 잠김' : '미정산';
 
-    final feeText =
-    (isLocked && lockedFee != null) ? '₩$lockedFee${paymentMethod.isNotEmpty ? " ($paymentMethod)" : ""}' : '—';
+    final feeText = (isLocked && lockedFee != null)
+        ? '₩$lockedFee${paymentMethod.isNotEmpty ? " ($paymentMethod)" : ""}'
+        : '—';
 
     final billingText = billingType.isNotEmpty ? billingType : '미지정';
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: cs.surfaceContainerLow,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black12),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -469,10 +470,11 @@ class _PlateSummaryCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   plateNumber,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.2,
+                    color: cs.onSurface,
                   ),
                 ),
               ),
@@ -487,7 +489,7 @@ class _PlateSummaryCard extends StatelessWidget {
                   badgeText,
                   style: TextStyle(
                     color: badgeColor,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w900,
                     fontSize: 12,
                   ),
                 ),
@@ -527,14 +529,16 @@ class _InfoLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final v = value.trim().isEmpty ? '—' : value.trim();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: Colors.black54,
+          style: TextStyle(
+            color: cs.onSurfaceVariant,
             fontSize: 12,
             fontWeight: FontWeight.w700,
           ),
@@ -544,10 +548,10 @@ class _InfoLine extends StatelessWidget {
           v,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Colors.black87,
+          style: TextStyle(
+            color: cs.onSurface,
             fontSize: 14,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
           ),
         ),
       ],
@@ -568,15 +572,17 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black12),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: cs.shadow.withOpacity(0.06),
             blurRadius: 10,
             offset: const Offset(0, 6),
           ),
@@ -585,9 +591,9 @@ class _SectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+          Text(title, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: cs.onSurface)),
           const SizedBox(height: 4),
-          Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 12)),
+          Text(subtitle, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
           const SizedBox(height: 12),
           child,
         ],
@@ -615,9 +621,11 @@ class _ActionTileButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color base = (tone == _ActionTone.positive) ? Colors.green : Colors.grey.shade800;
-    final Color bg = (tone == _ActionTone.positive) ? Colors.green.withOpacity(0.08) : Colors.grey.shade100;
-    final Color border = (tone == _ActionTone.positive) ? Colors.green.withOpacity(0.25) : Colors.black12;
+    final cs = Theme.of(context).colorScheme;
+
+    final Color base = (tone == _ActionTone.positive) ? cs.tertiary : cs.onSurface;
+    final Color bg = (tone == _ActionTone.positive) ? cs.tertiaryContainer.withOpacity(0.55) : cs.surfaceContainerLow;
+    final Color border = (tone == _ActionTone.positive) ? cs.tertiary.withOpacity(0.25) : cs.outlineVariant.withOpacity(0.85);
 
     return Material(
       color: Colors.transparent,
@@ -641,7 +649,7 @@ class _ActionTileButton extends StatelessWidget {
                   Expanded(
                     child: Text(
                       title,
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: cs.onSurface),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -652,7 +660,7 @@ class _ActionTileButton extends StatelessWidget {
               Text(
                 subtitle,
                 style: TextStyle(
-                  color: Colors.black.withOpacity(0.65),
+                  color: cs.onSurfaceVariant,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
@@ -678,20 +686,22 @@ class _SecondaryActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return OutlinedButton.icon(
-      icon: Icon(icon, size: 18),
+      icon: Icon(icon, size: 18, color: cs.onSurface),
       label: Text(
         label,
-        style: const TextStyle(fontWeight: FontWeight.w800),
+        style: TextStyle(fontWeight: FontWeight.w800, color: cs.onSurface),
         textAlign: TextAlign.center,
       ),
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(double.infinity, 46),
-        foregroundColor: Colors.black87,
-        side: const BorderSide(color: Colors.black12),
+        foregroundColor: cs.onSurface,
+        side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        backgroundColor: Colors.grey.shade50,
+        backgroundColor: cs.surfaceContainerLow,
       ),
     );
   }
@@ -700,7 +710,7 @@ class _SecondaryActionButton extends StatelessWidget {
 /// UsageReporter: 파이어베이스 DB 작업만 계측 (read / write / delete)
 void _reportDbSafe({
   required String area,
-  required String action, // 'read' | 'write' | 'delete'
+  required String action,
   required String source,
   int n = 1,
 }) {
@@ -711,7 +721,5 @@ void _reportDbSafe({
       n: n,
       source: source,
     );*/
-  } catch (_) {
-    // no-op
-  }
+  } catch (_) {}
 }

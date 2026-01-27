@@ -30,43 +30,63 @@ class DoubleInputPlateField extends StatelessWidget {
       children: [
         Expanded(
           flex: frontDigitCount,
-          child: _buildDigitInput(frontController),
+          child: _buildDigitInput(context, frontController, maxLen: frontDigitCount),
         ),
         if (hasMiddleChar)
           Expanded(
             flex: 1,
-            child: _buildMiddleInput(middleController!),
+            child: _buildMiddleInput(context, middleController!),
           ),
         Expanded(
           flex: backDigitCount,
-          child: _buildDigitInput(backController),
+          child: _buildDigitInput(context, backController, maxLen: backDigitCount),
         ),
       ],
     );
   }
 
-  Widget _buildDigitInput(TextEditingController controller) {
+  Widget _buildDigitInput(
+      BuildContext context,
+      TextEditingController controller, {
+        required int maxLen,
+      }) {
+    final cs = Theme.of(context).colorScheme;
     final isActive = controller == activeController;
+
+    final bg = isActive ? cs.primary.withOpacity(0.08) : cs.surface;
+    final border = isActive ? cs.primary.withOpacity(0.70) : cs.outlineVariant.withOpacity(0.85);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       margin: const EdgeInsets.symmetric(horizontal: 4.0),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: isActive ? Colors.red.shade50 : Colors.white,
-        borderRadius: BorderRadius.circular(6),
+        color: bg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: border),
       ),
       child: TextField(
         controller: controller,
         keyboardType: TextInputType.none,
-        maxLength: 4,
+        maxLength: maxLen, // ✅ 기존 코드의 maxLength=4 고정 제거(파라미터로 정확히)
         textAlign: TextAlign.center,
         readOnly: true,
         inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        decoration: const InputDecoration(
+        style: TextStyle(
+          color: cs.onSurface,
+          fontWeight: FontWeight.w900,
+          fontSize: 18,
+        ),
+        decoration: InputDecoration(
           counterText: "",
           border: UnderlineInputBorder(
-            borderSide: BorderSide(width: 2.0, color: Colors.black),
+            borderSide: BorderSide(width: 2.0, color: cs.onSurface),
+          ),
+          enabledBorder: UnderlineInputBorder(
+            borderSide: BorderSide(width: 2.0, color: cs.onSurface),
+          ),
+          focusedBorder: UnderlineInputBorder(
+            borderSide: BorderSide(width: 2.2, color: cs.primary),
           ),
         ),
         onTap: () => onKeypadStateChanged(controller),
@@ -74,16 +94,21 @@ class DoubleInputPlateField extends StatelessWidget {
     );
   }
 
-  Widget _buildMiddleInput(TextEditingController controller) {
+  Widget _buildMiddleInput(BuildContext context, TextEditingController controller) {
+    final cs = Theme.of(context).colorScheme;
     final isActive = controller == activeController;
+
+    final bg = isActive ? cs.primary.withOpacity(0.08) : cs.surface;
+    final border = isActive ? cs.primary.withOpacity(0.70) : cs.outlineVariant.withOpacity(0.85);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       margin: const EdgeInsets.symmetric(horizontal: 4.0),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: isActive ? Colors.red.shade50 : Colors.white,
-        borderRadius: BorderRadius.circular(6),
+        color: bg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: border),
       ),
       child: TextField(
         controller: controller,
@@ -94,10 +119,21 @@ class DoubleInputPlateField extends StatelessWidget {
         inputFormatters: [
           FilteringTextInputFormatter.allow(RegExp(r'^[ㄱ-ㅎㅏ-ㅣ가-힣]$')),
         ],
-        decoration: const InputDecoration(
+        style: TextStyle(
+          color: cs.onSurface,
+          fontWeight: FontWeight.w900,
+          fontSize: 18,
+        ),
+        decoration: InputDecoration(
           counterText: "",
           border: UnderlineInputBorder(
-            borderSide: BorderSide(width: 2.0, color: Colors.black),
+            borderSide: BorderSide(width: 2.0, color: cs.onSurface),
+          ),
+          enabledBorder: UnderlineInputBorder(
+            borderSide: BorderSide(width: 2.0, color: cs.onSurface),
+          ),
+          focusedBorder: UnderlineInputBorder(
+            borderSide: BorderSide(width: 2.2, color: cs.primary),
           ),
         ),
         onTap: () => onKeypadStateChanged(controller),

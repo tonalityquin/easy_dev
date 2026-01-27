@@ -31,10 +31,6 @@ class DoubleParkingCompletedSearchBottomSheet extends StatefulWidget {
 class _DoubleParkingCompletedSearchBottomSheetState
     extends State<DoubleParkingCompletedSearchBottomSheet>
     with SingleTickerProviderStateMixin {
-  // ✅ 요청 팔레트 (BlueGrey)
-  static const Color _base = Color(0xFF546E7A); // BlueGrey 600
-  static const Color _dark = Color(0xFF37474F); // BlueGrey 800
-
   final TextEditingController _controller = TextEditingController();
 
   bool _isLoading = false;
@@ -100,6 +96,7 @@ class _DoubleParkingCompletedSearchBottomSheetState
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final rootContext = Navigator.of(context, rootNavigator: true).context;
 
     return SafeArea(
@@ -113,9 +110,10 @@ class _DoubleParkingCompletedSearchBottomSheetState
             maxChildSize: 0.95,
             builder: (context, scrollController) {
               return Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
                 ),
                 child: ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
@@ -127,14 +125,13 @@ class _DoubleParkingCompletedSearchBottomSheetState
                           width: 44,
                           height: 4,
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade300,
+                            color: cs.outlineVariant.withOpacity(0.9),
                             borderRadius: BorderRadius.circular(999),
                           ),
                         ),
                       ),
                       const SizedBox(height: 12),
 
-                      // 상단 헤더(닫기 버튼 포함)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Row(
@@ -143,7 +140,7 @@ class _DoubleParkingCompletedSearchBottomSheetState
                             IconButton(
                               tooltip: '닫기',
                               onPressed: () => Navigator.pop(context),
-                              icon: Icon(Icons.close, color: _dark),
+                              icon: Icon(Icons.close, color: cs.onSurface),
                             ),
                           ],
                         ),
@@ -156,33 +153,26 @@ class _DoubleParkingCompletedSearchBottomSheetState
                           controller: scrollController,
                           padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                           children: [
-                            // 입력 카드
                             _CardSection(
                               title: '번호 4자리 입력',
                               subtitle: '예: 1234',
-                              accent: _base,
                               child: DoubleParkingCompletedPlateNumberDisplay(
                                 controller: _controller,
                                 isValidPlate: isValidPlate,
                               ),
                             ),
-
                             const SizedBox(height: 12),
-
-                            // 결과 영역
                             AnimatedSwitcher(
                               duration: const Duration(milliseconds: 220),
                               switchInCurve: Curves.easeOut,
                               switchOutCurve: Curves.easeIn,
                               child: _buildResultSection(rootContext, scrollController),
                             ),
-
                             const SizedBox(height: 12),
                           ],
                         ),
                       ),
 
-                      // 하단 CTA (검색 버튼)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
                         child: ValueListenableBuilder<TextEditingValue>(
@@ -210,7 +200,6 @@ class _DoubleParkingCompletedSearchBottomSheetState
           ),
         ),
 
-        // 키패드(검색 전만 노출) — 기존 로직 유지
         bottomNavigationBar: _hasSearched
             ? const SizedBox.shrink()
             : AnimatedKeypad(
@@ -231,6 +220,7 @@ class _DoubleParkingCompletedSearchBottomSheetState
   }
 
   Widget _buildResultSection(BuildContext rootContext, ScrollController scrollController) {
+    final cs = Theme.of(context).colorScheme;
     final text = _controller.text;
     final valid = isValidPlate(text);
 
@@ -239,9 +229,13 @@ class _DoubleParkingCompletedSearchBottomSheetState
     }
 
     if (_isLoading) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 26),
-        child: Center(child: CircularProgressIndicator()),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 26),
+        child: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+          ),
+        ),
       );
     }
 
@@ -282,14 +276,14 @@ class _DoubleParkingCompletedSearchBottomSheetState
                 area: selected.area,
                 newLocation: "미지정",
               );
-              await _refreshSearchResults(); // (기존 로직 유지)
+              await _refreshSearchResults();
             },
             onDelete: () async {
               await rootContext.read<DeletePlate>().deleteFromParkingCompleted(
                 selected.plateNumber,
                 selected.area,
               );
-              await _refreshSearchResults(); // (기존 로직 유지)
+              await _refreshSearchResults();
             },
           );
         });
@@ -302,26 +296,26 @@ class _CardSection extends StatelessWidget {
   final String title;
   final String subtitle;
   final Widget child;
-  final Color accent;
 
   const _CardSection({
     required this.title,
     required this.subtitle,
     required this.child,
-    required this.accent,
   });
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black12),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: cs.shadow.withOpacity(0.06),
             blurRadius: 12,
             offset: const Offset(0, 8),
           ),
@@ -335,14 +329,20 @@ class _CardSection extends StatelessWidget {
               Container(
                 width: 8,
                 height: 8,
-                decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+                decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
               ),
               const SizedBox(width: 8),
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+              Text(
+                title,
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: cs.onSurface),
+              ),
             ],
           ),
           const SizedBox(height: 4),
-          Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 12)),
+          Text(
+            subtitle,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+          ),
           const SizedBox(height: 12),
           child,
         ],
@@ -368,16 +368,17 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color fg = (tone == _EmptyTone.danger) ? Colors.redAccent : Colors.black54;
-    final Color bg =
-    (tone == _EmptyTone.danger) ? Colors.red.withOpacity(0.05) : Colors.grey.shade100;
+    final cs = Theme.of(context).colorScheme;
+
+    final Color fg = (tone == _EmptyTone.danger) ? cs.error : cs.onSurfaceVariant;
+    final Color bg = (tone == _EmptyTone.danger) ? cs.errorContainer.withOpacity(0.6) : cs.surfaceContainerLow;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black12),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
       ),
       child: Row(
         children: [
@@ -387,11 +388,11 @@ class _EmptyState extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(color: fg, fontWeight: FontWeight.w900)),
+                Text(title, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 4),
                 Text(
                   message,
-                  style: TextStyle(color: fg.withOpacity(0.85), fontWeight: FontWeight.w600),
+                  style: TextStyle(color: fg.withOpacity(0.9), fontWeight: FontWeight.w600),
                 ),
               ],
             ),

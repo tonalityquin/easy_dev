@@ -158,11 +158,6 @@ class _SingleInsideStartReportFormPageState extends State<SingleInsideStartRepor
     super.dispose();
   }
 
-  void _showSnack(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  }
-
   String _fmtDT(BuildContext context, DateTime? dt) {
     if (dt == null) return '미선택';
     final loc = MaterialLocalizations.of(context);

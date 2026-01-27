@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 
 class DoubleParkingCompletedSearchButton extends StatelessWidget {
-  // ✅ 요청 팔레트 (BlueGrey)
-  static const Color _base = Color(0xFF546E7A); // BlueGrey 600
-
   final bool isValid;
   final bool isLoading;
   final VoidCallback? onPressed;
@@ -17,6 +14,7 @@ class DoubleParkingCompletedSearchButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final enabled = isValid && !isLoading;
 
     return SizedBox(
@@ -24,21 +22,32 @@ class DoubleParkingCompletedSearchButton extends StatelessWidget {
       child: ElevatedButton(
         onPressed: enabled ? onPressed : null,
         style: ElevatedButton.styleFrom(
-          backgroundColor: enabled ? _base : Colors.grey.shade300,
-          foregroundColor: enabled ? Colors.white : Colors.black45,
+          backgroundColor: enabled ? cs.primary : cs.surfaceContainerLow,
+          foregroundColor: enabled ? cs.onPrimary : cs.onSurfaceVariant,
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
           elevation: 0,
+          side: enabled
+              ? BorderSide(color: cs.primary.withOpacity(0.25))
+              : BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+        ).copyWith(
+          overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                (states) => states.contains(MaterialState.pressed)
+                ? (enabled ? cs.onPrimary.withOpacity(0.10) : cs.outlineVariant.withOpacity(0.12))
+                : null,
+          ),
         ),
         child: isLoading
-            ? const SizedBox(
+            ? SizedBox(
           width: 20,
           height: 20,
           child: CircularProgressIndicator(
             strokeWidth: 2,
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            valueColor: AlwaysStoppedAnimation<Color>(
+              enabled ? cs.onPrimary : cs.onSurfaceVariant,
+            ),
           ),
         )
             : const Row(
