@@ -20,10 +20,12 @@ class TripleHomeDashBoardBottomSheet extends StatefulWidget {
   const TripleHomeDashBoardBottomSheet({super.key});
 
   @override
-  State<TripleHomeDashBoardBottomSheet> createState() => _TripleHomeDashBoardBottomSheetState();
+  State<TripleHomeDashBoardBottomSheet> createState() =>
+      _TripleHomeDashBoardBottomSheetState();
 }
 
-class _TripleHomeDashBoardBottomSheetState extends State<TripleHomeDashBoardBottomSheet> {
+class _TripleHomeDashBoardBottomSheetState
+    extends State<TripleHomeDashBoardBottomSheet> {
   static const String screenTag = 'DashBoard B';
 
   bool _layerHidden = true;
@@ -60,7 +62,8 @@ class _TripleHomeDashBoardBottomSheetState extends State<TripleHomeDashBoardBott
 
   bool _isFieldCommon(UserState userState) {
     final dynamic rawRole = userState.user?.role;
-    final String role = rawRole is String ? rawRole.trim() : (rawRole?.toString().trim() ?? '');
+    final String role =
+    rawRole is String ? rawRole.trim() : (rawRole?.toString().trim() ?? '');
     return role == 'fieldCommon';
   }
 
@@ -140,17 +143,22 @@ class _TripleHomeDashBoardBottomSheetState extends State<TripleHomeDashBoardBott
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        icon: Icon(_layerHidden ? Icons.layers : Icons.layers_clear),
-                        label: Text(_layerHidden ? '작업 버튼 펼치기' : '작업 버튼 숨기기'),
+                        icon: Icon(
+                            _layerHidden ? Icons.layers : Icons.layers_clear),
+                        label: Text(
+                            _layerHidden ? '작업 버튼 펼치기' : '작업 버튼 숨기기'),
                         style: _outlinedSurfaceBtnStyle(context, height: 48),
-                        onPressed: () => setState(() => _layerHidden = !_layerHidden),
+                        onPressed: () =>
+                            setState(() => _layerHidden = !_layerHidden),
                       ),
                     ),
                     const SizedBox(height: 16),
 
                     AnimatedCrossFade(
                       duration: const Duration(milliseconds: 200),
-                      crossFadeState: _layerHidden ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+                      crossFadeState: _layerHidden
+                          ? CrossFadeState.showFirst
+                          : CrossFadeState.showSecond,
                       firstChild: const SizedBox.shrink(),
                       secondChild: Column(
                         children: [
@@ -237,7 +245,9 @@ ButtonStyle _outlinedSurfaceBtnStyle(BuildContext context, {double height = 55})
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
   ).copyWith(
     overlayColor: MaterialStateProperty.resolveWith<Color?>(
-          (states) => states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(0.12) : null,
+          (states) => states.contains(MaterialState.pressed)
+          ? cs.outlineVariant.withOpacity(0.12)
+          : null,
     ),
   );
 }

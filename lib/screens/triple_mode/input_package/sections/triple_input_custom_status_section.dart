@@ -22,54 +22,68 @@ class TripleInputCustomStatusSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     // ✅ 정기(월정기)에서는 plate_status 기반 "자동 저장된 메모" 블록을 출력하지 않음
-    // (정기 데이터는 monthly_plate_status를 사용)
     final bool isMonthly = controller.selectedBillType == '정기';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('추가 상태 메모 (최대 20자)', style: TextStyle(fontWeight: FontWeight.bold)),
+        Text(
+          '추가 상태 메모 (최대 20자)',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w900,
+            color: cs.onSurface,
+          ),
+        ),
         const SizedBox(height: 8),
         TextField(
           controller: controller.customStatusController,
           maxLength: 20,
           decoration: InputDecoration(
             hintText: '예: 뒷범퍼 손상',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: cs.primary.withOpacity(0.85), width: 1.4),
+            ),
+            filled: true,
+            fillColor: cs.surfaceContainerLow,
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           ),
         ),
 
-        // ✅ 핵심:
-        // - 정기(isMonthly == true)면 fetchedCustomStatus가 있어도
-        //   plate_status 기반 "자동 저장된 메모" UI를 노출하지 않음
+        // ✅ 비정기(plate_status)에서만 자동 저장 메모 노출
         if (!isMonthly && fetchedCustomStatus != null)
           Padding(
             padding: const EdgeInsets.only(top: 12),
             child: Container(
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(8),
+                color: cs.surfaceContainerLow,
+                border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+                borderRadius: BorderRadius.circular(12),
               ),
               padding: const EdgeInsets.all(12),
               child: Row(
                 children: [
-                  const Icon(Icons.info_outline, size: 20, color: Colors.blueGrey),
+                  Icon(Icons.info_outline, size: 20, color: cs.onSurfaceVariant),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       '자동 저장된 메모: "$fetchedCustomStatus"',
-                      style: const TextStyle(fontSize: 14),
+                      style: TextStyle(fontSize: 14, color: cs.onSurface),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   const SizedBox(width: 8),
                   IconButton(
-                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    icon: Icon(Icons.delete_outline, color: cs.error),
                     onPressed: () async {
-                      // ✅ 이 버튼은 비정기(plate_status)에서만 노출되므로
-                      // plate_status 삭제만 수행한다.
                       try {
                         await controller.deleteCustomStatusFromFirestore(context);
 

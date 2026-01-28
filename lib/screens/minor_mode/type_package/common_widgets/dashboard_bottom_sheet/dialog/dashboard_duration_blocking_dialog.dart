@@ -1,31 +1,33 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
-/// Deep Blue 팔레트(서비스 카드 계열과 통일)
-class _Palette {
-  static const base = Color(0xFF0D47A1); // primary
-  static const dark = Color(0xFF09367D); // 강조 텍스트/아이콘
-  static const light = Color(0xFF5472D3); // 톤 변형/보더
-}
-
 /// 5초 동안 유지되는 취소 가능 blocking dialog
 /// - [duration] 동안 카운트다운 후 자동으로 true 반환
 /// - '취소' 버튼 누르면 false 반환
+///
+/// ✅ 리팩터링 포인트
+/// - 하드코딩 팔레트 제거 → Theme(ColorScheme) 기반
+/// - pop 중복 방지(타이머/버튼 동시 호출 방어)
+/// - duration이 0 이하인 경우 즉시 true 반환(안전)
 Future<bool> showDashboardDurationBlockingDialog(
     BuildContext context, {
       required String message,
       Duration duration = const Duration(seconds: 5),
     }) async {
+  // ✅ duration 방어: 0초 이하이면 즉시 자동 진행
+  if (duration.inSeconds <= 0) return true;
+
   final result = await showDialog<bool>(
     context: context,
     barrierDismissible: false,
-    builder: (dialogCtx) {
+    builder: (_) {
       return _CancelableBlockingDialog(
         message: message,
         duration: duration,
       );
     },
   );
+
   return result ?? false;
 }
 
@@ -46,21 +48,31 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
   Timer? _timer;
   late int _remainingSeconds;
 
+  bool _popped = false; // ✅ pop 중복 방지
+
   @override
   void initState() {
     super.initState();
+
     _remainingSeconds = widget.duration.inSeconds;
+    if (_remainingSeconds <= 0) {
+      // (이론상 showDashboardDurationBlockingDialog에서 걸러지지만 안전망)
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _safePop(true);
+      });
+      return;
+    }
 
     _timer = Timer.periodic(const Duration(seconds: 1), (t) {
       if (!mounted) return;
+
       setState(() {
-        _remainingSeconds--;
+        _remainingSeconds -= 1;
       });
+
       if (_remainingSeconds <= 0) {
         t.cancel();
-        if (mounted) {
-          Navigator.of(context).pop<bool>(true); // 자동 진행
-        }
+        _safePop(true); // 자동 진행
       }
     });
   }
@@ -71,38 +83,52 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
     super.dispose();
   }
 
-  void _handleCancel() {
+  void _safePop(bool value) {
+    if (_popped) return;
+    _popped = true;
+
     _timer?.cancel();
-    Navigator.of(context).pop<bool>(false); // 취소
+    if (!mounted) return;
+
+    Navigator.of(context).pop<bool>(value);
+  }
+
+  void _handleCancel() {
+    _safePop(false);
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final textTheme = theme.textTheme;
+
+    // ✅ 브랜드(Theme) 기반 토큰
+    final Color accent = cs.primary;
+    final Color border = cs.outlineVariant.withOpacity(0.6);
+
+    final Color chipBg = cs.primaryContainer.withOpacity(0.35);
+    final Color chipBorder = cs.primary.withOpacity(0.35);
+    final Color chipFg = cs.onPrimaryContainer;
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
       backgroundColor: cs.surface,
+      surfaceTintColor: Colors.transparent, // ✅ M3 tint 방지
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
-        side: BorderSide(
-          color: _Palette.light.withOpacity(0.25),
-        ),
+        side: BorderSide(color: border),
       ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          minWidth: 260,
-          maxWidth: 360,
-        ),
+        constraints: const BoxConstraints(minWidth: 260, maxWidth: 360),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center, // 중앙 정렬
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // 상단 아이콘 + 로딩 링 (Deep Blue 톤)
+              // 상단 아이콘 + 로딩 링 (Theme primary)
               Stack(
                 alignment: Alignment.center,
                 children: [
@@ -111,20 +137,17 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
                     height: 64,
                     child: CircularProgressIndicator(
                       strokeWidth: 3,
-                      color: _Palette.base,
+                      color: accent,
                     ),
                   ),
                   Container(
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: _Palette.base.withOpacity(0.08),
+                      color: cs.primaryContainer.withOpacity(0.45),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(
-                      Icons.schedule,
-                      color: _Palette.base,
-                    ),
+                    child: Icon(Icons.schedule, color: accent),
                   ),
                 ],
               ),
@@ -141,49 +164,40 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
               ),
               const SizedBox(height: 12),
 
-              // 남은 시간 표시 (필칩 스타일)
+              // 남은 시간 표시(칩)
               Container(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 6,
-                  horizontal: 12,
-                ),
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
                 decoration: BoxDecoration(
-                  color: _Palette.light.withOpacity(0.08),
+                  color: chipBg,
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(
-                    color: _Palette.light.withOpacity(0.4),
-                  ),
+                  border: Border.all(color: chipBorder),
                 ),
                 child: Text(
                   '자동 진행까지 약 $_remainingSeconds초',
                   textAlign: TextAlign.center,
                   style: textTheme.bodySmall?.copyWith(
-                    color: _Palette.dark.withOpacity(0.9),
-                    fontWeight: FontWeight.w500,
+                    color: chipFg,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
               ),
 
               const SizedBox(height: 16),
 
-              // 액션 버튼 (가운데 정렬)
+              // 취소 버튼
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   TextButton(
                     onPressed: _handleCancel,
                     style: TextButton.styleFrom(
-                      foregroundColor: _Palette.dark,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 10,
-                      ),
+                      foregroundColor: cs.onSurface,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(999),
-                        side: BorderSide(
-                          color: _Palette.light.withOpacity(0.6),
-                        ),
+                        side: BorderSide(color: cs.outlineVariant.withOpacity(0.9)),
                       ),
+                      overlayColor: cs.outlineVariant.withOpacity(0.12),
                     ),
                     child: const Text('취소'),
                   ),

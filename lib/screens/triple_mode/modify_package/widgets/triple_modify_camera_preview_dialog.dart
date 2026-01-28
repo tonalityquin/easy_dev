@@ -1,15 +1,9 @@
 import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // HapticFeedback, DeviceOrientation
+import 'package:flutter/services.dart'; // HapticFeedback
 import '../utils/triple_modify_camera_helper.dart';
 
-/// 프리뷰가 촬영 결과와 동일한 비율로 보이도록:
-/// - controller.value.previewSize로 종횡비 계산(세로에서 가로/세로 바꿔치기)
-/// - AspectRatio + contain 렌더링(크롭 없음) → 촬영 결과와 동일 프레이밍
-/// - 초기화 후 세로 잠금(lockCaptureOrientation)으로 회전 튐 방지
-/// - 갤러리 진입 시 pausePreview / 복귀 시 resumePreview
-/// - 탭 포커스/노출 좌표 정확화(LayoutBuilder 사용)
 class TripleModifyCameraPreviewDialog extends StatefulWidget {
   final void Function(List<XFile>)? onCaptureComplete;
   final void Function(XFile)? onImageCaptured;
@@ -21,12 +15,10 @@ class TripleModifyCameraPreviewDialog extends StatefulWidget {
   });
 
   @override
-  State<TripleModifyCameraPreviewDialog> createState() =>
-      _TripleModifyCameraPreviewDialogState();
+  State<TripleModifyCameraPreviewDialog> createState() => _TripleModifyCameraPreviewDialogState();
 }
 
-class _TripleModifyCameraPreviewDialogState
-    extends State<TripleModifyCameraPreviewDialog> {
+class _TripleModifyCameraPreviewDialogState extends State<TripleModifyCameraPreviewDialog> {
   late final TripleModifyCameraHelper _cameraHelper;
   final List<XFile> _capturedImages = [];
 
@@ -42,7 +34,7 @@ class _TripleModifyCameraPreviewDialogState
 
     _cameraHelper = TripleModifyCameraHelper(
       jpegQuality: 75,
-      maxLongSide: 2560, // 촬영 파일 다운스케일(옵션)
+      maxLongSide: 2560,
       keepOriginalAlso: false,
       resolution: ResolutionPreset.medium,
     );
@@ -59,19 +51,16 @@ class _TripleModifyCameraPreviewDialogState
     _initFuture = _cameraHelper.initializeInputCamera();
     try {
       await _initFuture;
-      await _cameraHelper.lockPortrait(); // 세로 고정(선택)
+      await _cameraHelper.lockPortrait();
+      if (!mounted) return;
+      setState(() => _isCameraReady = true);
+      debugPrint('✅ CameraHelper: 카메라 초기화 완료');
+    } catch (_) {
       if (!mounted) return;
       setState(() {
-        _isCameraReady = true;
+        _isCameraReady = false;
+        _initFailed = true;
       });
-      debugPrint('✅ CameraHelper: 카메라 초기화 완료');
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isCameraReady = false;
-          _initFailed = true;
-        });
-      }
     }
   }
 
@@ -115,9 +104,7 @@ class _TripleModifyCameraPreviewDialogState
     if (!mounted) return;
 
     if (image != null) {
-      setState(() {
-        _capturedImages.add(image);
-      });
+      setState(() => _capturedImages.add(image));
       widget.onImageCaptured?.call(image);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -140,9 +127,7 @@ class _TripleModifyCameraPreviewDialogState
         builder: (_) => GalleryView(
           images: List<XFile>.from(_capturedImages),
           onDelete: (index) {
-            setState(() {
-              _capturedImages.removeAt(index);
-            });
+            setState(() => _capturedImages.removeAt(index));
           },
         ),
       ),
@@ -155,8 +140,8 @@ class _TripleModifyCameraPreviewDialogState
     }
   }
 
-  /// 프리뷰를 촬영 결과와 동일한 종횡비로 렌더링(Contain: 크롭 없음)
   Widget _buildPreview() {
+    final cs = Theme.of(context).colorScheme;
     final ctrl = _cameraHelper.cameraController;
 
     if (_initFailed) {
@@ -174,8 +159,12 @@ class _TripleModifyCameraPreviewDialogState
                 style: TextStyle(color: Colors.white),
               ),
               const SizedBox(height: 12),
-              ElevatedButton(
+              FilledButton(
                 onPressed: _initializeCamera,
+                style: FilledButton.styleFrom(
+                  backgroundColor: cs.primary,
+                  foregroundColor: cs.onPrimary,
+                ),
                 child: const Text('다시 시도'),
               ),
             ],
@@ -188,10 +177,8 @@ class _TripleModifyCameraPreviewDialogState
       return const Center(child: CircularProgressIndicator());
     }
 
-    // ✅ previewSize를 이용해 현재 화면 방향에 맞는 종횡비 계산
     final sizeV = ctrl.value.previewSize;
     if (sizeV == null || sizeV.width == 0 || sizeV.height == 0) {
-      // 희귀 케이스 폴백: aspectRatio 사용
       final fallbackRatio = 1 / ctrl.value.aspectRatio;
       return Center(
         child: AspectRatio(
@@ -202,15 +189,12 @@ class _TripleModifyCameraPreviewDialogState
     }
 
     final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
-
-    // camera previewSize는 보통 landscape 기준 → 세로면 반전
     final previewW = isPortrait ? sizeV.height : sizeV.width;
-    final previewH = isPortrait ? sizeV.width  : sizeV.height;
+    final previewH = isPortrait ? sizeV.width : sizeV.height;
     final previewRatio = previewW / previewH;
 
     return Stack(
       children: [
-        // Contain(크롭 없음) → 촬영 결과와 동일한 프레이밍
         Center(
           child: AspectRatio(
             aspectRatio: previewRatio,
@@ -237,7 +221,6 @@ class _TripleModifyCameraPreviewDialogState
           ),
         ),
 
-        // 상단 썸네일 스트립
         if (_capturedImages.isNotEmpty)
           Positioned(
             top: 16,
@@ -257,7 +240,7 @@ class _TripleModifyCameraPreviewDialogState
                       width: 70,
                       height: 70,
                       fit: BoxFit.cover,
-                      cacheWidth: 160, // 저해상 썸네일
+                      cacheWidth: 160,
                       filterQuality: FilterQuality.low,
                     ),
                   );
@@ -292,7 +275,6 @@ class _TripleModifyCameraPreviewDialogState
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // 촬영 버튼
                 ElevatedButton(
                   onPressed: (!_isCameraReady ||
                       ctrl == null ||
@@ -312,7 +294,6 @@ class _TripleModifyCameraPreviewDialogState
                   child: const Icon(Icons.camera_alt, size: 30),
                 ),
                 const SizedBox(width: 16),
-                // 갤러리 열기
                 if (_capturedImages.isNotEmpty)
                   OutlinedButton.icon(
                     onPressed: _openGalleryView,
@@ -348,6 +329,7 @@ class GalleryView extends StatelessWidget {
       appBar: AppBar(
         title: const Text('촬영된 사진'),
         backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
       ),
       backgroundColor: Colors.black,
       body: GridView.builder(
@@ -437,9 +419,7 @@ class _FullScreenGalleryViewState extends State<FullScreenGalleryView> {
       body: PageView.builder(
         controller: _pageController,
         itemCount: widget.images.length,
-        onPageChanged: (index) {
-          setState(() => _currentIndex = index);
-        },
+        onPageChanged: (index) => setState(() => _currentIndex = index),
         itemBuilder: (context, index) {
           return Center(
             child: InteractiveViewer(
@@ -447,7 +427,7 @@ class _FullScreenGalleryViewState extends State<FullScreenGalleryView> {
               maxScale: 4.0,
               child: Image.file(
                 File(widget.images[index].path),
-                fit: BoxFit.contain, // 촬영 결과와 동일 프레이밍(크롭 없음)
+                fit: BoxFit.contain,
               ),
             ),
           );

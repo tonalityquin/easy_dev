@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 
 class TripleParkingCompletedSearchButton extends StatelessWidget {
-  // ✅ 요청 팔레트 (BlueGrey)
-  static const Color _base = Color(0xFF546E7A); // BlueGrey 600
-
   final bool isValid;
   final bool isLoading;
   final VoidCallback? onPressed;
@@ -17,6 +14,7 @@ class TripleParkingCompletedSearchButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final enabled = isValid && !isLoading;
 
     return SizedBox(
@@ -24,21 +22,26 @@ class TripleParkingCompletedSearchButton extends StatelessWidget {
       child: ElevatedButton(
         onPressed: enabled ? onPressed : null,
         style: ElevatedButton.styleFrom(
-          backgroundColor: enabled ? _base : Colors.grey.shade300,
-          foregroundColor: enabled ? Colors.white : Colors.black45,
+          backgroundColor: enabled ? cs.primary : cs.surfaceContainerLow,
+          foregroundColor: enabled ? cs.onPrimary : cs.onSurfaceVariant,
           padding: const EdgeInsets.symmetric(vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           elevation: 0,
+          side: BorderSide(color: cs.outlineVariant.withOpacity(0.85), width: 1.0),
+        ).copyWith(
+          overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                (states) => states.contains(MaterialState.pressed)
+                ? cs.outlineVariant.withOpacity(0.12)
+                : null,
+          ),
         ),
         child: isLoading
-            ? const SizedBox(
+            ? SizedBox(
           width: 20,
           height: 20,
           child: CircularProgressIndicator(
             strokeWidth: 2,
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            valueColor: AlwaysStoppedAnimation<Color>(cs.onPrimary),
           ),
         )
             : const Row(

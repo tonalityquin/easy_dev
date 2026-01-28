@@ -13,6 +13,17 @@ import '../../../../../utils/snackbar_helper.dart';
 import '../../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../../common_package/log_package/log_viewer_bottom_sheet.dart';
 
+/// ✅ 브랜드(ColorScheme) 기반 UI 헬퍼
+class _Brand {
+  static Color border(ColorScheme cs) => cs.outlineVariant.withOpacity(0.85);
+
+
+  static Color positive(ColorScheme cs) => cs.primary;
+  static Color positiveBg(ColorScheme cs) => cs.primaryContainer.withOpacity(0.45);
+
+  static Color neutralBg(ColorScheme cs) => cs.surfaceContainerLow;
+}
+
 Future<PlateModel?> showTripleDepartureCompletedStatusBottomSheet({
   required BuildContext context,
   required PlateModel plate,
@@ -70,6 +81,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
   bool get _isFreeBilling => (_plate.basicAmount ?? 0) == 0 && (_plate.addAmount ?? 0) == 0;
 
   void _showMessageSafe({required bool success, required String message}) {
+    // 1) 커스텀 스낵바 우선
     try {
       if (success) {
         showSuccessSnackbar(context, message);
@@ -78,15 +90,17 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
       }
       return;
     } catch (_) {
-      // no-op -> ScaffoldMessenger fallback
+      // ignore -> ScaffoldMessenger fallback
     }
 
+    // 2) ScaffoldMessenger fallback
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger != null) {
       messenger.showSnackBar(SnackBar(content: Text(message)));
       return;
     }
 
+    // 3) Root navigator context fallback
     final nav = Navigator.of(context, rootNavigator: true);
     final messenger2 = ScaffoldMessenger.maybeOf(nav.context);
     if (messenger2 != null) {
@@ -94,6 +108,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
       return;
     }
 
+    // 4) 최후: AlertDialog
     showDialog<void>(
       context: nav.context,
       builder: (_) => AlertDialog(
@@ -166,7 +181,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
 
       setState(() => _plate = updatedPlate);
       _showMessageSafe(success: true, message: '무료 정산이 자동 처리되었습니다. (₩0)');
-
       return true;
     } catch (e) {
       if (!mounted) return false;
@@ -260,7 +274,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
       if (!mounted) return;
 
       setState(() => _plate = updatedPlate);
-
       _showMessageSafe(
         success: true,
         message: '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})',
@@ -273,6 +286,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final rootContext = Navigator.of(context, rootNavigator: true).context;
 
     final lockedFee = _plate.lockedFeeAmount;
@@ -283,9 +297,10 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
     return SafeArea(
       top: false,
       child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          border: Border.all(color: _Brand.border(cs)),
         ),
         child: Column(
           children: [
@@ -299,12 +314,12 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
                       height: 4,
                       margin: const EdgeInsets.only(bottom: 12),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade400,
+                        color: cs.outlineVariant.withOpacity(0.85),
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
                   ),
-                  const _SheetTitleRow(
+                  _SheetTitleRow(
                     title: '출차 완료 상태 처리',
                     icon: Icons.settings,
                   ),
@@ -312,7 +327,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
                 ],
               ),
             ),
-
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
@@ -327,7 +341,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
                     paymentMethod: paymentMethod,
                   ),
                   const SizedBox(height: 14),
-
                   _SectionCard(
                     title: '정산',
                     subtitle: '출차 완료 상태에서도 사전 정산을 처리할 수 있습니다.',
@@ -345,9 +358,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 14),
-
                   _SectionCard(
                     title: '기타',
                     subtitle: '로그 확인 및 닫기',
@@ -389,7 +400,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 8),
                 ],
               ),
@@ -412,13 +422,15 @@ class _SheetTitleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Row(
       children: [
-        Icon(icon, color: Colors.blueAccent),
+        Icon(icon, color: cs.primary),
         const SizedBox(width: 8),
         Text(
           title,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: cs.onSurface),
         ),
       ],
     );
@@ -446,20 +458,23 @@ class _PlateSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final badgeColor = isLocked ? Colors.green : Colors.grey.shade600;
+    final cs = Theme.of(context).colorScheme;
+
+    final badgeColor = isLocked ? cs.primary : cs.onSurfaceVariant;
     final badgeText = isLocked ? '사전정산 잠김' : '미정산';
 
-    final feeText =
-    (isLocked && lockedFee != null) ? '₩$lockedFee${paymentMethod.isNotEmpty ? " ($paymentMethod)" : ""}' : '—';
+    final feeText = (isLocked && lockedFee != null)
+        ? '₩$lockedFee${paymentMethod.isNotEmpty ? " ($paymentMethod)" : ""}'
+        : '—';
 
     final billingText = billingType.isNotEmpty ? billingType : '미지정';
 
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: cs.surfaceContainerLow,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black12),
+        border: Border.all(color: _Brand.border(cs)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -469,10 +484,11 @@ class _PlateSummaryCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   plateNumber,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.2,
+                    color: cs.onSurface,
                   ),
                 ),
               ),
@@ -487,7 +503,7 @@ class _PlateSummaryCard extends StatelessWidget {
                   badgeText,
                   style: TextStyle(
                     color: badgeColor,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w900,
                     fontSize: 12,
                   ),
                 ),
@@ -527,16 +543,18 @@ class _InfoLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final v = value.trim().isEmpty ? '—' : value.trim();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: Colors.black54,
+          style: TextStyle(
+            color: cs.onSurfaceVariant,
             fontSize: 12,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
           ),
         ),
         const SizedBox(height: 4),
@@ -544,10 +562,10 @@ class _InfoLine extends StatelessWidget {
           v,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Colors.black87,
+          style: TextStyle(
+            color: cs.onSurface,
             fontSize: 14,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
           ),
         ),
       ],
@@ -568,15 +586,17 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black12),
+        border: Border.all(color: _Brand.border(cs)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: cs.shadow.withOpacity(0.04),
             blurRadius: 10,
             offset: const Offset(0, 6),
           ),
@@ -585,9 +605,9 @@ class _SectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+          Text(title, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: cs.onSurface)),
           const SizedBox(height: 4),
-          Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 12)),
+          Text(subtitle, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12, fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),
           child,
         ],
@@ -615,9 +635,11 @@ class _ActionTileButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color base = (tone == _ActionTone.positive) ? Colors.green : Colors.grey.shade800;
-    final Color bg = (tone == _ActionTone.positive) ? Colors.green.withOpacity(0.08) : Colors.grey.shade100;
-    final Color border = (tone == _ActionTone.positive) ? Colors.green.withOpacity(0.25) : Colors.black12;
+    final cs = Theme.of(context).colorScheme;
+
+    final Color base = (tone == _ActionTone.positive) ? _Brand.positive(cs) : cs.onSurface;
+    final Color bg = (tone == _ActionTone.positive) ? _Brand.positiveBg(cs) : _Brand.neutralBg(cs);
+    final Color border = _Brand.border(cs);
 
     return Material(
       color: Colors.transparent,
@@ -641,7 +663,7 @@ class _ActionTileButton extends StatelessWidget {
                   Expanded(
                     child: Text(
                       title,
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: cs.onSurface),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -652,7 +674,7 @@ class _ActionTileButton extends StatelessWidget {
               Text(
                 subtitle,
                 style: TextStyle(
-                  color: Colors.black.withOpacity(0.65),
+                  color: cs.onSurfaceVariant,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
@@ -678,20 +700,28 @@ class _SecondaryActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return OutlinedButton.icon(
-      icon: Icon(icon, size: 18),
+      icon: Icon(icon, size: 18, color: cs.onSurface),
       label: Text(
         label,
-        style: const TextStyle(fontWeight: FontWeight.w800),
+        style: TextStyle(fontWeight: FontWeight.w900, color: cs.onSurface),
         textAlign: TextAlign.center,
       ),
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(double.infinity, 46),
-        foregroundColor: Colors.black87,
-        side: const BorderSide(color: Colors.black12),
+        foregroundColor: cs.onSurface,
+        side: BorderSide(color: _Brand.border(cs)),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        backgroundColor: Colors.grey.shade50,
+        backgroundColor: cs.surfaceContainerLow,
+      ).copyWith(
+        overlayColor: MaterialStateProperty.resolveWith<Color?>(
+              (states) => states.contains(MaterialState.pressed)
+              ? cs.outlineVariant.withOpacity(0.12)
+              : null,
+        ),
       ),
     );
   }

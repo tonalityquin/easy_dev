@@ -30,15 +30,17 @@ class _MinorHomeBreakButtonWidgetState extends State<MinorHomeBreakButtonWidget>
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return ElevatedButton.icon(
       onPressed: _submitting ? null : _onTap,
       icon: _submitting
-          ? const SizedBox(
+          ? SizedBox(
         width: 20,
         height: 20,
         child: CircularProgressIndicator(
           strokeWidth: 2,
-          valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+          valueColor: AlwaysStoppedAnimation<Color>(cs.onSurface),
         ),
       )
           : const Icon(Icons.coffee),
@@ -46,17 +48,24 @@ class _MinorHomeBreakButtonWidgetState extends State<MinorHomeBreakButtonWidget>
         '휴게 사용 확인',
         style: TextStyle(
           fontSize: 16,
-          fontWeight: FontWeight.bold,
+          fontWeight: FontWeight.w900,
           letterSpacing: 1.1,
         ),
       ),
       style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
         minimumSize: const Size.fromHeight(55),
         padding: EdgeInsets.zero,
-        side: const BorderSide(color: Colors.grey, width: 1.0),
+        elevation: 0,
+        side: BorderSide(color: cs.outlineVariant.withOpacity(0.85), width: 1.0),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ).copyWith(
+        overlayColor: MaterialStateProperty.resolveWith<Color?>(
+              (states) => states.contains(MaterialState.pressed)
+              ? cs.outlineVariant.withOpacity(0.12)
+              : null,
+        ),
       ),
     );
   }

@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../../../utils/init/app_colors.dart';
+
+class _Brand {
+  static Color border(ColorScheme cs) => cs.outlineVariant.withOpacity(0.85);
+  static Color overlay(ColorScheme cs) => cs.outlineVariant.withOpacity(0.12);
+}
 
 class TripleModifyBottomNavigation extends StatelessWidget {
   final bool? showKeypad;
@@ -19,14 +23,25 @@ class TripleModifyBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap ?? () {},
-      child: Container(
-        decoration: BoxDecoration(
-          color: backgroundColor ?? AppColors.bottomNavBackground,
+    final cs = Theme.of(context).colorScheme;
+
+    final bg = backgroundColor ?? cs.surface;
+
+    return Material(
+      color: bg,
+      child: InkWell(
+        onTap: onTap ?? () {},
+        overlayColor: MaterialStateProperty.resolveWith<Color?>(
+              (states) => states.contains(MaterialState.pressed) ? _Brand.overlay(cs) : null,
         ),
-        padding: const EdgeInsets.all(16.0),
-        child: _buildContent(),
+        child: Container(
+          decoration: BoxDecoration(
+            color: bg,
+            border: Border(top: BorderSide(color: _Brand.border(cs), width: 1)),
+          ),
+          padding: const EdgeInsets.all(16.0),
+          child: _buildContent(),
+        ),
       ),
     );
   }
@@ -34,8 +49,7 @@ class TripleModifyBottomNavigation extends StatelessWidget {
   Widget _buildContent() {
     if (showKeypad == true && keypad != null) {
       return keypad!;
-    } else {
-      return actionButton;
     }
+    return actionButton;
   }
 }

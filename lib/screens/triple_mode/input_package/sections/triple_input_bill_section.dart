@@ -23,6 +23,8 @@ class TripleInputBillSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final billState = context.watch<BillState>();
     final isLoading = billState.isLoading;
     final generalBills = billState.generalBills;
@@ -32,25 +34,33 @@ class TripleInputBillSection extends StatelessWidget {
     final isGeneral = normalizedType == '변동';
     final isMonthly = normalizedType == '정기';
 
+    // 변동은 generalBills만 사용(기존 유지)
     final filteredBills = generalBills;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '정산 유형',
-          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w900,
+            color: cs.onSurface,
+          ),
         ),
         const SizedBox(height: 12.0),
+
+        // 타입 토글
         Row(
           children: [
             _buildTypeButton(
+              context: context,
               label: '변동',
               isSelected: isGeneral,
               onTap: () => onTypeChanged('변동'),
             ),
             const SizedBox(width: 8),
             _buildTypeButton(
+              context: context,
               label: '정기',
               isSelected: isMonthly,
               onTap: () => onTypeChanged('정기'),
@@ -58,20 +68,28 @@ class TripleInputBillSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12.0),
+
         if (isMonthly) ...[
           TextField(
             controller: countTypeController,
-            // ✅ 사용자 수정 불가
             readOnly: true,
             enabled: false,
             decoration: InputDecoration(
               labelText: '정기 - 호실/구분(=countType)',
               hintText: '예: 1901호',
-              border: const OutlineInputBorder(),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+              ),
+              disabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.65)),
+              ),
               filled: true,
-              fillColor: Colors.grey.shade100,
-              labelStyle: TextStyle(color: Colors.grey.shade600),
-              hintStyle: TextStyle(color: Colors.grey.shade500),
+              fillColor: cs.surfaceContainerLow,
+              labelStyle: TextStyle(color: cs.onSurfaceVariant),
+              hintStyle: TextStyle(color: cs.onSurfaceVariant),
             ),
           ),
         ] else ...[
@@ -86,7 +104,7 @@ class TripleInputBillSection extends StatelessWidget {
               child: Center(
                 child: Text(
                   '$normalizedType 정산 유형이 없습니다.',
-                  style: const TextStyle(color: Colors.grey),
+                  style: TextStyle(color: cs.onSurfaceVariant),
                 ),
               ),
             )
@@ -94,10 +112,16 @@ class TripleInputBillSection extends StatelessWidget {
             OutlinedButton(
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-                side: const BorderSide(color: Colors.black),
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+                backgroundColor: cs.surface,
+                foregroundColor: cs.onSurface,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ).copyWith(
+                overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                      (states) => states.contains(MaterialState.pressed)
+                      ? cs.outlineVariant.withOpacity(0.12)
+                      : null,
+                ),
               ),
               onPressed: () {
                 showModalBottomSheet(
@@ -111,9 +135,10 @@ class TripleInputBillSection extends StatelessWidget {
                       maxChildSize: 0.9,
                       builder: (context, scrollController) {
                         return Container(
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                          decoration: BoxDecoration(
+                            color: cs.surface,
+                            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                            border: Border.all(color: cs.outlineVariant.withOpacity(0.65)),
                           ),
                           padding: const EdgeInsets.all(16),
                           child: ListView(
@@ -125,23 +150,29 @@ class TripleInputBillSection extends StatelessWidget {
                                   height: 4,
                                   margin: const EdgeInsets.only(bottom: 16),
                                   decoration: BoxDecoration(
-                                    color: Colors.grey.shade300,
+                                    color: cs.outlineVariant.withOpacity(0.85),
                                     borderRadius: BorderRadius.circular(2),
                                   ),
                                 ),
                               ),
                               Text(
                                 '$normalizedType 정산 선택',
-                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w900,
+                                  color: cs.onSurface,
+                                ),
                               ),
                               const SizedBox(height: 24),
                               ...filteredBills.map((bill) {
-                                final countType = (bill).countType;
+                                final countType = bill.countType;
 
                                 return ListTile(
-                                  title: Text(countType),
+                                  title: Text(
+                                    countType,
+                                    style: TextStyle(color: cs.onSurface),
+                                  ),
                                   trailing: countType == selectedBill
-                                      ? const Icon(Icons.check, color: Colors.green)
+                                      ? Icon(Icons.check, color: cs.primary)
                                       : null,
                                   onTap: () {
                                     Navigator.pop(context);
@@ -161,7 +192,7 @@ class TripleInputBillSection extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(selectedBill ?? '정산 선택'),
-                  const Icon(Icons.arrow_drop_down),
+                  Icon(Icons.arrow_drop_down, color: cs.onSurfaceVariant),
                 ],
               ),
             ),
@@ -171,26 +202,42 @@ class TripleInputBillSection extends StatelessWidget {
   }
 
   Widget _buildTypeButton({
+    required BuildContext context,
     required String label,
     required bool isSelected,
     required VoidCallback onTap,
   }) {
+    final cs = Theme.of(context).colorScheme;
+
+    final bg = isSelected ? cs.primary : cs.surface;
+    final fg = isSelected ? cs.onPrimary : cs.onSurface;
+    final side = BorderSide(
+      color: isSelected ? cs.primary.withOpacity(0.65) : cs.outlineVariant.withOpacity(0.85),
+      width: 1.2,
+    );
+
     return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isSelected ? Colors.black : Colors.white,
-            border: Border.all(color: Colors.black),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            label,
-            style: TextStyle(
-              color: isSelected ? Colors.white : Colors.black,
-              fontWeight: FontWeight.bold,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(10),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOutCubic,
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: bg,
+              border: Border.fromBorderSide(side),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: fg,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ),
         ),

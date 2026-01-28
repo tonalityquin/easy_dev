@@ -52,10 +52,7 @@ Future<void> showTripleDashboardPunchCardFeedback(
     barrierColor: cs.scrim.withOpacity(0.35),
     transitionDuration: const Duration(milliseconds: 320),
     pageBuilder: (ctx, anim, secondaryAnim) {
-      return _PunchCardSheet(
-        type: type,
-        dateTime: dateTime,
-      );
+      return _PunchCardSheet(type: type, dateTime: dateTime);
     },
     transitionBuilder: (ctx, anim, secondaryAnim, child) {
       final curved = CurvedAnimation(
@@ -97,6 +94,7 @@ IconData _iconForType(AttBrkModeType type) {
   }
 }
 
+/// ✅ 강조색은 타입별 유지
 Color _accentColorForType(AttBrkModeType type) {
   switch (type) {
     case AttBrkModeType.workIn:
@@ -126,7 +124,8 @@ class _PunchCardSheet extends StatefulWidget {
   State<_PunchCardSheet> createState() => _PunchCardSheetState();
 }
 
-class _PunchCardSheetState extends State<_PunchCardSheet> with SingleTickerProviderStateMixin {
+class _PunchCardSheetState extends State<_PunchCardSheet>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _sheetScale;
   late final Animation<double> _headDrop;
@@ -220,7 +219,10 @@ class _PunchCardSheetState extends State<_PunchCardSheet> with SingleTickerProvi
                             offset: const Offset(0, 6),
                           ),
                         ],
-                        border: Border.all(color: cs.outlineVariant.withOpacity(0.75), width: 1),
+                        border: Border.all(
+                          color: cs.outlineVariant.withOpacity(0.75),
+                          width: 1,
+                        ),
                       ),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -263,7 +265,9 @@ class _PunchCardSheetState extends State<_PunchCardSheet> with SingleTickerProvi
                               const Spacer(),
                               Text(
                                 monthStr,
-                                style: textTheme.labelMedium?.copyWith(color: cs.onSurfaceVariant),
+                                style: textTheme.labelMedium?.copyWith(
+                                  color: cs.onSurfaceVariant,
+                                ),
                               ),
                             ],
                           ),
@@ -293,7 +297,9 @@ class _PunchCardSheetState extends State<_PunchCardSheet> with SingleTickerProvi
                                   '$typeLabel · 카드에 펀칭이 찍혔습니다.',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                                  style: textTheme.bodySmall?.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                  ),
                                 ),
                               ),
                             ],
@@ -304,7 +310,10 @@ class _PunchCardSheetState extends State<_PunchCardSheet> with SingleTickerProvi
                             decoration: BoxDecoration(
                               color: cs.surface,
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: cs.outlineVariant.withOpacity(0.75), width: 0.9),
+                              border: Border.all(
+                                color: cs.outlineVariant.withOpacity(0.75),
+                                width: 0.9,
+                              ),
                               boxShadow: [
                                 BoxShadow(
                                   color: cs.shadow.withOpacity(0.06),
@@ -330,8 +339,11 @@ class _PunchCardSheetState extends State<_PunchCardSheet> with SingleTickerProvi
                                     ],
                                   ),
                                 ),
-                                Divider(height: 1, thickness: 0.8, color: cs.outlineVariant.withOpacity(0.75)),
-
+                                Divider(
+                                  height: 1,
+                                  thickness: 0.8,
+                                  color: cs.outlineVariant.withOpacity(0.75),
+                                ),
                                 Padding(
                                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                                   child: Row(
@@ -351,12 +363,13 @@ class _PunchCardSheetState extends State<_PunchCardSheet> with SingleTickerProvi
                                             const SizedBox(height: 2),
                                             Text(
                                               weekDayStr,
-                                              style: textTheme.labelSmall?.copyWith(color: cs.onSurfaceVariant),
+                                              style: textTheme.labelSmall?.copyWith(
+                                                color: cs.onSurfaceVariant,
+                                              ),
                                             ),
                                           ],
                                         ),
                                       ),
-
                                       Expanded(
                                         flex: 3,
                                         child: _PunchStatusCell(
@@ -495,7 +508,9 @@ class _PunchStatusCell extends StatelessWidget {
             Icon(
               showCheck ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
               size: 16,
-              color: showCheck ? accentColor.withOpacity(0.95) : cs.outlineVariant.withOpacity(0.9),
+              color: showCheck
+                  ? accentColor.withOpacity(0.95)
+                  : cs.outlineVariant.withOpacity(0.9),
             ),
             const SizedBox(height: 2),
             Text(

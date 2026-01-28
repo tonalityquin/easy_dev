@@ -17,13 +17,19 @@ class MinorDepartureCompletedSelectedDateBar extends StatelessWidget {
     return '${d.year}.${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')} ($w)';
   }
 
-  bool _isSameYMD(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
+  bool _isSameYMD(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
   @override
   Widget build(BuildContext context) {
     if (!visible) return const SizedBox.shrink();
 
-    final selected = context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now();
+    final cs = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    final selected =
+        context.watch<FieldSelectedDateState>().selectedDate ?? DateTime.now();
+
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final selectedYmd = DateTime(selected.year, selected.month, selected.day);
@@ -35,18 +41,19 @@ class MinorDepartureCompletedSelectedDateBar extends StatelessWidget {
         margin: const EdgeInsets.fromLTRB(12, 6, 12, 0),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.grey[100],
+          color: cs.surfaceContainerLow,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.grey[300]!),
+          border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
         ),
         child: Row(
           children: [
-            Icon(Icons.event, size: 18, color: Colors.grey[700]),
+            Icon(Icons.event, size: 18, color: cs.onSurfaceVariant),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 '선택일: ${_format(selected)}',
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                style: (textTheme.bodyMedium ?? const TextStyle())
+                    .copyWith(fontSize: 14, fontWeight: FontWeight.w700, color: cs.onSurface),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
               ),
@@ -58,10 +65,10 @@ class MinorDepartureCompletedSelectedDateBar extends StatelessWidget {
                 onPressed: isToday
                     ? null
                     : () {
-                        final n = DateTime.now();
-                        final todayYmd = DateTime(n.year, n.month, n.day);
-                        context.read<FieldSelectedDateState>().setSelectedDate(todayYmd);
-                      },
+                  final n = DateTime.now();
+                  final todayYmd = DateTime(n.year, n.month, n.day);
+                  context.read<FieldSelectedDateState>().setSelectedDate(todayYmd);
+                },
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   minimumSize: const Size(0, 32),
@@ -71,7 +78,8 @@ class MinorDepartureCompletedSelectedDateBar extends StatelessWidget {
                   '오늘',
                   style: TextStyle(
                     fontSize: 13,
-                    color: isToday ? Colors.grey : null,
+                    fontWeight: FontWeight.w800,
+                    color: isToday ? cs.onSurfaceVariant.withOpacity(0.55) : cs.primary,
                   ),
                 ),
               ),

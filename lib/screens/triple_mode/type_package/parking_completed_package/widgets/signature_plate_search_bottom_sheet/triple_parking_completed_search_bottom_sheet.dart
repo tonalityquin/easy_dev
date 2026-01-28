@@ -37,9 +37,6 @@ class TripleParkingCompletedSearchBottomSheet extends StatefulWidget {
 class _TripleParkingCompletedSearchBottomSheetState
     extends State<TripleParkingCompletedSearchBottomSheet>
     with SingleTickerProviderStateMixin {
-  static const Color _base = Color(0xFF546E7A); // BlueGrey 600
-  static const Color _dark = Color(0xFF37474F); // BlueGrey 800
-
   final TextEditingController _controller = TextEditingController();
 
   bool _isLoading = false;
@@ -72,9 +69,7 @@ class _TripleParkingCompletedSearchBottomSheetState
     super.dispose();
   }
 
-  bool isValidPlate(String value) {
-    return RegExp(r'^\d{4}$').hasMatch(value);
-  }
+  bool isValidPlate(String value) => RegExp(r'^\d{4}$').hasMatch(value);
 
   Future<void> _refreshSearchResults() async {
     if (!mounted) return;
@@ -106,9 +101,15 @@ class _TripleParkingCompletedSearchBottomSheetState
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('검색 중 오류가 발생했습니다: $e')),
-      );
+
+      // ✅ 브랜드 공통 snackbar helper 우선 사용
+      try {
+        showFailedSnackbar(context, '검색 중 오류가 발생했습니다: $e');
+      } catch (_) {
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(content: Text('검색 중 오류가 발생했습니다: $e')),
+        );
+      }
     }
   }
 
@@ -164,6 +165,7 @@ class _TripleParkingCompletedSearchBottomSheetState
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final rootContext = Navigator.of(context, rootNavigator: true).context;
 
     return SafeArea(
@@ -177,9 +179,10 @@ class _TripleParkingCompletedSearchBottomSheetState
             maxChildSize: 0.95,
             builder: (context, scrollController) {
               return Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
                 ),
                 child: ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
@@ -191,7 +194,7 @@ class _TripleParkingCompletedSearchBottomSheetState
                           width: 44,
                           height: 4,
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade300,
+                            color: cs.outlineVariant.withOpacity(0.85),
                             borderRadius: BorderRadius.circular(999),
                           ),
                         ),
@@ -207,7 +210,7 @@ class _TripleParkingCompletedSearchBottomSheetState
                             IconButton(
                               tooltip: '닫기',
                               onPressed: () => Navigator.pop(context),
-                              icon: Icon(Icons.close, color: _dark),
+                              icon: Icon(Icons.close, color: cs.onSurface),
                             ),
                           ],
                         ),
@@ -223,7 +226,7 @@ class _TripleParkingCompletedSearchBottomSheetState
                             _CardSection(
                               title: '번호 4자리 입력',
                               subtitle: '예: 1234',
-                              accent: _base,
+                              accent: cs.primary,
                               child: TripleParkingCompletedPlateNumberDisplay(
                                 controller: _controller,
                                 isValidPlate: isValidPlate,
@@ -351,12 +354,14 @@ class _CardSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black12),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.03),
@@ -380,7 +385,7 @@ class _CardSection extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 4),
-          Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 12)),
+          Text(subtitle, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
           const SizedBox(height: 12),
           child,
         ],
@@ -406,16 +411,19 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color fg = (tone == _EmptyTone.danger) ? Colors.redAccent : Colors.black54;
-    final Color bg =
-    (tone == _EmptyTone.danger) ? Colors.red.withOpacity(0.05) : Colors.grey.shade100;
+    final cs = Theme.of(context).colorScheme;
+
+    final Color fg = (tone == _EmptyTone.danger) ? cs.error : cs.onSurfaceVariant;
+    final Color bg = (tone == _EmptyTone.danger)
+        ? cs.errorContainer.withOpacity(0.35)
+        : cs.surfaceContainerLow;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black12),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
       ),
       child: Row(
         children: [
@@ -429,7 +437,7 @@ class _EmptyState extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   message,
-                  style: TextStyle(color: fg.withOpacity(0.85), fontWeight: FontWeight.w600),
+                  style: TextStyle(color: fg.withOpacity(0.90), fontWeight: FontWeight.w600),
                 ),
               ],
             ),

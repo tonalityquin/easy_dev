@@ -12,22 +12,19 @@ class MinorModifyLocationSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start, // 왼쪽 정렬
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '주차 구역',
-          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w900,
+          ),
         ),
-        const SizedBox(height: 8.0),
+        const SizedBox(height: 8),
         Center(
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              MinorModifyLocationField(
-                controller: locationController,
-                widthFactor: 0.7,
-              ),
-            ],
+          child: MinorModifyLocationField(
+            controller: locationController,
+            widthFactor: 0.7,
           ),
         ),
       ],

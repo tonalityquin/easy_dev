@@ -4,12 +4,11 @@ import 'package:intl/intl.dart';
 
 import '../../../../../../../models/plate_model.dart';
 
-class TripleDepartureCompletedPlateSearchResults extends StatelessWidget {
-  // ✅ 요청 팔레트 (BlueGrey)
-  static const Color _base = Color(0xFF546E7A); // BlueGrey 600
-  static const Color _dark = Color(0xFF37474F); // BlueGrey 800
-  static const Color _light = Color(0xFFB0BEC5); // BlueGrey 200
+class _Brand {
+  static Color border(ColorScheme cs) => cs.outlineVariant.withOpacity(0.85);
+}
 
+class TripleDepartureCompletedPlateSearchResults extends StatelessWidget {
   final List<PlateModel> results;
   final void Function(PlateModel) onSelect;
   final VoidCallback? onRefresh;
@@ -23,14 +22,15 @@ class TripleDepartureCompletedPlateSearchResults extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final currency = NumberFormat("#,###", "ko_KR");
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '검색 결과',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: cs.onSurface),
         ),
         const SizedBox(height: 8),
         ListView.separated(
@@ -40,23 +40,27 @@ class TripleDepartureCompletedPlateSearchResults extends StatelessWidget {
           separatorBuilder: (_, __) => const SizedBox(height: 10),
           itemBuilder: (context, index) {
             final plate = results[index];
+
             final typeLabel = plate.typeEnum?.label ?? plate.type;
             final formattedTime = _formatTime(plate.requestTime);
 
             final isLocked = plate.isLockedFee == true;
             final lockedFeeAmount = plate.lockedFeeAmount;
-            final paymentMethod = plate.paymentMethod;
+            final paymentMethod = (plate.paymentMethod ?? '').trim();
             final lockedAtSec = plate.lockedAtTimeInSeconds;
 
             final locationText = plate.location.trim().isEmpty ? '-' : plate.location.trim();
 
-            final backgroundColor = plate.isSelected ? Colors.green.shade50 : Colors.white;
-            final borderColor = plate.isSelected ? Colors.green : Colors.black12;
+            final selectedBg = cs.primaryContainer.withOpacity(0.35);
+            final normalBg = cs.surface;
+            final backgroundColor = plate.isSelected ? selectedBg : normalBg;
+            final borderColor = plate.isSelected ? cs.primary : _Brand.border(cs);
 
-            final labelColor = _getLabelColor(plate.typeEnum);
-            final labelBgColor = _getLabelBackground(plate.typeEnum);
+            final labelColor = _getLabelColor(cs, plate.typeEnum);
+            final labelBgColor = _getLabelBackground(cs, plate.typeEnum);
 
             final typeChip = _buildChip(
+              cs: cs,
               text: typeLabel,
               fg: labelColor,
               bg: labelBgColor,
@@ -65,19 +69,19 @@ class TripleDepartureCompletedPlateSearchResults extends StatelessWidget {
 
             final settledChip = isLocked
                 ? _buildChip(
-              text: lockedFeeAmount != null
-                  ? '사전 정산 ₩${currency.format(lockedFeeAmount)}'
-                  : '사전 정산',
-              fg: Colors.teal,
-              bg: Colors.teal.shade50,
-              borderColor: Colors.teal.withOpacity(0.55),
+              cs: cs,
+              text: lockedFeeAmount != null ? '사전 정산 ₩${currency.format(lockedFeeAmount)}' : '사전 정산',
+              fg: cs.tertiary,
+              bg: cs.tertiaryContainer.withOpacity(0.55),
+              borderColor: cs.tertiary.withOpacity(0.55),
               icon: Icons.lock,
             )
                 : _buildChip(
+              cs: cs,
               text: '미정산',
-              fg: Colors.grey.shade700,
-              bg: Colors.grey.shade200,
-              borderColor: Colors.grey.shade500.withOpacity(0.7),
+              fg: cs.onSurfaceVariant,
+              bg: cs.surfaceContainerLow,
+              borderColor: _Brand.border(cs),
               icon: Icons.lock_open,
             );
 
@@ -104,7 +108,7 @@ class TripleDepartureCompletedPlateSearchResults extends StatelessWidget {
                     border: Border.all(color: borderColor),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.03),
+                        color: cs.shadow.withOpacity(0.04),
                         blurRadius: 12,
                         offset: const Offset(0, 8),
                       ),
@@ -121,11 +125,11 @@ class TripleDepartureCompletedPlateSearchResults extends StatelessWidget {
                             width: 34,
                             height: 34,
                             decoration: BoxDecoration(
-                              color: _base.withOpacity(0.10),
+                              color: cs.primary.withOpacity(0.10),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: _base.withOpacity(0.25)),
+                              border: Border.all(color: cs.primary.withOpacity(0.25)),
                             ),
-                            child: Icon(Icons.directions_car, size: 18, color: _base),
+                            child: Icon(Icons.directions_car, size: 18, color: cs.primary),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -134,9 +138,10 @@ class TripleDepartureCompletedPlateSearchResults extends StatelessWidget {
                               children: [
                                 Text(
                                   plate.plateNumber,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 16,
                                     fontWeight: FontWeight.w900,
+                                    color: cs.onSurface,
                                   ),
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -151,18 +156,18 @@ class TripleDepartureCompletedPlateSearchResults extends StatelessWidget {
                           ),
                         ],
                       ),
-
                       const SizedBox(height: 12),
 
-                      // 요약 정보(요청시간 / 주차구역)
                       _InfoRow(
                         icon: Icons.access_time,
                         text: '요청 시간: $formattedTime',
+                        iconColor: cs.onSurfaceVariant,
                       ),
                       const SizedBox(height: 6),
                       _InfoRow(
                         icon: Icons.location_on,
                         text: '주차 구역: $locationText',
+                        iconColor: cs.onSurfaceVariant,
                       ),
 
                       if (showDetailSection) ...[
@@ -171,57 +176,60 @@ class TripleDepartureCompletedPlateSearchResults extends StatelessWidget {
                           width: double.infinity,
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade50,
+                            color: cs.surfaceContainerLow,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: Colors.black12),
+                            border: Border.all(color: _Brand.border(cs)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               if (plate.isSelected)
-                                const Text(
+                                Text(
                                   '✅ 선택됨',
                                   style: TextStyle(
                                     fontSize: 13,
-                                    color: Colors.green,
-                                    fontWeight: FontWeight.w800,
+                                    color: cs.primary,
+                                    fontWeight: FontWeight.w900,
                                   ),
                                 ),
-
                               if (plate.selectedBy != null && plate.selectedBy!.isNotEmpty) ...[
                                 const SizedBox(height: 6),
                                 _LabeledPill(
                                   icon: Icons.person,
                                   label: '선택자',
                                   value: plate.selectedBy!,
-                                  toneColor: _dark,
+                                  toneColor: cs.onSurface,
+                                  borderColor: _Brand.border(cs),
+                                  bgColor: cs.surface,
                                 ),
                               ],
-
                               if (plate.billingType != null && plate.billingType!.isNotEmpty) ...[
                                 const SizedBox(height: 8),
-                                Text('과금 유형: ${plate.billingType}', style: const TextStyle(fontSize: 13)),
+                                Text(
+                                  '과금 유형: ${plate.billingType}',
+                                  style: TextStyle(fontSize: 13, color: cs.onSurface),
+                                ),
                               ],
-
                               if (plate.customStatus != null && plate.customStatus!.isNotEmpty) ...[
                                 const SizedBox(height: 4),
-                                Text('커스텀 상태: ${plate.customStatus}', style: const TextStyle(fontSize: 13)),
+                                Text(
+                                  '커스텀 상태: ${plate.customStatus}',
+                                  style: TextStyle(fontSize: 13, color: cs.onSurface),
+                                ),
                               ],
-
                               if (isLocked) ...[
                                 const SizedBox(height: 10),
                                 _InfoRow(
                                   icon: Icons.receipt_long,
-                                  iconColor: Colors.teal,
-                                  text:
-                                  '정산 금액: ${lockedFeeAmount != null ? '₩${currency.format(lockedFeeAmount)}' : '-'}',
+                                  iconColor: cs.tertiary,
+                                  text: '정산 금액: ${lockedFeeAmount != null ? '₩${currency.format(lockedFeeAmount)}' : '-'}',
                                   strong: true,
                                 ),
-                                if (paymentMethod != null && paymentMethod.isNotEmpty) ...[
+                                if (paymentMethod.isNotEmpty) ...[
                                   const SizedBox(height: 4),
                                   _InfoRow(
                                     icon: Icons.payment,
-                                    iconColor: Colors.teal,
+                                    iconColor: cs.tertiary,
                                     text: '결제 수단: $paymentMethod',
                                   ),
                                 ],
@@ -229,7 +237,7 @@ class TripleDepartureCompletedPlateSearchResults extends StatelessWidget {
                                   const SizedBox(height: 4),
                                   _InfoRow(
                                     icon: Icons.lock_clock,
-                                    iconColor: Colors.teal,
+                                    iconColor: cs.tertiary,
                                     text: '정산 시각: $lockedAtText',
                                   ),
                                 ],
@@ -255,37 +263,38 @@ class TripleDepartureCompletedPlateSearchResults extends StatelessWidget {
         '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:${time.second.toString().padLeft(2, '0')}';
   }
 
-  Color _getLabelColor(PlateType? type) {
+  Color _getLabelColor(ColorScheme cs, PlateType? type) {
     switch (type) {
       case PlateType.parkingRequests:
-        return _base;
+        return cs.primary;
       case PlateType.parkingCompleted:
-        return Colors.green;
+        return cs.secondary;
       case PlateType.departureRequests:
-        return Colors.orange;
+        return cs.tertiary;
       case PlateType.departureCompleted:
-        return Colors.grey;
+        return cs.onSurfaceVariant;
       default:
-        return _base;
+        return cs.primary;
     }
   }
 
-  Color _getLabelBackground(PlateType? type) {
+  Color _getLabelBackground(ColorScheme cs, PlateType? type) {
     switch (type) {
       case PlateType.parkingRequests:
-        return _light.withOpacity(0.35);
+        return cs.primaryContainer.withOpacity(0.45);
       case PlateType.parkingCompleted:
-        return Colors.green.shade50;
+        return cs.secondaryContainer.withOpacity(0.45);
       case PlateType.departureRequests:
-        return Colors.orange.shade50;
+        return cs.tertiaryContainer.withOpacity(0.45);
       case PlateType.departureCompleted:
-        return Colors.grey.shade200;
+        return cs.surfaceContainerLow;
       default:
-        return _light.withOpacity(0.35);
+        return cs.primaryContainer.withOpacity(0.45);
     }
   }
 
   Widget _buildChip({
+    required ColorScheme cs,
     required String text,
     required Color fg,
     required Color bg,
@@ -311,7 +320,7 @@ class TripleDepartureCompletedPlateSearchResults extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               color: fg,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w900,
             ),
           ),
         ],
@@ -335,7 +344,9 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = iconColor ?? Colors.grey;
+    final cs = Theme.of(context).colorScheme;
+    final c = iconColor ?? cs.onSurfaceVariant;
+
     return Row(
       children: [
         Icon(icon, size: 16, color: c),
@@ -345,8 +356,8 @@ class _InfoRow extends StatelessWidget {
             text,
             style: TextStyle(
               fontSize: 13,
-              fontWeight: strong ? FontWeight.w800 : FontWeight.w600,
-              color: Colors.black.withOpacity(strong ? 0.90 : 0.75),
+              fontWeight: strong ? FontWeight.w900 : FontWeight.w700,
+              color: cs.onSurface.withOpacity(strong ? 0.95 : 0.80),
             ),
             overflow: TextOverflow.ellipsis,
           ),
@@ -361,12 +372,16 @@ class _LabeledPill extends StatelessWidget {
   final String label;
   final String value;
   final Color toneColor;
+  final Color borderColor;
+  final Color bgColor;
 
   const _LabeledPill({
     required this.icon,
     required this.label,
     required this.value,
     required this.toneColor,
+    required this.borderColor,
+    required this.bgColor,
   });
 
   @override
@@ -374,22 +389,22 @@ class _LabeledPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: toneColor.withOpacity(0.07),
+        color: bgColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: toneColor.withOpacity(0.35)),
+        border: Border.all(color: borderColor),
       ),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: toneColor),
+          Icon(icon, size: 16, color: toneColor.withOpacity(0.85)),
           const SizedBox(width: 8),
           Text(
             '$label: ',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: toneColor),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: toneColor.withOpacity(0.85)),
           ),
           Expanded(
             child: Text(
               value,
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: toneColor),
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: toneColor.withOpacity(0.85)),
               overflow: TextOverflow.ellipsis,
             ),
           ),

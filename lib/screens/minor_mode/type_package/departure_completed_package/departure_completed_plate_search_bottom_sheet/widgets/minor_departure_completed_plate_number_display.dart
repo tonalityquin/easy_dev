@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 
 class MinorDepartureCompletedPlateNumberDisplay extends StatelessWidget {
-  // ✅ 요청 팔레트 (BlueGrey)
-  static const Color _base = Color(0xFF546E7A); // BlueGrey 600
-
   final TextEditingController controller;
   final bool Function(String) isValidPlate;
 
@@ -15,24 +12,54 @@ class MinorDepartureCompletedPlateNumberDisplay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return ValueListenableBuilder<TextEditingValue>(
       valueListenable: controller,
       builder: (context, value, child) {
-        final text = value.text;
+        final raw = value.text;
+        final text = raw.trim();
         final valid = isValidPlate(text);
 
-        final tone = text.isEmpty
-            ? Colors.black54
-            : (valid ? Colors.green.shade700 : Colors.redAccent);
+        // ✅ Theme(ColorScheme) 기반 톤/보더 통일
+        final Color tone = text.isEmpty
+            ? cs.onSurfaceVariant
+            : (valid ? cs.tertiary : cs.error);
 
-        final border = text.isEmpty
-            ? Colors.black12
-            : (valid ? Colors.green.withOpacity(0.45) : Colors.redAccent.withOpacity(0.55));
+        final Color border = text.isEmpty
+            ? cs.outlineVariant.withOpacity(0.85)
+            : (valid ? cs.tertiary.withOpacity(0.55) : cs.error.withOpacity(0.60));
+
+        Color boxBg(bool filled) {
+          if (filled) return cs.surface;
+          // 비어있는 칸은 톤을 살짝 죽여서 구분
+          return cs.surfaceVariant.withOpacity(0.35);
+        }
+
+        TextStyle digitStyle(bool filled) => textTheme.titleLarge?.copyWith(
+          fontSize: 22,
+          fontWeight: FontWeight.w900,
+          color: filled ? cs.onSurface : cs.onSurfaceVariant.withOpacity(0.55),
+        ) ??
+            TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+              color: filled ? cs.onSurface : cs.onSurfaceVariant.withOpacity(0.55),
+            );
+
+        final IconData statusIcon = text.isEmpty
+            ? Icons.edit
+            : (valid ? Icons.check_circle_outline : Icons.error_outline);
+
+        final String statusText = text.isEmpty
+            ? '숫자 4자리를 입력해주세요.'
+            : (valid ? '유효한 번호입니다.' : '숫자 4자리를 입력해주세요.');
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 4자리 박스 표시(직관적)
+            // ✅ 4자리 박스 표시
             Row(
               children: List.generate(4, (i) {
                 final char = (i < text.length) ? text[i] : '';
@@ -41,10 +68,11 @@ class MinorDepartureCompletedPlateNumberDisplay extends StatelessWidget {
                 return Expanded(
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOutCubic,
                     margin: EdgeInsets.only(right: i == 3 ? 0 : 8),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     decoration: BoxDecoration(
-                      color: filled ? Colors.white : Colors.grey.shade50,
+                      color: boxBg(filled),
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(color: border, width: 1.2),
                       boxShadow: [
@@ -57,12 +85,8 @@ class MinorDepartureCompletedPlateNumberDisplay extends StatelessWidget {
                     ),
                     child: Center(
                       child: Text(
-                        char.isEmpty ? '•' : char,
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          color: char.isEmpty ? Colors.black26 : Colors.black87,
-                        ),
+                        filled ? char : '•',
+                        style: digitStyle(filled),
                       ),
                     ),
                   ),
@@ -77,45 +101,47 @@ class MinorDepartureCompletedPlateNumberDisplay extends StatelessWidget {
               duration: const Duration(milliseconds: 180),
               child: Row(
                 children: [
-                  Icon(
-                    text.isEmpty
-                        ? Icons.edit
-                        : (valid ? Icons.check_circle_outline : Icons.error_outline),
-                    size: 16,
-                    color: tone,
-                  ),
+                  Icon(statusIcon, size: 16, color: tone),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      text.isEmpty
-                          ? '숫자 4자리를 입력해주세요.'
-                          : (valid ? '유효한 번호입니다.' : '숫자 4자리를 입력해주세요.'),
-                      style: TextStyle(
+                      statusText,
+                      style: textTheme.bodySmall?.copyWith(
                         color: tone,
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
-                      ),
+                      ) ??
+                          TextStyle(
+                            color: tone,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w800,
+                          ),
                     ),
                   ),
                 ],
               ),
             ),
 
-            // 입력 가이드 (BlueGrey 톤으로 살짝 강조)
+            // ✅ 입력 가이드(빈 상태에서만)
             if (text.isEmpty) ...[
               const SizedBox(height: 8),
               Row(
                 children: [
-                  Icon(Icons.info_outline, size: 14, color: _base.withOpacity(0.85)),
+                  Icon(Icons.info_outline, size: 14, color: cs.primary.withOpacity(0.85)),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       '키패드로 4자리를 입력하면 검색할 수 있습니다.',
-                      style: TextStyle(
+                      style: textTheme.bodySmall?.copyWith(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
-                        color: _base.withOpacity(0.85),
-                      ),
+                        color: cs.primary.withOpacity(0.85),
+                      ) ??
+                          TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: cs.primary.withOpacity(0.85),
+                          ),
                     ),
                   ),
                 ],

@@ -13,11 +13,13 @@ class MinorDepartureCompletedFieldCalendarInline extends StatefulWidget {
   const MinorDepartureCompletedFieldCalendarInline({super.key});
 
   @override
-  State<MinorDepartureCompletedFieldCalendarInline> createState() => _MinorDepartureCompletedFieldCalendarInlineState();
+  State<MinorDepartureCompletedFieldCalendarInline> createState() =>
+      _MinorDepartureCompletedFieldCalendarInlineState();
 }
 
-class _MinorDepartureCompletedFieldCalendarInlineState extends State<MinorDepartureCompletedFieldCalendarInline> {
-  late FieldCalendarState calendar;
+class _MinorDepartureCompletedFieldCalendarInlineState
+    extends State<MinorDepartureCompletedFieldCalendarInline> {
+  late final FieldCalendarState calendar;
   late DateTime _focusedDay;
 
   @override
@@ -33,18 +35,21 @@ class _MinorDepartureCompletedFieldCalendarInlineState extends State<MinorDepart
     });
   }
 
-  String _dateKey(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
-      '${d.month.toString().padLeft(2, '0')}-'
-      '${d.day.toString().padLeft(2, '0')}';
+  String _dateKey(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-'
+          '${d.month.toString().padLeft(2, '0')}-'
+          '${d.day.toString().padLeft(2, '0')}';
 
   Map<String, int> _unsettledCountByDay({
     required Iterable<PlateModel> plates,
     required String area,
   }) {
     final map = <String, int>{};
+    final areaNorm = area.trim().toLowerCase();
+
     for (final p in plates) {
       if (p.isLockedFee) continue;
-      if (p.area.trim().toLowerCase() != area.trim().toLowerCase()) continue;
+      if (p.area.trim().toLowerCase() != areaNorm) continue;
 
       final dt = p.requestTime;
       final ymd = DateTime(dt.year, dt.month, dt.day);
@@ -56,6 +61,8 @@ class _MinorDepartureCompletedFieldCalendarInlineState extends State<MinorDepart
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final area = context.watch<AreaState>().currentArea;
     final plateState = context.watch<MinorPlateState>();
 
@@ -72,7 +79,9 @@ class _MinorDepartureCompletedFieldCalendarInlineState extends State<MinorDepart
       firstDay: DateTime.utc(2020, 1, 1),
       lastDay: DateTime.utc(2100, 12, 31),
       focusedDay: _focusedDay,
+
       selectedDayPredicate: (day) => isSameDay(calendar.selectedDate, day),
+
       onDaySelected: (selectedDay, focusedDay) {
         final d = DateTime(selectedDay.year, selectedDay.month, selectedDay.day);
         calendar.selectDate(d);
@@ -81,18 +90,37 @@ class _MinorDepartureCompletedFieldCalendarInlineState extends State<MinorDepart
 
         showSelectedSnackbar(context, '선택된 날짜: ${calendar.formatDate(d)}');
       },
+
       onPageChanged: (focusedDay) => setState(() => _focusedDay = focusedDay),
+
       eventLoader: (day) {
-        final key = _dateKey(day);
+        // TableCalendar에서 넘어오는 day는 시각이 있을 수 있으므로 ymd로 정규화
+        final ymd = DateTime(day.year, day.month, day.day);
+        final key = _dateKey(ymd);
         final count = unsettledMap[key] ?? 0;
         return count > 0 ? const ['UNSETTLED'] : const [];
       },
-      calendarStyle: const CalendarStyle(
-        todayDecoration: BoxDecoration(color: Colors.indigoAccent, shape: BoxShape.circle),
-        selectedDecoration: BoxDecoration(color: Colors.indigo, shape: BoxShape.circle),
-        markerDecoration: BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+
+      // ✅ (리팩터링) 하드코딩 색 제거 → ColorScheme 기반
+      calendarStyle: CalendarStyle(
+        todayDecoration: BoxDecoration(
+          color: cs.primaryContainer.withOpacity(0.85),
+          shape: BoxShape.circle,
+        ),
+        selectedDecoration: BoxDecoration(
+          color: cs.primary,
+          shape: BoxShape.circle,
+        ),
+        markerDecoration: BoxDecoration(
+          color: cs.error, // 미정산 마커는 에러 톤(강조)
+          shape: BoxShape.circle,
+        ),
         markersAlignment: Alignment.bottomCenter,
+        outsideTextStyle: TextStyle(color: cs.onSurfaceVariant.withOpacity(0.55)),
+        weekendTextStyle: TextStyle(color: cs.onSurface),
+        defaultTextStyle: TextStyle(color: cs.onSurface),
       ),
+
       availableGestures: AvailableGestures.horizontalSwipe,
     );
   }

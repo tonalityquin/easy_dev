@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../../../../utils/init/app_colors.dart';
-
 class TripleInputBottomNavigation extends StatelessWidget {
   final bool showKeypad;
   final Widget keypad;
   final Widget actionButton;
   final VoidCallback? onTap;
+
+  /// 외부에서 강제 배경색을 주고 싶을 때만 사용.
+  /// 기본은 Theme(ColorScheme).surface 사용
   final Color? backgroundColor;
 
   const TripleInputBottomNavigation({
@@ -20,11 +21,16 @@ class TripleInputBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return GestureDetector(
       onTap: onTap ?? () {},
       child: Container(
         decoration: BoxDecoration(
-          color: backgroundColor ?? AppColors.bottomNavBackground,
+          color: backgroundColor ?? cs.surface,
+          border: Border(
+            top: BorderSide(color: cs.outlineVariant.withOpacity(0.85), width: 1),
+          ),
         ),
         padding: const EdgeInsets.all(16.0),
         child: _buildContent(),

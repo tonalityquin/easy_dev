@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../../states/user/user_state.dart';
-import '../../../../../../theme.dart';
 
 class TripleHomeUserInfoCard extends StatelessWidget {
   const TripleHomeUserInfoCard({super.key});
@@ -12,23 +11,16 @@ class TripleHomeUserInfoCard extends StatelessWidget {
     final userState = context.watch<UserState>();
     final cs = Theme.of(context).colorScheme;
 
-    final palette = AppCardPalette.of(context);
-    final base = palette.tripleBase;
-    final dark = palette.tripleDark;
-    final light = palette.tripleLight;
-
-    const fg = Colors.white;
-
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: () => debugPrint('📄 사용자 상세 정보 보기'),
       child: Card(
-        elevation: 2,
+        elevation: 0, // ✅ 브랜드 통일(모드별 그림자 차이 제거)
         color: cs.surface,
         surfaceTintColor: Colors.transparent, // ✅ M3 tint 방지(디자인 흔들림 방지)
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: light.withOpacity(.35)),
+          side: BorderSide(color: cs.outlineVariant.withOpacity(.85)),
         ),
         margin: const EdgeInsets.symmetric(vertical: 12),
         child: Padding(
@@ -39,13 +31,13 @@ class TripleHomeUserInfoCard extends StatelessWidget {
               // 헤더 라벨
               Row(
                 children: [
-                  Icon(Icons.badge, size: 14, color: dark.withOpacity(.9)),
+                  Icon(Icons.badge, size: 14, color: cs.onSurfaceVariant),
                   const SizedBox(width: 4),
                   Text(
                     '근무자 정보',
                     style: TextStyle(
                       fontSize: 12,
-                      color: dark.withOpacity(.9),
+                      color: cs.onSurfaceVariant,
                       fontWeight: FontWeight.w700,
                       letterSpacing: .2,
                     ),
@@ -60,8 +52,8 @@ class TripleHomeUserInfoCard extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 24,
-                    backgroundColor: base,
-                    child: const Icon(Icons.person, color: fg),
+                    backgroundColor: cs.primary, // ✅ 브랜드 Primary
+                    child: Icon(Icons.person, color: cs.onPrimary),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -92,16 +84,16 @@ class TripleHomeUserInfoCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Icon(Icons.qr_code, color: dark.withOpacity(.85)),
+                  Icon(Icons.qr_code, color: cs.onSurfaceVariant),
                 ],
               ),
 
               const SizedBox(height: 16),
-              Divider(color: light.withOpacity(.35), height: 1),
+              Divider(color: cs.outlineVariant.withOpacity(.85), height: 1),
               const SizedBox(height: 12),
 
-              _infoRow(context, dark: dark, icon: Icons.phone, value: userState.phone),
-              _infoRow(context, dark: dark, icon: Icons.location_on, value: userState.area),
+              _infoRow(cs: cs, icon: Icons.phone, value: userState.phone),
+              _infoRow(cs: cs, icon: Icons.location_on, value: userState.area),
             ],
           ),
         ),
@@ -109,19 +101,16 @@ class TripleHomeUserInfoCard extends StatelessWidget {
     );
   }
 
-  Widget _infoRow(
-      BuildContext context, {
-        required Color dark,
-        required IconData icon,
-        required String value,
-      }) {
-    final cs = Theme.of(context).colorScheme;
-
+  Widget _infoRow({
+    required ColorScheme cs,
+    required IconData icon,
+    required String value,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: dark.withOpacity(.9)),
+          Icon(icon, size: 18, color: cs.onSurfaceVariant),
           const SizedBox(width: 8),
           Expanded(
             child: Text(

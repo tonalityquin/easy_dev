@@ -17,8 +17,17 @@ String _formatAnyDate(dynamic v) {
   return v.toString();
 }
 
-Widget _infoRow(String label, String? value) {
+Widget _infoRow(BuildContext context, String label, String? value) {
   if (value == null || value.isEmpty) return const SizedBox.shrink();
+
+  final cs = Theme.of(context).colorScheme;
+  final tt = Theme.of(context).textTheme;
+
+  final labelStyle = (tt.titleMedium ?? const TextStyle(fontSize: 18))
+      .copyWith(fontWeight: FontWeight.w800, color: cs.onSurface);
+  final valueStyle =
+  (tt.titleMedium ?? const TextStyle(fontSize: 18)).copyWith(color: cs.onSurface);
+
   return Padding(
     padding: const EdgeInsets.only(bottom: 8),
     child: Row(
@@ -26,16 +35,10 @@ Widget _infoRow(String label, String? value) {
       children: [
         SizedBox(
           width: 130,
-          child: Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-          ),
+          child: Text(label, style: labelStyle),
         ),
         Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(fontSize: 18),
-          ),
+          child: Text(value, style: valueStyle),
         ),
       ],
     ),
@@ -94,10 +97,14 @@ Future<Map<String, dynamic>?> minorInputCustomStatusBottomSheet(
   final String? endDate = (data['endDate'] as String?)?.trim();
 
   final int? regularAmount = data['regularAmount'] is int ? data['regularAmount'] as int : null;
-  final int? regularDurationHours = data['regularDurationHours'] is int ? data['regularDurationHours'] as int : null;
+  final int? regularDurationHours =
+  data['regularDurationHours'] is int ? data['regularDurationHours'] as int : null;
 
   final List<Map<String, dynamic>> paymentHistory =
-      (data['payment_history'] as List<dynamic>?)?.map((e) => Map<String, dynamic>.from(e as Map)).toList() ?? [];
+      (data['payment_history'] as List<dynamic>?)
+          ?.map((e) => Map<String, dynamic>.from(e as Map))
+          .toList() ??
+          [];
 
   final formattedUpdatedAt = _formatAnyDate(updatedAt);
 
@@ -106,6 +113,14 @@ Future<Map<String, dynamic>?> minorInputCustomStatusBottomSheet(
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     builder: (context) {
+      final cs = Theme.of(context).colorScheme;
+      final tt = Theme.of(context).textTheme;
+
+      final bool hasWarning = customStatus != null && customStatus.isNotEmpty;
+      final Color headerIconColor = hasWarning ? cs.error : cs.primary;
+      final IconData headerIcon = hasWarning ? Icons.warning_amber_rounded : Icons.info_outline;
+      final String headerTitle = hasWarning ? '주의사항' : '상세 정보';
+
       return DraggableScrollableSheet(
         initialChildSize: 0.6,
         minChildSize: 0.3,
@@ -113,9 +128,12 @@ Future<Map<String, dynamic>?> minorInputCustomStatusBottomSheet(
         builder: (context, scrollController) {
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              border: Border(
+                top: BorderSide(color: cs.outlineVariant.withOpacity(0.8)),
+              ),
             ),
             child: ListView(
               controller: scrollController,
@@ -126,7 +144,7 @@ Future<Map<String, dynamic>?> minorInputCustomStatusBottomSheet(
                     height: 5,
                     margin: const EdgeInsets.only(bottom: 24),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
+                      color: cs.outlineVariant.withOpacity(0.9),
                       borderRadius: BorderRadius.circular(2.5),
                     ),
                   ),
@@ -135,19 +153,12 @@ Future<Map<String, dynamic>?> minorInputCustomStatusBottomSheet(
                 // 상단 타이틀
                 Row(
                   children: [
-                    Icon(
-                      (customStatus != null && customStatus.isNotEmpty)
-                          ? Icons.warning_amber_rounded
-                          : Icons.info_outline,
-                      color: (customStatus != null && customStatus.isNotEmpty)
-                          ? Colors.redAccent
-                          : Colors.blueAccent,
-                      size: 28,
-                    ),
+                    Icon(headerIcon, color: headerIconColor, size: 28),
                     const SizedBox(width: 10),
                     Text(
-                      (customStatus != null && customStatus.isNotEmpty) ? '주의사항' : '상세 정보',
-                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                      headerTitle,
+                      style: (tt.headlineSmall ?? const TextStyle(fontSize: 24))
+                          .copyWith(fontWeight: FontWeight.w900, color: cs.onSurface),
                     ),
                   ],
                 ),
@@ -157,19 +168,19 @@ Future<Map<String, dynamic>?> minorInputCustomStatusBottomSheet(
                 // ✅ 어떤 컬렉션을 보고 있는지 표기(디버깅/오해 방지)
                 Text(
                   '데이터 출처: $collectionName',
-                  style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+                  style: (tt.bodySmall ?? const TextStyle(fontSize: 14))
+                      .copyWith(color: cs.onSurfaceVariant),
                 ),
 
                 const SizedBox(height: 20),
 
                 // 메인 상태 텍스트
-                if (customStatus != null && customStatus.isNotEmpty) ...[
+                if (hasWarning) ...[
                   Text(
                     customStatus,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
+                    style: (tt.titleMedium ?? const TextStyle(fontSize: 20)).copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSurface,
                       height: 1.5,
                     ),
                   ),
@@ -179,11 +190,12 @@ Future<Map<String, dynamic>?> minorInputCustomStatusBottomSheet(
                 // 업데이트 시간
                 Row(
                   children: [
-                    const Icon(Icons.access_time, size: 20, color: Colors.grey),
+                    Icon(Icons.access_time, size: 20, color: cs.onSurfaceVariant),
                     const SizedBox(width: 8),
                     Text(
                       '최종 수정: $formattedUpdatedAt',
-                      style: const TextStyle(fontSize: 16, color: Colors.grey),
+                      style: (tt.bodyMedium ?? const TextStyle(fontSize: 16))
+                          .copyWith(color: cs.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -191,9 +203,10 @@ Future<Map<String, dynamic>?> minorInputCustomStatusBottomSheet(
                 // 저장된 상태 리스트
                 if (statusList.isNotEmpty) ...[
                   const SizedBox(height: 20),
-                  const Text(
+                  Text(
                     '저장된 상태',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: (tt.titleMedium ?? const TextStyle(fontSize: 18))
+                        .copyWith(fontWeight: FontWeight.w800, color: cs.onSurface),
                   ),
                   const SizedBox(height: 10),
                   Wrap(
@@ -204,10 +217,15 @@ Future<Map<String, dynamic>?> minorInputCustomStatusBottomSheet(
                           (s) => Chip(
                         label: Text(
                           s,
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: cs.onPrimaryContainer,
+                          ),
                         ),
-                        backgroundColor: Colors.orange.withOpacity(0.15),
+                        backgroundColor: cs.primaryContainer,
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        side: BorderSide(color: cs.outlineVariant.withOpacity(0.65)),
                       ),
                     )
                         .toList(),
@@ -216,26 +234,28 @@ Future<Map<String, dynamic>?> minorInputCustomStatusBottomSheet(
 
                 // 정기/부가 메타 정보
                 const SizedBox(height: 24),
-                const Text(
+                Text(
                   '상세 정보',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: (tt.titleMedium ?? const TextStyle(fontSize: 18))
+                      .copyWith(fontWeight: FontWeight.w800, color: cs.onSurface),
                 ),
                 const SizedBox(height: 12),
-                _infoRow('Type', type),
-                _infoRow('Count Type', countType),
-                _infoRow('Regular Type', regularType),
-                _infoRow('Regular Amount', regularAmount?.toString()),
-                _infoRow('Regular Duration (hours)', regularDurationHours?.toString()),
-                _infoRow('Period Unit', periodUnit),
-                _infoRow('Start Date', startDate),
-                _infoRow('End Date', endDate),
+                _infoRow(context, 'Type', type),
+                _infoRow(context, 'Count Type', countType),
+                _infoRow(context, 'Regular Type', regularType),
+                _infoRow(context, 'Regular Amount', regularAmount?.toString()),
+                _infoRow(context, 'Regular Duration (hours)', regularDurationHours?.toString()),
+                _infoRow(context, 'Period Unit', periodUnit),
+                _infoRow(context, 'Start Date', startDate),
+                _infoRow(context, 'End Date', endDate),
 
                 // 결제 내역
                 if (paymentHistory.isNotEmpty) ...[
                   const SizedBox(height: 24),
-                  const Text(
+                  Text(
                     '결제 내역',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: (tt.titleMedium ?? const TextStyle(fontSize: 18))
+                        .copyWith(fontWeight: FontWeight.w800, color: cs.onSurface),
                   ),
                   const SizedBox(height: 10),
                   ...paymentHistory.map((p) {
@@ -248,21 +268,26 @@ Future<Map<String, dynamic>?> minorInputCustomStatusBottomSheet(
                     return Container(
                       margin: const EdgeInsets.only(bottom: 10),
                       decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
+                        border: Border.all(color: cs.outlineVariant.withOpacity(0.9)),
                         borderRadius: BorderRadius.circular(10),
+                        color: cs.surface,
                       ),
                       child: ListTile(
                         title: Text(
                           '금액: ${amount ?? '-'}',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                          style: TextStyle(fontWeight: FontWeight.w700, color: cs.onSurface),
                         ),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (paidAt.isNotEmpty) Text('결제시간: $paidAt'),
-                            if (paidBy != null && paidBy.isNotEmpty) Text('결제자: $paidBy'),
-                            if (extended != null) Text('연장결제: $extended'),
-                            if (note != null && note.toString().isNotEmpty) Text('비고: $note'),
+                            if (paidAt.isNotEmpty)
+                              Text('결제시간: $paidAt', style: TextStyle(color: cs.onSurfaceVariant)),
+                            if (paidBy != null && paidBy.isNotEmpty)
+                              Text('결제자: $paidBy', style: TextStyle(color: cs.onSurfaceVariant)),
+                            if (extended != null)
+                              Text('연장결제: $extended', style: TextStyle(color: cs.onSurfaceVariant)),
+                            if (note != null && note.toString().isNotEmpty)
+                              Text('비고: $note', style: TextStyle(color: cs.onSurfaceVariant)),
                           ],
                         ),
                         dense: true,
@@ -274,12 +299,10 @@ Future<Map<String, dynamic>?> minorInputCustomStatusBottomSheet(
                 const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
-                  child: TextButton(
+                  child: FilledButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.black87,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     child: const Text('확인'),

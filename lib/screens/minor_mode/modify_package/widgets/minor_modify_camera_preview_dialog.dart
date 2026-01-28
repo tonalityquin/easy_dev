@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // HapticFeedback, DeviceOrientation
+import 'package:flutter/services.dart'; // HapticFeedback
 import '../utils/minor_modify_camera_helper.dart';
 
 /// 프리뷰가 촬영 결과와 동일한 비율로 보이도록:
@@ -28,7 +30,7 @@ class MinorModifyCameraPreviewDialog extends StatefulWidget {
 class _MinorModifyCameraPreviewDialogState
     extends State<MinorModifyCameraPreviewDialog> {
   late final MinorModifyCameraHelper _cameraHelper;
-  final List<XFile> _capturedImages = [];
+  final List<XFile> _capturedImages = <XFile>[];
 
   bool _isCameraReady = false;
   bool _closing = false;
@@ -36,13 +38,16 @@ class _MinorModifyCameraPreviewDialogState
 
   Future<void>? _initFuture;
 
+  // ✅ 재시도/초기화 레이스 방지용 시퀀스
+  int _initSeq = 0;
+
   @override
   void initState() {
     super.initState();
 
     _cameraHelper = MinorModifyCameraHelper(
       jpegQuality: 75,
-      maxLongSide: 2560, // 촬영 파일 다운스케일(옵션)
+      maxLongSide: 2560,
       keepOriginalAlso: false,
       resolution: ResolutionPreset.medium,
     );
@@ -50,60 +55,94 @@ class _MinorModifyCameraPreviewDialogState
     _initializeCamera();
   }
 
+  Future<void> _cleanup() async {
+    // ✅ 여러 경로에서 중복 호출되어도 안전하게
+    try {
+      await _cameraHelper.unlockOrientation();
+    } catch (_) {}
+
+    try {
+      await _cameraHelper.dispose();
+    } catch (_) {}
+  }
+
   Future<void> _initializeCamera() async {
-    setState(() {
-      _initFailed = false;
-      _isCameraReady = false;
-    });
+    if (_closing) return;
+
+    final int seq = ++_initSeq;
+
+    if (mounted) {
+      setState(() {
+        _initFailed = false;
+        _isCameraReady = false;
+      });
+    }
 
     _initFuture = _cameraHelper.initializeInputCamera();
+
     try {
       await _initFuture;
-      await _cameraHelper.lockPortrait(); // 세로 고정(선택)
-      if (!mounted) return;
+
+      // ✅ 오래된 initFuture 결과는 무시
+      if (!mounted || _closing || seq != _initSeq) return;
+
+      await _cameraHelper.lockPortrait();
+
+      if (!mounted || _closing || seq != _initSeq) return;
+
       setState(() {
         _isCameraReady = true;
+        _initFailed = false;
       });
-      debugPrint('✅ CameraHelper: 카메라 초기화 완료');
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isCameraReady = false;
-          _initFailed = true;
-        });
-      }
+    } catch (_) {
+      if (!mounted || _closing || seq != _initSeq) return;
+      setState(() {
+        _isCameraReady = false;
+        _initFailed = true;
+      });
     }
   }
 
   @override
   void dispose() {
-    widget.onCaptureComplete?.call(_capturedImages);
+    // ✅ 콜백은 즉시 전달(호출자가 결과를 받을 수 있게)
+    widget.onCaptureComplete?.call(List<XFile>.unmodifiable(_capturedImages));
 
-    final f = _initFuture;
-    Future(() async {
+    // ✅ 카메라/오리엔테이션 해제는 비동기로 안전 정리
+    unawaited(_cleanup());
+
+    super.dispose();
+  }
+
+  Future<void> _onClosePressed() async {
+    if (_closing) return;
+    setState(() => _closing = true);
+
+    try {
+      // ✅ 초기화가 진행 중이면 끝까지 기다린 다음 정리
+      final f = _initFuture;
       if (f != null) {
         try {
           await f;
         } catch (_) {}
       }
-      try {
-        await _cameraHelper.unlockOrientation();
-      } catch (_) {}
-      try {
-        await _cameraHelper.dispose();
-      } catch (_) {}
-    });
-
-    super.dispose();
+    } finally {
+      await _cleanup();
+      if (mounted) {
+        Navigator.of(context).maybePop();
+      }
+    }
   }
 
   Future<void> _onCapturePressed() async {
     final ctrl = _cameraHelper.cameraController;
-    if (!_isCameraReady ||
+
+    if (_closing ||
+        _initFailed ||
+        !_isCameraReady ||
         ctrl == null ||
         !ctrl.value.isInitialized ||
-        ctrl.value.isTakingPicture ||
-        _closing) {
+        ctrl.value.isTakingPicture) {
       return;
     }
 
@@ -112,23 +151,24 @@ class _MinorModifyCameraPreviewDialogState
     } catch (_) {}
 
     final image = await _cameraHelper.captureImage();
-    if (!mounted) return;
+    if (!mounted || _closing) return;
 
     if (image != null) {
-      setState(() {
-        _capturedImages.add(image);
-      });
+      setState(() => _capturedImages.add(image));
       widget.onImageCaptured?.call(image);
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
         const SnackBar(content: Text('촬영에 실패했습니다. 다시 시도해 주세요.')),
       );
     }
   }
 
   Future<void> _openGalleryView() async {
+    if (_closing) return;
+
     final ctrl = _cameraHelper.cameraController;
     final canPause = ctrl != null && ctrl.value.isInitialized;
+
     if (canPause) {
       try {
         await _cameraHelper.pausePreview();
@@ -140,15 +180,14 @@ class _MinorModifyCameraPreviewDialogState
         builder: (_) => GalleryView(
           images: List<XFile>.from(_capturedImages),
           onDelete: (index) {
-            setState(() {
-              _capturedImages.removeAt(index);
-            });
+            if (!mounted) return;
+            setState(() => _capturedImages.removeAt(index));
           },
         ),
       ),
     );
 
-    if (mounted && canPause) {
+    if (mounted && !_closing && canPause) {
       try {
         await _cameraHelper.resumePreview();
       } catch (_) {}
@@ -166,7 +205,8 @@ class _MinorModifyCameraPreviewDialogState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 48),
+              const Icon(Icons.warning_amber_rounded,
+                  color: Colors.white, size: 48),
               const SizedBox(height: 12),
               const Text(
                 '카메라를 초기화할 수 없습니다.\n권한을 확인한 뒤 다시 시도해 주세요.',
@@ -175,7 +215,7 @@ class _MinorModifyCameraPreviewDialogState
               ),
               const SizedBox(height: 12),
               ElevatedButton(
-                onPressed: _initializeCamera,
+                onPressed: _closing ? null : _initializeCamera,
                 child: const Text('다시 시도'),
               ),
             ],
@@ -188,7 +228,6 @@ class _MinorModifyCameraPreviewDialogState
       return const Center(child: CircularProgressIndicator());
     }
 
-    // ✅ previewSize를 이용해 현재 화면 방향에 맞는 종횡비 계산
     final sizeV = ctrl.value.previewSize;
     if (sizeV == null || sizeV.width == 0 || sizeV.height == 0) {
       // 희귀 케이스 폴백: aspectRatio 사용
@@ -201,11 +240,12 @@ class _MinorModifyCameraPreviewDialogState
       );
     }
 
-    final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
+    final isPortrait =
+        MediaQuery.of(context).orientation == Orientation.portrait;
 
     // camera previewSize는 보통 landscape 기준 → 세로면 반전
     final previewW = isPortrait ? sizeV.height : sizeV.width;
-    final previewH = isPortrait ? sizeV.width  : sizeV.height;
+    final previewH = isPortrait ? sizeV.width : sizeV.height;
     final previewRatio = previewW / previewH;
 
     return Stack(
@@ -237,7 +277,7 @@ class _MinorModifyCameraPreviewDialogState
           ),
         ),
 
-        // 상단 썸네일 스트립
+        // ✅ 상단 썸네일 스트립
         if (_capturedImages.isNotEmpty)
           Positioned(
             top: 16,
@@ -257,7 +297,7 @@ class _MinorModifyCameraPreviewDialogState
                       width: 70,
                       height: 70,
                       fit: BoxFit.cover,
-                      cacheWidth: 160, // 저해상 썸네일
+                      cacheWidth: 160,
                       filterQuality: FilterQuality.low,
                     ),
                   );
@@ -265,6 +305,19 @@ class _MinorModifyCameraPreviewDialogState
               ),
             ),
           ),
+
+        // ✅ 닫기 버튼(명시적 종료 UX)
+        Positioned(
+          top: 12,
+          right: 12,
+          child: SafeArea(
+            child: IconButton(
+              tooltip: '닫기',
+              onPressed: _closing ? null : _onClosePressed,
+              icon: const Icon(Icons.close, color: Colors.white, size: 28),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -275,13 +328,10 @@ class _MinorModifyCameraPreviewDialogState
 
     return WillPopScope(
       onWillPop: () async {
+        // ✅ 뒤로가기도 동일한 종료 루틴을 타도록(오리엔테이션/카메라 정리 보장)
         if (_closing) return true;
-        _closing = true;
-        if (mounted) setState(() => _isCameraReady = false);
-        try {
-          await WidgetsBinding.instance.endOfFrame;
-        } catch (_) {}
-        return true;
+        unawaited(_onClosePressed());
+        return false;
       },
       child: SafeArea(
         child: Scaffold(
@@ -294,12 +344,12 @@ class _MinorModifyCameraPreviewDialogState
               children: [
                 // 촬영 버튼
                 ElevatedButton(
-                  onPressed: (!_isCameraReady ||
-                      ctrl == null ||
-                      !(ctrl.value.isInitialized) ||
-                      ctrl.value.isTakingPicture ||
+                  onPressed: (_closing ||
                       _initFailed ||
-                      _closing)
+                      !_isCameraReady ||
+                      ctrl == null ||
+                      !ctrl.value.isInitialized ||
+                      ctrl.value.isTakingPicture)
                       ? null
                       : _onCapturePressed,
                   style: ElevatedButton.styleFrom(
@@ -312,10 +362,11 @@ class _MinorModifyCameraPreviewDialogState
                   child: const Icon(Icons.camera_alt, size: 30),
                 ),
                 const SizedBox(width: 16),
+
                 // 갤러리 열기
                 if (_capturedImages.isNotEmpty)
                   OutlinedButton.icon(
-                    onPressed: _openGalleryView,
+                    onPressed: (_closing || _initFailed) ? null : _openGalleryView,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Colors.white,
                       side: const BorderSide(color: Colors.white54),
@@ -405,7 +456,7 @@ class FullScreenGalleryView extends StatefulWidget {
 }
 
 class _FullScreenGalleryViewState extends State<FullScreenGalleryView> {
-  late PageController _pageController;
+  late final PageController _pageController;
   late int _currentIndex;
 
   @override
@@ -413,6 +464,12 @@ class _FullScreenGalleryViewState extends State<FullScreenGalleryView> {
     super.initState();
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: _currentIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   void _handleDelete() {
@@ -437,9 +494,7 @@ class _FullScreenGalleryViewState extends State<FullScreenGalleryView> {
       body: PageView.builder(
         controller: _pageController,
         itemCount: widget.images.length,
-        onPageChanged: (index) {
-          setState(() => _currentIndex = index);
-        },
+        onPageChanged: (index) => setState(() => _currentIndex = index),
         itemBuilder: (context, index) {
           return Center(
             child: InteractiveViewer(
@@ -447,7 +502,7 @@ class _FullScreenGalleryViewState extends State<FullScreenGalleryView> {
               maxScale: 4.0,
               child: Image.file(
                 File(widget.images[index].path),
-                fit: BoxFit.contain, // 촬영 결과와 동일 프레이밍(크롭 없음)
+                fit: BoxFit.contain,
               ),
             ),
           );

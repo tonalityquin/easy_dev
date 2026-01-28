@@ -13,22 +13,26 @@ import 'triple_dashboard_punch_card_feedback.dart';
 import '../../../../../../repositories/commute_repo_services/commute_true_false_repository.dart';
 import '../../../../../../utils/commute_true_false_mode_config.dart';
 
-/// 중립 톤만 테마 기반으로 사용(강조색은 타입별 유지)
+/// 중립 톤(텍스트/보더)은 브랜드(ColorScheme) 기반으로 사용하고,
+/// "출근/휴게/퇴근" 강조색은 타입별(기존 정책)로 유지합니다.
 class _NeutralTone {
   final Color text;
   final Color border;
-  const _NeutralTone({required this.text, required this.border});
+
+  const _NeutralTone({
+    required this.text,
+    required this.border,
+  });
 }
 
 /// 약식 모드용 출퇴근 기록기 카드
 /// - 출근/휴게/퇴근 3개 펀칭
 /// - 로컬 SQLite 기록
-/// - 정책(변경):
-///   - 서비스 로그인에서 이미 출근을 처리하므로, 이 화면에서는 "출근"은 절대 펀칭하지 않음(버튼 비활성)
+/// - 정책:
+///   - 서비스 로그인에서 이미 출근을 처리하므로, 이 화면에서는 "출근" 펀칭 금지(버튼 비활성)
 ///   - 휴게/퇴근만 사용자 조작 가능
-/// - 추가 정책:
-///   - 출근(workIn) 시에만 commute_true_false 에 "출근 시각(Timestamp)" 기록 (현재 화면에서 workIn을 막아 사실상 미사용)
-///   - 퇴근(workOut) 시 commute_true_false 는 무관 (절대 호출하지 않음)
+///   - 출근(workIn) 시 commute_true_false 기록 로직은 안전망으로만 유지(사실상 실행되지 않음)
+///   - 퇴근(workOut) 시 commute_true_false 미사용(절대 호출하지 않음)
 class TripleDashboardInsidePunchRecorderSection extends StatefulWidget {
   const TripleDashboardInsidePunchRecorderSection({
     super.key,
@@ -44,10 +48,12 @@ class TripleDashboardInsidePunchRecorderSection extends StatefulWidget {
   final String division;
 
   @override
-  State<TripleDashboardInsidePunchRecorderSection> createState() => _TripleDashboardInsidePunchRecorderSectionState();
+  State<TripleDashboardInsidePunchRecorderSection> createState() =>
+      _TripleDashboardInsidePunchRecorderSectionState();
 }
 
-class _TripleDashboardInsidePunchRecorderSectionState extends State<TripleDashboardInsidePunchRecorderSection> {
+class _TripleDashboardInsidePunchRecorderSectionState
+    extends State<TripleDashboardInsidePunchRecorderSection> {
   late DateTime _selectedDate;
 
   String? _workInTime;
@@ -55,12 +61,13 @@ class _TripleDashboardInsidePunchRecorderSectionState extends State<TripleDashbo
   String? _workOutTime;
   bool _loading = true;
 
-  final CommuteTrueFalseRepository _commuteTrueFalseRepo = CommuteTrueFalseRepository();
+  final CommuteTrueFalseRepository _commuteTrueFalseRepo =
+  CommuteTrueFalseRepository();
 
   bool get _hasWorkIn => _workInTime != null && _workInTime!.isNotEmpty;
   bool get _hasBreak => _breakTime != null && _breakTime!.isNotEmpty;
 
-  // ✅ 이 화면에서는 "출근" 펀칭을 허용하지 않음
+  // ✅ 이 화면에서는 출근 펀칭 금지
   bool get _disableWorkInPunch => true;
 
   @override
@@ -71,9 +78,7 @@ class _TripleDashboardInsidePunchRecorderSectionState extends State<TripleDashbo
   }
 
   Future<void> _loadForDate(DateTime date) async {
-    setState(() {
-      _loading = true;
-    });
+    setState(() => _loading = true);
 
     final events = await AttBrkRepository.instance.getEventsForDate(date);
 
@@ -120,7 +125,6 @@ class _TripleDashboardInsidePunchRecorderSectionState extends State<TripleDashbo
     final company = widget.division.trim();
     final area = widget.area.trim();
     final workerName = widget.userName.trim();
-
     if (company.isEmpty || area.isEmpty || workerName.isEmpty) return;
 
     await _commuteTrueFalseRepo.setClockInAt(
@@ -180,6 +184,7 @@ class _TripleDashboardInsidePunchRecorderSectionState extends State<TripleDashbo
   Future<void> _punch(AttBrkModeType type) async {
     if (_loading) return;
 
+    // ✅ 출근 금지
     if (type == AttBrkModeType.workIn && _disableWorkInPunch) {
       _showGuardSnack('출근은 서비스 로그인에서 처리됩니다. 이 화면에서는 변경할 수 없습니다.');
       return;
@@ -195,6 +200,7 @@ class _TripleDashboardInsidePunchRecorderSectionState extends State<TripleDashbo
       return;
     }
 
+    // 출근/퇴근은 확인 다이얼로그 유지(정책)
     if (type == AttBrkModeType.workIn || type == AttBrkModeType.workOut) {
       final isClockIn = type == AttBrkModeType.workIn;
 
@@ -233,6 +239,7 @@ class _TripleDashboardInsidePunchRecorderSectionState extends State<TripleDashbo
       dateTime: targetDateTime,
     );
 
+    // 안전망(실사용 거의 없음)
     if (type == AttBrkModeType.workIn) {
       await _recordClockInAtToCommuteTrueFalse(targetDateTime);
     }
@@ -261,6 +268,7 @@ class _TripleDashboardInsidePunchRecorderSectionState extends State<TripleDashbo
     final dateStr = DateFormat('MM.dd').format(_selectedDate);
     final textTheme = Theme.of(context).textTheme;
 
+    // 출근은 항상 false
     final bool canPunchWorkIn = !_disableWorkInPunch ? true : false;
     final bool canPunchBreak = _hasWorkIn;
     final bool canPunchWorkOut = _hasWorkIn && _hasBreak;
@@ -281,7 +289,8 @@ class _TripleDashboardInsidePunchRecorderSectionState extends State<TripleDashbo
           children: [
             Row(
               children: [
-                Icon(Icons.access_time, size: 16, color: t.text.withOpacity(.85)),
+                Icon(Icons.access_time,
+                    size: 16, color: t.text.withOpacity(.85)),
                 const SizedBox(width: 4),
                 Text(
                   '출퇴근 기록기',
@@ -296,11 +305,13 @@ class _TripleDashboardInsidePunchRecorderSectionState extends State<TripleDashbo
                   borderRadius: BorderRadius.circular(999),
                   onTap: _pickDate,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.calendar_today_rounded, size: 14, color: t.text.withOpacity(.85)),
+                        Icon(Icons.calendar_today_rounded,
+                            size: 14, color: t.text.withOpacity(.85)),
                         const SizedBox(width: 4),
                         Text(
                           '$monthStr · $dateStr',
@@ -327,7 +338,6 @@ class _TripleDashboardInsidePunchRecorderSectionState extends State<TripleDashbo
               ),
             ),
             const SizedBox(height: 12),
-
             if (_loading)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 16),
@@ -351,7 +361,8 @@ class _TripleDashboardInsidePunchRecorderSectionState extends State<TripleDashbo
                         width: 0.9,
                       ),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 10),
                     child: Row(
                       children: [
                         Expanded(
@@ -391,7 +402,8 @@ class _TripleDashboardInsidePunchRecorderSectionState extends State<TripleDashbo
                     alignment: Alignment.centerRight,
                     child: Text(
                       '날짜를 선택해 과거 기록도 수정/재펀칭할 수 있습니다.',
-                      style: textTheme.labelSmall?.copyWith(color: t.text.withOpacity(.75)),
+                      style: textTheme.labelSmall
+                          ?.copyWith(color: t.text.withOpacity(.75)),
                     ),
                   ),
                 ],
@@ -418,6 +430,7 @@ class _PunchSlot extends StatelessWidget {
     required this.onTap,
   });
 
+  // ✅ 강조색은 타입별 유지(정책)
   Color get _accent {
     switch (type) {
       case AttBrkModeType.workIn:
@@ -469,7 +482,9 @@ class _PunchSlot extends StatelessWidget {
               Icon(
                 _icon,
                 size: 14,
-                color: enabled ? _accent.withOpacity(0.92) : cs.onSurfaceVariant.withOpacity(0.35),
+                color: enabled
+                    ? _accent.withOpacity(0.92)
+                    : cs.onSurfaceVariant.withOpacity(0.35),
               ),
               const SizedBox(width: 4),
               Text(
@@ -477,7 +492,9 @@ class _PunchSlot extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
-                  color: enabled ? _accent.withOpacity(0.92) : cs.onSurfaceVariant.withOpacity(0.35),
+                  color: enabled
+                      ? _accent.withOpacity(0.92)
+                      : cs.onSurfaceVariant.withOpacity(0.35),
                 ),
               ),
             ],
@@ -486,7 +503,9 @@ class _PunchSlot extends StatelessWidget {
           Icon(
             punched ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
             size: 18,
-            color: punched ? _accent.withOpacity(0.95) : cs.outlineVariant.withOpacity(enabled ? .9 : .4),
+            color: punched
+                ? _accent.withOpacity(0.95)
+                : cs.outlineVariant.withOpacity(enabled ? .9 : .4),
           ),
           const SizedBox(height: 2),
           Text(

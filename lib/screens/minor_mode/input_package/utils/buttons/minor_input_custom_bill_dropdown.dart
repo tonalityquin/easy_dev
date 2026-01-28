@@ -14,25 +14,44 @@ class MinorInputCustomBillDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final bool hasError = selectedValue == null;
+
+    OutlineInputBorder border(Color color, {double width = 1.2}) {
+      return OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide(color: color, width: width),
+      );
+    }
+
     return InputDecorator(
       decoration: InputDecoration(
         labelText: '정산 유형 선택',
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        labelStyle: TextStyle(color: cs.onSurfaceVariant),
+        border: border(cs.outlineVariant),
+        enabledBorder: border(cs.outlineVariant),
+        focusedBorder: border(cs.primary, width: 1.6),
+        errorBorder: border(cs.error, width: 1.6),
+        focusedErrorBorder: border(cs.error, width: 1.8),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        errorText: selectedValue == null ? '정산 유형을 선택해주세요' : null,
+        errorText: hasError ? '정산 유형을 선택해주세요' : null,
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: selectedValue,
           isExpanded: true,
-          icon: const Icon(Icons.keyboard_arrow_down),
+          icon: Icon(Icons.keyboard_arrow_down, color: cs.onSurfaceVariant),
+          dropdownColor: cs.surface,
           onChanged: onChanged,
           items: items.map((item) {
             return DropdownMenuItem<String>(
               value: item,
               child: Text(
                 item,
-                style: const TextStyle(fontWeight: FontWeight.w500),
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: cs.onSurface,
+                ),
               ),
             );
           }).toList(),

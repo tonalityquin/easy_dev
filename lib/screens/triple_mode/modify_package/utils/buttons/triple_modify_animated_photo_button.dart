@@ -9,9 +9,10 @@ class TripleModifyAnimatedPhotoButton extends StatefulWidget {
   State<TripleModifyAnimatedPhotoButton> createState() => _TripleModifyAnimatedPhotoButtonState();
 }
 
-class _TripleModifyAnimatedPhotoButtonState extends State<TripleModifyAnimatedPhotoButton> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
+class _TripleModifyAnimatedPhotoButtonState extends State<TripleModifyAnimatedPhotoButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scaleAnimation;
 
   @override
   void initState() {
@@ -22,14 +23,10 @@ class _TripleModifyAnimatedPhotoButtonState extends State<TripleModifyAnimatedPh
       lowerBound: 0.95,
       upperBound: 1.0,
     );
-
-    _scaleAnimation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOut,
-    );
+    _scaleAnimation = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
   }
 
-  void _handleTap() async {
+  Future<void> _handleTap() async {
     await _controller.reverse();
     await _controller.forward();
     widget.onPressed();
@@ -43,26 +40,29 @@ class _TripleModifyAnimatedPhotoButtonState extends State<TripleModifyAnimatedPh
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return ScaleTransition(
       scale: _scaleAnimation,
       child: ElevatedButton(
         onPressed: _handleTap,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.green[50],
-          foregroundColor: Colors.green[800],
+          backgroundColor: cs.primary,
+          foregroundColor: cs.onPrimary,
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16.0),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: Colors.green, width: 1.5),
+            side: BorderSide(color: cs.primary.withOpacity(0.55), width: 1.2),
+          ),
+        ).copyWith(
+          overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                (states) => states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(0.12) : null,
           ),
         ),
         child: const Text(
           '사진 촬영',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
         ),
       ),
     );

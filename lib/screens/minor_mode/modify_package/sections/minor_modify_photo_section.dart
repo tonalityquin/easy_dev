@@ -23,7 +23,6 @@ class MinorModifyPhotoSection extends StatelessWidget {
     return '${utcNow.year.toString().padLeft(4, '0')}-${_twoDigits(utcNow.month)}';
   }
 
-  /// 최근 N개월(UTC) yyyy-MM 리스트 생성 (현재월 포함)
   List<String> _recentUtcYearMonths({int count = 12}) {
     final nowUtc = DateTime.now().toUtc();
     final result = <String>[];
@@ -34,36 +33,58 @@ class MinorModifyPhotoSection extends StatelessWidget {
     return result;
   }
 
+  void _openViewer(BuildContext context, int index) {
+    // ✅ 혼합 리스트를 isUrlList:true로 넘기는 문제 방지
+    if (index < imageUrls.length) {
+      minorModifyShowFullScreenImageViewer(
+        context,
+        imageUrls,
+        index,
+        isUrlList: true,
+      );
+      return;
+    }
+
+    final localIndex = index - imageUrls.length;
+    if (localIndex < 0 || localIndex >= capturedImages.length) return;
+
+    minorModifyShowFullScreenImageViewer(
+      context,
+      capturedImages,
+      localIndex,
+      isUrlList: false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final totalItems = [...imageUrls, ...capturedImages.map((e) => e.path)];
+    final totalCount = imageUrls.length + capturedImages.length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '촬영 사진',
-          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w900,
+          ),
         ),
-        const SizedBox(height: 8.0),
+        const SizedBox(height: 8),
         SizedBox(
           height: 100,
-          child: totalItems.isEmpty
+          child: totalCount == 0
               ? const Center(child: Text('촬영된 사진 없음'))
               : ListView.builder(
             scrollDirection: Axis.horizontal,
-            itemCount: totalItems.length,
+            itemCount: totalCount,
             itemBuilder: (context, index) {
               final isUrl = index < imageUrls.length;
-              final tag = isUrl ? imageUrls[index] : capturedImages[index - imageUrls.length].path;
+              final tag = isUrl
+                  ? imageUrls[index]
+                  : capturedImages[index - imageUrls.length].path;
 
               return GestureDetector(
-                onTap: () => minorModifyShowFullScreenImageViewer(
-                  context,
-                  imageUrls + capturedImages.map((e) => e.path).toList(),
-                  index,
-                  isUrlList: true,
-                ),
+                onTap: () => _openViewer(context, index),
                 child: Padding(
                   padding: const EdgeInsets.all(4.0),
                   child: Hero(
@@ -94,7 +115,6 @@ class MinorModifyPhotoSection extends StatelessWidget {
                             child: Center(child: Icon(Icons.broken_image, color: Colors.red)),
                           );
                         }
-
                         return Image.file(
                           File(capturedImages[index - imageUrls.length].path),
                           key: ValueKey(capturedImages[index - imageUrls.length].path),
@@ -110,7 +130,8 @@ class MinorModifyPhotoSection extends StatelessWidget {
             },
           ),
         ),
-        const SizedBox(height: 12.0),
+        const SizedBox(height: 12),
+
         Center(
           child: SizedBox(
             width: double.infinity,
@@ -120,14 +141,13 @@ class MinorModifyPhotoSection extends StatelessWidget {
                 backgroundColor: Colors.white,
                 side: const BorderSide(color: Colors.black),
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.zero,
-                ),
+                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
               ),
               onPressed: () {
                 showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
+                  useSafeArea: true,
                   backgroundColor: Colors.transparent,
                   builder: (_) {
                     final yearMonths = _recentUtcYearMonths(count: 12);
@@ -137,7 +157,7 @@ class MinorModifyPhotoSection extends StatelessWidget {
                     Future<List<String>> future = MinorModifyPlateService.listPlateImages(
                       context: context,
                       plateNumber: plateNumber,
-                      yearMonth: selectedYearMonth, // ✅ 월 단위 조회 기본 적용
+                      yearMonth: selectedYearMonth,
                     );
 
                     return DraggableScrollableSheet(
@@ -170,7 +190,6 @@ class MinorModifyPhotoSection extends StatelessWidget {
                                       ),
                                       const SizedBox(height: 12),
 
-                                      // ✅ 월 선택(UTC 기준)
                                       Row(
                                         children: [
                                           const Text(
@@ -201,7 +220,6 @@ class MinorModifyPhotoSection extends StatelessWidget {
                                                     if (value == null) return;
                                                     setModalState(() {
                                                       selectedYearMonth = value;
-                                                      // ✅ 월 변경 시 해당 월 prefix로만 다시 조회
                                                       future = MinorModifyPlateService.listPlateImages(
                                                         context: context,
                                                         plateNumber: plateNumber,
@@ -238,8 +256,6 @@ class MinorModifyPhotoSection extends StatelessWidget {
                                               itemCount: urls.length,
                                               itemBuilder: (context, index) {
                                                 final url = urls[index];
-
-                                                // URL 마지막 세그먼트는 파일명(월 폴더 추가되어도 동일)
                                                 final fileName = url.split('/').last;
                                                 final segments = fileName.split('_');
 

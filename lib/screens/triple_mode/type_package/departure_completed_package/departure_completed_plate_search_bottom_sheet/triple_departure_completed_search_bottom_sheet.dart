@@ -9,6 +9,13 @@ import 'widgets/triple_departure_completed_plate_search_results.dart';
 import 'widgets/triple_departure_completed_search_button.dart';
 import '../../../../../../repositories/plate_repo_services/firestore_plate_repository.dart';
 
+class _Brand {
+  static Color border(ColorScheme cs) => cs.outlineVariant.withOpacity(0.85);
+  static Color handle(ColorScheme cs) => cs.outlineVariant.withOpacity(0.85);
+  static Color cardBorder(ColorScheme cs) => cs.outlineVariant.withOpacity(0.7);
+  static Color muted(ColorScheme cs) => cs.onSurfaceVariant;
+}
+
 class TripleDepartureCompletedSearchBottomSheet extends StatefulWidget {
   final void Function(String) onSearch;
   final String area;
@@ -25,10 +32,6 @@ class TripleDepartureCompletedSearchBottomSheet extends StatefulWidget {
 
 class _TripleDepartureCompletedSearchBottomSheetState extends State<TripleDepartureCompletedSearchBottomSheet>
     with SingleTickerProviderStateMixin {
-  // ✅ 요청 팔레트 (BlueGrey)
-  static const Color _base = Color(0xFF546E7A); // BlueGrey 600
-  static const Color _dark = Color(0xFF37474F); // BlueGrey 800
-
   final TextEditingController _controller = TextEditingController();
 
   bool _isLoading = false;
@@ -60,9 +63,7 @@ class _TripleDepartureCompletedSearchBottomSheetState extends State<TripleDepart
     super.dispose();
   }
 
-  bool isValidPlate(String value) {
-    return RegExp(r'^\d{4}$').hasMatch(value);
-  }
+  bool isValidPlate(String value) => RegExp(r'^\d{4}$').hasMatch(value);
 
   Future<void> _refreshSearchResults() async {
     if (!mounted) return;
@@ -72,8 +73,8 @@ class _TripleDepartureCompletedSearchBottomSheetState extends State<TripleDepart
       final repository = FirestorePlateRepository();
 
       final results = await repository.fourDigitDepartureCompletedQuery(
-        plateFourDigit: _controller.text,
-        area: widget.area,
+        plateFourDigit: _controller.text.trim(),
+        area: widget.area.trim(),
       );
 
       if (!mounted) return;
@@ -93,6 +94,7 @@ class _TripleDepartureCompletedSearchBottomSheetState extends State<TripleDepart
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final rootContext = Navigator.of(context, rootNavigator: true).context;
 
     return SafeArea(
@@ -106,9 +108,10 @@ class _TripleDepartureCompletedSearchBottomSheetState extends State<TripleDepart
             maxChildSize: 0.95,
             builder: (context, scrollController) {
               return Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  border: Border.all(color: _Brand.cardBorder(cs)),
                 ),
                 child: ClipRRect(
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
@@ -120,7 +123,7 @@ class _TripleDepartureCompletedSearchBottomSheetState extends State<TripleDepart
                           width: 44,
                           height: 4,
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade300,
+                            color: _Brand.handle(cs),
                             borderRadius: BorderRadius.circular(999),
                           ),
                         ),
@@ -136,7 +139,7 @@ class _TripleDepartureCompletedSearchBottomSheetState extends State<TripleDepart
                             IconButton(
                               tooltip: '닫기',
                               onPressed: () => Navigator.pop(context),
-                              icon: Icon(Icons.close, color: _dark),
+                              icon: Icon(Icons.close, color: cs.onSurface),
                             ),
                           ],
                         ),
@@ -149,25 +152,21 @@ class _TripleDepartureCompletedSearchBottomSheetState extends State<TripleDepart
                           controller: scrollController,
                           padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                           children: [
-                            // 입력 카드
                             _CardSection(
                               title: '번호 4자리 입력',
                               subtitle: '예: 1234',
-                              accent: _base,
                               child: TripleDepartureCompletedPlateNumberDisplay(
                                 controller: _controller,
                                 isValidPlate: isValidPlate,
                               ),
                             ),
-
                             const SizedBox(height: 12),
 
-                            // 결과 영역
                             AnimatedSwitcher(
                               duration: const Duration(milliseconds: 220),
                               switchInCurve: Curves.easeOut,
                               switchOutCurve: Curves.easeIn,
-                              child: _buildResultSection(rootContext, scrollController),
+                              child: _buildResultSection(rootContext),
                             ),
 
                             const SizedBox(height: 12),
@@ -187,9 +186,9 @@ class _TripleDepartureCompletedSearchBottomSheetState extends State<TripleDepart
                               isLoading: _isLoading,
                               onPressed: valid
                                   ? () async {
-                                      await _refreshSearchResults();
-                                      widget.onSearch(value.text);
-                                    }
+                                await _refreshSearchResults();
+                                widget.onSearch(value.text);
+                              }
                                   : null,
                             );
                           },
@@ -203,33 +202,32 @@ class _TripleDepartureCompletedSearchBottomSheetState extends State<TripleDepart
           ),
         ),
 
-        // 키패드(검색 전만 노출) — 기존 로직 유지
+        // 키패드(검색 전만 노출)
         bottomNavigationBar: _hasSearched
             ? const SizedBox.shrink()
             : AnimatedKeypad(
-                slideAnimation: _slideAnimation,
-                fadeAnimation: _fadeAnimation,
-                controller: _controller,
-                maxLength: 4,
-                enableDigitModeSwitch: false,
-                onComplete: () => setState(() {}),
-                onReset: () => setState(() {
-                  _controller.clear();
-                  _hasSearched = false;
-                  _results.clear();
-                }),
-              ),
+          slideAnimation: _slideAnimation,
+          fadeAnimation: _fadeAnimation,
+          controller: _controller,
+          maxLength: 4,
+          enableDigitModeSwitch: false,
+          onComplete: () => setState(() {}),
+          onReset: () => setState(() {
+            _controller.clear();
+            _hasSearched = false;
+            _results.clear();
+            _navigating = false; // ✅ 재진입 안전
+          }),
+        ),
       ),
     );
   }
 
-  Widget _buildResultSection(BuildContext rootContext, ScrollController scrollController) {
+  Widget _buildResultSection(BuildContext rootContext) {
     final text = _controller.text;
     final valid = isValidPlate(text);
 
-    if (!_hasSearched) {
-      return const SizedBox.shrink();
-    }
+    if (!_hasSearched) return const SizedBox.shrink();
 
     if (_isLoading) {
       return const Padding(
@@ -279,26 +277,26 @@ class _CardSection extends StatelessWidget {
   final String title;
   final String subtitle;
   final Widget child;
-  final Color accent;
 
   const _CardSection({
     required this.title,
     required this.subtitle,
     required this.child,
-    required this.accent,
   });
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black12),
+        border: Border.all(color: _Brand.border(cs)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: cs.shadow.withOpacity(0.04),
             blurRadius: 12,
             offset: const Offset(0, 8),
           ),
@@ -312,14 +310,20 @@ class _CardSection extends StatelessWidget {
               Container(
                 width: 8,
                 height: 8,
-                decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+                decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
               ),
               const SizedBox(width: 8),
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+              Text(
+                title,
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: cs.onSurface),
+              ),
             ],
           ),
           const SizedBox(height: 4),
-          Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 12)),
+          Text(
+            subtitle,
+            style: TextStyle(color: _Brand.muted(cs), fontSize: 12, fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 12),
           child,
         ],
@@ -345,15 +349,19 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color fg = (tone == _EmptyTone.danger) ? Colors.redAccent : Colors.black54;
-    final Color bg = (tone == _EmptyTone.danger) ? Colors.red.withOpacity(0.05) : Colors.grey.shade100;
+    final cs = Theme.of(context).colorScheme;
+
+    final Color fg = (tone == _EmptyTone.danger) ? cs.error : cs.onSurfaceVariant;
+    final Color bg = (tone == _EmptyTone.danger)
+        ? cs.errorContainer.withOpacity(0.45)
+        : cs.surfaceContainerLow;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black12),
+        border: Border.all(color: _Brand.border(cs)),
       ),
       child: Row(
         children: [
@@ -367,7 +375,7 @@ class _EmptyState extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   message,
-                  style: TextStyle(color: fg.withOpacity(0.85), fontWeight: FontWeight.w600),
+                  style: TextStyle(color: fg.withOpacity(0.92), fontWeight: FontWeight.w700),
                 ),
               ],
             ),

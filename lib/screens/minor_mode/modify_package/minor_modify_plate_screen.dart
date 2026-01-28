@@ -1,8 +1,9 @@
-import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:flutter/material.dart';
 
-import '../../../models/plate_model.dart';
 import '../../../enums/plate_type.dart';
+import '../../../models/plate_model.dart';
+import '../../../utils/snackbar_helper.dart';
 
 import 'minor_modify_plate_controller.dart';
 import 'sections/minor_modify_location_section.dart';
@@ -17,8 +18,6 @@ import 'utils/buttons/minor_modify_animated_photo_button.dart';
 import 'widgets/minor_modify_bottom_navigation.dart';
 import 'widgets/minor_modify_camera_preview_dialog.dart';
 import 'widgets/minor_modify_location_bottom_sheet.dart';
-import '../../../utils/snackbar_helper.dart';
-import 'utils/minor_modify_camera_helper.dart';
 
 class MinorModifyPlateScreen extends StatefulWidget {
   final PlateModel plate;
@@ -38,18 +37,19 @@ class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
   // ⬇️ 화면 식별 태그(FAQ/에러 리포트 연계용)
   static const String screenTag = 'plate modify';
 
-  late MinorModifyPlateController _controller;
-  late MinorModifyCameraHelper _cameraHelper;
+  late final MinorModifyPlateController _controller;
 
   final TextEditingController controllerFrontdigit = TextEditingController();
   final TextEditingController controllerMidDigit = TextEditingController();
   final TextEditingController controllerBackDigit = TextEditingController();
   final TextEditingController locationController = TextEditingController();
 
-  final List<XFile> _capturedImages = [];
-  final List<String> _existingImageUrls = [];
+  final List<XFile> _capturedImages = <XFile>[];
+  final List<String> _existingImageUrls = <String>[];
 
-  bool isLoading = false;
+  bool _submitting = false;
+  bool _openingCameraDialog = false;
+
   late List<String> selectedStatusNames;
 
   // ───── DraggableScrollableSheet 상태/애니메이션 ─────
@@ -70,15 +70,14 @@ class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
     } catch (_) {
       // attach 전일 수 있으므로 프레임 이후 보정
       WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_sheetController.isAttached) return;
         _sheetController.jumpTo(target);
         if (mounted) setState(() => _sheetOpen = open);
       });
     }
   }
 
-  void _toggleSheet() {
-    _animateSheet(open: !_sheetOpen);
-  }
+  void _toggleSheet() => _animateSheet(open: !_sheetOpen);
 
   @override
   void initState() {
@@ -96,19 +95,12 @@ class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
       existingImageUrls: _existingImageUrls,
     );
 
-    _cameraHelper = MinorModifyCameraHelper();
-
-    // ✅ mounted 체크 보강
-    _cameraHelper.initializeInputCamera().then((_) {
-      if (mounted) setState(() {});
-    });
-
     _controller.initializePlate();
     _controller.initializeFieldValues();
 
     selectedStatusNames = List<String>.from(widget.plate.statusList);
 
-    // ✅ 드래그로 열고/닫을 때도 _sheetOpen 동기화(원본 Modify와 동일하게 보강)
+    // ✅ 드래그로 열고/닫을 때도 _sheetOpen 동기화
     _sheetController.addListener(() {
       try {
         final s = _sheetController.size;
@@ -122,24 +114,31 @@ class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
     });
   }
 
-  void _showCameraPreviewDialog() async {
-    await _cameraHelper.initializeInputCamera();
-    if (!mounted) return;
+  Future<void> _showCameraPreviewDialog() async {
+    if (_openingCameraDialog) return;
+    _openingCameraDialog = true;
 
-    await showDialog(
-      context: context,
-      builder: (context) => MinorModifyCameraPreviewDialog(
-        onImageCaptured: (image) {
-          setState(() {
-            _controller.capturedImages.add(image);
-          });
-        },
-      ),
-    );
+    try {
+      if (!mounted) return;
 
-    await _cameraHelper.dispose();
-    await Future.delayed(const Duration(milliseconds: 200));
-    if (mounted) setState(() {});
+      // ✅ 카메라 초기화/해제는 MinorModifyCameraPreviewDialog 내부에서 책임지도록 통일
+      await showDialog<void>(
+        context: context,
+        builder: (context) => MinorModifyCameraPreviewDialog(
+          onImageCaptured: (image) {
+            if (!mounted) return;
+            setState(() {
+              _controller.capturedImages.add(image);
+            });
+          },
+        ),
+      );
+
+      if (!mounted) return;
+      setState(() {});
+    } finally {
+      _openingCameraDialog = false;
+    }
   }
 
   void _selectParkingLocation() {
@@ -148,24 +147,27 @@ class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
       builder: (_) => MinorModifyLocationBottomSheet(
         locationController: _controller.locationController,
         onLocationSelected: (location) {
+          final trimmed = location.trim();
+          if (!mounted) return;
           setState(() {
-            _controller.locationController.text = location;
-            _controller.isLocationSelected = true;
+            _controller.locationController.text = trimmed;
+            _controller.isLocationSelected = trimmed.isNotEmpty;
           });
         },
       ),
     );
   }
 
-  VoidCallback _buildLocationAction() {
-    return _selectParkingLocation;
-  }
+  VoidCallback _buildLocationAction() => _selectParkingLocation;
 
   @override
   void dispose() {
     _sheetController.dispose();
     _controller.dispose();
-    _cameraHelper.dispose();
+    controllerFrontdigit.dispose();
+    controllerMidDigit.dispose();
+    controllerBackDigit.dispose();
+    locationController.dispose();
     super.dispose();
   }
 
@@ -186,7 +188,6 @@ class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
 
     return SafeArea(
       child: IgnorePointer(
-        // 제스처 간섭 방지
         child: Align(
           alignment: Alignment.topLeft,
           child: Padding(
@@ -203,9 +204,12 @@ class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final viewInset = MediaQuery.of(context).viewInsets.bottom;
+    final sysBottom = MediaQuery.of(context).padding.bottom;
+
     // 본문이 하단 내비/시트와 겹치지 않도록 여유 패딩
-    final bottomSafePadding = 140.0 + viewInset;
+    final bottomSafePadding = 140.0 + viewInset + sysBottom;
 
     final readOnlyCountType = _controller.selectedBillCountType ??
         _controller.selectedBill ??
@@ -214,23 +218,26 @@ class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: false, // ⬅️ 뒤로가기 화살표 제거
+        automaticallyImplyLeading: false,
         centerTitle: true,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
         elevation: 1,
-        // ⬇️ 좌측 상단(11시)에 'plate modify' 텍스트 고정
+        surfaceTintColor: Colors.transparent,
         flexibleSpace: _buildScreenTag(context),
-        title: const Text(
-          "번호판 수정",
-          style: TextStyle(color: Colors.grey, fontSize: 16),
+        title: Text(
+          '번호판 수정',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            color: cs.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+          ),
         ),
       ),
       body: LayoutBuilder(
         builder: (context, constraints) {
           return Stack(
             children: [
-              // ─── 상단 본문: 번호판 / 위치 / 사진 (작은 폰 보완: 스크롤 허용) ───
+              // ─── 상단 본문: 번호판 / 위치 / 사진 ───
               Positioned.fill(
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -251,11 +258,13 @@ class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
                         },
                       ),
                       const SizedBox(height: 32.0),
-                      MinorModifyLocationSection(locationController: _controller.locationController),
+                      MinorModifyLocationSection(
+                        locationController: _controller.locationController,
+                      ),
                       const SizedBox(height: 32.0),
                       MinorModifyPhotoSection(
                         capturedImages: _controller.capturedImages,
-                        imageUrls: widget.plate.imageUrls ?? [],
+                        imageUrls: widget.plate.imageUrls ?? const <String>[],
                         plateNumber: widget.plate.plateNumber,
                       ),
                     ],
@@ -268,18 +277,22 @@ class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
                 controller: _sheetController,
                 initialChildSize: _sheetClosed,
                 minChildSize: _sheetClosed,
-                maxChildSize: _sheetOpened, // 최상단까지
+                maxChildSize: _sheetOpened,
                 snap: true,
                 snapSizes: const [_sheetClosed, _sheetOpened],
                 builder: (context, scrollController) {
-                  const sheetBg = Color(0xFFF6F8FF);
+                  final sheetBg = cs.surfaceContainerLow;
 
                   return Container(
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: sheetBg,
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                       boxShadow: [
-                        BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, -4)),
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.18),
+                          blurRadius: 10,
+                          offset: const Offset(0, -4),
+                        ),
                       ],
                     ),
                     child: SafeArea(
@@ -287,15 +300,15 @@ class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
                       bottom: false,
                       child: ListView(
                         controller: scrollController,
-                        physics: const NeverScrollableScrollPhysics(), // 내부 스크롤 금지(요청 유지)
+                        physics: const NeverScrollableScrollPhysics(), // 요청 유지
                         padding: EdgeInsets.fromLTRB(
                           16,
                           8,
                           16,
-                          16 + 100 + viewInset, // 하단 내비와 겹치지 않도록 여유
+                          16 + 100 + viewInset + sysBottom,
                         ),
                         children: [
-                          // 헤더(탭으로 열고/닫기 + 애니메이션)
+                          // 헤더(탭으로 열고/닫기)
                           GestureDetector(
                             behavior: HitTestBehavior.opaque,
                             onTap: _toggleSheet,
@@ -307,7 +320,7 @@ class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
                                     width: 40,
                                     height: 4,
                                     decoration: BoxDecoration(
-                                      color: Colors.black38,
+                                      color: cs.onSurface.withOpacity(0.25),
                                       borderRadius: BorderRadius.circular(2),
                                     ),
                                   ),
@@ -317,14 +330,17 @@ class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
                                     children: [
                                       Text(
                                         _sheetOpen ? '정산 / 상태 (탭하여 닫기)' : '정산 / 상태 (탭하여 열기)',
-                                        style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w700,
+                                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                                          fontWeight: FontWeight.w800,
+                                          color: cs.onSurface,
                                         ),
                                       ),
                                       Text(
                                         widget.plate.plateNumber,
-                                        style: const TextStyle(color: Colors.black54),
+                                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                          color: cs.onSurfaceVariant,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -343,9 +359,12 @@ class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
                           const SizedBox(height: 24),
 
                           // 추가 상태 메모
-                          const Text(
+                          Text(
                             '추가 상태 메모 (최대 20자)',
-                            style: TextStyle(fontWeight: FontWeight.bold),
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: cs.onSurface,
+                            ),
                           ),
                           const SizedBox(height: 8),
                           TextField(
@@ -354,8 +373,7 @@ class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
                             decoration: InputDecoration(
                               hintText: '예: 뒷범퍼 손상',
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                              contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                             ),
                           ),
 
@@ -370,7 +388,7 @@ class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
                                   setState(() {
                                     _controller.fetchedCustomStatus = null;
                                     _controller.customStatusController.clear();
-                                    selectedStatusNames = [];
+                                    selectedStatusNames = <String>[];
                                   });
                                   showSuccessSnackbar(context, '자동 메모가 삭제되었습니다');
                                 } catch (_) {
@@ -401,33 +419,37 @@ class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: MinorModifyAnimatedPhotoButton(onPressed: _showCameraPreviewDialog),
+                      child: MinorModifyAnimatedPhotoButton(
+                        onPressed: _submitting ? () {} : _showCameraPreviewDialog,
+                      ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: MinorModifyAnimatedParkingButton(
                         isLocationSelected: _controller.isLocationSelected,
-                        onPressed: _buildLocationAction(),
+                        onPressed: _submitting ? () {} : _buildLocationAction(),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 15),
                 MinorModifyAnimatedActionButton(
-                  isLoading: isLoading,
+                  isLoading: _submitting,
                   isLocationSelected: _controller.isLocationSelected,
                   buttonLabel: '수정 완료',
                   onPressed: () async {
-                    setState(() => isLoading = true);
+                    if (_submitting) return;
+                    setState(() => _submitting = true);
 
-                    await _controller.handleAction(() {
-                      if (mounted) {
+                    try {
+                      await _controller.handleAction(() {
+                        if (!mounted) return;
                         Navigator.pop(context);
-                        showSuccessSnackbar(context, "수정이 완료되었습니다!");
-                      }
-                    }, selectedStatusNames);
-
-                    if (mounted) setState(() => isLoading = false);
+                        showSuccessSnackbar(context, '수정이 완료되었습니다!');
+                      }, selectedStatusNames);
+                    } finally {
+                      if (mounted) setState(() => _submitting = false);
+                    }
                   },
                 ),
               ],
@@ -460,46 +482,59 @@ class _ReadOnlyBillSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '정산 유형',
-          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+          style: text.titleMedium?.copyWith(
+            fontWeight: FontWeight.w900,
+            color: cs.onSurface,
+          ),
         ),
         const SizedBox(height: 12.0),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
           decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: Colors.black26),
-            borderRadius: BorderRadius.circular(8),
+            color: cs.surface,
+            border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+            borderRadius: BorderRadius.circular(10),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Flexible(
                 child: Text(
-                  countTypeLabel.isEmpty ? '-' : countTypeLabel,
+                  countTypeLabel.trim().isEmpty ? '-' : countTypeLabel.trim(),
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Colors.black87),
+                  style: text.bodyMedium?.copyWith(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
+              const SizedBox(width: 12),
               Text(
-                billTypeLabel,
-                style: const TextStyle(
-                  color: Colors.black54,
-                  fontWeight: FontWeight.w600,
+                billTypeLabel.trim().isEmpty ? '-' : billTypeLabel.trim(),
+                style: text.bodySmall?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ],
           ),
         ),
         const SizedBox(height: 8),
-        const Text(
+        Text(
           '정산 유형은 이 화면에서 변경할 수 없습니다.',
-          style: TextStyle(fontSize: 12, color: Colors.black54),
+          style: text.bodySmall?.copyWith(
+            color: cs.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ],
     );

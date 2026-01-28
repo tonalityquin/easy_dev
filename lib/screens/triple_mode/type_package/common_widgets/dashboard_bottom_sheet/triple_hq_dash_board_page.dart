@@ -29,7 +29,8 @@ class TripleHqDashBoardPage extends StatefulWidget {
 class _TripleHqDashBoardPageState extends State<TripleHqDashBoardPage> {
   bool _layerHidden = true;
 
-  late final TripleHomeDashBoardController _controller = TripleHomeDashBoardController();
+  late final TripleHomeDashBoardController _controller =
+  TripleHomeDashBoardController();
 
   void _trace(String name, {Map<String, dynamic>? meta}) {
     DebugActionRecorder.instance.recordAction(
@@ -244,7 +245,9 @@ class _TripleHqDashBoardPageState extends State<TripleHqDashBoardPage> {
                 const SizedBox(height: 16),
                 AnimatedCrossFade(
                   duration: const Duration(milliseconds: 200),
-                  crossFadeState: _layerHidden ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+                  crossFadeState: _layerHidden
+                      ? CrossFadeState.showFirst
+                      : CrossFadeState.showSecond,
                   firstChild: const SizedBox.shrink(),
                   secondChild: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -307,7 +310,9 @@ ButtonStyle _outlinedSurfaceBtnStyle(BuildContext context, {double minHeight = 5
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
   ).copyWith(
     overlayColor: MaterialStateProperty.resolveWith<Color?>(
-          (states) => states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(0.12) : null,
+          (states) => states.contains(MaterialState.pressed)
+          ? cs.outlineVariant.withOpacity(0.12)
+          : null,
     ),
   );
 }
@@ -325,7 +330,9 @@ ButtonStyle _dangerOutlinedBtnStyle(BuildContext context) {
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
   ).copyWith(
     overlayColor: MaterialStateProperty.resolveWith<Color?>(
-          (states) => states.contains(MaterialState.pressed) ? cs.error.withOpacity(0.10) : null,
+          (states) => states.contains(MaterialState.pressed)
+          ? cs.error.withOpacity(0.10)
+          : null,
     ),
   );
 }

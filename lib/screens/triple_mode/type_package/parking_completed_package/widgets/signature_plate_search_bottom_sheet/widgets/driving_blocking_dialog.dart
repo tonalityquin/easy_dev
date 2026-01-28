@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 /// - PopScope(canPop: false) -> 시스템 뒤로가기/제스처로 닫히지 않음
 /// - 모달 barrier가 아래 UI 터치를 모두 차단함(다른 곳 눌러도 아무 동작 없음)
 ///
-/// ✅ 추가 요구사항 반영
+/// ✅ 요구사항 반영
 /// 1) "주행 취소" 버튼 추가
 /// 2) canCancel=false이면 "주행 취소" 비활성화(선점자만 취소 가능)
 Future<void> showDrivingBlockingDialog({
@@ -14,14 +14,16 @@ Future<void> showDrivingBlockingDialog({
   required Future<void> Function() onComplete,
   required Future<void> Function() onCancel,
   required bool canCancel, // ✅ 선점자만 취소 가능
-  String? cancelDisabledHint, // ✅ 취소 불가 시 안내문구(옵션)
+  String? cancelDisabledHint,
   Future<void> Function(Object err, StackTrace st)? onError,
 }) async {
+  final cs = Theme.of(context).colorScheme;
+
   await showDialog<void>(
     context: context,
     useRootNavigator: true,
     barrierDismissible: false,
-    barrierColor: Colors.black.withOpacity(0.55),
+    barrierColor: cs.scrim.withOpacity(0.55),
     builder: (_) => PopScope(
       canPop: false,
       child: _DrivingBlockingDialog(
@@ -50,10 +52,7 @@ class _DrivingBlockingDialog extends StatefulWidget {
   final Future<void> Function() onComplete;
   final Future<void> Function() onCancel;
 
-  /// ✅ selectedBy == me 일 때만 true
   final bool canCancel;
-
-  /// ✅ 취소 버튼 비활성화 사유 표시(옵션)
   final String? cancelDisabledHint;
 
   final Future<void> Function(Object err, StackTrace st)? onError;
@@ -75,8 +74,6 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
       if (!mounted) return;
       Navigator.of(context, rootNavigator: true).pop();
     } catch (e, st) {
-      // ✅ 에러 시에도 '주행 중' 동안 하위 UI 조작은 불가(모달 barrier)
-      //    무한 블로킹 방지를 위해 다이얼로그는 닫고 onError로 위임
       if (mounted) {
         Navigator.of(context, rootNavigator: true).pop();
       }
@@ -86,25 +83,29 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
     }
   }
 
-  Future<void> _handleComplete() async {
-    await _run(widget.onComplete);
-  }
+  Future<void> _handleComplete() async => _run(widget.onComplete);
 
   Future<void> _handleCancel() async {
-    // ✅ UI에서 비활성화하더라도, 로직 레벨에서도 한번 더 방어
     if (!widget.canCancel) return;
     await _run(widget.onCancel);
   }
 
   @override
   Widget build(BuildContext context) {
-    final hint = (widget.canCancel)
+    final cs = Theme.of(context).colorScheme;
+
+    final hint = widget.canCancel
         ? null
         : (widget.cancelDisabledHint ?? '선점자만 주행 취소가 가능합니다.');
 
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      backgroundColor: cs.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
         child: Column(
@@ -116,7 +117,7 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
               child: CircularProgressIndicator(
                 strokeWidth: 3,
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  _busy ? Colors.grey : Colors.blueAccent,
+                  _busy ? cs.onSurfaceVariant : cs.primary,
                 ),
               ),
             ),
@@ -124,7 +125,11 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
             Text(
               widget.message,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: cs.onSurface,
+              ),
             ),
             if (hint != null) ...[
               const SizedBox(height: 10),
@@ -132,15 +137,14 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
                 hint,
                 textAlign: TextAlign.center,
                 style: TextStyle(
+                  color: cs.error,
                   fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.red.shade700,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ],
             const SizedBox(height: 14),
 
-            // ✅ 2개 버튼: 주행 취소 / 주행 완료
             Row(
               children: [
                 Expanded(
@@ -149,9 +153,15 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      side: const BorderSide(color: Colors.black12),
+                      side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
                       textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-                      foregroundColor: Colors.black87,
+                      foregroundColor: cs.onSurface,
+                    ).copyWith(
+                      overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                            (states) => states.contains(MaterialState.pressed)
+                            ? cs.outlineVariant.withOpacity(0.12)
+                            : null,
+                      ),
                     ),
                     child: Text(_busy ? '처리 중...' : '주행 취소'),
                   ),
@@ -161,6 +171,8 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
                   child: FilledButton(
                     onPressed: _busy ? null : _handleComplete,
                     style: FilledButton.styleFrom(
+                      backgroundColor: cs.primary,
+                      foregroundColor: cs.onPrimary,
                       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),

@@ -12,35 +12,49 @@ class MinorModifyStatusCustomSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = customStatus.trim();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 24),
-        const Text('자동 불러온 상태 메모', style: TextStyle(fontWeight: FontWeight.bold)),
+        Text(
+          '자동 불러온 상태 메모',
+          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w900,
+          ),
+        ),
         const SizedBox(height: 8),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: TextField(
-                controller: TextEditingController(text: customStatus),
-                readOnly: true,
-                maxLines: null,
-                style: const TextStyle(color: Colors.grey),
-                decoration: InputDecoration(
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  filled: true,
-                  fillColor: Colors.grey.shade100,
+        Container(
+          decoration: BoxDecoration(
+            color: cs.surfaceVariant.withOpacity(0.35),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+          ),
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: SelectableText(
+                  text.isEmpty ? '-' : text,
+                  style: TextStyle(
+                    color: cs.onSurface.withOpacity(0.70),
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              onPressed: onDelete,
-              icon: const Icon(Icons.clear, color: Colors.red),
-              tooltip: '자동 메모 지우기',
-            ),
-          ],
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: onDelete,
+                icon: const Icon(Icons.clear),
+                color: Colors.redAccent,
+                tooltip: '자동 메모 지우기',
+              ),
+            ],
+          ),
         ),
       ],
     );

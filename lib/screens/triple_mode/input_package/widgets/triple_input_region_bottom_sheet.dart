@@ -12,17 +12,21 @@ Future<void> tripleInputRegionPickerBottomSheet({
   await showModalBottomSheet(
     context: context,
     isScrollControlled: true,
+    useSafeArea: true,
     backgroundColor: Colors.transparent,
     builder: (context) {
+      final cs = Theme.of(context).colorScheme;
+
       return DraggableScrollableSheet(
         initialChildSize: 0.5,
         minChildSize: 0.4,
         maxChildSize: 0.9,
         builder: (_, scrollController) {
           return Container(
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              border: Border.all(color: cs.outlineVariant.withOpacity(0.70)),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
             child: Column(
@@ -32,23 +36,23 @@ Future<void> tripleInputRegionPickerBottomSheet({
                   height: 4,
                   margin: const EdgeInsets.only(bottom: 16),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: cs.outlineVariant.withOpacity(0.85),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                const Text(
+                Text(
                   '지역 선택',
                   style: TextStyle(
                     fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
+                    fontWeight: FontWeight.w900,
+                    color: cs.onSurface,
                   ),
                 ),
                 const SizedBox(height: 16),
                 Expanded(
                   child: CupertinoPicker(
                     scrollController: FixedExtentScrollController(
-                      initialItem: regions.indexOf(selectedRegion),
+                      initialItem: regions.indexOf(selectedRegion).clamp(0, regions.length - 1),
                     ),
                     itemExtent: 48,
                     onSelectedItemChanged: (index) {
@@ -58,17 +62,20 @@ Future<void> tripleInputRegionPickerBottomSheet({
                       return Center(
                         child: Text(
                           region,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w800,
+                            color: cs.onSurface,
                           ),
                         ),
                       );
                     }).toList(),
                   ),
                 ),
-                const Divider(height: 1),
+                Divider(height: 1, color: cs.outlineVariant.withOpacity(0.70)),
                 const SizedBox(height: 12),
+
+                // ✅ iOS 버튼 유지하되, 색은 브랜드(primary) 느낌으로 맞춤
                 CupertinoButton.filled(
                   padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 14),
                   onPressed: () {

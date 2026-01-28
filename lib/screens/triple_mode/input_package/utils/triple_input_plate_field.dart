@@ -25,82 +25,111 @@ class TripleInputPlateField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // hasMiddleChar=true인데 middleController가 null이면 런타임 에러가 나므로 방어
+    assert(!hasMiddleChar || middleController != null);
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Expanded(
           flex: frontDigitCount,
-          child: _buildDigitInput(frontController),
+          child: _DigitBox(
+            controller: frontController,
+            isActive: frontController == activeController,
+            maxLength: 4,
+            inputFormatters: _DigitBox.formatDigitsOnly,
+            onTap: () => onKeypadStateChanged(frontController),
+          ),
         ),
         if (hasMiddleChar)
           Expanded(
             flex: 1,
-            child: _buildMiddleInput(middleController!),
+            child: _DigitBox(
+              controller: middleController!,
+              isActive: middleController == activeController,
+              maxLength: 1,
+              inputFormatters: _DigitBox.formatKoreanOnly,
+              onTap: () => onKeypadStateChanged(middleController!),
+            ),
           ),
         Expanded(
           flex: backDigitCount,
-          child: _buildDigitInput(backController),
+          child: _DigitBox(
+            controller: backController,
+            isActive: backController == activeController,
+            maxLength: 4,
+            inputFormatters: _DigitBox.formatDigitsOnly,
+            onTap: () => onKeypadStateChanged(backController),
+          ),
         ),
       ],
     );
   }
+}
 
-  Widget _buildDigitInput(TextEditingController controller) {
-    final isActive = controller == activeController;
+/// ✅ 공통 입력 박스(앞/한글/뒤 동일 스타일)
+/// - const list 에러를 피하기 위해 inputFormatters는 static final로 캐싱
+class _DigitBox extends StatelessWidget {
+  // ✅ const list 에러 해결: digitsOnly / allow(...)는 const가 아니므로 static final로 보관
+  static final List<TextInputFormatter> formatDigitsOnly = <TextInputFormatter>[
+    FilteringTextInputFormatter.digitsOnly,
+  ];
+
+  static final List<TextInputFormatter> formatKoreanOnly = <TextInputFormatter>[
+    FilteringTextInputFormatter.allow(RegExp(r'^[ㄱ-ㅎㅏ-ㅣ가-힣]$')),
+  ];
+
+  final TextEditingController controller;
+  final bool isActive;
+  final int maxLength;
+  final List<TextInputFormatter> inputFormatters;
+  final VoidCallback onTap;
+
+  const _DigitBox({
+    required this.controller,
+    required this.isActive,
+    required this.maxLength,
+    required this.inputFormatters,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    final Color bg = isActive ? cs.primaryContainer.withOpacity(0.55) : cs.surface;
+    final Color border =
+    isActive ? cs.primary.withOpacity(0.75) : cs.outlineVariant.withOpacity(0.85);
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
       margin: const EdgeInsets.symmetric(horizontal: 4.0),
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: isActive ? Colors.red.shade50 : Colors.white,
-        borderRadius: BorderRadius.circular(6),
+        color: bg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: border, width: isActive ? 1.4 : 1.0),
       ),
       child: TextField(
         controller: controller,
         keyboardType: TextInputType.none,
-        maxLength: 4,
+        maxLength: maxLength,
         textAlign: TextAlign.center,
         readOnly: true,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        decoration: const InputDecoration(
-          counterText: "",
-          border: UnderlineInputBorder(
-            borderSide: BorderSide(width: 2.0, color: Colors.black),
-          ),
+        inputFormatters: inputFormatters,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w900,
+          color: cs.onSurface,
         ),
-        onTap: () => onKeypadStateChanged(controller),
-      ),
-    );
-  }
-
-  Widget _buildMiddleInput(TextEditingController controller) {
-    final isActive = controller == activeController;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      margin: const EdgeInsets.symmetric(horizontal: 4.0),
-      padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: isActive ? Colors.red.shade50 : Colors.white,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: TextField(
-        controller: controller,
-        keyboardType: TextInputType.none,
-        maxLength: 1,
-        textAlign: TextAlign.center,
-        readOnly: true,
-        inputFormatters: [
-          FilteringTextInputFormatter.allow(RegExp(r'^[ㄱ-ㅎㅏ-ㅣ가-힣]$')),
-        ],
         decoration: const InputDecoration(
-          counterText: "",
-          border: UnderlineInputBorder(
-            borderSide: BorderSide(width: 2.0, color: Colors.black),
-          ),
+          counterText: '',
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(vertical: 10),
+          // underline 제거: 외곽선은 컨테이너에서 처리
+          border: InputBorder.none,
         ),
-        onTap: () => onKeypadStateChanged(controller),
+        onTap: onTap,
       ),
     );
   }

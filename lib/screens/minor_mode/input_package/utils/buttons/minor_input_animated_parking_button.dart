@@ -37,7 +37,7 @@ class _MinorInputAnimatedParkingButtonState extends State<MinorInputAnimatedPark
     );
   }
 
-  void _handleTap() async {
+  Future<void> _handleTap() async {
     await _controller.reverse();
     await _controller.forward();
     widget.onPressed();
@@ -51,26 +51,27 @@ class _MinorInputAnimatedParkingButtonState extends State<MinorInputAnimatedPark
 
   @override
   Widget build(BuildContext context) {
-    final isSelected = widget.isLocationSelected;
+    final cs = Theme.of(context).colorScheme;
 
-    final label = widget.buttonLabel ??
-        (isSelected ? '구역 초기화' : '주차 구역 선택');
+    final isSelected = widget.isLocationSelected;
+    final label = widget.buttonLabel ?? (isSelected ? '구역 초기화' : '주차 구역 선택');
+
+    final Color bg = isSelected ? cs.primaryContainer : cs.surface;
+    final Color fg = isSelected ? cs.onPrimaryContainer : cs.onSurface;
+    final Color border = isSelected ? cs.primary : cs.outlineVariant;
 
     return ScaleTransition(
       scale: _scaleAnimation,
       child: ElevatedButton(
         onPressed: _handleTap,
         style: ElevatedButton.styleFrom(
-          backgroundColor: isSelected ? Colors.indigo[50] : Colors.blueGrey[50],
-          foregroundColor: isSelected ? Colors.indigo[800] : Colors.blueGrey[800],
+          backgroundColor: bg,
+          foregroundColor: fg,
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16.0),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(
-              color: isSelected ? Colors.indigo : Colors.blueGrey,
-              width: 1.5,
-            ),
+            side: BorderSide(color: border, width: 1.5),
           ),
         ),
         child: Text(

@@ -7,7 +7,7 @@ import '../../../../repositories/plate_repo_services/firestore_plate_repository.
 // ⛔️ GCS 직접 로드는 MergedLogSection 내부에서 처리
 import '../departure_completed_package/widgets/minor_departure_completed_page_merge_log.dart';
 import '../departure_completed_package/widgets/minor_departure_completed_page_today_log.dart';
-import '../../../../utils/snackbar_helper.dart'; // ✅ 커스텀 스낵바 헬퍼 추가
+import '../../../../utils/snackbar_helper.dart';
 
 class MinorDepartureCompletedSettledTab extends StatefulWidget {
   const MinorDepartureCompletedSettledTab({
@@ -24,10 +24,12 @@ class MinorDepartureCompletedSettledTab extends StatefulWidget {
   final String plateNumber;
 
   @override
-  State<MinorDepartureCompletedSettledTab> createState() => _MinorDepartureCompletedSettledTabbState();
+  State<MinorDepartureCompletedSettledTab> createState() =>
+      _MinorDepartureCompletedSettledTabState();
 }
 
-class _MinorDepartureCompletedSettledTabbState extends State<MinorDepartureCompletedSettledTab> {
+class _MinorDepartureCompletedSettledTabState
+    extends State<MinorDepartureCompletedSettledTab> {
   // ===== 아코디언 상태: 최대 1개만 열림 =====
   bool _openToday = true;
   bool _openMerged = false;
@@ -35,11 +37,9 @@ class _MinorDepartureCompletedSettledTabbState extends State<MinorDepartureCompl
   void _toggleToday() {
     setState(() {
       if (_openToday) {
-        // 이미 열려 있으면 두 섹션 모두 닫기
         _openToday = false;
         _openMerged = false;
       } else {
-        // 오늘만 열고 과거는 닫기
         _openToday = true;
         _openMerged = false;
       }
@@ -49,11 +49,9 @@ class _MinorDepartureCompletedSettledTabbState extends State<MinorDepartureCompl
   void _toggleMerged() {
     setState(() {
       if (_openMerged) {
-        // 이미 열려 있으면 두 섹션 모두 닫기
         _openMerged = false;
         _openToday = false;
       } else {
-        // 과거만 열고 오늘은 닫기
         _openMerged = true;
         _openToday = false;
       }
@@ -131,14 +129,12 @@ class _MinorDepartureCompletedSettledTabbState extends State<MinorDepartureCompl
         _hasSearched = true;
         _isLoading = false;
         _selectedResultIndex = initialIndex;
-        // 검색하면 자연스럽게 '오늘' 섹션이 열리도록 유도
         _openToday = true;
         _openMerged = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      // ✅ 기본 SnackBar → 커스텀 스낵바
       showFailedSnackbar(context, '검색 중 오류가 발생했습니다: $e');
     }
   }
@@ -165,7 +161,10 @@ class _MinorDepartureCompletedSettledTabbState extends State<MinorDepartureCompl
   Widget _buildTodaySectionBody() {
     if (!_hasSearched) {
       return Center(
-        child: Text('번호판 4자리를 입력 후 검색하세요.', style: TextStyle(color: Colors.grey[600])),
+        child: Text(
+          '번호판 4자리를 입력 후 검색하세요.',
+          style: TextStyle(color: Colors.grey[600]),
+        ),
       );
     }
     if (_isLoading) {
@@ -177,7 +176,6 @@ class _MinorDepartureCompletedSettledTabbState extends State<MinorDepartureCompl
       );
     }
 
-    // 다건 결과 칩
     final chips = _results.asMap().entries.map((entry) {
       final i = entry.key;
       final p = entry.value;
@@ -198,7 +196,8 @@ class _MinorDepartureCompletedSettledTabbState extends State<MinorDepartureCompl
     final target = _results[safeIndex];
 
     final String plate = target.plateNumber;
-    final List<dynamic> logsRaw = (target.logs?.map((e) => e.toMap()).toList()) ?? const <dynamic>[];
+    final List<dynamic> logsRaw =
+        (target.logs?.map((e) => e.toMap()).toList()) ?? const <dynamic>[];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -211,7 +210,6 @@ class _MinorDepartureCompletedSettledTabbState extends State<MinorDepartureCompl
               child: Row(children: chips),
             ),
           ),
-        // TodayLogSection 내부에 Expanded가 있으므로, 여기서는 Expanded로 감싸서 공간 할당
         Expanded(
           child: MinorTodayLogSection(
             plateNumber: plate,
@@ -223,7 +221,6 @@ class _MinorDepartureCompletedSettledTabbState extends State<MinorDepartureCompl
   }
 
   Widget _buildMergedSectionBody() {
-    // 리팩토링된 MergedLogSection은 내부에서 날짜 선택/불러오기/검색을 모두 처리
     return MinorMergedLogSection(
       mergedLogs: const <Map<String, dynamic>>[], // 시그니처 호환용, 내부 미사용
       division: widget.division,
@@ -233,7 +230,8 @@ class _MinorDepartureCompletedSettledTabbState extends State<MinorDepartureCompl
 
   @override
   Widget build(BuildContext context) {
-    // 오늘 검색바 (오늘 섹션과 연동)
+    final cs = Theme.of(context).colorScheme;
+
     final searchBar = SafeArea(
       top: false,
       child: Row(
@@ -243,20 +241,30 @@ class _MinorDepartureCompletedSettledTabbState extends State<MinorDepartureCompl
               controller: _fourDigitCtrl,
               maxLength: 4,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 counterText: '',
                 labelText: '번호판 4자리',
                 hintText: '예) 1234',
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
+                labelStyle: TextStyle(color: cs.onSurfaceVariant),
+                hintStyle: TextStyle(color: cs.onSurfaceVariant),
               ),
               onSubmitted: (_) => _runSearch(),
             ),
           ),
           const SizedBox(width: 8),
           ElevatedButton.icon(
-            onPressed: _isLoading || !_isValidFourDigit(_fourDigitCtrl.text) ? null : _runSearch,
+            onPressed:
+            _isLoading || !_isValidFourDigit(_fourDigitCtrl.text) ? null : _runSearch,
             icon: _isLoading
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                ? SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                valueColor: AlwaysStoppedAnimation<Color>(cs.onPrimary),
+              ),
+            )
                 : const Icon(Icons.search),
             label: const Text('검색'),
           ),
@@ -268,7 +276,6 @@ class _MinorDepartureCompletedSettledTabbState extends State<MinorDepartureCompl
       padding: const EdgeInsets.all(8.0),
       child: Column(
         children: [
-          // === (1) 오늘 헤더 — 항상 보임 ===
           _SectionHeader(
             key: const ValueKey('today-header'),
             icon: Icons.receipt_long,
@@ -278,16 +285,10 @@ class _MinorDepartureCompletedSettledTabbState extends State<MinorDepartureCompl
           ),
           const SizedBox(height: 6),
 
-          // === (2) 오늘 본문 — 열렸을 때만 Expanded 로 표시 ===
-          if (_openToday)
-            Expanded(
-              child: _buildTodaySectionBody(),
-            ),
+          if (_openToday) Expanded(child: _buildTodaySectionBody()),
 
-          // 오늘 본문이 차지하는 공간 아래로 과거 탭이 “내려오도록” 배치
           const SizedBox(height: 6),
 
-          // === (3) 과거 헤더 — 항상 보임(데이터 없어도 보임) ===
           _SectionHeader(
             key: const ValueKey('merged-header'),
             icon: Icons.merge_type,
@@ -297,15 +298,10 @@ class _MinorDepartureCompletedSettledTabbState extends State<MinorDepartureCompl
           ),
           const SizedBox(height: 6),
 
-          // === (4) 과거 본문 — 열렸을 때만 Expanded 로 표시 ===
-          if (_openMerged)
-            Expanded(
-              child: _buildMergedSectionBody(),
-            ),
+          if (_openMerged) Expanded(child: _buildMergedSectionBody()),
 
           const SizedBox(height: 8),
 
-          // === (5) 오늘 검색 입력 — 하단 고정 ===
           searchBar,
         ],
       ),
@@ -317,7 +313,6 @@ class _SectionHeader extends StatelessWidget {
   final IconData icon;
   final String title;
 
-  // 아코디언 제어용
   final bool? isOpen;
   final VoidCallback? onTap;
 
@@ -331,28 +326,34 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
-    final chevron = (onTap != null) ? (isOpen == true ? Icons.expand_less : Icons.expand_more) : null;
+
+    final chevron =
+    (onTap != null) ? (isOpen == true ? Icons.expand_less : Icons.expand_more) : null;
 
     final content = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
+        color: cs.surfaceContainerLow,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
       ),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: Colors.grey[700]),
+          Icon(icon, size: 18, color: cs.onSurfaceVariant),
           const SizedBox(width: 8),
           Text(
             title,
-            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: cs.onSurface,
+            ),
           ),
           const Spacer(),
           if (chevron != null) ...[
             const SizedBox(width: 8),
-            Icon(chevron, size: 20, color: Colors.grey[700]),
+            Icon(chevron, size: 20, color: cs.onSurfaceVariant),
           ],
         ],
       ),

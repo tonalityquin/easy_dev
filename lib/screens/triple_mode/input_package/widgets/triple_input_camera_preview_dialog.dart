@@ -1,13 +1,16 @@
 import 'dart:io';
+
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // HapticFeedback, DeviceOrientation
+import 'package:flutter/services.dart'; // HapticFeedback
 import '../utils/triple_input_camera_helper.dart';
 
 /// 프리뷰가 촬영 결과와 동일한 비율로 보이도록:
 /// - controller.value.previewSize로 종횡비 계산(세로에서 가로/세로 바꿔치기)
 /// - AspectRatio + contain 렌더링(크롭 없음) → 촬영 결과와 동일 프레이밍
-/// - 초기화 후 세로 잠금(lockCaptureOrientation)으로 회전 튐 방지
+/// - 초기화 후 세로 잠금(lockPortrait)으로 회전 튐 방지
+/// - 갤러리 진입 시 pausePreview / 복귀 시 resumePreview
+/// - 탭 포커스/노출 좌표 정확화(LayoutBuilder 사용)
 class TripleInputCameraPreviewDialog extends StatefulWidget {
   final void Function(List<XFile>)? onCaptureComplete;
   final void Function(XFile)? onImageCaptured;
@@ -39,7 +42,7 @@ class _TripleInputCameraPreviewDialogState extends State<TripleInputCameraPrevie
 
     _cameraHelper = TripleInputCameraHelper(
       jpegQuality: 75,
-      maxLongSide: 2560, // 촬영 파일 다운스케일(옵션)
+      maxLongSide: 2560,
       keepOriginalAlso: false,
       resolution: ResolutionPreset.medium,
     );
@@ -56,18 +59,15 @@ class _TripleInputCameraPreviewDialogState extends State<TripleInputCameraPrevie
     _initFuture = _cameraHelper.initializeInputCamera();
     try {
       await _initFuture;
-      await _cameraHelper.lockPortrait(); // 세로 고정(선택)
+      await _cameraHelper.lockPortrait();
+      if (!mounted) return;
+      setState(() => _isCameraReady = true);
+    } catch (_) {
       if (!mounted) return;
       setState(() {
-        _isCameraReady = true;
+        _isCameraReady = false;
+        _initFailed = true;
       });
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isCameraReady = false;
-          _initFailed = true;
-        });
-      }
     }
   }
 
@@ -111,9 +111,7 @@ class _TripleInputCameraPreviewDialogState extends State<TripleInputCameraPrevie
     if (!mounted) return;
 
     if (image != null) {
-      setState(() {
-        _capturedImages.add(image);
-      });
+      setState(() => _capturedImages.add(image));
       widget.onImageCaptured?.call(image);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -125,6 +123,7 @@ class _TripleInputCameraPreviewDialogState extends State<TripleInputCameraPrevie
   Future<void> _openGalleryView() async {
     final ctrl = _cameraHelper.cameraController;
     final canPause = ctrl != null && ctrl.value.isInitialized;
+
     if (canPause) {
       try {
         await _cameraHelper.pausePreview();
@@ -136,9 +135,7 @@ class _TripleInputCameraPreviewDialogState extends State<TripleInputCameraPrevie
         builder: (_) => GalleryView(
           images: List<XFile>.from(_capturedImages),
           onDelete: (index) {
-            setState(() {
-              _capturedImages.removeAt(index);
-            });
+            setState(() => _capturedImages.removeAt(index));
           },
         ),
       ),
@@ -151,8 +148,8 @@ class _TripleInputCameraPreviewDialogState extends State<TripleInputCameraPrevie
     }
   }
 
-  /// 프리뷰를 촬영 결과와 동일한 종횡비로 렌더링(Contain: 크롭 없음)
   Widget _buildPreview() {
+    final cs = Theme.of(context).colorScheme;
     final ctrl = _cameraHelper.cameraController;
 
     if (_initFailed) {
@@ -162,15 +159,15 @@ class _TripleInputCameraPreviewDialogState extends State<TripleInputCameraPrevie
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 48),
+              Icon(Icons.warning_amber_rounded, color: cs.onError, size: 48),
               const SizedBox(height: 12),
-              const Text(
+              Text(
                 '카메라를 초기화할 수 없습니다.\n권한을 확인한 뒤 다시 시도해 주세요.',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.white),
+                style: TextStyle(color: cs.onSurface),
               ),
               const SizedBox(height: 12),
-              ElevatedButton(
+              FilledButton(
                 onPressed: _initializeCamera,
                 child: const Text('다시 시도'),
               ),
@@ -184,43 +181,49 @@ class _TripleInputCameraPreviewDialogState extends State<TripleInputCameraPrevie
       return const Center(child: CircularProgressIndicator());
     }
 
-    // ✅ previewSize를 이용해 현재 화면 방향에 맞는 종횡비 계산
-    final previewSize = ctrl.value.previewSize!;
+    final previewSize = ctrl.value.previewSize;
     final isPortrait = MediaQuery.of(context).orientation == Orientation.portrait;
 
-    // camera previewSize는 보통 landscape 기준이므로 세로면 반전
-    final previewW = isPortrait ? previewSize.height : previewSize.width;
-    final previewH = isPortrait ? previewSize.width  : previewSize.height;
-    final previewRatio = previewW / previewH;
+    double previewRatio;
+    if (previewSize == null || previewSize.width == 0 || previewSize.height == 0) {
+      // 희귀 케이스 폴백: aspectRatio 사용(세로일 때 반전)
+      final raw = ctrl.value.aspectRatio;
+      previewRatio = isPortrait ? (1 / raw) : raw;
+    } else {
+      final previewW = isPortrait ? previewSize.height : previewSize.width;
+      final previewH = isPortrait ? previewSize.width : previewSize.height;
+      previewRatio = previewW / previewH;
+    }
 
     return Stack(
       children: [
-        // Contain(크롭 없음) → 촬영 결과와 동일한 프레이밍
         Center(
           child: AspectRatio(
             aspectRatio: previewRatio,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTapDown: (d) async {
-                final box = context.findRenderObject() as RenderBox?;
-                if (box == null) return;
-                final size = box.size;
-                final local = d.localPosition;
-                final point = Offset(
-                  (local.dx / size.width).clamp(0.0, 1.0),
-                  (local.dy / size.height).clamp(0.0, 1.0),
+            child: LayoutBuilder(
+              builder: (_, constraints) {
+                final renderSize = constraints.biggest;
+
+                return GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTapDown: (d) async {
+                    final local = d.localPosition;
+                    final point = Offset(
+                      (local.dx / renderSize.width).clamp(0.0, 1.0),
+                      (local.dy / renderSize.height).clamp(0.0, 1.0),
+                    );
+                    try {
+                      await ctrl.setFocusPoint(point);
+                      await ctrl.setExposurePoint(point);
+                    } catch (_) {}
+                  },
+                  child: CameraPreview(ctrl),
                 );
-                try {
-                  await ctrl.setFocusPoint(point);
-                  await ctrl.setExposurePoint(point);
-                } catch (_) {}
               },
-              child: CameraPreview(ctrl),
             ),
           ),
         ),
 
-        // 상단 썸네일 스트립
         if (_capturedImages.isNotEmpty)
           Positioned(
             top: 16,
@@ -240,7 +243,7 @@ class _TripleInputCameraPreviewDialogState extends State<TripleInputCameraPrevie
                       width: 70,
                       height: 70,
                       fit: BoxFit.cover,
-                      cacheWidth: 160, // 저해상 썸네일
+                      cacheWidth: 160,
                       filterQuality: FilterQuality.low,
                     ),
                   );
@@ -254,7 +257,11 @@ class _TripleInputCameraPreviewDialogState extends State<TripleInputCameraPrevie
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final ctrl = _cameraHelper.cameraController;
+
+    // 카메라 UI는 “어두운 배경”이 UX에 유리해서 scrim 사용
+    final bg = cs.scrim; // 보통 black 계열
 
     return WillPopScope(
       onWillPop: () async {
@@ -268,7 +275,7 @@ class _TripleInputCameraPreviewDialogState extends State<TripleInputCameraPrevie
       },
       child: SafeArea(
         child: Scaffold(
-          backgroundColor: Colors.black,
+          backgroundColor: bg,
           body: _buildPreview(),
           bottomNavigationBar: Padding(
             padding: const EdgeInsets.only(bottom: 20, top: 12),
@@ -288,20 +295,19 @@ class _TripleInputCameraPreviewDialogState extends State<TripleInputCameraPrevie
                   style: ElevatedButton.styleFrom(
                     shape: const CircleBorder(),
                     padding: const EdgeInsets.all(20),
-                    backgroundColor: Colors.white,
-                    foregroundColor: Colors.black,
+                    backgroundColor: cs.surface,
+                    foregroundColor: cs.onSurface,
                     elevation: 4,
                   ),
                   child: const Icon(Icons.camera_alt, size: 30),
                 ),
                 const SizedBox(width: 16),
-                // 갤러리 열기
                 if (_capturedImages.isNotEmpty)
                   OutlinedButton.icon(
                     onPressed: _openGalleryView,
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      side: const BorderSide(color: Colors.white54),
+                      foregroundColor: cs.surface,
+                      side: BorderSide(color: cs.surface.withOpacity(0.55)),
                     ),
                     icon: const Icon(Icons.photo_library_outlined),
                     label: const Text('갤러리'),
@@ -327,12 +333,17 @@ class GalleryView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('촬영된 사진'),
-        backgroundColor: Colors.black,
+        backgroundColor: cs.scrim,
+        foregroundColor: cs.surface,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
       ),
-      backgroundColor: Colors.black,
+      backgroundColor: cs.scrim,
       body: GridView.builder(
         padding: const EdgeInsets.all(12),
         itemCount: images.length,
@@ -404,11 +415,15 @@ class _FullScreenGalleryViewState extends State<FullScreenGalleryView> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: cs.scrim,
       appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
+        backgroundColor: cs.scrim,
+        foregroundColor: cs.surface,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
         actions: [
           if (widget.onDelete != null)
             IconButton(
@@ -420,9 +435,7 @@ class _FullScreenGalleryViewState extends State<FullScreenGalleryView> {
       body: PageView.builder(
         controller: _pageController,
         itemCount: widget.images.length,
-        onPageChanged: (index) {
-          setState(() => _currentIndex = index);
-        },
+        onPageChanged: (index) => setState(() => _currentIndex = index),
         itemBuilder: (context, index) {
           return Center(
             child: InteractiveViewer(
@@ -430,7 +443,7 @@ class _FullScreenGalleryViewState extends State<FullScreenGalleryView> {
               maxScale: 4.0,
               child: Image.file(
                 File(widget.images[index].path),
-                fit: BoxFit.contain, // 촬영 결과와 동일 프레이밍(크롭 없음)
+                fit: BoxFit.contain,
               ),
             ),
           );

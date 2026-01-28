@@ -40,7 +40,6 @@ class _MinorInputAnimatedActionButtonState extends State<MinorInputAnimatedActio
   Future<void> _handleTap() async {
     await _controller.reverse();
     await _controller.forward();
-
     await widget.onPressed();
   }
 
@@ -52,33 +51,42 @@ class _MinorInputAnimatedActionButtonState extends State<MinorInputAnimatedActio
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final bool isLoading = widget.isLoading;
     final bool isLocationSelected = widget.isLocationSelected;
 
-    // ✅ Minor 모드도 Service 모드와 동일하게
     // - 위치 선택 시: "입차 완료"
     // - 위치 미선택 시: "입차 요청"
     final String label = isLocationSelected ? '입차 완료' : '입차 요청';
 
-    // ✅ 위치 미선택이어도 "입차 요청"으로 제출 가능해야 함
-    // (로딩 중일 때만 비활성화)
+    // 위치 미선택이어도 제출 가능, 로딩 중만 비활성
     final bool isDisabled = isLoading;
+
+    // ✅ 상태별 토큰 매핑
+    final Color bg = isLocationSelected ? cs.primaryContainer : cs.surface;
+    final Color fg = isLocationSelected ? cs.onPrimaryContainer : cs.onSurface;
+    final Color border = isLocationSelected ? cs.primary : cs.outlineVariant;
+
+    final Color disabledBg = bg.withOpacity(0.55);
+    final Color disabledFg = fg.withOpacity(0.55);
+
+    final Color spinnerColor = isLocationSelected ? cs.onPrimaryContainer : cs.primary;
 
     return ScaleTransition(
       scale: _scaleAnimation,
       child: ElevatedButton(
         onPressed: isDisabled ? null : _handleTap,
         style: ElevatedButton.styleFrom(
-          backgroundColor: isLocationSelected ? Colors.indigo[50] : Colors.blueGrey[50],
-          foregroundColor: isLocationSelected ? Colors.indigo[800] : Colors.blueGrey[800],
+          backgroundColor: bg,
+          foregroundColor: fg,
+          disabledBackgroundColor: disabledBg,
+          disabledForegroundColor: disabledFg,
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 80),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(
-              color: isLocationSelected ? Colors.indigo : Colors.blueGrey,
-              width: 1.5,
-            ),
+            side: BorderSide(color: border, width: 1.5),
           ),
         ),
         child: AnimatedSwitcher(
@@ -87,18 +95,18 @@ class _MinorInputAnimatedActionButtonState extends State<MinorInputAnimatedActio
             return ScaleTransition(scale: animation, child: child);
           },
           child: isLoading
-              ? const SizedBox(
-            key: ValueKey('loading'),
+              ? SizedBox(
+            key: const ValueKey('loading'),
             width: 20,
             height: 20,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              color: Colors.black,
+              valueColor: AlwaysStoppedAnimation<Color>(spinnerColor),
             ),
           )
               : Text(
-            key: const ValueKey('buttonText'),
             label,
+            key: const ValueKey('buttonText'),
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w600,

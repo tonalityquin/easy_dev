@@ -88,7 +88,6 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
   @override
   void initState() {
     super.initState();
-    // 첫 프레임 이후에 라우트 가시성 확인 → 표시 중일 때만 집계/공지 호출
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _maybeRunCount();
       _maybeRunNotice();
@@ -98,7 +97,6 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 라우트 바인딩이 늦게 잡히는 경우를 대비해 한 번 더 시도
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _maybeRunCount();
       _maybeRunNotice();
@@ -107,7 +105,6 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
 
   void _maybeRunCount() {
     if (_didCountRun) return;
-    // 현재 라우트가 실제로 화면에 표시될 때만 실행
     final route = ModalRoute.of(context);
     final isVisible = route == null ? true : (route.isCurrent || route.isActive);
     if (!isVisible) return;
@@ -117,7 +114,6 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
 
   void _maybeRunNotice() {
     if (_didNoticeRun) return;
-    // 현재 라우트가 실제로 화면에 표시될 때만 실행
     final route = ModalRoute.of(context);
     final isVisible = route == null ? true : (route.isCurrent || route.isActive);
     if (!isVisible) return;
@@ -130,7 +126,7 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
 
     final area = context.read<AreaState>().currentArea.trim();
     final division = context.read<AreaState>().currentDivision.trim();
-    _lastArea = area; // 최신 area 기억
+    _lastArea = area;
 
     setState(() {
       _isCountLoading = true;
@@ -147,17 +143,6 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
       final snap = await aggQuery.get();
       final cnt = (snap.count ?? 0);
 
-      try {
-        /*await UsageReporter.instance.report(
-          area: area,
-          action: 'read', // 읽기
-          n: 1, // ← 고정(집계 1회당 read 1회)
-          source: 'parkingStatus.count.query(parking_completed).aggregate',
-        );*/
-      } catch (_) {
-        // 계측 실패는 UX에 영향 없음
-      }
-
       if (!mounted) return;
       setState(() {
         _occupiedCount = cnt;
@@ -165,7 +150,6 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
         _hadError = false;
       });
     } catch (e) {
-      // ✅ DebugApiLogger 로깅
       await _logApiError(
         tag: 'MinorParkingStatusPage._runAggregateCount',
         message: 'Firestore aggregate count 실패(parking_completed)',
@@ -179,20 +163,11 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
         tags: const <String>[_tParking, _tParkingStatus, _tFirestore, _tFirestoreAgg],
       );
 
-      try {
-        /*await UsageReporter.instance.report(
-          area: context.read<AreaState>().currentArea.trim(),
-          action: 'read',
-          n: 1, // ← 실패여도 1회 시도로 고정
-          source: 'parkingStatus.count.query(parking_completed).aggregate.error',
-        );*/
-      } catch (_) {}
-
       if (!mounted) return;
       setState(() {
         _occupiedCount = 0;
         _isCountLoading = false;
-        _hadError = true; // 에러 플래그 ON
+        _hadError = true;
       });
     }
   }
@@ -204,9 +179,7 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
     final division = context.read<AreaState>().currentDivision.trim();
     _lastNoticeArea = area;
 
-    setState(() {
-      _isNoticeLoading = true;
-    });
+    setState(() => _isNoticeLoading = true);
 
     try {
       final result = await MinorParkingNoticeService.fetchNoticeMessage(
@@ -220,8 +193,6 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
         _isNoticeLoading = false;
       });
     } catch (e) {
-      // fetchNoticeMessage는 기본적으로 캐시 fallback 하도록 구현되어 있어 throw가 드물지만,
-      // 호출부에서도 방어 + 로깅
       await _logApiError(
         tag: 'MinorParkingStatusPage._runNoticeFetch',
         message: '공지 로드(fetchNoticeMessage) 실패',
@@ -244,13 +215,13 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
 
   @override
   Widget build(BuildContext context) {
-    // 빌드 후에도 가시성 변화가 있으면 한 번 더 시도(이미 실행되었으면 무시됨)
+    final cs = Theme.of(context).colorScheme;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _maybeRunCount();
       _maybeRunNotice();
     });
 
-    // Area 변경 감지 → 재집계 트리거
     final currentArea = context.select<AreaState, String>((s) => s.currentArea.trim());
     if (_lastArea != null && _lastArea != currentArea) {
       _didCountRun = false;
@@ -258,7 +229,6 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
       WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRunCount());
     }
 
-    // ✅ Area 변경 감지 → 공지 재호출 트리거
     if (_lastNoticeArea != null && _lastNoticeArea != currentArea) {
       _didNoticeRun = false;
       _lastNoticeArea = currentArea;
@@ -266,125 +236,123 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
-      body: Stack(
-        children: [
-          Consumer<LocationState>(
-            builder: (context, locationState, _) {
-              // locations 로딩(용량 합산용) 또는 총합 집계 로딩 중이면 스피너
-              if (locationState.isLoading || _isCountLoading) {
-                return const Center(child: CircularProgressIndicator());
-              }
+      backgroundColor: cs.surface,
+      body: Consumer<LocationState>(
+        builder: (context, locationState, _) {
+          if (locationState.isLoading || _isCountLoading) {
+            return Center(
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+              ),
+            );
+          }
 
-              // capacity 합계는 로컬 state로 계산 (요청: 유지)
-              final totalCapacity =
-              locationState.locations.fold<int>(0, (sum, l) => sum + l.capacity);
-              final occupiedCount = _occupiedCount;
+          final totalCapacity =
+          locationState.locations.fold<int>(0, (sum, l) => sum + l.capacity);
+          final occupiedCount = _occupiedCount;
 
-              final double usageRatio = totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
-              final String usagePercent = (usageRatio * 100).toStringAsFixed(1);
+          final double usageRatio = totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
+          final String usagePercent = (usageRatio * 100).toStringAsFixed(1);
 
-              if (_hadError) {
-                // 에러 UI: 간단한 재시도 버튼 제공
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.warning_amber, size: 40, color: Colors.redAccent),
-                        const SizedBox(height: 12),
-                        const Text(
-                          '현황 집계 중 오류가 발생했습니다.',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '영역: $currentArea',
-                          style: const TextStyle(color: Colors.black54),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton.icon(
-                          onPressed: () {
-                            _didCountRun = false; // 다시 1회만 돌도록
-                            _runAggregateCount();
-                          },
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('다시 집계'),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
-
-              // ------ 상단 영역: "디자인/텍스트 수정 금지" 요청 반영 ------
-              return ListView(
+          if (_hadError) {
+            return Center(
+              child: Padding(
                 padding: const EdgeInsets.all(20),
-                children: [
-                  // ✅ 추가: '📊 현재 주차 현황' 상단 공지 알림바
-                  _MinorParkingNoticeBar(
-                    isLoading: _isNoticeLoading,
-                    message: _noticeMessage,
-                    onRefresh: () {
-                      _didNoticeRun = false;
-                      _runNoticeFetch(forceRefresh: true);
-                    },
-                  ),
-                  if (_noticeMessage.trim().isNotEmpty || _isNoticeLoading)
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.warning_amber, size: 40, color: cs.error),
                     const SizedBox(height: 12),
-
-                  const Text(
-                    '📊 현재 마이너 주차 현황',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '총 $totalCapacity대 중 $occupiedCount대 주차됨',
-                    style: const TextStyle(fontSize: 16),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-                  LinearProgressIndicator(
-                    value: usageRatio,
-                    backgroundColor: Colors.grey[300],
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      usageRatio >= 0.8 ? Colors.red : Colors.blueAccent,
+                    Text(
+                      '현황 집계 중 오류가 발생했습니다.',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: cs.onSurface,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                    minHeight: 8,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    '$usagePercent% 사용 중',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                    textAlign: TextAlign.center,
-                  ),
-                  // ------ 상단 영역 끝 (수정 없음) ------
+                    const SizedBox(height: 8),
+                    Text(
+                      '영역: $currentArea',
+                      style: TextStyle(color: cs.onSurfaceVariant),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        _didCountRun = false;
+                        _runAggregateCount();
+                      },
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('다시 집계'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: cs.primary,
+                        foregroundColor: cs.onPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }
 
-                  const SizedBox(height: 24),
+          return ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              _MinorParkingNoticeBar(
+                isLoading: _isNoticeLoading,
+                message: _noticeMessage,
+                onRefresh: () {
+                  _didNoticeRun = false;
+                  _runNoticeFetch(forceRefresh: true);
+                },
+              ),
+              if (_noticeMessage.trim().isNotEmpty || _isNoticeLoading)
+                const SizedBox(height: 12),
 
-                  // ⬇️ 지역별 문구가 들어가는 자동 순환 카드
-                  _AutoCyclingReminderCards(area: currentArea),
+              // ✅ 텍스트/구성 유지(색상만 브랜드 토큰 기반으로 상향 가능)
+              const Text(
+                '📊 현재 마이너 주차 현황',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '총 $totalCapacity대 중 $occupiedCount대 주차됨',
+                style: const TextStyle(fontSize: 16),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              LinearProgressIndicator(
+                value: usageRatio,
+                backgroundColor: cs.surfaceContainerHighest,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  usageRatio >= 0.8 ? cs.error : cs.primary,
+                ),
+                minHeight: 8,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '$usagePercent% 사용 중',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                textAlign: TextAlign.center,
+              ),
 
-                  const SizedBox(height: 12),
-
-                  // ⬇️ DashMemo 메모 자동 순환 카드 (1.5초 주기)
-                  const _AutoCyclingMemoCards(),
-
-                  const SizedBox(height: 12),
-                ],
-              );
-            },
-          ),
-        ],
+              const SizedBox(height: 24),
+              _AutoCyclingReminderCards(area: currentArea),
+              const SizedBox(height: 12),
+              const _AutoCyclingMemoCards(),
+              const SizedBox(height: 12),
+            ],
+          );
+        },
       ),
     );
   }
 }
 
-/// ✅ 상단 알림바(관리자 공지)
+/// ✅ 상단 알림바(관리자 공지) — 브랜드(ColorScheme) 기반
 class _MinorParkingNoticeBar extends StatelessWidget {
   final bool isLoading;
   final String message;
@@ -398,10 +366,10 @@ class _MinorParkingNoticeBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final text = message.trim();
-    if (!isLoading && text.isEmpty) {
-      return const SizedBox.shrink();
-    }
+
+    if (!isLoading && text.isEmpty) return const SizedBox.shrink();
 
     return Material(
       color: Colors.transparent,
@@ -409,31 +377,39 @@ class _MinorParkingNoticeBar extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.04),
+          color: cs.surfaceContainerLow,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.black.withOpacity(0.08)),
+          border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
         ),
         child: Row(
           children: [
-            const Icon(Icons.info_outline, size: 18),
+            Icon(Icons.info_outline, size: 18, color: cs.onSurfaceVariant),
             const SizedBox(width: 10),
             Expanded(
               child: isLoading
-                  ? const Text(
+                  ? Text(
                 '공지 불러오는 중...',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurface,
+                ),
               )
                   : Text(
                 text,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurface,
+                ),
               ),
             ),
             const SizedBox(width: 8),
             InkWell(
               onTap: onRefresh,
-              child: const Padding(
-                padding: EdgeInsets.all(4),
-                child: Icon(Icons.refresh, size: 18),
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(Icons.refresh, size: 18, color: cs.onSurfaceVariant),
               ),
             ),
           ],
@@ -447,14 +423,9 @@ class _MinorParkingNoticeBar extends StatelessWidget {
 class MinorParkingNoticeService {
   MinorParkingNoticeService._();
 
-  /// ✅ Header와 동일한 저장 키를 사용
   static const String kNoticeSpreadsheetIdKey = 'notice_spreadsheet_id_v1';
-
-  /// ✅ Header와 동일한 공지 시트/레인지
   static const String kNoticeSheetName = 'noti';
   static const String kNoticeRange = '$kNoticeSheetName!A1:A50';
-
-  /// 캐시 TTL: 10분
   static const Duration cacheTtl = Duration(minutes: 10);
 
   static Future<sheets.SheetsApi> _sheetsApi() async {
@@ -494,20 +465,15 @@ class MinorParkingNoticeService {
     final trimmedArea = area.trim();
     final prefs = await SharedPreferences.getInstance();
 
-    // ✅ area는 기존 호출부 호환/캐시 분리 용도로만 유지
     final cacheKey = 'minor_parking_notice_cache_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
     final cacheAtKey = 'minor_parking_notice_cache_at_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
     final cacheSidKey = 'minor_parking_notice_cache_sid_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
 
     final nowMs = DateTime.now().millisecondsSinceEpoch;
-
     final spreadsheetId = await _loadSpreadsheetId();
 
-    // 0) 스프레드시트 ID가 비어있으면: 캐시가 있으면 캐시, 없으면 빈 값
     if (spreadsheetId.isEmpty) {
       final fallback = (prefs.getString(cacheKey) ?? '').trim();
-
-      // ✅ 디버그 로그(설정 누락은 운영 이슈 트래킹에 유용)
       if (fallback.isEmpty) {
         await _logApiError(
           tag: 'MinorParkingNoticeService.fetchNoticeMessage',
@@ -517,11 +483,9 @@ class MinorParkingNoticeService {
           tags: const <String>[_tParking, _tParkingNotice, _tPrefs],
         );
       }
-
       return fallback;
     }
 
-    // 1) 캐시 사용(강제 갱신이 아니고 TTL 유효 + 같은 sid이면)
     if (!forceRefresh) {
       final cached = (prefs.getString(cacheKey) ?? '').trim();
       final cachedAt = prefs.getInt(cacheAtKey) ?? 0;
@@ -530,12 +494,9 @@ class MinorParkingNoticeService {
       final isFresh = cachedAt > 0 && (nowMs - cachedAt) <= cacheTtl.inMilliseconds;
       final isSameSid = cachedSid == spreadsheetId;
 
-      if (cached.isNotEmpty && isFresh && isSameSid) {
-        return cached;
-      }
+      if (cached.isNotEmpty && isFresh && isSameSid) return cached;
     }
 
-    // 2) Sheets API로 noti!A1:A50 직접 읽기
     try {
       final api = await _sheetsApi();
 
@@ -554,7 +515,6 @@ class MinorParkingNoticeService {
 
       final msg = lines.join('\n').trim();
 
-      // 3) 캐시 저장(빈 문자열이면 저장하지 않음)
       if (msg.isNotEmpty) {
         await prefs.setString(cacheKey, msg);
         await prefs.setInt(cacheAtKey, nowMs);
@@ -562,11 +522,9 @@ class MinorParkingNoticeService {
         return msg;
       }
 
-      // 4) 시트가 비어있으면: 캐시가 있으면 캐시를 우선 반환(공지바 “갑자기 사라짐” 방지)
       final fallback = (prefs.getString(cacheKey) ?? '').trim();
       if (fallback.isNotEmpty) return fallback;
 
-      // ✅ 시트가 비어 있고 캐시도 없음(운영상 확인용)
       await _logApiError(
         tag: 'MinorParkingNoticeService.fetchNoticeMessage',
         message: '공지 시트가 비어있고 캐시도 없음',
@@ -581,7 +539,6 @@ class MinorParkingNoticeService {
 
       return '';
     } catch (e) {
-      // 토큰 만료/권한 문제/네트워크 문제 등: 캐시 반환
       await _logApiError(
         tag: 'MinorParkingNoticeService.fetchNoticeMessage',
         message: 'Sheets 공지 로드 실패 → 캐시 fallback',
@@ -601,13 +558,11 @@ class MinorParkingNoticeService {
   }
 }
 
-/// 하단에 표시되는 자동 순환 카드 뷰
+/// 하단 자동 순환 카드(안내)
 class _AutoCyclingReminderCards extends StatefulWidget {
   final String area;
 
-  const _AutoCyclingReminderCards({
-    required this.area,
-  });
+  const _AutoCyclingReminderCards({required this.area});
 
   @override
   State<_AutoCyclingReminderCards> createState() => _AutoCyclingReminderCardsState();
@@ -633,9 +588,7 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.area.trim() != widget.area.trim()) {
       _currentIndex = 0;
-      if (_pageController.hasClients) {
-        _pageController.jumpToPage(0);
-      }
+      if (_pageController.hasClients) _pageController.jumpToPage(0);
       _startAutoCycle();
       setState(() {});
     }
@@ -665,11 +618,7 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
     _currentIndex = index;
     if (!mounted) return;
     try {
-      _pageController.animateToPage(
-        index,
-        duration: animDuration,
-        curve: animCurve,
-      );
+      _pageController.animateToPage(index, duration: animDuration, curve: animCurve);
       setState(() {});
     } catch (e) {
       _logApiError(
@@ -684,6 +633,7 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final cards = parkingRemindersForArea(widget.area);
 
     return SizedBox(
@@ -704,10 +654,12 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
                   final c = cards[index];
                   return Center(
                     child: Card(
-                      color: Colors.white,
+                      color: cs.surface,
+                      surfaceTintColor: Colors.transparent,
                       elevation: 2,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: cs.outlineVariant.withOpacity(0.55)),
                       ),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
@@ -718,13 +670,14 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.fact_check, size: 18),
+                                Icon(Icons.fact_check, size: 18, color: cs.onSurfaceVariant),
                                 const SizedBox(width: 8),
                                 Text(
                                   c.title,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontSize: 16,
-                                    fontWeight: FontWeight.w700,
+                                    fontWeight: FontWeight.w800,
+                                    color: cs.onSurface,
                                   ),
                                   textAlign: TextAlign.center,
                                 ),
@@ -737,7 +690,7 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
                                 child: Text(
                                   t,
                                   textAlign: TextAlign.center,
-                                  style: const TextStyle(fontSize: 14),
+                                  style: TextStyle(fontSize: 14, color: cs.onSurface),
                                 ),
                               ),
                             ),
@@ -762,7 +715,7 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
                   width: active ? 10 : 6,
                   height: 6,
                   decoration: BoxDecoration(
-                    color: active ? Colors.black87 : Colors.black26,
+                    color: active ? cs.onSurface : cs.onSurfaceVariant.withOpacity(0.35),
                     borderRadius: BorderRadius.circular(3),
                   ),
                 );
@@ -775,7 +728,7 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
   }
 }
 
-// ⬇️ DashMemo 메모를 1.5초 주기로 넘기는 자동 순환 카드
+/// DashMemo 자동 순환 카드
 class _AutoCyclingMemoCards extends StatefulWidget {
   const _AutoCyclingMemoCards();
 
@@ -825,11 +778,7 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
     if (_currentIndex >= total) _currentIndex = 0;
 
     try {
-      _pageController.animateToPage(
-        _currentIndex,
-        duration: animDuration,
-        curve: animCurve,
-      );
+      _pageController.animateToPage(_currentIndex, duration: animDuration, curve: animCurve);
       setState(() {});
     } catch (e) {
       _logApiError(
@@ -852,6 +801,8 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return SizedBox(
       height: 170,
       child: ValueListenableBuilder<List<String>>(
@@ -884,13 +835,15 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                       if (list.isEmpty) {
                         return Center(
                           child: Card(
-                            color: Colors.white,
+                            color: cs.surface,
+                            surfaceTintColor: Colors.transparent,
                             elevation: 2,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(color: cs.outlineVariant.withOpacity(0.55)),
                             ),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -898,23 +851,24 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(Icons.notes_rounded, size: 18),
-                                      SizedBox(width: 8),
+                                      Icon(Icons.notes_rounded, size: 18, color: cs.onSurfaceVariant),
+                                      const SizedBox(width: 8),
                                       Text(
                                         '메모',
                                         style: TextStyle(
                                           fontSize: 16,
-                                          fontWeight: FontWeight.w700,
+                                          fontWeight: FontWeight.w800,
+                                          color: cs.onSurface,
                                         ),
                                         textAlign: TextAlign.center,
                                       ),
                                     ],
                                   ),
-                                  SizedBox(height: 12),
+                                  const SizedBox(height: 12),
                                   Text(
                                     '저장된 메모가 없습니다.',
                                     textAlign: TextAlign.center,
-                                    style: TextStyle(fontSize: 14),
+                                    style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant),
                                   ),
                                 ],
                               ),
@@ -926,10 +880,12 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                       final (time, text) = _parseLine(list[index]);
                       return Center(
                         child: Card(
-                          color: Colors.white,
+                          color: cs.surface,
+                          surfaceTintColor: Colors.transparent,
                           elevation: 2,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(color: cs.outlineVariant.withOpacity(0.55)),
                           ),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
@@ -939,14 +895,15 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                               children: [
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
-                                    Icon(Icons.notes_rounded, size: 18),
-                                    SizedBox(width: 8),
+                                  children: [
+                                    Icon(Icons.notes_rounded, size: 18, color: cs.onSurfaceVariant),
+                                    const SizedBox(width: 8),
                                     Text(
                                       '메모',
                                       style: TextStyle(
                                         fontSize: 16,
-                                        fontWeight: FontWeight.w700,
+                                        fontWeight: FontWeight.w800,
+                                        color: cs.onSurface,
                                       ),
                                       textAlign: TextAlign.center,
                                     ),
@@ -959,7 +916,7 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                                     child: Text(
                                       text,
                                       textAlign: TextAlign.center,
-                                      style: const TextStyle(fontSize: 14),
+                                      style: TextStyle(fontSize: 14, color: cs.onSurface),
                                       maxLines: 3,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -968,7 +925,7 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                                   Text(
                                     time,
                                     textAlign: TextAlign.center,
-                                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
                                   ),
                               ],
                             ),
@@ -991,7 +948,7 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                       width: active ? 10 : 6,
                       height: 6,
                       decoration: BoxDecoration(
-                        color: active ? Colors.black87 : Colors.black26,
+                        color: active ? cs.onSurface : cs.onSurfaceVariant.withOpacity(0.35),
                         borderRadius: BorderRadius.circular(3),
                       ),
                     );

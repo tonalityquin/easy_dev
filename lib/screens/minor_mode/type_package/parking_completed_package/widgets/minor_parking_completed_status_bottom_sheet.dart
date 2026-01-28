@@ -24,6 +24,23 @@ import '../../../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import '../../../../common_package/log_package/log_viewer_bottom_sheet.dart';
 import '../../../modify_package/minor_modify_plate_screen.dart';
 
+/// ✅ 브랜딩(ColorScheme) 기반 톤 유틸
+class _BrandTone {
+  static Color border(ColorScheme cs) => cs.outlineVariant.withOpacity(0.85);
+  static Color softBorder(ColorScheme cs) => cs.outlineVariant.withOpacity(0.55);
+
+  static Color danger(ColorScheme cs) => cs.error;
+  static Color dangerBg(ColorScheme cs) => cs.errorContainer;
+  static Color dangerFg(ColorScheme cs) => cs.onErrorContainer;
+
+  static Color ok(ColorScheme cs) => cs.tertiary;
+  static Color okBg(ColorScheme cs) => cs.tertiaryContainer;
+
+  static Color warning(ColorScheme cs) => cs.secondary;
+  static Color warningBg(ColorScheme cs) => cs.secondaryContainer;
+  static Color warningFg(ColorScheme cs) => cs.onSecondaryContainer;
+}
+
 /// ✅ 추가: 다이얼로그/테이블에서 “콜백 없이” 바로 열기 위한 wrapper
 /// - 기존 showMinorParkingCompletedStatusBottomSheet 시그니처(콜백 required)는 유지
 Future<void> showMinorParkingCompletedStatusBottomSheetFromDialog({
@@ -114,7 +131,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
 
   bool _departureOverrideArmed = false;
   DateTime? _departureOverrideArmedAt;
-
   static const Duration _overrideWindow = Duration(seconds: 12);
 
   bool _primaryBusy = false;
@@ -322,10 +338,12 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
   }
 
   Future<_DepartureOverrideChoice?> _showDepartureOverrideDialog() async {
+    final cs = Theme.of(context).colorScheme;
+
     return showDialog<_DepartureOverrideChoice>(
       context: context,
       barrierDismissible: true,
-      barrierColor: Colors.black.withOpacity(0.45),
+      barrierColor: cs.scrim.withOpacity(0.55),
       builder: (_) {
         return Dialog(
           insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -334,12 +352,12 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
           child: Container(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: cs.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.black12),
+              border: Border.all(color: _BrandTone.border(cs)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.12),
+                  color: cs.shadow.withOpacity(0.18),
                   blurRadius: 24,
                   offset: const Offset(0, 12),
                 ),
@@ -354,24 +372,26 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(0.10),
+                        color: _BrandTone.warningBg(cs).withOpacity(0.55),
                         borderRadius: BorderRadius.circular(12),
-                        border:
-                        Border.all(color: Colors.orange.withOpacity(0.28)),
+                        border: Border.all(
+                          color: _BrandTone.warning(cs).withOpacity(0.30),
+                        ),
                       ),
                       child: Icon(
                         Icons.warning_amber_rounded,
-                        color: Colors.orange.shade700,
+                        color: _BrandTone.warning(cs),
                         size: 20,
                       ),
                     ),
                     const SizedBox(width: 10),
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         '정산 없이 출차 요청',
                         style: TextStyle(
                           fontWeight: FontWeight.w900,
                           fontSize: 16,
+                          color: cs.onSurface,
                         ),
                       ),
                     ),
@@ -383,9 +403,9 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                   padding:
                   const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
+                    color: cs.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.black12),
+                    border: Border.all(color: _BrandTone.softBorder(cs)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -393,7 +413,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                       Text(
                         '현재 사전 정산이 되어있지 않습니다.',
                         style: TextStyle(
-                          color: Colors.black.withOpacity(0.85),
+                          color: cs.onSurface,
                           fontWeight: FontWeight.w900,
                           fontSize: 13,
                         ),
@@ -402,7 +422,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                       Text(
                         '그래도 출차 요청으로 이동하시겠습니까?',
                         style: TextStyle(
-                          color: Colors.black.withOpacity(0.70),
+                          color: cs.onSurfaceVariant,
                           fontWeight: FontWeight.w700,
                           fontSize: 12,
                         ),
@@ -412,21 +432,21 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.08),
+                          color: _BrandTone.warningBg(cs).withOpacity(0.55),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                              color: Colors.orange.withOpacity(0.30)),
+                              color: _BrandTone.warning(cs).withOpacity(0.30)),
                         ),
                         child: Row(
                           children: [
                             Icon(Icons.directions_car_filled,
-                                size: 16, color: Colors.orange.shade700),
+                                size: 16, color: _BrandTone.warning(cs)),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 '차량: ${_plate.plateNumber}',
                                 style: TextStyle(
-                                  color: Colors.orange.shade800,
+                                  color: _BrandTone.warningFg(cs),
                                   fontWeight: FontWeight.w900,
                                   fontSize: 12,
                                 ),
@@ -446,53 +466,46 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                       onPressed: () => Navigator.pop(
                           context, _DepartureOverrideChoice.cancel),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.black87,
-                        side: const BorderSide(color: Colors.black12),
+                        foregroundColor: cs.onSurface,
+                        side: BorderSide(color: _BrandTone.border(cs)),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 12),
                       ),
-                      child: const Text(
-                        '취소',
-                        style: TextStyle(fontWeight: FontWeight.w900),
-                      ),
+                      child: const Text('취소',
+                          style: TextStyle(fontWeight: FontWeight.w900)),
                     ),
                     const SizedBox(width: 10),
                     OutlinedButton(
                       onPressed: () => Navigator.pop(
                           context, _DepartureOverrideChoice.goBilling),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.blueAccent,
-                        side: BorderSide(
-                            color: Colors.blueAccent.withOpacity(0.35)),
+                        foregroundColor: cs.primary,
+                        side: BorderSide(color: cs.primary.withOpacity(0.35)),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 12),
-                        backgroundColor: Colors.blueAccent.withOpacity(0.06),
+                        backgroundColor: cs.primary.withOpacity(0.06),
                       ),
-                      child: const Text(
-                        '정산하기',
-                        style: TextStyle(fontWeight: FontWeight.w900),
-                      ),
+                      child: const Text('정산하기',
+                          style: TextStyle(fontWeight: FontWeight.w900)),
                     ),
                     const SizedBox(width: 10),
                     FilledButton(
                       onPressed: () => Navigator.pop(
                           context, _DepartureOverrideChoice.proceed),
                       style: FilledButton.styleFrom(
-                        backgroundColor: Colors.orange.shade700,
-                        foregroundColor: Colors.white,
+                        backgroundColor: _BrandTone.warning(cs),
+                        foregroundColor: _BrandTone.warningFg(cs),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
                         padding: const EdgeInsets.symmetric(
                             horizontal: 14, vertical: 12),
                       ),
-                      child: const Text(
-                        '그래도 출차 요청',
-                        style: TextStyle(fontWeight: FontWeight.w900),
-                      ),
+                      child: const Text('그래도 출차 요청',
+                          style: TextStyle(fontWeight: FontWeight.w900)),
                     ),
                   ],
                 ),
@@ -546,11 +559,13 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
     Object? err;
     StackTrace? st;
 
+    final cs = Theme.of(context).colorScheme;
+
     final result = await showDialog<_DrivingResult>(
       context: context,
       useRootNavigator: true,
       barrierDismissible: false,
-      barrierColor: Colors.black.withOpacity(0.55),
+      barrierColor: cs.scrim.withOpacity(0.65),
       builder: (_) => PopScope(
         canPop: false,
         child: _DrivingBlockingDialog(
@@ -590,15 +605,18 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
     return r;
   }
 
-  // =========================
-  // ✅ 입차 완료: 주차 구역 선택(캐시 기반) 후 완료 처리
-  // =========================
+  // ─────────────────────────────────────────
+  // ✅ 입차 완료: “주차 구역 선택” (캐시 기반)
+  // ─────────────────────────────────────────
 
   String _resolveAreaForCache() {
     final a = _plate.area.trim();
     if (a.isNotEmpty) return a;
+
     final wa = widget.area.trim();
-    return wa.isNotEmpty ? wa : context.read<AreaState>().currentArea.trim();
+    if (wa.isNotEmpty) return wa;
+
+    return context.read<AreaState>().currentArea.trim();
   }
 
   String _locationDisplayName(LocationModel loc) {
@@ -613,14 +631,14 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
   }
 
   Future<List<LocationModel>> _loadCachedLocationsForArea(String area) async {
-    // 1) LocationState (내부적으로 SharedPreferences 캐시 기반)
+    // 1) LocationState 우선
     try {
       final ls = context.read<LocationState>();
       final list = ls.locations;
       if (list.isNotEmpty) return List<LocationModel>.of(list);
     } catch (_) {}
 
-    // 2) SharedPreferences 직접 fallback
+    // 2) SharedPreferences fallback
     try {
       final prefs = await SharedPreferences.getInstance();
       final cachedJson = prefs.getString('cached_locations_$area');
@@ -630,8 +648,11 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
       if (decoded is! List) return [];
 
       return decoded
-          .map((e) => LocationModel.fromCacheMap(
-          Map<String, dynamic>.from(e as Map<dynamic, dynamic>)))
+          .map(
+            (e) => LocationModel.fromCacheMap(
+          Map<String, dynamic>.from(e as Map<dynamic, dynamic>),
+        ),
+      )
           .toList();
     } catch (_) {
       return [];
@@ -643,15 +664,18 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
     required String area,
     required Future<void> Function(String pickedLocation) onConfirm,
   }) async {
+    final cs = Theme.of(context).colorScheme;
     final rootContext = Navigator.of(context, rootNavigator: true).context;
 
     final cached = await _loadCachedLocationsForArea(area);
     final items = cached
         .where((e) => e.locationName.trim().isNotEmpty)
         .toList()
-      ..sort((a, b) => _locationDisplayName(a)
-          .toLowerCase()
-          .compareTo(_locationDisplayName(b).toLowerCase()));
+      ..sort(
+            (a, b) => _locationDisplayName(a)
+            .toLowerCase()
+            .compareTo(_locationDisplayName(b).toLowerCase()),
+      );
 
     if (items.isEmpty) {
       _showWarningSafe(
@@ -664,10 +688,10 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
     return showDialog<String>(
       context: rootContext,
       barrierDismissible: false,
-      barrierColor: Colors.black.withOpacity(0.55),
+      barrierColor: cs.scrim.withOpacity(0.65),
       builder: (_) {
         String query = '';
-        String? selectedId;
+        String? selectedName; // ✅ LocationModel.id 등 미확실 필드에 의존하지 않음
         bool saving = false;
         String? errorText;
 
@@ -681,24 +705,17 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
             }).toList();
 
             return Dialog(
-              backgroundColor: Colors.transparent,
-              elevation: 0,
+              backgroundColor: cs.surface,
+              surfaceTintColor: Colors.transparent,
+              elevation: 10,
               insetPadding:
               const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-              child: Container(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+                side: BorderSide(color: _BrandTone.border(cs)),
+              ),
+              child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.black12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.12),
-                      blurRadius: 24,
-                      offset: const Offset(0, 12),
-                    ),
-                  ],
-                ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -709,51 +726,60 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                           width: 36,
                           height: 36,
                           decoration: BoxDecoration(
-                            color: Colors.blueAccent.withOpacity(0.10),
+                            color: cs.primary.withOpacity(0.10),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                                color: Colors.blueAccent.withOpacity(0.25)),
+                              color: cs.primary.withOpacity(0.25),
+                            ),
                           ),
-                          child: const Icon(
+                          child: Icon(
                             Icons.local_parking_rounded,
-                            color: Colors.blueAccent,
+                            color: cs.primary,
                             size: 20,
                           ),
                         ),
                         const SizedBox(width: 10),
-                        const Expanded(
+                        Expanded(
                           child: Text(
                             '주차 구역 선택',
                             style: TextStyle(
                               fontWeight: FontWeight.w900,
                               fontSize: 16,
+                              color: cs.onSurface,
                             ),
                           ),
                         ),
+                        IconButton(
+                          tooltip: '닫기',
+                          onPressed: saving
+                              ? null
+                              : () => Navigator.of(dialogCtx).pop(),
+                          icon: Icon(Icons.close, color: cs.onSurfaceVariant),
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
 
-                    // Info card
+                    // Info
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 10),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
+                        color: cs.surfaceContainerLow,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.black12),
+                        border: Border.all(color: _BrandTone.softBorder(cs)),
                       ),
                       child: Row(
                         children: [
                           Icon(Icons.directions_car_filled,
-                              size: 16, color: Colors.blueGrey.shade700),
+                              size: 16, color: cs.onSurfaceVariant),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               '차량: $plateNumber  •  지역: $area',
                               style: TextStyle(
-                                color: Colors.black.withOpacity(0.80),
+                                color: cs.onSurface,
                                 fontWeight: FontWeight.w800,
                                 fontSize: 12,
                               ),
@@ -771,24 +797,23 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                       onChanged: (v) => setDialogState(() => query = v),
                       decoration: InputDecoration(
                         hintText: '주차 구역 검색',
-                        prefixIcon: const Icon(Icons.search),
+                        prefixIcon: Icon(Icons.search, color: cs.onSurfaceVariant),
                         isDense: true,
                         filled: true,
-                        fillColor: Colors.grey.shade50,
+                        fillColor: cs.surfaceContainerLow,
                         contentPadding: const EdgeInsets.symmetric(
                             horizontal: 12, vertical: 10),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: Colors.black12),
+                          borderSide: BorderSide(color: _BrandTone.border(cs)),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide: const BorderSide(color: Colors.black12),
+                          borderSide: BorderSide(color: _BrandTone.border(cs)),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(
-                              color: Colors.blueAccent.withOpacity(0.6)),
+                          borderSide: BorderSide(color: cs.primary.withOpacity(0.70)),
                         ),
                       ),
                     ),
@@ -799,9 +824,9 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                     Container(
                       constraints: const BoxConstraints(maxHeight: 360),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: cs.surface,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.black12),
+                        border: Border.all(color: _BrandTone.border(cs)),
                       ),
                       child: filtered.isEmpty
                           ? Padding(
@@ -809,13 +834,13 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                         child: Row(
                           children: [
                             Icon(Icons.info_outline,
-                                color: Colors.grey.shade700),
+                                color: cs.onSurfaceVariant),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 '검색 결과가 없습니다.',
                                 style: TextStyle(
-                                  color: Colors.black.withOpacity(0.70),
+                                  color: cs.onSurfaceVariant,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -828,34 +853,34 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                         itemCount: filtered.length,
                         separatorBuilder: (_, __) => Divider(
                           height: 1,
-                          color: Colors.black.withOpacity(0.06),
+                          color: cs.outlineVariant.withOpacity(0.40),
                         ),
                         itemBuilder: (_, i) {
                           final loc = filtered[i];
                           final displayName = _locationDisplayName(loc);
                           final cap = loc.capacity;
-                          final count = loc.plateCount;
 
                           return RadioListTile<String>(
-                            value: loc.id,
-                            groupValue: selectedId,
+                            value: displayName,
+                            groupValue: selectedName,
                             onChanged: saving
                                 ? null
                                 : (v) => setDialogState(() {
-                              selectedId = v;
+                              selectedName = v;
                               errorText = null;
                             }),
                             title: Text(
                               displayName,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w900,
                                 fontSize: 13,
+                                color: cs.onSurface,
                               ),
                             ),
                             subtitle: Text(
-                              'capacity: $cap  •  plateCount: $count',
+                              'capacity: $cap',
                               style: TextStyle(
-                                color: Colors.black.withOpacity(0.60),
+                                color: cs.onSurfaceVariant,
                                 fontWeight: FontWeight.w700,
                                 fontSize: 12,
                               ),
@@ -863,7 +888,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                             dense: true,
                             controlAffinity:
                             ListTileControlAffinity.trailing,
-                            activeColor: Colors.blueAccent,
+                            activeColor: cs.primary,
                           );
                         },
                       ),
@@ -876,21 +901,21 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.05),
+                          color: _BrandTone.dangerBg(cs).withOpacity(0.55),
                           borderRadius: BorderRadius.circular(12),
-                          border:
-                          Border.all(color: Colors.red.withOpacity(0.25)),
+                          border: Border.all(
+                              color: _BrandTone.danger(cs).withOpacity(0.25)),
                         ),
                         child: Row(
                           children: [
                             Icon(Icons.error_outline,
-                                size: 18, color: Colors.red.shade700),
+                                size: 18, color: _BrandTone.danger(cs)),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 errorText!,
                                 style: TextStyle(
-                                  color: Colors.red.shade700,
+                                  color: _BrandTone.dangerFg(cs),
                                   fontWeight: FontWeight.w800,
                                   fontSize: 12,
                                 ),
@@ -912,8 +937,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                 ? null
                                 : () => Navigator.of(dialogCtx).pop(),
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: Colors.black87,
-                              side: const BorderSide(color: Colors.black12),
+                              foregroundColor: cs.onSurface,
+                              side: BorderSide(color: _BrandTone.border(cs)),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12)),
                               padding: const EdgeInsets.symmetric(
@@ -927,13 +952,11 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                         const SizedBox(width: 10),
                         Expanded(
                           child: FilledButton(
-                            onPressed: (saving || selectedId == null)
+                            onPressed: (saving || selectedName == null)
                                 ? null
                                 : () async {
-                              final picked = items
-                                  .firstWhere((e) => e.id == selectedId);
-                              final pickedName =
-                              _locationDisplayName(picked).trim();
+                              final pickedName = selectedName!.trim();
+                              if (pickedName.isEmpty) return;
 
                               setDialogState(() {
                                 saving = true;
@@ -952,8 +975,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                               }
                             },
                             style: FilledButton.styleFrom(
-                              backgroundColor: Colors.blueAccent,
-                              foregroundColor: Colors.white,
+                              backgroundColor: cs.primary,
+                              foregroundColor: cs.onPrimary,
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(12)),
                               padding: const EdgeInsets.symmetric(
@@ -975,6 +998,10 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
       },
     );
   }
+
+  // ─────────────────────────────────────────
+  // ✅ 주행
+  // ─────────────────────────────────────────
 
   Future<void> _startEntryDriving() async {
     await _runPrimary(() async {
@@ -1023,8 +1050,10 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
           canCancel: canCancel,
           cancelDisabledHint: '선점자만 주행 취소가 가능합니다.',
           onComplete: () async {
-            // ✅ 변경: "주행 완료"는 다이얼로그를 닫는 역할만 수행
-            // 실제 입차 완료 전환 + location 삽입은 다이얼로그 종료 후 중앙 선택 다이얼로그에서 처리
+            // ✅ 수정안 핵심:
+            // - 여기서는 "완료" 버튼이 다이얼로그를 닫는 역할만 수행
+            // - 실제 setParkingCompleted(location 삽입)는 다이얼로그 종료 후,
+            //   중앙 "주차 구역 선택" 다이얼로그에서 수행
           },
           onCancel: () async {
             // ✅ 취소 권한 제한(2중 방어)
@@ -1050,7 +1079,9 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
             if (mounted) setState(() => _plate = updated);
             try {
               await plateState.minorUpdatePlateLocally(
-                  PlateType.parkingRequests, updated);
+                PlateType.parkingRequests,
+                updated,
+              );
             } catch (_) {}
 
             try {
@@ -1062,7 +1093,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
         if (result == _DrivingResult.completed) {
           if (!mounted) return;
 
-          // ✅ 변경: 주행 다이얼로그가 닫힌 뒤 → 중앙 "주차 구역 선택" 다이얼로그 표시
+          // ✅ 주행 완료 후: 중앙 주차 구역 선택(캐시 기반)
           final area = _resolveAreaForCache();
           final picked = await _showParkingLocationPickerDialog(
             plateNumber: _plate.plateNumber,
@@ -1076,12 +1107,13 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
             },
           );
 
-          // 선택 취소/실패 시: 주행 상태(선점)는 유지 (워크플로우 미완료)
+          // 취소 시: 주행 상태 유지(사용자가 “주행 계속”으로 다시 정리 가능)
           if (picked == null || picked.trim().isEmpty) {
+            showSelectedSnackbar(context, '주차 구역 선택이 취소되었습니다. (주행 상태 유지)');
             return;
           }
 
-          // ✅ 성공: 시트 닫기
+          // 성공: 시트 닫기
           if (!mounted) return;
           Navigator.pop(context);
           return;
@@ -1176,7 +1208,9 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
             if (mounted) setState(() => _plate = updated);
             try {
               await plateState.minorUpdatePlateLocally(
-                  PlateType.departureRequests, updated);
+                PlateType.departureRequests,
+                updated,
+              );
             } catch (_) {}
 
             try {
@@ -1212,6 +1246,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final rootContext = Navigator.of(context, rootNavigator: true).context;
 
     final isLocked = _plate.isLockedFee == true;
@@ -1287,9 +1322,10 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
     return SafeArea(
       top: false,
       child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          border: Border.all(color: _BrandTone.border(cs)),
         ),
         child: Column(
           children: [
@@ -1303,14 +1339,15 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                       height: 4,
                       margin: const EdgeInsets.only(bottom: 12),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade400,
+                        color: cs.outlineVariant.withOpacity(0.75),
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
                   ),
-                  const _SheetTitleRow(
+                  _SheetTitleRow(
                     title: '입차 완료 상태 처리',
                     icon: Icons.settings,
+                    cs: cs,
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -1322,8 +1359,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                 builder: (context, _) {
                   final attention = _attentionPulse.value;
 
-                  final shakeDx = math
-                      .sin(_attentionCtrl.value * math.pi * 10) *
+                  final shakeDx = math.sin(_attentionCtrl.value * math.pi * 10) *
                       (1 - _attentionCtrl.value) *
                       6;
                   final scale = 1 + (attention * 0.012);
@@ -1337,6 +1373,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                         child: Transform.scale(
                           scale: _needsBilling ? scale : 1,
                           child: _PlateSummaryCard(
+                            cs: cs,
                             plateNumber: widget.plateNumber,
                             area: _plate.area,
                             location: location,
@@ -1349,7 +1386,9 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                         ),
                       ),
                       const SizedBox(height: 14),
+
                       _SectionCard(
+                        cs: cs,
                         title: '핵심 작업',
                         subtitle: '자주 사용하는 기능을 상단에 배치했습니다.',
                         child: Column(
@@ -1358,6 +1397,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                               children: [
                                 Expanded(
                                   child: _ActionTileButton(
+                                    cs: cs,
                                     icon: Icons.receipt_long,
                                     title: '정산',
                                     subtitle: '사전 정산',
@@ -1444,6 +1484,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                                   .isNotEmpty)
                                             'reason': result.reason!.trim(),
                                         };
+
                                         await firestore
                                             .collection('plates')
                                             .doc(_plate.id)
@@ -1461,24 +1502,12 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                         if (!mounted) return;
 
                                         setState(() => _plate = updatedPlate);
-
                                         _resetOverride();
 
-                                        try {
-                                          showSuccessSnackbar(
-                                            context,
-                                            '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})',
-                                          );
-                                        } catch (_) {
-                                          ScaffoldMessenger.maybeOf(context)
-                                              ?.showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})',
-                                              ),
-                                            ),
-                                          );
-                                        }
+                                        showSuccessSnackbar(
+                                          context,
+                                          '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})',
+                                        );
                                       } catch (e) {
                                         if (!mounted) return;
                                         _showWarningSafe(
@@ -1490,6 +1519,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: _ActionTileButton(
+                                    cs: cs,
                                     icon: Icons.lock_open,
                                     title: '정산 취소',
                                     subtitle: isLocked ? '잠금 해제' : '잠금 아님',
@@ -1547,6 +1577,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                           'performedBy': userName,
                                           'timestamp': now.toIso8601String(),
                                         };
+
                                         await firestore
                                             .collection('plates')
                                             .doc(_plate.id)
@@ -1565,20 +1596,12 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                         if (!mounted) return;
 
                                         setState(() => _plate = updatedPlate);
-
                                         _resetOverride();
 
-                                        try {
-                                          showSuccessSnackbar(
-                                              context, '사전 정산이 취소되었습니다.');
-                                        } catch (_) {
-                                          ScaffoldMessenger.maybeOf(context)
-                                              ?.showSnackBar(
-                                            const SnackBar(
-                                                content: Text(
-                                                    '사전 정산이 취소되었습니다.')),
-                                          );
-                                        }
+                                        showSuccessSnackbar(
+                                          context,
+                                          '사전 정산이 취소되었습니다.',
+                                        );
                                       } catch (e) {
                                         if (!mounted) return;
                                         _showWarningSafe(
@@ -1591,6 +1614,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                             ),
                             const SizedBox(height: 12),
                             _PrimaryCtaButton(
+                              cs: cs,
                               icon: primaryIcon,
                               title: primaryTitle,
                               subtitle: primarySubtitle,
@@ -1599,10 +1623,13 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                           ],
                         ),
                       ),
+
                       const SizedBox(height: 14),
+
                       _SectionCard(
+                        cs: cs,
                         title: '기타',
-                        subtitle: '로그 확인, 정보 수정, 삭제 등',
+                        subtitle: '로그 확인, 정보 수정, 상태 되돌리기, 삭제 등',
                         child: Column(
                           children: [
                             GridView.count(
@@ -1614,6 +1641,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                               childAspectRatio: 2.6,
                               children: [
                                 _SecondaryActionButton(
+                                  cs: cs,
                                   icon: Icons.history,
                                   label: '로그 확인',
                                   onPressed: () {
@@ -1622,8 +1650,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                       rootContext,
                                       MaterialPageRoute(
                                         builder: (_) => LogViewerBottomSheet(
-                                          initialPlateNumber:
-                                          widget.plateNumber,
+                                          initialPlateNumber: widget.plateNumber,
                                           division: widget.division,
                                           area: widget.area,
                                           requestTime: _plate.requestTime,
@@ -1633,6 +1660,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                   },
                                 ),
                                 _SecondaryActionButton(
+                                  cs: cs,
                                   icon: Icons.edit_note_outlined,
                                   label: '정보 수정',
                                   onPressed: () {
@@ -1642,29 +1670,46 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                       MaterialPageRoute(
                                         builder: (_) => MinorModifyPlateScreen(
                                           plate: _plate,
-                                          collectionKey:
-                                          PlateType.parkingCompleted,
+                                          collectionKey: PlateType.parkingCompleted,
                                         ),
                                       ),
                                     );
                                   },
                                 ),
+
+                                // ✅ onRequestEntry 사용(죽은 파라미터 제거)
+                                if (_type == PlateType.parkingCompleted)
+                                  _SecondaryActionButton(
+                                    cs: cs,
+                                    icon: Icons.undo,
+                                    label: '입차 요청으로',
+                                    onPressed: () async {
+                                      try {
+                                        await widget.onRequestEntry();
+                                        if (!mounted) return;
+                                        showSuccessSnackbar(context, '입차 요청으로 되돌렸습니다.');
+                                        Navigator.pop(context);
+                                      } catch (e) {
+                                        if (!mounted) return;
+                                        showFailedSnackbar(context, '처리 실패: $e');
+                                      }
+                                    },
+                                  ),
+
+                                _DangerActionButton(
+                                  cs: cs,
+                                  icon: Icons.delete_forever,
+                                  label: '삭제',
+                                  onPressed: () {
+                                    Navigator.pop(context);
+                                    widget.onDelete();
+                                  },
+                                ),
                               ],
-                            ),
-                            const SizedBox(height: 12),
-                            _DangerActionButton(
-                              icon: Icons.delete_forever,
-                              label: '삭제',
-                              onPressed: () {
-                                Navigator.pop(context);
-                                widget.onDelete();
-                              },
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      const SizedBox(height: 10),
                     ],
                   );
                 },
@@ -1710,9 +1755,16 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      backgroundColor: cs.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: _BrandTone.border(cs)),
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
         child: Column(
@@ -1724,7 +1776,7 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
               child: CircularProgressIndicator(
                 strokeWidth: 3,
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  _busy ? Colors.grey : Colors.blueAccent,
+                  _busy ? cs.onSurfaceVariant : cs.primary,
                 ),
               ),
             ),
@@ -1732,7 +1784,11 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
             Text(
               widget.message,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: cs.onSurface,
+              ),
             ),
             if (!widget.canCancel) ...[
               const SizedBox(height: 10),
@@ -1740,7 +1796,7 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
                 widget.cancelDisabledHint,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.red.shade700,
+                  color: cs.error,
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
                 ),
@@ -1759,10 +1815,10 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
                           vertical: 14, horizontal: 14),
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14)),
-                      side: const BorderSide(color: Colors.black12),
+                      side: BorderSide(color: _BrandTone.border(cs)),
                       textStyle: const TextStyle(
                           fontSize: 16, fontWeight: FontWeight.w900),
-                      foregroundColor: Colors.black87,
+                      foregroundColor: cs.onSurface,
                     ),
                     child: Text(_busy ? '처리 중...' : '주행 취소'),
                   ),
@@ -1778,6 +1834,8 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
                           borderRadius: BorderRadius.circular(14)),
                       textStyle: const TextStyle(
                           fontSize: 16, fontWeight: FontWeight.w900),
+                      backgroundColor: cs.primary,
+                      foregroundColor: cs.onPrimary,
                     ),
                     child: Text(_busy ? '처리 중...' : '주행 완료'),
                   ),
@@ -1794,21 +1852,27 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
 class _SheetTitleRow extends StatelessWidget {
   final String title;
   final IconData icon;
+  final ColorScheme cs;
 
   const _SheetTitleRow({
     required this.title,
     required this.icon,
+    required this.cs,
   });
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, color: Colors.blueAccent),
+        Icon(icon, color: cs.primary),
         const SizedBox(width: 8),
         Text(
           title,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w900,
+            color: cs.onSurface,
+          ),
         ),
       ],
     );
@@ -1816,6 +1880,8 @@ class _SheetTitleRow extends StatelessWidget {
 }
 
 class _PlateSummaryCard extends StatelessWidget {
+  final ColorScheme cs;
+
   final String plateNumber;
   final String area;
   final String location;
@@ -1827,6 +1893,7 @@ class _PlateSummaryCard extends StatelessWidget {
   final double attention;
 
   const _PlateSummaryCard({
+    required this.cs,
     required this.plateNumber,
     required this.area,
     required this.location,
@@ -1839,21 +1906,24 @@ class _PlateSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final badgeColor = isLocked ? Colors.green : Colors.grey.shade600;
+    final badgeColor = isLocked ? _BrandTone.ok(cs) : cs.onSurfaceVariant;
     final badgeText = isLocked ? '사전정산 잠김' : '사전정산 없음';
 
-    final feeText = (isLocked && lockedFee != null)
-        ? '₩$lockedFee${paymentMethod.isNotEmpty ? " ($paymentMethod)" : ""}'
-        : '—';
+    final feeText =
+    (isLocked && lockedFee != null) ? '₩$lockedFee${paymentMethod.isNotEmpty ? " ($paymentMethod)" : ""}' : '—';
 
     final billingText = billingType.isNotEmpty ? billingType : '미지정';
 
-    final borderColor =
-    Color.lerp(Colors.black12, Colors.orange, (attention * 0.9).clamp(0, 1))!;
+    final borderColor = Color.lerp(
+      _BrandTone.border(cs),
+      cs.error,
+      (attention * 0.75).clamp(0, 1),
+    )!;
+
     final bgColor = Color.lerp(
-      Colors.grey.shade50,
-      Colors.orange.withOpacity(0.06),
-      (attention * 0.8).clamp(0, 1),
+      cs.surfaceContainerLow,
+      cs.errorContainer.withOpacity(0.40),
+      (attention * 0.55).clamp(0, 1),
     )!;
 
     return Container(
@@ -1862,20 +1932,6 @@ class _PlateSummaryCard extends StatelessWidget {
         color: bgColor,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: borderColor, width: 1.2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 6),
-          ),
-          if (attention > 0.001)
-            BoxShadow(
-              color: Colors.orange.withOpacity(0.22 * attention),
-              blurRadius: 18 * attention,
-              spreadRadius: 1 * attention,
-              offset: const Offset(0, 6),
-            ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1885,10 +1941,11 @@ class _PlateSummaryCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   plateNumber,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.2,
+                    color: cs.onSurface,
                   ),
                 ),
               ),
@@ -1911,47 +1968,19 @@ class _PlateSummaryCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          if (attention > 0.001 && !isLocked) ...[
-            Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.orange.withOpacity(0.35)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.warning_amber_rounded,
-                      color: Colors.orange.shade700, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '정산이 필요합니다. 정산 후 출차 요청으로 이동할 수 있습니다.',
-                      style: TextStyle(
-                        color: Colors.orange.shade800,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
           Row(
             children: [
-              Expanded(child: _InfoLine(label: '지역', value: area)),
+              Expanded(child: _InfoLine(cs: cs, label: '지역', value: area)),
               const SizedBox(width: 12),
-              Expanded(child: _InfoLine(label: '위치', value: location)),
+              Expanded(child: _InfoLine(cs: cs, label: '위치', value: location)),
             ],
           ),
           const SizedBox(height: 8),
           Row(
             children: [
-              Expanded(child: _InfoLine(label: '정산 타입', value: billingText)),
+              Expanded(child: _InfoLine(cs: cs, label: '정산 타입', value: billingText)),
               const SizedBox(width: 12),
-              Expanded(child: _InfoLine(label: '잠금 금액', value: feeText)),
+              Expanded(child: _InfoLine(cs: cs, label: '잠금 금액', value: feeText)),
             ],
           ),
         ],
@@ -1961,10 +1990,12 @@ class _PlateSummaryCard extends StatelessWidget {
 }
 
 class _InfoLine extends StatelessWidget {
+  final ColorScheme cs;
   final String label;
   final String value;
 
   const _InfoLine({
+    required this.cs,
     required this.label,
     required this.value,
   });
@@ -1972,13 +2003,14 @@ class _InfoLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final v = value.trim().isEmpty ? '—' : value.trim();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: Colors.black54,
+          style: TextStyle(
+            color: cs.onSurfaceVariant,
             fontSize: 12,
             fontWeight: FontWeight.w700,
           ),
@@ -1988,10 +2020,10 @@ class _InfoLine extends StatelessWidget {
           v,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Colors.black87,
+          style: TextStyle(
+            color: cs.onSurface,
             fontSize: 14,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
           ),
         ),
       ],
@@ -2000,11 +2032,13 @@ class _InfoLine extends StatelessWidget {
 }
 
 class _SectionCard extends StatelessWidget {
+  final ColorScheme cs;
   final String title;
   final String subtitle;
   final Widget child;
 
   const _SectionCard({
+    required this.cs,
     required this.title,
     required this.subtitle,
     required this.child,
@@ -2015,25 +2049,22 @@ class _SectionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 6),
-          ),
-        ],
+        border: Border.all(color: _BrandTone.border(cs)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+          Text(
+            title,
+            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: cs.onSurface),
+          ),
           const SizedBox(height: 4),
-          Text(subtitle,
-              style: const TextStyle(color: Colors.black54, fontSize: 12)),
+          Text(
+            subtitle,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+          ),
           const SizedBox(height: 12),
           child,
         ],
@@ -2045,6 +2076,8 @@ class _SectionCard extends StatelessWidget {
 enum _ActionTone { positive, neutral }
 
 class _ActionTileButton extends StatelessWidget {
+  final ColorScheme cs;
+
   final IconData icon;
   final String title;
   final String subtitle;
@@ -2054,6 +2087,7 @@ class _ActionTileButton extends StatelessWidget {
   final double attention;
 
   const _ActionTileButton({
+    required this.cs,
     required this.icon,
     required this.title,
     required this.subtitle,
@@ -2065,22 +2099,12 @@ class _ActionTileButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color base =
-    (tone == _ActionTone.positive) ? Colors.green : Colors.grey.shade800;
-    final Color bg = (tone == _ActionTone.positive)
-        ? Colors.green.withOpacity(0.08)
-        : Colors.grey.shade100;
-    final Color border = (tone == _ActionTone.positive)
-        ? Colors.green.withOpacity(0.25)
-        : Colors.black12;
+    final Color base = (tone == _ActionTone.positive) ? _BrandTone.ok(cs) : cs.onSurfaceVariant;
+    final Color bg = (tone == _ActionTone.positive) ? _BrandTone.okBg(cs).withOpacity(0.55) : cs.surfaceContainerLow;
+    final Color border = _BrandTone.border(cs);
 
-    final Color attentionBorder =
-    Color.lerp(border, Colors.orange, (attention * 0.9).clamp(0, 1))!;
-    final Color attentionBg = Color.lerp(
-      bg,
-      Colors.orange.withOpacity(0.10),
-      (attention * 0.8).clamp(0, 1),
-    )!;
+    final Color attentionBorder = Color.lerp(border, cs.error, (attention * 0.75).clamp(0, 1))!;
+    final Color attentionBg = Color.lerp(bg, cs.errorContainer.withOpacity(0.35), (attention * 0.55).clamp(0, 1))!;
 
     return Material(
       color: Colors.transparent,
@@ -2093,15 +2117,6 @@ class _ActionTileButton extends StatelessWidget {
             color: attentionBg,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(color: attentionBorder, width: 1.2),
-            boxShadow: [
-              if (attention > 0.001)
-                BoxShadow(
-                  color: Colors.orange.withOpacity(0.22 * attention),
-                  blurRadius: 16 * attention,
-                  spreadRadius: 1 * attention,
-                  offset: const Offset(0, 6),
-                ),
-            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -2113,8 +2128,11 @@ class _ActionTileButton extends StatelessWidget {
                   Expanded(
                     child: Text(
                       title,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w900, fontSize: 15),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                        color: cs.onSurface,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -2122,8 +2140,7 @@ class _ActionTileButton extends StatelessWidget {
                   if (badgeText != null) ...[
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: base.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(999),
@@ -2145,31 +2162,11 @@ class _ActionTileButton extends StatelessWidget {
               Text(
                 subtitle,
                 style: TextStyle(
-                  color: Colors.black.withOpacity(0.65),
+                  color: cs.onSurfaceVariant,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              if (attention > 0.001) ...[
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(Icons.arrow_forward_rounded,
-                        size: 16, color: Colors.orange.shade700),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        '정산을 먼저 진행하세요',
-                        style: TextStyle(
-                          color: Colors.orange.shade800,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
             ],
           ),
         ),
@@ -2179,12 +2176,15 @@ class _ActionTileButton extends StatelessWidget {
 }
 
 class _PrimaryCtaButton extends StatelessWidget {
+  final ColorScheme cs;
+
   final IconData icon;
   final String title;
   final String subtitle;
   final Future<void> Function() onPressed;
 
   const _PrimaryCtaButton({
+    required this.cs,
     required this.icon,
     required this.title,
     required this.subtitle,
@@ -2197,8 +2197,8 @@ class _PrimaryCtaButton extends StatelessWidget {
       width: double.infinity,
       child: FilledButton(
         style: FilledButton.styleFrom(
-          backgroundColor: Colors.blueAccent,
-          foregroundColor: Colors.white,
+          backgroundColor: cs.primary,
+          foregroundColor: cs.onPrimary,
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
@@ -2219,7 +2219,7 @@ class _PrimaryCtaButton extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white.withOpacity(0.9),
+                      color: cs.onPrimary.withOpacity(0.90),
                     ),
                   ),
                 ],
@@ -2234,11 +2234,13 @@ class _PrimaryCtaButton extends StatelessWidget {
 }
 
 class _SecondaryActionButton extends StatelessWidget {
+  final ColorScheme cs;
   final IconData icon;
   final String label;
   final VoidCallback onPressed;
 
   const _SecondaryActionButton({
+    required this.cs,
     required this.icon,
     required this.label,
     required this.onPressed,
@@ -2247,26 +2249,31 @@ class _SecondaryActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return OutlinedButton.icon(
-      icon: Icon(icon, size: 18),
-      label: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
+      icon: Icon(icon, size: 18, color: cs.onSurface),
+      label: Text(
+        label,
+        style: TextStyle(fontWeight: FontWeight.w900, color: cs.onSurface),
+        textAlign: TextAlign.center,
+      ),
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(double.infinity, 46),
-        foregroundColor: Colors.black87,
-        side: const BorderSide(color: Colors.black12),
+        side: BorderSide(color: _BrandTone.border(cs)),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        backgroundColor: Colors.grey.shade50,
+        backgroundColor: cs.surfaceContainerLow,
       ),
     );
   }
 }
 
 class _DangerActionButton extends StatelessWidget {
+  final ColorScheme cs;
   final IconData icon;
   final String label;
   final VoidCallback onPressed;
 
   const _DangerActionButton({
+    required this.cs,
     required this.icon,
     required this.label,
     required this.onPressed,
@@ -2274,24 +2281,18 @@ class _DangerActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        icon: Icon(icon, color: Colors.red.shade700),
-        label: Text(
-          label,
-          style: TextStyle(
-            color: Colors.red.shade700,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          minimumSize: const Size(double.infinity, 48),
-          side: BorderSide(color: Colors.red.shade200),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          backgroundColor: Colors.red.withOpacity(0.04),
-        ),
+    return OutlinedButton.icon(
+      icon: Icon(icon, color: cs.error),
+      label: Text(
+        label,
+        style: TextStyle(color: cs.error, fontWeight: FontWeight.w900),
+      ),
+      onPressed: onPressed,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(double.infinity, 48),
+        side: BorderSide(color: cs.error.withOpacity(0.55)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        backgroundColor: cs.errorContainer.withOpacity(0.35),
       ),
     );
   }

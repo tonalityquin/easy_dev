@@ -20,8 +20,8 @@ class TripleModifyAnimatedActionButton extends StatefulWidget {
 
 class _TripleModifyAnimatedActionButtonState extends State<TripleModifyAnimatedActionButton>
     with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
+  late final AnimationController _controller;
+  late final Animation<double> _scaleAnimation;
 
   @override
   void initState() {
@@ -32,17 +32,12 @@ class _TripleModifyAnimatedActionButtonState extends State<TripleModifyAnimatedA
       lowerBound: 0.95,
       upperBound: 1.0,
     );
-
-    _scaleAnimation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOut,
-    );
+    _scaleAnimation = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
   }
 
   Future<void> _handleTap() async {
     await _controller.reverse();
     await _controller.forward();
-
     await widget.onPressed();
   }
 
@@ -54,53 +49,56 @@ class _TripleModifyAnimatedActionButtonState extends State<TripleModifyAnimatedA
 
   @override
   Widget build(BuildContext context) {
-    final bool isLoading = widget.isLoading;
-    final bool isLocationSelected = widget.isLocationSelected;
+    final cs = Theme.of(context).colorScheme;
 
-    final String label = widget.buttonLabel ??
-        (isLocationSelected ? '입차 완료' : '입차 요청');
+    final bool isLoading = widget.isLoading;
+    final bool isSelected = widget.isLocationSelected;
+
+    final String label = widget.buttonLabel ?? (isSelected ? '입차 완료' : '입차 요청');
+
+    // ✅ 브랜드 정책: 핵심 액션은 primary 계열로 통일
+    final Color bg = isSelected ? cs.primary : cs.surface;
+    final Color fg = isSelected ? cs.onPrimary : cs.onSurface;
+    final BorderSide side = BorderSide(
+      color: isSelected ? cs.primary.withOpacity(0.55) : cs.outlineVariant.withOpacity(0.85),
+      width: 1.2,
+    );
 
     return ScaleTransition(
       scale: _scaleAnimation,
       child: ElevatedButton(
         onPressed: isLoading ? null : _handleTap,
         style: ElevatedButton.styleFrom(
-          backgroundColor:
-          isLocationSelected ? Colors.indigo[50] : Colors.blueGrey[50],
-          foregroundColor:
-          isLocationSelected ? Colors.indigo[800] : Colors.blueGrey[800],
+          backgroundColor: bg,
+          foregroundColor: fg,
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 80),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(
-              color: isLocationSelected ? Colors.indigo : Colors.blueGrey,
-              width: 1.5,
-            ),
+            side: side,
+          ),
+        ).copyWith(
+          overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                (states) => states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(0.12) : null,
           ),
         ),
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 300),
-          transitionBuilder: (Widget child, Animation<double> animation) {
-            return ScaleTransition(scale: animation, child: child);
-          },
+          transitionBuilder: (child, animation) => ScaleTransition(scale: animation, child: child),
           child: isLoading
-              ? const SizedBox(
-            key: ValueKey('loading'),
+              ? SizedBox(
+            key: const ValueKey('loading'),
             width: 20,
             height: 20,
             child: CircularProgressIndicator(
               strokeWidth: 2,
-              color: Colors.black,
+              color: isSelected ? cs.onPrimary : cs.onSurface,
             ),
           )
               : Text(
-            key: const ValueKey('buttonText'),
             label,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-            ),
+            key: const ValueKey('buttonText'),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
           ),
         ),
       ),

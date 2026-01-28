@@ -9,9 +9,6 @@ import 'minor_mode/input_package/minor_input_plate_screen.dart';
 import 'minor_mode/type_package/common_widgets/dashboard_bottom_sheet/minor_home_dash_board_bottom_sheet.dart';
 import '../utils/snackbar_helper.dart';
 
-// ✅ AppCardPalette ThemeExtension 사용
-import '../theme.dart';
-
 // ✅ Trace 기록용 Recorder
 import 'hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
 import '../services/driving_recovery/driving_recovery_gate.dart';
@@ -28,8 +25,7 @@ class _MinorTypePageState extends State<MinorTypePage> {
   void initState() {
     super.initState();
 
-    // ✅ Minor 진입: PlateState 절대 금지(구독 시작됨)
-    // ✅ MinorPlateState만 1회 로드(get) 수행
+    // ✅ Minor 진입: MinorPlateState만 1회 로드(get)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<MinorPlateState>().minorEnableForTypePages(withDefaults: true);
     });
@@ -61,19 +57,22 @@ class _MinorTypePageState extends State<MinorTypePage> {
 
               final currentPage = pageState.pages[pageState.selectedIndex];
               final collection = currentPage.collectionKey;
-              final normalSelectedPlate = plateState.minorGetSelectedPlate(collection, userName);
+              final selected = plateState.minorGetSelectedPlate(collection, userName);
 
-              if (normalSelectedPlate != null && normalSelectedPlate.id.isNotEmpty) {
+              if (selected != null && selected.id.isNotEmpty) {
                 await plateState.minorTogglePlateIsSelected(
                   collection: collection,
-                  plateNumber: normalSelectedPlate.plateNumber,
+                  plateNumber: selected.plateNumber,
                   userName: userName,
                   onError: (msg) => debugPrint(msg),
                 );
               }
             },
             child: Scaffold(
-              body: DrivingRecoveryGate(mode: DrivingRecoveryMode.minor, child: const RefreshableBody()),
+              body: DrivingRecoveryGate(
+                mode: DrivingRecoveryMode.minor,
+                child: const RefreshableBody(),
+              ),
               bottomNavigationBar: SafeArea(
                 top: false,
                 child: Column(
@@ -104,19 +103,17 @@ class _EntryDashboardBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
+    final cs = Theme.of(context).colorScheme;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
       child: Row(
         children: [
-          // ✅ 좌측: 입차 화면 열기 버튼
-          const Expanded(
-            child: _OpenEntryButton(),
-          ),
+          // 좌측: 입차 화면 열기
+          const Expanded(child: _OpenEntryButton()),
           const SizedBox(width: 8),
 
-          // ── 대시보드(기존)
+          // 우측: 대시보드
           Expanded(
             child: ElevatedButton(
               onPressed: () {
@@ -129,14 +126,12 @@ class _EntryDashboardBar extends StatelessWidget {
                 );
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: palette.tripleBase,
-                foregroundColor: palette.tripleLight,
+                backgroundColor: cs.primary,
+                foregroundColor: cs.onPrimary,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 elevation: 2,
-                shadowColor: palette.tripleDark.withOpacity(.25),
+                shadowColor: cs.shadow.withOpacity(0.25),
               ),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -173,7 +168,7 @@ class _OpenEntryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
+    final cs = Theme.of(context).colorScheme;
 
     return ElevatedButton(
       onPressed: () async {
@@ -185,30 +180,35 @@ class _OpenEntryButton extends StatelessWidget {
             'action': 'open_minor_input_plate_screen',
           },
         );
-
         await _openEntryScreen(context);
       },
       style: ElevatedButton.styleFrom(
         elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
-          side: BorderSide(color: AppCardPalette.of(context).tripleBase.withOpacity(.35)),
+          side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+        ),
+      ).copyWith(
+        overlayColor: MaterialStateProperty.resolveWith<Color?>(
+              (states) => states.contains(MaterialState.pressed)
+              ? cs.outlineVariant.withOpacity(0.12)
+              : null,
         ),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.add_circle_outline, size: 20, color: palette.tripleBase),
+          Icon(Icons.add_circle_outline, size: 20, color: cs.primary),
           const SizedBox(width: 8),
           Text(
             '입차',
             style: TextStyle(
               fontWeight: FontWeight.w800,
               fontSize: 13,
-              color: palette.tripleBase,
+              color: cs.primary,
             ),
           ),
         ],
@@ -220,7 +220,6 @@ class _OpenEntryButton extends StatelessWidget {
 class _SingleHomeTabBar extends StatelessWidget {
   const _SingleHomeTabBar();
 
-  // ✅ 공통 Trace 기록 헬퍼 (StatelessWidget용)
   void _trace(BuildContext context, String name, {Map<String, dynamic>? meta}) {
     DebugActionRecorder.instance.recordAction(
       name,
@@ -231,17 +230,16 @@ class _SingleHomeTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
+    final cs = Theme.of(context).colorScheme;
 
     return Consumer<MinorPageState>(
       builder: (context, pageState, _) {
         return SizedBox(
           height: kBottomNavigationBarHeight,
           child: Material(
-            color: Colors.white,
+            color: cs.surface,
             child: InkWell(
               onTap: () async {
-                // ✅ 홈 버튼 탭 Trace 기록
                 _trace(
                   context,
                   '홈 버튼',
@@ -253,35 +251,31 @@ class _SingleHomeTabBar extends StatelessWidget {
                   },
                 );
 
-                // ✅ (기존) 홈 탭 처리: 재탭이면 reset 수행
                 await pageState.onItemTapped(
                   context,
                   0,
                   onError: (msg) => showFailedSnackbar(context, msg),
                 );
 
-                // ✅ (기존 유지) 홈 버튼을 탭할 때마다 데이터 갱신(1회 조회 get)
+                // 홈 탭할 때마다 데이터 1회 get
                 try {
                   context.read<MinorPlateState>().minorSyncWithAreaState();
-                } catch (_) {
-                  // no-op
-                }
+                } catch (_) {}
 
-                // ✅ [추가] 같은 area에서도 출차요청 aggregation count 재조회 트리거
-                // - 내부에 0.8초 쿨다운(Throttle) 적용됨
+                // 출차요청 aggregation refresh 토큰 bump
                 pageState.bumpDepartureRequestsCountRefreshToken();
               },
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.home, color: palette.tripleBase),
+                  Icon(Icons.home, color: cs.primary),
                   const SizedBox(width: 8),
                   Text(
                     '홈',
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.bold,
-                      color: palette.tripleBase,
+                      color: cs.primary,
                     ),
                   ),
                 ],
@@ -304,9 +298,9 @@ class RefreshableBody extends StatefulWidget {
 class _RefreshableBodyState extends State<RefreshableBody> {
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
+    final cs = Theme.of(context).colorScheme;
 
-    // ✅ [변경] Vertical Drag(TopSheet) 제스처 로직 완전 제거
+    // ✅ Vertical Drag(TopSheet) 제스처 로직 제거 유지
     return Consumer2<MinorPageState, MinorPlateState>(
       builder: (context, pageState, plateState, _) {
         return Stack(
@@ -314,14 +308,14 @@ class _RefreshableBodyState extends State<RefreshableBody> {
             _buildCurrentPage(context, pageState),
             if (plateState.isLoading)
               Container(
-                color: Colors.white.withOpacity(.35),
+                color: cs.surface.withOpacity(.35),
                 child: Center(
                   child: SizedBox(
                     width: 28,
                     height: 28,
                     child: CircularProgressIndicator(
                       strokeWidth: 3,
-                      valueColor: AlwaysStoppedAnimation<Color>(palette.tripleBase),
+                      valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
                     ),
                   ),
                 ),
@@ -338,7 +332,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   }
 }
 
-/// ✅ 공용 슬라이드 라우트(중복 제거)
+/// ✅ 공용 슬라이드 라우트
 PageRouteBuilder _slidePageRoute(Widget page, {required bool fromLeft}) {
   return PageRouteBuilder(
     transitionDuration: const Duration(milliseconds: 300),
@@ -346,7 +340,9 @@ PageRouteBuilder _slidePageRoute(Widget page, {required bool fromLeft}) {
     transitionsBuilder: (_, animation, __, child) {
       final begin = Offset(fromLeft ? -1.0 : 1.0, 0);
       final end = Offset.zero;
-      final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
+      final tween = Tween(begin: begin, end: end).chain(
+        CurveTween(curve: Curves.easeInOut),
+      );
       return SlideTransition(position: animation.drive(tween), child: child);
     },
   );

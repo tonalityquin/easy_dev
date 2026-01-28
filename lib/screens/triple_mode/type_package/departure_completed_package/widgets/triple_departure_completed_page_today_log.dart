@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+
 import 'triple_departure_completed_plate_image_dialog.dart';
 
 class TripleTodayLogSection extends StatefulWidget {
@@ -77,7 +78,7 @@ class _TripleTodayLogSectionState extends State<TripleTodayLogSection> {
     return '₩${_formatIntWithComma(n)}';
   }
 
-  // ===== 공통 로직: 액션에 따른 아이콘/색상 매핑 =====
+  // ===== 액션 아이콘 매핑 =====
   IconData _actionIcon(String action) {
     if (action.contains('사전 정산')) return Icons.receipt_long;
     if (action.contains('입차 완료')) return Icons.local_parking;
@@ -87,16 +88,42 @@ class _TripleTodayLogSectionState extends State<TripleTodayLogSection> {
     return Icons.history;
   }
 
-  Color _actionColor(String action) {
-    if (action.contains('사전 정산')) return Colors.teal;
-    if (action.contains('출차')) return Colors.orange;
-    if (action.contains('취소')) return Colors.redAccent;
-    if (action.contains('생성')) return Colors.indigo;
-    return Colors.blueGrey;
+  // ===== 브랜드(ColorScheme) 기반 액션 색상 매핑 =====
+  // - 기존의 teal/orange/red/indigo 하드코딩을 제거하고,
+  //   ColorScheme(primary/secondary/tertiary/error/onSurfaceVariant)로 통일
+  Color _actionColor(BuildContext context, String action) {
+    final cs = Theme.of(context).colorScheme;
+
+    if (action.contains('사전 정산')) return cs.primary;
+    if (action.contains('출차')) return cs.secondary;
+    if (action.contains('취소')) return cs.error;
+    if (action.contains('생성')) return cs.tertiary;
+
+    return cs.onSurfaceVariant;
+  }
+
+  void _openPhotoDialog(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: "사진 보기",
+      barrierColor: cs.scrim.withOpacity(0.45),
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (_, __, ___) {
+        return TripleDepartureCompletedPlateImageDialog(
+          plateNumber: widget.plateNumber,
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
     // 정규화 + "오래된순(오름차순)" 정렬
     final logs = _normalizeLogs(widget.logsRaw)
       ..sort((a, b) {
@@ -104,6 +131,26 @@ class _TripleTodayLogSectionState extends State<TripleTodayLogSection> {
         final bT = _parseTs(b['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
         return aT.compareTo(bT);
       });
+
+    final headerTextStyle = theme.textTheme.titleSmall?.copyWith(
+      fontSize: 16,
+      fontWeight: FontWeight.w900,
+      color: cs.onSurface,
+    ) ??
+        TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w900,
+          color: cs.onSurface,
+        );
+
+    final helperTextStyle = theme.textTheme.bodySmall?.copyWith(
+      color: cs.onSurfaceVariant,
+      fontWeight: FontWeight.w700,
+    ) ??
+        TextStyle(
+          color: cs.onSurfaceVariant,
+          fontWeight: FontWeight.w700,
+        );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -115,46 +162,69 @@ class _TripleTodayLogSectionState extends State<TripleTodayLogSection> {
             children: [
               // 번호판 영역 전체를 탭 가능하게
               Expanded(
-                child: InkWell(
-                  onTap: () => setState(() => _expanded = !_expanded),
-                  borderRadius: BorderRadius.circular(6),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '${widget.plateNumber} 로그',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => setState(() => _expanded = !_expanded),
+                    borderRadius: BorderRadius.circular(10),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${widget.plateNumber} 로그',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: headerTextStyle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Icon(
+                            _expanded ? Icons.expand_less : Icons.expand_more,
+                            size: 20,
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 6),
-                      Icon(_expanded ? Icons.expand_less : Icons.expand_more, size: 20),
-                    ],
+                    ),
                   ),
                 ),
               ),
               const SizedBox(width: 8),
-              ElevatedButton(
-                onPressed: () {
-                  showGeneralDialog(
-                    context: context,
-                    barrierDismissible: true,
-                    barrierLabel: "사진 보기",
-                    transitionDuration: const Duration(milliseconds: 300),
-                    pageBuilder: (_, __, ___) => TripleDepartureCompletedPlateImageDialog(plateNumber: widget.plateNumber),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.grey.shade100,
-                  foregroundColor: Colors.black87,
+
+              // ✅ 브랜드 톤 버튼(하드코딩 grey/black 제거)
+              OutlinedButton.icon(
+                onPressed: () => _openPhotoDialog(context),
+                icon: Icon(Icons.photo, color: cs.onSurface),
+                label: Text(
+                  '사진',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: cs.onSurface,
+                  ) ??
+                      TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: cs.onSurface,
+                      ),
                 ),
-                child: const Text('사진'),
+                style: OutlinedButton.styleFrom(
+                  backgroundColor: cs.surfaceContainerLow,
+                  foregroundColor: cs.onSurface,
+                  side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ).copyWith(
+                  overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                        (states) => states.contains(MaterialState.pressed)
+                        ? cs.outlineVariant.withOpacity(0.12)
+                        : null,
+                  ),
+                ),
               ),
             ],
           ),
         ),
-        const Divider(height: 1),
+        Divider(height: 1, color: cs.outlineVariant.withOpacity(0.85)),
 
         // 본문 리스트: 번호판 영역을 눌러야 펼쳐짐
         Expanded(
@@ -163,67 +233,120 @@ class _TripleTodayLogSectionState extends State<TripleTodayLogSection> {
             switchInCurve: Curves.easeOut,
             switchOutCurve: Curves.easeIn,
             child: !_expanded
-                ? const Center(
-                    key: ValueKey('collapsed'),
-                    child: Text('번호판 영역을 눌러 로그를 펼치세요.'),
-                  )
+                ? Center(
+              key: const ValueKey('collapsed'),
+              child: Text(
+                '번호판 영역을 눌러 로그를 펼치세요.',
+                style: helperTextStyle,
+                textAlign: TextAlign.center,
+              ),
+            )
                 : (logs.isEmpty
-                    ? const Center(
-                        key: ValueKey('empty'),
-                        child: Text('📭 로그가 없습니다.'),
-                      )
-                    : Scrollbar(
-                        key: const ValueKey('list'),
-                        child: ListView.separated(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          itemCount: logs.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (context, index) {
-                            final e = logs[index];
+                ? Center(
+              key: const ValueKey('empty'),
+              child: Text(
+                '📭 로그가 없습니다.',
+                style: helperTextStyle,
+                textAlign: TextAlign.center,
+              ),
+            )
+                : Scrollbar(
+              key: const ValueKey('list'),
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                itemCount: logs.length,
+                separatorBuilder: (_, __) => Divider(
+                  height: 1,
+                  color: cs.outlineVariant.withOpacity(0.55),
+                ),
+                itemBuilder: (context, index) {
+                  final e = logs[index];
 
-                            final action = (e['action'] ?? '-').toString();
-                            final from = (e['from'] ?? '').toString();
-                            final to = (e['to'] ?? '').toString();
-                            final performedBy = (e['performedBy'] ?? '').toString();
-                            final tsText = _formatTs(e['timestamp']);
+                  final action = (e['action'] ?? '-').toString();
+                  final from = (e['from'] ?? '').toString();
+                  final to = (e['to'] ?? '').toString();
+                  final performedBy = (e['performedBy'] ?? '').toString();
+                  final tsText = _formatTs(e['timestamp']);
 
-                            // 추가: 확정요금/결제수단/사유
-                            final String? feeText = (e.containsKey('lockedFee') || e.containsKey('lockedFeeAmount'))
-                                ? _formatWon(e['lockedFee'] ?? e['lockedFeeAmount'])
-                                : null;
-                            final String? payText = (e['paymentMethod']?.toString().trim().isNotEmpty ?? false)
-                                ? e['paymentMethod'].toString()
-                                : null;
-                            final String? reasonText =
-                                (e['reason']?.toString().trim().isNotEmpty ?? false) ? e['reason'].toString() : null;
+                  // 확정요금/결제수단/사유
+                  final String? feeText =
+                  (e.containsKey('lockedFee') || e.containsKey('lockedFeeAmount'))
+                      ? _formatWon(e['lockedFee'] ?? e['lockedFeeAmount'])
+                      : null;
 
-                            final color = _actionColor(action);
+                  final String? payText =
+                  (e['paymentMethod']?.toString().trim().isNotEmpty ?? false)
+                      ? e['paymentMethod'].toString()
+                      : null;
 
-                            return ListTile(
-                              dense: true,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              leading: Icon(_actionIcon(action), color: color),
-                              title: Text(action, style: TextStyle(fontWeight: FontWeight.w600, color: color)),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (from.isNotEmpty || to.isNotEmpty) Text('$from → $to'),
-                                  if (performedBy.isNotEmpty) const SizedBox(height: 2),
-                                  if (performedBy.isNotEmpty) const Text('담당자:', style: TextStyle(fontSize: 12)),
-                                  if (performedBy.isNotEmpty) Text(performedBy, style: const TextStyle(fontSize: 12)),
-                                  if (feeText != null || payText != null || reasonText != null)
-                                    const SizedBox(height: 2),
-                                  if (feeText != null) Text('확정요금: $feeText', style: const TextStyle(fontSize: 12)),
-                                  if (payText != null) Text('결제수단: $payText', style: const TextStyle(fontSize: 12)),
-                                  if (reasonText != null) Text('사유: $reasonText', style: const TextStyle(fontSize: 12)),
-                                ],
-                              ),
-                              trailing: Text(tsText, style: const TextStyle(fontSize: 12)),
-                              isThreeLine: true,
-                            );
-                          },
-                        ),
-                      )),
+                  final String? reasonText =
+                  (e['reason']?.toString().trim().isNotEmpty ?? false)
+                      ? e['reason'].toString()
+                      : null;
+
+                  final color = _actionColor(context, action);
+
+                  final titleStyle = theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: color,
+                  ) ??
+                      TextStyle(
+                        fontWeight: FontWeight.w800,
+                        color: color,
+                      );
+
+                  final metaStyle = theme.textTheme.bodySmall?.copyWith(
+                    fontSize: 12,
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ) ??
+                      TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      );
+
+                  return ListTile(
+                    dense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    leading: Icon(_actionIcon(action), color: color),
+                    title: Text(action, style: titleStyle),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (from.isNotEmpty || to.isNotEmpty)
+                          Text('$from → $to', style: metaStyle),
+                        if (performedBy.isNotEmpty) const SizedBox(height: 2),
+                        if (performedBy.isNotEmpty)
+                          Text('담당자:', style: metaStyle),
+                        if (performedBy.isNotEmpty)
+                          Text(performedBy, style: metaStyle),
+                        if (feeText != null || payText != null || reasonText != null)
+                          const SizedBox(height: 2),
+                        if (feeText != null)
+                          Text('확정요금: $feeText', style: metaStyle),
+                        if (payText != null)
+                          Text('결제수단: $payText', style: metaStyle),
+                        if (reasonText != null)
+                          Text('사유: $reasonText', style: metaStyle),
+                      ],
+                    ),
+                    trailing: Text(
+                      tsText,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ) ??
+                          TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    isThreeLine: true,
+                  );
+                },
+              ),
+            )),
           ),
         ),
       ],

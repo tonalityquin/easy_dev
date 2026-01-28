@@ -33,18 +33,29 @@ class MinorInputPhotoSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '촬영 사진',
-          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+          style: (tt.titleMedium ?? const TextStyle(fontSize: 18)).copyWith(
+            fontWeight: FontWeight.w900,
+            color: cs.onSurface,
+          ),
         ),
         const SizedBox(height: 8.0),
         SizedBox(
           height: 100,
           child: capturedImages.isEmpty
-              ? const Center(child: Text('촬영된 사진 없음'))
+              ? Center(
+            child: Text(
+              '촬영된 사진 없음',
+              style: TextStyle(color: cs.onSurfaceVariant),
+            ),
+          )
               : ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: capturedImages.length,
@@ -64,29 +75,37 @@ class MinorInputPhotoSection extends StatelessWidget {
                       future: File(imageFile.path).exists(),
                       builder: (context, snapshot) {
                         if (snapshot.connectionState != ConnectionState.done) {
-                          return const SizedBox(
-                            width: 100,
-                            height: 100,
-                            child: Center(child: CircularProgressIndicator()),
-                          );
-                        }
-
-                        if (snapshot.hasError || !(snapshot.data ?? false)) {
-                          return const SizedBox(
+                          return SizedBox(
                             width: 100,
                             height: 100,
                             child: Center(
-                              child: Icon(Icons.broken_image, color: Colors.red),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                              ),
                             ),
                           );
                         }
 
-                        return Image.file(
-                          File(imageFile.path),
-                          key: ValueKey(imageFile.path),
-                          width: 100,
-                          height: 100,
-                          fit: BoxFit.cover,
+                        if (snapshot.hasError || !(snapshot.data ?? false)) {
+                          return SizedBox(
+                            width: 100,
+                            height: 100,
+                            child: Center(
+                              child: Icon(Icons.broken_image, color: cs.error),
+                            ),
+                          );
+                        }
+
+                        return ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.file(
+                            File(imageFile.path),
+                            key: ValueKey(imageFile.path),
+                            width: 100,
+                            height: 100,
+                            fit: BoxFit.cover,
+                          ),
                         );
                       },
                     ),
@@ -102,9 +121,9 @@ class MinorInputPhotoSection extends StatelessWidget {
             width: double.infinity,
             child: OutlinedButton(
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.black,
-                backgroundColor: Colors.white,
-                side: const BorderSide(color: Colors.black),
+                foregroundColor: cs.onSurface,
+                backgroundColor: cs.surface,
+                side: BorderSide(color: cs.outlineVariant),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: const RoundedRectangleBorder(
                   borderRadius: BorderRadius.zero,
@@ -123,7 +142,7 @@ class MinorInputPhotoSection extends StatelessWidget {
                     Future<List<String>> future = MinorInputPlateService.listPlateImages(
                       context: context,
                       plateNumber: plateNumber,
-                      yearMonth: selectedYearMonth, // ✅ 월 단위 조회 기본 적용
+                      yearMonth: selectedYearMonth,
                     );
 
                     return DraggableScrollableSheet(
@@ -131,9 +150,12 @@ class MinorInputPhotoSection extends StatelessWidget {
                       minChildSize: 0.4,
                       maxChildSize: 0.95,
                       builder: (context, scrollController) {
+                        final cs2 = Theme.of(context).colorScheme;
+                        final tt2 = Theme.of(context).textTheme;
+
                         return SafeArea(
                           child: Material(
-                            color: Colors.white,
+                            color: cs2.surface,
                             borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                             child: Padding(
                               padding: const EdgeInsets.all(16.0),
@@ -146,40 +168,50 @@ class MinorInputPhotoSection extends StatelessWidget {
                                         height: 4,
                                         margin: const EdgeInsets.only(bottom: 16),
                                         decoration: BoxDecoration(
-                                          color: Colors.grey.shade300,
+                                          color: cs2.outlineVariant.withOpacity(0.9),
                                           borderRadius: BorderRadius.circular(2),
                                         ),
                                       ),
-                                      const Text(
+                                      Text(
                                         '저장된 사진 목록',
-                                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                        style: (tt2.titleMedium ?? const TextStyle(fontSize: 18)).copyWith(
+                                          fontWeight: FontWeight.w900,
+                                          color: cs2.onSurface,
+                                        ),
                                       ),
                                       const SizedBox(height: 12),
 
                                       // ✅ 월 선택(UTC 기준)
                                       Row(
                                         children: [
-                                          const Text(
+                                          Text(
                                             '월(UTC): ',
-                                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w700,
+                                              color: cs2.onSurface,
+                                            ),
                                           ),
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 12),
                                               decoration: BoxDecoration(
-                                                border: Border.all(color: Colors.grey.shade300),
-                                                borderRadius: BorderRadius.circular(8),
+                                                border: Border.all(color: cs2.outlineVariant),
+                                                borderRadius: BorderRadius.circular(12),
+                                                color: cs2.surface,
                                               ),
                                               child: DropdownButtonHideUnderline(
                                                 child: DropdownButton<String>(
                                                   value: selectedYearMonth,
                                                   isExpanded: true,
+                                                  dropdownColor: cs2.surface,
+                                                  icon: Icon(Icons.keyboard_arrow_down, color: cs2.onSurfaceVariant),
                                                   items: yearMonths
                                                       .map(
                                                         (ym) => DropdownMenuItem<String>(
                                                       value: ym,
-                                                      child: Text(ym),
+                                                      child: Text(ym, style: TextStyle(color: cs2.onSurface)),
                                                     ),
                                                   )
                                                       .toList(),
@@ -187,7 +219,6 @@ class MinorInputPhotoSection extends StatelessWidget {
                                                     if (value == null) return;
                                                     setModalState(() {
                                                       selectedYearMonth = value;
-                                                      // ✅ 월 변경 시 해당 월 prefix로만 다시 조회
                                                       future = MinorInputPlateService.listPlateImages(
                                                         context: context,
                                                         plateNumber: plateNumber,
@@ -209,17 +240,31 @@ class MinorInputPhotoSection extends StatelessWidget {
                                           future: future,
                                           builder: (context, snapshot) {
                                             if (snapshot.connectionState == ConnectionState.waiting) {
-                                              return const Center(child: CircularProgressIndicator());
+                                              return Center(
+                                                child: CircularProgressIndicator(
+                                                  valueColor: AlwaysStoppedAnimation<Color>(cs2.primary),
+                                                ),
+                                              );
                                             }
 
                                             if (snapshot.hasError) {
-                                              return const Center(child: Text('이미지 불러오기 실패'));
+                                              return Center(
+                                                child: Text(
+                                                  '이미지 불러오기 실패',
+                                                  style: TextStyle(color: cs2.onSurfaceVariant),
+                                                ),
+                                              );
                                             }
 
                                             final urls = snapshot.data ?? [];
 
                                             if (urls.isEmpty) {
-                                              return const Center(child: Text('DB에 저장된 이미지가 없습니다.'));
+                                              return Center(
+                                                child: Text(
+                                                  'DB에 저장된 이미지가 없습니다.',
+                                                  style: TextStyle(color: cs2.onSurfaceVariant),
+                                                ),
+                                              );
                                             }
 
                                             return ListView.builder(
@@ -228,7 +273,6 @@ class MinorInputPhotoSection extends StatelessWidget {
                                               itemBuilder: (context, index) {
                                                 final url = urls[index];
 
-                                                // URL 마지막 세그먼트는 파일명(월 폴더 추가되어도 동일)
                                                 final fileName = url.split('/').last;
                                                 final segments = fileName.split('_');
 
@@ -247,15 +291,15 @@ class MinorInputPhotoSection extends StatelessWidget {
                                                           width: MediaQuery.of(context).size.width * 0.2,
                                                           height: 80,
                                                           decoration: BoxDecoration(
-                                                            borderRadius: BorderRadius.circular(4),
-                                                            border: Border.all(color: Colors.grey.shade300),
+                                                            borderRadius: BorderRadius.circular(10),
+                                                            border: Border.all(color: cs2.outlineVariant),
                                                           ),
                                                           clipBehavior: Clip.hardEdge,
                                                           child: Image.network(
                                                             url,
                                                             fit: BoxFit.cover,
                                                             errorBuilder: (_, __, ___) =>
-                                                            const Icon(Icons.broken_image, color: Colors.red),
+                                                                Icon(Icons.broken_image, color: cs2.error),
                                                           ),
                                                         ),
                                                         const SizedBox(width: 12),
@@ -263,9 +307,9 @@ class MinorInputPhotoSection extends StatelessWidget {
                                                           child: Column(
                                                             crossAxisAlignment: CrossAxisAlignment.start,
                                                             children: [
-                                                              Text('📅 $date', style: const TextStyle(fontSize: 14)),
-                                                              Text('🚘 $number', style: const TextStyle(fontSize: 14)),
-                                                              Text('👤 $user', style: const TextStyle(fontSize: 14)),
+                                                              Text('📅 $date', style: TextStyle(fontSize: 14, color: cs2.onSurface)),
+                                                              Text('🚘 $number', style: TextStyle(fontSize: 14, color: cs2.onSurface)),
+                                                              Text('👤 $user', style: TextStyle(fontSize: 14, color: cs2.onSurface)),
                                                             ],
                                                           ),
                                                         ),

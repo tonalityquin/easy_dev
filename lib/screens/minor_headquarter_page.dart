@@ -7,9 +7,10 @@ import '../states/page/minor_hq_state.dart';
 import '../states/page/minor_page_info.dart';
 import '../selector_hubs_package/dev_auth.dart';
 import 'secondary_page.dart';
-import '../theme.dart';
+
 import '../states/plate/plate_state.dart';
 import '../states/plate/minor_plate_state.dart';
+
 import 'hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
 
 class MinorHeadquarterPage extends StatelessWidget {
@@ -109,17 +110,20 @@ class _HqModeSwitchButton extends StatelessWidget {
     );
   }
 
-  Future<_ModeTarget?> _pickTarget(BuildContext context, AppCardPalette palette) {
-    final accent = palette.minorBase;
-    final border = palette.minorLight.withOpacity(.65);
-    final textColor = palette.minorDark;
+  Future<_ModeTarget?> _pickTarget(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    final accent = cs.primary;
+    final border = cs.outlineVariant.withOpacity(0.85);
+    final textColor = cs.onSurface;
 
     return showDialog<_ModeTarget>(
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
         return Dialog(
-          backgroundColor: Colors.white,
+          backgroundColor: cs.surface,
+          surfaceTintColor: Colors.transparent,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
@@ -133,7 +137,7 @@ class _HqModeSwitchButton extends StatelessWidget {
                         '헤드쿼터 모드 전환',
                         style: TextStyle(
                           fontSize: 16,
-                          fontWeight: FontWeight.w700,
+                          fontWeight: FontWeight.w800,
                           color: textColor,
                         ),
                       ),
@@ -141,7 +145,7 @@ class _HqModeSwitchButton extends StatelessWidget {
                     IconButton(
                       tooltip: '닫기',
                       onPressed: () => Navigator.of(dialogContext).pop(),
-                      icon: Icon(Icons.close, color: textColor.withOpacity(.75)),
+                      icon: Icon(Icons.close, color: cs.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -169,7 +173,6 @@ class _HqModeSwitchButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
@@ -180,7 +183,7 @@ class _HqModeSwitchButton extends StatelessWidget {
           label: const Text('헤드쿼터 모드 전환'),
           style: _switchBtnStyle(context),
           onPressed: () async {
-            final target = await _pickTarget(context, palette);
+            final target = await _pickTarget(context);
             if (target == null) return;
 
             _trace(
@@ -229,8 +232,10 @@ class _ModeSwitchDialogOption extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Material(
-      color: Colors.white,
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -238,6 +243,7 @@ class _ModeSwitchDialogOption extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           decoration: BoxDecoration(
+            color: cs.surface,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: borderColor, width: 1),
           ),
@@ -250,12 +256,12 @@ class _ModeSwitchDialogOption extends StatelessWidget {
                   title,
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                     color: textColor,
                   ),
                 ),
               ),
-              Icon(Icons.chevron_right, color: textColor.withOpacity(.6)),
+              Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
             ],
           ),
         ),
@@ -335,8 +341,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   }
 
   void _handleHorizontalDragEnd(BuildContext context, double velocity) {
-    final fired = (_dragDistance < -_hDistanceThreshold) &&
-        (velocity < -_hVelocityThreshold);
+    final fired = (_dragDistance < -_hDistanceThreshold) && (velocity < -_hVelocityThreshold);
 
     if (fired) {
       _openSecondaryIfAuthorized();
@@ -347,7 +352,7 @@ class _RefreshableBodyState extends State<RefreshableBody> {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
+    final cs = Theme.of(context).colorScheme;
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
@@ -361,9 +366,8 @@ class _RefreshableBodyState extends State<RefreshableBody> {
         builder: (context, state, child) {
           final pages = state.pages;
 
-          final safeIndex = pages.isEmpty
-              ? 0
-              : state.selectedIndex.clamp(0, pages.length - 1);
+          final safeIndex =
+          pages.isEmpty ? 0 : state.selectedIndex.clamp(0, pages.length - 1);
 
           final children = pages.isEmpty
               ? const <Widget>[SizedBox.shrink()]
@@ -377,16 +381,14 @@ class _RefreshableBodyState extends State<RefreshableBody> {
               ),
               if (state.isLoading)
                 Container(
-                  color: Colors.white.withOpacity(.35),
+                  color: cs.surface.withOpacity(.35),
                   child: Center(
                     child: SizedBox(
                       width: 28,
                       height: 28,
                       child: CircularProgressIndicator(
                         strokeWidth: 3,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          palette.minorBase,
-                        ),
+                        valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
                       ),
                     ),
                   ),
@@ -404,7 +406,7 @@ class PageBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
+    final cs = Theme.of(context).colorScheme;
 
     return Consumer<MinorHqState>(
       builder: (context, state, child) {
@@ -428,9 +430,9 @@ class PageBottomNavigation extends StatelessWidget {
             ),
           )
               .toList(),
-          selectedItemColor: palette.minorBase,
-          unselectedItemColor: palette.minorDark.withOpacity(.55),
-          backgroundColor: Colors.white,
+          selectedItemColor: cs.primary,
+          unselectedItemColor: cs.onSurfaceVariant.withOpacity(.75),
+          backgroundColor: cs.surface,
           elevation: 0,
           showUnselectedLabels: true,
         );
@@ -440,18 +442,22 @@ class PageBottomNavigation extends StatelessWidget {
 }
 
 ButtonStyle _switchBtnStyle(BuildContext context) {
-  final palette = AppCardPalette.of(context);
+  final cs = Theme.of(context).colorScheme;
 
   return ElevatedButton.styleFrom(
-    backgroundColor: Colors.white,
-    foregroundColor: palette.minorDark,
+    backgroundColor: cs.surface,
+    foregroundColor: cs.onSurface,
     minimumSize: const Size.fromHeight(48),
     padding: EdgeInsets.zero,
-    side: BorderSide(
-      color: palette.minorLight.withOpacity(.8),
-      width: 1.0,
-    ),
+    elevation: 0,
+    side: BorderSide(color: cs.outlineVariant.withOpacity(.85), width: 1.0),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+  ).copyWith(
+    overlayColor: MaterialStateProperty.resolveWith<Color?>(
+          (states) => states.contains(MaterialState.pressed)
+          ? cs.outlineVariant.withOpacity(0.12)
+          : null,
+    ),
   );
 }
 

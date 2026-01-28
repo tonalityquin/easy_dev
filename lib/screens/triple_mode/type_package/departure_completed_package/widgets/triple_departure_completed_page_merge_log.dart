@@ -60,6 +60,21 @@ Future<void> _logApiError({
   }
 }
 
+/// ✅ 브랜드(ColorScheme) 기반 UI 헬퍼
+class _Brand {
+  static Color border(ColorScheme cs) => cs.outlineVariant.withOpacity(0.85);
+  static Color divider(ColorScheme cs) => cs.outlineVariant.withOpacity(0.55);
+
+  /// 액션 색상: 하드코딩 제거 → ColorScheme 기반
+  static Color actionColor(ColorScheme cs, String action) {
+    if (action.contains('사전 정산')) return cs.primary;
+    if (action.contains('출차')) return cs.secondary;
+    if (action.contains('취소')) return cs.error;
+    if (action.contains('생성')) return cs.tertiary;
+    return cs.onSurfaceVariant;
+  }
+}
+
 /// === GCS 헬퍼 (OAuth 사용) ===
 class _GcsHelper {
   /// prefix 하위 object 목록 (페이지네이션 대응)
@@ -163,7 +178,7 @@ class _GcsHelper {
     try {
       final decoded = jsonDecode(utf8.decode(resp.bodyBytes));
       if (decoded is Map<String, dynamic>) return decoded;
-      // 형태가 map이 아니면 빈 map 반환(기존 정책 유지)
+
       await _logApiError(
         tag: '_GcsHelper.loadJsonByObjectName',
         message: 'JSON이 Map 형태가 아님',
@@ -242,6 +257,8 @@ class RangeControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return SizedBox(
       height: 44,
       child: Row(
@@ -250,10 +267,26 @@ class RangeControls extends StatelessWidget {
             flex: 5,
             child: OutlinedButton.icon(
               onPressed: () => _pickRange(context),
-              icon: const Icon(Icons.calendar_month, size: 18),
+              icon: Icon(Icons.calendar_month, size: 18, color: cs.onSurface),
               label: FittedBox(
                 fit: BoxFit.scaleDown,
-                child: Text('${_ymd(start)}  ~  ${_ymd(end)}', maxLines: 1),
+                child: Text(
+                  '${_ymd(start)}  ~  ${_ymd(end)}',
+                  maxLines: 1,
+                  style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w800),
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                backgroundColor: cs.surface,
+                foregroundColor: cs.onSurface,
+                side: BorderSide(color: _Brand.border(cs)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ).copyWith(
+                overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                      (states) => states.contains(MaterialState.pressed)
+                      ? cs.outlineVariant.withOpacity(0.12)
+                      : null,
+                ),
               ),
             ),
           ),
@@ -263,13 +296,21 @@ class RangeControls extends StatelessWidget {
             child: FilledButton.icon(
               onPressed: loading ? null : onLoad,
               icon: loading
-                  ? const SizedBox(
+                  ? SizedBox(
                 width: 16,
                 height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: cs.onPrimary,
+                ),
               )
                   : const Icon(Icons.download),
               label: const FittedBox(child: Text('불러오기', maxLines: 1)),
+              style: FilledButton.styleFrom(
+                backgroundColor: cs.primary,
+                foregroundColor: cs.onPrimary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
             ),
           ),
         ],
@@ -335,7 +376,6 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     if (v == null) return null;
     final s = v.toString().trim();
     return s.isEmpty ? null : s;
-    // ignore: dead_code
   }
 
   num? _toNum(dynamic v) {
@@ -387,12 +427,10 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     return Icons.history;
   }
 
-  Color _actionColor(String action) {
-    if (action.contains('사전 정산')) return Colors.teal;
-    if (action.contains('출차')) return Colors.orange;
-    if (action.contains('취소')) return Colors.redAccent;
-    if (action.contains('생성')) return Colors.indigo;
-    return Colors.blueGrey;
+  // ✅ 하드코딩 제거: ColorScheme 기반
+  Color _actionColor(BuildContext context, String action) {
+    final cs = Theme.of(context).colorScheme;
+    return _Brand.actionColor(cs, action);
   }
 
   // ===== 파싱/호환 리팩터링 =====
@@ -426,11 +464,6 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
   }
 
   /// plate 후보 추출 (혼재 스키마 호환)
-  /// 우선순위:
-  /// 1) root.plateNumber
-  /// 2) meta.plateNumber
-  /// 3) meta.plate_number
-  /// 4) docId prefix
   String _extractPlate(Map<String, dynamic> item, Map<String, dynamic> meta, String docId) {
     final v = item['plateNumber'] ??
         meta['plateNumber'] ??
@@ -616,12 +649,16 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
   // ===== 사진 다이얼로그 열기 =====
   void _openPlateImageDialog(String plateNumber) {
     try {
+      final cs = Theme.of(context).colorScheme;
+
       showGeneralDialog(
         context: context,
         barrierDismissible: true,
         barrierLabel: "사진 보기",
+        barrierColor: cs.scrim.withOpacity(0.45),
         transitionDuration: const Duration(milliseconds: 300),
-        pageBuilder: (_, __, ___) => TripleDepartureCompletedPlateImageDialog(plateNumber: plateNumber),
+        pageBuilder: (_, __, ___) =>
+            TripleDepartureCompletedPlateImageDialog(plateNumber: plateNumber),
       );
     } catch (e) {
       _logApiError(
@@ -818,17 +855,19 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
   }
 
   // ===== UI 헬퍼: 문서 요약 =====
-  Widget _infoChip(String label, String value) {
+  Widget _infoChip(BuildContext context, String label, String value) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: Colors.grey.shade300),
+        color: cs.surface,
+        border: Border.all(color: _Brand.border(cs)),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         '$label: $value',
-        style: const TextStyle(fontSize: 12, color: Colors.black87),
+        style: TextStyle(fontSize: 12, color: cs.onSurface, fontWeight: FontWeight.w700),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
@@ -855,14 +894,16 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     final depText = _fmtDateTime(doc.departureCompletedAt);
     final parkText = _fmtDateTime(doc.parkingCompletedAt);
 
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        border: Border.all(color: Colors.grey.shade300),
-        borderRadius: BorderRadius.circular(10),
+        color: cs.surfaceContainerLow,
+        border: Border.all(color: _Brand.border(cs)),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -873,7 +914,7 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
               Expanded(
                 child: Text(
                   doc.plateNumber.isNotEmpty ? doc.plateNumber : doc.docId,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: cs.onSurface),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -882,8 +923,8 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(feeText, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
-                  Text(payText, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                  Text(feeText, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: cs.onSurface)),
+                  Text(payText, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
                 ],
               ),
             ],
@@ -896,11 +937,11 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _infoChip('상태', typeText),
-              _infoChip('과금', billingText),
-              _infoChip('위치', locText),
-              _infoChip('담당', userText),
-              _infoChip('메모', customText),
+              _infoChip(context, '상태', typeText),
+              _infoChip(context, '과금', billingText),
+              _infoChip(context, '위치', locText),
+              _infoChip(context, '담당', userText),
+              _infoChip(context, '메모', customText),
             ],
           ),
 
@@ -911,20 +952,20 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
             spacing: 8,
             runSpacing: 8,
             children: [
-              _infoChip('기본', basicText),
-              _infoChip('추가', addText),
-              _infoChip('정규', regularText),
-              _infoChip('조정', adjText),
+              _infoChip(context, '기본', basicText),
+              _infoChip(context, '추가', addText),
+              _infoChip(context, '정규', regularText),
+              _infoChip(context, '조정', adjText),
             ],
           ),
 
           const SizedBox(height: 10),
 
           // 4) 시간 필드
-          Text('요청: $reqText', style: const TextStyle(fontSize: 12, color: Colors.black54)),
-          Text('업데이트: $updText', style: const TextStyle(fontSize: 12, color: Colors.black54)),
-          Text('입차완료: $parkText', style: const TextStyle(fontSize: 12, color: Colors.black54)),
-          Text('출차완료: $depText', style: const TextStyle(fontSize: 12, color: Colors.black54)),
+          Text('요청: $reqText', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
+          Text('업데이트: $updText', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
+          Text('입차완료: $parkText', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
+          Text('출차완료: $depText', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
         ],
       ),
     );
@@ -933,6 +974,8 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
   // ===== UI =====
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final hasData = !_loading && _days.isNotEmpty;
     final mono = const TextStyle(fontFeatures: [FontFeature.tabularFigures()]); // 시간 숫자 정렬
 
@@ -986,7 +1029,7 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
                     );
                   }
                 },
-                icon: Icon(_currentPage == 0 ? Icons.search : Icons.list),
+                icon: Icon(_currentPage == 0 ? Icons.search : Icons.list, color: cs.onSurface),
                 visualDensity: VisualDensity.compact,
               ),
             ),
@@ -995,15 +1038,23 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
 
         if (_error != null) ...[
           const SizedBox(height: 8),
-          Text(_error!, style: const TextStyle(color: Colors.red)),
+          Text(_error!, style: TextStyle(color: cs.error, fontWeight: FontWeight.w800)),
         ],
         const SizedBox(height: 8),
 
         Expanded(
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? Center(
+            child: CircularProgressIndicator(
+              color: cs.primary,
+            ),
+          )
               : !hasData
-              ? const Center(child: Text('기간을 설정하고 불러오기를 눌러주세요.'))
+              ? Text(
+            '기간을 설정하고 불러오기를 눌러주세요.',
+            style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+            textAlign: TextAlign.center,
+          )
               : PageView(
             controller: _pageController,
             onPageChanged: (i) => setState(() => _currentPage = i),
@@ -1020,36 +1071,45 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
                       children: [
                         // 날짜 헤더 + 컬럼 헤더
                         Container(
-                          color: Colors.grey.shade200,
+                          color: cs.surfaceContainerLow,
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(day.dateStr, style: const TextStyle(fontWeight: FontWeight.bold)),
+                              Text(
+                                day.dateStr,
+                                style: TextStyle(fontWeight: FontWeight.w900, color: cs.onSurface),
+                              ),
                               const SizedBox(height: 8),
                               SizedBox(
                                 height: 24,
                                 child: Row(
-                                  children: const [
+                                  children: [
                                     SizedBox(
                                       width: _kTimeColWidth,
-                                      child: Text('시간',
-                                          style: TextStyle(fontSize: 12, color: Colors.black54),
-                                          textAlign: TextAlign.center),
+                                      child: Text(
+                                        '시간',
+                                        style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w800),
+                                        textAlign: TextAlign.center,
+                                      ),
                                     ),
-                                    SizedBox(width: 8),
+                                    const SizedBox(width: 8),
                                     Expanded(
-                                      child: Text('번호판',
-                                          style: TextStyle(fontSize: 12, color: Colors.black54),
-                                          textAlign: TextAlign.center),
+                                      child: Text(
+                                        '번호판',
+                                        style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w800),
+                                        textAlign: TextAlign.center,
+                                      ),
                                     ),
                                     SizedBox(
                                       width: _kFeeColWidth,
-                                      child: Text('요금/결제',
-                                          style: TextStyle(fontSize: 12, color: Colors.black54),
-                                          textAlign: TextAlign.center),
+                                      child: Text(
+                                        '요금/결제',
+                                        style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w800),
+                                        textAlign: TextAlign.center,
+                                      ),
                                     ),
-                                    SizedBox(width: _kChevronWidth),
+                                    const SizedBox(width: _kChevronWidth),
                                   ],
                                 ),
                               ),
@@ -1080,8 +1140,9 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
                                 child: Container(
                                   height: _kRowHeight,
                                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                                  decoration: const BoxDecoration(
-                                    border: Border(bottom: BorderSide(color: Color(0xFFE0E0E0))),
+                                  decoration: BoxDecoration(
+                                    color: cs.surface,
+                                    border: Border(bottom: BorderSide(color: _Brand.divider(cs))),
                                   ),
                                   child: Row(
                                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -1094,7 +1155,7 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
                                           softWrap: false,
                                           overflow: TextOverflow.clip,
                                           textAlign: TextAlign.center,
-                                          style: mono.copyWith(fontSize: 15),
+                                          style: mono.copyWith(fontSize: 15, color: cs.onSurface),
                                         ),
                                       ),
                                       const SizedBox(width: 8),
@@ -1105,7 +1166,7 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
                                           softWrap: false,
                                           overflow: TextOverflow.ellipsis,
                                           textAlign: TextAlign.center,
-                                          style: const TextStyle(fontSize: 16),
+                                          style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.w800),
                                         ),
                                       ),
                                       SizedBox(
@@ -1113,12 +1174,16 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
                                         child: Column(
                                           mainAxisAlignment: MainAxisAlignment.center,
                                           children: [
-                                            Text(feeText,
-                                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                                            Text(payText,
-                                                style: const TextStyle(fontSize: 11, color: Colors.black54),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis),
+                                            Text(
+                                              feeText,
+                                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: cs.onSurface),
+                                            ),
+                                            Text(
+                                              payText,
+                                              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
                                           ],
                                         ),
                                       ),
@@ -1127,7 +1192,7 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
                                         child: Icon(
                                           expanded ? Icons.expand_less : Icons.expand_more,
                                           size: 20,
-                                          color: Colors.black54,
+                                          color: cs.onSurfaceVariant,
                                         ),
                                       ),
                                     ],
@@ -1138,7 +1203,11 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
                               // 펼침부: 요약 + 로그 상세
                               if (expanded) ...[
                                 _buildDocSummary(doc),
-                                _buildLogsDetail(doc.logs, plateNumber: doc.plateNumber, scrollable: false),
+                                _buildLogsDetail(
+                                  doc.logs,
+                                  plateNumber: doc.plateNumber,
+                                  scrollable: false,
+                                ),
                               ],
                             ],
                           );
@@ -1173,6 +1242,8 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
 
   // ===== 검색 페이지 구성 =====
   Widget _buildSearchPage() {
+    final cs = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1184,20 +1255,27 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
                 controller: _tailCtrl,
                 maxLength: 4,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   counterText: '',
                   labelText: '번호판 4자리',
                   hintText: '예) 4444',
-                  border: OutlineInputBorder(),
+                  border: const OutlineInputBorder(),
+                  focusedBorder: OutlineInputBorder(
+                    borderSide: BorderSide(color: cs.primary, width: 1.4),
+                  ),
                 ),
                 onSubmitted: (_) => _search(),
               ),
             ),
             const SizedBox(width: 8),
-            ElevatedButton.icon(
+            FilledButton.icon(
               onPressed: _loading || _days.isEmpty ? null : _search,
               icon: const Icon(Icons.search),
               label: const Text('검색'),
+              style: FilledButton.styleFrom(
+                backgroundColor: cs.primary,
+                foregroundColor: cs.onPrimary,
+              ),
             ),
           ],
         ),
@@ -1206,22 +1284,36 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
         // 결과/상세
         Expanded(
           child: _hits.isEmpty
-              ? const Center(child: Text('검색 결과가 없습니다.'))
+              ? Text(
+            '검색 결과가 없습니다.',
+            style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+            textAlign: TextAlign.center,
+          )
               : (_selectedHit == null
           // 결과 리스트
               ? ListView.separated(
             itemCount: _hits.length,
-            separatorBuilder: (_, __) => const Divider(height: 1),
+            separatorBuilder: (_, __) => Divider(height: 1, color: _Brand.divider(cs)),
             itemBuilder: (_, i) {
               final h = _hits[i];
               final feeText = _fmtWon(h.doc.lockedFeeAmount);
               final payText = h.doc.paymentMethod ?? '—';
               final lastTs = h.doc.lastLogTime;
+
               return ListTile(
                 dense: true,
-                title: Text(h.doc.plateNumber.isNotEmpty ? h.doc.plateNumber : h.doc.docId),
-                subtitle: Text('${h.dateStr} • $feeText • $payText'),
-                trailing: Text(_fmtTime(lastTs), style: const TextStyle(fontSize: 12)),
+                title: Text(
+                  h.doc.plateNumber.isNotEmpty ? h.doc.plateNumber : h.doc.docId,
+                  style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w800),
+                ),
+                subtitle: Text(
+                  '${h.dateStr} • $feeText • $payText',
+                  style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+                ),
+                trailing: Text(
+                  _fmtTime(lastTs),
+                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+                ),
                 onTap: () => setState(() => _selectedHit = h),
               );
             },
@@ -1231,13 +1323,13 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                color: Colors.grey.shade100,
+                color: cs.surfaceContainerLow,
                 child: Row(
                   children: [
                     IconButton(
                       tooltip: '선택 해제',
                       onPressed: () => setState(() => _selectedHit = null),
-                      icon: const Icon(Icons.close),
+                      icon: Icon(Icons.close, color: cs.onSurface),
                     ),
                     const SizedBox(width: 4),
                     Expanded(
@@ -1245,15 +1337,17 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            _selectedHit!.doc.plateNumber.isNotEmpty ? _selectedHit!.doc.plateNumber : _selectedHit!.doc.docId,
-                            style: const TextStyle(fontWeight: FontWeight.w700),
+                            _selectedHit!.doc.plateNumber.isNotEmpty
+                                ? _selectedHit!.doc.plateNumber
+                                : _selectedHit!.doc.docId,
+                            style: TextStyle(fontWeight: FontWeight.w900, color: cs.onSurface),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 2),
                           Text(
                             '${_selectedHit!.dateStr} • ${_selectedHit!.doc.docId}',
-                            style: const TextStyle(fontSize: 12, color: Colors.black54),
+                            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1262,26 +1356,27 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
                     ),
                     const SizedBox(width: 8),
                     // 사진 보기 버튼
-                    ElevatedButton.icon(
+                    OutlinedButton.icon(
                       onPressed: () {
                         final plate = _selectedHit!.doc.plateNumber.isNotEmpty
                             ? _selectedHit!.doc.plateNumber
                             : _selectedHit!.doc.docId.split('_').first;
                         _openPlateImageDialog(plate);
                       },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey.shade100,
-                        foregroundColor: Colors.black87,
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: cs.surfaceContainerLow,
+                        foregroundColor: cs.onSurface,
+                        side: BorderSide(color: _Brand.border(cs)),
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       ),
-                      icon: const Icon(Icons.photo, size: 18),
-                      label: const Text('사진', style: TextStyle(fontSize: 13)),
+                      icon: Icon(Icons.photo, size: 18, color: cs.onSurface),
+                      label: Text('사진', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: cs.onSurface)),
                     ),
                   ],
                 ),
               ),
 
-              // ✅ 요약 표시 추가
+              // ✅ 요약 표시
               _buildDocSummary(_selectedHit!.doc),
 
               Expanded(
@@ -1304,10 +1399,12 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
         required String plateNumber,
         bool scrollable = false,
       }) {
+    final cs = Theme.of(context).colorScheme;
+
     if (logs.isEmpty) {
-      return const Padding(
-        padding: EdgeInsets.all(12),
-        child: Text('로그가 없습니다.'),
+      return Padding(
+        padding: const EdgeInsets.all(12),
+        child: Text('로그가 없습니다.', style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
       );
     }
 
@@ -1315,7 +1412,7 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
       physics: scrollable ? const AlwaysScrollableScrollPhysics() : const NeverScrollableScrollPhysics(),
       shrinkWrap: !scrollable,
       itemCount: logs.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
+      separatorBuilder: (_, __) => Divider(height: 1, color: _Brand.divider(cs)),
       itemBuilder: (_, i) {
         final e = logs[i];
         final action = (e['action'] ?? '-').toString();
@@ -1330,34 +1427,41 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
         final pay = (e['paymentMethod']?.toString().trim().isNotEmpty ?? false) ? e['paymentMethod'].toString() : null;
         final reason = (e['reason']?.toString().trim().isNotEmpty ?? false) ? e['reason'].toString() : null;
 
-        final color = _actionColor(action);
+        final color = _actionColor(context, action);
 
         return ListTile(
           dense: true,
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           leading: Icon(_actionIcon(action), color: color),
-          title: Text(action, style: TextStyle(fontWeight: FontWeight.w600, color: color)),
+          title: Text(
+            action,
+            style: TextStyle(fontWeight: FontWeight.w900, color: color),
+          ),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (from.isNotEmpty || to.isNotEmpty) Text('$from → $to'),
+              if (from.isNotEmpty || to.isNotEmpty)
+                Text('$from → $to', style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
               if (by.isNotEmpty) const SizedBox(height: 2),
-              if (by.isNotEmpty) const Text('담당자:', style: TextStyle(fontSize: 12)),
-              if (by.isNotEmpty) Text(by, style: const TextStyle(fontSize: 12)),
+              if (by.isNotEmpty) Text('담당자:', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
+              if (by.isNotEmpty) Text(by, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
               if (fee != null || pay != null || reason != null) const SizedBox(height: 2),
-              if (fee != null) Text('확정요금: $fee', style: const TextStyle(fontSize: 12)),
-              if (pay != null) Text('결제수단: $pay', style: const TextStyle(fontSize: 12)),
-              if (reason != null) Text('사유: $reason', style: const TextStyle(fontSize: 12)),
+              if (fee != null) Text('확정요금: $fee', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
+              if (pay != null) Text('결제수단: $pay', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
+              if (reason != null) Text('사유: $reason', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
             ],
           ),
-          trailing: Text(tsText, style: const TextStyle(fontSize: 12)),
+          trailing: Text(
+            tsText,
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+          ),
           isThreeLine: true,
         );
       },
     );
 
     return Container(
-      color: Colors.grey.shade50,
+      color: cs.surfaceContainerLow,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       child: listView,
     );
@@ -1439,12 +1543,14 @@ class _Dot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       width: active ? 20 : 8,
       height: 8,
       decoration: BoxDecoration(
-        color: active ? Colors.black87 : Colors.black26,
+        color: active ? cs.primary : cs.outlineVariant,
         borderRadius: BorderRadius.circular(999),
       ),
     );

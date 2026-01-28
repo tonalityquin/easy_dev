@@ -14,7 +14,7 @@ import '../../../../utils/google_auth_session.dart';
 import '../../../../states/location/location_state.dart';
 import '../../../../states/area/area_state.dart';
 
-// import '../../../../utils/usage_reporter.dart';;
+// import '../../../../utils/usage_reporter.dart';
 
 import '../../../common_package/memo_package/dash_memo.dart';
 import 'triple_parking_reminder_contents.dart';
@@ -88,7 +88,6 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
   @override
   void initState() {
     super.initState();
-    // 첫 프레임 이후에 라우트 가시성 확인 → 표시 중일 때만 집계/공지 호출
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _maybeRunCount();
       _maybeRunNotice();
@@ -98,7 +97,6 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 라우트 바인딩이 늦게 잡히는 경우를 대비해 한 번 더 시도
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _maybeRunCount();
       _maybeRunNotice();
@@ -107,7 +105,6 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
 
   void _maybeRunCount() {
     if (_didCountRun) return;
-    // 현재 라우트가 실제로 화면에 표시될 때만 실행
     final route = ModalRoute.of(context);
     final isVisible = route == null ? true : (route.isCurrent || route.isActive);
     if (!isVisible) return;
@@ -117,7 +114,6 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
 
   void _maybeRunNotice() {
     if (_didNoticeRun) return;
-    // 현재 라우트가 실제로 화면에 표시될 때만 실행
     final route = ModalRoute.of(context);
     final isVisible = route == null ? true : (route.isCurrent || route.isActive);
     if (!isVisible) return;
@@ -130,7 +126,7 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
 
     final area = context.read<AreaState>().currentArea.trim();
     final division = context.read<AreaState>().currentDivision.trim();
-    _lastArea = area; // 최신 area 기억
+    _lastArea = area;
 
     setState(() {
       _isCountLoading = true;
@@ -147,17 +143,6 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
       final snap = await aggQuery.get();
       final cnt = (snap.count ?? 0);
 
-      try {
-        /*await UsageReporter.instance.report(
-          area: area,
-          action: 'read', // 읽기
-          n: 1, // ← 고정(집계 1회당 read 1회)
-          source: 'parkingStatus.count.query(parking_completed).aggregate',
-        );*/
-      } catch (_) {
-        // 계측 실패는 UX에 영향 없음
-      }
-
       if (!mounted) return;
       setState(() {
         _occupiedCount = cnt;
@@ -165,7 +150,6 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
         _hadError = false;
       });
     } catch (e) {
-      // ✅ DebugApiLogger 로깅
       await _logApiError(
         tag: 'TripleParkingStatusPage._runAggregateCount',
         message: 'Firestore aggregate count 실패(parking_completed)',
@@ -176,23 +160,19 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
           'collection': 'plates',
           'type': 'parking_completed',
         },
-        tags: const <String>[_tParking, _tParkingStatus, _tFirestore, _tFirestoreAgg],
+        tags: const <String>[
+          _tParking,
+          _tParkingStatus,
+          _tFirestore,
+          _tFirestoreAgg
+        ],
       );
-
-      try {
-        /*await UsageReporter.instance.report(
-          area: context.read<AreaState>().currentArea.trim(),
-          action: 'read',
-          n: 1, // ← 실패여도 1회 시도로 고정
-          source: 'parkingStatus.count.query(parking_completed).aggregate.error',
-        );*/
-      } catch (_) {}
 
       if (!mounted) return;
       setState(() {
         _occupiedCount = 0;
         _isCountLoading = false;
-        _hadError = true; // 에러 플래그 ON
+        _hadError = true;
       });
     }
   }
@@ -220,8 +200,6 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
         _isNoticeLoading = false;
       });
     } catch (e) {
-      // fetchNoticeMessage는 기본적으로 캐시 fallback 하도록 구현되어 있어 throw가 드물지만,
-      // 호출부에서도 방어 + 로깅
       await _logApiError(
         tag: 'TripleParkingStatusPage._runNoticeFetch',
         message: '공지 로드(fetchNoticeMessage) 실패',
@@ -244,21 +222,22 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
 
   @override
   Widget build(BuildContext context) {
-    // 빌드 후에도 가시성 변화가 있으면 한 번 더 시도(이미 실행되었으면 무시됨)
+    final cs = Theme.of(context).colorScheme;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _maybeRunCount();
       _maybeRunNotice();
     });
 
-    // Area 변경 감지 → 재집계 트리거
-    final currentArea = context.select<AreaState, String>((s) => s.currentArea.trim());
+    final currentArea =
+    context.select<AreaState, String>((s) => s.currentArea.trim());
+
     if (_lastArea != null && _lastArea != currentArea) {
       _didCountRun = false;
       _lastArea = currentArea;
       WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRunCount());
     }
 
-    // ✅ Area 변경 감지 → 공지 재호출 트리거
     if (_lastNoticeArea != null && _lastNoticeArea != currentArea) {
       _didNoticeRun = false;
       _lastNoticeArea = currentArea;
@@ -266,35 +245,35 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
     }
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: cs.surface,
       body: Consumer<LocationState>(
         builder: (context, locationState, _) {
-          // locations 로딩(용량 합산용) 또는 총합 집계 로딩 중이면 스피너
           if (locationState.isLoading || _isCountLoading) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // capacity 합계는 로컬 state로 계산 (요청: 유지)
           final totalCapacity =
           locationState.locations.fold<int>(0, (sum, l) => sum + l.capacity);
           final occupiedCount = _occupiedCount;
 
-          final double usageRatio = totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
+          final double usageRatio =
+          totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
           final String usagePercent = (usageRatio * 100).toStringAsFixed(1);
 
           if (_hadError) {
-            // 에러 UI: 간단한 재시도 버튼 제공
             return Center(
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.warning_amber, size: 40, color: Colors.redAccent),
+                    const Icon(Icons.warning_amber,
+                        size: 40, color: Colors.redAccent),
                     const SizedBox(height: 12),
                     const Text(
                       '현황 집계 중 오류가 발생했습니다.',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style:
+                      TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
@@ -305,7 +284,7 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
                       onPressed: () {
-                        _didCountRun = false; // 다시 1회만 돌도록
+                        _didCountRun = false;
                         _runAggregateCount();
                       },
                       icon: const Icon(Icons.refresh),
@@ -321,7 +300,6 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
           return ListView(
             padding: const EdgeInsets.all(20),
             children: [
-              // ✅ 추가: '📊 현재 주차 현황' 상단 공지 알림바
               _TripleParkingNoticeBar(
                 isLoading: _isNoticeLoading,
                 message: _noticeMessage,
@@ -330,7 +308,8 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
                   _runNoticeFetch(forceRefresh: true);
                 },
               ),
-              if (_noticeMessage.trim().isNotEmpty || _isNoticeLoading) const SizedBox(height: 12),
+              if (_noticeMessage.trim().isNotEmpty || _isNoticeLoading)
+                const SizedBox(height: 12),
 
               const Text(
                 '📊 현재 노말 주차 현황',
@@ -355,19 +334,18 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
               const SizedBox(height: 12),
               Text(
                 '$usagePercent% 사용 중',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                style:
+                const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                 textAlign: TextAlign.center,
               ),
               // ------ 상단 영역 끝 (수정 없음) ------
 
               const SizedBox(height: 24),
 
-              // ⬇️ 지역별 문구가 들어가는 자동 순환 카드
               _AutoCyclingReminderCards(area: currentArea),
 
               const SizedBox(height: 12),
 
-              // ⬇️ DashMemo 메모 자동 순환 카드 (1.5초 주기)
               const _AutoCyclingMemoCards(),
 
               const SizedBox(height: 12),
@@ -379,7 +357,7 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
   }
 }
 
-/// ✅ 상단 알림바(관리자 공지)
+/// ✅ 상단 알림바(관리자 공지) - 브랜드(ColorScheme) 기반
 class _TripleParkingNoticeBar extends StatelessWidget {
   final bool isLoading;
   final String message;
@@ -393,6 +371,8 @@ class _TripleParkingNoticeBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final text = message.trim();
     if (!isLoading && text.isEmpty) {
       return const SizedBox.shrink();
@@ -404,31 +384,39 @@ class _TripleParkingNoticeBar extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.04),
+          color: cs.surfaceContainerLow,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.black.withOpacity(0.08)),
+          border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
         ),
         child: Row(
           children: [
-            const Icon(Icons.info_outline, size: 18),
+            Icon(Icons.info_outline, size: 18, color: cs.onSurfaceVariant),
             const SizedBox(width: 10),
             Expanded(
               child: isLoading
-                  ? const Text(
+                  ? Text(
                 '공지 불러오는 중...',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurface,
+                ),
               )
                   : Text(
                 text,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurface,
+                ),
               ),
             ),
             const SizedBox(width: 8),
             InkWell(
               onTap: onRefresh,
-              child: const Padding(
-                padding: EdgeInsets.all(4),
-                child: Icon(Icons.refresh, size: 18),
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(Icons.refresh, size: 18, color: cs.onSurfaceVariant),
               ),
             ),
           ],
@@ -442,14 +430,10 @@ class _TripleParkingNoticeBar extends StatelessWidget {
 class TripleParkingNoticeService {
   TripleParkingNoticeService._();
 
-  /// ✅ Header와 동일한 저장 키를 사용
   static const String kNoticeSpreadsheetIdKey = 'notice_spreadsheet_id_v1';
-
-  /// ✅ Header와 동일한 공지 시트/레인지
   static const String kNoticeSheetName = 'noti';
   static const String kNoticeRange = '$kNoticeSheetName!A1:A50';
 
-  /// 캐시 TTL: 10분
   static const Duration cacheTtl = Duration(minutes: 10);
 
   static Future<sheets.SheetsApi> _sheetsApi() async {
@@ -489,7 +473,6 @@ class TripleParkingNoticeService {
     final trimmedArea = area.trim();
     final prefs = await SharedPreferences.getInstance();
 
-    // ✅ area는 기존 호출부 호환/캐시 분리 용도로만 유지
     final cacheKey =
         'triple_parking_notice_cache_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
     final cacheAtKey =
@@ -501,11 +484,9 @@ class TripleParkingNoticeService {
 
     final spreadsheetId = await _loadSpreadsheetId();
 
-    // 0) 스프레드시트 ID가 비어있으면: 캐시가 있으면 캐시, 없으면 빈 값
     if (spreadsheetId.isEmpty) {
       final fallback = (prefs.getString(cacheKey) ?? '').trim();
 
-      // ✅ 디버그 로그(설정 누락은 운영 이슈 트래킹에 유용)
       if (fallback.isEmpty) {
         await _logApiError(
           tag: 'TripleParkingNoticeService.fetchNoticeMessage',
@@ -519,13 +500,13 @@ class TripleParkingNoticeService {
       return fallback;
     }
 
-    // 1) 캐시 사용(강제 갱신이 아니고 TTL 유효 + 같은 sid이면)
     if (!forceRefresh) {
       final cached = (prefs.getString(cacheKey) ?? '').trim();
       final cachedAt = prefs.getInt(cacheAtKey) ?? 0;
       final cachedSid = (prefs.getString(cacheSidKey) ?? '').trim();
 
-      final isFresh = cachedAt > 0 && (nowMs - cachedAt) <= cacheTtl.inMilliseconds;
+      final isFresh =
+          cachedAt > 0 && (nowMs - cachedAt) <= cacheTtl.inMilliseconds;
       final isSameSid = cachedSid == spreadsheetId;
 
       if (cached.isNotEmpty && isFresh && isSameSid) {
@@ -533,7 +514,6 @@ class TripleParkingNoticeService {
       }
     }
 
-    // 2) Sheets API로 noti!A1:A50 직접 읽기
     try {
       final api = await _sheetsApi();
 
@@ -545,14 +525,14 @@ class TripleParkingNoticeService {
 
       final lines = <String>[];
       for (final row in values) {
-        final rowStrings = row.map((c) => (c ?? '').toString().trim()).toList();
+        final rowStrings =
+        row.map((c) => (c ?? '').toString().trim()).toList();
         final joined = rowStrings.where((s) => s.isNotEmpty).join(' ');
         if (joined.isNotEmpty) lines.add(joined);
       }
 
       final msg = lines.join('\n').trim();
 
-      // 3) 캐시 저장(빈 문자열이면 저장하지 않음)
       if (msg.isNotEmpty) {
         await prefs.setString(cacheKey, msg);
         await prefs.setInt(cacheAtKey, nowMs);
@@ -560,11 +540,9 @@ class TripleParkingNoticeService {
         return msg;
       }
 
-      // 4) 시트가 비어있으면: 캐시가 있으면 캐시를 우선 반환(공지바 “갑자기 사라짐” 방지)
       final fallback = (prefs.getString(cacheKey) ?? '').trim();
       if (fallback.isNotEmpty) return fallback;
 
-      // ✅ 시트가 비어 있고 캐시도 없음(운영상 확인용)
       await _logApiError(
         tag: 'TripleParkingNoticeService.fetchNoticeMessage',
         message: '공지 시트가 비어있고 캐시도 없음',
@@ -579,7 +557,6 @@ class TripleParkingNoticeService {
 
       return '';
     } catch (e) {
-      // 토큰 만료/권한 문제/네트워크 문제 등: 캐시 반환
       await _logApiError(
         tag: 'TripleParkingNoticeService.fetchNoticeMessage',
         message: 'Sheets 공지 로드 실패 → 캐시 fallback',
@@ -608,7 +585,8 @@ class _AutoCyclingReminderCards extends StatefulWidget {
   });
 
   @override
-  State<_AutoCyclingReminderCards> createState() => _AutoCyclingReminderCardsState();
+  State<_AutoCyclingReminderCards> createState() =>
+      _AutoCyclingReminderCardsState();
 }
 
 class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
@@ -708,7 +686,8 @@ class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 16, horizontal: 16),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           crossAxisAlignment: CrossAxisAlignment.center,
@@ -888,13 +867,15 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                              padding: EdgeInsets.symmetric(
+                                  vertical: 16, horizontal: 16),
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.center,
                                 children: [
                                   Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    mainAxisAlignment:
+                                    MainAxisAlignment.center,
                                     children: [
                                       Icon(Icons.notes_rounded, size: 18),
                                       SizedBox(width: 8),
@@ -930,13 +911,15 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 16, horizontal: 16),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
                                 Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisAlignment:
+                                  MainAxisAlignment.center,
                                   children: const [
                                     Icon(Icons.notes_rounded, size: 18),
                                     SizedBox(width: 8),
@@ -966,7 +949,9 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                                   Text(
                                     time,
                                     textAlign: TextAlign.center,
-                                    style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                    style: const TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.black54),
                                   ),
                               ],
                             ),

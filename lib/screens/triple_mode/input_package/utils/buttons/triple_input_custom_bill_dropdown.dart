@@ -14,25 +14,42 @@ class TripleInputCustomBillDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    final bool showError = selectedValue == null;
+
     return InputDecorator(
       decoration: InputDecoration(
         labelText: '정산 유형 선택',
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: cs.primary.withOpacity(0.85), width: 1.4),
+        ),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        errorText: selectedValue == null ? '정산 유형을 선택해주세요' : null,
+        errorText: showError ? '정산 유형을 선택해주세요' : null,
+        filled: true,
+        fillColor: cs.surfaceContainerLow,
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
           value: selectedValue,
           isExpanded: true,
-          icon: const Icon(Icons.keyboard_arrow_down),
+          icon: Icon(Icons.keyboard_arrow_down, color: cs.onSurfaceVariant),
           onChanged: onChanged,
           items: items.map((item) {
             return DropdownMenuItem<String>(
               value: item,
               child: Text(
                 item,
-                style: const TextStyle(fontWeight: FontWeight.w500),
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: cs.onSurface,
+                ),
               ),
             );
           }).toList(),

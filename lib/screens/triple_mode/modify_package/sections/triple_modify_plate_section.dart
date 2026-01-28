@@ -24,12 +24,22 @@ class TripleModifyPlateSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '번호 입력',
-          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w900,
+            color: cs.onSurface,
+          ) ??
+              TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: cs.onSurface,
+              ),
         ),
         const SizedBox(height: 8),
         Row(
@@ -55,9 +65,10 @@ class TripleModifyPlateSection extends StatelessWidget {
                   children: [
                     Text(
                       dropdownValue,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                        fontWeight: FontWeight.w900,
+                        color: cs.onSurface,
                       ),
                     ),
                   ],

@@ -45,12 +45,16 @@ class _TripleDepartureCompletedFullHeightSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
     return SafeArea(
       top: false,
       child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
         child: ListView(
@@ -61,30 +65,37 @@ class _TripleDepartureCompletedFullHeightSheet extends StatelessWidget {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 20),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade400,
+                  color: cs.outlineVariant.withOpacity(0.85),
                   borderRadius: BorderRadius.circular(4),
                 ),
               ),
             ),
+
             Row(
               children: [
-                const Icon(Icons.settings, color: Colors.blueAccent),
+                Icon(Icons.settings, color: cs.primary),
                 const SizedBox(width: 8),
-                const Expanded(
+                Expanded(
                   child: Text(
                     '출차 완료 상태 처리',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: cs.onSurface,
+                    ),
                   ),
                 ),
                 IconButton(
                   tooltip: '닫기',
                   onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
+                  icon: Icon(Icons.close, color: cs.onSurface),
                 ),
               ],
             ),
+
             const SizedBox(height: 16),
+
             _SummaryCard(plate: plate),
+
             const SizedBox(height: 24),
 
             // 정산(사전 정산)
@@ -101,21 +112,28 @@ class _TripleDepartureCompletedFullHeightSheet extends StatelessWidget {
                 );
 
                 if (!context.mounted) return;
-
                 if (updated != null) {
                   Navigator.pop(context, updated);
                 }
               },
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 52),
-                backgroundColor: _isLocked ? Colors.grey.shade200 : Colors.blueAccent,
-                foregroundColor: _isLocked ? Colors.grey.shade600 : Colors.white,
                 elevation: 0,
+                backgroundColor: _isLocked ? cs.surfaceContainerLow : cs.primary,
+                foregroundColor: _isLocked ? cs.onSurfaceVariant : cs.onPrimary,
+                disabledBackgroundColor: cs.surfaceContainerLow,
+                disabledForegroundColor: cs.onSurfaceVariant,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
+              ).copyWith(
+                overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                      (states) =>
+                  states.contains(MaterialState.pressed) ? cs.primary.withOpacity(0.10) : null,
+                ),
               ),
             ),
+
             const SizedBox(height: 12),
 
             // 정산 취소
@@ -135,19 +153,24 @@ class _TripleDepartureCompletedFullHeightSheet extends StatelessWidget {
                 );
 
                 if (!context.mounted) return;
-
                 if (updated != null) {
                   Navigator.pop(context, updated);
                 }
               },
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 52),
-                backgroundColor: _isLocked ? Colors.orange.shade400 : Colors.grey.shade100,
-                foregroundColor: _isLocked ? Colors.white : Colors.black38,
                 elevation: 0,
-                side: _isLocked ? null : const BorderSide(color: Colors.black12),
+                backgroundColor: _isLocked ? cs.errorContainer : cs.surfaceContainerLow,
+                foregroundColor: _isLocked ? cs.onErrorContainer : cs.onSurfaceVariant,
+                disabledBackgroundColor: cs.surfaceContainerLow,
+                disabledForegroundColor: cs.onSurfaceVariant,
+                side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
+                ),
+              ).copyWith(
+                overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                      (states) => states.contains(MaterialState.pressed) ? cs.error.withOpacity(0.10) : null,
                 ),
               ),
             ),
@@ -170,12 +193,16 @@ class _TripleDepartureCompletedFullHeightSheet extends StatelessWidget {
               },
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 52),
-                backgroundColor: Colors.grey.shade100,
-                foregroundColor: Colors.black87,
                 elevation: 0,
-                side: const BorderSide(color: Colors.black12),
+                backgroundColor: cs.surfaceContainerLow,
+                foregroundColor: cs.onSurface,
+                side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
+                ),
+              ).copyWith(
+                overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                      (states) => states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(0.12) : null,
                 ),
               ),
             ),
@@ -189,10 +216,12 @@ class _TripleDepartureCompletedFullHeightSheet extends StatelessWidget {
               onPressed: null,
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 52),
-                backgroundColor: Colors.grey.shade100,
-                foregroundColor: Colors.black38,
                 elevation: 0,
-                side: const BorderSide(color: Colors.black12),
+                backgroundColor: cs.surfaceContainerLow,
+                foregroundColor: cs.onSurfaceVariant,
+                disabledBackgroundColor: cs.surfaceContainerLow,
+                disabledForegroundColor: cs.onSurfaceVariant,
+                side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -203,9 +232,12 @@ class _TripleDepartureCompletedFullHeightSheet extends StatelessWidget {
 
             // 닫기
             TextButton.icon(
-              icon: const Icon(Icons.close, color: Colors.black54),
-              label: const Text('닫기', style: TextStyle(color: Colors.black54)),
+              icon: Icon(Icons.close, color: cs.onSurfaceVariant),
+              label: Text('닫기', style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w800)),
               onPressed: () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                overlayColor: cs.outlineVariant.withOpacity(0.12),
+              ),
             ),
           ],
         ),
@@ -220,48 +252,93 @@ class _SummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
     final bool isLocked = plate.isLockedFee == true;
 
-    final String area = (plate.area).trim();
-    final String location = (plate.location).trim().isEmpty ? '미지정' : plate.location.trim();
+    final String area = plate.area.trim();
+    final String location = plate.location.trim().isEmpty ? '미지정' : plate.location.trim();
     final String billingType =
     (plate.billingType ?? '').trim().isEmpty ? '미지정' : (plate.billingType ?? '').trim();
+
+    final badgeColor = isLocked ? cs.tertiary : cs.error;
+    final badgeBg = isLocked ? cs.tertiaryContainer : cs.errorContainer;
+    final badgeFg = isLocked ? cs.onTertiaryContainer : cs.onErrorContainer;
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
+        color: cs.surfaceContainerLow,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black12),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             plate.plateNumber,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w900,
+              color: cs.onSurface,
+            ),
           ),
           const SizedBox(height: 6),
-          Text('지역: $area', style: const TextStyle(fontWeight: FontWeight.w700)),
+
+          Text(
+            '지역: $area',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: cs.onSurface,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text('위치: $location', style: const TextStyle(fontWeight: FontWeight.w700)),
+
+          Text(
+            '위치: $location',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: cs.onSurface,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text('정산 타입: $billingType', style: const TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
+
+          Text(
+            '정산 타입: $billingType',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w800,
+              color: cs.onSurface,
+            ),
+          ),
+          const SizedBox(height: 10),
+
           Row(
             children: [
-              Icon(
-                isLocked ? Icons.check_circle : Icons.error_outline,
-                size: 16,
-                color: isLocked ? Colors.green.shade700 : Colors.redAccent,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                isLocked ? '정산 완료' : '미정산',
-                style: TextStyle(
-                  fontWeight: FontWeight.w900,
-                  color: isLocked ? Colors.green.shade700 : Colors.redAccent,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: badgeBg,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: badgeColor.withOpacity(0.35)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isLocked ? Icons.check_circle : Icons.error_outline,
+                      size: 16,
+                      color: badgeFg,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      isLocked ? '정산 완료' : '미정산',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        color: badgeFg,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -273,10 +350,14 @@ class _SummaryCard extends StatelessWidget {
 }
 
 Future<bool> _confirmCancelSettlement(BuildContext context) async {
+  final cs = Theme.of(context).colorScheme;
+
   final result = await showDialog<bool>(
     context: context,
     barrierDismissible: true,
     builder: (_) => AlertDialog(
+      backgroundColor: cs.surface,
+      surfaceTintColor: Colors.transparent,
       title: const Text('정산 취소'),
       content: const Text('정산 정보를 취소(해제)하시겠습니까?\n이 작업은 로그에 기록됩니다.'),
       actions: [
@@ -291,6 +372,7 @@ Future<bool> _confirmCancelSettlement(BuildContext context) async {
       ],
     ),
   );
+
   return result == true;
 }
 

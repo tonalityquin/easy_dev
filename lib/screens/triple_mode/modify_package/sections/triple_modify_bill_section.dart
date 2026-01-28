@@ -23,7 +23,9 @@ class TripleModifyBillSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final billState = context.watch<BillState>();
+
     final isLoading = billState.isLoading;
     final generalBills = billState.generalBills;
     final regularBills = billState.regularBills;
@@ -35,18 +37,33 @@ class TripleModifyBillSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '정산 유형',
-          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w900,
+            color: cs.onSurface,
+          ) ??
+              TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: cs.onSurface,
+              ),
         ),
         const SizedBox(height: 12.0),
 
-        // ✅ 변동/고정 버튼 Row 제거
-
         if (isLoading)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: cs.primary,
+                ),
+              ),
+            ),
           )
         else if (filteredBills.isEmpty)
           Padding(
@@ -54,7 +71,7 @@ class TripleModifyBillSection extends StatelessWidget {
             child: Center(
               child: Text(
                 '${isGeneral ? '변동' : '고정'} 정산 유형이 없습니다.',
-                style: const TextStyle(color: Colors.grey),
+                style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
               ),
             ),
           )
@@ -62,10 +79,16 @@ class TripleModifyBillSection extends StatelessWidget {
           OutlinedButton(
             style: OutlinedButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-              side: const BorderSide(color: Colors.black),
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              foregroundColor: cs.onSurface,
+              backgroundColor: cs.surface,
+              side: BorderSide(color: cs.outlineVariant.withOpacity(0.85), width: 1.0),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ).copyWith(
+              overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                    (states) => states.contains(MaterialState.pressed)
+                    ? cs.outlineVariant.withOpacity(0.12)
+                    : null,
+              ),
             ),
             onPressed: () {
               showModalBottomSheet(
@@ -79,9 +102,10 @@ class TripleModifyBillSection extends StatelessWidget {
                     maxChildSize: 0.9,
                     builder: (context, scrollController) {
                       return Container(
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                        decoration: BoxDecoration(
+                          color: cs.surface,
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                          border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
                         ),
                         padding: const EdgeInsets.all(16),
                         child: ListView(
@@ -93,26 +117,41 @@ class TripleModifyBillSection extends StatelessWidget {
                                 height: 4,
                                 margin: const EdgeInsets.only(bottom: 16),
                                 decoration: BoxDecoration(
-                                  color: Colors.grey,
+                                  color: cs.outlineVariant.withOpacity(0.85),
                                   borderRadius: BorderRadius.circular(2),
                                 ),
                               ),
                             ),
                             Text(
                               '${isGeneral ? '변동' : '고정'} 정산 선택',
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                color: cs.onSurface,
+                              ) ??
+                                  TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w900,
+                                    color: cs.onSurface,
+                                  ),
                             ),
                             const SizedBox(height: 24),
-
                             ...filteredBills.map((bill) {
                               final countType = isGeneral
                                   ? (bill as BillModel).countType
                                   : (bill as RegularBillModel).countType;
 
+                              final selected = countType == selectedBill;
+
                               return ListTile(
-                                title: Text(countType),
-                                trailing: countType == selectedBill
-                                    ? const Icon(Icons.check, color: Colors.green)
+                                title: Text(
+                                  countType,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: cs.onSurface,
+                                  ),
+                                ),
+                                trailing: selected
+                                    ? Icon(Icons.check, color: cs.primary)
                                     : null,
                                 onTap: () {
                                   Navigator.pop(context);
@@ -131,8 +170,11 @@ class TripleModifyBillSection extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(selectedBill ?? '정산 선택'),
-                const Icon(Icons.arrow_drop_down),
+                Text(
+                  selectedBill ?? '정산 선택',
+                  style: TextStyle(fontWeight: FontWeight.w800, color: cs.onSurface),
+                ),
+                Icon(Icons.arrow_drop_down, color: cs.onSurfaceVariant),
               ],
             ),
           ),

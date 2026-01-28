@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
 
 class MinorParkingCompletedSearchButton extends StatelessWidget {
-  // ✅ 요청 팔레트 (BlueGrey)
-  static const Color _base = Color(0xFF546E7A); // BlueGrey 600
-
   final bool isValid;
   final bool isLoading;
   final VoidCallback? onPressed;
@@ -17,15 +14,19 @@ class MinorParkingCompletedSearchButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final enabled = isValid && !isLoading;
+
+    final Color bg = enabled ? cs.primary : cs.surfaceContainerHighest;
+    final Color fg = enabled ? cs.onPrimary : cs.onSurfaceVariant;
 
     return SizedBox(
       width: double.infinity,
       child: ElevatedButton(
         onPressed: enabled ? onPressed : null,
         style: ElevatedButton.styleFrom(
-          backgroundColor: enabled ? _base : Colors.grey.shade300,
-          foregroundColor: enabled ? Colors.white : Colors.black45,
+          backgroundColor: bg,
+          foregroundColor: fg,
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
@@ -33,17 +34,17 @@ class MinorParkingCompletedSearchButton extends StatelessWidget {
           elevation: 0,
         ),
         child: isLoading
-            ? const SizedBox(
+            ? SizedBox(
           width: 20,
           height: 20,
           child: CircularProgressIndicator(
             strokeWidth: 2,
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+            valueColor: AlwaysStoppedAnimation<Color>(fg),
           ),
         )
-            : const Row(
+            : Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [
+          children: const [
             Icon(Icons.search, size: 18),
             SizedBox(width: 8),
             Text(

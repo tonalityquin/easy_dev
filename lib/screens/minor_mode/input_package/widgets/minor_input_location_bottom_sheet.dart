@@ -15,7 +15,11 @@ class MinorInputLocationBottomSheet extends StatefulWidget {
     required this.onLocationSelected,
   });
 
-  static Future<void> show(BuildContext context, TextEditingController controller, Function(String) onSelected) async {
+  static Future<void> show(
+      BuildContext context,
+      TextEditingController controller,
+      Function(String) onSelected,
+      ) async {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -56,6 +60,9 @@ class _MinorInputLocationBottomSheetState extends State<MinorInputLocationBottom
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
     return SafeArea(
       child: Material(
         color: Colors.transparent,
@@ -65,21 +72,30 @@ class _MinorInputLocationBottomSheetState extends State<MinorInputLocationBottom
           maxChildSize: 0.9,
           builder: (context, scrollController) {
             return Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(0.8))),
               ),
               child: Consumer<LocationState>(
                 builder: (context, locationState, _) {
                   if (locationState.isLoading) {
-                    return const Center(child: CircularProgressIndicator());
+                    return Center(
+                      child: CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                      ),
+                    );
                   }
 
                   return FutureBuilder<List<LocationModel>>(
                     future: _futureLocations,
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
+                        return Center(
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                          ),
+                        );
                       }
 
                       if (!snapshot.hasData || snapshot.data!.isEmpty) {
@@ -106,34 +122,33 @@ class _MinorInputLocationBottomSheetState extends State<MinorInputLocationBottom
                             height: 4,
                             margin: const EdgeInsets.only(bottom: 16),
                             decoration: BoxDecoration(
-                              color: Colors.grey.shade300,
+                              color: cs.outlineVariant.withOpacity(0.9),
                               borderRadius: BorderRadius.circular(2),
                             ),
                           ),
-                          const Text(
+                          Text(
                             '주차 구역 선택',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
+                            style: (tt.titleLarge ?? const TextStyle(fontSize: 20)).copyWith(
+                              fontWeight: FontWeight.w900,
+                              color: cs.onSurface,
                             ),
                           ),
                           const SizedBox(height: 16),
+
                           if (selectedParent != null) ...[
                             ListTile(
-                              leading: const Icon(Icons.arrow_back),
-                              title: const Text('뒤로가기'),
+                              leading: Icon(Icons.arrow_back, color: cs.onSurface),
+                              title: Text('뒤로가기', style: TextStyle(color: cs.onSurface)),
                               onTap: () => setState(() => selectedParent = null),
                             ),
-                            const Divider(),
-                            ...composites
-                                .where((loc) => loc.parent == selectedParent)
-                                .map((loc) {
+                            Divider(color: cs.outlineVariant.withOpacity(0.9)),
+                            ...composites.where((loc) => loc.parent == selectedParent).map((loc) {
                               final name = '${loc.parent} - ${loc.locationName}';
                               return ListTile(
-                                leading: const Icon(Icons.subdirectory_arrow_right),
-                                title: Text(name),
-                                subtitle: Text('공간 ${loc.capacity}'),
+                                leading: Icon(Icons.subdirectory_arrow_right, color: cs.primary),
+                                title: Text(name, style: TextStyle(color: cs.onSurface)),
+                                subtitle: Text('공간 ${loc.capacity}',
+                                    style: TextStyle(color: cs.onSurfaceVariant)),
                                 onTap: () {
                                   widget.onLocationSelected(name);
                                   Navigator.pop(context);
@@ -141,36 +156,44 @@ class _MinorInputLocationBottomSheetState extends State<MinorInputLocationBottom
                               );
                             }),
                           ] else ...[
-                            const Text(
+                            Text(
                               '단일 주차 구역',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              style: (tt.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: cs.onSurface,
+                              ),
                             ),
                             const SizedBox(height: 8),
                             ...singles.map((loc) {
                               return ListTile(
-                                leading: const Icon(Icons.place),
-                                title: Text(loc.locationName),
-                                subtitle: Text('공간 ${loc.capacity}'),
+                                leading: Icon(Icons.place, color: cs.primary),
+                                title: Text(loc.locationName, style: TextStyle(color: cs.onSurface)),
+                                subtitle: Text('공간 ${loc.capacity}',
+                                    style: TextStyle(color: cs.onSurfaceVariant)),
                                 onTap: () {
                                   widget.onLocationSelected(loc.locationName);
                                   Navigator.pop(context);
                                 },
                               );
                             }),
-                            const Divider(height: 32),
-                            const Text(
+                            Divider(height: 32, color: cs.outlineVariant.withOpacity(0.9)),
+                            Text(
                               '복합 주차 구역',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              style: (tt.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: cs.onSurface,
+                              ),
                             ),
                             const SizedBox(height: 8),
                             ...parentSet.map((parent) {
                               final sub = composites.where((l) => l.parent == parent).toList();
                               final totalCapacity = sub.fold(0, (sum, l) => sum + l.capacity);
                               return ListTile(
-                                leading: const Icon(Icons.layers),
-                                title: Text('복합 구역: $parent'),
-                                subtitle: Text('총 공간 $totalCapacity'),
-                                trailing: const Icon(Icons.chevron_right),
+                                leading: Icon(Icons.layers, color: cs.primary),
+                                title: Text('복합 구역: $parent', style: TextStyle(color: cs.onSurface)),
+                                subtitle: Text('총 공간 $totalCapacity',
+                                    style: TextStyle(color: cs.onSurfaceVariant)),
+                                trailing: Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
                                 onTap: () => setState(() => selectedParent = parent),
                               );
                             }),
@@ -178,6 +201,7 @@ class _MinorInputLocationBottomSheetState extends State<MinorInputLocationBottom
                             Center(
                               child: TextButton(
                                 onPressed: () => Navigator.pop(context),
+                                style: TextButton.styleFrom(foregroundColor: cs.primary),
                                 child: const Text('닫기'),
                               ),
                             ),

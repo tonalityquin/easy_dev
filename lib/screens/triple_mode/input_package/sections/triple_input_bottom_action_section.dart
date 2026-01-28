@@ -56,6 +56,7 @@ class _TripleInputBottomActionSectionState extends State<TripleInputBottomAction
   }
 
   void _selectParkingLocation() {
+    // ✅ 기존 동작 유지(showDialog). (내부는 DraggableScrollableSheet 형태)
     showDialog(
       context: context,
       builder: (_) => TripleInputLocationBottomSheet(
@@ -84,7 +85,11 @@ class _TripleInputBottomActionSectionState extends State<TripleInputBottomAction
       children: [
         Row(
           children: [
-            Expanded(child: TripleInputAnimatedPhotoButton(onPressed: _showCameraPreviewDialog)),
+            Expanded(
+              child: TripleInputAnimatedPhotoButton(
+                onPressed: _showCameraPreviewDialog,
+              ),
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: TripleInputAnimatedParkingButton(

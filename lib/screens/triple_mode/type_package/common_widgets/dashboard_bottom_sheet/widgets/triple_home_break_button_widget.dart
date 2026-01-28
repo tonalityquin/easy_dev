@@ -6,13 +6,18 @@ import '../triple_home_dash_board_controller.dart';
 class TripleHomeBreakButtonWidget extends StatefulWidget {
   final TripleHomeDashBoardController controller;
 
-  const TripleHomeBreakButtonWidget({super.key, required this.controller});
+  const TripleHomeBreakButtonWidget({
+    super.key,
+    required this.controller,
+  });
 
   @override
-  State<TripleHomeBreakButtonWidget> createState() => _TripleHomeBreakButtonWidgetState();
+  State<TripleHomeBreakButtonWidget> createState() =>
+      _TripleHomeBreakButtonWidgetState();
 }
 
-class _TripleHomeBreakButtonWidgetState extends State<TripleHomeBreakButtonWidget> {
+class _TripleHomeBreakButtonWidgetState
+    extends State<TripleHomeBreakButtonWidget> {
   bool _submitting = false;
 
   Future<void> _onTap() async {
@@ -44,13 +49,12 @@ class _TripleHomeBreakButtonWidgetState extends State<TripleHomeBreakButtonWidge
         ),
       )
           : const Icon(Icons.coffee),
-      label: Text(
+      label: const Text(
         '휴게 사용 확인',
         style: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w900,
           letterSpacing: 1.1,
-          color: cs.onSurface,
         ),
       ),
       style: ElevatedButton.styleFrom(
@@ -59,11 +63,18 @@ class _TripleHomeBreakButtonWidgetState extends State<TripleHomeBreakButtonWidge
         minimumSize: const Size.fromHeight(55),
         padding: EdgeInsets.zero,
         elevation: 0,
-        side: BorderSide(color: cs.outlineVariant.withOpacity(0.85), width: 1.0),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        side: BorderSide(
+          color: cs.outlineVariant.withOpacity(0.85),
+          width: 1.0,
+        ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
       ).copyWith(
         overlayColor: MaterialStateProperty.resolveWith<Color?>(
-              (states) => states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(0.12) : null,
+              (states) => states.contains(MaterialState.pressed)
+              ? cs.outlineVariant.withOpacity(0.12)
+              : null,
         ),
       ),
     );

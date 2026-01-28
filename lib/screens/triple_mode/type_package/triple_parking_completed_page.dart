@@ -33,7 +33,8 @@ class TripleParkingCompletedPage extends StatefulWidget {
   }
 
   @override
-  State<TripleParkingCompletedPage> createState() => _TripleParkingCompletedPageState();
+  State<TripleParkingCompletedPage> createState() =>
+      _TripleParkingCompletedPageState();
 }
 
 class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage> {
@@ -65,7 +66,7 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
 
   /// ✅ 현황 모드 ↔ 테이블 모드 토글
   /// - 현황 모드: TripleParkingStatusPage
-  /// - 테이블 모드: (리팩터링) TripleParkingCompletedLocationPicker = 실시간(view) 테이블(입차완료/출차요청)
+  /// - 테이블 모드: 실시간(view) 테이블(입차완료/출차요청)
   void _toggleViewMode() {
     if (_mode == TripleParkingViewMode.plateList) return; // 안전장치
 
@@ -75,7 +76,9 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
           : TripleParkingViewMode.status;
     });
 
-    _log(_mode == TripleParkingViewMode.status ? 'mode → status' : 'mode → locationPicker(table)');
+    _log(_mode == TripleParkingViewMode.status
+        ? 'mode → status'
+        : 'mode → locationPicker(table)');
   }
 
   void _toggleSortIcon() {
@@ -104,7 +107,8 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
     final movementPlate = context.read<MovementPlate>();
     final userName = context.read<UserState>().name;
     final plateState = context.read<TriplePlateState>();
-    final selectedPlate = plateState.tripleGetSelectedPlate(PlateType.parkingCompleted, userName);
+    final selectedPlate =
+    plateState.tripleGetSelectedPlate(PlateType.parkingCompleted, userName);
 
     if (selectedPlate != null) {
       movementPlate
@@ -128,19 +132,23 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
 
   // ✅ (빌드 에러 방지) 컨트롤 버튼에서 요구하는 입차 요청 콜백 스텁
   // ※ 트리플 모드에서는 입차 요청 기능이 없지만, 기존 UI/바텀시트 시그니처 호환을 위해 유지
-  void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) async {
+  void handleEntryParkingRequest(
+      BuildContext context, String plateNumber, String area) async {
     _log('stub: entry parking request $plateNumber ($area)');
     showSuccessSnackbar(context, "입차 요청 처리: $plateNumber ($area)");
   }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return WillPopScope(
       // 시스템/뒤로가기 처리: 선택/모드 단계적으로 해제
       onWillPop: () async {
         final plateState = context.read<TriplePlateState>();
         final userName = context.read<UserState>().name;
-        final selectedPlate = plateState.tripleGetSelectedPlate(PlateType.parkingCompleted, userName);
+        final selectedPlate =
+        plateState.tripleGetSelectedPlate(PlateType.parkingCompleted, userName);
 
         // 선택된 번호판이 있으면 선택 해제 먼저
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
@@ -169,12 +177,22 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
         return true;
       },
       child: Scaffold(
+        backgroundColor: cs.surface,
         appBar: AppBar(
           title: const TripleTopNavigation(),
           centerTitle: true,
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
+
+          // ✅ 브랜드(ColorScheme) 기반
+          backgroundColor: cs.surface,
+          foregroundColor: cs.onSurface,
+          surfaceTintColor: Colors.transparent,
           elevation: 0,
+          shape: Border(
+            bottom: BorderSide(
+              color: cs.outlineVariant.withOpacity(0.85),
+              width: 1,
+            ),
+          ),
         ),
         body: _buildBody(context),
 
@@ -208,8 +226,6 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
       case TripleParkingViewMode.locationPicker:
       // ✅ 리팩터링: 기존 “주차 구역 리스트” 대신
       //    트리플 모드 전용 “실시간(view) 테이블(입차 완료 / 출차 요청)” 임베드 출력
-      // ✅ 내부 Scaffold 제거된 위젯이므로 body 영역을 자연스럽게 채우고,
-      //    bottomNavigationBar(ControlButtons) 상단까지만 렌더링됨.
         return TripleParkingCompletedRealTimeTable(
           onClose: () {
             if (!mounted) return;
@@ -219,12 +235,15 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
 
       case TripleParkingViewMode.plateList:
       // 🔹 기존 plateList 화면은 보존(다른 경로에서 필요할 수 있음). 현재 기본 흐름에선 사용 안 함.
-        List<PlateModel> plates = plateState.tripleGetPlatesByCollection(PlateType.parkingCompleted);
+        List<PlateModel> plates =
+        plateState.tripleGetPlatesByCollection(PlateType.parkingCompleted);
         if (_selectedParkingArea != null) {
           plates = plates.where((p) => p.location == _selectedParkingArea).toList();
         }
         plates.sort(
-              (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
+              (a, b) => _isSorted
+              ? b.requestTime.compareTo(a.requestTime)
+              : a.requestTime.compareTo(b.requestTime),
         );
 
         return ListView(
@@ -233,7 +252,8 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
             PlateContainer(
               data: plates,
               collection: PlateType.parkingCompleted,
-              filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
+              filterCondition: (request) =>
+              request.type == PlateType.parkingCompleted.firestoreValue,
               onPlateTap: (plateNumber, area) {
                 context.read<TriplePlateState>().tripleTogglePlateIsSelected(
                   collection: PlateType.parkingCompleted,

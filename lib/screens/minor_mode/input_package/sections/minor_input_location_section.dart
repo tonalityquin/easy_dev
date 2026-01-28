@@ -11,10 +11,19 @@ class MinorInputLocationSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('주차 구역', style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold)),
+        Text(
+          '주차 구역',
+          style: (tt.titleMedium ?? const TextStyle(fontSize: 18)).copyWith(
+            fontWeight: FontWeight.w900,
+            color: cs.onSurface,
+          ),
+        ),
         const SizedBox(height: 8.0),
         Center(
           child: Row(

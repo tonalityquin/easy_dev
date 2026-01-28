@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class MinorModifyAnimatedActionButton extends StatefulWidget {
   final bool isLoading;
@@ -15,91 +16,114 @@ class MinorModifyAnimatedActionButton extends StatefulWidget {
   });
 
   @override
-  State<MinorModifyAnimatedActionButton> createState() => _MinorModifyAnimatedActionButtonState();
+  State<MinorModifyAnimatedActionButton> createState() =>
+      _MinorModifyAnimatedActionButtonState();
 }
 
-class _MinorModifyAnimatedActionButtonState extends State<MinorModifyAnimatedActionButton>
+class _MinorModifyAnimatedActionButtonState
+    extends State<MinorModifyAnimatedActionButton>
     with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
+  late final AnimationController _pressCtrl;
+  late final Animation<double> _scale;
+
+  bool _tapBusy = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
+
+    // ✅ 초기 스케일이 0.95로 보이는 문제 방지: value=1.0로 시작
+    _pressCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 150),
       lowerBound: 0.95,
       upperBound: 1.0,
-    );
+    )..value = 1.0;
 
-    _scaleAnimation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOut,
-    );
-  }
-
-  Future<void> _handleTap() async {
-    await _controller.reverse();
-    await _controller.forward();
-
-    await widget.onPressed();
+    _scale = CurvedAnimation(parent: _pressCtrl, curve: Curves.easeOut);
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _pressCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _handleTap() async {
+    if (_tapBusy || widget.isLoading) return;
+
+    setState(() => _tapBusy = true);
+
+    try {
+      HapticFeedback.lightImpact();
+
+      await _pressCtrl.reverse();
+      await _pressCtrl.forward();
+
+      await widget.onPressed();
+    } finally {
+      if (mounted) setState(() => _tapBusy = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final bool isLoading = widget.isLoading;
-    final bool isLocationSelected = widget.isLocationSelected;
+    final cs = Theme.of(context).colorScheme;
 
-    final String label = widget.buttonLabel ??
-        (isLocationSelected ? '입차 완료' : '입차 요청');
+    final bool loading = widget.isLoading || _tapBusy;
+
+    // ✅ MinorModify의 기본 액션은 "수정 완료"가 자연스러움
+    final String label = (widget.buttonLabel ?? '수정 완료').trim().isEmpty
+        ? '수정 완료'
+        : (widget.buttonLabel ?? '수정 완료').trim();
+
+    // ✅ location 선택 여부는 "색감 톤"에만 반영(기존 시그니처 유지)
+    final bool toneSelected = widget.isLocationSelected;
+
+    final Color bg =
+    toneSelected ? cs.primaryContainer : cs.surfaceVariant.withOpacity(0.55);
+    final Color fg = toneSelected ? cs.onPrimaryContainer : cs.onSurface;
+    final Color border =
+    toneSelected ? cs.primary.withOpacity(0.65) : cs.outlineVariant.withOpacity(0.65);
+
+    final Color spinnerColor = fg;
 
     return ScaleTransition(
-      scale: _scaleAnimation,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : _handleTap,
-        style: ElevatedButton.styleFrom(
-          backgroundColor:
-          isLocationSelected ? Colors.indigo[50] : Colors.blueGrey[50],
-          foregroundColor:
-          isLocationSelected ? Colors.indigo[800] : Colors.blueGrey[800],
-          elevation: 0,
-          padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 80),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(
-              color: isLocationSelected ? Colors.indigo : Colors.blueGrey,
-              width: 1.5,
+      scale: _scale,
+      child: SizedBox(
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: loading ? null : _handleTap,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: bg,
+            foregroundColor: fg,
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(vertical: 16.0),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: border, width: 1.4),
             ),
           ),
-        ),
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          transitionBuilder: (Widget child, Animation<double> animation) {
-            return ScaleTransition(scale: animation, child: child);
-          },
-          child: isLoading
-              ? const SizedBox(
-            key: ValueKey('loading'),
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: Colors.black,
-            ),
-          )
-              : Text(
-            key: const ValueKey('buttonText'),
-            label,
-            style: const TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (child, anim) =>
+                ScaleTransition(scale: anim, child: child),
+            child: loading
+                ? SizedBox(
+              key: const ValueKey('loading'),
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: spinnerColor,
+              ),
+            )
+                : Text(
+              key: const ValueKey('buttonText'),
+              label,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
             ),
           ),
         ),

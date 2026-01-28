@@ -14,25 +14,41 @@ class MinorModifyCustomBillDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    final normalizedItems =
+    items.map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+
+    // ✅ selectedValue가 items에 없으면 null로 처리(드롭다운 예외 방지)
+    final String? normalizedSelected = (selectedValue ?? '').trim();
+    final String? safeSelected = normalizedItems.contains(normalizedSelected)
+        ? normalizedSelected
+        : null;
+
+    final bool disabled = onChanged == null || normalizedItems.isEmpty;
+
     return InputDecorator(
       decoration: InputDecoration(
         labelText: '정산 유형 선택',
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        errorText: selectedValue == null ? '정산 유형을 선택해주세요' : null,
+        errorText: safeSelected == null ? '정산 유형을 선택해주세요' : null,
+        filled: true,
+        fillColor: cs.surfaceVariant.withOpacity(0.35),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String>(
-          value: selectedValue,
+          value: safeSelected,
           isExpanded: true,
-          icon: const Icon(Icons.keyboard_arrow_down),
-          onChanged: onChanged,
-          items: items.map((item) {
+          icon: Icon(Icons.keyboard_arrow_down, color: cs.outline),
+          onChanged: disabled ? null : onChanged,
+          items: normalizedItems.map((item) {
             return DropdownMenuItem<String>(
               value: item,
               child: Text(
                 item,
-                style: const TextStyle(fontWeight: FontWeight.w500),
+                style: const TextStyle(fontWeight: FontWeight.w600),
+                overflow: TextOverflow.ellipsis,
               ),
             );
           }).toList(),

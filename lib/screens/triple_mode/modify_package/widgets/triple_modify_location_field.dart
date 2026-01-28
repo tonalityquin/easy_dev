@@ -8,33 +8,41 @@ class TripleModifyLocationField extends StatelessWidget {
   const TripleModifyLocationField({
     super.key,
     required this.controller,
-    this.readOnly = false,
+    this.readOnly = true,
     this.widthFactor = 0.7,
   });
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context).textTheme;
     final screenWidth = MediaQuery.of(context).size.width;
+
+    final hasValue = controller.text.trim().isNotEmpty;
+
     return SizedBox(
       width: screenWidth * widthFactor,
       child: TextField(
         controller: controller,
-        readOnly: true,
+        readOnly: readOnly,
         textAlign: TextAlign.center,
         style: theme.bodyLarge?.copyWith(
           fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: controller.text.isEmpty ? Colors.grey : Colors.black,
+          fontWeight: FontWeight.w900,
+          color: hasValue ? cs.onSurface : cs.onSurfaceVariant,
         ),
         decoration: InputDecoration(
-          hintText: controller.text.isEmpty ? '미지정' : null,
+          hintText: hasValue ? null : '미지정',
           hintStyle: theme.bodyLarge?.copyWith(
             fontSize: 18,
-            color: Colors.grey,
+            color: cs.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
           ),
-          enabledBorder: const UnderlineInputBorder(
-            borderSide: BorderSide(color: Colors.black, width: 2.0),
+          enabledBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: cs.onSurfaceVariant.withOpacity(0.85), width: 2.0),
+          ),
+          focusedBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: cs.primary, width: 2.2),
           ),
         ),
       ),

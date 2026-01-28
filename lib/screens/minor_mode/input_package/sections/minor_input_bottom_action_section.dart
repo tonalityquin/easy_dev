@@ -55,7 +55,7 @@ class _MinorInputBottomActionSectionState extends State<MinorInputBottomActionSe
     widget.onStateRefresh();
   }
 
-  void _handleParkingButtonPressed() {
+  Future<void> _handleParkingButtonPressed() async {
     // ✅ 선택된 구역이 있으면: "구역 초기화"
     if (widget.controller.isLocationSelected) {
       setState(() {
@@ -65,20 +65,18 @@ class _MinorInputBottomActionSectionState extends State<MinorInputBottomActionSe
       return;
     }
 
-    // ✅ 선택된 구역이 없으면: "주차 구역 선택"
-    showDialog(
-      context: context,
-      builder: (_) => MinorInputLocationBottomSheet(
-        locationController: widget.controller.locationController,
-        onLocationSelected: (location) {
-          setState(() {
-            final trimmed = location.trim();
-            widget.controller.locationController.text = trimmed;
-            widget.controller.isLocationSelected = trimmed.isNotEmpty;
-          });
-          widget.onStateRefresh();
-        },
-      ),
+    // ✅ 선택된 구역이 없으면: "주차 구역 선택" (BottomSheet로 표준화)
+    await MinorInputLocationBottomSheet.show(
+      context,
+      widget.controller.locationController,
+          (location) {
+        setState(() {
+          final trimmed = location.trim();
+          widget.controller.locationController.text = trimmed;
+          widget.controller.isLocationSelected = trimmed.isNotEmpty;
+        });
+        widget.onStateRefresh();
+      },
     );
   }
 

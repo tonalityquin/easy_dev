@@ -7,18 +7,28 @@ import '../../../modify_package/utils/triple_modify_plate_service.dart';
 class TripleDepartureCompletedPlateImageDialog extends StatelessWidget {
   final String plateNumber;
 
-  const TripleDepartureCompletedPlateImageDialog({super.key, required this.plateNumber});
+  const TripleDepartureCompletedPlateImageDialog({
+    super.key,
+    required this.plateNumber,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: cs.surface,
       appBar: AppBar(
         centerTitle: true,
         title: const Text('저장된 사진 목록'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 1,
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        shape: Border(
+          bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.85), width: 1),
+        ),
       ),
       body: FutureBuilder<List<String>>(
         future: TripleModifyPlateService.listPlateImages(
@@ -27,17 +37,37 @@ class TripleDepartureCompletedPlateImageDialog extends StatelessWidget {
         ),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+              ),
+            );
           }
 
           if (snapshot.hasError) {
-            return const Center(child: Text('이미지 불러오기 실패'));
+            return Center(
+              child: Text(
+                '이미지 불러오기 실패',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            );
           }
 
           final urls = snapshot.data ?? [];
 
           if (urls.isEmpty) {
-            return const Center(child: Text('DB에 저장된 이미지가 없습니다.'));
+            return Center(
+              child: Text(
+                'DB에 저장된 이미지가 없습니다.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            );
           }
 
           return ListView.builder(
@@ -51,7 +81,7 @@ class TripleDepartureCompletedPlateImageDialog extends StatelessWidget {
               final userWithExt = segments.length > 3 ? segments[3] : '미상';
               final user = userWithExt.replaceAll('.jpg', '');
 
-              return GestureDetector(
+              return InkWell(
                 onTap: () => modifyshowFullScreenImageViewer(
                   context,
                   urls,
@@ -66,26 +96,38 @@ class TripleDepartureCompletedPlateImageDialog extends StatelessWidget {
                         width: MediaQuery.of(context).size.width * 0.2,
                         height: 80,
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+                          color: cs.surfaceContainerLow,
                         ),
                         clipBehavior: Clip.hardEdge,
                         child: Image.network(
                           url,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) =>
-                          const Icon(Icons.broken_image, color: Colors.red),
+                              Icon(Icons.broken_image, color: cs.error),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('📅 $date', style: const TextStyle(fontSize: 14)),
-                            Text('🚘 $number', style: const TextStyle(fontSize: 14)),
-                            Text('👤 $user', style: const TextStyle(fontSize: 14)),
-                          ],
+                        child: DefaultTextStyle(
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: cs.onSurface,
+                            fontWeight: FontWeight.w700,
+                          ) ??
+                              TextStyle(
+                                fontSize: 14,
+                                color: cs.onSurface,
+                                fontWeight: FontWeight.w700,
+                              ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('📅 $date'),
+                              Text('🚘 $number'),
+                              Text('👤 $user', style: TextStyle(color: cs.onSurfaceVariant)),
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -106,13 +148,15 @@ void modifyshowFullScreenImageViewer(
     int initialIndex, {
       bool isUrlList = false,
     }) {
+  final cs = Theme.of(context).colorScheme;
+
   showDialog(
     context: context,
     useSafeArea: true,
     barrierDismissible: true,
     builder: (_) {
       return Dialog(
-        backgroundColor: Colors.black,
+        backgroundColor: cs.scrim, // ✅ 하드코딩 black → scrim
         insetPadding: EdgeInsets.zero,
         child: SafeArea(
           child: Stack(
@@ -125,7 +169,9 @@ void modifyshowFullScreenImageViewer(
                   final tag = isUrlList ? image : (image as XFile).path;
                   final metadata = isUrlList
                       ? _parseMetadataFromUrl(image)
-                      : _parseMetadataFromFileName(File(image.path).uri.pathSegments.last);
+                      : _parseMetadataFromFileName(
+                    File(image.path).uri.pathSegments.last,
+                  );
 
                   return Stack(
                     children: [
@@ -141,20 +187,29 @@ void modifyshowFullScreenImageViewer(
                               fit: BoxFit.contain,
                               loadingBuilder: (context, child, progress) {
                                 if (progress == null) return child;
-                                return const Center(child: CircularProgressIndicator());
+                                return Center(
+                                  child: CircularProgressIndicator(
+                                    valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                                  ),
+                                );
                               },
                               errorBuilder: (_, __, ___) =>
-                              const Icon(Icons.error, color: Colors.red),
+                                  Icon(Icons.error, color: cs.error),
                             )
                                 : FutureBuilder<bool>(
                               future: File(image.path).exists(),
                               builder: (context, snapshot) {
                                 if (snapshot.connectionState != ConnectionState.done) {
-                                  return const Center(child: CircularProgressIndicator());
+                                  return Center(
+                                    child: CircularProgressIndicator(
+                                      valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                                    ),
+                                  );
                                 }
                                 if (snapshot.hasError || !(snapshot.data ?? false)) {
-                                  return const Center(
-                                      child: Icon(Icons.broken_image, color: Colors.red));
+                                  return Center(
+                                    child: Icon(Icons.broken_image, color: cs.error),
+                                  );
                                 }
                                 return Image.file(
                                   File(image.path),
@@ -174,12 +229,17 @@ void modifyshowFullScreenImageViewer(
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               decoration: BoxDecoration(
-                                color: Colors.black.withOpacity(0.6),
+                                color: cs.scrim.withOpacity(0.65),
                                 borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: cs.outlineVariant.withOpacity(0.45)),
                               ),
                               child: Text(
                                 metadata,
-                                style: const TextStyle(color: Colors.white, fontSize: 14),
+                                style: TextStyle(
+                                  color: cs.inverseSurface, // ✅ white → inverseSurface
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
                                 textAlign: TextAlign.center,
                               ),
                             ),
@@ -194,7 +254,7 @@ void modifyshowFullScreenImageViewer(
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                    icon: Icon(Icons.close, color: Theme.of(context).colorScheme.inverseSurface, size: 30),
                     onPressed: () => Navigator.of(context).pop(),
                     tooltip: '닫기',
                   ),

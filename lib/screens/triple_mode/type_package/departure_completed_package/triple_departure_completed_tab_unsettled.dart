@@ -11,15 +11,15 @@ import 'departure_completed_plate_search_bottom_sheet/triple_departure_completed
 /// Triple / 출차완료 / 미정산 탭
 ///
 /// 정책/기능
-/// - 미정산(isLockedFee == false)만 표시
+/// - 미정산(isLockedFee != true)만 표시
 /// - 정렬/그룹핑 기준: requestTime 고정
 /// - 오래된 순(오름차순)
 /// - 날짜 그룹 헤더: Divider 가운데 라벨 `YYYY.MM.DD (요일) · N건`
 /// - 상단 안내 배너:
 ///   - 정산은 "번호판 검색"으로 진행 안내
 ///   - 마지막 갱신 시간 표시 + 색상 정책
-///     - 날짜가 오늘과 다르면 빨간색
-///     - 오늘이지만 1시간 이상 경과하면 주황색
+///     - 날짜가 오늘과 다르면 error 계열
+///     - 오늘이지만 1시간 이상 경과하면 tertiary 계열
 /// - 하단: "데이터 갱신" + "번호판 검색"
 /// - Pull-to-refresh 지원
 class TripleDepartureCompletedUnsettledTab extends StatefulWidget {
@@ -33,10 +33,12 @@ class TripleDepartureCompletedUnsettledTab extends StatefulWidget {
   final String userName;
 
   @override
-  State<TripleDepartureCompletedUnsettledTab> createState() => _TripleDepartureCompletedUnsettledTabState();
+  State<TripleDepartureCompletedUnsettledTab> createState() =>
+      _TripleDepartureCompletedUnsettledTabState();
 }
 
-class _TripleDepartureCompletedUnsettledTabState extends State<TripleDepartureCompletedUnsettledTab> {
+class _TripleDepartureCompletedUnsettledTabState
+    extends State<TripleDepartureCompletedUnsettledTab> {
   // ✅ 날짜/정렬 기준을 requestTime으로 고정
   DateTime _sortTime(PlateModel p) => p.requestTime;
 
@@ -79,7 +81,6 @@ class _TripleDepartureCompletedUnsettledTabState extends State<TripleDepartureCo
 
   Future<void> _openPlateSearchBottomSheet() async {
     final area = context.read<AreaState>().currentArea.trim();
-
     if (area.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -119,7 +120,8 @@ class _TripleDepartureCompletedUnsettledTabState extends State<TripleDepartureCo
     if (!mounted) return;
 
     final lastAt = plateState.tripleLastRefreshAtOf(PlateType.departureCompleted);
-    final sourceLabel = plateState.tripleLastRefreshSourceLabelOf(PlateType.departureCompleted);
+    final sourceLabel =
+    plateState.tripleLastRefreshSourceLabelOf(PlateType.departureCompleted);
 
     final text = (lastAt == null)
         ? '데이터를 갱신했습니다.'
@@ -130,20 +132,22 @@ class _TripleDepartureCompletedUnsettledTabState extends State<TripleDepartureCo
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final plateState = context.watch<TriplePlateState>();
 
     // ✅ 이 탭은 "state의 최신 데이터"를 기준으로 렌더링 (갱신 반영 보장)
     final raw = plateState.dataOfType(PlateType.departureCompleted);
 
-    // departureCompleted는 state 쿼리에서 이미 isLockedFee=false로 제한하지만,
-    // 방어적으로 한 번 더 필터링
-    final plates = raw.where((p) => p.isLockedFee == false).toList()
+    // ✅ 미정산 방어 필터: bool? 안전하게 처리
+    final plates = raw.where((p) => p.isLockedFee != true).toList()
       ..sort((a, b) => _sortTime(a).compareTo(_sortTime(b))); // 오래된 순
 
-    final lastRefreshAt = plateState.tripleLastRefreshAtOf(PlateType.departureCompleted);
-    final sourceLabel = plateState.tripleLastRefreshSourceLabelOf(PlateType.departureCompleted);
-
-    final bool isRefreshing = plateState.isLoadingType(PlateType.departureCompleted);
+    final lastRefreshAt =
+    plateState.tripleLastRefreshAtOf(PlateType.departureCompleted);
+    final sourceLabel =
+    plateState.tripleLastRefreshSourceLabelOf(PlateType.departureCompleted);
+    final bool isRefreshing =
+    plateState.isLoadingType(PlateType.departureCompleted);
 
     // ✅ 날짜별(YYYY-MM-DD) 미정산 건수 사전 계산
     final Map<DateTime, int> dateCounts = <DateTime, int>{};
@@ -174,6 +178,8 @@ class _TripleDepartureCompletedUnsettledTabState extends State<TripleDepartureCo
     return Scaffold(
       backgroundColor: Colors.transparent,
       body: RefreshIndicator(
+        color: cs.primary,
+        backgroundColor: cs.surface,
         onRefresh: _refreshUnsettled,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -189,7 +195,10 @@ class _TripleDepartureCompletedUnsettledTabState extends State<TripleDepartureCo
     );
   }
 
-  List<Widget> _buildGroupedList(List<PlateModel> plates, Map<DateTime, int> dateCounts) {
+  List<Widget> _buildGroupedList(
+      List<PlateModel> plates,
+      Map<DateTime, int> dateCounts,
+      ) {
     final widgets = <Widget>[];
     DateTime? currentDate;
 
@@ -224,11 +233,11 @@ class _TripleDepartureCompletedUnsettledTabState extends State<TripleDepartureCo
 
 /// ✅ 상단 안내 + 마지막 갱신 시간 표시 배너
 ///
-/// 색상 정책:
-/// - lastRefreshAt == null: 빨간색(갱신 이력 없음)
-/// - 오늘 날짜와 다름: 빨간색
-/// - 오늘이지만 1시간 이상 경과: 주황색
-/// - 그 외: 기본 회색
+/// 색상 정책(브랜드 팔레트 기반):
+/// - lastRefreshAt == null: error
+/// - 오늘 날짜와 다름: error
+/// - 오늘이지만 1시간 이상 경과: tertiary
+/// - 그 외: onSurfaceVariant
 class _TopNoticeBanner extends StatelessWidget {
   const _TopNoticeBanner({
     required this.lastRefreshAt,
@@ -242,28 +251,27 @@ class _TopNoticeBanner extends StatelessWidget {
   final bool isRefreshing;
   final String Function(DateTime) format;
 
-  bool _isSameYmd(DateTime a, DateTime b) {
-    return a.year == b.year && a.month == b.month && a.day == b.day;
-  }
+  bool _isSameYmd(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final now = DateTime.now();
 
     final bool hasValue = lastRefreshAt != null;
-
     final bool isNotToday = hasValue ? !_isSameYmd(lastRefreshAt!, now) : true;
+    final bool over1Hour =
+    hasValue ? now.difference(lastRefreshAt!).inMinutes >= 60 : true;
 
-    final bool over1Hour = hasValue ? now.difference(lastRefreshAt!).inMinutes >= 60 : true;
-
-    // ✅ 우선순위: 날짜 다름/없음(빨강) > 오늘이지만 1시간 경과(주황) > 기본
+    // ✅ 우선순위: 날짜 다름/없음(error) > 오늘이지만 1시간 경과(tertiary) > 기본(onSurfaceVariant)
     final Color dataColor = isNotToday
-        ? Colors.redAccent
-        : (over1Hour ? Colors.orange.shade700 : Colors.black54);
+        ? cs.error
+        : (over1Hour ? cs.tertiary : cs.onSurfaceVariant);
 
     final Color borderColor = isNotToday
-        ? Colors.redAccent.withOpacity(0.35)
-        : (over1Hour ? Colors.orange.shade700.withOpacity(0.35) : Colors.black12);
+        ? cs.error.withOpacity(0.35)
+        : (over1Hour ? cs.tertiary.withOpacity(0.35) : cs.outlineVariant.withOpacity(0.85));
 
     final IconData icon = isRefreshing
         ? Icons.sync
@@ -279,21 +287,25 @@ class _TopNoticeBanner extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.grey.shade100,
+        color: cs.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: borderColor),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.info_outline, size: 16, color: Colors.black54),
-              SizedBox(width: 8),
+              Icon(Icons.info_outline, size: 16, color: cs.onSurfaceVariant),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   '정산은 하단의 “번호판 검색”을 눌러 진행해 주세요.',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: Colors.black87),
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    color: cs.onSurface,
+                  ),
                 ),
               ),
             ],
@@ -317,7 +329,14 @@ class _TopNoticeBanner extends StatelessWidget {
               ),
               if (isRefreshing) ...[
                 const SizedBox(width: 8),
-                const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
+                SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                  ),
+                ),
               ],
             ],
           ),
@@ -340,8 +359,10 @@ class _BottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return BottomAppBar(
-      color: Colors.white,
+      color: cs.surface,
       elevation: 0,
       child: SafeArea(
         top: false,
@@ -355,21 +376,30 @@ class _BottomBar extends StatelessWidget {
                   child: TextButton.icon(
                     onPressed: onRefreshPressed,
                     icon: isRefreshing
-                        ? const SizedBox(
+                        ? SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor:
+                        AlwaysStoppedAnimation<Color>(cs.primary),
+                      ),
                     )
-                        : Icon(Icons.refresh, color: Colors.grey[800]),
+                        : Icon(Icons.refresh, color: cs.onSurface),
                     label: Text(
                       isRefreshing ? '갱신 중' : '데이터 갱신',
                       style: TextStyle(
-                        color: onRefreshPressed == null ? Colors.grey[500] : Colors.grey[800],
+                        color: onRefreshPressed == null
+                            ? cs.onSurfaceVariant
+                            : cs.onSurface,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      foregroundColor: cs.onSurface,
+                      overlayColor: cs.outlineVariant.withOpacity(0.12),
                     ),
                   ),
                 ),
@@ -377,16 +407,19 @@ class _BottomBar extends StatelessWidget {
                 Expanded(
                   child: TextButton.icon(
                     onPressed: onSearchPressed,
-                    icon: Icon(Icons.search, color: Colors.grey[800]),
+                    icon: Icon(Icons.search, color: cs.onSurface),
                     label: Text(
                       '번호판 검색',
                       style: TextStyle(
-                        color: Colors.grey[800],
+                        color: cs.onSurface,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 10),
+                      foregroundColor: cs.onSurface,
+                      overlayColor: cs.outlineVariant.withOpacity(0.12),
                     ),
                   ),
                 ),
@@ -410,21 +443,26 @@ class _DateDivider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final style = Theme.of(context).textTheme.labelMedium?.copyWith(
       fontWeight: FontWeight.w900,
-      color: Colors.black54,
+      color: cs.onSurfaceVariant,
     );
 
     final text = '$label · ${count}건';
 
     return Row(
       children: [
-        const Expanded(child: Divider(height: 1)),
+        Expanded(
+          child: Divider(height: 1, color: cs.outlineVariant.withOpacity(0.85)),
+        ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10),
           child: Text(text, style: style),
         ),
-        const Expanded(child: Divider(height: 1)),
+        Expanded(
+          child: Divider(height: 1, color: cs.outlineVariant.withOpacity(0.85)),
+        ),
       ],
     );
   }
@@ -446,20 +484,26 @@ class _UnsettledPlateCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final plateNo = _safe(plate.plateNumber);
     final location = _safe(plate.location, fallback: '미지정');
     final area = _safe(plate.area);
 
-    return Material(
-      color: Colors.white,
-      elevation: 1.2,
-      borderRadius: BorderRadius.circular(12),
+    return Card(
+      elevation: 0,
+      color: cs.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+      ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.directions_car, size: 18, color: Colors.black54),
+            Icon(Icons.directions_car, size: 18, color: cs.onSurfaceVariant),
             const SizedBox(width: 10),
             Expanded(
               child: Column(
@@ -472,7 +516,11 @@ class _UnsettledPlateCard extends StatelessWidget {
                           plateNo,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w900,
+                            color: cs.onSurface,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -480,7 +528,7 @@ class _UnsettledPlateCard extends StatelessWidget {
                         CustomDateUtils.formatTimeForUI(requestTime),
                         style: TextStyle(
                           fontSize: 12,
-                          color: Colors.grey[700],
+                          color: cs.onSurfaceVariant,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -489,12 +537,20 @@ class _UnsettledPlateCard extends StatelessWidget {
                   const SizedBox(height: 6),
                   Text(
                     '지역: $area',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[700], fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 2),
                   Text(
                     '위치: $location',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[700], fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
@@ -519,24 +575,43 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 32, 16, 32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 36, color: Colors.grey[500]),
+            Icon(icon, size: 36, color: cs.onSurfaceVariant),
             const SizedBox(height: 10),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+              style: text.titleSmall?.copyWith(
+                fontSize: 15,
+                fontWeight: FontWeight.w900,
+                color: cs.onSurface,
+              ) ??
+                  TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                    color: cs.onSurface,
+                  ),
             ),
             const SizedBox(height: 4),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              style: text.bodySmall?.copyWith(
+                fontSize: 12,
+                color: cs.onSurfaceVariant,
+              ) ??
+                  TextStyle(
+                    fontSize: 12,
+                    color: cs.onSurfaceVariant,
+                  ),
             ),
           ],
         ),

@@ -9,6 +9,9 @@ import 'widgets/minor_departure_completed_plate_search_results.dart';
 import 'widgets/minor_departure_completed_search_button.dart';
 import '../../../../../../repositories/plate_repo_services/firestore_plate_repository.dart';
 
+// ✅ 프로젝트 공통 스낵바 헬퍼 사용(기존 SnackBar 직접 호출 제거)
+import '../../../../../../utils/snackbar_helper.dart';
+
 class MinorDepartureCompletedSearchBottomSheet extends StatefulWidget {
   final void Function(String) onSearch;
   final String area;
@@ -20,12 +23,14 @@ class MinorDepartureCompletedSearchBottomSheet extends StatefulWidget {
   });
 
   @override
-  State<MinorDepartureCompletedSearchBottomSheet> createState() => _MinorDepartureCompletedSearchBottomSheetState();
+  State<MinorDepartureCompletedSearchBottomSheet> createState() =>
+      _MinorDepartureCompletedSearchBottomSheetState();
 }
 
-class _MinorDepartureCompletedSearchBottomSheetState extends State<MinorDepartureCompletedSearchBottomSheet>
+class _MinorDepartureCompletedSearchBottomSheetState
+    extends State<MinorDepartureCompletedSearchBottomSheet>
     with SingleTickerProviderStateMixin {
-  // ✅ 요청 팔레트 (BlueGrey)
+  // ✅ 요청 팔레트(기존 톤 유지)
   static const Color _base = Color(0xFF546E7A); // BlueGrey 600
   static const Color _dark = Color(0xFF37474F); // BlueGrey 800
 
@@ -37,19 +42,23 @@ class _MinorDepartureCompletedSearchBottomSheetState extends State<MinorDepartur
 
   List<PlateModel> _results = [];
 
-  late AnimationController _keypadController;
-  late Animation<Offset> _slideAnimation;
-  late Animation<double> _fadeAnimation;
+  late final AnimationController _keypadController;
+  late final Animation<Offset> _slideAnimation;
+  late final Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
-    _keypadController = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
+    _keypadController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.2),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _keypadController, curve: Curves.easeOut));
-    _fadeAnimation = CurvedAnimation(parent: _keypadController, curve: Curves.easeIn);
+    _fadeAnimation =
+        CurvedAnimation(parent: _keypadController, curve: Curves.easeIn);
     _keypadController.forward();
   }
 
@@ -60,20 +69,35 @@ class _MinorDepartureCompletedSearchBottomSheetState extends State<MinorDepartur
     super.dispose();
   }
 
-  bool isValidPlate(String value) {
-    return RegExp(r'^\d{4}$').hasMatch(value);
-  }
+  bool _isValidPlate(String value) => RegExp(r'^\d{4}$').hasMatch(value.trim());
 
   Future<void> _refreshSearchResults() async {
     if (!mounted) return;
+    if (_isLoading) return;
+
+    final q = _controller.text.trim();
+    final area = widget.area.trim();
+
+    // ✅ 방어: invalid 입력이면 쿼리하지 않음
+    if (!_isValidPlate(q)) {
+      showSelectedSnackbar(context, '숫자 4자리를 입력해주세요.');
+      return;
+    }
+
+    // ✅ 방어: area 비어있으면 쿼리하지 않음
+    if (area.isEmpty) {
+      showFailedSnackbar(context, '현재 지역(area)이 설정되지 않아 검색할 수 없습니다.');
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
       final repository = FirestorePlateRepository();
 
       final results = await repository.fourDigitDepartureCompletedQuery(
-        plateFourDigit: _controller.text,
-        area: widget.area,
+        plateFourDigit: q,
+        area: area,
       );
 
       if (!mounted) return;
@@ -85,14 +109,24 @@ class _MinorDepartureCompletedSearchBottomSheetState extends State<MinorDepartur
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('검색 중 오류가 발생했습니다: $e')),
-      );
+      // ✅ 기존 SnackBar 직접 호출 제거 → 공통 헬퍼로 통일
+      showFailedSnackbar(context, '검색 중 오류가 발생했습니다: $e');
     }
+  }
+
+  void _resetSearch() {
+    if (!mounted) return;
+    setState(() {
+      _controller.clear();
+      _hasSearched = false;
+      _results.clear();
+      _navigating = false; // ✅ 재진입 안전(패턴 통일)
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final rootContext = Navigator.of(context, rootNavigator: true).context;
 
     return SafeArea(
@@ -106,12 +140,14 @@ class _MinorDepartureCompletedSearchBottomSheetState extends State<MinorDepartur
             maxChildSize: 0.95,
             builder: (context, scrollController) {
               return Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                decoration: BoxDecoration(
+                  color: cs.surface, // ✅ 테마 대응(기존 white 하드코딩 최소화)
+                  borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
                 ),
                 child: ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
                   child: Column(
                     children: [
                       const SizedBox(height: 10),
@@ -120,7 +156,7 @@ class _MinorDepartureCompletedSearchBottomSheetState extends State<MinorDepartur
                           width: 44,
                           height: 4,
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade300,
+                            color: cs.outlineVariant.withOpacity(0.75),
                             borderRadius: BorderRadius.circular(999),
                           ),
                         ),
@@ -132,7 +168,9 @@ class _MinorDepartureCompletedSearchBottomSheetState extends State<MinorDepartur
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Row(
                           children: [
-                            const Expanded(child: MinorDepartureCompletedPlateSearchHeader()),
+                            const Expanded(
+                              child: MinorDepartureCompletedPlateSearchHeader(),
+                            ),
                             IconButton(
                               tooltip: '닫기',
                               onPressed: () => Navigator.pop(context),
@@ -156,10 +194,9 @@ class _MinorDepartureCompletedSearchBottomSheetState extends State<MinorDepartur
                               accent: _base,
                               child: MinorDepartureCompletedPlateNumberDisplay(
                                 controller: _controller,
-                                isValidPlate: isValidPlate,
+                                isValidPlate: (v) => _isValidPlate(v),
                               ),
                             ),
-
                             const SizedBox(height: 12),
 
                             // 결과 영역
@@ -167,7 +204,7 @@ class _MinorDepartureCompletedSearchBottomSheetState extends State<MinorDepartur
                               duration: const Duration(milliseconds: 220),
                               switchInCurve: Curves.easeOut,
                               switchOutCurve: Curves.easeIn,
-                              child: _buildResultSection(rootContext, scrollController),
+                              child: _buildResultSection(rootContext),
                             ),
 
                             const SizedBox(height: 12),
@@ -181,15 +218,17 @@ class _MinorDepartureCompletedSearchBottomSheetState extends State<MinorDepartur
                         child: ValueListenableBuilder<TextEditingValue>(
                           valueListenable: _controller,
                           builder: (context, value, child) {
-                            final valid = isValidPlate(value.text);
+                            final valid = _isValidPlate(value.text);
                             return MinorDepartureCompletedSearchButton(
                               isValid: valid,
                               isLoading: _isLoading,
                               onPressed: valid
                                   ? () async {
-                                      await _refreshSearchResults();
-                                      widget.onSearch(value.text);
-                                    }
+                                await _refreshSearchResults();
+                                // ✅ 외부 콜백은 검색 시도 시점에 호출(기존 정책 유지)
+                                // 필요하면 성공 시에만 호출하도록 변경 가능
+                                widget.onSearch(value.text.trim());
+                              }
                                   : null,
                             );
                           },
@@ -203,29 +242,26 @@ class _MinorDepartureCompletedSearchBottomSheetState extends State<MinorDepartur
           ),
         ),
 
-        // 키패드(검색 전만 노출) — 기존 로직 유지
+        // 키패드(검색 전만 노출)
         bottomNavigationBar: _hasSearched
             ? const SizedBox.shrink()
             : AnimatedKeypad(
-                slideAnimation: _slideAnimation,
-                fadeAnimation: _fadeAnimation,
-                controller: _controller,
-                maxLength: 4,
-                enableDigitModeSwitch: false,
-                onComplete: () => setState(() {}),
-                onReset: () => setState(() {
-                  _controller.clear();
-                  _hasSearched = false;
-                  _results.clear();
-                }),
-              ),
+          slideAnimation: _slideAnimation,
+          fadeAnimation: _fadeAnimation,
+          controller: _controller,
+          maxLength: 4,
+          enableDigitModeSwitch: false,
+          onComplete: () => setState(() {}),
+          onReset: _resetSearch, // ✅ 공통 reset 함수로 통일
+        ),
       ),
     );
   }
 
-  Widget _buildResultSection(BuildContext rootContext, ScrollController scrollController) {
-    final text = _controller.text;
-    final valid = isValidPlate(text);
+  // ✅ scrollController는 내부에서 사용하지 않으므로 제거(불필요 인자/경고 예방)
+  Widget _buildResultSection(BuildContext rootContext) {
+    final text = _controller.text.trim();
+    final valid = _isValidPlate(text);
 
     if (!_hasSearched) {
       return const SizedBox.shrink();
@@ -290,12 +326,14 @@ class _CardSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.black12),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.8)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.03),
@@ -315,11 +353,21 @@ class _CardSection extends StatelessWidget {
                 decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
               ),
               const SizedBox(width: 8),
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+              Text(
+                title,
+                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+              ),
             ],
           ),
           const SizedBox(height: 4),
-          Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 12)),
+          Text(
+            subtitle,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 12),
           child,
         ],
@@ -345,8 +393,11 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color fg = (tone == _EmptyTone.danger) ? Colors.redAccent : Colors.black54;
-    final Color bg = (tone == _EmptyTone.danger) ? Colors.red.withOpacity(0.05) : Colors.grey.shade100;
+    final Color fg =
+    (tone == _EmptyTone.danger) ? Colors.redAccent : Colors.black54;
+    final Color bg = (tone == _EmptyTone.danger)
+        ? Colors.red.withOpacity(0.05)
+        : Colors.grey.shade100;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -363,11 +414,15 @@ class _EmptyState extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(color: fg, fontWeight: FontWeight.w900)),
+                Text(title,
+                    style: TextStyle(color: fg, fontWeight: FontWeight.w900)),
                 const SizedBox(height: 4),
                 Text(
                   message,
-                  style: TextStyle(color: fg.withOpacity(0.85), fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    color: fg.withOpacity(0.85),
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),

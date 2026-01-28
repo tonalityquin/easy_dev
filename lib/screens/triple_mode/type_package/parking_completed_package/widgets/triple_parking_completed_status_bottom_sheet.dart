@@ -30,12 +30,11 @@ Future<void> showTripleParkingCompletedStatusBottomSheetFromDialog({
     context: context,
     plate: plate,
     onRequestEntry: () async {
-      // 안전 기본값: 기존 helper 활용(원하면 여기 정책 변경 가능)
       final area = context.read<AreaState>().currentArea;
       await handleEntryParkingRequest(context, plate.plateNumber, area);
     },
     onDelete: () {
-      // 안전 기본값: 테이블 상세 → 작업 수행 경로에서는 삭제를 기본 비활성화(원하면 실제 삭제 로직으로 대체)
+      // 테이블 상세 → 작업 수행 경로에서는 삭제 기본 비활성화(정책 유지)
       try {
         showFailedSnackbar(context, '이 경로에서는 삭제 기능을 사용할 수 없습니다.');
       } catch (_) {
@@ -100,7 +99,8 @@ class _FullHeightSheet extends StatefulWidget {
   State<_FullHeightSheet> createState() => _FullHeightSheetState();
 }
 
-class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerProviderStateMixin {
+class _FullHeightSheetState extends State<_FullHeightSheet>
+    with SingleTickerProviderStateMixin {
   late PlateModel _plate;
 
   final ScrollController _scrollController = ScrollController();
@@ -127,11 +127,13 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
 
     _attentionPulse = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0, end: 1).chain(CurveTween(curve: Curves.easeOutCubic)),
+        tween: Tween<double>(begin: 0, end: 1)
+            .chain(CurveTween(curve: Curves.easeOutCubic)),
         weight: 45,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1, end: 0).chain(CurveTween(curve: Curves.easeInCubic)),
+        tween: Tween<double>(begin: 1, end: 0)
+            .chain(CurveTween(curve: Curves.easeInCubic)),
         weight: 55,
       ),
     ]).animate(_attentionCtrl);
@@ -146,9 +148,13 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
 
   PlateType? get _type => _plate.typeEnum;
 
-  bool get _needsBilling => (_type == PlateType.parkingCompleted) && (_plate.isLockedFee != true);
-  bool get _isFreeBilling => (_plate.basicAmount ?? 0) == 0 && (_plate.addAmount ?? 0) == 0;
+  /// ✅ (기능 유지) parkingCompleted인데 아직 사전정산(잠금) 아니면 billing 필요
+  bool get _needsBilling =>
+      (_type == PlateType.parkingCompleted) && (_plate.isLockedFee != true);
 
+  /// ✅ 무료 판정: basicAmount == 0 && addAmount == 0
+  bool get _isFreeBilling =>
+      (_plate.basicAmount ?? 0) == 0 && (_plate.addAmount ?? 0) == 0;
 
   /// ✅ 앱 강제 종료/재실행 등으로 '주행 중(선점)' 상태가 남아있을 때,
   /// 동일 사용자가 다시 진입하면 UI 문구를 '시작'이 아닌 '계속'으로 노출합니다.
@@ -156,6 +162,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
     final userName = (context.read<UserState>().name).trim();
     final selectedBy = (_plate.selectedBy ?? '').trim();
     final t = _type;
+
     return _plate.isSelected == true &&
         userName.isNotEmpty &&
         selectedBy.isNotEmpty &&
@@ -183,7 +190,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
     return '${_plate.plateNumber}_${_plate.area}';
   }
 
-  String get _effectiveLocation => _plate.location.trim().isEmpty ? '미지정' : _plate.location.trim();
+  String get _effectiveLocation =>
+      _plate.location.trim().isEmpty ? '미지정' : _plate.location.trim();
 
   Future<void> _runPrimary(Future<void> Function() fn) async {
     if (_primaryBusy) return;
@@ -229,9 +237,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
     );
   }
 
-  Future<void> _triggerBillingRequiredAttention({
-    required String message,
-  }) async {
+  Future<void> _triggerBillingRequiredAttention({required String message}) async {
     _showWarningSafe(message);
 
     if (_scrollController.hasClients) {
@@ -309,10 +315,12 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
   }
 
   Future<_DepartureOverrideChoice?> _showDepartureOverrideDialog() async {
+    final cs = Theme.of(context).colorScheme;
+
     return showDialog<_DepartureOverrideChoice>(
       context: context,
       barrierDismissible: true,
-      barrierColor: Colors.black.withOpacity(0.45),
+      barrierColor: cs.scrim.withOpacity(0.45),
       builder: (_) {
         return Dialog(
           insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -321,12 +329,12 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
           child: Container(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: cs.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.black12),
+              border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.12),
+                  color: cs.shadow.withOpacity(0.12),
                   blurRadius: 24,
                   offset: const Offset(0, 12),
                 ),
@@ -341,21 +349,25 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: Colors.orange.withOpacity(0.10),
+                        color: cs.errorContainer.withOpacity(0.55),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.orange.withOpacity(0.28)),
+                        border: Border.all(color: cs.error.withOpacity(0.28)),
                       ),
                       child: Icon(
                         Icons.warning_amber_rounded,
-                        color: Colors.orange.shade700,
+                        color: cs.error,
                         size: 20,
                       ),
                     ),
                     const SizedBox(width: 10),
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         '정산 없이 출차 요청',
-                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 16,
+                          color: cs.onSurface,
+                        ),
                       ),
                     ),
                   ],
@@ -365,9 +377,9 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade50,
+                    color: cs.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.black12),
+                    border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -375,7 +387,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                       Text(
                         '현재 사전 정산이 되어있지 않습니다.',
                         style: TextStyle(
-                          color: Colors.black.withOpacity(0.85),
+                          color: cs.onSurface,
                           fontWeight: FontWeight.w900,
                           fontSize: 13,
                         ),
@@ -384,7 +396,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                       Text(
                         '그래도 출차 요청으로 이동하시겠습니까?',
                         style: TextStyle(
-                          color: Colors.black.withOpacity(0.70),
+                          color: cs.onSurfaceVariant,
                           fontWeight: FontWeight.w700,
                           fontSize: 12,
                         ),
@@ -393,19 +405,19 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                         decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.08),
+                          color: cs.errorContainer.withOpacity(0.35),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.orange.withOpacity(0.30)),
+                          border: Border.all(color: cs.error.withOpacity(0.30)),
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.directions_car_filled, size: 16, color: Colors.orange.shade700),
+                            Icon(Icons.directions_car_filled, size: 16, color: cs.error),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 '차량: ${_plate.plateNumber}',
                                 style: TextStyle(
-                                  color: Colors.orange.shade800,
+                                  color: cs.error,
                                   fontWeight: FontWeight.w900,
                                   fontSize: 12,
                                 ),
@@ -424,8 +436,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                     OutlinedButton(
                       onPressed: () => Navigator.pop(context, _DepartureOverrideChoice.cancel),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.black87,
-                        side: const BorderSide(color: Colors.black12),
+                        foregroundColor: cs.onSurface,
+                        side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       ),
@@ -435,11 +447,11 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                     OutlinedButton(
                       onPressed: () => Navigator.pop(context, _DepartureOverrideChoice.goBilling),
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.blueAccent,
-                        side: BorderSide(color: Colors.blueAccent.withOpacity(0.35)),
+                        foregroundColor: cs.primary,
+                        side: BorderSide(color: cs.primary.withOpacity(0.35)),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        backgroundColor: Colors.blueAccent.withOpacity(0.06),
+                        backgroundColor: cs.primaryContainer.withOpacity(0.35),
                       ),
                       child: const Text('정산하기', style: TextStyle(fontWeight: FontWeight.w900)),
                     ),
@@ -447,8 +459,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                     FilledButton(
                       onPressed: () => Navigator.pop(context, _DepartureOverrideChoice.proceed),
                       style: FilledButton.styleFrom(
-                        backgroundColor: Colors.orange.shade700,
-                        foregroundColor: Colors.white,
+                        backgroundColor: cs.error,
+                        foregroundColor: cs.onError,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       ),
@@ -504,13 +516,12 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
     required Future<void> Function() onCancel,
   }) async {
     Object? err;
-    StackTrace? st;
 
     final result = await showDialog<_DrivingResult>(
       context: context,
       useRootNavigator: true,
       barrierDismissible: false,
-      barrierColor: Colors.black.withOpacity(0.55),
+      barrierColor: Theme.of(context).colorScheme.scrim.withOpacity(0.55),
       builder: (_) => PopScope(
         canPop: false,
         child: _DrivingBlockingDialog(
@@ -521,9 +532,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
             try {
               await onComplete();
               return _DrivingResult.completed;
-            } catch (e, s) {
+            } catch (e) {
               err = e;
-              st = s;
               return _DrivingResult.failed;
             }
           },
@@ -531,9 +541,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
             try {
               await onCancel();
               return _DrivingResult.cancelled;
-            } catch (e, s) {
+            } catch (e) {
               err = e;
-              st = s;
               return _DrivingResult.failed;
             }
           },
@@ -544,8 +553,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
     final r = result ?? _DrivingResult.failed;
     if (r == _DrivingResult.failed && err != null) {
       _showWarningSafe('주행 처리 실패: $err');
-      // ignore: unused_local_variable
-      final _ = st;
     }
     return r;
   }
@@ -578,7 +585,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
           area: _plate.area,
         );
 
-        // 로컬 즉시 반영(취소 권한 판단용)
         if (mounted) {
           setState(() {
             _plate = _plate.copyWith(
@@ -602,7 +608,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
             );
           },
           onCancel: () async {
-            // ✅ 취소 권한 제한(2중 방어)
             final currentSelectedBy = (_plate.selectedBy ?? '').trim();
             if (currentSelectedBy != userName) {
               throw StateError('권한 없음: 선점자만 취소 가능');
@@ -620,7 +625,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
               userName: userName,
             );
 
-            // 로컬/상태 즉시 반영
             final updated = _plate.copyWith(isSelected: false, selectedBy: null);
             if (mounted) setState(() => _plate = updated);
             try {
@@ -640,7 +644,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
         }
 
         if (result == _DrivingResult.cancelled) {
-          // 시트는 유지
           return;
         }
 
@@ -761,6 +764,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final rootContext = Navigator.of(context, rootNavigator: true).context;
 
     final isLocked = _plate.isLockedFee == true;
@@ -835,9 +839,10 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
     return SafeArea(
       top: false,
       child: Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
         ),
         child: Column(
           children: [
@@ -851,7 +856,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                       height: 4,
                       margin: const EdgeInsets.only(bottom: 12),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade400,
+                        color: cs.outlineVariant.withOpacity(0.85),
                         borderRadius: BorderRadius.circular(4),
                       ),
                     ),
@@ -1160,7 +1165,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
                           ],
                         ),
                       ),
-                      const SizedBox(height: 8),
                       const SizedBox(height: 10),
                     ],
                   );
@@ -1174,6 +1178,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> with SingleTickerPro
   }
 }
 
+/// ✅ 주행 중(선점) 다이얼로그: ColorScheme 기반으로 색 통일
 class _DrivingBlockingDialog extends StatefulWidget {
   const _DrivingBlockingDialog({
     required this.message,
@@ -1207,9 +1212,16 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      backgroundColor: cs.surface,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+      ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
         child: Column(
@@ -1221,7 +1233,7 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
               child: CircularProgressIndicator(
                 strokeWidth: 3,
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  _busy ? Colors.grey : Colors.blueAccent,
+                  _busy ? cs.onSurfaceVariant : cs.primary,
                 ),
               ),
             ),
@@ -1229,7 +1241,11 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
             Text(
               widget.message,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: cs.onSurface,
+              ),
             ),
             if (!widget.canCancel) ...[
               const SizedBox(height: 10),
@@ -1237,7 +1253,7 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
                 widget.cancelDisabledHint,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.red.shade700,
+                  color: cs.error,
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
                 ),
@@ -1252,9 +1268,9 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      side: const BorderSide(color: Colors.black12),
+                      side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
                       textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-                      foregroundColor: Colors.black87,
+                      foregroundColor: cs.onSurface,
                     ),
                     child: Text(_busy ? '처리 중...' : '주행 취소'),
                   ),
@@ -1264,6 +1280,8 @@ class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
                   child: FilledButton(
                     onPressed: _busy ? null : () => _run(widget.onComplete),
                     style: FilledButton.styleFrom(
+                      backgroundColor: cs.primary,
+                      foregroundColor: cs.onPrimary,
                       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                       textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
@@ -1291,13 +1309,19 @@ class _SheetTitleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Row(
       children: [
-        Icon(icon, color: Colors.blueAccent),
+        Icon(icon, color: cs.primary),
         const SizedBox(width: 8),
         Text(
           title,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: cs.onSurface,
+          ),
         ),
       ],
     );
@@ -1328,17 +1352,26 @@ class _PlateSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final badgeColor = isLocked ? Colors.green : Colors.grey.shade600;
+    final cs = Theme.of(context).colorScheme;
+
+    // ✅ 사전정산 완료 = 성공 톤(tertiary), 미정산 = 중립 톤
+    final badgeColor = isLocked ? cs.tertiary : cs.onSurfaceVariant;
     final badgeText = isLocked ? '사전정산 잠김' : '사전정산 없음';
 
-    final feeText =
-    (isLocked && lockedFee != null) ? '₩$lockedFee${paymentMethod.isNotEmpty ? " ($paymentMethod)" : ""}' : '—';
+    final feeText = (isLocked && lockedFee != null)
+        ? '₩$lockedFee${paymentMethod.isNotEmpty ? " ($paymentMethod)" : ""}'
+        : '—';
 
     final billingText = billingType.isNotEmpty ? billingType : '미지정';
 
-    final borderColor = Color.lerp(Colors.black12, Colors.orange, (attention * 0.9).clamp(0, 1))!;
-    final bgColor =
-    Color.lerp(Colors.grey.shade50, Colors.orange.withOpacity(0.06), (attention * 0.8).clamp(0, 1))!;
+    // ✅ attention(정산 필요) = error 계열로 강조
+    final borderColor =
+    Color.lerp(cs.outlineVariant.withOpacity(0.85), cs.error, (attention * 0.9).clamp(0, 1))!;
+    final bgColor = Color.lerp(
+      cs.surfaceContainerLow,
+      cs.errorContainer.withOpacity(0.35),
+      (attention * 0.8).clamp(0, 1),
+    )!;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -1348,13 +1381,13 @@ class _PlateSummaryCard extends StatelessWidget {
         border: Border.all(color: borderColor, width: 1.2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: cs.shadow.withOpacity(0.03),
             blurRadius: 10,
             offset: const Offset(0, 6),
           ),
           if (attention > 0.001)
             BoxShadow(
-              color: Colors.orange.withOpacity(0.22 * attention),
+              color: cs.error.withOpacity(0.18 * attention),
               blurRadius: 18 * attention,
               spreadRadius: 1 * attention,
               offset: const Offset(0, 6),
@@ -1369,10 +1402,11 @@ class _PlateSummaryCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   plateNumber,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.2,
+                    color: cs.onSurface,
                   ),
                 ),
               ),
@@ -1400,19 +1434,19 @@ class _PlateSummaryCard extends StatelessWidget {
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.orange.withOpacity(0.08),
+                color: cs.errorContainer.withOpacity(0.35),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.orange.withOpacity(0.35)),
+                border: Border.all(color: cs.error.withOpacity(0.35)),
               ),
               child: Row(
                 children: [
-                  Icon(Icons.warning_amber_rounded, color: Colors.orange.shade700, size: 18),
+                  Icon(Icons.warning_amber_rounded, color: cs.error, size: 18),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       '정산이 필요합니다. 정산 후 출차 요청으로 이동할 수 있습니다.',
                       style: TextStyle(
-                        color: Colors.orange.shade800,
+                        color: cs.error,
                         fontWeight: FontWeight.w800,
                         fontSize: 12,
                       ),
@@ -1454,14 +1488,15 @@ class _InfoLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final v = value.trim().isEmpty ? '—' : value.trim();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: Colors.black54,
+          style: TextStyle(
+            color: cs.onSurfaceVariant,
             fontSize: 12,
             fontWeight: FontWeight.w700,
           ),
@@ -1471,8 +1506,8 @@ class _InfoLine extends StatelessWidget {
           v,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            color: Colors.black87,
+          style: TextStyle(
+            color: cs.onSurface,
             fontSize: 14,
             fontWeight: FontWeight.w700,
           ),
@@ -1495,15 +1530,17 @@ class _SectionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black12),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: cs.shadow.withOpacity(0.03),
             blurRadius: 10,
             offset: const Offset(0, 6),
           ),
@@ -1512,9 +1549,10 @@ class _SectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+          Text(title,
+              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: cs.onSurface)),
           const SizedBox(height: 4),
-          Text(subtitle, style: const TextStyle(color: Colors.black54, fontSize: 12)),
+          Text(subtitle, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
           const SizedBox(height: 12),
           child,
         ],
@@ -1532,6 +1570,7 @@ class _ActionTileButton extends StatelessWidget {
   final _ActionTone tone;
   final String? badgeText;
   final VoidCallback onTap;
+
   final double attention;
 
   const _ActionTileButton({
@@ -1546,12 +1585,16 @@ class _ActionTileButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color base = (tone == _ActionTone.positive) ? Colors.green : Colors.grey.shade800;
-    final Color bg = (tone == _ActionTone.positive) ? Colors.green.withOpacity(0.08) : Colors.grey.shade100;
-    final Color border = (tone == _ActionTone.positive) ? Colors.green.withOpacity(0.25) : Colors.black12;
+    final cs = Theme.of(context).colorScheme;
 
-    final Color attentionBorder = Color.lerp(border, Colors.orange, (attention * 0.9).clamp(0, 1))!;
-    final Color attentionBg = Color.lerp(bg, Colors.orange.withOpacity(0.10), (attention * 0.8).clamp(0, 1))!;
+    final Color base = (tone == _ActionTone.positive) ? cs.tertiary : cs.onSurfaceVariant;
+    final Color bg = (tone == _ActionTone.positive) ? cs.tertiaryContainer.withOpacity(0.45) : cs.surfaceContainerLow;
+    final Color border = (tone == _ActionTone.positive) ? cs.tertiary.withOpacity(0.35) : cs.outlineVariant.withOpacity(0.85);
+
+    final Color attentionBorder =
+    Color.lerp(border, cs.error, (attention * 0.9).clamp(0, 1))!;
+    final Color attentionBg =
+    Color.lerp(bg, cs.errorContainer.withOpacity(0.35), (attention * 0.8).clamp(0, 1))!;
 
     return Material(
       color: Colors.transparent,
@@ -1567,7 +1610,7 @@ class _ActionTileButton extends StatelessWidget {
             boxShadow: [
               if (attention > 0.001)
                 BoxShadow(
-                  color: Colors.orange.withOpacity(0.22 * attention),
+                  color: cs.error.withOpacity(0.18 * attention),
                   blurRadius: 16 * attention,
                   spreadRadius: 1 * attention,
                   offset: const Offset(0, 6),
@@ -1584,7 +1627,11 @@ class _ActionTileButton extends StatelessWidget {
                   Expanded(
                     child: Text(
                       title,
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                        color: cs.onSurface,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1614,7 +1661,7 @@ class _ActionTileButton extends StatelessWidget {
               Text(
                 subtitle,
                 style: TextStyle(
-                  color: Colors.black.withOpacity(0.65),
+                  color: cs.onSurfaceVariant,
                   fontSize: 12,
                   fontWeight: FontWeight.w700,
                 ),
@@ -1623,13 +1670,13 @@ class _ActionTileButton extends StatelessWidget {
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Icon(Icons.arrow_forward_rounded, size: 16, color: Colors.orange.shade700),
+                    Icon(Icons.arrow_forward_rounded, size: 16, color: cs.error),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
                         '정산을 먼저 진행하세요',
                         style: TextStyle(
-                          color: Colors.orange.shade800,
+                          color: cs.error,
                           fontWeight: FontWeight.w900,
                           fontSize: 12,
                         ),
@@ -1661,12 +1708,14 @@ class _PrimaryCtaButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return SizedBox(
       width: double.infinity,
       child: FilledButton(
         style: FilledButton.styleFrom(
-          backgroundColor: Colors.blueAccent,
-          foregroundColor: Colors.white,
+          backgroundColor: cs.primary,
+          foregroundColor: cs.onPrimary,
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
@@ -1687,7 +1736,7 @@ class _PrimaryCtaButton extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white.withOpacity(0.9),
+                      color: cs.onPrimary.withOpacity(0.90),
                     ),
                   ),
                 ],
@@ -1714,16 +1763,18 @@ class _SecondaryActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return OutlinedButton.icon(
       icon: Icon(icon, size: 18),
       label: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(double.infinity, 46),
-        foregroundColor: Colors.black87,
-        side: const BorderSide(color: Colors.black12),
+        foregroundColor: cs.onSurface,
+        side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        backgroundColor: Colors.grey.shade50,
+        backgroundColor: cs.surface,
       ),
     );
   }
@@ -1742,23 +1793,29 @@ class _DangerActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return SizedBox(
       width: double.infinity,
       child: OutlinedButton.icon(
-        icon: Icon(icon, color: Colors.red.shade700),
-        label: Text(label, style: TextStyle(color: Colors.red.shade700, fontWeight: FontWeight.w900)),
+        icon: Icon(icon, color: cs.error),
+        label: Text(
+          label,
+          style: TextStyle(color: cs.error, fontWeight: FontWeight.w900),
+        ),
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(double.infinity, 48),
-          side: BorderSide(color: Colors.red.shade200),
+          side: BorderSide(color: cs.error.withOpacity(0.45)),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          backgroundColor: Colors.red.withOpacity(0.04),
+          backgroundColor: cs.errorContainer.withOpacity(0.35),
         ),
       ),
     );
   }
 }
 
+/// UsageReporter: 파이어베이스 DB 작업만 계측 (read / write / delete)
 void _reportDbSafe({
   required String area,
   required String action,

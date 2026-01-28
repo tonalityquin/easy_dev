@@ -4,16 +4,12 @@ import 'package:provider/provider.dart';
 import '../../../../../../states/user/user_state.dart';
 import '../../../../../../states/area/area_state.dart';
 
-// ✅ 역할별로 다른 문서철 바텀시트를 사용하기 위해 두 파일 모두 import
 import '../../../../common_package/memo_package/dash_memo.dart';
 import '../../../../common_package/sheet_tool/fielder_document_box_sheet.dart';
 import '../../../../common_package/sheet_tool/leader_document_box_sheet.dart';
 import 'widgets/minor_dashboard_punch_recorder_section.dart';
 
-// ✅ [추가] 사진 전송(공용) 페이지
 import 'package:easydev/screens/common_package/camera_package/photo_transfer_mail_page.dart';
-
-// ✅ [추가] 보조 페이지
 import 'package:easydev/screens/secondary_page.dart';
 
 class MinorHomeDashBoardBottomSheet extends StatefulWidget {
@@ -29,16 +25,18 @@ class _MinorHomeDashBoardBottomSheetState extends State<MinorHomeDashBoardBottom
   bool _layerHidden = true;
 
   Widget _buildScreenTag(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final base = Theme.of(context).textTheme.labelSmall;
+
     final style = (base ??
-        const TextStyle(
+        TextStyle(
           fontSize: 11,
-          color: Colors.black54,
-          fontWeight: FontWeight.w600,
+          color: cs.onSurfaceVariant,
+          fontWeight: FontWeight.w700,
         ))
         .copyWith(
-      color: Colors.black54,
-      fontWeight: FontWeight.w600,
+      color: cs.onSurfaceVariant,
+      fontWeight: FontWeight.w700,
       letterSpacing: 0.2,
     );
 
@@ -58,44 +56,31 @@ class _MinorHomeDashBoardBottomSheetState extends State<MinorHomeDashBoardBottom
 
   bool _isFieldCommon(UserState userState) {
     final dynamic rawRole = userState.user?.role;
-    final String role = rawRole is String ? rawRole.trim() : (rawRole?.toString().trim() ?? '');
+    final String role =
+    rawRole is String ? rawRole.trim() : (rawRole?.toString().trim() ?? '');
     return role == 'fieldCommon';
   }
 
   void _onPhotoTransferPressed(BuildContext context) {
-    // ✅ 바텀시트가 모달로 떠있는 경우 닫고, 루트 네비게이터로 페이지 push
     final rootNav = Navigator.of(context, rootNavigator: true);
-
     final nav = Navigator.of(context);
-    if (nav.canPop()) {
-      nav.pop();
-    }
+    if (nav.canPop()) nav.pop();
 
-    rootNav.push(
-      MaterialPageRoute(
-        builder: (_) => const PhotoTransferMailPage(),
-      ),
-    );
+    rootNav.push(MaterialPageRoute(builder: (_) => const PhotoTransferMailPage()));
   }
 
   void _onOpenSecondaryPressed(BuildContext context) {
-    // ✅ 바텀시트 닫고, 루트 네비게이터로 SecondaryPage push
     final rootNav = Navigator.of(context, rootNavigator: true);
-
     final nav = Navigator.of(context);
-    if (nav.canPop()) {
-      nav.pop();
-    }
+    if (nav.canPop()) nav.pop();
 
-    rootNav.push(
-      MaterialPageRoute(
-        builder: (_) => const SecondaryPage(),
-      ),
-    );
+    rootNav.push(MaterialPageRoute(builder: (_) => const SecondaryPage()));
   }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.95,
@@ -103,9 +88,10 @@ class _MinorHomeDashBoardBottomSheetState extends State<MinorHomeDashBoardBottom
       maxChildSize: 0.95,
       builder: (context, scrollController) {
         return Container(
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            border: Border.all(color: cs.outlineVariant.withOpacity(0.70)),
           ),
           child: Consumer<UserState>(
             builder: (context, userState, _) {
@@ -122,7 +108,7 @@ class _MinorHomeDashBoardBottomSheetState extends State<MinorHomeDashBoardBottom
                       width: 60,
                       height: 6,
                       decoration: BoxDecoration(
-                        color: Colors.grey[300],
+                        color: cs.outlineVariant.withOpacity(0.85),
                         borderRadius: BorderRadius.circular(3),
                       ),
                     ),
@@ -130,7 +116,6 @@ class _MinorHomeDashBoardBottomSheetState extends State<MinorHomeDashBoardBottom
                     _buildScreenTag(context),
                     const SizedBox(height: 16),
 
-                    /// ⬇️ 출퇴근 기록기 카드 (HomeUserInfoCard 대체)
                     MinorDashboardPunchRecorderSection(
                       userId: userState.name,
                       userName: userState.name,
@@ -142,20 +127,19 @@ class _MinorHomeDashBoardBottomSheetState extends State<MinorHomeDashBoardBottom
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        icon: Icon(
-                          _layerHidden ? Icons.layers : Icons.layers_clear,
-                        ),
-                        label: Text(
-                          _layerHidden ? '작업 버튼 펼치기' : '작업 버튼 숨기기',
-                        ),
-                        style: _outlinedWhiteBtnStyle(height: 48),
+                        icon: Icon(_layerHidden ? Icons.layers : Icons.layers_clear),
+                        label: Text(_layerHidden ? '작업 버튼 펼치기' : '작업 버튼 숨기기'),
+                        style: _outlinedSurfaceBtnStyle(context, height: 48),
                         onPressed: () => setState(() => _layerHidden = !_layerHidden),
                       ),
                     ),
                     const SizedBox(height: 16),
+
                     AnimatedCrossFade(
                       duration: const Duration(milliseconds: 200),
-                      crossFadeState: _layerHidden ? CrossFadeState.showFirst : CrossFadeState.showSecond,
+                      crossFadeState: _layerHidden
+                          ? CrossFadeState.showFirst
+                          : CrossFadeState.showSecond,
                       firstChild: const SizedBox.shrink(),
                       secondChild: Column(
                         children: [
@@ -164,7 +148,7 @@ class _MinorHomeDashBoardBottomSheetState extends State<MinorHomeDashBoardBottom
                             child: ElevatedButton.icon(
                               icon: const Icon(Icons.sticky_note_2_rounded),
                               label: const Text('메모'),
-                              style: _outlinedWhiteBtnStyle(height: 55),
+                              style: _outlinedSurfaceBtnStyle(context),
                               onPressed: () async {
                                 await DashMemo.init();
                                 DashMemo.mountIfNeeded();
@@ -174,13 +158,12 @@ class _MinorHomeDashBoardBottomSheetState extends State<MinorHomeDashBoardBottom
                           ),
                           const SizedBox(height: 16),
 
-                          // ✅ 사진 전송 버튼 (메모와 서류함 열기 사이)
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
                               icon: const Icon(Icons.photo_camera_back_rounded),
                               label: const Text('사진 전송'),
-                              style: _outlinedWhiteBtnStyle(height: 55),
+                              style: _outlinedSurfaceBtnStyle(context),
                               onPressed: () => _onPhotoTransferPressed(context),
                             ),
                           ),
@@ -191,10 +174,8 @@ class _MinorHomeDashBoardBottomSheetState extends State<MinorHomeDashBoardBottom
                             child: ElevatedButton.icon(
                               icon: const Icon(Icons.folder_open),
                               label: const Text('서류함 열기'),
-                              style: _outlinedWhiteBtnStyle(height: 55),
+                              style: _outlinedSurfaceBtnStyle(context),
                               onPressed: () {
-                                // ✅ role 이 fieldCommon 이면 필드 전용 문서철
-                                //    그 외에는 리더 전용 문서철
                                 if (isFieldCommon) {
                                   openFielderDocumentBox(context);
                                 } else {
@@ -205,13 +186,12 @@ class _MinorHomeDashBoardBottomSheetState extends State<MinorHomeDashBoardBottom
                           ),
                           const SizedBox(height: 16),
 
-                          // ✅ [추가] 보조 페이지 열기 버튼
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
                               icon: const Icon(Icons.open_in_new),
                               label: const Text('보조 페이지 열기'),
-                              style: _outlinedWhiteBtnStyle(height: 55),
+                              style: _outlinedSurfaceBtnStyle(context),
                               onPressed: () => _onOpenSecondaryPressed(context),
                             ),
                           ),
@@ -219,6 +199,7 @@ class _MinorHomeDashBoardBottomSheetState extends State<MinorHomeDashBoardBottom
                         ],
                       ),
                     ),
+
                     const SizedBox(height: 16),
                     if (_layerHidden) const SizedBox(height: 16),
                   ],
@@ -232,13 +213,22 @@ class _MinorHomeDashBoardBottomSheetState extends State<MinorHomeDashBoardBottom
   }
 }
 
-ButtonStyle _outlinedWhiteBtnStyle({double height = 55}) {
+ButtonStyle _outlinedSurfaceBtnStyle(BuildContext context, {double height = 55}) {
+  final cs = Theme.of(context).colorScheme;
+
   return ElevatedButton.styleFrom(
-    backgroundColor: Colors.white,
-    foregroundColor: Colors.black,
+    backgroundColor: cs.surface,
+    foregroundColor: cs.onSurface,
     minimumSize: Size.fromHeight(height),
     padding: EdgeInsets.zero,
-    side: const BorderSide(color: Colors.grey, width: 1.0),
+    elevation: 0,
+    side: BorderSide(color: cs.outlineVariant.withOpacity(0.85), width: 1.0),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+  ).copyWith(
+    overlayColor: MaterialStateProperty.resolveWith<Color?>(
+          (states) => states.contains(MaterialState.pressed)
+          ? cs.outlineVariant.withOpacity(0.12)
+          : null,
+    ),
   );
 }

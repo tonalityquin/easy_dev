@@ -15,10 +15,15 @@ class TripleInputLocationBottomSheet extends StatefulWidget {
     required this.onLocationSelected,
   });
 
-  static Future<void> show(BuildContext context, TextEditingController controller, Function(String) onSelected) async {
+  static Future<void> show(
+      BuildContext context,
+      TextEditingController controller,
+      Function(String) onSelected,
+      ) async {
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (_) {
         return TripleInputLocationBottomSheet(
@@ -30,7 +35,8 @@ class TripleInputLocationBottomSheet extends StatefulWidget {
   }
 
   @override
-  State<TripleInputLocationBottomSheet> createState() => _TripleInputLocationBottomSheetState();
+  State<TripleInputLocationBottomSheet> createState() =>
+      _TripleInputLocationBottomSheetState();
 }
 
 class _TripleInputLocationBottomSheetState extends State<TripleInputLocationBottomSheet> {
@@ -44,18 +50,28 @@ class _TripleInputLocationBottomSheetState extends State<TripleInputLocationBott
     _prepareLocationData();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // ✅ area 변경에 대응(시트 열린 상태에서도 안전)
+    _prepareLocationData();
+  }
+
   void _prepareLocationData() {
-    final currentArea = context.read<AreaState>().currentArea;
+    final currentArea = context.read<AreaState>().currentArea.trim();
     final locationState = context.read<LocationState>();
 
     if (_previousArea != currentArea) {
       _previousArea = currentArea;
+      selectedParent = null;
       _futureLocations = Future.value(locationState.locations);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return SafeArea(
       child: Material(
         color: Colors.transparent,
@@ -65,9 +81,10 @@ class _TripleInputLocationBottomSheetState extends State<TripleInputLocationBott
           maxChildSize: 0.9,
           builder: (context, scrollController) {
             return Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                border: Border.all(color: cs.outlineVariant.withOpacity(0.70)),
               ),
               child: Consumer<LocationState>(
                 builder: (context, locationState, _) {
@@ -84,7 +101,7 @@ class _TripleInputLocationBottomSheetState extends State<TripleInputLocationBott
 
                       if (!snapshot.hasData || snapshot.data!.isEmpty) {
                         return Center(
-                          child: ElevatedButton.icon(
+                          child: OutlinedButton.icon(
                             icon: const Icon(Icons.refresh),
                             label: const Text('주차 구역 갱신하기'),
                             onPressed: () => Navigator.pop(context),
@@ -106,26 +123,27 @@ class _TripleInputLocationBottomSheetState extends State<TripleInputLocationBott
                             height: 4,
                             margin: const EdgeInsets.only(bottom: 16),
                             decoration: BoxDecoration(
-                              color: Colors.grey.shade300,
+                              color: cs.outlineVariant.withOpacity(0.85),
                               borderRadius: BorderRadius.circular(2),
                             ),
                           ),
-                          const Text(
+                          Text(
                             '주차 구역 선택',
                             style: TextStyle(
                               fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black,
+                              fontWeight: FontWeight.w900,
+                              color: cs.onSurface,
                             ),
                           ),
                           const SizedBox(height: 16),
+
                           if (selectedParent != null) ...[
                             ListTile(
                               leading: const Icon(Icons.arrow_back),
                               title: const Text('뒤로가기'),
                               onTap: () => setState(() => selectedParent = null),
                             ),
-                            const Divider(),
+                            Divider(color: cs.outlineVariant.withOpacity(0.70)),
                             ...composites
                                 .where((loc) => loc.parent == selectedParent)
                                 .map((loc) {
@@ -141,9 +159,13 @@ class _TripleInputLocationBottomSheetState extends State<TripleInputLocationBott
                               );
                             }),
                           ] else ...[
-                            const Text(
+                            Text(
                               '단일 주차 구역',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                color: cs.onSurface,
+                              ),
                             ),
                             const SizedBox(height: 8),
                             ...singles.map((loc) {
@@ -157,15 +179,21 @@ class _TripleInputLocationBottomSheetState extends State<TripleInputLocationBott
                                 },
                               );
                             }),
+
                             const Divider(height: 32),
-                            const Text(
+
+                            Text(
                               '복합 주차 구역',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                                color: cs.onSurface,
+                              ),
                             ),
                             const SizedBox(height: 8),
                             ...parentSet.map((parent) {
                               final sub = composites.where((l) => l.parent == parent).toList();
-                              final totalCapacity = sub.fold(0, (sum, l) => sum + l.capacity);
+                              final totalCapacity = sub.fold<int>(0, (sum, l) => sum + l.capacity);
                               return ListTile(
                                 leading: const Icon(Icons.layers),
                                 title: Text('복합 구역: $parent'),

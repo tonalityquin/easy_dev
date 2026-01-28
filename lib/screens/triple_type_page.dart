@@ -12,12 +12,59 @@ import '../utils/snackbar_helper.dart';
 
 import '../services/latest_message_service.dart';
 
-// ✅ AppCardPalette ThemeExtension 사용
-import '../theme.dart';
-
 // ✅ Trace 기록용 Recorder
 import 'hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
 import '../services/driving_recovery/driving_recovery_gate.dart';
+
+class _Brand {
+  static Color border(ColorScheme cs) => cs.outlineVariant.withOpacity(0.85);
+
+  static Color overlayOnSurface(ColorScheme cs) => cs.outlineVariant.withOpacity(0.12);
+
+  static ButtonStyle outlinedSurfaceButtonStyle(
+      BuildContext context, {
+        double minHeight = 48,
+        Color? borderColor,
+      }) {
+    final cs = Theme.of(context).colorScheme;
+    final bc = borderColor ?? border(cs);
+
+    return ElevatedButton.styleFrom(
+      backgroundColor: cs.surface,
+      foregroundColor: cs.onSurface,
+      minimumSize: Size.fromHeight(minHeight),
+      padding: EdgeInsets.zero,
+      elevation: 0,
+      side: BorderSide(color: bc, width: 1.0),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ).copyWith(
+      overlayColor: MaterialStateProperty.resolveWith<Color?>(
+            (states) => states.contains(MaterialState.pressed) ? overlayOnSurface(cs) : null,
+      ),
+    );
+  }
+
+  static ButtonStyle filledPrimaryButtonStyle(
+      BuildContext context, {
+        double minHeight = 48,
+      }) {
+    final cs = Theme.of(context).colorScheme;
+
+    return ElevatedButton.styleFrom(
+      backgroundColor: cs.primary,
+      foregroundColor: cs.onPrimary,
+      minimumSize: Size.fromHeight(minHeight),
+      padding: EdgeInsets.zero,
+      elevation: 2,
+      shadowColor: cs.shadow.withOpacity(0.20),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    ).copyWith(
+      overlayColor: MaterialStateProperty.resolveWith<Color?>(
+            (states) => states.contains(MaterialState.pressed) ? cs.onPrimary.withOpacity(0.12) : null,
+      ),
+    );
+  }
+}
 
 class TripleTypePage extends StatefulWidget {
   const TripleTypePage({super.key});
@@ -82,7 +129,10 @@ class _TripleTypePageState extends State<TripleTypePage> {
               }
             },
             child: Scaffold(
-              body: DrivingRecoveryGate(mode: DrivingRecoveryMode.triple, child: const RefreshableBody()),
+              body: DrivingRecoveryGate(
+                mode: DrivingRecoveryMode.triple,
+                child: const RefreshableBody(),
+              ),
               bottomNavigationBar: SafeArea(
                 top: false,
                 child: Column(
@@ -113,19 +163,16 @@ class _EntryDashboardBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
       child: Row(
         children: [
-          // ✅ 좌측: 입차 화면 열기 버튼 (기존 채팅 버튼 제거)
-          const Expanded(
-            child: _OpenEntryButton(),
-          ),
+          // ✅ 좌측: 입차 화면 열기 버튼
+          const Expanded(child: _OpenEntryButton()),
           const SizedBox(width: 8),
 
-          // ── 대시보드(기존)
+          // ✅ 우측: 대시보드 버튼 (브랜드 primary)
           Expanded(
             child: ElevatedButton(
               onPressed: () {
@@ -137,22 +184,13 @@ class _EntryDashboardBar extends StatelessWidget {
                   builder: (_) => const TripleHomeDashBoardBottomSheet(),
                 );
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: palette.tripleBase,
-                foregroundColor: palette.tripleLight,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                elevation: 2,
-                shadowColor: palette.tripleDark.withOpacity(.25),
-              ),
+              style: _Brand.filledPrimaryButtonStyle(context, minHeight: 48),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.dashboard, size: 20),
                   SizedBox(width: 6),
-                  Text('대시보드'),
+                  Text('대시보드', style: TextStyle(fontWeight: FontWeight.w900)),
                 ],
               ),
             ),
@@ -182,7 +220,7 @@ class _OpenEntryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
+    final cs = Theme.of(context).colorScheme;
 
     return ElevatedButton(
       onPressed: () async {
@@ -197,27 +235,22 @@ class _OpenEntryButton extends StatelessWidget {
 
         await _openEntryScreen(context);
       },
-      style: ElevatedButton.styleFrom(
-        elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-          side: BorderSide(color: palette.tripleBase.withOpacity(.35)),
-        ),
+      style: _Brand.outlinedSurfaceButtonStyle(
+        context,
+        minHeight: 48,
+        borderColor: cs.primary.withOpacity(0.35),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.add_circle_outline, size: 20, color: palette.tripleBase),
+          Icon(Icons.add_circle_outline, size: 20, color: cs.primary),
           const SizedBox(width: 8),
           Text(
             '입차',
             style: TextStyle(
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w900,
               fontSize: 13,
-              color: palette.tripleBase,
+              color: cs.primary,
             ),
           ),
         ],
@@ -229,7 +262,6 @@ class _OpenEntryButton extends StatelessWidget {
 class _SingleHomeTabBar extends StatelessWidget {
   const _SingleHomeTabBar();
 
-  // ✅ 공통 Trace 기록 헬퍼 (StatelessWidget용)
   void _trace(BuildContext context, String name, {Map<String, dynamic>? meta}) {
     DebugActionRecorder.instance.recordAction(
       name,
@@ -240,17 +272,16 @@ class _SingleHomeTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
+    final cs = Theme.of(context).colorScheme;
 
     return Consumer<TriplePageState>(
       builder: (context, pageState, _) {
         return SizedBox(
           height: kBottomNavigationBarHeight,
           child: Material(
-            color: Colors.white,
+            color: cs.surface,
             child: InkWell(
               onTap: () async {
-                // ✅ 홈 버튼 탭 Trace 기록
                 _trace(
                   context,
                   '홈 버튼',
@@ -262,38 +293,41 @@ class _SingleHomeTabBar extends StatelessWidget {
                   },
                 );
 
-                // ✅ (기존) 홈 탭 처리: 재탭이면 reset 수행
                 await pageState.onItemTapped(
                   context,
                   0,
                   onError: (msg) => showFailedSnackbar(context, msg),
                 );
 
-                // ✅ (기존 유지) 홈 버튼을 탭할 때마다 데이터 갱신(1회 조회 get)
+                // ✅ 홈 버튼을 탭할 때마다 데이터 갱신(1회 조회 get)
                 try {
                   context.read<TriplePlateState>().tripleSyncWithAreaState();
-                } catch (_) {
-                  // no-op
-                }
+                } catch (_) {}
 
-                // ✅ [추가] 같은 area에서도 출차요청 aggregation count 재조회 트리거
-                // - 내부에 0.8초 쿨다운(Throttle) 적용됨
+                // ✅ 같은 area에서도 출차요청 aggregation count 재조회 트리거
                 pageState.bumpDepartureRequestsCountRefreshToken();
               },
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.home, color: palette.tripleBase),
-                  const SizedBox(width: 8),
-                  Text(
-                    '홈',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.bold,
-                      color: palette.tripleBase,
-                    ),
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(color: _Brand.border(cs)),
                   ),
-                ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.home, color: cs.primary),
+                    const SizedBox(width: 8),
+                    Text(
+                      '홈',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
+                        color: cs.primary,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -313,24 +347,25 @@ class RefreshableBody extends StatefulWidget {
 class _RefreshableBodyState extends State<RefreshableBody> {
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
+    final cs = Theme.of(context).colorScheme;
 
-    // ✅ [변경] Vertical Drag(TopSheet) 제스처 로직 완전 제거
+    // ✅ Vertical Drag(TopSheet) 제스처 로직 제거 유지
     return Consumer2<TriplePageState, TriplePlateState>(
       builder: (context, pageState, normalPlateState, _) {
         return Stack(
           children: [
             _buildCurrentPage(context, pageState),
+
             if (normalPlateState.isLoading)
               Container(
-                color: Colors.white.withOpacity(.35),
+                color: cs.surface.withOpacity(.35),
                 child: Center(
                   child: SizedBox(
                     width: 28,
                     height: 28,
                     child: CircularProgressIndicator(
                       strokeWidth: 3,
-                      valueColor: AlwaysStoppedAnimation<Color>(palette.tripleBase),
+                      valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
                     ),
                   ),
                 ),

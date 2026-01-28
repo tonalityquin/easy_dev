@@ -9,7 +9,8 @@ class MinorInputAnimatedPhotoButton extends StatefulWidget {
   State<MinorInputAnimatedPhotoButton> createState() => _MinorInputAnimatedPhotoButtonState();
 }
 
-class _MinorInputAnimatedPhotoButtonState extends State<MinorInputAnimatedPhotoButton> with SingleTickerProviderStateMixin {
+class _MinorInputAnimatedPhotoButtonState extends State<MinorInputAnimatedPhotoButton>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _scaleAnimation;
 
@@ -29,7 +30,7 @@ class _MinorInputAnimatedPhotoButtonState extends State<MinorInputAnimatedPhotoB
     );
   }
 
-  void _handleTap() async {
+  Future<void> _handleTap() async {
     await _controller.reverse();
     await _controller.forward();
     widget.onPressed();
@@ -43,18 +44,20 @@ class _MinorInputAnimatedPhotoButtonState extends State<MinorInputAnimatedPhotoB
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return ScaleTransition(
       scale: _scaleAnimation,
       child: ElevatedButton(
         onPressed: _handleTap,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.green[50],
-          foregroundColor: Colors.green[800],
+          backgroundColor: cs.tertiaryContainer,
+          foregroundColor: cs.onTertiaryContainer,
           elevation: 0,
           padding: const EdgeInsets.symmetric(vertical: 16.0),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: Colors.green, width: 1.5),
+            side: BorderSide(color: cs.tertiary, width: 1.5),
           ),
         ),
         child: const Text(

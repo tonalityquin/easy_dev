@@ -50,6 +50,12 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
   static const String _platesSub = 'plates';
   static const String _monthlyPlateStatusRoot = 'monthly_plate_status';
 
+  // ✅ (A안) collectionGroup 조회를 위한 문서 필드 키
+  // - plate_status/{area}/months/{yyyyMM}/plates/{docId} 문서 내부에 아래 필드가 "저장"되어야
+  //   A(primary: orderBy+limit)가 제대로 동작합니다.
+  static const String _fPlateDocId = 'plateDocId'; // 예: "222-노-2222_britishArea"
+  static const String _fMonthKey = 'monthKey'; // 예: "202601" (yyyyMM)
+
   static const bool _usageUseSourceOnlyKey = true;
   static const int _usageSourceShardCount = 10;
 
@@ -455,9 +461,27 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
     super.dispose();
   }
 
+  /// (A안 반영) plate_status 조회:
+  /// 1) 현재월/전월 2개월 direct get
+  /// 2) 실패 시 collectionGroup('plates') + where(plateDocId==docId) 폴백
+  ///    - primary: orderBy(monthKey desc) + limit(1)
+  ///    - secondary: 인덱스/필드 이슈 시 where만 + limit(cap) 후 클라이언트에서 최신 선택
+  ///
+  /// 비용/형태 로그:
+  /// - directGets: 문서 get 시도 횟수
+  /// - primaryDocs/secondaryDocs: 각 쿼리 반환 문서 수
+  /// - estReads: doc.get + (각 쿼리당 최소 1 read 특성 반영한 추정치)
   Future<Map<String, dynamic>?> _fetchPlateStatus(String plateNumber, String area) async {
     final safeArea = _safeArea(area);
     final docId = _plateDocId(plateNumber, safeArea);
+
+    int directGetCount = 0;
+
+    bool triedPrimary = false;
+    bool triedSecondary = false;
+
+    int primaryDocs = 0;
+    int secondaryDocs = 0;
 
     final now = DateTime.now();
     final monthsToTry = <DateTime>[
@@ -465,9 +489,15 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
       DateTime(now.year, now.month - 1, 1),
     ];
 
+    debugPrint(
+      '[DoubleInputPlateScreen][PlateStatusLookup] start docId=$docId area=$safeArea monthsTry=${monthsToTry.map(_monthKey).join(',')}',
+    );
+
     try {
+      // (1) direct get: 현재월/전월
       for (final m in monthsToTry) {
         final mk = _monthKey(m);
+        directGetCount++;
 
         final doc = await _firestore
             .collection(_plateStatusRoot)
@@ -478,44 +508,116 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
             .doc(docId)
             .get();
 
-        if (doc.exists) return doc.data();
+        if (doc.exists) {
+          debugPrint(
+            '[DoubleInputPlateScreen][PlateStatusLookup] hit direct month=$mk (directGets=$directGetCount)',
+          );
+          return doc.data();
+        }
       }
 
+      // (2) A primary: where(plateDocId == docId) + orderBy(monthKey desc) + limit(1)
       try {
+        triedPrimary = true;
+
         final qs = await _firestore
             .collectionGroup(_platesSub)
-            .where(FieldPath.documentId, isEqualTo: docId)
+            .where(_fPlateDocId, isEqualTo: docId)
+            .orderBy(_fMonthKey, descending: true)
+            .limit(1)
             .get();
 
+        primaryDocs = qs.docs.length;
+
         if (qs.docs.isNotEmpty) {
-          QueryDocumentSnapshot<Map<String, dynamic>>? best;
-          int bestMonth = -1;
+          final d = qs.docs.first;
+          final data = d.data();
+          final mk = (data[_fMonthKey] as String?)?.trim();
 
-          for (final d in qs.docs) {
+          debugPrint(
+            '[DoubleInputPlateScreen][PlateStatusLookup] hit A(primary) monthKey=$mk path=${d.reference.path} (primaryDocs=$primaryDocs)',
+          );
+          return data;
+        }
+
+        debugPrint(
+          '[DoubleInputPlateScreen][PlateStatusLookup] miss A(primary) (primaryDocs=$primaryDocs)',
+        );
+      } on FirebaseException catch (e) {
+        debugPrint(
+          '[DoubleInputPlateScreen][PlateStatusLookup] A(primary) failed: ${e.code} ${e.message}',
+        );
+      }
+
+      // (3) A secondary (다운그레이드): where만 + limit(cap) 후 최신 선택
+      // - monthKey 필드 우선
+      // - 없으면 path에서 months/{yyyyMM} 파싱(레거시 호환 최후 수단)
+      try {
+        triedSecondary = true;
+
+        const int cap = 12;
+
+        final qs = await _firestore
+            .collectionGroup(_platesSub)
+            .where(_fPlateDocId, isEqualTo: docId)
+            .limit(cap)
+            .get();
+
+        secondaryDocs = qs.docs.length;
+
+        if (qs.docs.isEmpty) {
+          debugPrint(
+            '[DoubleInputPlateScreen][PlateStatusLookup] miss A(secondary) (secondaryDocs=$secondaryDocs cap=$cap)',
+          );
+          return null;
+        }
+
+        QueryDocumentSnapshot<Map<String, dynamic>>? best;
+        int bestMonth = -1;
+
+        for (final d in qs.docs) {
+          final data = d.data();
+
+          int mkInt = -1;
+          final mk = (data[_fMonthKey] as String?)?.trim();
+          if (mk != null && mk.isNotEmpty) {
+            mkInt = int.tryParse(mk) ?? -1;
+          } else {
+            // 레거시: path 파싱
             final path = d.reference.path;
-            if (!path.contains('$_plateStatusRoot/$safeArea/$_monthsSub/')) continue;
-
             final parts = path.split('/');
             final monthsIndex = parts.indexOf(_monthsSub);
-            if (monthsIndex < 0 || monthsIndex + 1 >= parts.length) continue;
-
-            final mk = parts[monthsIndex + 1];
-            final mkInt = int.tryParse(mk) ?? -1;
-
-            if (mkInt > bestMonth) {
-              bestMonth = mkInt;
-              best = d;
+            if (monthsIndex >= 0 && monthsIndex + 1 < parts.length) {
+              final fromPath = parts[monthsIndex + 1];
+              mkInt = int.tryParse(fromPath) ?? -1;
             }
           }
 
-          if (best != null) return best.data();
-          return qs.docs.first.data();
+          if (mkInt > bestMonth) {
+            bestMonth = mkInt;
+            best = d;
+          }
         }
-      } on FirebaseException catch (e) {
-        debugPrint('[collectionGroup fallback blocked] ${e.code} ${e.message}');
-      }
 
-      return null;
+        if (best != null) {
+          final data = best.data();
+          final mk = (data[_fMonthKey] as String?)?.trim();
+          debugPrint(
+            '[DoubleInputPlateScreen][PlateStatusLookup] hit A(secondary) bestMonth=$bestMonth monthKeyField=$mk path=${best.reference.path} (secondaryDocs=$secondaryDocs cap=$cap)',
+          );
+          return data;
+        }
+
+        debugPrint(
+          '[DoubleInputPlateScreen][PlateStatusLookup] A(secondary) had docs but could not select best (secondaryDocs=$secondaryDocs). Return first.',
+        );
+        return qs.docs.first.data();
+      } on FirebaseException catch (e) {
+        debugPrint(
+          '[DoubleInputPlateScreen][PlateStatusLookup] A(secondary) failed: ${e.code} ${e.message}',
+        );
+        return null;
+      }
     } on FirebaseException catch (e) {
       debugPrint('[_fetchPlateStatus] FirebaseException: ${e.code} ${e.message}');
       return null;
@@ -523,6 +625,21 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
       debugPrint('[_fetchPlateStatus] error: $e');
       return null;
     } finally {
+      // 비용(형태) 추정:
+      // - direct doc.get: directGetCount 만큼 read 발생한다고 가정
+      // - query: 각 쿼리마다 docsReturned만큼 read + (0건이어도 최소 1 read) 성격 반영
+      final int estPrimaryReads = triedPrimary ? (primaryDocs == 0 ? 1 : primaryDocs) : 0;
+      final int estSecondaryReads = triedSecondary ? (secondaryDocs == 0 ? 1 : secondaryDocs) : 0;
+      final int estTotalReads = directGetCount + estPrimaryReads + estSecondaryReads;
+
+      debugPrint(
+        '[DoubleInputPlateScreen][PlateStatusLookup] done'
+            ' directGets=$directGetCount'
+            ' triedA(primary)=$triedPrimary primaryDocs=$primaryDocs estPrimaryReads~=$estPrimaryReads'
+            ' triedA(secondary)=$triedSecondary secondaryDocs=$secondaryDocs estSecondaryReads~=$estSecondaryReads'
+            ' estReads~=$estTotalReads (doc.get + query(min 1 read each))',
+      );
+
       await _reportUsage(
         area: safeArea,
         action: 'read',
@@ -971,7 +1088,9 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ).copyWith(
             overlayColor: MaterialStateProperty.resolveWith<Color?>(
-                  (states) => states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(0.12) : null,
+                  (states) => states.contains(MaterialState.pressed)
+                  ? cs.outlineVariant.withOpacity(0.12)
+                  : null,
             ),
           ),
         ),
@@ -1278,7 +1397,6 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
                     ),
                   ),
                 ),
-
                 DraggableScrollableSheet(
                   controller: _sheetController,
                   initialChildSize: _sheetClosed,
@@ -1452,7 +1570,6 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 14),
-
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -1491,9 +1608,7 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
                   ],
                 ),
               ),
-
               const SizedBox(height: 12),
-
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
@@ -1546,9 +1661,7 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
                   ],
                 ),
               ),
-
               const SizedBox(height: 16),
-
               Row(
                 children: [
                   Expanded(
@@ -1685,7 +1798,6 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
                 ),
               ),
               const SizedBox(height: 8),
-
               Row(
                 children: [
                   Expanded(
@@ -1708,7 +1820,6 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
                 ],
               ),
               const SizedBox(height: 4),
-
               Row(
                 children: [
                   Expanded(

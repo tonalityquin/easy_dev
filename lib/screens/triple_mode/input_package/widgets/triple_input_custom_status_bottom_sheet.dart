@@ -8,10 +8,8 @@ String _formatAnyDate(dynamic v) {
   if (v == null) return '시간 정보 없음';
   if (v is Timestamp) return DateFormat('yyyy-MM-dd HH:mm:ss').format(v.toDate());
   if (v is String) {
-    try {
-      final dt = DateTime.tryParse(v);
-      if (dt != null) return DateFormat('yyyy-MM-dd HH:mm:ss').format(dt);
-    } catch (_) {}
+    final dt = DateTime.tryParse(v);
+    if (dt != null) return DateFormat('yyyy-MM-dd HH:mm:ss').format(dt);
     return v;
   }
   return v.toString();
@@ -24,27 +22,138 @@ Widget _infoRow(String label, String? value) {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const SizedBox(width: 130, child: SizedBox.shrink()),
         SizedBox(
           width: 130,
-          child: Text(
-            label,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-          ),
+          child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
         ),
-        Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(fontSize: 18),
-          ),
-        ),
+        Expanded(child: Text(value, style: const TextStyle(fontSize: 18))),
       ],
     ),
   );
 }
 
+/// ✅ (정책 반영) plate_status 샤딩 경로
+const String _plateStatusRoot = 'plate_status';
+const String _monthsSub = 'months';
+const String _platesSub = 'plates';
+
+const String _monthlyPlateStatusRoot = 'monthly_plate_status';
+
+String _safeArea(String area) {
+  final a = area.trim();
+  return a.isEmpty ? 'unknown' : a;
+}
+
+String _monthKey(DateTime dt) => '${dt.year}${dt.month.toString().padLeft(2, '0')}';
+
+String _canonicalPlateNumber(String plateNumber) {
+  final t = plateNumber.trim().replaceAll(' ', '');
+  final raw = t.replaceAll('-', '');
+  final m = RegExp(r'^(\d{2,3})([가-힣])(\d{4})$').firstMatch(raw);
+  if (m == null) return t;
+  return '${m.group(1)}-${m.group(2)}-${m.group(3)}';
+}
+
+/// ✅ 단일 docId 규칙: "{plate(하이픈 포함)}_{area}"
+String _plateDocId(String plateNumber, String area) {
+  final a = _safeArea(area);
+  final p = _canonicalPlateNumber(plateNumber);
+  return '${p}_$a';
+}
+
+Future<Map<String, dynamic>?> _fetchPlateStatusSharded({
+  required FirebaseFirestore firestore,
+  required String plateNumber,
+  required String area,
+}) async {
+  final safeArea = _safeArea(area);
+  final docId = _plateDocId(plateNumber, safeArea);
+
+  final now = DateTime.now();
+  final monthsToTry = <DateTime>[
+    DateTime(now.year, now.month, 1),
+    DateTime(now.year, now.month - 1, 1),
+  ];
+
+  try {
+    // 1) 빠른 경로: 현재월/전월
+    for (final m in monthsToTry) {
+      final mk = _monthKey(m);
+
+      final doc = await firestore
+          .collection(_plateStatusRoot)
+          .doc(safeArea)
+          .collection(_monthsSub)
+          .doc(mk)
+          .collection(_platesSub)
+          .doc(docId)
+          .get();
+
+      if (doc.exists) return doc.data();
+    }
+
+    // 2) 폴백: collectionGroup('plates')에서 docId로 검색(인덱스/규칙 미지원이면 실패 가능)
+    try {
+      final qs = await firestore
+          .collectionGroup(_platesSub)
+          .where(FieldPath.documentId, isEqualTo: docId)
+          .get();
+
+      if (qs.docs.isNotEmpty) {
+        QueryDocumentSnapshot<Map<String, dynamic>>? best;
+        int bestMonth = -1;
+
+        for (final d in qs.docs) {
+          final path = d.reference.path;
+          if (!path.contains('$_plateStatusRoot/$safeArea/$_monthsSub/')) continue;
+
+          final parts = path.split('/');
+          final monthsIndex = parts.indexOf(_monthsSub);
+          if (monthsIndex < 0 || monthsIndex + 1 >= parts.length) continue;
+
+          final mk = parts[monthsIndex + 1];
+          final mkInt = int.tryParse(mk) ?? -1;
+
+          if (mkInt > bestMonth) {
+            bestMonth = mkInt;
+            best = d;
+          }
+        }
+
+        if (best != null) return best.data();
+        return qs.docs.first.data();
+      }
+    } on FirebaseException catch (_) {
+      // 규칙/인덱스 제한 시 조용히 무시(상위에서 null 처리)
+    }
+
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
+Future<Map<String, dynamic>?> _fetchMonthlyPlateStatus({
+  required FirebaseFirestore firestore,
+  required String plateNumber,
+  required String area,
+}) async {
+  final safeArea = _safeArea(area);
+  final docId = _plateDocId(plateNumber, safeArea);
+
+  try {
+    final doc = await firestore.collection(_monthlyPlateStatusRoot).doc(docId).get();
+    if (doc.exists) return doc.data();
+    return null;
+  } catch (_) {
+    return null;
+  }
+}
+
 /// ✅ 정산 유형에 따라 조회 컬렉션을 분기하는 BottomSheet
-/// - selectedBillType == '정기'  → monthly_plate_status
-/// - 그 외                     → plate_status
+/// - selectedBillType == '정기'  → monthly_plate_status (단일 doc)
+/// - 그 외                     → plate_status (샤딩 경로)
 ///
 /// 주의: 이 함수는 "조회/표시"만 합니다(쓰기 없음).
 Future<Map<String, dynamic>?> tripleInputCustomStatusBottomSheet(
@@ -53,38 +162,44 @@ Future<Map<String, dynamic>?> tripleInputCustomStatusBottomSheet(
     String area, {
       required String selectedBillType,
     }) async {
-  final docId = '${plateNumber}_$area';
+  final firestore = FirebaseFirestore.instance;
+  final safeArea = _safeArea(area);
 
   final bool isMonthly = selectedBillType.trim() == '정기';
-  final String collectionName = isMonthly ? 'monthly_plate_status' : 'plate_status';
+  final String sourceLabel = isMonthly ? 'monthly_plate_status' : 'plate_status(sharded)';
 
-  DocumentSnapshot<Map<String, dynamic>>? docSnapshot;
+  Map<String, dynamic>? data;
   try {
-    docSnapshot = await FirebaseFirestore.instance.collection(collectionName).doc(docId).get();
-  } on FirebaseException catch (e) {
-    debugPrint('[tripleInputCustomStatusBottomSheet] FirebaseException: ${e.code} ${e.message}');
-    docSnapshot = null;
-  } catch (e) {
-    debugPrint('[tripleInputCustomStatusBottomSheet] error: $e');
-    docSnapshot = null;
+    if (isMonthly) {
+      data = await _fetchMonthlyPlateStatus(
+        firestore: firestore,
+        plateNumber: plateNumber,
+        area: safeArea,
+      );
+    } else {
+      data = await _fetchPlateStatusSharded(
+        firestore: firestore,
+        plateNumber: plateNumber,
+        area: safeArea,
+      );
+    }
   } finally {
+    // ✅ 계측은 항상 1회로 보고(정책 유지)
     await UsageReporter.instance.report(
-      area: (area.isEmpty ? 'unknown' : area),
+      area: safeArea,
       action: 'read',
       n: 1,
-      source: 'tripleInputCustomStatusBottomSheet/$collectionName.doc.get',
+      source: 'tripleInputCustomStatusBottomSheet/$sourceLabel.read',
       useSourceOnlyKey: true,
     );
   }
 
-  if (docSnapshot == null || !docSnapshot.exists) return null;
-
-  final data = docSnapshot.data() ?? {};
+  if (data == null || data.isEmpty) return null;
 
   final String? customStatus = (data['customStatus'] as String?)?.trim();
   final Timestamp? updatedAt = data['updatedAt'];
-  final List<dynamic>? statusListRaw = data['statusList'];
-  final List<String> statusList = statusListRaw?.map((e) => e.toString()).toList() ?? [];
+  final List<String> statusList =
+      (data['statusList'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [];
 
   final String? countType = (data['countType'] as String?)?.trim();
   final String? type = (data['type'] as String?)?.trim();
@@ -94,10 +209,14 @@ Future<Map<String, dynamic>?> tripleInputCustomStatusBottomSheet(
   final String? endDate = (data['endDate'] as String?)?.trim();
 
   final int? regularAmount = data['regularAmount'] is int ? data['regularAmount'] as int : null;
-  final int? regularDurationHours = data['regularDurationHours'] is int ? data['regularDurationHours'] as int : null;
+  final int? regularDurationHours =
+  data['regularDurationHours'] is int ? data['regularDurationHours'] as int : null;
 
   final List<Map<String, dynamic>> paymentHistory =
-      (data['payment_history'] as List<dynamic>?)?.map((e) => Map<String, dynamic>.from(e as Map)).toList() ?? [];
+      (data['payment_history'] as List<dynamic>?)
+          ?.map((e) => Map<String, dynamic>.from(e as Map))
+          .toList() ??
+          [];
 
   final formattedUpdatedAt = _formatAnyDate(updatedAt);
 
@@ -106,6 +225,8 @@ Future<Map<String, dynamic>?> tripleInputCustomStatusBottomSheet(
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
     builder: (context) {
+      final cs = Theme.of(context).colorScheme;
+
       return DraggableScrollableSheet(
         initialChildSize: 0.6,
         minChildSize: 0.3,
@@ -113,9 +234,10 @@ Future<Map<String, dynamic>?> tripleInputCustomStatusBottomSheet(
         builder: (context, scrollController) {
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              border: Border.all(color: cs.outlineVariant.withOpacity(0.70)),
             ),
             child: ListView(
               controller: scrollController,
@@ -126,13 +248,12 @@ Future<Map<String, dynamic>?> tripleInputCustomStatusBottomSheet(
                     height: 5,
                     margin: const EdgeInsets.only(bottom: 24),
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
+                      color: cs.outlineVariant.withOpacity(0.85),
                       borderRadius: BorderRadius.circular(2.5),
                     ),
                   ),
                 ),
 
-                // 상단 타이틀
                 Row(
                   children: [
                     Icon(
@@ -140,60 +261,64 @@ Future<Map<String, dynamic>?> tripleInputCustomStatusBottomSheet(
                           ? Icons.warning_amber_rounded
                           : Icons.info_outline,
                       color: (customStatus != null && customStatus.isNotEmpty)
-                          ? Colors.redAccent
-                          : Colors.blueAccent,
+                          ? cs.error
+                          : cs.primary,
                       size: 28,
                     ),
                     const SizedBox(width: 10),
                     Text(
                       (customStatus != null && customStatus.isNotEmpty) ? '주의사항' : '상세 정보',
-                      style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
+                        color: cs.onSurface,
+                      ),
                     ),
                   ],
                 ),
 
                 const SizedBox(height: 12),
 
-                // ✅ 어떤 컬렉션을 보고 있는지 표기(디버깅/오해 방지)
                 Text(
-                  '데이터 출처: $collectionName',
-                  style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
+                  '데이터 출처: $sourceLabel',
+                  style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant),
                 ),
 
                 const SizedBox(height: 20),
 
-                // 메인 상태 텍스트
                 if (customStatus != null && customStatus.isNotEmpty) ...[
                   Text(
                     customStatus,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSurface,
                       height: 1.5,
                     ),
                   ),
                   const SizedBox(height: 16),
                 ],
 
-                // 업데이트 시간
                 Row(
                   children: [
-                    const Icon(Icons.access_time, size: 20, color: Colors.grey),
+                    Icon(Icons.access_time, size: 20, color: cs.onSurfaceVariant),
                     const SizedBox(width: 8),
                     Text(
                       '최종 수정: $formattedUpdatedAt',
-                      style: const TextStyle(fontSize: 16, color: Colors.grey),
+                      style: TextStyle(fontSize: 16, color: cs.onSurfaceVariant),
                     ),
                   ],
                 ),
 
-                // 저장된 상태 리스트
                 if (statusList.isNotEmpty) ...[
                   const SizedBox(height: 20),
-                  const Text(
+                  Text(
                     '저장된 상태',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: cs.onSurface,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   Wrap(
@@ -204,9 +329,14 @@ Future<Map<String, dynamic>?> tripleInputCustomStatusBottomSheet(
                           (s) => Chip(
                         label: Text(
                           s,
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: cs.onSurface,
+                          ),
                         ),
-                        backgroundColor: Colors.orange.withOpacity(0.15),
+                        backgroundColor: cs.surfaceContainerLow,
+                        side: BorderSide(color: cs.outlineVariant.withOpacity(0.75)),
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       ),
                     )
@@ -214,11 +344,14 @@ Future<Map<String, dynamic>?> tripleInputCustomStatusBottomSheet(
                   ),
                 ],
 
-                // 정기/부가 메타 정보
                 const SizedBox(height: 24),
-                const Text(
+                Text(
                   '상세 정보',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                    color: cs.onSurface,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 _infoRow('Type', type),
@@ -230,12 +363,15 @@ Future<Map<String, dynamic>?> tripleInputCustomStatusBottomSheet(
                 _infoRow('Start Date', startDate),
                 _infoRow('End Date', endDate),
 
-                // 결제 내역
                 if (paymentHistory.isNotEmpty) ...[
                   const SizedBox(height: 24),
-                  const Text(
+                  Text(
                     '결제 내역',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                      color: cs.onSurface,
+                    ),
                   ),
                   const SizedBox(height: 10),
                   ...paymentHistory.map((p) {
@@ -248,13 +384,14 @@ Future<Map<String, dynamic>?> tripleInputCustomStatusBottomSheet(
                     return Container(
                       margin: const EdgeInsets.only(bottom: 10),
                       decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
+                        border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
                         borderRadius: BorderRadius.circular(10),
+                        color: cs.surface,
                       ),
                       child: ListTile(
                         title: Text(
                           '금액: ${amount ?? '-'}',
-                          style: const TextStyle(fontWeight: FontWeight.w600),
+                          style: TextStyle(fontWeight: FontWeight.w800, color: cs.onSurface),
                         ),
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -274,12 +411,13 @@ Future<Map<String, dynamic>?> tripleInputCustomStatusBottomSheet(
                 const SizedBox(height: 24),
                 SizedBox(
                   width: double.infinity,
-                  child: TextButton(
+                  child: FilledButton(
                     onPressed: () => Navigator.of(context).pop(),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.black87,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: cs.primary,
+                      foregroundColor: cs.onPrimary,
                       padding: const EdgeInsets.symmetric(vertical: 14),
-                      textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                     ),
                     child: const Text('확인'),
@@ -305,6 +443,6 @@ Future<Map<String, dynamic>?> tripleInputCustomStatusBottomSheet(
     'startDate': startDate,
     'endDate': endDate,
     'payment_history': paymentHistory,
-    'collection': collectionName,
+    'source': sourceLabel,
   };
 }

@@ -5,9 +5,7 @@ import '../../../../utils/plate_limit/status_mapping_helper.dart';
 
 class TripleModifyStatusOnTapSection extends StatefulWidget {
   final List<String>? initialSelectedStatuses;
-
   final String? initialCategory;
-
   final ValueChanged<List<String>>? onSelectionChanged;
 
   const TripleModifyStatusOnTapSection({
@@ -43,8 +41,10 @@ class _TripleModifyStatusOnTapSectionState extends State<TripleModifyStatusOnTap
 
     if (selectedCategory != null && widget.initialSelectedStatuses != null) {
       final currentStatuses = StatusMappingHelper.getStatuses(selectedCategory!);
-      selectedIndexes =
-          widget.initialSelectedStatuses!.map((name) => currentStatuses.indexOf(name)).where((i) => i != -1).toSet();
+      selectedIndexes = widget.initialSelectedStatuses!
+          .map((name) => currentStatuses.indexOf(name))
+          .where((i) => i != -1)
+          .toSet();
     }
 
     _notifySelection();
@@ -64,13 +64,13 @@ class _TripleModifyStatusOnTapSectionState extends State<TripleModifyStatusOnTap
 
     final currentStatuses = StatusMappingHelper.getStatuses(selectedCategory!);
     final selectedNames =
-        selectedIndexes.where((i) => i < currentStatuses.length).map((i) => currentStatuses[i]).toList();
+    selectedIndexes.where((i) => i < currentStatuses.length).map((i) => currentStatuses[i]).toList();
     widget.onSelectionChanged!(selectedNames);
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final cs = Theme.of(context).colorScheme;
     final currentStatuses = StatusMappingHelper.getStatuses(selectedCategory);
 
     return Column(
@@ -79,14 +79,20 @@ class _TripleModifyStatusOnTapSectionState extends State<TripleModifyStatusOnTap
         DropdownButtonFormField<String>(
           value: selectedCategory,
           hint: const Text('업종 선택'),
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: '업종',
-            border: OutlineInputBorder(),
+            border: const OutlineInputBorder(),
+            enabledBorder: OutlineInputBorder(
+              borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderSide: BorderSide(color: cs.primary.withOpacity(0.85), width: 1.2),
+            ),
           ),
           items: StatusMappingHelper.categories.map((category) {
             return DropdownMenuItem(
               value: category,
-              child: Text(category),
+              child: Text(category, style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w700)),
             );
           }).toList(),
           onChanged: (value) async {
@@ -99,26 +105,35 @@ class _TripleModifyStatusOnTapSectionState extends State<TripleModifyStatusOnTap
           },
         ),
         const SizedBox(height: 16),
-        const Text(
+
+        Text(
           '차량 상태',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w900,
+            color: cs.onSurface,
+          ) ??
+              TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: cs.onSurface,
+              ),
         ),
         const SizedBox(height: 8),
+
         if (currentStatuses.isEmpty)
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(8),
+              color: cs.surfaceContainerLow,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
             ),
-            child: const Text(
+            child: Text(
               '업종을 선택하세요.',
               style: TextStyle(
-                color: Colors.black54,
+                color: cs.onSurfaceVariant,
                 fontSize: 14,
+                fontWeight: FontWeight.w700,
               ),
             ),
           )
@@ -128,12 +143,13 @@ class _TripleModifyStatusOnTapSectionState extends State<TripleModifyStatusOnTap
             runSpacing: 8,
             children: List.generate(currentStatuses.length, (index) {
               final selected = selectedIndexes.contains(index);
+
               return ChoiceChip(
                 label: Text(
                   currentStatuses[index],
                   style: TextStyle(
-                    fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                    color: selected ? theme.primaryColor : Colors.black87,
+                    fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                    color: selected ? cs.primary : cs.onSurface,
                   ),
                 ),
                 selected: selected,
@@ -147,41 +163,46 @@ class _TripleModifyStatusOnTapSectionState extends State<TripleModifyStatusOnTap
                   });
                   _notifySelection();
                 },
-                selectedColor: theme.primaryColor.withOpacity(0.2),
-                backgroundColor: Colors.grey.shade100,
+                selectedColor: cs.primaryContainer.withOpacity(0.65),
+                backgroundColor: cs.surfaceContainerLow,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
                   side: BorderSide(
-                    color: selected ? theme.primaryColor : Colors.grey.shade300,
+                    color: selected ? cs.primary.withOpacity(0.75) : cs.outlineVariant.withOpacity(0.85),
                   ),
                 ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               );
             }),
           ),
+
         const SizedBox(height: 16),
+
         if (selectedCategory != null && selectedIndexes.isNotEmpty)
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
+              Text(
                 '선택된 상태:',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: cs.onSurface,
+                ) ??
+                    TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: cs.onSurface),
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 6),
               Wrap(
                 spacing: 6,
-                children: selectedIndexes
-                    .map(
-                      (i) => Chip(
-                        label: Text(currentStatuses[i]),
-                        backgroundColor: theme.primaryColor.withOpacity(0.1),
-                      ),
-                    )
-                    .toList(),
+                children: selectedIndexes.map((i) {
+                  return Chip(
+                    label: Text(
+                      currentStatuses[i],
+                      style: TextStyle(fontWeight: FontWeight.w700, color: cs.onPrimaryContainer),
+                    ),
+                    backgroundColor: cs.primaryContainer.withOpacity(0.55),
+                    side: BorderSide(color: cs.primary.withOpacity(0.35)),
+                  );
+                }).toList(),
               ),
             ],
           ),

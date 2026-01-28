@@ -14,27 +14,39 @@ class MinorInputLocationField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context).textTheme;
+    final tt = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+
     final screenWidth = MediaQuery.of(context).size.width;
+    final bool isEmpty = controller.text.trim().isEmpty;
+
+    final textStyle = (tt.bodyLarge ?? const TextStyle()).copyWith(
+      fontSize: 18,
+      fontWeight: FontWeight.bold,
+      color: isEmpty ? cs.onSurfaceVariant : cs.onSurface,
+    );
+
+    final hintStyle = (tt.bodyLarge ?? const TextStyle()).copyWith(
+      fontSize: 18,
+      fontWeight: FontWeight.bold,
+      color: cs.onSurfaceVariant,
+    );
+
     return SizedBox(
       width: screenWidth * widthFactor,
       child: TextField(
         controller: controller,
-        readOnly: true,
+        readOnly: readOnly,
         textAlign: TextAlign.center,
-        style: theme.bodyLarge?.copyWith(
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          color: controller.text.isEmpty ? Colors.grey : Colors.black,
-        ),
+        style: textStyle,
         decoration: InputDecoration(
-          hintText: controller.text.isEmpty ? '미지정' : null,
-          hintStyle: theme.bodyLarge?.copyWith(
-            fontSize: 18,
-            color: Colors.grey,
+          hintText: isEmpty ? '미지정' : null,
+          hintStyle: hintStyle,
+          enabledBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: cs.outline, width: 2.0),
           ),
-          enabledBorder: const UnderlineInputBorder(
-            borderSide: BorderSide(color: Colors.black, width: 2.0),
+          focusedBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: cs.primary, width: 2.2),
           ),
         ),
       ),

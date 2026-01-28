@@ -36,20 +36,32 @@ class TripleModifyPhotoSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final totalItems = [...imageUrls, ...capturedImages.map((e) => e.path)];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           '촬영 사진',
-          style: TextStyle(fontSize: 18.0, fontWeight: FontWeight.bold),
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w900,
+            color: cs.onSurface,
+          ) ??
+              TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+                color: cs.onSurface,
+              ),
         ),
         const SizedBox(height: 8.0),
         SizedBox(
           height: 100,
           child: totalItems.isEmpty
-              ? const Center(child: Text('촬영된 사진 없음'))
+              ? Text(
+            '촬영된 사진 없음',
+            style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+          )
               : ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: totalItems.length,
@@ -75,7 +87,7 @@ class TripleModifyPhotoSection extends StatelessWidget {
                       height: 100,
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) =>
-                      const Icon(Icons.broken_image, color: Colors.red),
+                          Icon(Icons.broken_image, color: cs.error),
                     )
                         : FutureBuilder<bool>(
                       future: File(capturedImages[index - imageUrls.length].path).exists(),
@@ -88,10 +100,10 @@ class TripleModifyPhotoSection extends StatelessWidget {
                           );
                         }
                         if (snapshot.hasError || !(snapshot.data ?? false)) {
-                          return const SizedBox(
+                          return SizedBox(
                             width: 100,
                             height: 100,
-                            child: Center(child: Icon(Icons.broken_image, color: Colors.red)),
+                            child: Center(child: Icon(Icons.broken_image, color: cs.error)),
                           );
                         }
 
@@ -116,12 +128,16 @@ class TripleModifyPhotoSection extends StatelessWidget {
             width: double.infinity,
             child: OutlinedButton(
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.black,
-                backgroundColor: Colors.white,
-                side: const BorderSide(color: Colors.black),
+                foregroundColor: cs.onSurface,
+                backgroundColor: cs.surface,
+                side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.zero,
+                shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+              ).copyWith(
+                overlayColor: MaterialStateProperty.resolveWith<Color?>(
+                      (states) => states.contains(MaterialState.pressed)
+                      ? cs.outlineVariant.withOpacity(0.12)
+                      : null,
                 ),
               ),
               onPressed: () {
@@ -137,7 +153,7 @@ class TripleModifyPhotoSection extends StatelessWidget {
                     Future<List<String>> future = TripleModifyPlateService.listPlateImages(
                       context: context,
                       plateNumber: plateNumber,
-                      yearMonth: selectedYearMonth, // ✅ 월 단위 조회 기본 적용
+                      yearMonth: selectedYearMonth,
                     );
 
                     return DraggableScrollableSheet(
@@ -145,9 +161,12 @@ class TripleModifyPhotoSection extends StatelessWidget {
                       minChildSize: 0.4,
                       maxChildSize: 0.95,
                       builder: (context, scrollController) {
+                        final csModal = Theme.of(context).colorScheme;
+
                         return SafeArea(
                           child: Material(
-                            color: Colors.white,
+                            color: csModal.surface,
+                            surfaceTintColor: Colors.transparent,
                             borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                             child: Padding(
                               padding: const EdgeInsets.all(16.0),
@@ -160,40 +179,60 @@ class TripleModifyPhotoSection extends StatelessWidget {
                                         height: 4,
                                         margin: const EdgeInsets.only(bottom: 16),
                                         decoration: BoxDecoration(
-                                          color: Colors.grey.shade300,
+                                          color: csModal.outlineVariant.withOpacity(0.85),
                                           borderRadius: BorderRadius.circular(2),
                                         ),
                                       ),
-                                      const Text(
+                                      Text(
                                         '저장된 사진 목록',
-                                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                          fontWeight: FontWeight.w900,
+                                          color: csModal.onSurface,
+                                        ) ??
+                                            TextStyle(
+                                              fontSize: 18,
+                                              fontWeight: FontWeight.w900,
+                                              color: csModal.onSurface,
+                                            ),
                                       ),
                                       const SizedBox(height: 12),
 
                                       // ✅ 월 선택(UTC 기준)
                                       Row(
                                         children: [
-                                          const Text(
+                                          Text(
                                             '월(UTC): ',
-                                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                            style: TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w800,
+                                              color: csModal.onSurface,
+                                            ),
                                           ),
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Container(
                                               padding: const EdgeInsets.symmetric(horizontal: 12),
                                               decoration: BoxDecoration(
-                                                border: Border.all(color: Colors.grey.shade300),
+                                                border: Border.all(color: csModal.outlineVariant.withOpacity(0.85)),
                                                 borderRadius: BorderRadius.circular(8),
+                                                color: csModal.surface,
                                               ),
                                               child: DropdownButtonHideUnderline(
                                                 child: DropdownButton<String>(
                                                   value: selectedYearMonth,
                                                   isExpanded: true,
+                                                  icon: Icon(Icons.expand_more, color: csModal.onSurfaceVariant),
                                                   items: yearMonths
                                                       .map(
                                                         (ym) => DropdownMenuItem<String>(
                                                       value: ym,
-                                                      child: Text(ym),
+                                                      child: Text(
+                                                        ym,
+                                                        style: TextStyle(
+                                                          color: csModal.onSurface,
+                                                          fontWeight: FontWeight.w700,
+                                                        ),
+                                                      ),
                                                     ),
                                                   )
                                                       .toList(),
@@ -201,7 +240,6 @@ class TripleModifyPhotoSection extends StatelessWidget {
                                                     if (value == null) return;
                                                     setModalState(() {
                                                       selectedYearMonth = value;
-                                                      // ✅ 월 변경 시 해당 월 prefix로만 다시 조회
                                                       future = TripleModifyPlateService.listPlateImages(
                                                         context: context,
                                                         plateNumber: plateNumber,
@@ -226,11 +264,17 @@ class TripleModifyPhotoSection extends StatelessWidget {
                                               return const Center(child: CircularProgressIndicator());
                                             }
                                             if (snapshot.hasError) {
-                                              return const Center(child: Text('이미지 불러오기 실패'));
+                                              return Text(
+                                                '이미지 불러오기 실패',
+                                                style: TextStyle(color: csModal.error, fontWeight: FontWeight.w800),
+                                              );
                                             }
                                             final urls = snapshot.data ?? [];
                                             if (urls.isEmpty) {
-                                              return const Center(child: Text('DB에 저장된 이미지가 없습니다.'));
+                                              return Text(
+                                                'DB에 저장된 이미지가 없습니다.',
+                                                style: TextStyle(color: csModal.onSurfaceVariant, fontWeight: FontWeight.w700),
+                                              );
                                             }
 
                                             return ListView.builder(
@@ -239,7 +283,6 @@ class TripleModifyPhotoSection extends StatelessWidget {
                                               itemBuilder: (context, index) {
                                                 final url = urls[index];
 
-                                                // URL 마지막 세그먼트는 파일명(월 폴더 추가되어도 동일)
                                                 final fileName = url.split('/').last;
                                                 final segments = fileName.split('_');
 
@@ -264,14 +307,13 @@ class TripleModifyPhotoSection extends StatelessWidget {
                                                           height: 80,
                                                           decoration: BoxDecoration(
                                                             borderRadius: BorderRadius.circular(4),
-                                                            border: Border.all(color: Colors.grey.shade300),
+                                                            border: Border.all(color: csModal.outlineVariant.withOpacity(0.85)),
                                                           ),
                                                           clipBehavior: Clip.hardEdge,
                                                           child: Image.network(
                                                             url,
                                                             fit: BoxFit.cover,
-                                                            errorBuilder: (_, __, ___) =>
-                                                            const Icon(Icons.broken_image, color: Colors.red),
+                                                            errorBuilder: (_, __, ___) => Icon(Icons.broken_image, color: csModal.error),
                                                           ),
                                                         ),
                                                         const SizedBox(width: 12),
@@ -279,9 +321,9 @@ class TripleModifyPhotoSection extends StatelessWidget {
                                                           child: Column(
                                                             crossAxisAlignment: CrossAxisAlignment.start,
                                                             children: [
-                                                              Text('📅 $date', style: const TextStyle(fontSize: 14)),
-                                                              Text('🚘 $number', style: const TextStyle(fontSize: 14)),
-                                                              Text('👤 $user', style: const TextStyle(fontSize: 14)),
+                                                              Text('📅 $date', style: TextStyle(fontSize: 14, color: csModal.onSurface, fontWeight: FontWeight.w700)),
+                                                              Text('🚘 $number', style: TextStyle(fontSize: 14, color: csModal.onSurface, fontWeight: FontWeight.w700)),
+                                                              Text('👤 $user', style: TextStyle(fontSize: 14, color: csModal.onSurfaceVariant, fontWeight: FontWeight.w600)),
                                                             ],
                                                           ),
                                                         ),
@@ -306,7 +348,10 @@ class TripleModifyPhotoSection extends StatelessWidget {
                   },
                 );
               },
-              child: const Text('사진 불러오기'),
+              child: const Text(
+                '사진 불러오기',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
             ),
           ),
         ),
