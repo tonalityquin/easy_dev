@@ -2,10 +2,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-// ✅ AppCardPalette 사용 (프로젝트 경로에 맞게 수정)
-// 예: import 'package:easydev/theme/app_card_palette.dart';
-import '../../../../../theme.dart';
-
 Future<void> monthlyRegionPickerBottomSheet({
   required BuildContext context,
   required String selectedRegion,
@@ -20,7 +16,6 @@ Future<void> monthlyRegionPickerBottomSheet({
       backgroundColor: Colors.transparent,
       builder: (ctx) {
         final cs = Theme.of(ctx).colorScheme;
-        final palette = AppCardPalette.of(ctx);
 
         return SafeArea(
           child: Container(
@@ -28,10 +23,10 @@ Future<void> monthlyRegionPickerBottomSheet({
             decoration: BoxDecoration(
               color: cs.surface,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              border: Border.all(color: cs.outlineVariant.withOpacity(.5)),
+              border: Border.all(color: cs.outlineVariant.withOpacity(.50)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(.08),
+                  color: cs.shadow.withOpacity(.10),
                   blurRadius: 14,
                   offset: const Offset(0, -2),
                 ),
@@ -46,21 +41,21 @@ Future<void> monthlyRegionPickerBottomSheet({
                     height: 4,
                     margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
-                      color: cs.outlineVariant.withOpacity(.6),
+                      color: cs.outlineVariant.withOpacity(.60),
                       borderRadius: BorderRadius.circular(999),
                     ),
                   ),
                 ),
                 Row(
                   children: [
-                    Icon(Icons.info_outline, color: palette.serviceDark),
+                    Icon(Icons.info_outline, color: cs.onSurface),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         '선택 가능한 지역이 없습니다.',
                         style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          color: palette.serviceDark,
+                          fontWeight: FontWeight.w900,
+                          color: cs.onSurface,
                         ),
                       ),
                     ),
@@ -72,8 +67,8 @@ Future<void> monthlyRegionPickerBottomSheet({
                   child: ElevatedButton(
                     onPressed: () => Navigator.of(ctx).pop(),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: palette.serviceBase,
-                      foregroundColor: Colors.white,
+                      backgroundColor: cs.primary,
+                      foregroundColor: cs.onPrimary,
                       shape: const StadiumBorder(),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       elevation: 0,
@@ -100,7 +95,6 @@ Future<void> monthlyRegionPickerBottomSheet({
     backgroundColor: Colors.transparent,
     builder: (sheetCtx) {
       final cs = Theme.of(sheetCtx).colorScheme;
-      final palette = AppCardPalette.of(sheetCtx);
 
       return DraggableScrollableSheet(
         initialChildSize: 0.55,
@@ -117,7 +111,7 @@ Future<void> monthlyRegionPickerBottomSheet({
                 border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(.55))),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(.08),
+                    color: cs.shadow.withOpacity(.10),
                     blurRadius: 14,
                     offset: const Offset(0, -2),
                   ),
@@ -134,7 +128,7 @@ Future<void> monthlyRegionPickerBottomSheet({
                       height: 4,
                       margin: const EdgeInsets.only(bottom: 16),
                       decoration: BoxDecoration(
-                        color: cs.outlineVariant.withOpacity(.6),
+                        color: cs.outlineVariant.withOpacity(.60),
                         borderRadius: BorderRadius.circular(999),
                       ),
                     ),
@@ -147,11 +141,11 @@ Future<void> monthlyRegionPickerBottomSheet({
                         width: 36,
                         height: 36,
                         decoration: BoxDecoration(
-                          color: palette.serviceLight.withOpacity(.18),
+                          color: cs.primaryContainer.withOpacity(.65),
                           borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: palette.serviceLight.withOpacity(.40)),
+                          border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
                         ),
-                        child: Icon(Icons.place_outlined, color: palette.serviceDark),
+                        child: Icon(Icons.place_outlined, color: cs.primary),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -160,15 +154,14 @@ Future<void> monthlyRegionPickerBottomSheet({
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w900,
-                            color: palette.serviceDark,
+                            color: cs.onSurface,
                           ),
                         ),
                       ),
                       IconButton(
                         tooltip: '닫기',
                         onPressed: () => Navigator.of(sheetCtx).pop(),
-                        icon: const Icon(Icons.close),
-                        color: palette.serviceDark,
+                        icon: Icon(Icons.close, color: cs.onSurfaceVariant),
                       ),
                     ],
                   ),
@@ -178,15 +171,15 @@ Future<void> monthlyRegionPickerBottomSheet({
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: palette.serviceLight.withOpacity(.08),
+                      color: cs.surfaceContainerLow,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: palette.serviceLight.withOpacity(.25)),
+                      border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
                     ),
                     child: Text(
                       '현재 선택: $selectedRegion',
                       style: TextStyle(
-                        color: palette.serviceDark,
-                        fontWeight: FontWeight.w700,
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                   ),
@@ -197,7 +190,7 @@ Future<void> monthlyRegionPickerBottomSheet({
                     height: 216,
                     child: CupertinoTheme(
                       data: CupertinoThemeData(
-                        primaryColor: palette.serviceBase,
+                        primaryColor: cs.primary,
                         textTheme: CupertinoTextThemeData(
                           pickerTextStyle: TextStyle(
                             fontSize: 18,
@@ -214,7 +207,7 @@ Future<void> monthlyRegionPickerBottomSheet({
                           HapticFeedback.selectionClick();
                         },
                         selectionOverlay: CupertinoPickerDefaultSelectionOverlay(
-                          background: palette.serviceLight.withOpacity(.10),
+                          background: cs.primaryContainer.withOpacity(.35),
                         ),
                         children: [
                           for (final region in regions)
@@ -239,8 +232,8 @@ Future<void> monthlyRegionPickerBottomSheet({
                       Expanded(
                         child: OutlinedButton(
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: palette.serviceDark,
-                            side: BorderSide(color: palette.serviceLight.withOpacity(.75)),
+                            foregroundColor: cs.onSurface,
+                            side: BorderSide(color: cs.outlineVariant.withOpacity(.75)),
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: const StadiumBorder(),
                           ),
@@ -252,8 +245,8 @@ Future<void> monthlyRegionPickerBottomSheet({
                       Expanded(
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: palette.serviceBase,
-                            foregroundColor: Colors.white,
+                            backgroundColor: cs.primary,
+                            foregroundColor: cs.onPrimary,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: const StadiumBorder(),
                             elevation: 0,

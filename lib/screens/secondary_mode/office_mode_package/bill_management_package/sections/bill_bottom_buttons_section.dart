@@ -1,7 +1,4 @@
-// lib/screens/secondary_package/office_mode_package/bill_management_package/sections/bill_bottom_buttons_section.dart
 import 'package:flutter/material.dart';
-
-import '../../../../../../theme.dart'; // ✅ AppCardPalette 사용 (프로젝트 경로에 맞게 조정)
 
 class BillBottomButtonsSection extends StatelessWidget {
   final VoidCallback onCancel;
@@ -29,14 +26,7 @@ class BillBottomButtonsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ Service 팔레트: ThemeExtension(AppCardPalette)에서 획득
-    final palette = AppCardPalette.of(context);
-    final serviceBase = palette.serviceBase;
-    final serviceDark = palette.serviceDark;
-    final serviceLight = palette.serviceLight;
-
-    // 기존 상수의 의미 유지(전경/배경)
-    const fg = Colors.white;
+    final cs = Theme.of(context).colorScheme;
 
     return SafeArea(
       top: false,
@@ -45,23 +35,22 @@ class BillBottomButtonsSection extends StatelessWidget {
           Expanded(
             child: OutlinedButton.icon(
               onPressed: isBusy ? null : onCancel,
-              icon: Icon(cancelIcon ?? Icons.close, color: serviceBase),
+              icon: Icon(cancelIcon ?? Icons.close, color: cs.primary),
               label: Text(
                 cancelLabel,
                 style: TextStyle(
-                  fontWeight: FontWeight.w600,
-                  color: serviceBase,
+                  fontWeight: FontWeight.w700,
+                  color: cs.primary,
                 ),
               ),
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
-                foregroundColor: serviceBase,
-                side: BorderSide(color: serviceBase, width: 1.2),
+                foregroundColor: cs.primary,
+                side: BorderSide(color: cs.primary.withOpacity(.85), width: 1.2),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ).copyWith(
-                // ↓ overlay는 styleFrom이 아닌 copyWith로 지정
                 overlayColor: WidgetStatePropertyAll(
-                  serviceLight.withOpacity(0.08),
+                  cs.primary.withOpacity(0.08),
                 ),
               ),
             ),
@@ -71,30 +60,32 @@ class BillBottomButtonsSection extends StatelessWidget {
             child: ElevatedButton.icon(
               onPressed: (!isSaveEnabled || isBusy) ? null : onSave,
               icon: isBusy
-                  ? const SizedBox(
+                  ? SizedBox(
                 width: 18,
                 height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2, color: fg),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: cs.onPrimary,
+                ),
               )
-                  : Icon(saveIcon ?? Icons.check, color: fg),
+                  : Icon(saveIcon ?? Icons.check, color: cs.onPrimary),
               label: Text(
                 isBusy ? '저장 중...' : saveLabel,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: fg,
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: cs.onPrimary,
                 ),
               ),
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size.fromHeight(48),
-                backgroundColor: serviceBase,
-                foregroundColor: fg,
+                backgroundColor: cs.primary,
+                foregroundColor: cs.onPrimary,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                 elevation: 2,
-                shadowColor: serviceDark.withOpacity(0.25),
+                shadowColor: cs.shadow.withOpacity(0.20),
               ).copyWith(
-                // ↓ overlay는 styleFrom이 아닌 copyWith로 지정
                 overlayColor: WidgetStatePropertyAll(
-                  serviceLight.withOpacity(0.08),
+                  cs.onPrimary.withOpacity(0.08),
                 ),
               ),
             ),

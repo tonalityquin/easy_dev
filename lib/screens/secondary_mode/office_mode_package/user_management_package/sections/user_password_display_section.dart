@@ -4,10 +4,6 @@ import 'package:flutter/services.dart';
 // snackbar_helper 경로는 현재 파일(…/sections/…) 기준으로 계산
 import '../../../../../../utils/snackbar_helper.dart';
 
-// ✅ AppCardPalette 정의 파일을 프로젝트 경로에 맞게 import 하세요.
-// 예) import 'package:your_app/theme/app_card_palette.dart';
-import '../../../../../../theme.dart';
-
 class UserPasswordDisplaySection extends StatelessWidget {
   final TextEditingController controller;
 
@@ -36,10 +32,7 @@ class UserPasswordDisplaySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
-    final base = palette.serviceBase;
-    final dark = palette.serviceDark;
-    final light = palette.serviceLight;
+    final cs = Theme.of(context).colorScheme;
 
     return TextField(
       controller: controller,
@@ -48,6 +41,7 @@ class UserPasswordDisplaySection extends StatelessWidget {
       autocorrect: false,
       enableInteractiveSelection: true,
       style: TextStyle(
+        color: cs.onSurface,
         fontFeatures: enableMonospace ? [FontFeature.tabularFigures()] : null,
         letterSpacing: 0.5,
       ),
@@ -55,29 +49,28 @@ class UserPasswordDisplaySection extends StatelessWidget {
         labelText: label,
         helperText: '읽기 전용(자동 생성). 복사해서 전달하세요.',
         floatingLabelStyle: TextStyle(
-          color: dark,
+          color: cs.primary,
           fontWeight: FontWeight.w700,
         ),
-        prefixIcon: Icon(Icons.lock, color: dark),
+        prefixIcon: Icon(Icons.lock, color: cs.onSurfaceVariant),
         suffixIcon: allowCopy
             ? IconButton(
           tooltip: '복사',
           onPressed: () => _copyToClipboard(context),
-          icon: Icon(Icons.copy, color: dark),
+          icon: Icon(Icons.copy, color: cs.onSurfaceVariant),
         )
             : null,
         filled: true,
-        fillColor: light.withOpacity(.06),
+        fillColor: cs.surfaceVariant.withOpacity(.45),
         isDense: true,
-        contentPadding:
-        const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+        contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: light.withOpacity(.45)),
+          borderSide: BorderSide(color: cs.outlineVariant.withOpacity(.75)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: base, width: 1.2),
+          borderSide: BorderSide(color: cs.primary, width: 1.3),
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),

@@ -1,9 +1,5 @@
-// lib/screens/secondary_package/office_mode_package/location_management_package/location_setting.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
-// ✅ AppCardPalette 사용 (프로젝트 경로에 맞게 수정)
-import '../../../../../theme.dart';
 
 class LocationSettingBottomSheet extends StatefulWidget {
   final Function(dynamic location) onSave;
@@ -52,15 +48,16 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
 
   // ---------- 11시 라벨 ----------
   Widget _buildScreenTag(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final base = Theme.of(context).textTheme.labelSmall;
+
     final style = (base ??
         const TextStyle(
           fontSize: 11,
-          color: Colors.black54,
           fontWeight: FontWeight.w600,
         ))
         .copyWith(
-      color: Colors.black54,
+      color: cs.onSurfaceVariant.withOpacity(.72),
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
     );
@@ -189,32 +186,36 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
   InputDecoration _inputDecoration(
       BuildContext context,
       String label, {
-        required Color serviceBase,
-        required Color serviceLight,
+        required ColorScheme cs,
       }) {
     return InputDecoration(
       labelText: label,
       isDense: true,
+      filled: true,
+      fillColor: cs.surfaceVariant.withOpacity(.45),
       contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: serviceLight.withOpacity(.35)),
+        borderSide: BorderSide(color: cs.outlineVariant.withOpacity(.75)),
       ),
       focusedBorder: OutlineInputBorder(
-        borderSide: BorderSide(color: serviceBase, width: 1.6),
+        borderSide: BorderSide(color: cs.primary, width: 1.6),
         borderRadius: BorderRadius.circular(10),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: cs.error.withOpacity(.60)),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: cs.error, width: 1.3),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
-    final serviceBase = palette.serviceBase;
-    final serviceDark = palette.serviceDark;
-    final serviceLight = palette.serviceLight;
-
     final cs = Theme.of(context).colorScheme;
     final bottomPadding = MediaQuery.of(context).viewInsets.bottom;
     final screenHeight = MediaQuery.of(context).size.height;
@@ -230,9 +231,10 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                decoration: const BoxDecoration(
-                  color: Colors.white, // ✅ 시트 배경
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -244,7 +246,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                         height: 4,
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: serviceLight.withOpacity(.32),
+                          color: cs.outlineVariant.withOpacity(.65),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -253,8 +255,8 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                       '주차 구역 설정',
                       style: TextStyle(
                         fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: serviceDark,
+                        fontWeight: FontWeight.w900,
+                        color: cs.onSurface,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -267,9 +269,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                           label: '단일',
                           selected: _isSingle,
                           onTap: () => setState(() => _isSingle = true),
-                          serviceBase: serviceBase,
-                          serviceDark: serviceDark,
-                          serviceLight: serviceLight,
                         ),
                         const SizedBox(width: 8),
                         _ModeChip(
@@ -281,9 +280,6 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                               if (_subControllers.isEmpty) _addSubLocation();
                             });
                           },
-                          serviceBase: serviceBase,
-                          serviceDark: serviceDark,
-                          serviceLight: serviceLight,
                         ),
                       ],
                     ),
@@ -294,11 +290,11 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                       controller: _locationController,
                       onTapOutside: (_) => FocusScope.of(context).unfocus(),
                       textInputAction: TextInputAction.next,
+                      style: TextStyle(color: cs.onSurface),
                       decoration: _inputDecoration(
                         context,
                         _isSingle ? '구역명' : '상위 구역명',
-                        serviceBase: serviceBase,
-                        serviceLight: serviceLight,
+                        cs: cs,
                       ),
                       onSubmitted: (_) {
                         if (_isSingle) {
@@ -320,11 +316,11 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                           FilteringTextInputFormatter.digitsOnly,
                           LengthLimitingTextInputFormatter(4),
                         ],
+                        style: TextStyle(color: cs.onSurface),
                         decoration: _inputDecoration(
                           context,
                           '수용 가능 차량 수',
-                          serviceBase: serviceBase,
-                          serviceLight: serviceLight,
+                          cs: cs,
                         ),
                       ),
 
@@ -336,8 +332,8 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                           Text(
                             '하위 구역',
                             style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: serviceDark,
+                              fontWeight: FontWeight.w900,
+                              color: cs.onSurface,
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -354,11 +350,11 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                                       controller: sub.name,
                                       onTapOutside: (_) => FocusScope.of(context).unfocus(),
                                       textInputAction: TextInputAction.next,
+                                      style: TextStyle(color: cs.onSurface),
                                       decoration: _inputDecoration(
                                         context,
                                         '하위 ${index + 1}',
-                                        serviceBase: serviceBase,
-                                        serviceLight: serviceLight,
+                                        cs: cs,
                                       ),
                                     ),
                                   ),
@@ -374,11 +370,11 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                                         FilteringTextInputFormatter.digitsOnly,
                                         LengthLimitingTextInputFormatter(4),
                                       ],
+                                      style: TextStyle(color: cs.onSurface),
                                       decoration: _inputDecoration(
                                         context,
                                         '수용',
-                                        serviceBase: serviceBase,
-                                        serviceLight: serviceLight,
+                                        cs: cs,
                                       ),
                                     ),
                                   ),
@@ -395,16 +391,16 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                             alignment: Alignment.centerRight,
                             child: TextButton.icon(
                               onPressed: _addSubLocation,
-                              icon: Icon(Icons.add, color: serviceBase),
+                              icon: Icon(Icons.add, color: cs.primary),
                               label: Text(
                                 '하위 구역 추가',
                                 style: TextStyle(
-                                  color: serviceBase,
-                                  fontWeight: FontWeight.w700,
+                                  color: cs.primary,
+                                  fontWeight: FontWeight.w800,
                                 ),
                               ),
                               style: TextButton.styleFrom(
-                                foregroundColor: serviceBase,
+                                foregroundColor: cs.primary,
                               ),
                             ),
                           ),
@@ -412,8 +408,8 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                           Text(
                             '총 수용 차량: ${_calculateTotalSubCapacity()}대',
                             style: TextStyle(
-                              color: serviceDark,
-                              fontWeight: FontWeight.w600,
+                              color: cs.onSurfaceVariant.withOpacity(.85),
+                              fontWeight: FontWeight.w700,
                             ),
                           ),
                         ],
@@ -423,7 +419,10 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                       const SizedBox(height: 12),
                       Text(
                         _errorMessage!,
-                        style: TextStyle(color: cs.error, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                          color: cs.error,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ],
 
@@ -436,8 +435,8 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                           child: OutlinedButton(
                             onPressed: () => Navigator.pop(context),
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: serviceBase,
-                              side: BorderSide(color: serviceBase, width: 1.2),
+                              foregroundColor: cs.onSurface,
+                              side: BorderSide(color: cs.outlineVariant.withOpacity(.75), width: 1.2),
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: const StadiumBorder(),
                             ),
@@ -449,16 +448,16 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                           child: ElevatedButton(
                             onPressed: _handleSave,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: serviceBase,
-                              foregroundColor: Colors.white,
+                              backgroundColor: cs.primary,
+                              foregroundColor: cs.onPrimary,
                               padding: const EdgeInsets.symmetric(vertical: 14),
                               shape: const StadiumBorder(),
                               elevation: 2,
-                              shadowColor: serviceLight.withOpacity(.35),
+                              shadowColor: cs.primary.withOpacity(.25),
                             ),
                             child: const Text(
                               '저장',
-                              style: TextStyle(fontWeight: FontWeight.w700),
+                              style: TextStyle(fontWeight: FontWeight.w800),
                             ),
                           ),
                         ),
@@ -478,40 +477,35 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
   }
 }
 
-/// 모드 토글 칩 (서비스 팔레트 반영)
+/// 모드 토글 칩 (브랜드테마 반영)
 class _ModeChip extends StatelessWidget {
   const _ModeChip({
     required this.label,
     required this.selected,
     required this.onTap,
-    required this.serviceBase,
-    required this.serviceDark,
-    required this.serviceLight,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onTap;
 
-  final Color serviceBase;
-  final Color serviceDark;
-  final Color serviceLight;
-
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return ChoiceChip(
       label: Text(
         label,
         style: TextStyle(
-          fontWeight: FontWeight.w700,
-          color: selected ? Colors.white : serviceDark,
+          fontWeight: FontWeight.w800,
+          color: selected ? cs.onPrimary : cs.onSurface,
         ),
       ),
       selected: selected,
-      selectedColor: serviceBase,
-      backgroundColor: serviceLight.withOpacity(.12),
+      selectedColor: cs.primary,
+      backgroundColor: cs.surfaceVariant.withOpacity(.45),
       side: BorderSide(
-        color: selected ? serviceBase : serviceLight.withOpacity(.4),
+        color: selected ? cs.primary : cs.outlineVariant.withOpacity(.65),
       ),
       showCheckmark: false,
       onSelected: (_) => onTap(),

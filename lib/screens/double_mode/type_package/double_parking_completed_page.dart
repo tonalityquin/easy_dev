@@ -15,7 +15,6 @@ import '../../../widgets/navigation/double_top_navigation.dart';
 import 'parking_completed_package/widgets/signature_plate_search_bottom_sheet/double_parking_completed_search_bottom_sheet.dart';
 import '../../../widgets/container/plate_container.dart';
 
-import 'parking_completed_package/double_parking_completed_control_buttons.dart';
 import 'parking_completed_package/double_parking_completed_real_time_table.dart';
 import 'parking_completed_package/double_parking_status_page.dart';
 
@@ -24,8 +23,30 @@ enum DoubleParkingViewMode { status, locationPicker, plateList }
 class DoubleParkingCompletedPage extends StatefulWidget {
   const DoubleParkingCompletedPage({super.key});
 
+  /// ✅ 상위(DoubleTypePage)에서 하단 컨트롤바가 현재 모드/정렬 상태를 알 수 있도록 노출
+  static final ValueNotifier<DoubleParkingViewMode> modeNotifier =
+  ValueNotifier<DoubleParkingViewMode>(DoubleParkingViewMode.status);
+
+  static final ValueNotifier<bool> isSortedNotifier = ValueNotifier<bool>(true);
+
+  /// 기존 홈 재탭 reset 유지
   static void reset(GlobalKey key) {
     (key.currentState as _DoubleParkingCompletedPageState?)?._resetInternalState();
+  }
+
+  /// ✅ 외부(상위 Scaffold)에서 '현황 ↔ 테이블' 토글 제어
+  static void toggleViewMode(GlobalKey key) {
+    (key.currentState as _DoubleParkingCompletedPageState?)?._toggleViewMode();
+  }
+
+  /// ✅ 외부에서 검색 다이얼로그 오픈
+  static void openSearchDialog(GlobalKey key, BuildContext context) {
+    (key.currentState as _DoubleParkingCompletedPageState?)?._showSearchDialog(context);
+  }
+
+  /// ✅ 외부에서 정렬 토글(plateList용)
+  static void toggleSortIcon(GlobalKey key) {
+    (key.currentState as _DoubleParkingCompletedPageState?)?._toggleSortIcon();
   }
 
   @override
@@ -43,6 +64,17 @@ class _DoubleParkingCompletedPageState extends State<DoubleParkingCompletedPage>
     if (kDebugMode) debugPrint('[ParkingCompleted] $msg');
   }
 
+  void _syncNotifiers() {
+    DoubleParkingCompletedPage.modeNotifier.value = _mode;
+    DoubleParkingCompletedPage.isSortedNotifier.value = _isSorted;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _syncNotifiers();
+  }
+
   void _resetInternalState() {
     setState(() {
       _mode = DoubleParkingViewMode.status;
@@ -50,6 +82,7 @@ class _DoubleParkingCompletedPageState extends State<DoubleParkingCompletedPage>
       _isSorted = true;
       _statusKeySeed++;
     });
+    _syncNotifiers();
     _log('reset page state');
   }
 
@@ -61,6 +94,7 @@ class _DoubleParkingCompletedPageState extends State<DoubleParkingCompletedPage>
           ? DoubleParkingViewMode.locationPicker
           : DoubleParkingViewMode.status;
     });
+    _syncNotifiers();
 
     _log(_mode == DoubleParkingViewMode.status ? 'mode → status' : 'mode → locationPicker(table)');
   }
@@ -69,6 +103,7 @@ class _DoubleParkingCompletedPageState extends State<DoubleParkingCompletedPage>
     setState(() {
       _isSorted = !_isSorted;
     });
+    _syncNotifiers();
     _log(_isSorted ? 'sort → 최신순' : 'sort → 오래된순');
   }
 
@@ -86,16 +121,6 @@ class _DoubleParkingCompletedPageState extends State<DoubleParkingCompletedPage>
     );
   }
 
-  void _doubleHandleDepartureRequested(BuildContext context) {
-    _log('stub: departure request (double mode has no departure request)');
-    showFailedSnackbar(context, "더블 모드에서는 출차 요청 기능이 없습니다.");
-  }
-
-  void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) async {
-    _log('stub: entry parking request $plateNumber ($area)');
-    showFailedSnackbar(context, "더블 모드에서는 입차 요청 기능이 없습니다.");
-  }
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -104,8 +129,10 @@ class _DoubleParkingCompletedPageState extends State<DoubleParkingCompletedPage>
       onWillPop: () async {
         final plateState = context.read<DoublePlateState>();
         final userName = context.read<UserState>().name;
-        final selectedPlate = plateState.doubleGetSelectedPlate(PlateType.parkingCompleted, userName);
+        final selectedPlate =
+        plateState.doubleGetSelectedPlate(PlateType.parkingCompleted, userName);
 
+        // ✅ 선택된 차량이 있으면 "뒤로가기 = 선택 해제" 우선
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
           await plateState.doubleTogglePlateIsSelected(
             collection: PlateType.parkingCompleted,
@@ -117,12 +144,15 @@ class _DoubleParkingCompletedPageState extends State<DoubleParkingCompletedPage>
           return false;
         }
 
+        // ✅ 내부 모드 back 처리(plateList → locationPicker → status)
         if (_mode == DoubleParkingViewMode.plateList) {
           setState(() => _mode = DoubleParkingViewMode.locationPicker);
+          _syncNotifiers();
           _log('back → locationPicker');
           return false;
         } else if (_mode == DoubleParkingViewMode.locationPicker) {
           setState(() => _mode = DoubleParkingViewMode.status);
+          _syncNotifiers();
           _log('back → status');
           return false;
         }
@@ -141,18 +171,9 @@ class _DoubleParkingCompletedPageState extends State<DoubleParkingCompletedPage>
             bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.85), width: 1),
           ),
         ),
+
+        // ✅ 변경 핵심: 기존 bottomNavigationBar 제거 → 그 높이만큼 body 영역 확보
         body: _buildBody(context),
-        bottomNavigationBar: DoubleParkingCompletedControlButtons(
-          isParkingAreaMode: _mode == DoubleParkingViewMode.plateList,
-          isStatusMode: _mode == DoubleParkingViewMode.status,
-          isLocationPickerMode: _mode == DoubleParkingViewMode.locationPicker,
-          isSorted: _isSorted,
-          onToggleViewMode: _toggleViewMode,
-          showSearchDialog: () => _showSearchDialog(context),
-          toggleSortIcon: _toggleSortIcon,
-          handleEntryParkingRequest: handleEntryParkingRequest,
-          handleDepartureRequested: _doubleHandleDepartureRequested,
-        ),
       ),
     );
   }
@@ -172,16 +193,22 @@ class _DoubleParkingCompletedPageState extends State<DoubleParkingCompletedPage>
           onClose: () {
             if (!mounted) return;
             setState(() => _mode = DoubleParkingViewMode.status);
+            _syncNotifiers();
           },
         );
 
       case DoubleParkingViewMode.plateList:
-        List<PlateModel> plates = plateState.doubleGetPlatesByCollection(PlateType.parkingCompleted);
+        List<PlateModel> plates =
+        plateState.doubleGetPlatesByCollection(PlateType.parkingCompleted);
+
         if (_selectedParkingArea != null) {
           plates = plates.where((p) => p.location == _selectedParkingArea).toList();
         }
+
         plates.sort(
-              (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
+              (a, b) => _isSorted
+              ? b.requestTime.compareTo(a.requestTime)
+              : a.requestTime.compareTo(b.requestTime),
         );
 
         return ListView(
@@ -190,7 +217,8 @@ class _DoubleParkingCompletedPageState extends State<DoubleParkingCompletedPage>
             PlateContainer(
               data: plates,
               collection: PlateType.parkingCompleted,
-              filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
+              filterCondition: (request) =>
+              request.type == PlateType.parkingCompleted.firestoreValue,
               onPlateTap: (plateNumber, area) {
                 context.read<DoublePlateState>().doubleTogglePlateIsSelected(
                   collection: PlateType.parkingCompleted,

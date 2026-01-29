@@ -7,7 +7,6 @@ import '../../../enums/plate_type.dart';
 
 import '../../../states/area/area_state.dart';
 import '../../../states/plate/triple_plate_state.dart';
-import '../../../states/plate/movement_plate.dart';
 import '../../../states/user/user_state.dart';
 
 import '../../../utils/snackbar_helper.dart';
@@ -18,7 +17,6 @@ import '../../../widgets/navigation/triple_top_navigation.dart';
 import 'parking_completed_package/widgets/signature_plate_search_bottom_sheet/triple_parking_completed_search_bottom_sheet.dart';
 import '../../../widgets/container/plate_container.dart';
 
-import 'parking_completed_package/triple_parking_completed_control_buttons.dart';
 import 'parking_completed_package/triple_parking_completed_real_time_table.dart';
 import 'parking_completed_package/triple_parking_status_page.dart';
 
@@ -27,14 +25,34 @@ enum TripleParkingViewMode { status, locationPicker, plateList }
 class TripleParkingCompletedPage extends StatefulWidget {
   const TripleParkingCompletedPage({super.key});
 
+  /// ✅ 상위(TripleTypePage)에서 하단 컨트롤바가 현재 모드/정렬 상태를 알 수 있도록 노출
+  static final ValueNotifier<TripleParkingViewMode> modeNotifier =
+  ValueNotifier<TripleParkingViewMode>(TripleParkingViewMode.status);
+
+  static final ValueNotifier<bool> isSortedNotifier = ValueNotifier<bool>(true);
+
   /// 홈 탭 재진입/재탭 시 내부 상태 초기화를 위한 entry point
   static void reset(GlobalKey key) {
     (key.currentState as _TripleParkingCompletedPageState?)?._resetInternalState();
   }
 
+  /// ✅ 외부(상위 Scaffold)에서 '현황 ↔ 테이블' 토글 제어
+  static void toggleViewMode(GlobalKey key) {
+    (key.currentState as _TripleParkingCompletedPageState?)?._toggleViewMode();
+  }
+
+  /// ✅ 외부에서 검색 다이얼로그 오픈
+  static void openSearchDialog(GlobalKey key, BuildContext context) {
+    (key.currentState as _TripleParkingCompletedPageState?)?._showSearchDialog(context);
+  }
+
+  /// ✅ 외부에서 정렬 토글(plateList용)
+  static void toggleSortIcon(GlobalKey key) {
+    (key.currentState as _TripleParkingCompletedPageState?)?._toggleSortIcon();
+  }
+
   @override
-  State<TripleParkingCompletedPage> createState() =>
-      _TripleParkingCompletedPageState();
+  State<TripleParkingCompletedPage> createState() => _TripleParkingCompletedPageState();
 }
 
 class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage> {
@@ -52,6 +70,17 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
     if (kDebugMode) debugPrint('[ParkingCompleted] $msg');
   }
 
+  void _syncNotifiers() {
+    TripleParkingCompletedPage.modeNotifier.value = _mode;
+    TripleParkingCompletedPage.isSortedNotifier.value = _isSorted;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _syncNotifiers();
+  }
+
   /// 홈 재탭/진입 시 초기 상태로 되돌림
   /// ✅ 변경: 잠금 상태 제거. 홈 기본은 현황 모드(status).
   void _resetInternalState() {
@@ -61,6 +90,7 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
       _isSorted = true;
       _statusKeySeed++; // ✅ Status 재생성 트리거 → ParkingStatusPage 집계 재실행
     });
+    _syncNotifiers();
     _log('reset page state');
   }
 
@@ -75,6 +105,7 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
           ? TripleParkingViewMode.locationPicker
           : TripleParkingViewMode.status;
     });
+    _syncNotifiers();
 
     _log(_mode == TripleParkingViewMode.status
         ? 'mode → status'
@@ -85,6 +116,7 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
     setState(() {
       _isSorted = !_isSorted;
     });
+    _syncNotifiers();
     _log(_isSorted ? 'sort → 최신순' : 'sort → 오래된순');
   }
 
@@ -102,38 +134,9 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
     );
   }
 
-  // ✅ 출차 요청 핸들러 (기존 로직 유지)
-  void _tripleHandleDepartureRequested(BuildContext context) {
-    final movementPlate = context.read<MovementPlate>();
-    final userName = context.read<UserState>().name;
-    final plateState = context.read<TriplePlateState>();
-    final selectedPlate =
-    plateState.tripleGetSelectedPlate(PlateType.parkingCompleted, userName);
-
-    if (selectedPlate != null) {
-      movementPlate
-          .setDepartureRequested(
-        selectedPlate.plateNumber,
-        selectedPlate.area,
-        selectedPlate.location,
-      )
-          .then((_) {
-        Future.delayed(const Duration(milliseconds: 300), () {
-          if (!mounted) return;
-          Navigator.pop(context);
-          showSuccessSnackbar(context, "출차 요청이 완료되었습니다.");
-        });
-      }).catchError((e) {
-        if (!mounted) return;
-        showFailedSnackbar(context, "출차 요청 중 오류: $e");
-      });
-    }
-  }
-
   // ✅ (빌드 에러 방지) 컨트롤 버튼에서 요구하는 입차 요청 콜백 스텁
   // ※ 트리플 모드에서는 입차 요청 기능이 없지만, 기존 UI/바텀시트 시그니처 호환을 위해 유지
-  void handleEntryParkingRequest(
-      BuildContext context, String plateNumber, String area) async {
+  void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) async {
     _log('stub: entry parking request $plateNumber ($area)');
     showSuccessSnackbar(context, "입차 요청 처리: $plateNumber ($area)");
   }
@@ -165,10 +168,12 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
         // plateList → locationPicker → status 순으로 한 단계씩 되돌기
         if (_mode == TripleParkingViewMode.plateList) {
           setState(() => _mode = TripleParkingViewMode.locationPicker);
+          _syncNotifiers();
           _log('back → locationPicker');
           return false;
         } else if (_mode == TripleParkingViewMode.locationPicker) {
           setState(() => _mode = TripleParkingViewMode.status);
+          _syncNotifiers();
           _log('back → status');
           return false;
         }
@@ -194,20 +199,11 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
             ),
           ),
         ),
-        body: _buildBody(context),
 
-        // ✅ 요구사항 유지: ControlButtons 항상 표시
-        bottomNavigationBar: TripleParkingCompletedControlButtons(
-          isParkingAreaMode: _mode == TripleParkingViewMode.plateList,
-          isStatusMode: _mode == TripleParkingViewMode.status,
-          isLocationPickerMode: _mode == TripleParkingViewMode.locationPicker,
-          isSorted: _isSorted,
-          onToggleViewMode: _toggleViewMode,
-          showSearchDialog: () => _showSearchDialog(context),
-          toggleSortIcon: _toggleSortIcon,
-          handleEntryParkingRequest: handleEntryParkingRequest,
-          handleDepartureRequested: _tripleHandleDepartureRequested,
-        ),
+        // ✅ 변경 핵심:
+        // 기존 bottomNavigationBar(TripleParkingCompletedControlButtons) 제거
+        // → 그 높이만큼 ParkingCompletedPage의 body 영역 확장
+        body: _buildBody(context),
       ),
     );
   }
@@ -230,6 +226,7 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
           onClose: () {
             if (!mounted) return;
             setState(() => _mode = TripleParkingViewMode.status);
+            _syncNotifiers();
           },
         );
 
@@ -237,9 +234,11 @@ class _TripleParkingCompletedPageState extends State<TripleParkingCompletedPage>
       // 🔹 기존 plateList 화면은 보존(다른 경로에서 필요할 수 있음). 현재 기본 흐름에선 사용 안 함.
         List<PlateModel> plates =
         plateState.tripleGetPlatesByCollection(PlateType.parkingCompleted);
+
         if (_selectedParkingArea != null) {
           plates = plates.where((p) => p.location == _selectedParkingArea).toList();
         }
+
         plates.sort(
               (a, b) => _isSorted
               ? b.requestTime.compareTo(a.requestTime)

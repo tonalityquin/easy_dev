@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-// ✅ AppCardPalette 정의가 있는 파일을 프로젝트 경로에 맞게 import 하세요.
-// 예) import 'package:your_app/theme/app_card_palette.dart';
-import '../../../../../../theme.dart';
+// snackbar_helper 경로는 현재 파일(…/sections/…) 기준으로 계산
+import '../../../../../../utils/snackbar_helper.dart';
 
 /// 비밀번호 표시(읽기 전용 + 복사)
 class TabletPasswordDisplay extends StatelessWidget {
@@ -28,19 +27,13 @@ class TabletPasswordDisplay extends StatelessWidget {
 
   Future<void> _copyToClipboard(BuildContext context) async {
     await Clipboard.setData(ClipboardData(text: controller.text));
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    messenger?.clearSnackBars();
-    messenger?.showSnackBar(
-      const SnackBar(content: Text('비밀번호가 복사되었습니다.')),
-    );
+    // ✅ 앱 전반 스낵바 스타일 통일
+    showSuccessSnackbar(context, '비밀번호가 복사되었습니다.');
   }
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
-    final base = palette.serviceBase;
-    final dark = palette.serviceDark;
-    final light = palette.serviceLight;
+    final cs = Theme.of(context).colorScheme;
 
     return TextField(
       controller: controller,
@@ -49,6 +42,7 @@ class TabletPasswordDisplay extends StatelessWidget {
       autocorrect: false,
       enableInteractiveSelection: true,
       style: TextStyle(
+        color: cs.onSurface,
         fontFeatures: enableMonospace ? [FontFeature.tabularFigures()] : null,
         letterSpacing: 0.5,
       ),
@@ -56,28 +50,28 @@ class TabletPasswordDisplay extends StatelessWidget {
         labelText: label,
         helperText: '읽기 전용(자동 생성). 복사해서 전달하세요.',
         floatingLabelStyle: TextStyle(
-          color: dark,
+          color: cs.primary,
           fontWeight: FontWeight.w700,
         ),
-        prefixIcon: Icon(Icons.lock, color: dark),
+        prefixIcon: Icon(Icons.lock, color: cs.onSurfaceVariant),
         suffixIcon: allowCopy
             ? IconButton(
           tooltip: '복사',
           onPressed: () => _copyToClipboard(context),
-          icon: Icon(Icons.copy, color: dark),
+          icon: Icon(Icons.copy, color: cs.onSurfaceVariant),
         )
             : null,
         filled: true,
-        fillColor: light.withOpacity(.06),
+        fillColor: cs.surfaceVariant.withOpacity(.45),
         isDense: true,
         contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: light.withOpacity(.45)),
+          borderSide: BorderSide(color: cs.outlineVariant.withOpacity(.75)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: base, width: 1.2),
+          borderSide: BorderSide(color: cs.primary, width: 1.3),
         ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),

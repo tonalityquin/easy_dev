@@ -1,4 +1,3 @@
-// lib/screens/secondary_package/office_mode_package/location_management.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -7,9 +6,6 @@ import 'location_management_package/location_setting.dart';
 import '../../../../states/location/location_state.dart';
 import '../../../../states/area/area_state.dart';
 import '../../../../models/location_model.dart';
-
-// ✅ AppCardPalette 사용 (프로젝트 경로에 맞게 수정)
-import '../../../../theme.dart';
 
 class LocationManagement extends StatefulWidget {
   const LocationManagement({super.key});
@@ -27,15 +23,16 @@ class _LocationManagementState extends State<LocationManagement> {
 
   // 11시 라벨
   Widget _buildScreenTag(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final base = Theme.of(context).textTheme.labelSmall;
+
     final style = (base ??
         const TextStyle(
           fontSize: 11,
-          color: Colors.black54,
           fontWeight: FontWeight.w600,
         ))
         .copyWith(
-      color: Colors.black54,
+      color: cs.onSurfaceVariant.withOpacity(.72),
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
     );
@@ -176,12 +173,6 @@ class _LocationManagementState extends State<LocationManagement> {
 
   @override
   Widget build(BuildContext context) {
-    // ✅ ThemeExtension(AppCardPalette)로부터 Service 팔레트 획득
-    final palette = AppCardPalette.of(context);
-    final serviceBase = palette.serviceBase;
-    final serviceDark = palette.serviceDark;
-    final serviceLight = palette.serviceLight;
-
     final locationState = context.watch<LocationState>();
     final cs = Theme.of(context).colorScheme;
     final currentArea = context.watch<AreaState>().currentArea;
@@ -201,24 +192,30 @@ class _LocationManagementState extends State<LocationManagement> {
     final hasSelection = locationState.selectedLocationId != null;
 
     return Scaffold(
+      backgroundColor: cs.surface,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: cs.surface,
         elevation: 0,
-        foregroundColor: Colors.black87,
+        foregroundColor: cs.onSurface,
+        surfaceTintColor: Colors.transparent,
         flexibleSpace: _buildScreenTag(context), // ◀️ 11시 라벨
         title: Text(
           '주차구역',
-          style: const TextStyle(fontWeight: FontWeight.bold).copyWith(color: serviceDark),
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         centerTitle: true,
         automaticallyImplyLeading: false,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: serviceLight.withOpacity(.18)),
+          child: Container(height: 1, color: cs.outlineVariant.withOpacity(.75)),
         ),
       ),
       body: locationState.isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+        ),
+      )
           : allLocations.isEmpty
           ? const Center(child: Text('현재 지역에 주차 구역이 없습니다.'))
           : Column(
@@ -235,57 +232,41 @@ class _LocationManagementState extends State<LocationManagement> {
                   label: '전체',
                   selected: _filter == 'all',
                   onSelected: () => setState(() => _filter = 'all'),
-                  cs: cs,
-                  serviceBase: serviceBase,
-                  serviceLight: serviceLight,
                 ),
                 const SizedBox(width: 8),
                 _FilterChip(
                   label: '단일',
                   selected: _filter == 'single',
                   onSelected: () => setState(() => _filter = 'single'),
-                  cs: cs,
-                  serviceBase: serviceBase,
-                  serviceLight: serviceLight,
                 ),
                 const SizedBox(width: 8),
                 _FilterChip(
                   label: '복합',
                   selected: _filter == 'composite',
                   onSelected: () => setState(() => _filter = 'composite'),
-                  cs: cs,
-                  serviceBase: serviceBase,
-                  serviceLight: serviceLight,
                 ),
               ],
             ),
           ),
-          const Divider(height: 1),
+          Divider(height: 1, color: cs.outlineVariant.withOpacity(.75)),
           Expanded(
             child: _filter == 'single'
                 ? _buildSimpleList(
               singles,
               locationState,
               colorScheme: cs,
-              serviceBase: serviceBase,
-              serviceLight: serviceLight,
             )
                 : _filter == 'composite'
                 ? _buildGroupedList(
               grouped,
               locationState,
               colorScheme: cs,
-              serviceBase: serviceBase,
-              serviceLight: serviceLight,
             )
                 : _buildAllListView(
               singles: singles,
               grouped: grouped,
               state: locationState,
               colorScheme: cs,
-              serviceDark: serviceDark,
-              serviceBase: serviceBase,
-              serviceLight: serviceLight,
             ),
           ),
         ],
@@ -299,8 +280,6 @@ class _LocationManagementState extends State<LocationManagement> {
         hasSelection: hasSelection,
         onAdd: () => _handleAdd(context),
         onDelete: hasSelection ? () => _handleDelete(context) : null,
-        cs: cs,
-        serviceBase: serviceBase,
       ),
     );
   }
@@ -311,10 +290,8 @@ class _LocationManagementState extends State<LocationManagement> {
     required Map<String, List<LocationModel>> grouped,
     required LocationState state,
     required ColorScheme colorScheme,
-    required Color serviceDark,
-    required Color serviceBase,
-    required Color serviceLight,
   }) {
+    final cs = colorScheme;
     final tiles = <Widget>[];
 
     if (singles.isNotEmpty) {
@@ -324,17 +301,17 @@ class _LocationManagementState extends State<LocationManagement> {
           child: Text(
             '단일 주차 구역',
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: serviceDark,
+              fontWeight: FontWeight.w800,
+              color: cs.onSurface,
             ),
           ),
         ),
       );
-      tiles.addAll(_buildSimpleTiles(singles, state, colorScheme, serviceBase, serviceLight));
+      tiles.addAll(_buildSimpleTiles(singles, state, cs));
     }
 
     if (singles.isNotEmpty && grouped.isNotEmpty) {
-      tiles.add(Divider(color: serviceLight.withOpacity(.30)));
+      tiles.add(Divider(color: cs.outlineVariant.withOpacity(.55)));
     }
 
     if (grouped.isNotEmpty) {
@@ -344,13 +321,13 @@ class _LocationManagementState extends State<LocationManagement> {
           child: Text(
             '복합 주차 구역',
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: serviceDark,
+              fontWeight: FontWeight.w800,
+              color: cs.onSurface,
             ),
           ),
         ),
       );
-      tiles.addAll(_buildGroupedTiles(grouped, state, colorScheme, serviceBase, serviceLight));
+      tiles.addAll(_buildGroupedTiles(grouped, state, cs));
     }
 
     return ListView(children: tiles);
@@ -360,8 +337,6 @@ class _LocationManagementState extends State<LocationManagement> {
       List<LocationModel> list,
       LocationState state,
       ColorScheme cs,
-      Color serviceBase,
-      Color serviceLight,
       ) {
     return List<Widget>.generate(list.length, (index) {
       final loc = list[index];
@@ -369,46 +344,51 @@ class _LocationManagementState extends State<LocationManagement> {
 
       return Card(
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        color: Colors.white,
+        color: cs.surface,
         elevation: isSelected ? 3 : 1,
+        surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(
-            color: isSelected ? serviceBase : serviceLight.withOpacity(.28),
+            color: isSelected ? cs.primary : cs.outlineVariant.withOpacity(.65),
             width: isSelected ? 1.5 : 1,
           ),
         ),
         child: ListTile(
-          title: const Text(
-            ' ',
-            style: TextStyle(fontSize: 0),
-          ),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                loc.locationName,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              if (loc.capacity > 0) Text('공간 ${loc.capacity}대'),
-            ],
+          title: const Text(' ', style: TextStyle(fontSize: 0)),
+          subtitle: DefaultTextStyle(
+            style: TextStyle(color: cs.onSurfaceVariant, height: 1.2),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  loc.locationName,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: cs.onSurface,
+                  ),
+                ),
+                if (loc.capacity > 0) Text('공간 ${loc.capacity}대'),
+              ],
+            ),
           ),
           leading: Container(
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: serviceLight.withOpacity(.18),
+              color: cs.primaryContainer.withOpacity(.55),
               borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
             ),
             child: Icon(
               loc.type == 'single' ? Icons.location_on : Icons.maps_home_work,
-              color: serviceBase,
+              color: cs.primary,
               size: 20,
             ),
           ),
           trailing: isSelected
-              ? Icon(Icons.check_circle, color: serviceBase)
-              : Icon(Icons.chevron_right, color: cs.outline),
+              ? Icon(Icons.check_circle, color: cs.primary)
+              : Icon(Icons.chevron_right, color: cs.onSurfaceVariant.withOpacity(.75)),
           selected: isSelected,
           onTap: () => state.toggleLocationSelection(loc.id),
         ),
@@ -420,8 +400,6 @@ class _LocationManagementState extends State<LocationManagement> {
       Map<String, List<LocationModel>> grouped,
       LocationState state,
       ColorScheme cs,
-      Color serviceBase,
-      Color serviceLight,
       ) {
     return grouped.entries.map((entry) {
       final totalCapacity = entry.value.fold<int>(0, (sum, loc) => sum + loc.capacity);
@@ -430,15 +408,16 @@ class _LocationManagementState extends State<LocationManagement> {
         margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: serviceLight.withOpacity(.28)),
+          side: BorderSide(color: cs.outlineVariant.withOpacity(.65)),
         ),
-        color: Colors.white,
+        color: cs.surface,
         elevation: 1,
+        surfaceTintColor: Colors.transparent,
         child: Theme(
           data: Theme.of(context).copyWith(
             dividerColor: Colors.transparent,
             expansionTileTheme: ExpansionTileThemeData(
-              iconColor: serviceBase,
+              iconColor: cs.primary,
               collapsedIconColor: cs.onSurfaceVariant,
               textColor: cs.onSurface,
               collapsedTextColor: cs.onSurface,
@@ -449,17 +428,31 @@ class _LocationManagementState extends State<LocationManagement> {
           child: ExpansionTile(
             title: Text(
               '상위 구역: ${entry.key} (공간 $totalCapacity대)',
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: cs.onSurface,
+              ),
             ),
             childrenPadding: const EdgeInsets.only(bottom: 8),
             children: entry.value.map((loc) {
               final isSelected = state.selectedLocationId == loc.id;
 
               return ListTile(
-                title: Text(loc.locationName),
-                subtitle: loc.capacity > 0 ? Text('공간 ${loc.capacity}대') : null,
+                title: Text(
+                  loc.locationName,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                  ),
+                ),
+                subtitle: loc.capacity > 0
+                    ? Text(
+                  '공간 ${loc.capacity}대',
+                  style: TextStyle(color: cs.onSurfaceVariant),
+                )
+                    : null,
                 leading: Icon(Icons.subdirectory_arrow_right, color: cs.onSurfaceVariant),
-                trailing: isSelected ? Icon(Icons.check_circle, color: serviceBase) : null,
+                trailing: isSelected ? Icon(Icons.check_circle, color: cs.primary) : null,
                 selected: isSelected,
                 onTap: () => state.toggleLocationSelection(loc.id),
               );
@@ -475,9 +468,9 @@ class _LocationManagementState extends State<LocationManagement> {
       List<LocationModel> list,
       LocationState state, {
         required ColorScheme colorScheme,
-        required Color serviceBase,
-        required Color serviceLight,
       }) {
+    final cs = colorScheme;
+
     return ListView.builder(
       itemCount: list.length,
       itemBuilder: (context, index) {
@@ -486,35 +479,42 @@ class _LocationManagementState extends State<LocationManagement> {
 
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          color: Colors.white,
+          color: cs.surface,
           elevation: isSelected ? 3 : 1,
+          surfaceTintColor: Colors.transparent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
             side: BorderSide(
-              color: isSelected ? serviceBase : serviceLight.withOpacity(.28),
+              color: isSelected ? cs.primary : cs.outlineVariant.withOpacity(.65),
               width: isSelected ? 1.5 : 1,
             ),
           ),
           child: ListTile(
             title: Text(
               loc.locationName,
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: TextStyle(fontWeight: FontWeight.w800, color: cs.onSurface),
             ),
-            subtitle: loc.capacity > 0 ? Text('공간 ${loc.capacity}대') : null,
+            subtitle: loc.capacity > 0
+                ? Text(
+              '공간 ${loc.capacity}대',
+              style: TextStyle(color: cs.onSurfaceVariant),
+            )
+                : null,
             leading: Container(
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: serviceLight.withOpacity(.18),
+                color: cs.primaryContainer.withOpacity(.55),
                 borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
               ),
               child: Icon(
                 loc.type == 'single' ? Icons.location_on : Icons.maps_home_work,
-                color: serviceBase,
+                color: cs.primary,
                 size: 20,
               ),
             ),
-            trailing: isSelected ? Icon(Icons.check_circle, color: serviceBase) : null,
+            trailing: isSelected ? Icon(Icons.check_circle, color: cs.primary) : null,
             selected: isSelected,
             onTap: () => state.toggleLocationSelection(loc.id),
           ),
@@ -528,29 +528,30 @@ class _LocationManagementState extends State<LocationManagement> {
       Map<String, List<LocationModel>> grouped,
       LocationState state, {
         required ColorScheme colorScheme,
-        required Color serviceBase,
-        required Color serviceLight,
       }) {
+    final cs = colorScheme;
+
     return ListView(
       children: grouped.entries.map((entry) {
         final totalCapacity = entry.value.fold<int>(0, (sum, loc) => sum + loc.capacity);
 
         return Card(
           margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          color: Colors.white,
+          color: cs.surface,
           elevation: 1,
+          surfaceTintColor: Colors.transparent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: serviceLight.withOpacity(.28)),
+            side: BorderSide(color: cs.outlineVariant.withOpacity(.65)),
           ),
           child: Theme(
             data: Theme.of(context).copyWith(
               dividerColor: Colors.transparent,
               expansionTileTheme: ExpansionTileThemeData(
-                iconColor: serviceBase,
-                collapsedIconColor: colorScheme.onSurfaceVariant,
-                textColor: colorScheme.onSurface,
-                collapsedTextColor: colorScheme.onSurface,
+                iconColor: cs.primary,
+                collapsedIconColor: cs.onSurfaceVariant,
+                textColor: cs.onSurface,
+                collapsedTextColor: cs.onSurface,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
@@ -558,18 +559,25 @@ class _LocationManagementState extends State<LocationManagement> {
             child: ExpansionTile(
               title: Text(
                 '상위 구역: ${entry.key} (공간 $totalCapacity대)',
-                style: const TextStyle(fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: cs.onSurface,
+                ),
               ),
               childrenPadding: const EdgeInsets.only(bottom: 8),
               children: entry.value.map((loc) {
                 final isSelected = state.selectedLocationId == loc.id;
 
                 return ListTile(
-                  title: Text(loc.locationName),
-                  subtitle: loc.capacity > 0 ? Text('공간 ${loc.capacity}대') : null,
-                  leading:
-                  Icon(Icons.subdirectory_arrow_right, color: colorScheme.onSurfaceVariant),
-                  trailing: isSelected ? Icon(Icons.check_circle, color: serviceBase) : null,
+                  title: Text(
+                    loc.locationName,
+                    style: TextStyle(fontWeight: FontWeight.w700, color: cs.onSurface),
+                  ),
+                  subtitle: loc.capacity > 0
+                      ? Text('공간 ${loc.capacity}대', style: TextStyle(color: cs.onSurfaceVariant))
+                      : null,
+                  leading: Icon(Icons.subdirectory_arrow_right, color: cs.onSurfaceVariant),
+                  trailing: isSelected ? Icon(Icons.check_circle, color: cs.primary) : null,
                   selected: isSelected,
                   onTap: () => state.toggleLocationSelection(loc.id),
                 );
@@ -590,8 +598,6 @@ class _FabStack extends StatelessWidget {
     required this.hasSelection,
     required this.onAdd,
     required this.onDelete,
-    required this.cs,
-    required this.serviceBase,
   });
 
   final double bottomGap;
@@ -599,16 +605,16 @@ class _FabStack extends StatelessWidget {
   final bool hasSelection;
   final VoidCallback onAdd;
   final VoidCallback? onDelete;
-  final ColorScheme cs;
-  final Color serviceBase;
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final ButtonStyle primaryStyle = ElevatedButton.styleFrom(
-      backgroundColor: serviceBase,
-      foregroundColor: Colors.white,
+      backgroundColor: cs.primary,
+      foregroundColor: cs.onPrimary,
       elevation: 3,
-      shadowColor: cs.shadow.withOpacity(0.25),
+      shadowColor: cs.primary.withOpacity(0.25),
       shape: const StadiumBorder(),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       textStyle: const TextStyle(fontWeight: FontWeight.w700),
@@ -712,31 +718,27 @@ class _FilterChip extends StatelessWidget {
     required this.label,
     required this.selected,
     required this.onSelected,
-    required this.cs,
-    required this.serviceBase,
-    required this.serviceLight,
   });
 
   final String label;
   final bool selected;
   final VoidCallback onSelected;
-  final ColorScheme cs;
-  final Color serviceBase;
-  final Color serviceLight;
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return ChoiceChip(
       label: Text(label),
       selected: selected,
       labelStyle: TextStyle(
-        fontWeight: FontWeight.w700,
-        color: selected ? serviceBase : cs.onSurfaceVariant,
+        fontWeight: FontWeight.w800,
+        color: selected ? cs.onPrimary : cs.onSurfaceVariant,
       ),
-      selectedColor: serviceLight.withOpacity(.22),
-      backgroundColor: serviceLight.withOpacity(.10),
+      selectedColor: cs.primary,
+      backgroundColor: cs.surface,
       side: BorderSide(
-        color: selected ? serviceBase : cs.outlineVariant.withOpacity(.6),
+        color: selected ? cs.primary : cs.outlineVariant.withOpacity(.6),
       ),
       onSelected: (_) => onSelected(),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),

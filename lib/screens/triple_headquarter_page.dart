@@ -8,7 +8,6 @@ import '../states/page/triple_hq_state.dart';
 import '../states/page/triple_page_info.dart';
 import '../states/plate/plate_state.dart';
 import '../states/plate/triple_plate_state.dart';
-import '../theme.dart';
 import 'hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
 import 'secondary_page.dart';
 
@@ -52,7 +51,6 @@ class _BottomArea extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           _HqModeSwitchButton(),
-          _BrandFooter(),
         ],
       );
     }
@@ -60,9 +58,8 @@ class _BottomArea extends StatelessWidget {
     return const Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _HqModeSwitchButton(),
         _PageBottomNavigation(),
-        _BrandFooter(),
+        _HqModeSwitchButton(),
       ],
     );
   }
@@ -109,12 +106,12 @@ class _HqModeSwitchButton extends StatelessWidget {
     );
   }
 
-  Future<_ModeTarget?> _pickTarget(BuildContext context, AppCardPalette palette) {
+  Future<_ModeTarget?> _pickTarget(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    final accent = palette.tripleBase;
-    final border = palette.tripleLight.withOpacity(.65);
-    final textColor = palette.tripleDark;
+    final accent = cs.primary;
+    final border = cs.outlineVariant.withOpacity(0.85);
+    final textColor = cs.onSurface;
 
     return showDialog<_ModeTarget>(
       context: context,
@@ -148,7 +145,7 @@ class _HqModeSwitchButton extends StatelessWidget {
                     IconButton(
                       tooltip: '닫기',
                       onPressed: () => Navigator.of(dialogContext).pop(),
-                      icon: Icon(Icons.close, color: cs.onSurfaceVariant.withOpacity(.85)),
+                      icon: Icon(Icons.close, color: cs2.onSurfaceVariant.withOpacity(.85)),
                     ),
                   ],
                 ),
@@ -176,10 +173,8 @@ class _HqModeSwitchButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
-
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
       child: SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
@@ -187,7 +182,7 @@ class _HqModeSwitchButton extends StatelessWidget {
           label: const Text('헤드쿼터 모드 전환'),
           style: _switchBtnStyle(context),
           onPressed: () async {
-            final target = await _pickTarget(context, palette);
+            final target = await _pickTarget(context);
             if (target == null) return;
 
             _trace(
@@ -239,7 +234,8 @@ class _ModeSwitchDialogOption extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     return Material(
-      color: Colors.transparent,
+      // ColorScheme only: Colors.transparent 제거
+      color: cs.surface.withOpacity(0),
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -271,25 +267,6 @@ class _ModeSwitchDialogOption extends StatelessWidget {
               Icon(Icons.chevron_right, color: cs.onSurfaceVariant.withOpacity(.75)),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BrandFooter extends StatelessWidget {
-  const _BrandFooter();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: SizedBox(
-        height: 48,
-        child: Semantics(
-          label: 'Pelican 브랜드 로고',
-          image: true,
-          child: Image.asset('assets/images/pelican.png'),
         ),
       ),
     );
@@ -359,7 +336,6 @@ class _RefreshableBodyState extends State<_RefreshableBody> {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
     final cs = Theme.of(context).colorScheme;
 
     return GestureDetector(
@@ -393,7 +369,7 @@ class _RefreshableBodyState extends State<_RefreshableBody> {
                       height: 28,
                       child: CircularProgressIndicator(
                         strokeWidth: 3,
-                        valueColor: AlwaysStoppedAnimation<Color>(palette.tripleBase),
+                        valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
                       ),
                     ),
                   ),
@@ -411,7 +387,6 @@ class _PageBottomNavigation extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
     final cs = Theme.of(context).colorScheme;
 
     return Consumer<TripleHqState>(
@@ -436,8 +411,8 @@ class _PageBottomNavigation extends StatelessWidget {
             ),
           )
               .toList(),
-          selectedItemColor: palette.tripleBase,
-          unselectedItemColor: palette.tripleDark.withOpacity(.55),
+          selectedItemColor: cs.primary,
+          unselectedItemColor: cs.onSurfaceVariant.withOpacity(.75),
           backgroundColor: cs.surface,
           elevation: 0,
           showUnselectedLabels: true,
@@ -449,7 +424,6 @@ class _PageBottomNavigation extends StatelessWidget {
 
 ButtonStyle _switchBtnStyle(BuildContext context) {
   final cs = Theme.of(context).colorScheme;
-  final palette = AppCardPalette.of(context);
 
   return ElevatedButton.styleFrom(
     backgroundColor: cs.surface,
@@ -457,7 +431,7 @@ ButtonStyle _switchBtnStyle(BuildContext context) {
     minimumSize: const Size.fromHeight(48),
     padding: EdgeInsets.zero,
     side: BorderSide(
-      color: palette.tripleLight.withOpacity(.80),
+      color: cs.outlineVariant.withOpacity(.85),
       width: 1.0,
     ),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

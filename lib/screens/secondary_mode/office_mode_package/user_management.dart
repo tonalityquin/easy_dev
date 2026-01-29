@@ -8,8 +8,6 @@ import 'user_management_package/user_setting.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../states/area/area_state.dart';
 
-import '../../../../theme.dart';
-
 /// Iterable 안전 확장: 조건에 맞는 첫 원소를 찾되 없으면 null
 extension IterableX<T> on Iterable<T> {
   T? firstWhereOrNull(bool Function(T) test) {
@@ -42,15 +40,16 @@ class _UserManagementState extends State<UserManagement> {
 
   // 좌측 상단(11시) 화면 태그: 'user management'
   Widget _buildScreenTag(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final base = Theme.of(context).textTheme.labelSmall;
+
     final style = (base ??
         const TextStyle(
           fontSize: 11,
-          color: Colors.black54,
           fontWeight: FontWeight.w600,
         ))
         .copyWith(
-      color: Colors.black54,
+      color: cs.onSurfaceVariant.withOpacity(.72),
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
     );
@@ -145,11 +144,9 @@ class _UserManagementState extends State<UserManagement> {
   }
 
   /// ✅ 삭제 대신: 활성/비활성 확인 다이얼로그
-  Future<bool> _confirmToggleActive(BuildContext context,
-      {required bool toActive}) async {
+  Future<bool> _confirmToggleActive(BuildContext context, {required bool toActive}) async {
     final title = toActive ? '활성화 확인' : '비활성화 확인';
-    final content =
-    toActive ? '선택한 계정을 활성화하시겠습니까?' : '선택한 계정을 비활성화하시겠습니까?';
+    final content = toActive ? '선택한 계정을 활성화하시겠습니까?' : '선택한 계정을 비활성화하시겠습니까?';
     final actionLabel = toActive ? '활성화' : '비활성화';
 
     return await showDialog<bool>(
@@ -199,9 +196,7 @@ class _UserManagementState extends State<UserManagement> {
             position,
             ) async {
           try {
-            final englishName = await context
-                .read<UserRepository>()
-                .getEnglishNameByArea(selectedArea, division);
+            final englishName = await context.read<UserRepository>().getEnglishNameByArea(selectedArea, division);
 
             final newUser = UserModel(
               id: '$phone-$area',
@@ -240,8 +235,7 @@ class _UserManagementState extends State<UserManagement> {
       return;
     }
 
-    final selectedUser =
-    userState.users.firstWhereOrNull((u) => u.id == selectedId);
+    final selectedUser = userState.users.firstWhereOrNull((u) => u.id == selectedId);
     if (selectedUser == null) {
       showFailedSnackbar(context, '선택된 계정을 찾지 못했습니다.');
       return;
@@ -268,9 +262,7 @@ class _UserManagementState extends State<UserManagement> {
           position,
           ) async {
         try {
-          final englishName = await context
-              .read<UserRepository>()
-              .getEnglishNameByArea(selectedArea, division);
+          final englishName = await context.read<UserRepository>().getEnglishNameByArea(selectedArea, division);
 
           final updatedUser = selectedUser.copyWith(
             name: name,
@@ -312,8 +304,7 @@ class _UserManagementState extends State<UserManagement> {
       return;
     }
 
-    final selectedUser =
-    userState.users.firstWhereOrNull((u) => u.id == selectedId);
+    final selectedUser = userState.users.firstWhereOrNull((u) => u.id == selectedId);
     if (selectedUser == null) {
       showFailedSnackbar(context, '선택된 계정을 찾지 못했습니다.');
       return;
@@ -333,22 +324,30 @@ class _UserManagementState extends State<UserManagement> {
   }
 
   Widget _buildUserTile(BuildContext context, UserState userState, UserModel user) {
-    final palette = AppCardPalette.of(context);
-    final base = palette.serviceBase;
-    final dark = palette.serviceDark;
-    final light = palette.serviceLight;
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
 
     final isSelected = userState.selectedUserId == user.id;
 
     // ✅ 비활성 계정은 시각적으로만 약간 낮춤
     final double inactiveOpacity = user.isActive ? 1.0 : 0.55;
 
-    final bg = isSelected ? light.withOpacity(.10) : Colors.white;
+    final bg = isSelected ? cs.primaryContainer.withOpacity(.35) : cs.surface;
     final border = isSelected
-        ? Border.all(color: base, width: 1.25)
-        : Border.all(color: Colors.black.withOpacity(.08));
+        ? Border.all(color: cs.primary, width: 1.25)
+        : Border.all(color: cs.outlineVariant.withOpacity(.85));
 
     final modesText = (user.modes.isNotEmpty) ? user.modes.join(', ') : '-';
+
+    final titleStyle = (tt.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(
+      fontWeight: FontWeight.w800,
+      color: cs.onSurface,
+    );
+
+    final subtitleStyle = (tt.bodySmall ?? const TextStyle(fontSize: 12.5)).copyWith(
+      color: cs.onSurfaceVariant,
+      height: 1.25,
+    );
 
     return Opacity(
       opacity: inactiveOpacity,
@@ -363,34 +362,29 @@ class _UserManagementState extends State<UserManagement> {
           key: ValueKey(user.id),
           contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           leading: CircleAvatar(
-            backgroundColor: light.withOpacity(.25),
-            foregroundColor: dark,
+            backgroundColor: cs.primaryContainer.withOpacity(.55),
+            foregroundColor: cs.onPrimaryContainer,
             child: const Icon(Icons.person_outline),
           ),
           title: Row(
             children: [
-              Expanded(
-                child: Text(
-                  user.name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                  ),
-                ),
-              ),
-              if (isSelected) Icon(Icons.check_circle, color: base),
+              Expanded(child: Text(user.name, style: titleStyle)),
+              if (isSelected) Icon(Icons.check_circle, color: cs.primary),
             ],
           ),
           subtitle: Padding(
             padding: const EdgeInsets.only(top: 6),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('이메일: ${user.email}'),
-                Text('전화번호: ${user.phone}'),
-                if (user.position?.isNotEmpty == true) Text('직책: ${user.position!}'),
-                Text('허용 모드: $modesText'), // ✅ 표시 추가
-              ],
+            child: DefaultTextStyle(
+              style: subtitleStyle,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('이메일: ${user.email}'),
+                  Text('전화번호: ${user.phone}'),
+                  if (user.position?.isNotEmpty == true) Text('직책: ${user.position!}'),
+                  Text('허용 모드: $modesText'), // ✅ 표시 추가
+                ],
+              ),
             ),
           ),
           onTap: () => userState.toggleUserCard(user.id),
@@ -400,22 +394,20 @@ class _UserManagementState extends State<UserManagement> {
   }
 
   Widget _buildActiveInactiveDivider(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.fromLTRB(2, 10, 2, 6),
       child: Divider(
         height: 18,
         thickness: 1.2,
-        color: Colors.black.withOpacity(0.10),
+        color: cs.outlineVariant.withOpacity(.85),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
-    final base = palette.serviceBase;
-    final dark = palette.serviceDark;
-    final light = palette.serviceLight;
+    final cs = Theme.of(context).colorScheme;
 
     final userState = context.watch<UserState>();
     final areaState = context.watch<AreaState>();
@@ -439,25 +431,25 @@ class _UserManagementState extends State<UserManagement> {
 
     final bool hasSelection = userState.selectedUserId != null;
 
-    final selectedUser = hasSelection
-        ? userState.users.firstWhereOrNull((u) => u.id == userState.selectedUserId)
-        : null;
+    final selectedUser = hasSelection ? userState.users.firstWhereOrNull((u) => u.id == userState.selectedUserId) : null;
     final bool selectedIsActive = selectedUser?.isActive ?? true;
     final String toggleLabel = selectedIsActive ? '비활성화' : '활성화';
     final IconData toggleIcon = selectedIsActive ? Icons.pause_circle : Icons.play_circle;
 
     return Scaffold(
+      backgroundColor: cs.surface,
       appBar: AppBar(
-        backgroundColor: Colors.white,
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
-        foregroundColor: Colors.black87,
         title: const Text('계정', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         automaticallyImplyLeading: false,
         flexibleSpace: _buildScreenTag(context),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
+          child: Container(height: 1, color: cs.outlineVariant.withOpacity(.75)),
         ),
         actions: [
           IconButton(
@@ -468,7 +460,11 @@ class _UserManagementState extends State<UserManagement> {
         ],
       ),
       body: userState.isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+        ),
+      )
           : filteredUsers.isEmpty
           ? Center(
         child: userState.users.isEmpty
@@ -477,17 +473,10 @@ class _UserManagementState extends State<UserManagement> {
       )
           : ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        itemCount: 1 +
-            activeUsers.length +
-            (needDivider ? 1 : 0) +
-            inactiveUsers.length,
+        itemCount: 1 + activeUsers.length + (needDivider ? 1 : 0) + inactiveUsers.length,
         itemBuilder: (context, index) {
           if (index == 0) {
-            return _HeaderBanner(
-              base: base,
-              dark: dark,
-              light: light,
-            );
+            return const _HeaderBanner();
           }
 
           var cursor = index - 1;
@@ -523,47 +512,46 @@ class _UserManagementState extends State<UserManagement> {
   }
 }
 
-/// 상단 그라디언트 배너(브랜드 톤) - ✅ AppCardPalette 기반으로 주입
+/// 상단 배너(브랜드 톤) - ✅ 전역 ColorScheme 기반
 class _HeaderBanner extends StatelessWidget {
-  const _HeaderBanner({
-    required this.base,
-    required this.dark,
-    required this.light,
-  });
-
-  final Color base;
-  final Color dark;
-  final Color light;
+  const _HeaderBanner();
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    final titleStyle = (tt.titleSmall ?? const TextStyle(fontSize: 14)).copyWith(
+      color: cs.onPrimaryContainer,
+      fontWeight: FontWeight.w800,
+      height: 1.25,
+    );
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            light.withOpacity(.95),
-            base.withOpacity(.95),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: cs.primaryContainer.withOpacity(.60),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: dark.withOpacity(.16)),
+        border: Border.all(color: cs.outlineVariant.withOpacity(.85)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.manage_accounts_rounded, color: Colors.white),
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: cs.primary.withOpacity(.12),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: cs.primary.withOpacity(.18)),
+            ),
+            child: Icon(Icons.manage_accounts_rounded, color: cs.primary),
+          ),
           const SizedBox(width: 10),
-          const Expanded(
+          Expanded(
             child: Text(
               '계정을 추가/수정/활성/비활성할 수 있습니다.\n선택 시 항목이 강조 표시됩니다.',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                height: 1.25,
-              ),
+              style: titleStyle,
             ),
           ),
         ],
@@ -598,23 +586,21 @@ class _FabStack extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
-    final base = palette.serviceBase;
-    final fg = Theme.of(context).colorScheme.onPrimary; // 일반적으로 white
     final cs = Theme.of(context).colorScheme;
 
     final ButtonStyle primaryStyle = ElevatedButton.styleFrom(
-      backgroundColor: base,
-      foregroundColor: fg,
+      backgroundColor: cs.primary,
+      foregroundColor: cs.onPrimary,
       elevation: 3,
-      shadowColor: base.withOpacity(0.25),
+      shadowColor: cs.primary.withOpacity(0.25),
       shape: const StadiumBorder(),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       textStyle: const TextStyle(fontWeight: FontWeight.w700),
     );
 
-    final Color secondaryBg = secondaryIsDanger ? cs.error : base;
-    final Color secondaryFg = secondaryIsDanger ? cs.onError : fg;
+    // ✅ 비활성화는 danger(에러), 활성화는 primary
+    final Color secondaryBg = secondaryIsDanger ? cs.error : cs.primary;
+    final Color secondaryFg = secondaryIsDanger ? cs.onError : cs.onPrimary;
 
     final ButtonStyle secondaryStyle = ElevatedButton.styleFrom(
       backgroundColor: secondaryBg,

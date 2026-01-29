@@ -1,9 +1,7 @@
-// lib/screens/secondary_package/office_mode_package/bill_management.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../theme.dart'; // ✅ AppCardPalette 사용 (경로 필요 시 조정)
 import '../../../../utils/snackbar_helper.dart';
 import '../../../../states/bill/bill_state.dart';
 import '../../../../states/area/area_state.dart';
@@ -121,15 +119,16 @@ class _BillManagementState extends State<BillManagement> {
 
   // 11시 라벨 위젯 (LocationManagement와 동일 패턴)
   Widget _buildScreenTag(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final base = Theme.of(context).textTheme.labelSmall;
+
     final style = (base ??
         const TextStyle(
           fontSize: 11,
-          color: Colors.black54,
           fontWeight: FontWeight.w600,
         ))
         .copyWith(
-      color: Colors.black54,
+      color: cs.onSurfaceVariant.withOpacity(.72),
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
     );
@@ -158,28 +157,20 @@ class _BillManagementState extends State<BillManagement> {
     final won = NumberFormat.decimalPattern();
     final cs = Theme.of(context).colorScheme;
 
-    // ✅ AppCardPalette에서 Service 팔레트(Deep Blue) 사용
-    final palette = AppCardPalette.of(context);
-    final serviceBase = palette.serviceBase;
-    final serviceDark = palette.serviceDark;
-    final serviceLight = palette.serviceLight;
-
-    // 기존과 동일하게 white 고정 사용(원하면 Theme 기반으로 교체 가능)
-    const cardFg = Colors.white;
-    const cardBg = Colors.white;
-
     return Scaffold(
+      backgroundColor: cs.surface,
       appBar: AppBar(
-        backgroundColor: cardBg, // 화이트 고정
+        backgroundColor: cs.surface,
         elevation: 0,
-        foregroundColor: Colors.black87,
+        foregroundColor: cs.onSurface,
+        surfaceTintColor: Colors.transparent,
         flexibleSpace: _buildScreenTag(context), // ◀️ 11시 라벨 (AppBar에 배치)
         title: const Text('정산유형', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
         automaticallyImplyLeading: false,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: Colors.black.withOpacity(.06)),
+          child: Container(height: 1, color: cs.outlineVariant.withOpacity(.75)),
         ),
       ),
       body: Consumer<BillState>(
@@ -192,22 +183,27 @@ class _BillManagementState extends State<BillManagement> {
           }
 
           return ListView(
+            padding: const EdgeInsets.only(bottom: 12),
             children: [
               if (generalBills.isNotEmpty) ...[
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
-                  child: Text('변동 정산', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Text(
+                    '변동 정산',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: cs.onSurface,
+                    ),
+                  ),
                 ),
-                const Divider(height: 1.0),
+                Divider(height: 1.0, color: cs.outlineVariant.withOpacity(.75)),
                 ...generalBills.map(
                       (bill) => _buildGeneralBillTile(
                     context,
                     state,
                     bill,
                     won,
-                    serviceBase: serviceBase,
-                    serviceLight: serviceLight,
-                    tileBg: cardBg,
+                    colorScheme: cs,
                   ),
                 ),
               ],
@@ -226,11 +222,6 @@ class _BillManagementState extends State<BillManagement> {
         onAdd: () => _showBillSettingBottomSheet(context),
         onEdit: hasSelection ? () => _handleEdit(context) : null,
         onDelete: hasSelection ? () => _deleteSelectedBill(context) : null,
-        cs: cs,
-        serviceBase: serviceBase,
-        serviceDark: serviceDark,
-        serviceLight: serviceLight,
-        fg: cardFg,
       ),
     );
   }
@@ -240,34 +231,80 @@ class _BillManagementState extends State<BillManagement> {
       BillState state,
       dynamic bill,
       NumberFormat won, {
-        required Color serviceBase,
-        required Color serviceLight,
-        required Color tileBg,
+        required ColorScheme colorScheme,
       }) {
+    final cs = colorScheme;
     final isSelected = state.selectedBillId == bill.id;
-    final selectedBg = serviceLight.withOpacity(0.12);
 
-    return ListTile(
-      key: ValueKey(bill.id),
-      selected: isSelected,
-      selectedTileColor: selectedBg,
-      tileColor: isSelected ? selectedBg : tileBg,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      title: Text(
-        bill.countType,
-        style: const TextStyle(fontWeight: FontWeight.bold),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+    final selectedBg = cs.primaryContainer.withOpacity(.22);
+
+    return Material(
+      color: isSelected ? selectedBg : cs.surface,
+      child: InkWell(
+        onTap: () => state.toggleBillSelection(bill.id),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // leading icon
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer.withOpacity(.55),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
+                ),
+                child: Icon(Icons.receipt_long_rounded, color: cs.primary, size: 20),
+              ),
+              const SizedBox(width: 12),
+
+              // content
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      bill.countType,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      '기본 기준: ${bill.basicStandard}, 기본 금액: ₩${won.format(bill.basicAmount)}',
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                        height: 1.25,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '추가 기준: ${bill.addStandard}, 추가 금액: ₩${won.format(bill.addAmount)}',
+                      style: TextStyle(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // trailing check
+              if (isSelected) ...[
+                const SizedBox(width: 10),
+                Icon(Icons.check_circle, color: cs.primary),
+              ],
+            ],
+          ),
+        ),
       ),
-      subtitle: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('기본 기준: ${bill.basicStandard}, 기본 금액: ₩${won.format(bill.basicAmount)}'),
-          Text('추가 기준: ${bill.addStandard}, 추가 금액: ₩${won.format(bill.addAmount)}'),
-        ],
-      ),
-      trailing: isSelected ? Icon(Icons.check_circle, color: serviceBase) : null,
-      onTap: () => state.toggleBillSelection(bill.id),
     );
   }
 }
@@ -281,11 +318,6 @@ class _FabStack extends StatelessWidget {
     required this.onAdd,
     required this.onEdit,
     required this.onDelete,
-    required this.cs,
-    required this.serviceBase,
-    required this.serviceDark,
-    required this.serviceLight,
-    required this.fg,
   });
 
   final double bottomGap;
@@ -294,30 +326,26 @@ class _FabStack extends StatelessWidget {
   final VoidCallback onAdd;
   final VoidCallback? onEdit;
   final VoidCallback? onDelete;
-  final ColorScheme cs;
-
-  final Color serviceBase;
-  final Color serviceDark;
-  final Color serviceLight;
-  final Color fg;
 
   @override
   Widget build(BuildContext context) {
-    final ButtonStyle primaryStyle = ElevatedButton.styleFrom(
-      backgroundColor: serviceBase,
-      foregroundColor: fg,
+    final cs = Theme.of(context).colorScheme;
+
+    final ButtonStyle addStyle = ElevatedButton.styleFrom(
+      backgroundColor: cs.primary,
+      foregroundColor: cs.onPrimary,
       elevation: 3,
-      shadowColor: serviceDark.withOpacity(0.28),
+      shadowColor: cs.primary.withOpacity(0.25),
       shape: const StadiumBorder(),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       textStyle: const TextStyle(fontWeight: FontWeight.w700),
     );
 
     final ButtonStyle editStyle = ElevatedButton.styleFrom(
-      backgroundColor: serviceLight,
-      foregroundColor: fg,
+      backgroundColor: cs.primaryContainer,
+      foregroundColor: cs.onPrimaryContainer,
       elevation: 3,
-      shadowColor: serviceLight.withOpacity(0.35),
+      shadowColor: cs.shadow.withOpacity(0.18),
       shape: const StadiumBorder(),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       textStyle: const TextStyle(fontWeight: FontWeight.w700),
@@ -342,7 +370,7 @@ class _FabStack extends StatelessWidget {
           _ElevatedPillButton.icon(
             icon: Icons.add,
             label: '추가',
-            style: primaryStyle,
+            style: addStyle,
             onPressed: onAdd,
           ),
         ] else ...[

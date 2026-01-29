@@ -4,13 +4,6 @@ import 'package:flutter/material.dart';
 import 'monthly_plate_controller.dart';
 import 'sections/monthly_payment_section.dart';
 
-/// 서비스 로그인 카드와 동일 팔레트(Deep Blue)
-class _SvcColors {
-  static const base = Color(0xFF0D47A1);
-  static const dark = Color(0xFF09367D);
-  static const light = Color(0xFF5472D3);
-}
-
 /// ✅ 결제 전용 바텀시트
 /// - “수정 모드에서 결제 탭으로 전환” 방식이 아니라
 ///   “결제 버튼 → 별도 시트로 독립 진입” 방식
@@ -31,15 +24,15 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
 
   // 11시 라벨
   Widget _buildScreenTag(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final base = Theme.of(context).textTheme.labelSmall;
     final style = (base ??
         const TextStyle(
           fontSize: 11,
-          color: Colors.black54,
           fontWeight: FontWeight.w600,
         ))
         .copyWith(
-      color: Colors.black54,
+      color: cs.onSurfaceVariant.withOpacity(.72),
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
     );
@@ -66,21 +59,13 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
 
     final plate = c.buildPlateNumber();
 
-    final countType = (c.nameController?.text.trim().isNotEmpty ?? false)
-        ? c.nameController!.text.trim()
-        : '-';
+    final countType = (c.nameController?.text.trim().isNotEmpty ?? false) ? c.nameController!.text.trim() : '-';
 
-    final regularType = (c.selectedRegularType?.trim().isNotEmpty ?? false)
-        ? c.selectedRegularType!.trim()
-        : '-';
+    final regularType = (c.selectedRegularType?.trim().isNotEmpty ?? false) ? c.selectedRegularType!.trim() : '-';
 
-    final amount = (c.amountController?.text.trim().isNotEmpty ?? false)
-        ? c.amountController!.text.trim()
-        : '-';
+    final amount = (c.amountController?.text.trim().isNotEmpty ?? false) ? c.amountController!.text.trim() : '-';
 
-    final duration = (c.durationController?.text.trim().isNotEmpty ?? false)
-        ? c.durationController!.text.trim()
-        : '-';
+    final duration = (c.durationController?.text.trim().isNotEmpty ?? false) ? c.durationController!.text.trim() : '-';
 
     final periodUnit = c.selectedPeriodUnit;
 
@@ -96,7 +81,7 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
             child: Text(
               k,
               style: text.bodySmall?.copyWith(
-                color: Colors.black.withOpacity(.55),
+                color: cs.onSurfaceVariant.withOpacity(.78),
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -106,7 +91,7 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
               v,
               style: text.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w900,
-                color: _SvcColors.dark,
+                color: cs.onSurface,
               ),
             ),
           ),
@@ -122,7 +107,7 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
         border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.04),
+            color: cs.shadow.withOpacity(.06),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -137,11 +122,11 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: _SvcColors.light.withOpacity(.18),
+                  color: cs.primaryContainer.withOpacity(.65),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _SvcColors.light.withOpacity(.40)),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
                 ),
-                child: const Icon(Icons.directions_car_outlined, color: _SvcColors.dark),
+                child: Icon(Icons.directions_car_outlined, color: cs.primary),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -149,22 +134,22 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
                   '결제 대상 정보',
                   style: text.titleMedium?.copyWith(
                     fontWeight: FontWeight.w900,
-                    color: _SvcColors.dark,
+                    color: cs.onSurface,
                   ),
                 ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: cs.surfaceVariant.withOpacity(.7),
+                  color: cs.surfaceVariant.withOpacity(.70),
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: cs.outlineVariant.withOpacity(.7)),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(.70)),
                 ),
                 child: Text(
                   '읽기 전용',
                   style: text.bodySmall?.copyWith(
                     fontWeight: FontWeight.w800,
-                    color: cs.onSurface.withOpacity(.65),
+                    color: cs.onSurfaceVariant.withOpacity(.85),
                   ),
                 ),
               ),
@@ -204,10 +189,10 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
                 decoration: BoxDecoration(
                   color: cs.surface,
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                  border: Border.all(color: _SvcColors.base.withOpacity(.12)),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(.06),
+                      color: cs.shadow.withOpacity(.10),
                       blurRadius: 12,
                       offset: const Offset(0, -2),
                     ),
@@ -222,7 +207,7 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
                         height: 4,
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: cs.outlineVariant.withOpacity(.6),
+                          color: cs.outlineVariant.withOpacity(.60),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -235,20 +220,20 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
                           width: 36,
                           height: 36,
                           decoration: BoxDecoration(
-                            color: _SvcColors.light.withOpacity(.20),
+                            color: cs.primaryContainer.withOpacity(.65),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: _SvcColors.light.withOpacity(.45)),
+                            border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
                           ),
-                          child: const Icon(Icons.payments_outlined, color: _SvcColors.dark),
+                          child: Icon(Icons.payments_outlined, color: cs.primary),
                         ),
                         const SizedBox(width: 10),
-                        const Expanded(
+                        Expanded(
                           child: Text(
                             '결제',
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w900,
-                              color: _SvcColors.dark,
+                              color: cs.onSurface,
                             ),
                           ),
                         ),
@@ -258,7 +243,7 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
                             final nav = Navigator.of(context, rootNavigator: true);
                             if (nav.canPop()) nav.pop();
                           },
-                          icon: const Icon(Icons.close, color: _SvcColors.dark),
+                          icon: Icon(Icons.close, color: cs.onSurfaceVariant),
                         ),
                       ],
                     ),

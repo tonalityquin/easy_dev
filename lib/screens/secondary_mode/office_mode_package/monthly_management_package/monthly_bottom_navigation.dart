@@ -1,9 +1,8 @@
-// lib/screens/secondary_package/office_mode_package/monthly_management_package/monthly_bottom_navigation.dart
 import 'package:flutter/material.dart';
 
 /// 하단 고정 네비: 액션 버튼 vs. 숫자/한글 키패드 토글 표시
 /// - ✅ 바텀시트 배경색과 다르게 노는 문제를 방지하기 위해
-///   기본 배경을 AppColors 같은 고정 흰색이 아니라 `Theme.colorScheme.surface`로 통일
+///   기본 배경을 고정 흰색이 아니라 `Theme.colorScheme.surface`로 통일
 /// - showKeypad일 때만 약간 톤 변화(원치 않으면 baseBg 그대로 사용하면 됨)
 /// - Offstage + AnimatedOpacity로 상태 유지 + 자연스러운 페이드
 class MonthlyBottomNavigation extends StatelessWidget {
@@ -32,11 +31,10 @@ class MonthlyBottomNavigation extends StatelessWidget {
     final Color baseBg = backgroundColor ?? cs.surface;
 
     // 키패드 표시 시에만 아주 약한 톤 구분
-    final Color effectiveBg =
-    showKeypad ? cs.surfaceVariant.withOpacity(.55) : baseBg;
+    final Color effectiveBg = showKeypad ? cs.surfaceVariant.withOpacity(.55) : baseBg;
 
     final Color borderTop =
-    showKeypad ? cs.primary.withOpacity(.18) : cs.outlineVariant.withOpacity(.5);
+    showKeypad ? cs.primary.withOpacity(.18) : cs.outlineVariant.withOpacity(.50);
 
     return GestureDetector(
       onTap: onTap ?? () {},
@@ -51,7 +49,8 @@ class MonthlyBottomNavigation extends StatelessWidget {
             border: Border(top: BorderSide(color: borderTop, width: 1)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(.06),
+                // ✅ 하드코딩 black 대신 테마 shadow/scrim 기반
+                color: cs.shadow.withOpacity(.08),
                 blurRadius: 12,
                 offset: const Offset(0, -2),
               ),

@@ -8,9 +8,24 @@ class BillErrorMessageTextSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (message == null) return const SizedBox.shrink();
-    return Text(
-      message!,
-      style: const TextStyle(color: Colors.red),
+
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: cs.errorContainer.withOpacity(.55),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: cs.error.withOpacity(.35)),
+      ),
+      child: Text(
+        message!,
+        style: TextStyle(
+          color: cs.onErrorContainer,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }

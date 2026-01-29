@@ -53,7 +53,6 @@ class _BottomArea extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           _HqModeSwitchButton(),
-          _BrandFooter(),
         ],
       );
     }
@@ -61,9 +60,8 @@ class _BottomArea extends StatelessWidget {
     return const Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _HqModeSwitchButton(),
         PageBottomNavigation(),
-        _BrandFooter(),
+        _HqModeSwitchButton(),
       ],
     );
   }
@@ -121,9 +119,12 @@ class _HqModeSwitchButton extends StatelessWidget {
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
+        final cs2 = Theme.of(dialogContext).colorScheme;
+
         return Dialog(
-          backgroundColor: cs.surface,
-          surfaceTintColor: Colors.transparent,
+          backgroundColor: cs2.surface,
+          // ColorScheme only: Colors.transparent 제거
+          surfaceTintColor: cs2.surface.withOpacity(0),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
@@ -145,7 +146,7 @@ class _HqModeSwitchButton extends StatelessWidget {
                     IconButton(
                       tooltip: '닫기',
                       onPressed: () => Navigator.of(dialogContext).pop(),
-                      icon: Icon(Icons.close, color: cs.onSurfaceVariant),
+                      icon: Icon(Icons.close, color: cs2.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -173,9 +174,8 @@ class _HqModeSwitchButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
       child: SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
@@ -235,7 +235,8 @@ class _ModeSwitchDialogOption extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     return Material(
-      color: Colors.transparent,
+      // ColorScheme only: Colors.transparent 제거
+      color: cs.surface.withOpacity(0),
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
@@ -264,25 +265,6 @@ class _ModeSwitchDialogOption extends StatelessWidget {
               Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BrandFooter extends StatelessWidget {
-  const _BrandFooter();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: SizedBox(
-        height: 48,
-        child: Semantics(
-          label: 'Pelican 브랜드 로고',
-          image: true,
-          child: Image.asset('assets/images/pelican.png'),
         ),
       ),
     );
@@ -366,12 +348,9 @@ class _RefreshableBodyState extends State<RefreshableBody> {
         builder: (context, state, child) {
           final pages = state.pages;
 
-          final safeIndex =
-          pages.isEmpty ? 0 : state.selectedIndex.clamp(0, pages.length - 1);
+          final safeIndex = pages.isEmpty ? 0 : state.selectedIndex.clamp(0, pages.length - 1);
 
-          final children = pages.isEmpty
-              ? const <Widget>[SizedBox.shrink()]
-              : pages.map((p) => p.page).toList();
+          final children = pages.isEmpty ? const <Widget>[SizedBox.shrink()] : pages.map((p) => p.page).toList();
 
           return Stack(
             children: [
@@ -454,9 +433,7 @@ ButtonStyle _switchBtnStyle(BuildContext context) {
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
   ).copyWith(
     overlayColor: MaterialStateProperty.resolveWith<Color?>(
-          (states) => states.contains(MaterialState.pressed)
-          ? cs.outlineVariant.withOpacity(0.12)
-          : null,
+          (states) => states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(0.12) : null,
     ),
   );
 }

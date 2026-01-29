@@ -5,10 +5,6 @@ import '../../../../../../models/capability.dart';
 import '../../../../../../states/area/area_state.dart';
 import 'user_role_type_section.dart'; // RoleType 정의
 
-// ✅ AppCardPalette 정의 파일을 프로젝트 경로에 맞게 import 하세요.
-// 예) import 'package:your_app/theme/app_card_palette.dart';
-import '../../../../../../theme.dart';
-
 class UserRoleDropdownSection extends StatelessWidget {
   /// 현재 선택된 역할(부모 상태)
   final RoleType selectedRole;
@@ -78,16 +74,10 @@ class UserRoleDropdownSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    final palette = AppCardPalette.of(context);
-    final base = palette.serviceBase;
-    final dark = palette.serviceDark;
-    final light = palette.serviceLight;
+    final cs = theme.colorScheme;
 
     // 현재 지역 capability 조회
-    final CapSet areaCaps =
-    context.select<AreaState, CapSet>((s) => s.capabilitiesOfCurrentArea);
+    final CapSet areaCaps = context.select<AreaState, CapSet>((s) => s.capabilitiesOfCurrentArea);
 
     // 1차: 외부 allowedRoles → 2차: 지역 capability로 필터링
     final List<RoleType> effectiveRoles = allowedRoles
@@ -95,9 +85,8 @@ class UserRoleDropdownSection extends StatelessWidget {
         .toList(growable: false);
 
     // 드롭다운 value는 items에 반드시 포함되어야 함
-    final RoleType safeValue = effectiveRoles.contains(selectedRole)
-        ? selectedRole
-        : (effectiveRoles.isNotEmpty ? effectiveRoles.first : selectedRole);
+    final RoleType safeValue =
+    effectiveRoles.contains(selectedRole) ? selectedRole : (effectiveRoles.isNotEmpty ? effectiveRoles.first : selectedRole);
 
     // 부모 상태와 불일치 시 프레임 종료 후 동기화
     if (safeValue != selectedRole && effectiveRoles.isNotEmpty) {
@@ -107,44 +96,44 @@ class UserRoleDropdownSection extends StatelessWidget {
     }
 
     // Dropdown 팝업 배경색
-    final Color dropdownBgColor = colorScheme.surface;
+    final Color dropdownBgColor = cs.surface;
 
     final String capsHuman = showAreaCapabilityHint ? Cap.human(areaCaps) : '';
-    final String helper = showAreaCapabilityHint
-        ? '현재 지역 기능: $capsHuman (해당 기능에 맞는 권한만 표시됩니다)'
-        : '';
+    final String helper =
+    showAreaCapabilityHint ? '현재 지역 기능: $capsHuman (해당 기능에 맞는 권한만 표시됩니다)' : '';
+
+    final decoration = InputDecoration(
+      labelText: label,
+      floatingLabelStyle: TextStyle(
+        color: cs.primary,
+        fontWeight: FontWeight.w700,
+      ),
+      helperText: showAreaCapabilityHint ? helper : null,
+      helperMaxLines: 2,
+      filled: true,
+      fillColor: cs.surfaceVariant.withOpacity(.45),
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: cs.outlineVariant.withOpacity(.75)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: cs.primary, width: 1.3),
+      ),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
+    );
 
     // 선택 가능한 역할이 없다면 안내만 출력
     if (effectiveRoles.isEmpty) {
       return InputDecorator(
-        decoration: InputDecoration(
-          labelText: label,
-          floatingLabelStyle: TextStyle(
-            color: dark,
-            fontWeight: FontWeight.w700,
-          ),
-          helperText: showAreaCapabilityHint ? helper : null,
-          helperMaxLines: 2,
-          isDense: true,
-          contentPadding:
-          const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-          filled: true,
-          fillColor: light.withOpacity(.06),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: light.withOpacity(.45)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: base, width: 1.2),
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
+        decoration: decoration,
         child: Text(
           '현재 지역 기능으로 선택 가능한 권한이 없습니다.',
-          style: theme.textTheme.bodyMedium?.copyWith(color: theme.hintColor),
+          style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant.withOpacity(.75)),
         ),
       );
     }
@@ -154,34 +143,10 @@ class UserRoleDropdownSection extends StatelessWidget {
       isExpanded: true,
       autovalidateMode: autovalidateMode,
       validator: validator,
-      iconEnabledColor: base,
+      iconEnabledColor: cs.primary,
       dropdownColor: dropdownBgColor,
       menuMaxHeight: 360,
-      decoration: InputDecoration(
-        labelText: label,
-        floatingLabelStyle: TextStyle(
-          color: dark,
-          fontWeight: FontWeight.w700,
-        ),
-        helperText: showAreaCapabilityHint ? helper : null,
-        helperMaxLines: 2,
-        filled: true,
-        fillColor: light.withOpacity(.06),
-        isDense: true,
-        contentPadding:
-        const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: light.withOpacity(.45)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: base, width: 1.2),
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-      ),
+      decoration: decoration,
       items: effectiveRoles
           .map(
             (role) => DropdownMenuItem<RoleType>(
@@ -189,7 +154,7 @@ class UserRoleDropdownSection extends StatelessWidget {
           child: Text(
             role.label,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: dark),
+            style: TextStyle(color: cs.onSurface),
           ),
         ),
       )

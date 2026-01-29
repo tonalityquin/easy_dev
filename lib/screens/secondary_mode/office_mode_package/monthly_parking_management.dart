@@ -1,4 +1,3 @@
-// lib/screens/secondary_package/office_mode_package/monthly_parking_management.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -7,9 +6,6 @@ import 'package:provider/provider.dart';
 import '../../../../states/user/user_state.dart';
 import 'monthly_management_package/monthly_plate_bottom_sheet.dart';
 import '../../../../utils/snackbar_helper.dart';
-
-// ✅ AppCardPalette 사용 (프로젝트 경로에 맞게 수정)
-import '../../../../../theme.dart';
 
 enum _ListFilter { all, expiringSoon, expired, hasMemo }
 enum _SortMode { updatedDesc, endDateAsc, plateAsc }
@@ -194,15 +190,16 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
   // ─────────────────────────────────────────────────────────────────────────────
 
   Widget _buildScreenTag(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final base = Theme.of(context).textTheme.labelSmall;
+
     final style = (base ??
         const TextStyle(
           fontSize: 11,
-          color: Colors.black54,
           fontWeight: FontWeight.w600,
         ))
         .copyWith(
-      color: Colors.black54,
+      color: cs.onSurfaceVariant.withOpacity(.72),
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
     );
@@ -224,9 +221,6 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
   }
 
   PreferredSizeWidget _buildSearchBar(ColorScheme cs) {
-    final palette = AppCardPalette.of(context);
-    final serviceBase = palette.serviceBase;
-
     return PreferredSize(
       preferredSize: const Size.fromHeight(64),
       child: AnimatedContainer(
@@ -267,7 +261,7 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: serviceBase, width: 1.6),
+                    borderSide: BorderSide(color: cs.primary, width: 1.6),
                   ),
                 ),
               ),
@@ -292,9 +286,6 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
   }
 
   Widget _buildToolbar(ColorScheme cs, int totalCount, int filteredCount) {
-    final palette = AppCardPalette.of(context);
-    final serviceBase = palette.serviceBase;
-
     Widget chip({
       required String label,
       required _ListFilter value,
@@ -307,20 +298,20 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
         label: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: active ? Colors.white : serviceBase),
+            Icon(icon, size: 16, color: active ? cs.onPrimary : cs.primary),
             const SizedBox(width: 6),
             Text(label),
           ],
         ),
         labelStyle: TextStyle(
           fontWeight: FontWeight.w900,
-          color: active ? Colors.white : serviceBase,
+          color: active ? cs.onPrimary : cs.primary,
           letterSpacing: .2,
         ),
-        selectedColor: serviceBase,
+        selectedColor: cs.primary,
         backgroundColor: cs.surface,
         side: BorderSide(
-          color: active ? serviceBase : serviceBase.withOpacity(.28),
+          color: active ? cs.primary : cs.primary.withOpacity(.28),
           width: 1.2,
         ),
         shape: const StadiumBorder(),
@@ -491,18 +482,17 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
-    final serviceBase = palette.serviceBase;
-
     final currentArea = context.read<UserState>().currentArea.trim();
     final won = NumberFormat.decimalPattern('ko_KR');
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
+      backgroundColor: cs.surface,
       appBar: AppBar(
         backgroundColor: cs.surface,
         elevation: 0,
         foregroundColor: cs.onSurface,
+        surfaceTintColor: Colors.transparent,
         flexibleSpace: _buildScreenTag(context),
         title: const Text(
           '정기 주차 관리',
@@ -537,7 +527,11 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return Center(
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+              ),
+            );
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -593,8 +587,8 @@ class _MonthlyParkingManagementState extends State<MonthlyParkingManagement> {
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _openAddSheet,
-        backgroundColor: serviceBase,
-        foregroundColor: Colors.white,
+        backgroundColor: cs.primary,
+        foregroundColor: cs.onPrimary,
         icon: const Icon(Icons.add),
         label: const Text('추가', style: TextStyle(fontWeight: FontWeight.w900)),
       ),
@@ -653,22 +647,17 @@ class _MonthlyPlateCompactCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
-    final serviceBase = palette.serviceBase;
-    final serviceDark = palette.serviceDark;
-    final serviceLight = palette.serviceLight;
-
     final cs = Theme.of(context).colorScheme;
     final won = NumberFormat.decimalPattern('ko_KR');
 
-    final Color border = selected ? serviceBase : cs.outlineVariant.withOpacity(.45);
+    final Color border = selected ? cs.primary : cs.outlineVariant.withOpacity(.45);
     final Color bg = cs.surface;
     final Color title = cs.onSurface;
 
     return Material(
       color: bg,
       elevation: selected ? 3 : 0,
-      shadowColor: Colors.black.withOpacity(.08),
+      shadowColor: cs.shadow.withOpacity(.10),
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -686,13 +675,13 @@ class _MonthlyPlateCompactCard extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: serviceLight.withOpacity(.14),
+                  color: cs.primaryContainer.withOpacity(.55),
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: serviceLight.withOpacity(.28)),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
                 ),
                 child: Icon(
                   Icons.directions_car_outlined,
-                  color: serviceDark,
+                  color: cs.primary,
                   size: 20,
                 ),
               ),
@@ -725,7 +714,7 @@ class _MonthlyPlateCompactCard extends StatelessWidget {
                             width: 8,
                             height: 8,
                             decoration: BoxDecoration(
-                              color: serviceBase,
+                              color: cs.primary,
                               borderRadius: BorderRadius.circular(99),
                             ),
                           ),
@@ -768,10 +757,6 @@ class _DdayChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
-    final serviceDark = palette.serviceDark;
-    final serviceLight = palette.serviceLight;
-
     final cs = Theme.of(context).colorScheme;
 
     String text;
@@ -791,9 +776,9 @@ class _DdayChip extends StatelessWidget {
       br = cs.error.withOpacity(.45);
     } else if (daysLeft! <= 7) {
       text = 'D-$daysLeft';
-      bg = serviceLight.withOpacity(.18);
-      fg = serviceDark;
-      br = serviceLight.withOpacity(.45);
+      bg = cs.primaryContainer.withOpacity(.70);
+      fg = cs.onPrimaryContainer;
+      br = cs.primary.withOpacity(.35);
     } else {
       text = 'D-$daysLeft';
       bg = cs.surfaceVariant.withOpacity(.55);
@@ -842,16 +827,16 @@ class _MonthlyPlateDetailSheet extends StatelessWidget {
   final VoidCallback onPay;
   final VoidCallback onDelete;
 
-  ButtonStyle _pillOutlineStyle(ColorScheme cs, Color serviceBase) {
+  ButtonStyle _pillOutlineStyle(ColorScheme cs) {
     return OutlinedButton.styleFrom(
       minimumSize: const Size.fromHeight(52),
       shape: const StadiumBorder(),
-      foregroundColor: serviceBase,
-      side: BorderSide(color: serviceBase.withOpacity(.45), width: 1.4),
+      foregroundColor: cs.primary,
+      side: BorderSide(color: cs.primary.withOpacity(.45), width: 1.4),
       backgroundColor: cs.surface,
       textStyle: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: .2),
     ).copyWith(
-      overlayColor: MaterialStatePropertyAll(serviceBase.withOpacity(.06)),
+      overlayColor: MaterialStatePropertyAll(cs.primary.withOpacity(.06)),
     );
   }
 
@@ -867,11 +852,6 @@ class _MonthlyPlateDetailSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = AppCardPalette.of(context);
-    final serviceBase = palette.serviceBase;
-    final serviceDark = palette.serviceDark;
-    final serviceLight = palette.serviceLight;
-
     final cs = Theme.of(context).colorScheme;
 
     final plateNumber = docId.split('_').first;
@@ -905,7 +885,7 @@ class _MonthlyPlateDetailSheet extends StatelessWidget {
               border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(.10),
+                  color: cs.shadow.withOpacity(.14),
                   blurRadius: 16,
                   offset: const Offset(0, -3),
                 ),
@@ -933,11 +913,11 @@ class _MonthlyPlateDetailSheet extends StatelessWidget {
                         width: 40,
                         height: 40,
                         decoration: BoxDecoration(
-                          color: serviceLight.withOpacity(.14),
+                          color: cs.primaryContainer.withOpacity(.55),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: serviceLight.withOpacity(.28)),
+                          border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
                         ),
-                        child: Icon(Icons.assignment_outlined, color: serviceDark),
+                        child: Icon(Icons.assignment_outlined, color: cs.primary),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -985,14 +965,12 @@ class _MonthlyPlateDetailSheet extends StatelessWidget {
                         context,
                         title: '기본 정보',
                         icon: Icons.info_outline,
-                        serviceDark: serviceDark,
-                        serviceLight: serviceLight,
                         children: [
-                          _kv(context, '주차 타입', regularType.isEmpty ? '-' : regularType, serviceDark),
-                          _kv(context, '요금', '₩${won.format(amount)}', serviceDark),
-                          _kv(context, '주차 시간', '$duration$periodUnit', serviceDark),
-                          _kv(context, '기간', '$startDate ~ $endDate', serviceDark),
-                          _kv(context, '상태 메시지', customStatus, serviceDark),
+                          _kv(context, '주차 타입', regularType.isEmpty ? '-' : regularType),
+                          _kv(context, '요금', '₩${won.format(amount)}'),
+                          _kv(context, '주차 시간', '$duration$periodUnit'),
+                          _kv(context, '기간', '$startDate ~ $endDate'),
+                          _kv(context, '상태 메시지', customStatus),
                         ],
                       ),
                       const SizedBox(height: 12),
@@ -1001,8 +979,6 @@ class _MonthlyPlateDetailSheet extends StatelessWidget {
                         context,
                         title: '결제 내역',
                         icon: Icons.payments_outlined,
-                        serviceDark: serviceDark,
-                        serviceLight: serviceLight,
                         children: [
                           if (reversed.isEmpty)
                             Text(
@@ -1034,9 +1010,6 @@ class _MonthlyPlateDetailSheet extends StatelessWidget {
                                 paidBy: paidBy,
                                 note: note,
                                 extended: extended,
-                                serviceBase: serviceBase,
-                                serviceDark: serviceDark,
-                                serviceLight: serviceLight,
                               );
                             }),
                         ],
@@ -1056,7 +1029,7 @@ class _MonthlyPlateDetailSheet extends StatelessWidget {
                           onPressed: onEdit,
                           icon: const Icon(Icons.edit_outlined),
                           label: const Text('수정'),
-                          style: _pillOutlineStyle(cs, serviceBase),
+                          style: _pillOutlineStyle(cs),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -1065,7 +1038,7 @@ class _MonthlyPlateDetailSheet extends StatelessWidget {
                           onPressed: onPay,
                           icon: const Icon(Icons.payments_outlined),
                           label: const Text('결제'),
-                          style: _pillOutlineStyle(cs, serviceBase),
+                          style: _pillOutlineStyle(cs),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -1092,8 +1065,6 @@ class _MonthlyPlateDetailSheet extends StatelessWidget {
       BuildContext context, {
         required String title,
         required IconData icon,
-        required Color serviceDark,
-        required Color serviceLight,
         required List<Widget> children,
       }) {
     final cs = Theme.of(context).colorScheme;
@@ -1106,7 +1077,7 @@ class _MonthlyPlateDetailSheet extends StatelessWidget {
         border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.04),
+            color: cs.shadow.withOpacity(.06),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -1122,11 +1093,11 @@ class _MonthlyPlateDetailSheet extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: serviceLight.withOpacity(.14),
+                  color: cs.primaryContainer.withOpacity(.55),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: serviceLight.withOpacity(.28)),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
                 ),
-                child: Icon(icon, color: serviceDark, size: 18),
+                child: Icon(icon, color: cs.primary, size: 18),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -1134,7 +1105,7 @@ class _MonthlyPlateDetailSheet extends StatelessWidget {
                   title,
                   style: text.titleMedium?.copyWith(
                     fontWeight: FontWeight.w900,
-                    color: serviceDark,
+                    color: cs.onSurface,
                   ),
                 ),
               ),
@@ -1147,8 +1118,10 @@ class _MonthlyPlateDetailSheet extends StatelessWidget {
     );
   }
 
-  Widget _kv(BuildContext context, String k, String v, Color serviceDark) {
+  Widget _kv(BuildContext context, String k, String v) {
+    final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
@@ -1158,7 +1131,7 @@ class _MonthlyPlateDetailSheet extends StatelessWidget {
             child: Text(
               k,
               style: text.bodySmall?.copyWith(
-                color: Colors.black.withOpacity(.55),
+                color: cs.onSurfaceVariant.withOpacity(.75),
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -1168,7 +1141,7 @@ class _MonthlyPlateDetailSheet extends StatelessWidget {
               v,
               style: text.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w900,
-                color: serviceDark,
+                color: cs.onSurface,
               ),
             ),
           ),
@@ -1184,9 +1157,6 @@ class _MonthlyPlateDetailSheet extends StatelessWidget {
         required String paidBy,
         required String note,
         required bool extended,
-        required Color serviceBase,
-        required Color serviceDark,
-        required Color serviceLight,
       }) {
     final cs = Theme.of(context).colorScheme;
 
@@ -1219,15 +1189,15 @@ class _MonthlyPlateDetailSheet extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
-                    color: serviceLight.withOpacity(.16),
+                    color: cs.primaryContainer.withOpacity(.65),
                     borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: serviceLight.withOpacity(.35)),
+                    border: Border.all(color: cs.primary.withOpacity(.25)),
                   ),
                   child: Text(
                     '연장',
                     style: TextStyle(
                       fontSize: 12,
-                      color: serviceDark,
+                      color: cs.onPrimaryContainer,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
@@ -1237,7 +1207,7 @@ class _MonthlyPlateDetailSheet extends StatelessWidget {
           const SizedBox(height: 6),
           Row(
             children: [
-              Icon(Icons.person, size: 16, color: serviceBase),
+              Icon(Icons.person, size: 16, color: cs.primary),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -1253,11 +1223,14 @@ class _MonthlyPlateDetailSheet extends StatelessWidget {
           const SizedBox(height: 6),
           Row(
             children: [
-              Icon(Icons.attach_money, size: 16, color: serviceBase),
+              Icon(Icons.attach_money, size: 16, color: cs.primary),
               const SizedBox(width: 6),
               Text(
                 amountText,
-                style: const TextStyle(fontWeight: FontWeight.w900),
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  color: cs.onSurface,
+                ),
               ),
             ],
           ),

@@ -1,11 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-// ✅ AppCardPalette 정의가 있는 파일을 프로젝트 경로에 맞게 import 하세요.
-// 예) import 'package:your_app/theme/app_card_palette.dart';
-// 예) import 'package:your_app/theme/app_theme.dart';
-import '../../../../../../theme.dart';
-
 /// 대문자 입력 시 자동으로 소문자로 변환
 class LowercaseTextFormatter extends TextInputFormatter {
   const LowercaseTextFormatter();
@@ -68,6 +63,7 @@ class TabletInputSection extends StatelessWidget {
 
   InputDecoration _decoration(
       BuildContext context, {
+        required ColorScheme cs,
         required String label,
         required String helperText,
         String? errorText,
@@ -76,52 +72,45 @@ class TabletInputSection extends StatelessWidget {
         bool showDoneIcon = false,
         bool done = false,
       }) {
-    final cs = Theme.of(context).colorScheme;
-    final palette = AppCardPalette.of(context);
-
-    final base = palette.serviceBase;
-    final dark = palette.serviceDark;
-    final light = palette.serviceLight;
-
     return InputDecoration(
       labelText: label,
       helperText: helperText,
       floatingLabelStyle: TextStyle(
-        color: dark,
+        color: cs.primary,
         fontWeight: FontWeight.w700,
       ),
       prefixIcon: prefixIcon == null ? null : Icon(prefixIcon),
-      prefixIconColor: dark,
+      prefixIconColor: cs.onSurfaceVariant,
       suffixText: suffixText,
       suffixStyle: TextStyle(
-        color: dark,
+        color: cs.onSurfaceVariant.withOpacity(.85),
         fontWeight: FontWeight.w600,
       ),
       suffixIcon: showDoneIcon
           ? Icon(
         done ? Icons.check_circle : Icons.radio_button_unchecked,
-        color: done ? dark : light.withOpacity(.70),
+        color: done ? cs.primary : cs.onSurfaceVariant.withOpacity(.55),
       )
           : null,
       filled: true,
-      fillColor: light.withOpacity(.06),
+      fillColor: cs.surfaceVariant.withOpacity(.45),
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: light.withOpacity(.45)),
+        borderSide: BorderSide(color: cs.outlineVariant.withOpacity(.75)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: base, width: 1.2),
+        borderSide: BorderSide(color: cs.primary, width: 1.3),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: cs.error.withOpacity(.85)),
+        borderSide: BorderSide(color: cs.error.withOpacity(.60)),
       ),
       focusedErrorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
-        borderSide: BorderSide(color: cs.error, width: 1.2),
+        borderSide: BorderSide(color: cs.error, width: 1.3),
       ),
       errorText: errorText,
     );
@@ -129,9 +118,10 @@ class TabletInputSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     // 문자열 비교는 유지(호환). 추후 필드별 에러로 교체 권장.
-    final nameError =
-    errorMessage == '이름을 다시 입력하세요' ? errorMessage : null;
+    final nameError = errorMessage == '이름을 다시 입력하세요' ? errorMessage : null;
 
     final handleError = (errorMessage == '아이디는 소문자 영어 3~20자로 입력하세요' ||
         errorMessage == '아이디를 다시 입력하세요' ||
@@ -155,8 +145,10 @@ class TabletInputSection extends StatelessWidget {
           onSubmitted: (_) => FocusScope.of(context).nextFocus(),
           textCapitalization: TextCapitalization.words,
           autofillHints: const [AutofillHints.name],
+          style: TextStyle(color: cs.onSurface),
           decoration: _decoration(
             context,
+            cs: cs,
             label: '이름',
             helperText: '예: 태블릿A, 로비태블릿 등',
             errorText: nameError,
@@ -181,8 +173,10 @@ class TabletInputSection extends StatelessWidget {
             FilteringTextInputFormatter.allow(RegExp(r'[a-z]')),
             LengthLimitingTextInputFormatter(20),
           ],
+          style: TextStyle(color: cs.onSurface),
           decoration: _decoration(
             context,
+            cs: cs,
             label: '아이디(소문자 영문)',
             helperText: '소문자 a~z, 3~20자',
             errorText: handleError,
@@ -201,8 +195,10 @@ class TabletInputSection extends StatelessWidget {
           textInputAction: TextInputAction.done,
           keyboardType: TextInputType.emailAddress,
           autofillHints: const [AutofillHints.username],
+          style: TextStyle(color: cs.onSurface),
           decoration: _decoration(
             context,
+            cs: cs,
             label: '이메일(구글)',
             helperText: '영문/숫자/._- 만 입력 가능',
             suffixText: '@gmail.com',

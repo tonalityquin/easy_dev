@@ -11,8 +11,6 @@ import 'sections/user_validation_helpers_section.dart';
 // ✅ endTime 리마인더 서비스 (프로젝트에서 실제 사용 중인 경로로 통일 권장)
 import 'package:easydev/services/endtime_reminder_service.dart';
 
-import '../../../../../theme.dart';
-
 class UserSettingBottomSheet extends StatefulWidget {
   final Function(
       String name,
@@ -169,15 +167,16 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
 
   // 11시 라벨(상단 좌측 고정)
   Widget _buildScreenTag(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final base = Theme.of(context).textTheme.labelSmall;
+
     final style = (base ??
         const TextStyle(
           fontSize: 11,
-          color: Colors.black54,
           fontWeight: FontWeight.w600,
         ))
         .copyWith(
-      color: Colors.black54,
+      color: cs.onSurfaceVariant.withOpacity(.72),
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
     );
@@ -242,9 +241,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
 
   Future<void> _selectTime({required bool isStartTime}) async {
     final theme = Theme.of(context);
-    final palette = AppCardPalette.of(context);
-    final base = palette.serviceBase;
-    final light = palette.serviceLight;
+    final cs = theme.colorScheme;
 
     final initial = isStartTime
         ? (_startTime ?? const TimeOfDay(hour: 9, minute: 0))
@@ -255,12 +252,17 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
       initialTime: initial,
       builder: (ctx, child) {
         final mq = MediaQuery.of(ctx);
+
+        // ✅ 브랜드 테마 반영: 전역 ColorScheme(primary)를 그대로 사용
         final branded = theme.copyWith(
           colorScheme: theme.colorScheme.copyWith(
-            primary: base,
-            secondary: light,
+            primary: cs.primary,
+            secondary: cs.primaryContainer,
+            surface: cs.surface,
+            onSurface: cs.onSurface,
           ),
         );
+
         return MediaQuery(
           data: mq.copyWith(alwaysUse24HourFormat: true),
           child: Theme(data: branded, child: child!),
@@ -373,25 +375,27 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
   }
 
   Widget _buildPanelHeader({
-    required Color base,
-    required Color dark,
-    required Color light,
+    required ColorScheme cs,
     required int step,
     required String title,
     required String summary,
     required bool isDone,
     required bool isExpanded,
   }) {
+    final base = cs.primary;
+    final dark = cs.onSurface;
+    final container = cs.primaryContainer;
+
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       leading: Container(
         width: 34,
         height: 34,
         decoration: BoxDecoration(
-          color: isExpanded ? base.withOpacity(.12) : light.withOpacity(.10),
+          color: isExpanded ? base.withOpacity(.12) : container.withOpacity(.30),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: isExpanded ? base.withOpacity(.35) : light.withOpacity(.35),
+            color: isExpanded ? base.withOpacity(.35) : cs.outlineVariant.withOpacity(.65),
           ),
         ),
         child: Center(
@@ -416,7 +420,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
       subtitle: Text(
         summary,
         style: TextStyle(
-          color: Colors.black.withOpacity(.60),
+          color: cs.onSurfaceVariant.withOpacity(.78),
           fontWeight: FontWeight.w600,
         ),
       ),
@@ -428,8 +432,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
   }
 
   Widget _buildPanelBody({
-    required Color dark,
-    required Color light,
+    required ColorScheme cs,
     required Widget child,
     int? nextPanel,
   }) {
@@ -446,13 +449,12 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
               icon: const Icon(Icons.arrow_forward),
               label: const Text('다음 단계로 이동'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: dark,
-                side: BorderSide(color: light.withOpacity(.75)),
+                foregroundColor: cs.onSurface,
+                side: BorderSide(color: cs.outlineVariant.withOpacity(.75)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
-                padding:
-                const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
               ),
             ),
           ],
@@ -461,16 +463,13 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
     );
   }
 
-  Widget _buildModesSelector({
-    required Color dark,
-    required Color light,
-  }) {
+  Widget _buildModesSelector({required ColorScheme cs}) {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: light.withOpacity(.06),
+        color: cs.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: light.withOpacity(.35)),
+        border: Border.all(color: cs.outlineVariant.withOpacity(.75)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -478,7 +477,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
           Text(
             '허용 모드(필수)',
             style: TextStyle(
-              color: dark,
+              color: cs.onSurface,
               fontWeight: FontWeight.w900,
             ),
           ),
@@ -486,7 +485,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
           Text(
             '선택된 모드에 포함된 로그인 화면에서만 로그인할 수 있습니다.',
             style: TextStyle(
-              color: Colors.black.withOpacity(.60),
+              color: cs.onSurfaceVariant.withOpacity(.78),
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -499,8 +498,11 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
               return FilterChip(
                 label: Text(m),
                 selected: selected,
-                selectedColor: light.withOpacity(.25),
-                checkmarkColor: dark,
+                selectedColor: cs.primaryContainer.withOpacity(.65),
+                checkmarkColor: cs.onPrimaryContainer,
+                side: BorderSide(
+                  color: selected ? cs.primary.withOpacity(.35) : cs.outlineVariant.withOpacity(.65),
+                ),
                 onSelected: (v) {
                   _clearErrorIfAny();
                   setState(() {
@@ -516,11 +518,9 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
           ),
           const SizedBox(height: 6),
           Text(
-            _selectedModes.isEmpty
-                ? '모드를 1개 이상 선택하세요.'
-                : '선택: ${_selectedModes.join(', ')}',
+            _selectedModes.isEmpty ? '모드를 1개 이상 선택하세요.' : '선택: ${_selectedModes.join(', ')}',
             style: TextStyle(
-              color: _selectedModes.isEmpty ? Colors.redAccent : dark,
+              color: _selectedModes.isEmpty ? cs.error : cs.onSurface,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -535,12 +535,6 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
-
-    final palette = AppCardPalette.of(context);
-    final base = palette.serviceBase;
-    final dark = palette.serviceDark;
-    final light = palette.serviceLight;
-    final fg = cs.onPrimary;
 
     final isEditMode = widget.isEditMode || (widget.initialUser != null);
 
@@ -557,10 +551,10 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
               height: effectiveHeight,
               child: Container(
                 padding: const EdgeInsets.all(16),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius:
-                  BorderRadius.vertical(top: Radius.circular(24)),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
                 ),
                 child: Column(
                   children: [
@@ -570,7 +564,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                         height: 4,
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: theme.dividerColor,
+                          color: cs.outlineVariant.withOpacity(.65),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
@@ -583,12 +577,11 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                           width: 36,
                           height: 36,
                           decoration: BoxDecoration(
-                            color: light.withOpacity(.20),
+                            color: cs.primaryContainer.withOpacity(.65),
                             borderRadius: BorderRadius.circular(10),
-                            border:
-                            Border.all(color: light.withOpacity(.45)),
+                            border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
                           ),
-                          child: Icon(Icons.person_outline, color: dark),
+                          child: Icon(Icons.person_outline, color: cs.primary),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -597,23 +590,21 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w900,
-                              color: dark,
+                              color: cs.onSurface,
                             ),
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                           decoration: BoxDecoration(
-                            color: light.withOpacity(.18),
+                            color: cs.surfaceVariant.withOpacity(.55),
                             borderRadius: BorderRadius.circular(999),
-                            border:
-                            Border.all(color: light.withOpacity(.35)),
+                            border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
                           ),
                           child: Text(
                             widget.areaValue,
                             style: TextStyle(
-                              color: dark,
+                              color: cs.onSurface,
                               fontWeight: FontWeight.w800,
                               fontSize: 12,
                             ),
@@ -628,16 +619,16 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: light.withOpacity(.08),
+                        color: cs.surfaceContainerLow,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: light.withOpacity(.25)),
+                        border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
                       ),
                       child: Text(
                         isEditMode
                             ? '수정 모드에서는 이름/전화번호는 변경할 수 없습니다. 다른 항목만 수정하세요.'
                             : '아래 단계별로 하나씩 입력하면 됩니다. 각 단계를 열어 입력하고, 완료되면 체크 표시로 바뀝니다.',
                         style: TextStyle(
-                          color: dark,
+                          color: cs.onSurface,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -651,7 +642,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                           expansionCallback: (index, isExpanded) {
                             _clearErrorIfAny();
                             FocusScope.of(context).unfocus(); // 키보드/포커스 정리(선택이지만 추천)
-                            _openPanelAndScroll(index);       // ✅ 항상 누른 패널은 열림(토글로 닫지 않음)
+                            _openPanelAndScroll(index); // ✅ 항상 누른 패널은 열림(토글로 닫지 않음)
                           },
                           children: [
                             // 1) 기본 정보
@@ -661,20 +652,16 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                               headerBuilder: (ctx, _) => KeyedSubtree(
                                 key: _keyBasic,
                                 child: _buildPanelHeader(
-                                  base: base,
-                                  dark: dark,
-                                  light: light,
+                                  cs: cs,
                                   step: 1,
                                   title: '기본 정보',
                                   summary: _basicSummary,
-                                  isDone: _isBasicInfoComplete &&
-                                      _isEmailLocalPartValid,
+                                  isDone: _isBasicInfoComplete && _isEmailLocalPartValid,
                                   isExpanded: _expanded[_panelBasic],
                                 ),
                               ),
                               body: _buildPanelBody(
-                                dark: dark,
-                                light: light,
+                                cs: cs,
                                 nextPanel: _panelRole,
                                 child: UserInputSection(
                                   nameController: _nameController,
@@ -685,8 +672,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                                   emailFocus: _emailFocus,
                                   errorMessage: _errorMessage,
                                   onEdited: _clearErrorIfAny,
-                                  emailLocalPartValidator:
-                                  _isValidEmailLocalPart,
+                                  emailLocalPartValidator: _isValidEmailLocalPart,
                                   lockNameAndPhone: isEditMode, // ✅ 수정 모드 잠금
                                 ),
                               ),
@@ -699,9 +685,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                               headerBuilder: (ctx, _) => KeyedSubtree(
                                 key: _keyRole,
                                 child: _buildPanelHeader(
-                                  base: base,
-                                  dark: dark,
-                                  light: light,
+                                  cs: cs,
                                   step: 2,
                                   title: '권한',
                                   summary: _roleSummary,
@@ -710,34 +694,28 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                                 ),
                               ),
                               body: _buildPanelBody(
-                                dark: dark,
-                                light: light,
+                                cs: cs,
                                 nextPanel: _panelPosition,
                                 child: Column(
-                                  crossAxisAlignment:
-                                  CrossAxisAlignment.stretch,
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
                                     Container(
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
-                                        color: light.withOpacity(.06),
-                                        borderRadius:
-                                        BorderRadius.circular(12),
-                                        border: Border.all(
-                                            color: light.withOpacity(.35)),
+                                        color: cs.surfaceContainerLow,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
                                       ),
                                       child: UserRoleDropdownSection(
                                         selectedRole: _selectedRole,
                                         onChanged: (value) {
                                           _clearErrorIfAny();
-                                          setState(
-                                                  () => _selectedRole = value);
+                                          setState(() => _selectedRole = value);
                                         },
                                       ),
                                     ),
                                     const SizedBox(height: 12),
-                                    _buildModesSelector(
-                                        dark: dark, light: light), // ✅ tablet 제외된 선택지
+                                    _buildModesSelector(cs: cs), // ✅ tablet 제외된 선택지
                                   ],
                                 ),
                               ),
@@ -750,48 +728,38 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                               headerBuilder: (ctx, _) => KeyedSubtree(
                                 key: _keyPosition,
                                 child: _buildPanelHeader(
-                                  base: base,
-                                  dark: dark,
-                                  light: light,
+                                  cs: cs,
                                   step: 3,
                                   title: '직책(선택)',
                                   summary: _positionSummary,
-                                  isDone: _positionController.text
-                                      .trim()
-                                      .isNotEmpty,
+                                  isDone: _positionController.text.trim().isNotEmpty,
                                   isExpanded: _expanded[_panelPosition],
                                 ),
                               ),
                               body: _buildPanelBody(
-                                dark: dark,
-                                light: light,
+                                cs: cs,
                                 nextPanel: _panelPassword,
                                 child: TextField(
                                   controller: _positionController,
                                   focusNode: _positionFocus,
                                   onChanged: (_) => _clearErrorIfAny(),
-                                  onTapOutside: (_) =>
-                                      FocusScope.of(context).unfocus(),
+                                  onTapOutside: (_) => FocusScope.of(context).unfocus(),
                                   decoration: InputDecoration(
                                     labelText: '직책',
-                                    helperText:
-                                    '예: 과장, 매니저, 기사 등 (미입력 가능)',
+                                    helperText: '예: 과장, 매니저, 기사 등 (미입력 가능)',
                                     focusedBorder: OutlineInputBorder(
-                                      borderSide:
-                                      BorderSide(color: base, width: 1.2),
+                                      borderSide: BorderSide(color: cs.primary, width: 1.2),
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     enabledBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(10),
-                                      borderSide: BorderSide(
-                                          color: light.withOpacity(.45)),
+                                      borderSide: BorderSide(color: cs.outlineVariant.withOpacity(.65)),
                                     ),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     isDense: true,
-                                    contentPadding:
-                                    const EdgeInsets.symmetric(
+                                    contentPadding: const EdgeInsets.symmetric(
                                       vertical: 12,
                                       horizontal: 12,
                                     ),
@@ -807,25 +775,19 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                               headerBuilder: (ctx, _) => KeyedSubtree(
                                 key: _keyPassword,
                                 child: _buildPanelHeader(
-                                  base: base,
-                                  dark: dark,
-                                  light: light,
+                                  cs: cs,
                                   step: 4,
                                   title: '비밀번호',
                                   summary: '자동 생성/복사 가능',
-                                  isDone: _passwordController.text
-                                      .trim()
-                                      .isNotEmpty,
+                                  isDone: _passwordController.text.trim().isNotEmpty,
                                   isExpanded: _expanded[_panelPassword],
                                 ),
                               ),
                               body: _buildPanelBody(
-                                dark: dark,
-                                light: light,
+                                cs: cs,
                                 nextPanel: _panelTime,
                                 child: Column(
-                                  crossAxisAlignment:
-                                  CrossAxisAlignment.stretch,
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
                                     UserPasswordDisplaySection(
                                       controller: _passwordController,
@@ -835,16 +797,14 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                                     Container(
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
-                                        color: light.withOpacity(.06),
-                                        borderRadius:
-                                        BorderRadius.circular(12),
-                                        border: Border.all(
-                                            color: light.withOpacity(.25)),
+                                        color: cs.surfaceContainerLow,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
                                       ),
                                       child: Text(
                                         '비밀번호는 읽기 전용입니다. 우측 복사 버튼으로 전달하세요.',
                                         style: TextStyle(
-                                          color: dark,
+                                          color: cs.onSurface,
                                           fontWeight: FontWeight.w700,
                                         ),
                                       ),
@@ -861,38 +821,31 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                               headerBuilder: (ctx, _) => KeyedSubtree(
                                 key: _keyTime,
                                 child: _buildPanelHeader(
-                                  base: base,
-                                  dark: dark,
-                                  light: light,
+                                  cs: cs,
                                   step: 5,
                                   title: '근무 시간(선택)',
                                   summary: _timeSummary,
-                                  isDone:
-                                  _startTime != null || _endTime != null,
+                                  isDone: _startTime != null || _endTime != null,
                                   isExpanded: _expanded[_panelTime],
                                 ),
                               ),
                               body: _buildPanelBody(
-                                dark: dark,
-                                light: light,
+                                cs: cs,
                                 nextPanel: _panelHoliday,
                                 child: Column(
-                                  crossAxisAlignment:
-                                  CrossAxisAlignment.stretch,
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
                                     Container(
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
-                                        color: light.withOpacity(.06),
-                                        borderRadius:
-                                        BorderRadius.circular(12),
-                                        border: Border.all(
-                                            color: light.withOpacity(.25)),
+                                        color: cs.surfaceContainerLow,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
                                       ),
                                       child: Text(
                                         '퇴근 시간이 설정되면 “퇴근 1시간 전” 알림이 자동 예약됩니다.',
                                         style: TextStyle(
-                                          color: dark,
+                                          color: cs.onSurface,
                                           fontWeight: FontWeight.w700,
                                         ),
                                       ),
@@ -907,19 +860,14 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                                               _selectTime(isStartTime: true);
                                             },
                                             icon: const Icon(Icons.schedule),
-                                            label: Text(
-                                                '출근: ${_formatTimeOfDay(_startTime)}'),
+                                            label: Text('출근: ${_formatTimeOfDay(_startTime)}'),
                                             style: OutlinedButton.styleFrom(
-                                              foregroundColor: dark,
-                                              side: BorderSide(
-                                                  color:
-                                                  light.withOpacity(.75)),
+                                              foregroundColor: cs.onSurface,
+                                              side: BorderSide(color: cs.outlineVariant.withOpacity(.75)),
                                               shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                BorderRadius.circular(12),
+                                                borderRadius: BorderRadius.circular(12),
                                               ),
-                                              padding:
-                                              const EdgeInsets.symmetric(
+                                              padding: const EdgeInsets.symmetric(
                                                 vertical: 12,
                                                 horizontal: 12,
                                               ),
@@ -934,19 +882,14 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                                               _selectTime(isStartTime: false);
                                             },
                                             icon: const Icon(Icons.schedule),
-                                            label: Text(
-                                                '퇴근: ${_formatTimeOfDay(_endTime)}'),
+                                            label: Text('퇴근: ${_formatTimeOfDay(_endTime)}'),
                                             style: OutlinedButton.styleFrom(
-                                              foregroundColor: dark,
-                                              side: BorderSide(
-                                                  color:
-                                                  light.withOpacity(.75)),
+                                              foregroundColor: cs.onSurface,
+                                              side: BorderSide(color: cs.outlineVariant.withOpacity(.75)),
                                               shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                BorderRadius.circular(12),
+                                                borderRadius: BorderRadius.circular(12),
                                               ),
-                                              padding:
-                                              const EdgeInsets.symmetric(
+                                              padding: const EdgeInsets.symmetric(
                                                 vertical: 12,
                                                 horizontal: 12,
                                               ),
@@ -967,9 +910,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                               headerBuilder: (ctx, _) => KeyedSubtree(
                                 key: _keyHoliday,
                                 child: _buildPanelHeader(
-                                  base: base,
-                                  dark: dark,
-                                  light: light,
+                                  cs: cs,
                                   step: 6,
                                   title: '고정 휴일(선택)',
                                   summary: _holidaySummary,
@@ -978,20 +919,17 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                                 ),
                               ),
                               body: _buildPanelBody(
-                                dark: dark,
-                                light: light,
+                                cs: cs,
                                 child: Column(
-                                  crossAxisAlignment:
-                                  CrossAxisAlignment.stretch,
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
                                   children: [
                                     Align(
                                       alignment: Alignment.centerLeft,
                                       child: Text(
                                         '요일을 선택하세요',
-                                        style: theme.textTheme.bodyLarge
-                                            ?.copyWith(
+                                        style: theme.textTheme.bodyLarge?.copyWith(
                                           fontWeight: FontWeight.bold,
-                                          color: dark,
+                                          color: cs.onSurface,
                                         ),
                                       ),
                                     ),
@@ -1000,14 +938,17 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                                       spacing: 8,
                                       runSpacing: 8,
                                       children: _days.map((day) {
-                                        final isSelected = _selectedHolidays
-                                            .contains(day);
+                                        final isSelected = _selectedHolidays.contains(day);
                                         return FilterChip(
                                           label: Text(day),
                                           selected: isSelected,
-                                          selectedColor:
-                                          light.withOpacity(.25),
-                                          checkmarkColor: dark,
+                                          selectedColor: cs.primaryContainer.withOpacity(.65),
+                                          checkmarkColor: cs.onPrimaryContainer,
+                                          side: BorderSide(
+                                            color: isSelected
+                                                ? cs.primary.withOpacity(.35)
+                                                : cs.outlineVariant.withOpacity(.65),
+                                          ),
                                           onSelected: (selected) {
                                             _clearErrorIfAny();
                                             setState(() {
@@ -1037,14 +978,14 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: cs.error.withOpacity(.08),
+                          color: cs.errorContainer.withOpacity(.55),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: cs.error.withOpacity(.30)),
+                          border: Border.all(color: cs.error.withOpacity(.35)),
                         ),
                         child: Text(
                           _errorMessage!,
                           style: TextStyle(
-                            color: cs.error,
+                            color: cs.onErrorContainer,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -1058,8 +999,8 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                           child: OutlinedButton(
                             onPressed: () => Navigator.pop(context),
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: dark,
-                              side: BorderSide(color: light.withOpacity(.75)),
+                              foregroundColor: cs.onSurface,
+                              side: BorderSide(color: cs.outlineVariant.withOpacity(.75)),
                               shape: const StadiumBorder(),
                               padding: const EdgeInsets.symmetric(vertical: 14),
                             ),
@@ -1077,8 +1018,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                                 return;
                               }
 
-                              if (!_isValidEmailLocalPart(
-                                  _emailController.text)) {
+                              if (!_isValidEmailLocalPart(_emailController.text)) {
                                 _setErrorMessage('이메일을 다시 확인하세요');
                                 _openPanelAndScroll(_panelBasic);
                                 return;
@@ -1096,8 +1036,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                                 return;
                               }
 
-                              final fullEmail =
-                                  '${_emailController.text}@gmail.com';
+                              final fullEmail = '${_emailController.text}@gmail.com';
 
                               widget.onSave(
                                 _nameController.text,
@@ -1119,8 +1058,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
 
                               final endTime = _timeToString(_endTime);
                               if (endTime != null) {
-                                await EndTimeReminderService.instance
-                                    .scheduleDailyOneHourBefore(endTime);
+                                await EndTimeReminderService.instance.scheduleDailyOneHourBefore(endTime);
                               } else {
                                 await EndTimeReminderService.instance.cancel();
                               }
@@ -1130,8 +1068,8 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                               }
                             },
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: base,
-                              foregroundColor: fg,
+                              backgroundColor: cs.primary,
+                              foregroundColor: cs.onPrimary,
                               shape: const StadiumBorder(),
                               padding: const EdgeInsets.symmetric(vertical: 14),
                             ),

@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-class _SvcColors {
-  static const base = Color(0xFF0D47A1);
-}
-
 /// ✅ “결제 버튼(OutlinedButton.icon)”과 동일한 디자인을 공용으로 쓰기 위한 버튼
-/// - StadiumBorder / minHeight 56 / border 1.4 / foreground base / bg surface
-/// - disabled/pressed/overlay 톤까지 결제 버튼과 동일 계열로 정리
+/// - StadiumBorder / minHeight 56 / border 1.4 / foreground primary / bg surface
+/// - disabled/pressed/overlay 톤까지 전역 ColorScheme 기반으로 정리
 /// - 기존 Scale 애니메이션 + 로딩 스위처 유지
 class MonthlyAnimatedActionButton extends StatefulWidget {
   final bool isLoading;
@@ -27,8 +23,7 @@ class MonthlyAnimatedActionButton extends StatefulWidget {
   });
 
   @override
-  State<MonthlyAnimatedActionButton> createState() =>
-      _MonthlyAnimatedActionButtonState();
+  State<MonthlyAnimatedActionButton> createState() => _MonthlyAnimatedActionButtonState();
 }
 
 class _MonthlyAnimatedActionButtonState extends State<MonthlyAnimatedActionButton>
@@ -65,10 +60,10 @@ class _MonthlyAnimatedActionButtonState extends State<MonthlyAnimatedActionButto
   }
 
   ButtonStyle _buttonStyle(ColorScheme cs) {
-    // ✅ 결제 버튼과 동일 기준:
+    // ✅ 전역 브랜드테마 기준:
     // - bg: cs.surface
-    // - fg: base
-    // - side: base 45% 1.4
+    // - fg: cs.primary
+    // - side: cs.primary 45% 1.4
     // - disabled: surfaceVariant / outlineVariant / fg 38%
     return ButtonStyle(
       minimumSize: const MaterialStatePropertyAll(Size.fromHeight(56)),
@@ -89,21 +84,21 @@ class _MonthlyAnimatedActionButtonState extends State<MonthlyAnimatedActionButto
         if (states.contains(MaterialState.disabled)) {
           return cs.onSurface.withOpacity(.38);
         }
-        return _SvcColors.base;
+        return cs.primary;
       }),
 
       side: MaterialStateProperty.resolveWith((states) {
         if (states.contains(MaterialState.disabled)) {
-          return BorderSide(color: cs.outlineVariant, width: 1.4);
+          return BorderSide(color: cs.outlineVariant.withOpacity(.85), width: 1.4);
         }
-        return BorderSide(color: _SvcColors.base.withOpacity(.45), width: 1.4);
+        return BorderSide(color: cs.primary.withOpacity(.45), width: 1.4);
       }),
 
-      overlayColor: MaterialStatePropertyAll(_SvcColors.base.withOpacity(.06)),
+      overlayColor: MaterialStatePropertyAll(cs.primary.withOpacity(.06)),
     );
   }
 
-  Widget _buildIdleChild(String label, ColorScheme cs) {
+  Widget _buildIdleChild(String label) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
@@ -134,8 +129,8 @@ class _MonthlyAnimatedActionButtonState extends State<MonthlyAnimatedActionButto
           child: CircularProgressIndicator(
             strokeWidth: 2,
             valueColor: AlwaysStoppedAnimation<Color>(
-              // disabled 상태에선 버튼이 눌리지 않으므로 base로 고정
-              _SvcColors.base,
+              // disabled 상태에선 버튼이 눌리지 않으므로 primary로 고정
+              cs.primary,
             ),
           ),
         ),
@@ -171,8 +166,7 @@ class _MonthlyAnimatedActionButtonState extends State<MonthlyAnimatedActionButto
             duration: const Duration(milliseconds: 220),
             switchInCurve: Curves.easeOut,
             switchOutCurve: Curves.easeIn,
-            transitionBuilder: (child, anim) =>
-                ScaleTransition(scale: anim, child: child),
+            transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
             child: widget.isLoading
                 ? KeyedSubtree(
               key: const ValueKey('loading'),
@@ -180,7 +174,7 @@ class _MonthlyAnimatedActionButtonState extends State<MonthlyAnimatedActionButto
             )
                 : KeyedSubtree(
               key: const ValueKey('idle'),
-              child: _buildIdleChild(label, cs),
+              child: _buildIdleChild(label),
             ),
           ),
         ),

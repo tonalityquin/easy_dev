@@ -51,7 +51,6 @@ class _BottomArea extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           _HqModeSwitchButton(),
-          _BrandFooter(),
         ],
       );
     }
@@ -59,9 +58,8 @@ class _BottomArea extends StatelessWidget {
     return const Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        _HqModeSwitchButton(),
         PageBottomNavigation(),
-        _BrandFooter(),
+        _HqModeSwitchButton(),
       ],
     );
   }
@@ -173,7 +171,7 @@ class _HqModeSwitchButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
       child: SizedBox(
         width: double.infinity,
         child: ElevatedButton.icon(
@@ -262,25 +260,6 @@ class _ModeSwitchDialogOption extends StatelessWidget {
               Icon(Icons.chevron_right, color: textColor.withOpacity(.6)),
             ],
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BrandFooter extends StatelessWidget {
-  const _BrandFooter();
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: SizedBox(
-        height: 48,
-        child: Semantics(
-          label: 'Pelican 브랜드 로고',
-          image: true,
-          child: Image.asset('assets/images/pelican.png'),
         ),
       ),
     );

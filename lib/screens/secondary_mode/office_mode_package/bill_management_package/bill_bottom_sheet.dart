@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // 숫자만 입력
 import 'package:provider/provider.dart';
 
-import '../../../../../theme.dart'; // ✅ AppCardPalette 사용 (경로는 프로젝트 구조에 맞게 조정)
 import '../../../../../states/area/area_state.dart';
 import 'sections/bill_type_input_section.dart';
 import 'sections/bill_standard_and_amount_row_section.dart';
@@ -96,15 +95,16 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
 
   // 11시 라벨 위젯
   Widget _buildScreenTag(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final base = Theme.of(context).textTheme.labelSmall;
+
     final style = (base ??
         const TextStyle(
           fontSize: 11,
-          color: Colors.black54,
           fontWeight: FontWeight.w600,
         ))
         .copyWith(
-      color: Colors.black54,
+      color: cs.onSurfaceVariant.withOpacity(.72),
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
     );
@@ -125,20 +125,12 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     // ✅ 최상단까지 차오르도록 높이 고정 + 키보드 여백 반영
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final screenHeight = MediaQuery.of(context).size.height;
     final effectiveHeight = screenHeight - bottomInset;
-
-    // ✅ AppCardPalette에서 Service 팔레트(Deep Blue) 사용
-    final palette = AppCardPalette.of(context);
-    final serviceBase = palette.serviceBase;
-    final serviceDark = palette.serviceDark;
-    final serviceLight = palette.serviceLight;
-
-    // 기존 코드의 의미 유지(시트/카드 배경, 전경)
-    const sheetBg = Colors.white;
-    const fg = Colors.white;
 
     return SafeArea(
       child: Padding(
@@ -148,9 +140,10 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
           child: Stack(
             children: [
               Container(
-                decoration: const BoxDecoration(
-                  color: sheetBg,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
                 ),
                 child: Column(
                   children: [
@@ -162,14 +155,18 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                         height: 4,
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: Colors.grey[300],
+                          color: cs.outlineVariant.withOpacity(.65),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
                     ),
-                    const Text(
+                    Text(
                       '정산 유형 추가',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: cs.onSurface,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 16),
@@ -218,20 +215,20 @@ class _BillSettingBottomSheetState extends State<BillSettingBottomSheet> {
                     Padding(
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                       child: Theme(
-                        // ✅ 하단 공용 섹션 버튼들도 Service 팔레트로 통일
+                        // ✅ 하단 공용 섹션 버튼들도 전역 브랜드(ColorScheme)로 통일
                         data: Theme.of(context).copyWith(
                           elevatedButtonTheme: ElevatedButtonThemeData(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: serviceBase,
-                              foregroundColor: fg,
+                              backgroundColor: cs.primary,
+                              foregroundColor: cs.onPrimary,
                               shape: const StadiumBorder(),
                             ),
                           ),
                           outlinedButtonTheme: OutlinedButtonThemeData(
                             style: OutlinedButton.styleFrom(
                               shape: const StadiumBorder(),
-                              side: BorderSide(color: serviceLight),
-                              foregroundColor: serviceDark,
+                              side: BorderSide(color: cs.outlineVariant.withOpacity(.85)),
+                              foregroundColor: cs.onSurface,
                             ),
                           ),
                         ),

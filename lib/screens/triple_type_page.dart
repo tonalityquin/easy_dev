@@ -1,15 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../enums/plate_type.dart';
 import '../states/page/triple_page_state.dart';
 import '../states/area/area_state.dart';
 import '../states/plate/triple_plate_state.dart';
+import '../states/plate/movement_plate.dart';
 import '../states/user/user_state.dart';
 
 import 'triple_mode/input_package/triple_input_plate_screen.dart';
 import 'triple_mode/type_package/common_widgets/dashboard_bottom_sheet/triple_home_dash_board_bottom_sheet.dart';
-import '../utils/snackbar_helper.dart';
+import 'triple_mode/type_package/triple_parking_completed_page.dart';
+import 'triple_mode/type_package/parking_completed_package/triple_parking_completed_control_buttons.dart';
 
+import '../utils/snackbar_helper.dart';
 import '../services/latest_message_service.dart';
 
 // ✅ Trace 기록용 Recorder
@@ -117,7 +121,8 @@ class _TripleTypePageState extends State<TripleTypePage> {
 
               final currentPage = pageState.pages[pageState.selectedIndex];
               final collection = currentPage.collectionKey;
-              final normalSelectedPlate = normalPlateState.tripleGetSelectedPlate(collection, userName);
+              final normalSelectedPlate =
+              normalPlateState.tripleGetSelectedPlate(collection, userName);
 
               if (normalSelectedPlate != null && normalSelectedPlate.id.isNotEmpty) {
                 await normalPlateState.tripleTogglePlateIsSelected(
@@ -137,16 +142,15 @@ class _TripleTypePageState extends State<TripleTypePage> {
                 top: false,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const _EntryDashboardBar(),
-                    const _SingleHomeTabBar(),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: SizedBox(
-                        height: 48,
-                        child: Image.asset('assets/images/pelican.png'),
-                      ),
-                    ),
+                  children: const [
+                    // ✅ (기존: 입차/대시보드 행 자리) -> 현황/출차요청/출차완료 컨트롤바 이동
+                    _ParkingCompletedControlBar(),
+
+                    // ✅ (기존: 홈 버튼 자리) -> 입차/대시보드 행 이동
+                    _EntryDashboardBar(),
+
+                    // ✅ (기존: 하단 이미지 자리) -> 홈 버튼 이동 (하단 이미지 제거)
+                    _SingleHomeTabBar(),
                   ],
                 ),
               ),
@@ -158,12 +162,93 @@ class _TripleTypePageState extends State<TripleTypePage> {
   }
 }
 
+/// ✅ 기존 TripleParkingCompletedPage의 bottomNavigationBar(현황/출차요청/출차완료 포함)를
+/// TripleTypePage 하단 1행으로 올려서 재사용.
+/// - 모드/정렬 상태는 TripleParkingCompletedPage의 static ValueNotifier로 동기화.
+/// - 출차요청/입차요청 핸들러는 TripleTypePage에서 기존과 동일하게 수행(Provider 접근 용이).
+class _ParkingCompletedControlBar extends StatelessWidget {
+  const _ParkingCompletedControlBar();
+
+  void _tripleHandleDepartureRequested(BuildContext context) {
+    final movementPlate = context.read<MovementPlate>();
+    final userName = context.read<UserState>().name;
+    final plateState = context.read<TriplePlateState>();
+
+    final selectedPlate =
+    plateState.tripleGetSelectedPlate(PlateType.parkingCompleted, userName);
+
+    if (selectedPlate != null) {
+      movementPlate
+          .setDepartureRequested(
+        selectedPlate.plateNumber,
+        selectedPlate.area,
+        selectedPlate.location,
+      )
+          .then((_) {
+        Future.delayed(const Duration(milliseconds: 300), () {
+          // 다이얼로그에서 confirm 후 호출되는 경우 pop이 필요
+          if (Navigator.of(context).canPop()) {
+            Navigator.pop(context);
+          }
+          showSuccessSnackbar(context, "출차 요청이 완료되었습니다.");
+        });
+      }).catchError((e) {
+        showFailedSnackbar(context, "출차 요청 중 오류: $e");
+      });
+    }
+  }
+
+  void _handleEntryParkingRequest(BuildContext context, String plateNumber, String area) async {
+    // 기존 TripleParkingCompletedPage의 stub 동작 유지
+    showSuccessSnackbar(context, "입차 요청 처리: $plateNumber ($area)");
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pageState = context.read<TriplePageState>();
+
+    return ValueListenableBuilder<TripleParkingViewMode>(
+      valueListenable: TripleParkingCompletedPage.modeNotifier,
+      builder: (context, mode, _) {
+        return ValueListenableBuilder<bool>(
+          valueListenable: TripleParkingCompletedPage.isSortedNotifier,
+          builder: (context, isSorted, __) {
+            final isStatusMode = mode == TripleParkingViewMode.status;
+            final isLocationPickerMode = mode == TripleParkingViewMode.locationPicker;
+            final isParkingAreaMode = mode == TripleParkingViewMode.plateList;
+
+            return TripleParkingCompletedControlButtons(
+              isParkingAreaMode: isParkingAreaMode,
+              isStatusMode: isStatusMode,
+              isLocationPickerMode: isLocationPickerMode,
+              isSorted: isSorted,
+              onToggleViewMode: () {
+                TripleParkingCompletedPage.toggleViewMode(pageState.parkingCompletedKey);
+              },
+              showSearchDialog: () {
+                TripleParkingCompletedPage.openSearchDialog(
+                  pageState.parkingCompletedKey,
+                  context,
+                );
+              },
+              toggleSortIcon: () {
+                TripleParkingCompletedPage.toggleSortIcon(pageState.parkingCompletedKey);
+              },
+              handleEntryParkingRequest: _handleEntryParkingRequest,
+              handleDepartureRequested: _tripleHandleDepartureRequested,
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
 class _EntryDashboardBar extends StatelessWidget {
   const _EntryDashboardBar();
 
   @override
   Widget build(BuildContext context) {
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
       child: Row(
@@ -355,7 +440,6 @@ class _RefreshableBodyState extends State<RefreshableBody> {
         return Stack(
           children: [
             _buildCurrentPage(context, pageState),
-
             if (normalPlateState.isLoading)
               Container(
                 color: cs.surface.withOpacity(.35),

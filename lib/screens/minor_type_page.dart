@@ -3,10 +3,16 @@ import 'package:provider/provider.dart';
 
 import '../states/page/minor_page_state.dart';
 import '../states/plate/minor_plate_state.dart';
+import '../states/plate/movement_plate.dart';
 import '../states/user/user_state.dart';
+
+import '../enums/plate_type.dart';
 
 import 'minor_mode/input_package/minor_input_plate_screen.dart';
 import 'minor_mode/type_package/common_widgets/dashboard_bottom_sheet/minor_home_dash_board_bottom_sheet.dart';
+import 'minor_mode/type_package/minor_parking_completed_page.dart';
+import 'minor_mode/type_package/parking_completed_package/minor_parking_completed_control_buttons.dart';
+
 import '../utils/snackbar_helper.dart';
 
 // ✅ Trace 기록용 Recorder
@@ -77,16 +83,15 @@ class _MinorTypePageState extends State<MinorTypePage> {
                 top: false,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const _EntryDashboardBar(),
-                    const _SingleHomeTabBar(),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: SizedBox(
-                        height: 48,
-                        child: Image.asset('assets/images/pelican.png'),
-                      ),
-                    ),
+                  children: const [
+                    // ✅ (기존: 입차/대시보드 행 자리) -> 현황/출차요청/출차완료 컨트롤바 이동
+                    _ParkingCompletedControlBar(),
+
+                    // ✅ (기존: 홈 버튼 자리) -> 입차/대시보드 행 이동
+                    _EntryDashboardBar(),
+
+                    // ✅ (기존: 하단 이미지 자리) -> 홈 버튼 이동 (하단 이미지 제거)
+                    _SingleHomeTabBar(),
                   ],
                 ),
               ),
@@ -94,6 +99,87 @@ class _MinorTypePageState extends State<MinorTypePage> {
           );
         },
       ),
+    );
+  }
+}
+
+/// ✅ 기존 MinorParkingCompletedPage의 bottomNavigationBar(현황/출차요청/출차완료 포함)를
+/// MinorTypePage 하단 1행으로 올려서 재사용.
+/// - 모드/정렬 상태는 MinorParkingCompletedPage의 static ValueNotifier로 동기화.
+class _ParkingCompletedControlBar extends StatelessWidget {
+  const _ParkingCompletedControlBar();
+
+  void _minorHandleDepartureRequested(BuildContext context) {
+    final movementPlate = context.read<MovementPlate>();
+    final userName = context.read<UserState>().name;
+    final plateState = context.read<MinorPlateState>();
+
+    final selectedPlate =
+    plateState.minorGetSelectedPlate(PlateType.parkingCompleted, userName);
+
+    if (selectedPlate == null) return;
+
+    movementPlate
+        .setDepartureRequested(
+      selectedPlate.plateNumber,
+      selectedPlate.area,
+      selectedPlate.location,
+    )
+        .then((_) {
+      Future.delayed(const Duration(milliseconds: 300), () {
+        // 컨트롤버튼 내부에서 다이얼로그 confirm으로 호출되는 케이스 pop 안전 처리
+        if (Navigator.of(context).canPop()) {
+          Navigator.pop(context);
+        }
+        showSuccessSnackbar(context, "출차 요청이 완료되었습니다.");
+      });
+    }).catchError((e) {
+      showFailedSnackbar(context, "출차 요청 중 오류: $e");
+    });
+  }
+
+  void _handleEntryParkingRequest(BuildContext context, String plateNumber, String area) async {
+    // 기존 MinorParkingCompletedPage의 stub 동작 유지
+    showSuccessSnackbar(context, "입차 요청 처리: $plateNumber ($area)");
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pageState = context.read<MinorPageState>();
+
+    return ValueListenableBuilder<MinorParkingViewMode>(
+      valueListenable: MinorParkingCompletedPage.modeNotifier,
+      builder: (context, mode, _) {
+        return ValueListenableBuilder<bool>(
+          valueListenable: MinorParkingCompletedPage.isSortedNotifier,
+          builder: (context, isSorted, __) {
+            final isStatusMode = mode == MinorParkingViewMode.status;
+            final isLocationPickerMode = mode == MinorParkingViewMode.locationPicker;
+            final isParkingAreaMode = mode == MinorParkingViewMode.plateList;
+
+            return MinorParkingCompletedControlButtons(
+              isParkingAreaMode: isParkingAreaMode,
+              isStatusMode: isStatusMode,
+              isLocationPickerMode: isLocationPickerMode,
+              isSorted: isSorted,
+              onToggleViewMode: () {
+                MinorParkingCompletedPage.toggleViewMode(pageState.parkingCompletedKey);
+              },
+              showSearchDialog: () {
+                MinorParkingCompletedPage.openSearchDialog(
+                  pageState.parkingCompletedKey,
+                  context,
+                );
+              },
+              toggleSortIcon: () {
+                MinorParkingCompletedPage.toggleSortIcon(pageState.parkingCompletedKey);
+              },
+              handleEntryParkingRequest: _handleEntryParkingRequest,
+              handleDepartureRequested: _minorHandleDepartureRequested,
+            );
+          },
+        );
+      },
     );
   }
 }

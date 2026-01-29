@@ -7,7 +7,6 @@ import '../../../enums/plate_type.dart';
 
 import '../../../states/area/area_state.dart';
 import '../../../states/plate/minor_plate_state.dart';
-import '../../../states/plate/movement_plate.dart';
 import '../../../states/user/user_state.dart';
 
 import '../../../utils/snackbar_helper.dart';
@@ -16,7 +15,6 @@ import '../../../widgets/navigation/minor_top_navigation.dart';
 import 'parking_completed_package/widgets/signature_plate_search_bottom_sheet/minor_parking_completed_search_bottom_sheet.dart';
 import '../../../widgets/container/plate_container.dart';
 
-import 'parking_completed_package/minor_parking_completed_control_buttons.dart';
 import 'parking_completed_package/minor_parking_completed_real_time_table.dart';
 import 'parking_completed_package/minor_parking_status_page.dart';
 
@@ -25,8 +23,29 @@ enum MinorParkingViewMode { status, locationPicker, plateList }
 class MinorParkingCompletedPage extends StatefulWidget {
   const MinorParkingCompletedPage({super.key});
 
+  /// ✅ 상위(MinorTypePage)에서 하단 컨트롤바가 현재 모드/정렬 상태를 알 수 있도록 노출
+  static final ValueNotifier<MinorParkingViewMode> modeNotifier =
+  ValueNotifier<MinorParkingViewMode>(MinorParkingViewMode.status);
+
+  static final ValueNotifier<bool> isSortedNotifier = ValueNotifier<bool>(true);
+
   static void reset(GlobalKey key) {
     (key.currentState as _MinorParkingCompletedPageState?)?._resetInternalState();
+  }
+
+  /// ✅ 외부(상위 Scaffold)에서 '현황 ↔ 테이블' 토글 제어
+  static void toggleViewMode(GlobalKey key) {
+    (key.currentState as _MinorParkingCompletedPageState?)?._toggleViewMode();
+  }
+
+  /// ✅ 외부에서 검색 다이얼로그 오픈
+  static void openSearchDialog(GlobalKey key, BuildContext context) {
+    (key.currentState as _MinorParkingCompletedPageState?)?._showSearchDialog(context);
+  }
+
+  /// ✅ 외부에서 정렬 토글(plateList용)
+  static void toggleSortIcon(GlobalKey key) {
+    (key.currentState as _MinorParkingCompletedPageState?)?._toggleSortIcon();
   }
 
   @override
@@ -44,6 +63,17 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
     if (kDebugMode) debugPrint('[ParkingCompleted] $msg');
   }
 
+  void _syncNotifiers() {
+    MinorParkingCompletedPage.modeNotifier.value = _mode;
+    MinorParkingCompletedPage.isSortedNotifier.value = _isSorted;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _syncNotifiers();
+  }
+
   void _resetInternalState() {
     setState(() {
       _mode = MinorParkingViewMode.status;
@@ -51,6 +81,7 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
       _isSorted = true;
       _statusKeySeed++;
     });
+    _syncNotifiers();
     _log('reset page state');
   }
 
@@ -62,12 +93,14 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
           ? MinorParkingViewMode.locationPicker
           : MinorParkingViewMode.status;
     });
+    _syncNotifiers();
 
     _log(_mode == MinorParkingViewMode.status ? 'mode → status' : 'mode → locationPicker(table)');
   }
 
   void _toggleSortIcon() {
     setState(() => _isSorted = !_isSorted);
+    _syncNotifiers();
     _log(_isSorted ? 'sort → 최신순' : 'sort → 오래된순');
   }
 
@@ -85,37 +118,6 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
     );
   }
 
-  void _minorHandleDepartureRequested(BuildContext context) {
-    final movementPlate = context.read<MovementPlate>();
-    final userName = context.read<UserState>().name;
-    final plateState = context.read<MinorPlateState>();
-    final selectedPlate = plateState.minorGetSelectedPlate(PlateType.parkingCompleted, userName);
-
-    if (selectedPlate != null) {
-      movementPlate
-          .setDepartureRequested(
-        selectedPlate.plateNumber,
-        selectedPlate.area,
-        selectedPlate.location,
-      )
-          .then((_) {
-        Future.delayed(const Duration(milliseconds: 300), () {
-          if (!mounted) return;
-          Navigator.pop(context);
-          showSuccessSnackbar(context, "출차 요청이 완료되었습니다.");
-        });
-      }).catchError((e) {
-        if (!mounted) return;
-        showFailedSnackbar(context, "출차 요청 중 오류: $e");
-      });
-    }
-  }
-
-  void handleEntryParkingRequest(BuildContext context, String plateNumber, String area) async {
-    _log('stub: entry parking request $plateNumber ($area)');
-    showSuccessSnackbar(context, "입차 요청 처리: $plateNumber ($area)");
-  }
-
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -124,7 +126,8 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
       onWillPop: () async {
         final plateState = context.read<MinorPlateState>();
         final userName = context.read<UserState>().name;
-        final selectedPlate = plateState.minorGetSelectedPlate(PlateType.parkingCompleted, userName);
+        final selectedPlate =
+        plateState.minorGetSelectedPlate(PlateType.parkingCompleted, userName);
 
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
           await plateState.minorTogglePlateIsSelected(
@@ -139,10 +142,12 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
 
         if (_mode == MinorParkingViewMode.plateList) {
           setState(() => _mode = MinorParkingViewMode.locationPicker);
+          _syncNotifiers();
           _log('back → locationPicker(table)');
           return false;
         } else if (_mode == MinorParkingViewMode.locationPicker) {
           setState(() => _mode = MinorParkingViewMode.status);
+          _syncNotifiers();
           _log('back → status');
           return false;
         }
@@ -161,18 +166,11 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
             bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.85), width: 1),
           ),
         ),
+
+        // ✅ 변경 핵심:
+        // 기존 bottomNavigationBar(MinorParkingCompletedControlButtons) 제거
+        // → 그 높이만큼 body 영역 확장
         body: _buildBody(context),
-        bottomNavigationBar: MinorParkingCompletedControlButtons(
-          isParkingAreaMode: _mode == MinorParkingViewMode.plateList,
-          isStatusMode: _mode == MinorParkingViewMode.status,
-          isLocationPickerMode: _mode == MinorParkingViewMode.locationPicker,
-          isSorted: _isSorted,
-          onToggleViewMode: _toggleViewMode,
-          showSearchDialog: () => _showSearchDialog(context),
-          toggleSortIcon: _toggleSortIcon,
-          handleEntryParkingRequest: handleEntryParkingRequest,
-          handleDepartureRequested: _minorHandleDepartureRequested,
-        ),
       ),
     );
   }
@@ -192,16 +190,22 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
           onClose: () {
             if (!mounted) return;
             setState(() => _mode = MinorParkingViewMode.status);
+            _syncNotifiers();
           },
         );
 
       case MinorParkingViewMode.plateList:
-        List<PlateModel> plates = plateState.minorGetPlatesByCollection(PlateType.parkingCompleted);
+        List<PlateModel> plates =
+        plateState.minorGetPlatesByCollection(PlateType.parkingCompleted);
+
         if (_selectedParkingArea != null) {
           plates = plates.where((p) => p.location == _selectedParkingArea).toList();
         }
+
         plates.sort(
-              (a, b) => _isSorted ? b.requestTime.compareTo(a.requestTime) : a.requestTime.compareTo(b.requestTime),
+              (a, b) => _isSorted
+              ? b.requestTime.compareTo(a.requestTime)
+              : a.requestTime.compareTo(b.requestTime),
         );
 
         return ListView(
@@ -210,7 +214,8 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
             PlateContainer(
               data: plates,
               collection: PlateType.parkingCompleted,
-              filterCondition: (request) => request.type == PlateType.parkingCompleted.firestoreValue,
+              filterCondition: (request) =>
+              request.type == PlateType.parkingCompleted.firestoreValue,
               onPlateTap: (plateNumber, area) {
                 context.read<MinorPlateState>().minorTogglePlateIsSelected(
                   collection: PlateType.parkingCompleted,

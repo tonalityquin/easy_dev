@@ -17,13 +17,6 @@ import 'monthly_bottom_navigation.dart';
 // ✅ 결제 버튼도 동일 UI로 맞추기 위해 공용 버튼 import
 import 'utils/buttons/monthly_animated_action_button.dart';
 
-/// 서비스 로그인 카드와 동일 팔레트(Deep Blue)
-class _SvcColors {
-  static const base = Color(0xFF0D47A1);
-  static const dark = Color(0xFF09367D);
-  static const light = Color(0xFF5472D3);
-}
-
 class MonthlyPlateBottomSheet extends StatefulWidget {
   final bool isEditMode;
   final String? initialDocId;
@@ -186,15 +179,15 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
   }
 
   Widget _buildScreenTag(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final base = Theme.of(context).textTheme.labelSmall;
     final style = (base ??
         const TextStyle(
           fontSize: 11,
-          color: Colors.black54,
           fontWeight: FontWeight.w600,
         ))
         .copyWith(
-      color: Colors.black54,
+      color: cs.onSurfaceVariant.withOpacity(.72),
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
     );
@@ -217,9 +210,9 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
-        color: _SvcColors.light.withOpacity(.10),
+        color: cs.primaryContainer.withOpacity(.55),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _SvcColors.light.withOpacity(.25)),
+        border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
       ),
       child: Row(
         children: [
@@ -227,23 +220,25 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
             width: 36,
             height: 36,
             decoration: BoxDecoration(
-              color: _SvcColors.base.withOpacity(.12),
+              color: cs.primary.withOpacity(.12),
               borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: cs.primary.withOpacity(.18)),
             ),
-            child: const Icon(Icons.tune_rounded, color: _SvcColors.base, size: 20),
+            child: Icon(Icons.tune_rounded, color: cs.primary, size: 20),
           ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              widget.isEditMode
-                  ? '정기 정산 수정'
-                  : (controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리'),
-              style: const TextStyle(fontWeight: FontWeight.w800),
+              widget.isEditMode ? '정기 정산 수정' : (controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리'),
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: cs.onSurface,
+              ),
             ),
           ),
           IconButton(
             tooltip: '닫기',
-            icon: const Icon(Icons.close, color: _SvcColors.dark),
+            icon: Icon(Icons.close, color: cs.onSurfaceVariant),
             onPressed: () {
               final nav = Navigator.of(context, rootNavigator: true);
               if (nav.canPop()) nav.pop();
@@ -301,10 +296,10 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                 decoration: BoxDecoration(
                   color: cs.surface,
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                  border: Border.all(color: _SvcColors.base.withOpacity(.12)),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(.06),
+                      color: cs.shadow.withOpacity(.10),
                       blurRadius: 12,
                       offset: const Offset(0, -2),
                     ),
@@ -314,7 +309,7 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                   children: [
                     _buildTopBar(cs),
                     const SizedBox(height: 8),
-                    Container(height: 1, color: Colors.black.withOpacity(0.06)),
+                    Container(height: 1, color: cs.outlineVariant.withOpacity(.75)),
 
                     Expanded(
                       child: SingleChildScrollView(
@@ -345,17 +340,22 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                               decoration: InputDecoration(
                                 labelText: '정산 유형',
                                 isDense: true,
-                                contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                filled: true,
+                                fillColor: cs.surfaceVariant.withOpacity(.45),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                enabledBorder: OutlineInputBorder(
+                                  borderSide: BorderSide(color: cs.outlineVariant.withOpacity(.75)),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
                                 focusedBorder: OutlineInputBorder(
-                                  borderSide: const BorderSide(color: _SvcColors.base),
+                                  borderSide: BorderSide(color: cs.primary, width: 1.3),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
-                              child: const Text('정기'),
+                              child: Text('정기', style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w700)),
                             ),
 
                             const SizedBox(height: 32),
@@ -424,7 +424,7 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                       height: 4,
                       width: 64,
                       decoration: BoxDecoration(
-                        color: _SvcColors.base.withOpacity(.18),
+                        color: cs.primary.withOpacity(.18),
                         borderRadius: BorderRadius.circular(999),
                       ),
                     ),

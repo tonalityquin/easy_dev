@@ -8,6 +8,8 @@ import '../states/user/user_state.dart';
 
 import 'double_mode/input_package/double_input_plate_screen.dart';
 import 'double_mode/type_package/common_widgets/dashboard_bottom_sheet/double_home_dash_board_bottom_sheet.dart';
+import 'double_mode/type_package/double_parking_completed_page.dart';
+import 'double_mode/type_package/parking_completed_package/double_parking_completed_control_buttons.dart';
 import '../utils/snackbar_helper.dart';
 
 import '../services/latest_message_service.dart';
@@ -62,7 +64,8 @@ class _DoubleTypePageState extends State<DoubleTypePage> {
 
               final currentPage = pageState.pages[pageState.selectedIndex];
               final collection = currentPage.collectionKey;
-              final liteSelectedPlate = litePlateState.doubleGetSelectedPlate(collection, userName);
+              final liteSelectedPlate =
+              litePlateState.doubleGetSelectedPlate(collection, userName);
 
               if (liteSelectedPlate != null && liteSelectedPlate.id.isNotEmpty) {
                 await litePlateState.doubleTogglePlateIsSelected(
@@ -79,20 +82,15 @@ class _DoubleTypePageState extends State<DoubleTypePage> {
                 top: false,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const _EntryDashboardBar(),
-                    const _SingleHomeTabBar(),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: SizedBox(
-                        height: 48,
-                        child: Semantics(
-                          label: 'Pelican 브랜드 로고',
-                          image: true,
-                          child: Image.asset('assets/images/pelican.png'),
-                        ),
-                      ),
-                    ),
+                  children: const [
+                    // ✅ (기존: 입차/대시보드 행 자리) -> 현황/출차요청/출차완료(기존 컨트롤바) 이동
+                    _ParkingCompletedControlBar(),
+
+                    // ✅ (기존: 홈 버튼 자리) -> 입차/대시보드 행 이동
+                    _EntryDashboardBar(),
+
+                    // ✅ (기존: 하단 이미지 자리) -> 홈 버튼 이동 (하단 이미지 제거)
+                    _SingleHomeTabBar(),
                   ],
                 ),
               ),
@@ -100,6 +98,58 @@ class _DoubleTypePageState extends State<DoubleTypePage> {
           );
         },
       ),
+    );
+  }
+}
+
+/// ✅ 기존 DoubleParkingCompletedPage의 bottomNavigationBar(현황/출차요청/출차완료 포함)를
+/// DoubleTypePage 하단 1행으로 올려서 재사용.
+/// - 모드/정렬 상태는 DoubleParkingCompletedPage의 static ValueNotifier로 동기화.
+class _ParkingCompletedControlBar extends StatelessWidget {
+  const _ParkingCompletedControlBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final pageState = context.read<DoublePageState>();
+
+    return ValueListenableBuilder<DoubleParkingViewMode>(
+      valueListenable: DoubleParkingCompletedPage.modeNotifier,
+      builder: (context, mode, _) {
+        return ValueListenableBuilder<bool>(
+          valueListenable: DoubleParkingCompletedPage.isSortedNotifier,
+          builder: (context, isSorted, __) {
+            final isStatusMode = mode == DoubleParkingViewMode.status;
+            final isLocationPickerMode = mode == DoubleParkingViewMode.locationPicker;
+            final isParkingAreaMode = mode == DoubleParkingViewMode.plateList;
+
+            return DoubleParkingCompletedControlButtons(
+              isParkingAreaMode: isParkingAreaMode,
+              isStatusMode: isStatusMode,
+              isLocationPickerMode: isLocationPickerMode,
+              isSorted: isSorted,
+              onToggleViewMode: () {
+                DoubleParkingCompletedPage.toggleViewMode(pageState.parkingCompletedKey);
+              },
+              showSearchDialog: () {
+                DoubleParkingCompletedPage.openSearchDialog(
+                  pageState.parkingCompletedKey,
+                  context,
+                );
+              },
+              toggleSortIcon: () {
+                DoubleParkingCompletedPage.toggleSortIcon(pageState.parkingCompletedKey);
+              },
+              // ✅ 더블 모드 정책 유지(기존 stub 동작을 상위에서 처리)
+              handleEntryParkingRequest: (ctx, plateNumber, area) {
+                showFailedSnackbar(ctx, "더블 모드에서는 입차 요청 기능이 없습니다.");
+              },
+              handleDepartureRequested: (ctx) {
+                showFailedSnackbar(ctx, "더블 모드에서는 출차 요청 기능이 없습니다.");
+              },
+            );
+          },
+        );
+      },
     );
   }
 }
@@ -117,7 +167,6 @@ class _EntryDashboardBar extends StatelessWidget {
         children: [
           const Expanded(child: _OpenEntryButton()),
           const SizedBox(width: 8),
-
           Expanded(
             child: ElevatedButton(
               onPressed: () {
@@ -137,7 +186,8 @@ class _EntryDashboardBar extends StatelessWidget {
                 elevation: 0,
               ).copyWith(
                 overlayColor: MaterialStateProperty.resolveWith<Color?>(
-                      (states) => states.contains(MaterialState.pressed) ? cs.onPrimary.withOpacity(0.10) : null,
+                      (states) =>
+                  states.contains(MaterialState.pressed) ? cs.onPrimary.withOpacity(0.10) : null,
                 ),
               ),
               child: const Row(
@@ -201,7 +251,8 @@ class _OpenEntryButton extends StatelessWidget {
         ),
       ).copyWith(
         overlayColor: MaterialStateProperty.resolveWith<Color?>(
-              (states) => states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(0.18) : null,
+              (states) =>
+          states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(0.18) : null,
         ),
       ),
       child: Row(
@@ -336,7 +387,8 @@ PageRouteBuilder _slidePageRoute(Widget page, {required bool fromLeft}) {
     transitionsBuilder: (_, animation, __, child) {
       final begin = Offset(fromLeft ? -1.0 : 1.0, 0);
       final end = Offset.zero;
-      final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
+      final tween =
+      Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
       return SlideTransition(position: animation.drive(tween), child: child);
     },
   );

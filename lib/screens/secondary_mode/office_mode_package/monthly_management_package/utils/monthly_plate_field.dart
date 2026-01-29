@@ -1,15 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// 서비스 로그인 카드(Deep Blue 팔레트) 톤 참조
-class _SvcColors {
-  static const base = Color(0xFF0D47A1);
-  static const light = Color(0xFF5472D3);
-}
-
 /// 공통 번호판 입력 필드 위젯
 /// - 기존 로직(키패드 활성 컨트롤러, editMode 비활성화 등) 유지
 /// - 시각적으로 “현재 입력 칸”에 집중되도록 토널/보더/아이콘 정리
+/// - ✅ 고정 팔레트(_SvcColors) 제거 → ColorScheme 기반으로 브랜드 테마 자동 반영
 class MonthlyPlateField extends StatelessWidget {
   final int frontDigitCount;
   final bool hasMiddleChar;
@@ -40,8 +35,7 @@ class MonthlyPlateField extends StatelessWidget {
     required this.onKeypadStateChanged,
     this.isEditMode = false,
     this.middleBoxWidth = 56,
-  }) : assert(!hasMiddleChar || middleController != null,
-  'hasMiddleChar=true이면 middleController가 필요합니다.');
+  }) : assert(!hasMiddleChar || middleController != null, 'hasMiddleChar=true이면 middleController가 필요합니다.');
 
   static const _radius = 12.0;
   static const _anim = Duration(milliseconds: 180);
@@ -94,21 +88,19 @@ class MonthlyPlateField extends StatelessWidget {
   }) {
     final bg = !enabled
         ? cs.surfaceVariant.withOpacity(.55)
-        : (isActive ? _SvcColors.light.withOpacity(.10) : cs.surface);
+        : (isActive ? cs.primaryContainer.withOpacity(.35) : cs.surface);
 
     return BoxDecoration(
       color: bg,
       borderRadius: BorderRadius.circular(_radius),
       border: Border.all(
-        color: isActive
-            ? _SvcColors.base.withOpacity(.45)
-            : cs.outlineVariant.withOpacity(.55),
+        color: isActive ? cs.primary.withOpacity(.55) : cs.outlineVariant.withOpacity(.65),
         width: isActive ? 1.6 : 1.0,
       ),
       boxShadow: isActive
           ? [
         BoxShadow(
-          color: _SvcColors.light.withOpacity(.10),
+          color: cs.primary.withOpacity(.08),
           blurRadius: 10,
           offset: const Offset(0, 4),
         ),
@@ -153,8 +145,7 @@ class MonthlyPlateField extends StatelessWidget {
             showCursor: false,
             inputFormatters: [
               if (!isKorean) FilteringTextInputFormatter.digitsOnly,
-              if (isKorean)
-                FilteringTextInputFormatter.allow(RegExp(r'[ㄱ-ㅎㅏ-ㅣ가-힣]')),
+              if (isKorean) FilteringTextInputFormatter.allow(RegExp(r'[ㄱ-ㅎㅏ-ㅣ가-힣]')),
             ],
             style: _textStyle(cs, enabled: enabled, isKorean: isKorean),
             decoration: const InputDecoration(
@@ -180,7 +171,7 @@ class MonthlyPlateField extends StatelessWidget {
                 width: 10,
                 height: 10,
                 decoration: BoxDecoration(
-                  color: _SvcColors.base,
+                  color: cs.primary,
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),

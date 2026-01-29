@@ -1,4 +1,3 @@
-// lib/screens/secondary_package/office_mode_package/tablet_management.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -10,10 +9,6 @@ import '../../../../utils/snackbar_helper.dart';
 import 'tablet_management_package/tablet_setting.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../states/area/area_state.dart';
-
-// ✅ AppCardPalette 사용 (프로젝트 경로에 맞게 수정)
-// 예: import 'package:your_app/theme/app_card_palette.dart';
-import '../../../theme.dart';
 
 /// Iterable 안전 확장: 조건에 맞는 첫 원소를 찾되 없으면 null
 extension IterableX<T> on Iterable<T> {
@@ -51,15 +46,16 @@ class _TabletManagementState extends State<TabletManagement> {
 
   // 좌측 상단(11시) 화면 태그 위젯
   Widget _buildScreenTag(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     final base = Theme.of(context).textTheme.labelSmall;
+
     final style = (base ??
         const TextStyle(
           fontSize: 11,
-          color: Colors.black54,
           fontWeight: FontWeight.w600,
         ))
         .copyWith(
-      color: Colors.black54,
+      color: cs.onSurfaceVariant.withOpacity(.72),
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
     );
@@ -189,9 +185,7 @@ class _TabletManagementState extends State<TabletManagement> {
             division,
             ) async {
           try {
-            final englishName = await context
-                .read<UserRepository>()
-                .getEnglishNameByArea(area, division);
+            final englishName = await context.read<UserRepository>().getEnglishNameByArea(area, division);
 
             // 🔁 UserModel → TabletModel 로 생성
             final newTablet = TabletModel(
@@ -231,8 +225,7 @@ class _TabletManagementState extends State<TabletManagement> {
     }
 
     // index 0: 수정 (선택 있음)
-    final selectedUser =
-    userState.tabletUsers.firstWhereOrNull((u) => u.id == selectedId);
+    final selectedUser = userState.tabletUsers.firstWhereOrNull((u) => u.id == selectedId);
     if (selectedUser == null) {
       showFailedSnackbar(context, '선택된 계정을 찾지 못했습니다.');
       return;
@@ -254,9 +247,7 @@ class _TabletManagementState extends State<TabletManagement> {
           division,
           ) async {
         try {
-          final englishName = await context
-              .read<UserRepository>()
-              .getEnglishNameByArea(area, division);
+          final englishName = await context.read<UserRepository>().getEnglishNameByArea(area, division);
 
           final updatedUser = selectedUser.copyWith(
             name: name,
@@ -303,12 +294,12 @@ class _TabletManagementState extends State<TabletManagement> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final userState = context.watch<UserState>();
     final areaState = context.watch<AreaState>();
     final currentArea = areaState.currentArea;
     final currentDivision = areaState.currentDivision;
-
-    final palette = AppCardPalette.of(context);
 
     bool matches(UserModel u) {
       final areas = u.areas;
@@ -323,15 +314,16 @@ class _TabletManagementState extends State<TabletManagement> {
     final bool hasSelection = userState.selectedUserId != null;
 
     return Scaffold(
+      backgroundColor: cs.surface,
       appBar: AppBar(
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: cs.surface,
+        foregroundColor: cs.onSurface,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
-        foregroundColor: Colors.black87,
         // ⬇️ 좌측 상단(11시)에 'tablet management' 텍스트 고정
         flexibleSpace: _buildScreenTag(context),
-        title: const Text('태블릿 계정 관리',
-            style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('태블릿 계정 관리', style: TextStyle(fontWeight: FontWeight.bold)),
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
@@ -352,11 +344,15 @@ class _TabletManagementState extends State<TabletManagement> {
         ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
+          child: Container(height: 1, color: cs.outlineVariant.withOpacity(.75)),
         ),
       ),
       body: userState.isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+        ),
+      )
           : filteredTablets.isEmpty
           ? Center(
         child: userState.tabletUsers.isEmpty
@@ -371,56 +367,49 @@ class _TabletManagementState extends State<TabletManagement> {
           final isSelected = userState.selectedUserId == user.id;
 
           return Card(
-            color: Colors.white,
+            color: cs.surface,
             elevation: 1,
-            surfaceTintColor: palette.serviceLight,
+            surfaceTintColor: Colors.transparent,
             margin: const EdgeInsets.symmetric(vertical: 6),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
               side: BorderSide(
-                color: isSelected
-                    ? palette.serviceBase.withOpacity(.25)
-                    : Colors.black.withOpacity(.06),
+                color: isSelected ? cs.primary.withOpacity(.25) : cs.outlineVariant.withOpacity(.65),
               ),
             ),
             child: ListTile(
               key: ValueKey(user.id),
               leading: CircleAvatar(
                 radius: 18,
-                backgroundColor: palette.serviceBase,
-                child: const Icon(
-                  Icons.tablet_mac_rounded,
-                  size: 18,
-                  color: Colors.white,
-                ),
+                backgroundColor: cs.primaryContainer.withOpacity(.65),
+                foregroundColor: cs.onPrimaryContainer,
+                child: const Icon(Icons.tablet_mac_rounded, size: 18),
               ),
               title: Text(
                 user.name,
                 style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: palette.serviceDark,
+                  color: cs.onSurface,
                 ),
               ),
               subtitle: Padding(
                 padding: const EdgeInsets.only(top: 4),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('이메일: ${user.email}'),
-                    Text(
-                      '출근: ${formatTime(user.startTime)} / 퇴근: ${formatTime(user.endTime)}',
-                    ),
-                    Text('역할: ${user.role}'),
-                    if (user.position?.isNotEmpty == true)
-                      Text('직책: ${user.position!}'),
-                  ],
+                child: DefaultTextStyle(
+                  style: TextStyle(color: cs.onSurfaceVariant, height: 1.25),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('이메일: ${user.email}'),
+                      Text('출근: ${formatTime(user.startTime)} / 퇴근: ${formatTime(user.endTime)}'),
+                      Text('역할: ${user.role}'),
+                      if (user.position?.isNotEmpty == true) Text('직책: ${user.position!}'),
+                    ],
+                  ),
                 ),
               ),
-              trailing: isSelected
-                  ? Icon(Icons.check_circle, color: palette.serviceBase)
-                  : null,
+              trailing: isSelected ? Icon(Icons.check_circle, color: cs.primary) : null,
               selected: isSelected,
-              selectedTileColor: palette.serviceLight.withOpacity(.06),
+              selectedTileColor: cs.primaryContainer.withOpacity(.22),
               onTap: () => userState.toggleUserCard(user.id),
             ),
           );
@@ -459,13 +448,12 @@ class _FabStack extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final palette = AppCardPalette.of(context);
 
     final ButtonStyle primaryStyle = ElevatedButton.styleFrom(
-      backgroundColor: palette.serviceBase, // ✅ AppCardPalette
-      foregroundColor: Colors.white,
+      backgroundColor: cs.primary,
+      foregroundColor: cs.onPrimary,
       elevation: 3,
-      shadowColor: cs.shadow.withOpacity(0.25),
+      shadowColor: cs.primary.withOpacity(0.25),
       shape: const StadiumBorder(),
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       textStyle: const TextStyle(fontWeight: FontWeight.w700),
@@ -559,8 +547,7 @@ class _ElevatedPillButton extends StatelessWidget {
 
 /// 아이콘 + 라벨(간격/정렬 최적화)
 class _FabLabel extends StatelessWidget {
-  const _FabLabel({required this.icon, required this.label, Key? key})
-      : super(key: key);
+  const _FabLabel({required this.icon, required this.label, Key? key}) : super(key: key);
 
   final IconData icon;
   final String label;
