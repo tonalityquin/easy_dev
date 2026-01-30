@@ -6,16 +6,16 @@ import '../lite_login_controller.dart';
 // ✅ Trace 기록용 Recorder
 import '../../../../../screens/hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
 
-class LiteLoginForm extends StatefulWidget {
+class DoubleLoginForm extends StatefulWidget {
   final LiteLoginController controller;
 
-  const LiteLoginForm({super.key, required this.controller});
+  const DoubleLoginForm({super.key, required this.controller});
 
   @override
-  State<LiteLoginForm> createState() => _LiteLoginFormState();
+  State<DoubleLoginForm> createState() => _DoubleLoginFormState();
 }
 
-class _LiteLoginFormState extends State<LiteLoginForm> {
+class _DoubleLoginFormState extends State<DoubleLoginForm> {
   late final LiteLoginController _controller;
 
   @override

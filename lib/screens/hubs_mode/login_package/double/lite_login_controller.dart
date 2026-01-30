@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
-import 'utils/lite_login_network_service.dart';
-import 'utils/lite_login_validate.dart';
+import 'utils/double_login_network_service.dart';
+import 'utils/double_login_validate.dart';
 
 import '../../../../repositories/user_repo_services/user_repository.dart';
 import '../../../../states/area/area_state.dart';
@@ -93,8 +93,8 @@ class LiteLoginController {
       return;
     }
 
-    final phoneError = LiteLoginValidate.validatePhone(phone);
-    final passwordError = LiteLoginValidate.validatePassword(password);
+    final phoneError = DoubleLoginValidate.validatePhone(phone);
+    final passwordError = DoubleLoginValidate.validatePassword(password);
 
     if (name.isEmpty) {
       showFailedSnackbar(context, '이름을 입력해주세요.');
@@ -111,7 +111,7 @@ class LiteLoginController {
 
     setState(() => isLoading = true);
 
-    final isConn = await LiteLoginNetworkService().isConnected();
+    final isConn = await DoubleLoginNetworkService().isConnected();
     debugPrint('[LOGIN-LITE][${_ts()}] isConnected=$isConn');
 
     if (!isConn) {

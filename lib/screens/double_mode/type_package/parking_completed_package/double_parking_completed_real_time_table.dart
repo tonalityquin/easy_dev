@@ -228,7 +228,7 @@ class _GenericViewRepository {
 }
 
 class DoubleParkingCompletedRealTimeTable extends StatefulWidget {
-  final VoidCallback? onClose;
+  final VoidCallback? onClose; // (호환성 유지) UI에서는 더 이상 사용하지 않음
 
   const DoubleParkingCompletedRealTimeTable({
     super.key,
@@ -358,73 +358,7 @@ class _DoubleParkingCompletedRealTimeTableState
     );
   }
 
-  Widget _buildTopHeader(TextTheme textTheme, ColorScheme cs) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: cs.primary.withOpacity(.08),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(Icons.table_chart_outlined, color: cs.primary, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '입차 완료 테이블',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: cs.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '지역: $_area',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                ),
-              ],
-            ),
-          ),
-          if (!_gatesLoaded) ...[
-            const SizedBox(width: 8),
-            SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.2,
-                valueColor: AlwaysStoppedAnimation<Color>(cs.primary.withOpacity(.9)),
-              ),
-            ),
-          ],
-          const SizedBox(width: 6),
-          IconButton(
-            tooltip: '닫기',
-            onPressed: () {
-              final cb = widget.onClose;
-              if (cb != null) {
-                cb();
-                return;
-              }
-              Navigator.of(context).maybePop();
-            },
-            icon: Icon(Icons.close, color: cs.onSurface),
-          ),
-        ],
-      ),
-    );
-  }
-
+  /// ✅ 닫기 아이콘 완전 제거(하단 바는 탭만 유지)
   Widget _buildBottomTabBar(ColorScheme cs) {
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
@@ -456,15 +390,13 @@ class _DoubleParkingCompletedRealTimeTableState
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
 
     return Container(
       color: cs.surface,
       child: Column(
         children: [
-          _buildTopHeader(textTheme, cs),
-          Divider(height: 1, color: cs.outlineVariant.withOpacity(.7)),
+          // ✅ 상단 헤더 제거 → 데이터 영역(Expanded)이 그만큼 더 커짐
           Expanded(
             child: TabBarView(
               controller: _tabCtrl,
@@ -473,11 +405,13 @@ class _DoubleParkingCompletedRealTimeTableState
                 _pcGate
                     ? _UnifiedTableBody(
                   controller: _ctrl,
-                  description: '하단 “입차 완료” 탭을 누르면 데이터가 갱신됩니다. 잦은 갱신은 앱에 무리를 줍니다.',
+                  description:
+                  '하단 “입차 완료” 탭을 누르면 데이터가 갱신됩니다. 잦은 갱신은 앱에 무리를 줍니다.',
                 )
                     : const _LockedPanel(
                   title: '입차 완료 실시간 모드가 비활성화되어 있습니다',
-                  message: '설정에서 “입차 완료 실시간 모드(탭) 사용”을 ON으로 변경한 뒤 다시 시도해 주세요.',
+                  message:
+                  '설정에서 “입차 완료 실시간 모드(탭) 사용”을 ON으로 변경한 뒤 다시 시도해 주세요.',
                 ),
               ],
             ),
@@ -745,7 +679,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
   }
 
   Future<void> _toggleViewMode() async {
-    final next = (_viewMode == _ViewMode.plate) ? _ViewMode.zone : _ViewMode.plate;
+    final next =
+    (_viewMode == _ViewMode.plate) ? _ViewMode.zone : _ViewMode.plate;
 
     setState(() {
       _viewMode = next;
@@ -1034,7 +969,9 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
       context: context,
       barrierDismissible: _kDialogBarrierDismissible,
       builder: (_) {
-        final remainText = (z.remaining == null) ? '-' : (z.remaining! >= 0 ? '${z.remaining}대' : '0대');
+        final remainText = (z.remaining == null)
+            ? '-'
+            : (z.remaining! >= 0 ? '${z.remaining}대' : '0대');
         final capText = z.capacity > 0 ? '${z.capacity}대' : '-';
 
         final title = '구역: ${z.fullName}';
@@ -1048,6 +985,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
           fontWeight: FontWeight.w900,
           color: color,
         );
+
         return Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 520),
@@ -1056,8 +994,10 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
               child: AlertDialog(
                 backgroundColor: cs.surface,
                 elevation: 8,
-                insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                insetPadding:
+                const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
                 contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                 content: SizedBox(
                   width: 520,
@@ -1088,7 +1028,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                         alignment: Alignment.centerLeft,
                         child: Text(
                           subtitle,
-                          style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                          style: text.bodySmall
+                              ?.copyWith(color: cs.onSurfaceVariant),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -1100,11 +1041,13 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.inbox_outlined, size: 40, color: cs.outline),
+                              Icon(Icons.inbox_outlined,
+                                  size: 40, color: cs.outline),
                               const SizedBox(height: 10),
                               Text(
                                 '표시할 번호판이 없습니다.',
-                                style: text.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                                style: text.bodyMedium
+                                    ?.copyWith(color: cs.onSurfaceVariant),
                               ),
                             ],
                           ),
@@ -1115,7 +1058,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                             decoration: BoxDecoration(
                               color: cs.surfaceContainerLow,
                               borderRadius: BorderRadius.circular(14),
-                              border: Border.all(color: cs.outlineVariant.withOpacity(.75)),
+                              border: Border.all(
+                                  color: cs.outlineVariant.withOpacity(.75)),
                             ),
                             child: Scrollbar(
                               child: ListView.separated(
@@ -1134,42 +1078,54 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                                     child: InkWell(
                                       onTap: () {
                                         Navigator.of(context).pop();
-                                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                                        WidgetsBinding.instance
+                                            .addPostFrameCallback((_) {
                                           if (!mounted) return;
                                           _openHybridDetailPopup(r);
                                         });
                                       },
                                       child: Padding(
-                                        padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                                        padding: const EdgeInsets.fromLTRB(
+                                            10, 10, 10, 10),
                                         child: Row(
                                           children: [
                                             SizedBox(
                                               width: 30,
                                               child: Text(
-                                                (i + 1).toString().padLeft(2, '0'),
+                                                (i + 1)
+                                                    .toString()
+                                                    .padLeft(2, '0'),
                                                 style: monoSmall(cs.onSurface),
                                               ),
                                             ),
                                             const SizedBox(width: 10),
                                             Expanded(
                                               child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                                 children: [
                                                   Text(
                                                     r.plateNumber,
-                                                    style: text.bodyMedium?.copyWith(
-                                                      fontWeight: FontWeight.w900,
+                                                    style: text.bodyMedium
+                                                        ?.copyWith(
+                                                      fontWeight:
+                                                      FontWeight.w900,
                                                       color: cs.onSurface,
                                                     ),
                                                     maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
+                                                    overflow:
+                                                    TextOverflow.ellipsis,
                                                   ),
                                                   const SizedBox(height: 2),
                                                   Text(
                                                     r.location,
-                                                    style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                                                    style: text.bodySmall
+                                                        ?.copyWith(
+                                                        color: cs
+                                                            .onSurfaceVariant),
                                                     maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
+                                                    overflow:
+                                                    TextOverflow.ellipsis,
                                                   ),
                                                 ],
                                               ),
@@ -1177,7 +1133,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                                             const SizedBox(width: 10),
                                             Text(
                                               timeText.isEmpty ? '-' : timeText,
-                                              style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                                              style: text.bodySmall?.copyWith(
+                                                  color: cs.onSurfaceVariant),
                                             ),
                                           ],
                                         ),
@@ -1194,7 +1151,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                         alignment: Alignment.centerLeft,
                         child: Text(
                           '항목을 탭하면 번호판 상세로 이동합니다.',
-                          style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                          style: text.bodySmall
+                              ?.copyWith(color: cs.onSurfaceVariant),
                         ),
                       ),
                     ],
@@ -1224,7 +1182,10 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
 
     final fut = () async {
       try {
-        final doc = await FirebaseFirestore.instance.collection('plates').doc(id).get();
+        final doc = await FirebaseFirestore.instance
+            .collection('plates')
+            .doc(id)
+            .get();
         if (!doc.exists) return null;
 
         final plate = PlateModel.fromDocument(doc);
@@ -1469,7 +1430,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
 
   Widget _buildViewModeTogglePill(ColorScheme cs, TextTheme text) {
     final disabled = _loading;
-    final toggleLabel = (_viewMode == _ViewMode.plate) ? '구역으로 보기' : '번호판으로 보기';
+    final toggleLabel =
+    (_viewMode == _ViewMode.plate) ? '구역으로 보기' : '번호판으로 보기';
 
     return Container(
       width: double.infinity,
@@ -1496,7 +1458,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
               borderRadius: BorderRadius.circular(999),
               onTap: disabled ? null : _toggleViewMode,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                 child: Row(
                   children: [
                     Expanded(
@@ -1505,13 +1468,15 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: text.labelMedium?.copyWith(
-                          color: disabled ? cs.onSurfaceVariant : cs.onSurface,
+                          color:
+                          disabled ? cs.onSurfaceVariant : cs.onSurface,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Icon(Icons.swap_horiz_rounded, size: 18, color: cs.onSurfaceVariant),
+                    Icon(Icons.swap_horiz_rounded,
+                        size: 18, color: cs.onSurfaceVariant),
                   ],
                 ),
               ),
@@ -1526,7 +1491,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
     final options = _locationOptionsForDropdown();
     final disabled = _loading || options.isEmpty;
 
-    if (_selectedLocation != _locationAll && !options.contains(_selectedLocation)) {
+    if (_selectedLocation != _locationAll &&
+        !options.contains(_selectedLocation)) {
       _selectedLocation = _locationAll;
     }
 
@@ -1608,7 +1574,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
         ),
         filled: true,
         fillColor: cs.surfaceContainerLow,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        contentPadding:
+        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.8)),
@@ -1675,11 +1642,15 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text('No', style: _headStyle(cs), overflow: TextOverflow.ellipsis),
+                        child: Text('No',
+                            style: _headStyle(cs),
+                            overflow: TextOverflow.ellipsis),
                       ),
                       const SizedBox(width: 4),
                       Icon(
-                        _sortOldFirst ? Icons.arrow_upward : Icons.arrow_downward,
+                        _sortOldFirst
+                            ? Icons.arrow_upward
+                            : Icons.arrow_downward,
                         size: 14,
                         color: cs.onSurfaceVariant,
                       ),
@@ -1688,9 +1659,17 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                 ),
               ),
               const SizedBox(width: 8),
-              Expanded(flex: 7, child: Text('Plate', style: _headStyle(cs), overflow: TextOverflow.ellipsis)),
+              Expanded(
+                  flex: 7,
+                  child: Text('Plate',
+                      style: _headStyle(cs),
+                      overflow: TextOverflow.ellipsis)),
               const SizedBox(width: 8),
-              Expanded(flex: 5, child: Text('Location', style: _headStyle(cs), overflow: TextOverflow.ellipsis)),
+              Expanded(
+                  flex: 5,
+                  child: Text('Location',
+                      style: _headStyle(cs),
+                      overflow: TextOverflow.ellipsis)),
             ],
           ),
         ),
@@ -1702,9 +1681,12 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
               itemCount: _rows.length,
               itemBuilder: (context, i) {
                 final r = _rows[i];
-                final rowBg = i.isEven ? cs.surface : cs.surfaceContainerLow.withOpacity(.55);
+                final rowBg = i.isEven
+                    ? cs.surface
+                    : cs.surfaceContainerLow.withOpacity(.55);
 
-                final rawNo = (i < _displayNos.length) ? _displayNos[i] : (i + 1);
+                final rawNo =
+                (i < _displayNos.length) ? _displayNos[i] : (i + 1);
                 final noText = rawNo.toString().padLeft(2, '0');
 
                 return Material(
@@ -1727,7 +1709,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                             flex: 2,
                             child: Text(
                               noText,
-                              style: _monoStyle(cs).copyWith(fontWeight: FontWeight.w900),
+                              style: _monoStyle(cs)
+                                  .copyWith(fontWeight: FontWeight.w900),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -1740,7 +1723,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                               alignment: Alignment.centerLeft,
                               child: Text(
                                 r.plateNumber,
-                                style: _cellStyle(cs).copyWith(fontWeight: FontWeight.w900),
+                                style: _cellStyle(cs)
+                                    .copyWith(fontWeight: FontWeight.w900),
                                 maxLines: 1,
                                 softWrap: false,
                               ),
@@ -1754,7 +1738,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                               alignment: Alignment.centerLeft,
                               child: Text(
                                 r.location,
-                                style: _cellStyle(cs).copyWith(color: cs.onSurfaceVariant),
+                                style: _cellStyle(cs)
+                                    .copyWith(color: cs.onSurfaceVariant),
                                 maxLines: 1,
                                 softWrap: false,
                               ),
@@ -1790,11 +1775,14 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
     final totalRemAll = totalCapAll > 0 ? (totalCapAll - totalCurAll) : null;
 
     Widget buildZoneRow(_ZoneVM z, {required bool indented}) {
-      final remainText = (z.remaining == null) ? '-' : (z.remaining! >= 0 ? '${z.remaining}대' : '0대');
+      final remainText = (z.remaining == null)
+          ? '-'
+          : (z.remaining! >= 0 ? '${z.remaining}대' : '0대');
       final capText = z.capacity > 0 ? '${z.capacity}대' : '-';
 
       final leftPad = indented ? 28.0 : 12.0;
-      final remainColor = (z.remaining != null && z.remaining! <= 0) ? cs.error : cs.tertiary;
+      final remainColor =
+      (z.remaining != null && z.remaining! <= 0) ? cs.error : cs.tertiary;
 
       return Material(
         color: cs.surface,
@@ -1805,12 +1793,15 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
             padding: EdgeInsets.fromLTRB(leftPad, 10, 12, 10),
             decoration: BoxDecoration(
               color: cs.surface,
-              border: Border(bottom: BorderSide(color: cs.outlineVariant.withOpacity(.55))),
+              border: Border(
+                  bottom:
+                  BorderSide(color: cs.outlineVariant.withOpacity(.55))),
             ),
             child: Row(
               children: [
                 if (indented) ...[
-                  Icon(Icons.subdirectory_arrow_right_rounded, size: 18, color: cs.onSurfaceVariant),
+                  Icon(Icons.subdirectory_arrow_right_rounded,
+                      size: 18, color: cs.onSurfaceVariant),
                   const SizedBox(width: 6),
                 ],
                 Expanded(
@@ -1824,9 +1815,13 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                   ),
                 ),
                 const SizedBox(width: 8),
-                Text('현재 ${z.current}대', style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                Text('현재 ${z.current}대',
+                    style: text.bodySmall
+                        ?.copyWith(color: cs.onSurfaceVariant)),
                 const SizedBox(width: 10),
-                Text('총 $capText', style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                Text('총 $capText',
+                    style: text.bodySmall
+                        ?.copyWith(color: cs.onSurfaceVariant)),
                 const SizedBox(width: 10),
                 Text(
                   '잔여 $remainText',
@@ -1857,7 +1852,10 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
       final groupRemainText = g.totalRemaining == null
           ? '-'
           : (g.totalRemaining! >= 0 ? '${g.totalRemaining}대' : '0대');
-      final groupRemainColor = (g.totalRemaining != null && g.totalRemaining! <= 0) ? cs.error : cs.tertiary;
+      final groupRemainColor =
+      (g.totalRemaining != null && g.totalRemaining! <= 0)
+          ? cs.error
+          : cs.tertiary;
 
       children.add(
         Material(
@@ -1869,11 +1867,14 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
               decoration: BoxDecoration(
                 color: cs.surfaceContainerLow,
-                border: Border(bottom: BorderSide(color: cs.outlineVariant.withOpacity(.65))),
+                border: Border(
+                    bottom:
+                    BorderSide(color: cs.outlineVariant.withOpacity(.65))),
               ),
               child: Row(
                 children: [
-                  Icon(expanded ? Icons.expand_less : Icons.expand_more, color: cs.onSurfaceVariant),
+                  Icon(expanded ? Icons.expand_less : Icons.expand_more,
+                      color: cs.onSurfaceVariant),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
@@ -1886,11 +1887,14 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Text('현재 ${g.totalCurrent}대', style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                  Text('현재 ${g.totalCurrent}대',
+                      style: text.bodySmall
+                          ?.copyWith(color: cs.onSurfaceVariant)),
                   const SizedBox(width: 10),
                   Text(
                     '총 ${g.totalCapacity > 0 ? "${g.totalCapacity}대" : "-"}',
-                    style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                    style: text.bodySmall
+                        ?.copyWith(color: cs.onSurfaceVariant),
                   ),
                   const SizedBox(width: 10),
                   Text(
@@ -1921,7 +1925,9 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
           decoration: BoxDecoration(
             color: cs.surfaceContainerLow,
-            border: Border(bottom: BorderSide(color: cs.outlineVariant.withOpacity(.85))),
+            border: Border(
+                bottom:
+                BorderSide(color: cs.outlineVariant.withOpacity(.85))),
           ),
           child: Row(
             children: [
@@ -1940,7 +1946,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                 totalCapAll > 0
                     ? '총 ${totalCapAll}대 / 현재 ${totalCurAll}대 / 잔여 ${totalRemAll ?? 0}대'
                     : '현재 ${totalCurAll}대',
-                style: text.labelMedium?.copyWith(color: cs.onSurfaceVariant),
+                style: text.labelMedium
+                    ?.copyWith(color: cs.onSurfaceVariant),
               ),
             ],
           ),
@@ -1976,8 +1983,10 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
               child: AlertDialog(
                 backgroundColor: cs.surface,
                 elevation: 8,
-                insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                insetPadding:
+                const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
                 contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                 content: _PlateDetailNotFoundDialog(
                   plateId: plateId,
@@ -2015,8 +2024,10 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
               child: AlertDialog(
                 backgroundColor: cs.surface,
                 elevation: 8,
-                insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                insetPadding:
+                const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
                 contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                 content: _PlateDetailBodyDialog(
                   title: '번호판 상세',
@@ -2030,8 +2041,11 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                     topRightDownText: feeText,
                     midLeftText: plate.location,
                     midCenterText: displayUser.isEmpty ? '-' : displayUser,
-                    midRightText: CustomDateUtils.formatTimeForUI(plate.requestTime),
-                    bottomLeftLeftText: plate.statusList.isNotEmpty ? plate.statusList.join(", ") : "",
+                    midRightText:
+                    CustomDateUtils.formatTimeForUI(plate.requestTime),
+                    bottomLeftLeftText: plate.statusList.isNotEmpty
+                        ? plate.statusList.join(", ")
+                        : "",
                     bottomLeftCenterText: plate.customStatus ?? '',
                     bottomRightText: elapsedText,
                     isSelected: plate.isSelected,
@@ -2101,8 +2115,10 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
           currentFee = plate.lockedFeeAmount!;
         } else {
           currentFee = calculateParkingFee(
-            entryTimeInSeconds: plate.requestTime.millisecondsSinceEpoch ~/ 1000,
-            currentTimeInSeconds: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            entryTimeInSeconds:
+            plate.requestTime.millisecondsSinceEpoch ~/ 1000,
+            currentTimeInSeconds:
+            DateTime.now().millisecondsSinceEpoch ~/ 1000,
             basicStandard: basicStandard,
             basicAmount: basicAmount,
             addStandard: addStandard,
@@ -2119,7 +2135,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
           ? '${plate.isLockedFee ? (plate.lockedFeeAmount ?? 0) : (plate.regularAmount ?? 0)}원'
           : '$currentFee원';
 
-      final elapsedText = _formatElapsed(DateTime.now().difference(plate.requestTime));
+      final elapsedText =
+      _formatElapsed(DateTime.now().difference(plate.requestTime));
 
       final backgroundColor =
       ((plate.billingType?.trim().isNotEmpty ?? false) && plate.isLockedFee)
@@ -2127,7 +2144,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
           : cs.surface;
 
       final bool isSelected = plate.isSelected;
-      final String displayUser = isSelected ? (plate.selectedBy ?? '') : plate.userName;
+      final String displayUser =
+      isSelected ? (plate.selectedBy ?? '') : plate.userName;
 
       final bool? doWork = await _showPlateDetailDialog(
         viewRow: r,
@@ -2170,7 +2188,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                 Expanded(
                   child: Text(
                     widget.description,
-                    style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                    style: text.bodySmall
+                        ?.copyWith(color: cs.onSurfaceVariant),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -2347,11 +2366,19 @@ class _PlateDetailNotFoundDialog extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text('plateId: $plateId', style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                Text('plateId: $plateId',
+                    style:
+                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
                 const SizedBox(height: 6),
-                Text('VIEW Plate: $viewPlateNumber', style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
-                Text('VIEW Location: $viewLocation', style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
-                Text('VIEW Time: $viewTimeText', style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                Text('VIEW Plate: $viewPlateNumber',
+                    style:
+                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                Text('VIEW Location: $viewLocation',
+                    style:
+                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                Text('VIEW Time: $viewTimeText',
+                    style:
+                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
               ],
             ),
           ),
@@ -2433,7 +2460,8 @@ class _PlateDetailBodyDialog extends StatelessWidget {
                   style: FilledButton.styleFrom(
                     backgroundColor: cs.primary,
                     foregroundColor: cs.onPrimary,
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 12, horizontal: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),

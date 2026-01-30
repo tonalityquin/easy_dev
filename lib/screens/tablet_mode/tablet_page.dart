@@ -11,17 +11,6 @@ import '../tablet_mode/body_panels/tablet_right_panel.dart';
 import '../tablet_mode/widgets/tablet_top_navigation.dart';
 import '../tablet_mode/states/tablet_pad_mode_state.dart';
 
-/// Tablet 전용 팔레트(이전 Deep Blue 컨셉 일관 유지)
-class _Palette {
-  static const base = Color(0xFF0D47A1);
-  static const dark = Color(0xFF09367D);
-  static const light = Color(0xFF5472D3);
-
-  // 화면 배경/보더 톤
-  static const panelBg = Color(0xFFF7F8FA);
-  static const divider = Color(0xFFEBEDF0);
-}
-
 class TabletPage extends StatefulWidget {
   const TabletPage({super.key});
 
@@ -70,17 +59,25 @@ class _TabletPageState extends State<TabletPage> {
     });
   }
 
-  SnackBar _styledSnackBar(String message, {Duration? duration}) {
+  // 브랜드 테마(ColorScheme) 기반으로 SnackBar 스타일링
+  SnackBar _styledSnackBar(BuildContext context, String message, {Duration? duration}) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+
     return SnackBar(
       content: Text(
         message,
-        style: const TextStyle(fontWeight: FontWeight.w600),
+        style: (text.bodyMedium ?? const TextStyle()).copyWith(
+          fontWeight: FontWeight.w700,
+          color: cs.onInverseSurface,
+        ),
       ),
       behavior: SnackBarBehavior.floating,
       duration: duration ?? const Duration(seconds: 3),
-      backgroundColor: _Palette.dark.withOpacity(.96),
+      backgroundColor: cs.inverseSurface.withOpacity(.96),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      elevation: 0,
     );
   }
 
@@ -100,7 +97,7 @@ class _TabletPageState extends State<TabletPage> {
         final messenger = ScaffoldMessenger.maybeOf(context);
         messenger?.hideCurrentSnackBar();
         messenger?.showSnackBar(
-          _styledSnackBar('출차 완료 처리됨: ${removed.plateNumber}'),
+          _styledSnackBar(context, '출차 완료 처리됨: ${removed.plateNumber}'),
         );
 
         _addCompletedChip(removed.plateNumber);
@@ -116,6 +113,8 @@ class _TabletPageState extends State<TabletPage> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final area = context.select<AreaState, String?>((s) => s.currentArea) ?? '';
     final padMode = context.select<TabletPadModeState, PadMode>((s) => s.mode);
 
@@ -137,13 +136,15 @@ class _TabletPageState extends State<TabletPage> {
         messenger?.hideCurrentSnackBar();
         messenger?.showSnackBar(
           _styledSnackBar(
+            context,
             '뒤로가기가 비활성화되어 앱이 종료되지 않습니다. 상단 메뉴에서 이동하세요.',
             duration: const Duration(seconds: 2),
           ),
         );
       },
       child: Scaffold(
-        backgroundColor: Colors.white,
+        // ✅ 고정 white 제거 → 브랜드 테마 surface를 배경으로
+        backgroundColor: cs.surface,
 
         appBar: const PreferredSize(
           preferredSize: Size.fromHeight(kToolbarHeight),
@@ -168,7 +169,7 @@ class _TabletPageState extends State<TabletPage> {
                 child: padMode == PadMode.show
                 // ▶ show 모드: 왼쪽 패널만 전체 화면
                     ? ColoredBox(
-                  color: _Palette.panelBg,
+                  color: cs.surfaceContainerLow,
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: _PanelCard(
@@ -181,7 +182,7 @@ class _TabletPageState extends State<TabletPage> {
                     : padMode == PadMode.mobile
                 // ✅ mobile 모드: 좌/우 패널 분할 없이 단일 화면(검색+입력표시+키패드)
                     ? ColoredBox(
-                  color: Colors.white,
+                  color: cs.surface,
                   child: RightPaneSearchPanel(
                     key: ValueKey('mobile-pane-$area'),
                     area: area,
@@ -194,7 +195,7 @@ class _TabletPageState extends State<TabletPage> {
                     // ⬅️ 왼쪽 패널
                     Expanded(
                       child: ColoredBox(
-                        color: _Palette.panelBg,
+                        color: cs.surfaceContainerLow,
                         child: Padding(
                           padding: const EdgeInsets.all(24),
                           child: _PanelCard(
@@ -206,16 +207,16 @@ class _TabletPageState extends State<TabletPage> {
                       ),
                     ),
 
-                    const VerticalDivider(
+                    VerticalDivider(
                       width: 1,
                       thickness: 1,
-                      color: _Palette.divider,
+                      color: cs.outlineVariant,
                     ),
 
                     // ➡️ 오른쪽 패널
                     Expanded(
                       child: ColoredBox(
-                        color: Colors.white,
+                        color: cs.surface,
                         child: ClipRRect(
                           borderRadius: const BorderRadius.only(
                             topLeft: Radius.circular(12),
@@ -238,8 +239,8 @@ class _TabletPageState extends State<TabletPage> {
           top: false,
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(top: BorderSide(color: _Palette.divider.withOpacity(.9))),
+              color: cs.surface,
+              border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(.9))),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -269,14 +270,17 @@ class _PanelCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        // ✅ 고정 white 제거 → surface 사용
+        color: cs.surface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: cs.outline.withOpacity(.12)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.04),
+            // ✅ Colors.black 제거 → scheme shadow 사용
+            color: cs.shadow.withOpacity(.04),
             blurRadius: 14,
             offset: const Offset(0, 6),
           ),
@@ -302,15 +306,24 @@ class _StickyNoticeBar extends StatelessWidget {
     required this.onRemove,
   });
 
+  Color _tintOnSurface(ColorScheme cs, {required double opacity}) {
+    return Color.alphaBlend(cs.primary.withOpacity(opacity), cs.surface);
+  }
+
   @override
   Widget build(BuildContext context) {
     final hasChips = plates.isNotEmpty;
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
 
-    // 기존 amber notice를 유지하되, 전체 톤을 Deep Blue UI와 어울리도록 보더/텍스트/칩을 정리
-    final barBg = _Palette.base.withOpacity(.05);
-    final barBorder = _Palette.light.withOpacity(.28);
+    // ✅ 기존 "Deep Blue" 고정 팔레트 제거 → 브랜드 primary를 surface 위에 얇게 얹는 방식으로 톤 유지
+    final dark = cs.brightness == Brightness.dark;
+    final barBg = _tintOnSurface(cs, opacity: dark ? 0.14 : 0.06);
+    final barBorder = cs.primary.withOpacity(dark ? 0.35 : 0.20);
+
+    final infoIconColor = hasChips ? cs.tertiary : cs.primary;
+    final titleColor = cs.onSurface;
+    final bodyColor = cs.onSurface.withOpacity(.85);
 
     return Material(
       color: barBg,
@@ -326,7 +339,7 @@ class _StickyNoticeBar extends StatelessWidget {
             Icon(
               hasChips ? Icons.check_circle_outline : Icons.info_outline,
               size: 18,
-              color: hasChips ? Colors.teal.shade700 : _Palette.base,
+              color: infoIconColor,
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -335,9 +348,9 @@ class _StickyNoticeBar extends StatelessWidget {
                 children: [
                   Text(
                     '출차 완료:',
-                    style: text.bodySmall?.copyWith(
+                    style: (text.bodySmall ?? const TextStyle()).copyWith(
                       fontSize: 13,
-                      color: _Palette.dark,
+                      color: titleColor,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -348,14 +361,15 @@ class _StickyNoticeBar extends StatelessWidget {
                       child: Row(
                         children: plates.map((p) {
                           final selected = selectedPlates.contains(p);
+
                           return Padding(
                             padding: const EdgeInsets.only(right: 8),
                             child: InputChip(
                               label: Text(
                                 p,
-                                style: text.labelMedium?.copyWith(
+                                style: (text.labelMedium ?? const TextStyle()).copyWith(
                                   fontWeight: FontWeight.w800,
-                                  color: selected ? Colors.white : _Palette.dark,
+                                  color: selected ? cs.onPrimary : cs.onSurface,
                                 ),
                               ),
                               selected: selected,
@@ -363,12 +377,12 @@ class _StickyNoticeBar extends StatelessWidget {
                               onSelected: (_) => onToggleSelect(p),
                               onDeleted: selected ? () => onRemove(p) : null,
                               deleteIcon: selected
-                                  ? const Icon(Icons.close, size: 16, color: Colors.white)
+                                  ? Icon(Icons.close, size: 16, color: cs.onPrimary)
                                   : null,
-                              backgroundColor: Colors.white,
-                              selectedColor: _Palette.base,
+                              backgroundColor: cs.surface,
+                              selectedColor: cs.primary,
                               side: BorderSide(
-                                color: selected ? _Palette.base : cs.outline.withOpacity(.18),
+                                color: selected ? cs.primary : cs.outline.withOpacity(.18),
                               ),
                               visualDensity: VisualDensity.compact,
                               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -386,9 +400,9 @@ class _StickyNoticeBar extends StatelessWidget {
               )
                   : Text(
                 '출차 요청 목록에서 방금 누른 번호가 사라졌다면, 출차 완료 처리된 것입니다.',
-                style: text.bodySmall?.copyWith(
+                style: (text.bodySmall ?? const TextStyle()).copyWith(
                   fontSize: 13,
-                  color: _Palette.dark.withOpacity(.85),
+                  color: bodyColor,
                   fontWeight: FontWeight.w700,
                   height: 1.25,
                 ),

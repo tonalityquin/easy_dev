@@ -306,6 +306,7 @@ class _GenericViewRepository {
 }
 
 class MinorParkingCompletedRealTimeTable extends StatefulWidget {
+  // (호환성 유지) UI에서는 더 이상 사용하지 않음
   final VoidCallback? onClose;
 
   const MinorParkingCompletedRealTimeTable({
@@ -399,12 +400,6 @@ class _MinorParkingCompletedRealTimeTableState
         _tabCtrl.index = 1;
       });
     }
-  }
-
-  String _titleForIndex(int idx) {
-    if (idx == 0) return '입차 요청 테이블';
-    if (idx == 1) return '입차 완료 테이블';
-    return '출차 요청 테이블';
   }
 
   bool _isTabEnabled(int idx) {
@@ -504,77 +499,6 @@ class _MinorParkingCompletedRealTimeTableState
     );
   }
 
-  Widget _buildTopHeader(TextTheme textTheme, ColorScheme cs) {
-    final title = _titleForIndex(_tabCtrl.index);
-    final accent = _Brand.accentForTabIndex(cs, _tabCtrl.index);
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
-      child: Row(
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: accent.withOpacity(.10),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: _Brand.border(cs).withOpacity(0.6)),
-            ),
-            child: Icon(Icons.table_chart_outlined, color: accent, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: cs.onSurface,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '지역: $_area',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                ),
-              ],
-            ),
-          ),
-          if (!_gatesLoaded) ...[
-            const SizedBox(width: 8),
-            SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.2,
-                valueColor: AlwaysStoppedAnimation<Color>(accent.withOpacity(.95)),
-              ),
-            ),
-          ],
-          const SizedBox(width: 6),
-          IconButton(
-            tooltip: '닫기',
-            onPressed: () {
-              final cb = widget.onClose;
-              if (cb != null) {
-                cb();
-                return;
-              }
-              Navigator.of(context).maybePop();
-            },
-            icon: Icon(Icons.close, color: cs.onSurface),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildBottomTabBar(ColorScheme cs) {
     final indicator = _Brand.accentForTabIndex(cs, _tabCtrl.index);
 
@@ -612,15 +536,13 @@ class _MinorParkingCompletedRealTimeTableState
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
 
     return Container(
       color: cs.surface,
       child: Column(
         children: [
-          _buildTopHeader(textTheme, cs),
-          Divider(height: 1, color: _Brand.border(cs)),
+          // ✅ 수정안 반영: 상단 헤더/닫기(X)/구분선 제거 → 데이터 영역 확장
           Expanded(
             child: TabBarView(
               controller: _tabCtrl,
@@ -630,31 +552,37 @@ class _MinorParkingCompletedRealTimeTableState
                     ? _UnifiedTableTab(
                   controller: _reqCtrl,
                   mode: _TabMode.parkingRequestsRealtime,
-                  description: _descriptionForMode(_TabMode.parkingRequestsRealtime),
+                  description:
+                  _descriptionForMode(_TabMode.parkingRequestsRealtime),
                 )
                     : const _RealtimeTabLockedPanel(
                   title: '입차 요청 실시간 탭이 비활성화되어 있습니다',
-                  message: '설정에서 “입차 요청 실시간 모드(탭) 사용”을 ON으로 변경한 뒤 다시 시도해 주세요.',
+                  message:
+                  '설정에서 “입차 요청 실시간 모드(탭) 사용”을 ON으로 변경한 뒤 다시 시도해 주세요.',
                 ),
                 _pcGate
                     ? _UnifiedTableTab(
                   controller: _pcCtrl,
                   mode: _TabMode.parkingCompletedRealtime,
-                  description: _descriptionForMode(_TabMode.parkingCompletedRealtime),
+                  description:
+                  _descriptionForMode(_TabMode.parkingCompletedRealtime),
                 )
                     : const _RealtimeTabLockedPanel(
                   title: '입차 완료 실시간 탭이 비활성화되어 있습니다',
-                  message: '설정에서 “입차 완료 실시간 모드(탭) 사용”을 ON으로 변경한 뒤 다시 시도해 주세요.',
+                  message:
+                  '설정에서 “입차 완료 실시간 모드(탭) 사용”을 ON으로 변경한 뒤 다시 시도해 주세요.',
                 ),
                 _depGate
                     ? _UnifiedTableTab(
                   controller: _depCtrl,
                   mode: _TabMode.departureRequestsRealtime,
-                  description: _descriptionForMode(_TabMode.departureRequestsRealtime),
+                  description:
+                  _descriptionForMode(_TabMode.departureRequestsRealtime),
                 )
                     : const _RealtimeTabLockedPanel(
                   title: '출차 요청 실시간 탭이 비활성화되어 있습니다',
-                  message: '설정에서 “출차 요청 실시간 모드(탭) 사용”을 ON으로 변경한 뒤 다시 시도해 주세요.',
+                  message:
+                  '설정에서 “출차 요청 실시간 모드(탭) 사용”을 ON으로 변경한 뒤 다시 시도해 주세요.',
                 ),
               ],
             ),
@@ -1171,7 +1099,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
 
     final fut = () async {
       try {
-        final doc = await FirebaseFirestore.instance.collection('plates').doc(id).get();
+        final doc =
+        await FirebaseFirestore.instance.collection('plates').doc(id).get();
         if (!doc.exists) return null;
 
         final plate = PlateModel.fromDocument(doc);
@@ -1237,8 +1166,10 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                 backgroundColor: cs.surface,
                 surfaceTintColor: Colors.transparent,
                 elevation: 8,
-                insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                insetPadding:
+                const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
                 contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                 content: _PlateDetailNotFoundDialog(
                   plateId: plateId,
@@ -1282,8 +1213,10 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                 backgroundColor: cs.surface,
                 surfaceTintColor: Colors.transparent,
                 elevation: 8,
-                insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                insetPadding:
+                const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
                 contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                 content: _PlateDetailBodyDialog(
                   title: '번호판 상세',
@@ -1297,8 +1230,11 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                     topRightDownText: feeText,
                     midLeftText: plate.location,
                     midCenterText: displayUser.isEmpty ? '-' : displayUser,
-                    midRightText: CustomDateUtils.formatTimeForUI(plate.requestTime),
-                    bottomLeftLeftText: plate.statusList.isNotEmpty ? plate.statusList.join(", ") : "",
+                    midRightText:
+                    CustomDateUtils.formatTimeForUI(plate.requestTime),
+                    bottomLeftLeftText: plate.statusList.isNotEmpty
+                        ? plate.statusList.join(", ")
+                        : "",
                     bottomLeftCenterText: plate.customStatus ?? '',
                     bottomRightText: elapsedText,
                     isSelected: plate.isSelected,
@@ -1367,7 +1303,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
         } else {
           currentFee = calculateParkingFee(
             entryTimeInSeconds: plate.requestTime.millisecondsSinceEpoch ~/ 1000,
-            currentTimeInSeconds: DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            currentTimeInSeconds:
+            DateTime.now().millisecondsSinceEpoch ~/ 1000,
             basicStandard: basicStandard,
             basicAmount: basicAmount,
             addStandard: addStandard,
@@ -1384,7 +1321,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
           ? '${plate.isLockedFee ? (plate.lockedFeeAmount ?? 0) : (plate.regularAmount ?? 0)}원'
           : '$currentFee원';
 
-      final elapsedText = _formatElapsed(DateTime.now().difference(plate.requestTime));
+      final elapsedText =
+      _formatElapsed(DateTime.now().difference(plate.requestTime));
 
       final ColorScheme cs = Theme.of(context).colorScheme;
       final Color? backgroundColor =
@@ -1392,7 +1330,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
           ? cs.tertiaryContainer.withOpacity(0.45)
           : cs.surface;
 
-      final String displayUser = plate.isSelected ? (plate.selectedBy ?? '') : plate.userName;
+      final String displayUser =
+      plate.isSelected ? (plate.selectedBy ?? '') : plate.userName;
 
       final bool? doWork = await _showPlateDetailDialog(
         viewRow: r,
@@ -1526,7 +1465,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
   // UI
   // ─────────────────────────────────────────
   Widget _buildRowsChip(ColorScheme cs, TextTheme text) {
-    final count = (_viewMode == _ViewMode.plate) ? _rows.length : _allRows.length;
+    final count =
+    (_viewMode == _ViewMode.plate) ? _rows.length : _allRows.length;
     final accent = _Brand.accentForMode(cs, widget.mode);
 
     return Container(
@@ -1557,7 +1497,9 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
     final blocked = _isRefreshBlocked;
     final label = blocked ? '대기 ${_refreshRemainingSec}s' : 'Ready';
 
-    final Color bg = blocked ? cs.errorContainer.withOpacity(0.45) : cs.tertiaryContainer.withOpacity(0.45);
+    final Color bg = blocked
+        ? cs.errorContainer.withOpacity(0.45)
+        : cs.tertiaryContainer.withOpacity(0.45);
     final Color fg = blocked ? cs.onErrorContainer : cs.onTertiaryContainer;
 
     return Container(
@@ -1570,7 +1512,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(blocked ? Icons.timer_outlined : Icons.check_circle_outline, size: 16, color: fg),
+          Icon(blocked ? Icons.timer_outlined : Icons.check_circle_outline,
+              size: 16, color: fg),
           const SizedBox(width: 6),
           Text(
             label,
@@ -1619,7 +1562,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                 child: Row(
                   children: [
                     if (!_zoneSupported) ...[
-                      Icon(Icons.lock_outline, size: 16, color: cs.onSurfaceVariant),
+                      Icon(Icons.lock_outline,
+                          size: 16, color: cs.onSurfaceVariant),
                       const SizedBox(width: 6),
                     ],
                     Expanded(
@@ -1628,13 +1572,15 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: text.labelMedium?.copyWith(
-                          color: disabled ? cs.onSurfaceVariant : cs.onSurface,
+                          color:
+                          disabled ? cs.onSurfaceVariant : cs.onSurface,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
                     ),
                     const SizedBox(width: 6),
-                    Icon(Icons.swap_horiz_rounded, size: 18, color: cs.onSurfaceVariant),
+                    Icon(Icons.swap_horiz_rounded,
+                        size: 18, color: cs.onSurfaceVariant),
                   ],
                 ),
               ),
@@ -1649,7 +1595,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
     final options = _locationOptionsForDropdown();
     final disabled = _loading || options.isEmpty;
 
-    if (_selectedLocation != _locationAll && !options.contains(_selectedLocation)) {
+    if (_selectedLocation != _locationAll &&
+        !options.contains(_selectedLocation)) {
       _selectedLocation = _locationAll;
     }
 
@@ -1688,7 +1635,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: text.labelMedium?.copyWith(
-                        color: disabled ? cs.onSurfaceVariant : cs.onSurface,
+                        color:
+                        disabled ? cs.onSurfaceVariant : cs.onSurface,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -1733,7 +1681,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
         ),
         filled: true,
         fillColor: cs.surfaceContainerLow,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        contentPadding:
+        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
@@ -1793,10 +1742,16 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                   borderRadius: BorderRadius.circular(8),
                   child: Row(
                     children: [
-                      Expanded(child: Text('No', style: headStyle, overflow: TextOverflow.ellipsis)),
+                      Expanded(
+                        child: Text('No',
+                            style: headStyle,
+                            overflow: TextOverflow.ellipsis),
+                      ),
                       const SizedBox(width: 4),
                       Icon(
-                        _sortOldFirst ? Icons.arrow_upward : Icons.arrow_downward,
+                        _sortOldFirst
+                            ? Icons.arrow_upward
+                            : Icons.arrow_downward,
                         size: 14,
                         color: cs.onSurfaceVariant,
                       ),
@@ -1805,9 +1760,15 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                 ),
               ),
               const SizedBox(width: 8),
-              Expanded(flex: 7, child: Text('Plate', style: headStyle, overflow: TextOverflow.ellipsis)),
+              Expanded(
+                  flex: 7,
+                  child: Text('Plate',
+                      style: headStyle, overflow: TextOverflow.ellipsis)),
               const SizedBox(width: 8),
-              Expanded(flex: 5, child: Text('Location', style: headStyle, overflow: TextOverflow.ellipsis)),
+              Expanded(
+                  flex: 5,
+                  child: Text('Location',
+                      style: headStyle, overflow: TextOverflow.ellipsis)),
             ],
           ),
         ),
@@ -1821,7 +1782,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                 final r = _rows[i];
                 final rowBg = i.isEven ? cs.surface : _Brand.rowAlt(cs);
 
-                final rawNo = (i < _displayNos.length) ? _displayNos[i] : (i + 1);
+                final rawNo =
+                (i < _displayNos.length) ? _displayNos[i] : (i + 1);
                 final noText = rawNo.toString().padLeft(2, '0');
 
                 return Material(
@@ -1832,7 +1794,10 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
                       decoration: BoxDecoration(
                         border: Border(
-                          bottom: BorderSide(color: _Brand.border(cs).withOpacity(0.55), width: .7),
+                          bottom: BorderSide(
+                            color: _Brand.border(cs).withOpacity(0.55),
+                            width: .7,
+                          ),
                         ),
                       ),
                       child: Row(
@@ -1841,7 +1806,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                             flex: 2,
                             child: Text(
                               noText,
-                              style: monoStyle.copyWith(fontWeight: FontWeight.w900),
+                              style: monoStyle.copyWith(
+                                  fontWeight: FontWeight.w900),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -1854,7 +1820,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                               alignment: Alignment.centerLeft,
                               child: Text(
                                 r.plateNumber,
-                                style: cellStyle.copyWith(fontWeight: FontWeight.w900),
+                                style: cellStyle.copyWith(
+                                    fontWeight: FontWeight.w900),
                                 maxLines: 1,
                                 softWrap: false,
                               ),
@@ -2023,8 +1990,10 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                 backgroundColor: cs.surface,
                 surfaceTintColor: Colors.transparent,
                 elevation: 8,
-                insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                insetPadding:
+                const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(18)),
                 contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                 content: SizedBox(
                   width: 520,
@@ -2055,24 +2024,26 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                         alignment: Alignment.centerLeft,
                         child: Text(
                           subtitle,
-                          style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                          style: text.bodySmall
+                              ?.copyWith(color: cs.onSurfaceVariant),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       const SizedBox(height: 10),
-
                       if (rows.isEmpty)
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 26),
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.inbox_outlined, size: 40, color: cs.onSurfaceVariant),
+                              Icon(Icons.inbox_outlined,
+                                  size: 40, color: cs.onSurfaceVariant),
                               const SizedBox(height: 10),
                               Text(
                                 '표시할 번호판이 없습니다.',
-                                style: text.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                                style: text.bodyMedium
+                                    ?.copyWith(color: cs.onSurfaceVariant),
                               ),
                             ],
                           ),
@@ -2089,7 +2060,10 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                               child: ListView.separated(
                                 shrinkWrap: true,
                                 itemCount: rows.length,
-                                separatorBuilder: (_, __) => Divider(height: 1, color: _Brand.border(cs).withOpacity(0.55)),
+                                separatorBuilder: (_, __) => Divider(
+                                  height: 1,
+                                  color: _Brand.border(cs).withOpacity(0.55),
+                                ),
                                 itemBuilder: (ctx, i) {
                                   final r = rows[i];
                                   final timeText = _fmtDate(r.createdAt);
@@ -2099,42 +2073,55 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                                     child: InkWell(
                                       onTap: () {
                                         Navigator.of(context).pop();
-                                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                                        WidgetsBinding.instance
+                                            .addPostFrameCallback((_) {
                                           if (!mounted) return;
                                           _openHybridDetailPopup(r);
                                         });
                                       },
                                       child: Padding(
-                                        padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                                        padding: const EdgeInsets.fromLTRB(
+                                            10, 10, 10, 10),
                                         child: Row(
                                           children: [
                                             SizedBox(
                                               width: 30,
                                               child: Text(
-                                                (i + 1).toString().padLeft(2, '0'),
+                                                (i + 1)
+                                                    .toString()
+                                                    .padLeft(2, '0'),
                                                 style: monoSmall(cs.onSurface),
                                               ),
                                             ),
                                             const SizedBox(width: 10),
                                             Expanded(
                                               child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                                 children: [
                                                   Text(
                                                     r.plateNumber,
-                                                    style: text.bodyMedium?.copyWith(
-                                                      fontWeight: FontWeight.w900,
+                                                    style: text.bodyMedium
+                                                        ?.copyWith(
+                                                      fontWeight:
+                                                      FontWeight.w900,
                                                       color: cs.onSurface,
                                                     ),
                                                     maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
+                                                    overflow:
+                                                    TextOverflow.ellipsis,
                                                   ),
                                                   const SizedBox(height: 2),
                                                   Text(
                                                     r.location,
-                                                    style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                                                    style: text.bodySmall
+                                                        ?.copyWith(
+                                                      color: cs
+                                                          .onSurfaceVariant,
+                                                    ),
                                                     maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
+                                                    overflow:
+                                                    TextOverflow.ellipsis,
                                                   ),
                                                 ],
                                               ),
@@ -2142,7 +2129,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                                             const SizedBox(width: 10),
                                             Text(
                                               timeText.isEmpty ? '-' : timeText,
-                                              style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                                              style: text.bodySmall?.copyWith(
+                                                  color: cs.onSurfaceVariant),
                                             ),
                                           ],
                                         ),
@@ -2154,13 +2142,13 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                             ),
                           ),
                         ),
-
                       const SizedBox(height: 6),
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
                           '항목을 탭하면 번호판 상세로 이동합니다.',
-                          style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                          style: text.bodySmall
+                              ?.copyWith(color: cs.onSurfaceVariant),
                         ),
                       ),
                     ],
@@ -2696,11 +2684,19 @@ class _PlateDetailNotFoundDialog extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text('plateId: $plateId', style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                Text('plateId: $plateId',
+                    style:
+                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
                 const SizedBox(height: 6),
-                Text('VIEW Plate: $viewPlateNumber', style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
-                Text('VIEW Location: $viewLocation', style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
-                Text('VIEW Time: $viewTimeText', style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                Text('VIEW Plate: $viewPlateNumber',
+                    style:
+                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                Text('VIEW Location: $viewLocation',
+                    style:
+                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                Text('VIEW Time: $viewTimeText',
+                    style:
+                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
               ],
             ),
           ),
@@ -2782,8 +2778,10 @@ class _PlateDetailBodyDialog extends StatelessWidget {
                   style: FilledButton.styleFrom(
                     backgroundColor: cs.primary,
                     foregroundColor: cs.onPrimary,
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    padding:
+                    const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
                   ),
                 ),
               ),

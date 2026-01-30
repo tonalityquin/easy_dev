@@ -21,8 +21,8 @@ import 'tablet/tablet_login_controller.dart';
 import 'tablet/sections/tablet_login_form.dart';
 
 // double
-import 'lite/lite_login_controller.dart';
-import 'lite/sections/lite_login_form.dart';
+import 'double/lite_login_controller.dart';
+import 'double/sections/double_login_form.dart';
 
 // triple
 import 'normal/normal_login_controller.dart';
@@ -338,7 +338,7 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
     } else if (_mode == 'single') {
       loginForm = SimpleLoginForm(controller: _simpleLoginController!);
     } else if (_mode == 'double') {
-      loginForm = LiteLoginForm(controller: _liteLoginController!);
+      loginForm = DoubleLoginForm(controller: _liteLoginController!);
     } else if (_mode == 'triple') {
       loginForm = NormalLoginForm(controller: _normalLoginController!);
     } else if (_mode == 'minor') {

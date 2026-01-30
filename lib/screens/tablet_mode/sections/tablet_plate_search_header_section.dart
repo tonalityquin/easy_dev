@@ -5,17 +5,18 @@ class TabletPlateSearchHeaderSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
 
     return Row(
       children: [
-        Icon(Icons.directions_car, color: primary),
+        Icon(Icons.directions_car, color: cs.primary),
         const SizedBox(width: 8),
-        const Text(
+        Text(
           '번호판 검색',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
+          style: (text.titleMedium ?? const TextStyle()).copyWith(
+            fontWeight: FontWeight.w700,
+            color: cs.onSurface,
           ),
         ),
       ],
