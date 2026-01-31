@@ -64,7 +64,9 @@ class _Brand {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     ).copyWith(
       overlayColor: MaterialStateProperty.resolveWith<Color?>(
-            (states) => states.contains(MaterialState.pressed) ? cs.onPrimary.withOpacity(0.12) : null,
+            (states) => states.contains(MaterialState.pressed)
+            ? cs.onPrimary.withOpacity(0.12)
+            : null,
       ),
     );
   }
@@ -164,7 +166,8 @@ class _TripleTypePageState extends State<TripleTypePage> {
 
 /// ✅ 기존 TripleParkingCompletedPage의 bottomNavigationBar(현황/출차요청/출차완료 포함)를
 /// TripleTypePage 하단 1행으로 올려서 재사용.
-/// - 모드/정렬 상태는 TripleParkingCompletedPage의 static ValueNotifier로 동기화.
+/// - 모드 상태는 TripleParkingCompletedPage.modeNotifier로 동기화.
+/// - (정렬/plateList/정렬토글 등 레거시 기능은 TripleParkingCompletedPage 리팩터링에서 제거됨)
 /// - 출차요청/입차요청 핸들러는 TripleTypePage에서 기존과 동일하게 수행(Provider 접근 용이).
 class _ParkingCompletedControlBar extends StatelessWidget {
   const _ParkingCompletedControlBar();
@@ -199,7 +202,7 @@ class _ParkingCompletedControlBar extends StatelessWidget {
   }
 
   void _handleEntryParkingRequest(BuildContext context, String plateNumber, String area) async {
-    // 기존 TripleParkingCompletedPage의 stub 동작 유지
+    // 기존 stub 동작 유지(컨트롤 버튼 시그니처 호환)
     showSuccessSnackbar(context, "입차 요청 처리: $plateNumber ($area)");
   }
 
@@ -210,34 +213,37 @@ class _ParkingCompletedControlBar extends StatelessWidget {
     return ValueListenableBuilder<TripleParkingViewMode>(
       valueListenable: TripleParkingCompletedPage.modeNotifier,
       builder: (context, mode, _) {
-        return ValueListenableBuilder<bool>(
-          valueListenable: TripleParkingCompletedPage.isSortedNotifier,
-          builder: (context, isSorted, __) {
-            final isStatusMode = mode == TripleParkingViewMode.status;
-            final isLocationPickerMode = mode == TripleParkingViewMode.locationPicker;
-            final isParkingAreaMode = mode == TripleParkingViewMode.plateList;
+        final isStatusMode = mode == TripleParkingViewMode.status;
+        final isLocationPickerMode = mode == TripleParkingViewMode.locationPicker;
 
-            return TripleParkingCompletedControlButtons(
-              isParkingAreaMode: isParkingAreaMode,
-              isStatusMode: isStatusMode,
-              isLocationPickerMode: isLocationPickerMode,
-              isSorted: isSorted,
-              onToggleViewMode: () {
-                TripleParkingCompletedPage.toggleViewMode(pageState.parkingCompletedKey);
-              },
-              showSearchDialog: () {
-                TripleParkingCompletedPage.openSearchDialog(
-                  pageState.parkingCompletedKey,
-                  context,
-                );
-              },
-              toggleSortIcon: () {
-                TripleParkingCompletedPage.toggleSortIcon(pageState.parkingCompletedKey);
-              },
-              handleEntryParkingRequest: _handleEntryParkingRequest,
-              handleDepartureRequested: _tripleHandleDepartureRequested,
+        // ✅ 리팩터링 반영:
+        // - plateList 모드 제거 → 항상 false
+        // - 정렬 상태(notifier) 제거 → 항상 true로 유지(컨트롤 위젯 시그니처 호환)
+        const bool isParkingAreaMode = false;
+        const bool isSorted = true;
+
+        return TripleParkingCompletedControlButtons(
+          isParkingAreaMode: isParkingAreaMode,
+          isStatusMode: isStatusMode,
+          isLocationPickerMode: isLocationPickerMode,
+          isSorted: isSorted,
+          onToggleViewMode: () {
+            TripleParkingCompletedPage.toggleViewMode(pageState.parkingCompletedKey);
+          },
+          showSearchDialog: () {
+            TripleParkingCompletedPage.openSearchDialog(
+              pageState.parkingCompletedKey,
+              context,
             );
           },
+
+          // ✅ 리팩터링 반영:
+          // - TripleParkingCompletedPage.toggleSortIcon(...) 삭제됨
+          // - 컨트롤 위젯이 아직 toggleSortIcon 콜백을 요구하는 경우를 대비해 no-op 처리
+          toggleSortIcon: () {},
+
+          handleEntryParkingRequest: _handleEntryParkingRequest,
+          handleDepartureRequested: _tripleHandleDepartureRequested,
         );
       },
     );

@@ -104,7 +104,8 @@ class _DoubleTypePageState extends State<DoubleTypePage> {
 
 /// ✅ 기존 DoubleParkingCompletedPage의 bottomNavigationBar(현황/출차요청/출차완료 포함)를
 /// DoubleTypePage 하단 1행으로 올려서 재사용.
-/// - 모드/정렬 상태는 DoubleParkingCompletedPage의 static ValueNotifier로 동기화.
+/// - 모드 상태는 DoubleParkingCompletedPage.modeNotifier로 동기화.
+/// - (plateList/정렬 관련 레거시 기능은 DoubleParkingCompletedPage 리팩터링에서 제거됨)
 class _ParkingCompletedControlBar extends StatelessWidget {
   const _ParkingCompletedControlBar();
 
@@ -115,38 +116,41 @@ class _ParkingCompletedControlBar extends StatelessWidget {
     return ValueListenableBuilder<DoubleParkingViewMode>(
       valueListenable: DoubleParkingCompletedPage.modeNotifier,
       builder: (context, mode, _) {
-        return ValueListenableBuilder<bool>(
-          valueListenable: DoubleParkingCompletedPage.isSortedNotifier,
-          builder: (context, isSorted, __) {
-            final isStatusMode = mode == DoubleParkingViewMode.status;
-            final isLocationPickerMode = mode == DoubleParkingViewMode.locationPicker;
-            final isParkingAreaMode = mode == DoubleParkingViewMode.plateList;
+        final isStatusMode = mode == DoubleParkingViewMode.status;
+        final isLocationPickerMode = mode == DoubleParkingViewMode.locationPicker;
 
-            return DoubleParkingCompletedControlButtons(
-              isParkingAreaMode: isParkingAreaMode,
-              isStatusMode: isStatusMode,
-              isLocationPickerMode: isLocationPickerMode,
-              isSorted: isSorted,
-              onToggleViewMode: () {
-                DoubleParkingCompletedPage.toggleViewMode(pageState.parkingCompletedKey);
-              },
-              showSearchDialog: () {
-                DoubleParkingCompletedPage.openSearchDialog(
-                  pageState.parkingCompletedKey,
-                  context,
-                );
-              },
-              toggleSortIcon: () {
-                DoubleParkingCompletedPage.toggleSortIcon(pageState.parkingCompletedKey);
-              },
-              // ✅ 더블 모드 정책 유지(기존 stub 동작을 상위에서 처리)
-              handleEntryParkingRequest: (ctx, plateNumber, area) {
-                showFailedSnackbar(ctx, "더블 모드에서는 입차 요청 기능이 없습니다.");
-              },
-              handleDepartureRequested: (ctx) {
-                showFailedSnackbar(ctx, "더블 모드에서는 출차 요청 기능이 없습니다.");
-              },
+        // ✅ 리팩터링 반영:
+        // - plateList 모드 제거 → 항상 false
+        // - 정렬 상태(notifier) 제거 → 컨트롤 위젯 시그니처 호환을 위해 true 고정 전달
+        const bool isParkingAreaMode = false;
+        const bool isSorted = true;
+
+        return DoubleParkingCompletedControlButtons(
+          isParkingAreaMode: isParkingAreaMode,
+          isStatusMode: isStatusMode,
+          isLocationPickerMode: isLocationPickerMode,
+          isSorted: isSorted,
+          onToggleViewMode: () {
+            DoubleParkingCompletedPage.toggleViewMode(pageState.parkingCompletedKey);
+          },
+          showSearchDialog: () {
+            DoubleParkingCompletedPage.openSearchDialog(
+              pageState.parkingCompletedKey,
+              context,
             );
+          },
+
+          // ✅ 리팩터링 반영:
+          // - DoubleParkingCompletedPage.toggleSortIcon(...) 삭제됨
+          // - 컨트롤 위젯이 콜백을 요구하는 경우를 대비해 no-op 처리
+          toggleSortIcon: () {},
+
+          // ✅ 더블 모드 정책 유지(기존 stub 동작을 상위에서 처리)
+          handleEntryParkingRequest: (ctx, plateNumber, area) {
+            showFailedSnackbar(ctx, "더블 모드에서는 입차 요청 기능이 없습니다.");
+          },
+          handleDepartureRequested: (ctx) {
+            showFailedSnackbar(ctx, "더블 모드에서는 출차 요청 기능이 없습니다.");
           },
         );
       },

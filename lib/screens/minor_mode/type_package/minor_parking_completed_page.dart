@@ -2,32 +2,28 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../models/plate_model.dart';
 import '../../../enums/plate_type.dart';
 
 import '../../../states/area/area_state.dart';
 import '../../../states/plate/minor_plate_state.dart';
 import '../../../states/user/user_state.dart';
 
-import '../../../utils/snackbar_helper.dart';
-
 import '../../../widgets/navigation/minor_top_navigation.dart';
 import 'parking_completed_package/widgets/signature_plate_search_bottom_sheet/minor_parking_completed_search_bottom_sheet.dart';
-import '../../../widgets/container/plate_container.dart';
 
 import 'parking_completed_package/minor_parking_completed_real_time_table.dart';
 import 'parking_completed_package/minor_parking_status_page.dart';
 
-enum MinorParkingViewMode { status, locationPicker, plateList }
+/// ✅ Minor 입차완료 페이지는 "현황(status) ↔ 실시간 테이블(locationPicker)" 2가지 화면만 제공합니다.
+/// - 과거 레거시였던 plateList/정렬/구역필터/PlateContainer 리스트 UI는 현재 흐름에서 사용되지 않아 제거됨.
+enum MinorParkingViewMode { status, locationPicker }
 
 class MinorParkingCompletedPage extends StatefulWidget {
   const MinorParkingCompletedPage({super.key});
 
-  /// ✅ 상위(MinorTypePage)에서 하단 컨트롤바가 현재 모드/정렬 상태를 알 수 있도록 노출
+  /// ✅ 상위(MinorTypePage)에서 하단 컨트롤바가 현재 모드를 알 수 있도록 노출
   static final ValueNotifier<MinorParkingViewMode> modeNotifier =
   ValueNotifier<MinorParkingViewMode>(MinorParkingViewMode.status);
-
-  static final ValueNotifier<bool> isSortedNotifier = ValueNotifier<bool>(true);
 
   static void reset(GlobalKey key) {
     (key.currentState as _MinorParkingCompletedPageState?)?._resetInternalState();
@@ -43,70 +39,54 @@ class MinorParkingCompletedPage extends StatefulWidget {
     (key.currentState as _MinorParkingCompletedPageState?)?._showSearchDialog(context);
   }
 
-  /// ✅ 외부에서 정렬 토글(plateList용)
-  static void toggleSortIcon(GlobalKey key) {
-    (key.currentState as _MinorParkingCompletedPageState?)?._toggleSortIcon();
-  }
-
   @override
   State<MinorParkingCompletedPage> createState() => _MinorParkingCompletedPageState();
 }
 
 class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
   MinorParkingViewMode _mode = MinorParkingViewMode.status;
-  String? _selectedParkingArea;
-  bool _isSorted = true;
 
+  // ✅ Status 페이지 강제 재생성용 키 시드 (홈 버튼 리셋 시 증가)
   int _statusKeySeed = 0;
 
   void _log(String msg) {
     if (kDebugMode) debugPrint('[ParkingCompleted] $msg');
   }
 
-  void _syncNotifiers() {
+  void _syncModeNotifier() {
     MinorParkingCompletedPage.modeNotifier.value = _mode;
-    MinorParkingCompletedPage.isSortedNotifier.value = _isSorted;
   }
 
   @override
   void initState() {
     super.initState();
-    _syncNotifiers();
+    _syncModeNotifier();
   }
 
   void _resetInternalState() {
     setState(() {
       _mode = MinorParkingViewMode.status;
-      _selectedParkingArea = null;
-      _isSorted = true;
-      _statusKeySeed++;
+      _statusKeySeed++; // ✅ Status 재생성 트리거 → StatusPage 집계 재실행
     });
-    _syncNotifiers();
+    _syncModeNotifier();
     _log('reset page state');
   }
 
   void _toggleViewMode() {
-    if (_mode == MinorParkingViewMode.plateList) return;
-
     setState(() {
       _mode = (_mode == MinorParkingViewMode.status)
           ? MinorParkingViewMode.locationPicker
           : MinorParkingViewMode.status;
     });
-    _syncNotifiers();
+    _syncModeNotifier();
 
     _log(_mode == MinorParkingViewMode.status ? 'mode → status' : 'mode → locationPicker(table)');
-  }
-
-  void _toggleSortIcon() {
-    setState(() => _isSorted = !_isSorted);
-    _syncNotifiers();
-    _log(_isSorted ? 'sort → 최신순' : 'sort → 오래된순');
   }
 
   void _showSearchDialog(BuildContext context) {
     final currentArea = context.read<AreaState>().currentArea;
     _log('open search dialog');
+
     showDialog(
       context: context,
       builder: (_) {
@@ -129,6 +109,7 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
         final selectedPlate =
         plateState.minorGetSelectedPlate(PlateType.parkingCompleted, userName);
 
+        // ✅ 선택된 차량이 있으면 "뒤로가기 = 선택 해제" 우선
         if (selectedPlate != null && selectedPlate.id.isNotEmpty) {
           await plateState.minorTogglePlateIsSelected(
             collection: PlateType.parkingCompleted,
@@ -140,18 +121,15 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
           return false;
         }
 
-        if (_mode == MinorParkingViewMode.plateList) {
-          setState(() => _mode = MinorParkingViewMode.locationPicker);
-          _syncNotifiers();
-          _log('back → locationPicker(table)');
-          return false;
-        } else if (_mode == MinorParkingViewMode.locationPicker) {
+        // ✅ 테이블 → 현황으로 한 단계 되돌기
+        if (_mode == MinorParkingViewMode.locationPicker) {
           setState(() => _mode = MinorParkingViewMode.status);
-          _syncNotifiers();
+          _syncModeNotifier();
           _log('back → status');
           return false;
         }
 
+        // 최상위(status)면 pop 허용
         return true;
       },
       child: Scaffold(
@@ -170,15 +148,12 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
         // ✅ 변경 핵심:
         // 기존 bottomNavigationBar(MinorParkingCompletedControlButtons) 제거
         // → 그 높이만큼 body 영역 확장
-        body: _buildBody(context),
+        body: _buildBody(),
       ),
     );
   }
 
-  Widget _buildBody(BuildContext context) {
-    final plateState = context.watch<MinorPlateState>();
-    final userName = context.read<UserState>().name;
-
+  Widget _buildBody() {
     switch (_mode) {
       case MinorParkingViewMode.status:
         return MinorParkingStatusPage(
@@ -186,48 +161,9 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
         );
 
       case MinorParkingViewMode.locationPicker:
-        return MinorParkingCompletedRealTimeTable(
-          onClose: () {
-            if (!mounted) return;
-            setState(() => _mode = MinorParkingViewMode.status);
-            _syncNotifiers();
-          },
-        );
-
-      case MinorParkingViewMode.plateList:
-        List<PlateModel> plates =
-        plateState.minorGetPlatesByCollection(PlateType.parkingCompleted);
-
-        if (_selectedParkingArea != null) {
-          plates = plates.where((p) => p.location == _selectedParkingArea).toList();
-        }
-
-        plates.sort(
-              (a, b) => _isSorted
-              ? b.requestTime.compareTo(a.requestTime)
-              : a.requestTime.compareTo(b.requestTime),
-        );
-
-        return ListView(
-          padding: const EdgeInsets.all(8.0),
-          children: [
-            PlateContainer(
-              data: plates,
-              collection: PlateType.parkingCompleted,
-              filterCondition: (request) =>
-              request.type == PlateType.parkingCompleted.firestoreValue,
-              onPlateTap: (plateNumber, area) {
-                context.read<MinorPlateState>().minorTogglePlateIsSelected(
-                  collection: PlateType.parkingCompleted,
-                  plateNumber: plateNumber,
-                  userName: userName,
-                  onError: (msg) => showFailedSnackbar(context, msg),
-                );
-                _log('tap plate: $plateNumber');
-              },
-            ),
-          ],
-        );
+      // ✅ 리팩터링: 레거시 “주차 구역 리스트/plateList” 대신
+      //    Minor 모드 전용 “실시간(view) 테이블(입차 완료 / 출차 요청)” 임베드 출력
+        return MinorParkingCompletedRealTimeTable();
     }
   }
 }

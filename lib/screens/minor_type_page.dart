@@ -105,7 +105,8 @@ class _MinorTypePageState extends State<MinorTypePage> {
 
 /// ✅ 기존 MinorParkingCompletedPage의 bottomNavigationBar(현황/출차요청/출차완료 포함)를
 /// MinorTypePage 하단 1행으로 올려서 재사용.
-/// - 모드/정렬 상태는 MinorParkingCompletedPage의 static ValueNotifier로 동기화.
+/// - 모드 상태는 MinorParkingCompletedPage.modeNotifier로 동기화.
+/// - (plateList/정렬 관련 레거시 기능은 MinorParkingCompletedPage 리팩터링에서 제거됨)
 class _ParkingCompletedControlBar extends StatelessWidget {
   const _ParkingCompletedControlBar();
 
@@ -150,34 +151,37 @@ class _ParkingCompletedControlBar extends StatelessWidget {
     return ValueListenableBuilder<MinorParkingViewMode>(
       valueListenable: MinorParkingCompletedPage.modeNotifier,
       builder: (context, mode, _) {
-        return ValueListenableBuilder<bool>(
-          valueListenable: MinorParkingCompletedPage.isSortedNotifier,
-          builder: (context, isSorted, __) {
-            final isStatusMode = mode == MinorParkingViewMode.status;
-            final isLocationPickerMode = mode == MinorParkingViewMode.locationPicker;
-            final isParkingAreaMode = mode == MinorParkingViewMode.plateList;
+        final isStatusMode = mode == MinorParkingViewMode.status;
+        final isLocationPickerMode = mode == MinorParkingViewMode.locationPicker;
 
-            return MinorParkingCompletedControlButtons(
-              isParkingAreaMode: isParkingAreaMode,
-              isStatusMode: isStatusMode,
-              isLocationPickerMode: isLocationPickerMode,
-              isSorted: isSorted,
-              onToggleViewMode: () {
-                MinorParkingCompletedPage.toggleViewMode(pageState.parkingCompletedKey);
-              },
-              showSearchDialog: () {
-                MinorParkingCompletedPage.openSearchDialog(
-                  pageState.parkingCompletedKey,
-                  context,
-                );
-              },
-              toggleSortIcon: () {
-                MinorParkingCompletedPage.toggleSortIcon(pageState.parkingCompletedKey);
-              },
-              handleEntryParkingRequest: _handleEntryParkingRequest,
-              handleDepartureRequested: _minorHandleDepartureRequested,
+        // ✅ 리팩터링 반영:
+        // - plateList 모드 제거 → 항상 false
+        // - 정렬 상태(notifier) 제거 → 컨트롤 위젯 시그니처 호환을 위해 true 고정 전달
+        const bool isParkingAreaMode = false;
+        const bool isSorted = true;
+
+        return MinorParkingCompletedControlButtons(
+          isParkingAreaMode: isParkingAreaMode,
+          isStatusMode: isStatusMode,
+          isLocationPickerMode: isLocationPickerMode,
+          isSorted: isSorted,
+          onToggleViewMode: () {
+            MinorParkingCompletedPage.toggleViewMode(pageState.parkingCompletedKey);
+          },
+          showSearchDialog: () {
+            MinorParkingCompletedPage.openSearchDialog(
+              pageState.parkingCompletedKey,
+              context,
             );
           },
+
+          // ✅ 리팩터링 반영:
+          // - MinorParkingCompletedPage.toggleSortIcon(...) 삭제됨
+          // - 컨트롤 위젯이 콜백을 요구하는 경우를 대비해 no-op 처리
+          toggleSortIcon: () {},
+
+          handleEntryParkingRequest: _handleEntryParkingRequest,
+          handleDepartureRequested: _minorHandleDepartureRequested,
         );
       },
     );
