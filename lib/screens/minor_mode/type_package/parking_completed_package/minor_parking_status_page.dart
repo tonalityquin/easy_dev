@@ -17,7 +17,6 @@ import '../../../../states/area/area_state.dart';
 // import '../../../../utils/usage_reporter.dart';;
 
 import '../../../common_package/memo_package/dash_memo.dart';
-import 'minor_parking_reminder_contents.dart';
 
 // ✅ API 디버그(통합 에러 로그) 로거
 import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
@@ -160,7 +159,12 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
           'collection': 'plates',
           'type': 'parking_completed',
         },
-        tags: const <String>[_tParking, _tParkingStatus, _tFirestore, _tFirestoreAgg],
+        tags: const <String>[
+          _tParking,
+          _tParkingStatus,
+          _tFirestore,
+          _tFirestoreAgg
+        ],
       );
 
       if (!mounted) return;
@@ -222,7 +226,8 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
       _maybeRunNotice();
     });
 
-    final currentArea = context.select<AreaState, String>((s) => s.currentArea.trim());
+    final currentArea =
+    context.select<AreaState, String>((s) => s.currentArea.trim());
     if (_lastArea != null && _lastArea != currentArea) {
       _didCountRun = false;
       _lastArea = currentArea;
@@ -252,7 +257,8 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
           locationState.locations.fold<int>(0, (sum, l) => sum + l.capacity);
           final occupiedCount = _occupiedCount;
 
-          final double usageRatio = totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
+          final double usageRatio =
+          totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
           final String usagePercent = (usageRatio * 100).toStringAsFixed(1);
 
           if (_hadError) {
@@ -340,9 +346,13 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
               ),
 
               const SizedBox(height: 24),
-              _AutoCyclingReminderCards(area: currentArea),
+
+              // ✅ [삭제] 업무 리마인더 카드 영역(_AutoCyclingReminderCards)
+
               const SizedBox(height: 12),
+
               const _AutoCyclingMemoCards(),
+
               const SizedBox(height: 12),
             ],
           );
@@ -465,9 +475,12 @@ class MinorParkingNoticeService {
     final trimmedArea = area.trim();
     final prefs = await SharedPreferences.getInstance();
 
-    final cacheKey = 'minor_parking_notice_cache_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
-    final cacheAtKey = 'minor_parking_notice_cache_at_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
-    final cacheSidKey = 'minor_parking_notice_cache_sid_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
+    final cacheKey =
+        'minor_parking_notice_cache_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
+    final cacheAtKey =
+        'minor_parking_notice_cache_at_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
+    final cacheSidKey =
+        'minor_parking_notice_cache_sid_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
 
     final nowMs = DateTime.now().millisecondsSinceEpoch;
     final spreadsheetId = await _loadSpreadsheetId();
@@ -491,7 +504,8 @@ class MinorParkingNoticeService {
       final cachedAt = prefs.getInt(cacheAtKey) ?? 0;
       final cachedSid = (prefs.getString(cacheSidKey) ?? '').trim();
 
-      final isFresh = cachedAt > 0 && (nowMs - cachedAt) <= cacheTtl.inMilliseconds;
+      final isFresh =
+          cachedAt > 0 && (nowMs - cachedAt) <= cacheTtl.inMilliseconds;
       final isSameSid = cachedSid == spreadsheetId;
 
       if (cached.isNotEmpty && isFresh && isSameSid) return cached;
@@ -558,177 +572,7 @@ class MinorParkingNoticeService {
   }
 }
 
-/// 하단 자동 순환 카드(안내)
-class _AutoCyclingReminderCards extends StatefulWidget {
-  final String area;
-
-  const _AutoCyclingReminderCards({required this.area});
-
-  @override
-  State<_AutoCyclingReminderCards> createState() => _AutoCyclingReminderCardsState();
-}
-
-class _AutoCyclingReminderCardsState extends State<_AutoCyclingReminderCards> {
-  static const Duration cycleInterval = Duration(seconds: 2);
-  static const Duration animDuration = Duration(milliseconds: 400);
-  static const Curve animCurve = Curves.easeInOut;
-
-  final PageController _pageController = PageController();
-  Timer? _timer;
-  int _currentIndex = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _startAutoCycle();
-  }
-
-  @override
-  void didUpdateWidget(covariant _AutoCyclingReminderCards oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.area.trim() != widget.area.trim()) {
-      _currentIndex = 0;
-      if (_pageController.hasClients) _pageController.jumpToPage(0);
-      _startAutoCycle();
-      setState(() {});
-    }
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  void _startAutoCycle() {
-    _timer?.cancel();
-    final total = parkingRemindersForArea(widget.area).length;
-    if (total <= 1) return;
-    _timer = Timer.periodic(cycleInterval, (_) {
-      if (!mounted) return;
-      final cards = parkingRemindersForArea(widget.area);
-      if (cards.length <= 1) return;
-      final next = (_currentIndex + 1) % cards.length;
-      _animateToPage(next);
-    });
-  }
-
-  void _animateToPage(int index) {
-    _currentIndex = index;
-    if (!mounted) return;
-    try {
-      _pageController.animateToPage(index, duration: animDuration, curve: animCurve);
-      setState(() {});
-    } catch (e) {
-      _logApiError(
-        tag: '_AutoCyclingReminderCards._animateToPage',
-        message: '안내 카드 페이지 전환 실패',
-        error: e,
-        extra: <String, dynamic>{'index': index, 'area': widget.area},
-        tags: const <String>[_tParking, _tUi],
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final cards = parkingRemindersForArea(widget.area);
-
-    return SizedBox(
-      height: 170,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Align(
-            alignment: Alignment.center,
-            child: FractionallySizedBox(
-              widthFactor: 0.98,
-              child: PageView.builder(
-                controller: _pageController,
-                physics: const NeverScrollableScrollPhysics(),
-                onPageChanged: (i) => _currentIndex = i,
-                itemCount: cards.length,
-                itemBuilder: (context, index) {
-                  final c = cards[index];
-                  return Center(
-                    child: Card(
-                      color: cs.surface,
-                      surfaceTintColor: Colors.transparent,
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(color: cs.outlineVariant.withOpacity(0.55)),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.fact_check, size: 18, color: cs.onSurfaceVariant),
-                                const SizedBox(width: 8),
-                                Text(
-                                  c.title,
-                                  style: TextStyle(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                    color: cs.onSurface,
-                                  ),
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            ...c.lines.map(
-                                  (t) => Padding(
-                                padding: const EdgeInsets.only(bottom: 6),
-                                child: Text(
-                                  t,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(fontSize: 14, color: cs.onSurface),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: 6,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: List.generate(cards.length, (i) {
-                final active = i == _currentIndex;
-                return AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  margin: const EdgeInsets.symmetric(horizontal: 3),
-                  width: active ? 10 : 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: active ? cs.onSurface : cs.onSurfaceVariant.withOpacity(0.35),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                );
-              }),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// DashMemo 자동 순환 카드
+/// DashMemo 메모를 1.5초 주기로 넘기는 자동 순환 카드
 class _AutoCyclingMemoCards extends StatefulWidget {
   const _AutoCyclingMemoCards();
 
@@ -778,7 +622,11 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
     if (_currentIndex >= total) _currentIndex = 0;
 
     try {
-      _pageController.animateToPage(_currentIndex, duration: animDuration, curve: animCurve);
+      _pageController.animateToPage(
+        _currentIndex,
+        duration: animDuration,
+        curve: animCurve,
+      );
       setState(() {});
     } catch (e) {
       _logApiError(
@@ -840,10 +688,13 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                             elevation: 2,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
-                              side: BorderSide(color: cs.outlineVariant.withOpacity(0.55)),
+                              side: BorderSide(
+                                color: cs.outlineVariant.withOpacity(0.55),
+                              ),
                             ),
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 16, horizontal: 16),
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -851,7 +702,8 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(Icons.notes_rounded, size: 18, color: cs.onSurfaceVariant),
+                                      Icon(Icons.notes_rounded,
+                                          size: 18, color: cs.onSurfaceVariant),
                                       const SizedBox(width: 8),
                                       Text(
                                         '메모',
@@ -868,7 +720,10 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                                   Text(
                                     '저장된 메모가 없습니다.',
                                     textAlign: TextAlign.center,
-                                    style: TextStyle(fontSize: 14, color: cs.onSurfaceVariant),
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: cs.onSurfaceVariant,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -885,10 +740,13 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                           elevation: 2,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(color: cs.outlineVariant.withOpacity(0.55)),
+                            side: BorderSide(
+                              color: cs.outlineVariant.withOpacity(0.55),
+                            ),
                           ),
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                            padding: const EdgeInsets.symmetric(
+                                vertical: 16, horizontal: 16),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.center,
@@ -896,7 +754,8 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.notes_rounded, size: 18, color: cs.onSurfaceVariant),
+                                    Icon(Icons.notes_rounded,
+                                        size: 18, color: cs.onSurfaceVariant),
                                     const SizedBox(width: 8),
                                     Text(
                                       '메모',
@@ -916,7 +775,10 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                                     child: Text(
                                       text,
                                       textAlign: TextAlign.center,
-                                      style: TextStyle(fontSize: 14, color: cs.onSurface),
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: cs.onSurface,
+                                      ),
                                       maxLines: 3,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -925,7 +787,10 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                                   Text(
                                     time,
                                     textAlign: TextAlign.center,
-                                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: cs.onSurfaceVariant,
+                                    ),
                                   ),
                               ],
                             ),
@@ -948,7 +813,9 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                       width: active ? 10 : 6,
                       height: 6,
                       decoration: BoxDecoration(
-                        color: active ? cs.onSurface : cs.onSurfaceVariant.withOpacity(0.35),
+                        color: active
+                            ? cs.onSurface
+                            : cs.onSurfaceVariant.withOpacity(0.35),
                         borderRadius: BorderRadius.circular(3),
                       ),
                     );

@@ -111,7 +111,7 @@ class _OfflineLoginFormState extends State<OfflineLoginForm> {
                   onTap: () {},
                   child: SizedBox(
                     height: 360,
-                    child: Image.asset('assets/images/easyvalet_logo_car.png'),
+                    child: Image.asset('assets/images/pelican.png'),
                   ),
                 ),
                 const SizedBox(height: 12),

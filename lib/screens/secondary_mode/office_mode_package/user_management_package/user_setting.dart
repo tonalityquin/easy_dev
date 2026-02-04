@@ -72,8 +72,18 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
   final Set<String> _selectedHolidays = {};
 
   /// ✅ 허용 모드(modes) 선택 (다중 선택)
-  /// - tablet은 계정 허용 모드 대상이 아니므로 제외
-  static const List<String> _availableModes = ['service', 'lite', 'simple'];
+  /// - 계정 모드 체계: single / double / triple / minor
+  /// - (레거시) service/simple/lite/normal/light 등은 UI에서 자동 정규화 처리
+  static const List<String> _availableModes = ['single', 'double', 'triple', 'minor'];
+
+  /// UI 라벨(원하면 한글로 바꿔도 됩니다. 저장되는 값은 key로 유지)
+  static const Map<String, String> _modeLabels = {
+    'single': 'single',
+    'double': 'double',
+    'triple': 'triple',
+    'minor': 'minor',
+  };
+
   final Set<String> _selectedModes = {};
 
   // --- UI: 단계형(확장패널) 구성 ---
@@ -93,6 +103,65 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
   final GlobalKey _keyPassword = GlobalKey();
   final GlobalKey _keyTime = GlobalKey();
   final GlobalKey _keyHoliday = GlobalKey();
+
+  // --------------------------
+  // ✅ Modes 정규화/호환 로직
+  // --------------------------
+
+  /// raw token을 새 표준 모드(single/double/triple/minor)로 정규화합니다.
+  /// - null/빈값/알 수 없는 값은 null 반환(= 무시)
+  ///
+  /// 레거시 매핑:
+  /// - service, simple  -> single
+  /// - lite, light      -> double
+  /// - normal           -> triple
+  /// - single/double/triple/minor는 그대로 유지
+  String? _normalizeModeToken(String raw) {
+    final v = raw.trim().toLowerCase();
+    if (v.isEmpty) return null;
+
+    switch (v) {
+    // ✅ current standard
+      case 'single':
+      case 'double':
+      case 'triple':
+      case 'minor':
+        return v;
+
+    // ✅ legacy tokens
+      case 'service':
+      case 'simple':
+        return 'single';
+      case 'lite':
+      case 'light':
+        return 'double';
+      case 'normal':
+        return 'triple';
+
+    // ✅ 과거 데이터에 섞일 수 있는 값들(정책에 맞게 추가/삭제)
+      case 'tablet':
+      // tablet은 “계정 허용 모드”가 아니라 별도 디바이스/권한 체계로 취급하는 경우가 많아
+      // 여기서는 무시 처리(필요하면 minor 등으로 매핑하세요)
+        return null;
+
+      default:
+        return null;
+    }
+  }
+
+  /// 기존 modes 리스트를 정규화하고, 허용 목록만 남기며, 중복 제거하여 반환합니다.
+  List<String> _normalizeAndFilterModes(Iterable<String> modes) {
+    final out = <String>{};
+    for (final m in modes) {
+      final nm = _normalizeModeToken(m);
+      if (nm != null && _availableModes.contains(nm)) {
+        out.add(nm);
+      }
+    }
+    return out.toList();
+  }
+
+  String _modeLabel(String mode) => _modeLabels[mode] ?? mode;
 
   @override
   void initState() {
@@ -116,22 +185,21 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
       _endTime = user.endTime;
       _selectedHolidays.addAll(user.fixedHolidays);
 
-      // ✅ 기존 계정의 modes 반영
-      // - tablet이 들어있던 과거 데이터는 _availableModes에 없으므로 자동으로 제외됨
-      final modes = user.modes;
-      if (modes.isNotEmpty) {
-        _selectedModes.addAll(modes.where((m) => _availableModes.contains(m)));
+      // ✅ 기존 계정 modes 반영(레거시 포함 정규화)
+      final normalized = _normalizeAndFilterModes(user.modes);
+      if (normalized.isNotEmpty) {
+        _selectedModes.addAll(normalized);
       }
 
-      // ✅ 안전장치: 기존 데이터에 modes가 비어있거나 전부 필터링되면 기본값 부여
+      // ✅ 안전장치: 기존 데이터에 modes가 비었거나 전부 필터링되면 기본값 부여
       if (_selectedModes.isEmpty) {
-        _selectedModes.add('service');
+        _selectedModes.add('single');
       }
     } else {
       _passwordController.text = _generateRandomPassword();
 
       // ✅ 신규 생성 기본값(원하는 정책으로 변경 가능)
-      _selectedModes.add('service');
+      _selectedModes.add('single');
     }
 
     _nameFocus.addListener(() {
@@ -320,7 +388,8 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
 
   String get _modesSummary {
     if (_selectedModes.isEmpty) return '모드 미선택';
-    return '모드: ${_selectedModes.join(', ')}';
+    final shown = _selectedModes.map(_modeLabel).join(', ');
+    return '모드: $shown';
   }
 
   String get _roleSummary => '${_selectedRole.label} · $_modesSummary';
@@ -496,7 +565,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
             children: _availableModes.map((m) {
               final selected = _selectedModes.contains(m);
               return FilterChip(
-                label: Text(m),
+                label: Text(_modeLabel(m)),
                 selected: selected,
                 selectedColor: cs.primaryContainer.withOpacity(.65),
                 checkmarkColor: cs.onPrimaryContainer,
@@ -518,7 +587,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
           ),
           const SizedBox(height: 6),
           Text(
-            _selectedModes.isEmpty ? '모드를 1개 이상 선택하세요.' : '선택: ${_selectedModes.join(', ')}',
+            _selectedModes.isEmpty ? '모드를 1개 이상 선택하세요.' : '선택: ${_selectedModes.map(_modeLabel).join(', ')}',
             style: TextStyle(
               color: _selectedModes.isEmpty ? cs.error : cs.onSurface,
               fontWeight: FontWeight.w800,
@@ -715,7 +784,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
                                       ),
                                     ),
                                     const SizedBox(height: 12),
-                                    _buildModesSelector(cs: cs), // ✅ tablet 제외된 선택지
+                                    _buildModesSelector(cs: cs),
                                   ],
                                 ),
                               ),
@@ -1038,12 +1107,20 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
 
                               final fullEmail = '${_emailController.text}@gmail.com';
 
+                              // ✅ 저장 직전에도 한번 더 표준화/필터링(안전)
+                              final normalizedModes = _normalizeAndFilterModes(_selectedModes);
+                              if (normalizedModes.isEmpty) {
+                                _setErrorMessage('허용 모드를 1개 이상 선택하세요');
+                                _openPanelAndScroll(_panelRole);
+                                return;
+                              }
+
                               widget.onSave(
                                 _nameController.text,
                                 _phoneController.text,
                                 fullEmail,
                                 _selectedRole.name,
-                                _selectedModes.toList(), // ✅ 추가
+                                normalizedModes, // ✅ 표준 모드만 저장
                                 _passwordController.text,
                                 widget.areaValue,
                                 widget.division,

@@ -177,8 +177,14 @@ class _LocationManagementState extends State<LocationManagement> {
     final cs = Theme.of(context).colorScheme;
     final currentArea = context.watch<AreaState>().currentArea;
 
-    final allLocations =
-    locationState.locations.where((location) => location.area == currentArea).toList();
+    // ✅ PageStorageKey 충돌 방지용 prefix
+    // - Area별로 스크롤/확장 상태가 섞이지 않게 currentArea를 prefix에 포함
+    // - toString()이 안정적이지 않다면 (ex. 인스턴스 주소) area id/name 같은 고유값으로 바꾸는 걸 권장
+    final storageKeyPrefix = 'location_management_${currentArea.toString()}';
+
+    final allLocations = locationState.locations
+        .where((location) => location.area == currentArea)
+        .toList();
 
     final singles = allLocations.where((loc) => loc.type == 'single').toList();
     final composites = allLocations.where((loc) => loc.type == 'composite').toList();
@@ -255,18 +261,21 @@ class _LocationManagementState extends State<LocationManagement> {
               singles,
               locationState,
               colorScheme: cs,
+              storageKeyPrefix: storageKeyPrefix,
             )
                 : _filter == 'composite'
                 ? _buildGroupedList(
               grouped,
               locationState,
               colorScheme: cs,
+              storageKeyPrefix: storageKeyPrefix,
             )
                 : _buildAllListView(
               singles: singles,
               grouped: grouped,
               state: locationState,
               colorScheme: cs,
+              storageKeyPrefix: storageKeyPrefix,
             ),
           ),
         ],
@@ -290,6 +299,7 @@ class _LocationManagementState extends State<LocationManagement> {
     required Map<String, List<LocationModel>> grouped,
     required LocationState state,
     required ColorScheme colorScheme,
+    required String storageKeyPrefix,
   }) {
     final cs = colorScheme;
     final tiles = <Widget>[];
@@ -327,10 +337,16 @@ class _LocationManagementState extends State<LocationManagement> {
           ),
         ),
       );
-      tiles.addAll(_buildGroupedTiles(grouped, state, cs));
+      tiles.addAll(_buildGroupedTiles(grouped, state, cs, storageKeyPrefix));
     }
 
-    return ListView(children: tiles);
+    // ✅ 핵심 수정 1) ListView에 고유 PageStorageKey 부여
+    // - ScrollPosition.restoreScrollOffset()이 읽는 값(double?)이
+    //   ExpansionTile의 상태(bool)와 같은 슬롯을 공유하지 않도록 분리
+    return ListView(
+      key: PageStorageKey<String>('${storageKeyPrefix}_all_list'),
+      children: tiles,
+    );
   }
 
   List<Widget> _buildSimpleTiles(
@@ -400,6 +416,7 @@ class _LocationManagementState extends State<LocationManagement> {
       Map<String, List<LocationModel>> grouped,
       LocationState state,
       ColorScheme cs,
+      String storageKeyPrefix,
       ) {
     return grouped.entries.map((entry) {
       final totalCapacity = entry.value.fold<int>(0, (sum, loc) => sum + loc.capacity);
@@ -425,7 +442,11 @@ class _LocationManagementState extends State<LocationManagement> {
               collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
           ),
+          // ✅ 핵심 수정 2) ExpansionTile에도 고유 PageStorageKey 부여
+          // - ExpansionTile은 펼침 상태를 PageStorage에 bool로 저장
+          // - ListView 스크롤 오프셋(double?) 저장 슬롯과 분리해야 함
           child: ExpansionTile(
+            key: PageStorageKey<String>('${storageKeyPrefix}_exp_all_${entry.key}'),
             title: Text(
               '상위 구역: ${entry.key} (공간 $totalCapacity대)',
               style: TextStyle(
@@ -468,10 +489,13 @@ class _LocationManagementState extends State<LocationManagement> {
       List<LocationModel> list,
       LocationState state, {
         required ColorScheme colorScheme,
+        required String storageKeyPrefix,
       }) {
     final cs = colorScheme;
 
+    // ✅ 핵심 수정 1) ListView.builder에도 고유 PageStorageKey 부여
     return ListView.builder(
+      key: PageStorageKey<String>('${storageKeyPrefix}_single_list'),
       itemCount: list.length,
       itemBuilder: (context, index) {
         final loc = list[index];
@@ -528,10 +552,13 @@ class _LocationManagementState extends State<LocationManagement> {
       Map<String, List<LocationModel>> grouped,
       LocationState state, {
         required ColorScheme colorScheme,
+        required String storageKeyPrefix,
       }) {
     final cs = colorScheme;
 
+    // ✅ 핵심 수정 1) ListView에도 고유 PageStorageKey 부여
     return ListView(
+      key: PageStorageKey<String>('${storageKeyPrefix}_composite_list'),
       children: grouped.entries.map((entry) {
         final totalCapacity = entry.value.fold<int>(0, (sum, loc) => sum + loc.capacity);
 
@@ -556,7 +583,9 @@ class _LocationManagementState extends State<LocationManagement> {
                 collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
+            // ✅ 핵심 수정 2) ExpansionTile 고유 PageStorageKey 부여
             child: ExpansionTile(
+              key: PageStorageKey<String>('${storageKeyPrefix}_exp_composite_${entry.key}'),
               title: Text(
                 '상위 구역: ${entry.key} (공간 $totalCapacity대)',
                 style: TextStyle(
@@ -574,7 +603,10 @@ class _LocationManagementState extends State<LocationManagement> {
                     style: TextStyle(fontWeight: FontWeight.w700, color: cs.onSurface),
                   ),
                   subtitle: loc.capacity > 0
-                      ? Text('공간 ${loc.capacity}대', style: TextStyle(color: cs.onSurfaceVariant))
+                      ? Text(
+                    '공간 ${loc.capacity}대',
+                    style: TextStyle(color: cs.onSurfaceVariant),
+                  )
                       : null,
                   leading: Icon(Icons.subdirectory_arrow_right, color: cs.onSurfaceVariant),
                   trailing: isSelected ? Icon(Icons.check_circle, color: cs.primary) : null,

@@ -55,7 +55,7 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
       '회사 로고(상단)',
       meta: <String, dynamic>{
         'screen': 'simple_login',
-        'asset': 'assets/images/easyvalet_logo_car.png',
+        'asset': 'assets/images/pelican.png',
         'action': 'tap',
       },
     );
@@ -147,7 +147,7 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
                   onTap: _onTopCompanyLogoTapped,
                   child: SizedBox(
                     height: 360,
-                    child: Image.asset('assets/images/easyvalet_logo_car.png'),
+                    child: Image.asset('assets/images/pelican.png'),
                   ),
                 ),
 
