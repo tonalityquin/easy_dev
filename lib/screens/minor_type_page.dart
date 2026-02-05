@@ -3,10 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../states/page/minor_page_state.dart';
 import '../states/plate/minor_plate_state.dart';
-import '../states/plate/movement_plate.dart';
 import '../states/user/user_state.dart';
-
-import '../enums/plate_type.dart';
 
 import 'minor_mode/input_package/minor_input_plate_screen.dart';
 import 'minor_mode/type_package/common_widgets/dashboard_bottom_sheet/minor_home_dash_board_bottom_sheet.dart';
@@ -84,13 +81,13 @@ class _MinorTypePageState extends State<MinorTypePage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: const [
-                    // ✅ (기존: 입차/대시보드 행 자리) -> 현황/출차요청/출차완료 컨트롤바 이동
+                    // ✅ 1행: 모드 토글(현황/테이블) + 출차요청(count) + 출차완료
                     _ParkingCompletedControlBar(),
 
-                    // ✅ (기존: 홈 버튼 자리) -> 입차/대시보드 행 이동
+                    // ✅ 2행: 입차/대시보드
                     _EntryDashboardBar(),
 
-                    // ✅ (기존: 하단 이미지 자리) -> 홈 버튼 이동 (하단 이미지 제거)
+                    // ✅ 3행: 홈
                     _SingleHomeTabBar(),
                   ],
                 ),
@@ -103,46 +100,11 @@ class _MinorTypePageState extends State<MinorTypePage> {
   }
 }
 
-/// ✅ 기존 MinorParkingCompletedPage의 bottomNavigationBar(현황/출차요청/출차완료 포함)를
-/// MinorTypePage 하단 1행으로 올려서 재사용.
-/// - 모드 상태는 MinorParkingCompletedPage.modeNotifier로 동기화.
-/// - (plateList/정렬 관련 레거시 기능은 MinorParkingCompletedPage 리팩터링에서 제거됨)
+/// ✅ MinorParkingCompletedPage의 모드(현황/테이블)를 하단 컨트롤바에 반영.
+/// - modeNotifier로 동기화.
+/// - 컨트롤 위젯 리팩터링으로 레거시 인자(정렬/사전정산/상태수정/삭제/요청확정 등) 제거됨.
 class _ParkingCompletedControlBar extends StatelessWidget {
   const _ParkingCompletedControlBar();
-
-  void _minorHandleDepartureRequested(BuildContext context) {
-    final movementPlate = context.read<MovementPlate>();
-    final userName = context.read<UserState>().name;
-    final plateState = context.read<MinorPlateState>();
-
-    final selectedPlate =
-    plateState.minorGetSelectedPlate(PlateType.parkingCompleted, userName);
-
-    if (selectedPlate == null) return;
-
-    movementPlate
-        .setDepartureRequested(
-      selectedPlate.plateNumber,
-      selectedPlate.area,
-      selectedPlate.location,
-    )
-        .then((_) {
-      Future.delayed(const Duration(milliseconds: 300), () {
-        // 컨트롤버튼 내부에서 다이얼로그 confirm으로 호출되는 케이스 pop 안전 처리
-        if (Navigator.of(context).canPop()) {
-          Navigator.pop(context);
-        }
-        showSuccessSnackbar(context, "출차 요청이 완료되었습니다.");
-      });
-    }).catchError((e) {
-      showFailedSnackbar(context, "출차 요청 중 오류: $e");
-    });
-  }
-
-  void _handleEntryParkingRequest(BuildContext context, String plateNumber, String area) async {
-    // 기존 MinorParkingCompletedPage의 stub 동작 유지
-    showSuccessSnackbar(context, "입차 요청 처리: $plateNumber ($area)");
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -152,19 +114,9 @@ class _ParkingCompletedControlBar extends StatelessWidget {
       valueListenable: MinorParkingCompletedPage.modeNotifier,
       builder: (context, mode, _) {
         final isStatusMode = mode == MinorParkingViewMode.status;
-        final isLocationPickerMode = mode == MinorParkingViewMode.locationPicker;
-
-        // ✅ 리팩터링 반영:
-        // - plateList 모드 제거 → 항상 false
-        // - 정렬 상태(notifier) 제거 → 컨트롤 위젯 시그니처 호환을 위해 true 고정 전달
-        const bool isParkingAreaMode = false;
-        const bool isSorted = true;
 
         return MinorParkingCompletedControlButtons(
-          isParkingAreaMode: isParkingAreaMode,
           isStatusMode: isStatusMode,
-          isLocationPickerMode: isLocationPickerMode,
-          isSorted: isSorted,
           onToggleViewMode: () {
             MinorParkingCompletedPage.toggleViewMode(pageState.parkingCompletedKey);
           },
@@ -174,14 +126,6 @@ class _ParkingCompletedControlBar extends StatelessWidget {
               context,
             );
           },
-
-          // ✅ 리팩터링 반영:
-          // - MinorParkingCompletedPage.toggleSortIcon(...) 삭제됨
-          // - 컨트롤 위젯이 콜백을 요구하는 경우를 대비해 no-op 처리
-          toggleSortIcon: () {},
-
-          handleEntryParkingRequest: _handleEntryParkingRequest,
-          handleDepartureRequested: _minorHandleDepartureRequested,
         );
       },
     );
@@ -352,7 +296,7 @@ class _SingleHomeTabBar extends StatelessWidget {
                   context.read<MinorPlateState>().minorSyncWithAreaState();
                 } catch (_) {}
 
-                // 출차요청 aggregation refresh 토큰 bump
+                // 출차요청(및 현재 코드상 입차요청도 동일 토큰 사용) aggregation refresh 토큰 bump
                 pageState.bumpDepartureRequestsCountRefreshToken();
               },
               child: Row(
@@ -390,7 +334,6 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    // ✅ Vertical Drag(TopSheet) 제스처 로직 제거 유지
     return Consumer2<MinorPageState, MinorPlateState>(
       builder: (context, pageState, plateState, _) {
         return Stack(

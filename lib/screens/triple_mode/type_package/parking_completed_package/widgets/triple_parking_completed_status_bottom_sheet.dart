@@ -489,6 +489,52 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
     Navigator.pop(context);
   }
 
+  /// ✅ 신규: "주행 스킵 → 바로 출차 완료" 타입 전환
+  /// - departure_requests 상태에서만 허용
+  /// - 다른 사용자가 이미 선점(주행 중)인 경우에는 차단(정합성/충돌 방지)
+  /// - 주행 다이얼로그 없이 곧바로 departure_completed로 transition
+  Future<void> _skipDepartureDrivingToCompleted() async {
+    await _runPrimary(() async {
+      if (_type != PlateType.departureRequests) {
+        _showWarningSafe('현재 상태에서는 출차 완료 처리(스킵)가 불가능합니다.');
+        return;
+      }
+
+      final userName = context.read<UserState>().name;
+      final selectedBy = (_plate.selectedBy ?? '').trim();
+
+      if (_plate.isSelected == true &&
+          selectedBy.isNotEmpty &&
+          selectedBy != userName) {
+        _showWarningSafe('다른 사용자가 이미 주행 중입니다. (선택자: $selectedBy)');
+        return;
+      }
+
+      final movementPlate = context.read<MovementPlate>();
+
+      try {
+        await movementPlate.setDepartureCompleted(_plate);
+
+        if (!mounted) return;
+
+        // UI 정리(선점 표시가 남아있다면 정리)
+        setState(() {
+          _plate = _plate.copyWith(isSelected: false, selectedBy: null);
+        });
+
+        try {
+          showSuccessSnackbar(context, '주행을 스킵하고 출차 완료로 변경했습니다.');
+        } catch (_) {}
+
+        Navigator.pop(context);
+      } on FirebaseException catch (e) {
+        _showWarningSafe('출차 완료 처리 실패: ${e.message ?? e.code}');
+      } catch (e) {
+        _showWarningSafe('출차 완료 처리 실패: $e');
+      }
+    });
+  }
+
   Future<void> _logDrivingCancel({
     required String plateId,
     required String phase,
@@ -1100,6 +1146,21 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                               subtitle: primarySubtitle,
                               onPressed: primaryOnPressed,
                             ),
+
+                            /// ✅ 신규 버튼 위치: "출차 주행 시작" 하단
+                            /// - departure_requests 타입일 때만 표시
+                            if (_type == PlateType.departureRequests) ...[
+                              const SizedBox(height: 10),
+                              _PrimaryCtaButton(
+                                icon: Icons.skip_next_rounded,
+                                title: '주행 스킵 후 출차 완료',
+                                subtitle: '주행 과정을 생략하고 바로 출차 완료로 변경합니다.',
+                                onPressed: _skipDepartureDrivingToCompleted,
+                                // 동일 컴포넌트/레이아웃 유지 + 색만 구분(오동작 방지)
+                                backgroundColor: cs.tertiary,
+                                foregroundColor: cs.onTertiary,
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -1588,8 +1649,12 @@ class _ActionTileButton extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     final Color base = (tone == _ActionTone.positive) ? cs.tertiary : cs.onSurfaceVariant;
-    final Color bg = (tone == _ActionTone.positive) ? cs.tertiaryContainer.withOpacity(0.45) : cs.surfaceContainerLow;
-    final Color border = (tone == _ActionTone.positive) ? cs.tertiary.withOpacity(0.35) : cs.outlineVariant.withOpacity(0.85);
+    final Color bg = (tone == _ActionTone.positive)
+        ? cs.tertiaryContainer.withOpacity(0.45)
+        : cs.surfaceContainerLow;
+    final Color border = (tone == _ActionTone.positive)
+        ? cs.tertiary.withOpacity(0.35)
+        : cs.outlineVariant.withOpacity(0.85);
 
     final Color attentionBorder =
     Color.lerp(border, cs.error, (attention * 0.9).clamp(0, 1))!;
@@ -1699,23 +1764,32 @@ class _PrimaryCtaButton extends StatelessWidget {
   final String subtitle;
   final Future<void> Function() onPressed;
 
+  /// ✅ 리팩터링: 동일한 버튼 디자인 유지하면서, 상황별(스킵 버튼 등) 색만 구분 가능하게 확장
+  final Color? backgroundColor;
+  final Color? foregroundColor;
+
   const _PrimaryCtaButton({
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.onPressed,
+    this.backgroundColor,
+    this.foregroundColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
+    final bg = backgroundColor ?? cs.primary;
+    final fg = foregroundColor ?? cs.onPrimary;
+
     return SizedBox(
       width: double.infinity,
       child: FilledButton(
         style: FilledButton.styleFrom(
-          backgroundColor: cs.primary,
-          foregroundColor: cs.onPrimary,
+          backgroundColor: bg,
+          foregroundColor: fg,
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
@@ -1736,7 +1810,7 @@ class _PrimaryCtaButton extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: cs.onPrimary.withOpacity(0.90),
+                      color: fg.withOpacity(0.90),
                     ),
                   ),
                 ],

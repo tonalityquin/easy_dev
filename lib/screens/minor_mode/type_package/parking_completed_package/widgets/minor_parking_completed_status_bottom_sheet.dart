@@ -751,9 +751,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                         ),
                         IconButton(
                           tooltip: '닫기',
-                          onPressed: saving
-                              ? null
-                              : () => Navigator.of(dialogCtx).pop(),
+                          onPressed:
+                          saving ? null : () => Navigator.of(dialogCtx).pop(),
                           icon: Icon(Icons.close, color: cs.onSurfaceVariant),
                         ),
                       ],
@@ -797,7 +796,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                       onChanged: (v) => setDialogState(() => query = v),
                       decoration: InputDecoration(
                         hintText: '주차 구역 검색',
-                        prefixIcon: Icon(Icons.search, color: cs.onSurfaceVariant),
+                        prefixIcon:
+                        Icon(Icons.search, color: cs.onSurfaceVariant),
                         isDense: true,
                         filled: true,
                         fillColor: cs.surfaceContainerLow,
@@ -805,15 +805,18 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                             horizontal: 12, vertical: 10),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(color: _BrandTone.border(cs)),
+                          borderSide:
+                          BorderSide(color: _BrandTone.border(cs)),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(color: _BrandTone.border(cs)),
+                          borderSide:
+                          BorderSide(color: _BrandTone.border(cs)),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(color: cs.primary.withOpacity(0.70)),
+                          borderSide:
+                          BorderSide(color: cs.primary.withOpacity(0.70)),
                         ),
                       ),
                     ),
@@ -997,6 +1000,118 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
         );
       },
     );
+  }
+
+  // ─────────────────────────────────────────
+  // ✅ 신규: “주행 스킵 → 타입 즉시 전환”
+  // ─────────────────────────────────────────
+
+  /// ✅ 출차 요청(departure_requests) 상태에서: 주행 스킵 → 바로 출차 완료
+  Future<void> _skipDepartureDrivingToCompleted() async {
+    await _runPrimary(() async {
+      if (_type != PlateType.departureRequests) {
+        _showWarningSafe('현재 상태에서는 출차 완료 처리(스킵)가 불가능합니다.');
+        return;
+      }
+
+      final userName = context.read<UserState>().name;
+      final selectedBy = (_plate.selectedBy ?? '').trim();
+
+      // 다른 사용자가 선점 중이면 차단
+      if (_plate.isSelected == true &&
+          selectedBy.isNotEmpty &&
+          selectedBy != userName) {
+        _showWarningSafe('다른 사용자가 이미 주행 중입니다. (선택자: $selectedBy)');
+        return;
+      }
+
+      final movementPlate = context.read<MovementPlate>();
+
+      try {
+        await movementPlate.setDepartureCompleted(_plate);
+
+        if (!mounted) return;
+
+        // UI 정리(선점 표시가 남아있을 수 있으므로 로컬에서 정리)
+        setState(() {
+          _plate = _plate.copyWith(isSelected: false, selectedBy: null);
+        });
+
+        try {
+          showSuccessSnackbar(context, '주행을 스킵하고 출차 완료로 변경했습니다.');
+        } catch (_) {}
+
+        Navigator.pop(context);
+      } on FirebaseException catch (e) {
+        _showWarningSafe('출차 완료 처리 실패: ${e.message ?? e.code}');
+      } catch (e) {
+        _showWarningSafe('출차 완료 처리 실패: $e');
+      }
+    });
+  }
+
+  /// ✅ 입차 요청(parking_requests) 상태에서: 주행 스킵 → 바로 입차 완료
+  /// - Minor는 입차 완료 시 위치가 필요하므로, 기존과 동일하게 “주차 구역 선택(캐시)”을 거친다.
+  Future<void> _skipEntryDrivingToParkingCompleted() async {
+    await _runPrimary(() async {
+      if (_type != PlateType.parkingRequests) {
+        _showWarningSafe('현재 상태에서는 입차 완료 처리(스킵)가 불가능합니다.');
+        return;
+      }
+
+      final userName = context.read<UserState>().name;
+      final selectedBy = (_plate.selectedBy ?? '').trim();
+
+      // 다른 사용자가 선점 중이면 차단
+      if (_plate.isSelected == true &&
+          selectedBy.isNotEmpty &&
+          selectedBy != userName) {
+        _showWarningSafe('다른 사용자가 이미 주행 중입니다. (선택자: $selectedBy)');
+        return;
+      }
+
+      final movementPlate = context.read<MovementPlate>();
+
+      try {
+        // ✅ Minor 정책: 입차 완료는 위치가 필요 → 동일 UI(캐시 기반 선택 다이얼로그) 재사용
+        final area = _resolveAreaForCache();
+        final picked = await _showParkingLocationPickerDialog(
+          plateNumber: _plate.plateNumber,
+          area: area,
+          onConfirm: (pickedLocation) async {
+            await movementPlate.setParkingCompleted(
+              _plate.plateNumber,
+              area,
+              pickedLocation,
+            );
+          },
+        );
+
+        // 사용자가 취소하면 아무 것도 변경하지 않음(안전)
+        if (picked == null || picked.trim().isEmpty) {
+          showSelectedSnackbar(
+              context, '주차 구역 선택이 취소되었습니다. (상태 변경 없음)');
+          return;
+        }
+
+        if (!mounted) return;
+
+        // UI 정리(선점 표시가 남아있을 수 있으므로 로컬에서 정리)
+        setState(() {
+          _plate = _plate.copyWith(isSelected: false, selectedBy: null);
+        });
+
+        try {
+          showSuccessSnackbar(context, '주행을 스킵하고 입차 완료로 변경했습니다.');
+        } catch (_) {}
+
+        Navigator.pop(context);
+      } on FirebaseException catch (e) {
+        _showWarningSafe('입차 완료 처리 실패: ${e.message ?? e.code}');
+      } catch (e) {
+        _showWarningSafe('입차 완료 처리 실패: $e');
+      }
+    });
   }
 
   // ─────────────────────────────────────────
@@ -1467,7 +1582,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                           n: 1,
                                         );
 
-                                        await plateState.minorUpdatePlateLocally(
+                                        await plateState
+                                            .minorUpdatePlateLocally(
                                           PlateType.parkingCompleted,
                                           updatedPlate,
                                         );
@@ -1567,7 +1683,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                           n: 1,
                                         );
 
-                                        await plateState.minorUpdatePlateLocally(
+                                        await plateState
+                                            .minorUpdatePlateLocally(
                                           PlateType.parkingCompleted,
                                           updatedPlate,
                                         );
@@ -1613,6 +1730,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                               ],
                             ),
                             const SizedBox(height: 12),
+
+                            // ✅ 기존 Primary 버튼(현 타입에 따라: 출차 요청/입차 주행/출차 주행)
                             _PrimaryCtaButton(
                               cs: cs,
                               icon: primaryIcon,
@@ -1620,6 +1739,32 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                               subtitle: primarySubtitle,
                               onPressed: primaryOnPressed,
                             ),
+
+                            // ✅ 신규 스킵 버튼은 “출차 주행 시작” 하단(= Primary 버튼 하단)에 위치
+                            if (_type == PlateType.departureRequests) ...[
+                              const SizedBox(height: 10),
+                              _PrimaryCtaButton(
+                                cs: cs,
+                                icon: Icons.skip_next_rounded,
+                                title: '주행 스킵 후 출차 완료',
+                                subtitle: '주행 과정을 생략하고 바로 출차 완료로 변경합니다.',
+                                onPressed: _skipDepartureDrivingToCompleted,
+                                backgroundColor: _BrandTone.ok(cs),
+                                foregroundColor: cs.onTertiary,
+                              ),
+                            ],
+                            if (_type == PlateType.parkingRequests) ...[
+                              const SizedBox(height: 10),
+                              _PrimaryCtaButton(
+                                cs: cs,
+                                icon: Icons.skip_next_rounded,
+                                title: '주행 스킵 후 입차 완료',
+                                subtitle: '주행 과정을 생략하고 바로 입차 완료로 변경합니다. (주차 구역 선택 필요)',
+                                onPressed: _skipEntryDrivingToParkingCompleted,
+                                backgroundColor: _BrandTone.ok(cs),
+                                foregroundColor: cs.onTertiary,
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -1670,7 +1815,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                       MaterialPageRoute(
                                         builder: (_) => MinorModifyPlateScreen(
                                           plate: _plate,
-                                          collectionKey: PlateType.parkingCompleted,
+                                          collectionKey:
+                                          PlateType.parkingCompleted,
                                         ),
                                       ),
                                     );
@@ -1687,7 +1833,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                       try {
                                         await widget.onRequestEntry();
                                         if (!mounted) return;
-                                        showSuccessSnackbar(context, '입차 요청으로 되돌렸습니다.');
+                                        showSuccessSnackbar(
+                                            context, '입차 요청으로 되돌렸습니다.');
                                         Navigator.pop(context);
                                       } catch (e) {
                                         if (!mounted) return;
@@ -1909,8 +2056,9 @@ class _PlateSummaryCard extends StatelessWidget {
     final badgeColor = isLocked ? _BrandTone.ok(cs) : cs.onSurfaceVariant;
     final badgeText = isLocked ? '사전정산 잠김' : '사전정산 없음';
 
-    final feeText =
-    (isLocked && lockedFee != null) ? '₩$lockedFee${paymentMethod.isNotEmpty ? " ($paymentMethod)" : ""}' : '—';
+    final feeText = (isLocked && lockedFee != null)
+        ? '₩$lockedFee${paymentMethod.isNotEmpty ? " ($paymentMethod)" : ""}'
+        : '—';
 
     final billingText = billingType.isNotEmpty ? billingType : '미지정';
 
@@ -1950,7 +2098,8 @@ class _PlateSummaryCard extends StatelessWidget {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: badgeColor.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(999),
@@ -1978,9 +2127,11 @@ class _PlateSummaryCard extends StatelessWidget {
           const SizedBox(height: 8),
           Row(
             children: [
-              Expanded(child: _InfoLine(cs: cs, label: '정산 타입', value: billingText)),
+              Expanded(
+                  child: _InfoLine(cs: cs, label: '정산 타입', value: billingText)),
               const SizedBox(width: 12),
-              Expanded(child: _InfoLine(cs: cs, label: '잠금 금액', value: feeText)),
+              Expanded(
+                  child: _InfoLine(cs: cs, label: '잠금 금액', value: feeText)),
             ],
           ),
         ],
@@ -2058,7 +2209,10 @@ class _SectionCard extends StatelessWidget {
         children: [
           Text(
             title,
-            style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: cs.onSurface),
+            style: TextStyle(
+                fontWeight: FontWeight.w900,
+                fontSize: 16,
+                color: cs.onSurface),
           ),
           const SizedBox(height: 4),
           Text(
@@ -2099,12 +2253,18 @@ class _ActionTileButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color base = (tone == _ActionTone.positive) ? _BrandTone.ok(cs) : cs.onSurfaceVariant;
-    final Color bg = (tone == _ActionTone.positive) ? _BrandTone.okBg(cs).withOpacity(0.55) : cs.surfaceContainerLow;
+    final Color base = (tone == _ActionTone.positive)
+        ? _BrandTone.ok(cs)
+        : cs.onSurfaceVariant;
+    final Color bg = (tone == _ActionTone.positive)
+        ? _BrandTone.okBg(cs).withOpacity(0.55)
+        : cs.surfaceContainerLow;
     final Color border = _BrandTone.border(cs);
 
-    final Color attentionBorder = Color.lerp(border, cs.error, (attention * 0.75).clamp(0, 1))!;
-    final Color attentionBg = Color.lerp(bg, cs.errorContainer.withOpacity(0.35), (attention * 0.55).clamp(0, 1))!;
+    final Color attentionBorder =
+    Color.lerp(border, cs.error, (attention * 0.75).clamp(0, 1))!;
+    final Color attentionBg = Color.lerp(
+        bg, cs.errorContainer.withOpacity(0.35), (attention * 0.55).clamp(0, 1))!;
 
     return Material(
       color: Colors.transparent,
@@ -2140,7 +2300,8 @@ class _ActionTileButton extends StatelessWidget {
                   if (badgeText != null) ...[
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: base.withOpacity(0.12),
                         borderRadius: BorderRadius.circular(999),
@@ -2183,24 +2344,34 @@ class _PrimaryCtaButton extends StatelessWidget {
   final String subtitle;
   final Future<void> Function() onPressed;
 
+  /// ✅ 확장: 동일 디자인 유지 + 상황별 색상만 선택 가능
+  final Color? backgroundColor;
+  final Color? foregroundColor;
+
   const _PrimaryCtaButton({
     required this.cs,
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.onPressed,
+    this.backgroundColor,
+    this.foregroundColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    final bg = backgroundColor ?? cs.primary;
+    final fg = foregroundColor ?? cs.onPrimary;
+
     return SizedBox(
       width: double.infinity,
       child: FilledButton(
         style: FilledButton.styleFrom(
-          backgroundColor: cs.primary,
-          foregroundColor: cs.onPrimary,
+          backgroundColor: bg,
+          foregroundColor: fg,
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
         ),
         onPressed: () async => onPressed(),
@@ -2219,7 +2390,7 @@ class _PrimaryCtaButton extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: cs.onPrimary.withOpacity(0.90),
+                      color: fg.withOpacity(0.90),
                     ),
                   ),
                 ],

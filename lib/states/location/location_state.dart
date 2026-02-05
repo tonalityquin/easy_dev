@@ -130,8 +130,7 @@ class LocationState extends ChangeNotifier {
 
       final currentIds = _locations.map((e) => e.id).toSet();
       final newIds = data.map((e) => e.id).toSet();
-      final isIdentical =
-          currentIds.length == newIds.length && currentIds.containsAll(newIds);
+      final isIdentical = currentIds.length == newIds.length && currentIds.containsAll(newIds);
 
       if (isIdentical) {
         debugPrint('✅ Firestore 데이터가 캐시와 동일 → 갱신 없음');
@@ -261,6 +260,7 @@ class LocationState extends ChangeNotifier {
       }) async {
     final cleanArea = area.trim();
     final cleanParent = _normalizeName(parent);
+    final parentKey = _nameKey(cleanParent);
 
     if (cleanArea.isEmpty) {
       onError?.call('⚠️ 지역(area)이 비어 있어 복합 주차 구역을 추가할 수 없습니다.');
@@ -276,6 +276,8 @@ class LocationState extends ChangeNotifier {
     }
 
     // 1) 입력 정규화 + "요청 내" 중복 체크
+    // - 하위 이름은 서로 중복 불가
+    // - 상위 이름은 하위 이름과도 중복 불가 (요구사항: 이름이 같으면 생성되면 안 됨)
     final normalizedSubs = <Map<String, dynamic>>[];
     final seen = <String>{};
 
@@ -287,8 +289,8 @@ class LocationState extends ChangeNotifier {
         onError?.call('⚠️ 하위(자식) 주차 구역명은 비어 있을 수 없습니다.');
         return false;
       }
-      if (cap < 0) {
-        onError?.call('⚠️ 하위(자식) 수용 대수(capacity)는 0 이상이어야 합니다.');
+      if (cap <= 0) {
+        onError?.call('⚠️ 하위(자식) 수용 대수(capacity)는 1 이상이어야 합니다.');
         return false;
       }
 
@@ -302,11 +304,26 @@ class LocationState extends ChangeNotifier {
       normalizedSubs.add({'name': name, 'capacity': cap});
     }
 
+    if (seen.contains(parentKey)) {
+      onError?.call('⚠️ 상위(부모) 주차 구역명 "$cleanParent"은 하위(자식) 주차 구역명과 같을 수 없습니다.');
+      return false;
+    }
+
     try {
       // 2) Firestore 기준 "지역 내 전역 유니크" 중복 체크
+      // - 단일(single) 이름과 복합(composite) 자식 이름이 서로 충돌하면 안 됨
+      // - 상위(부모) 이름도 기존 주차 구역명과 충돌하면 안 됨(요구사항 반영)
       final existing = await _fetchExistingNameKeysForArea(cleanArea);
-      final conflicts = <String>[];
 
+      if (existing.contains(parentKey)) {
+        onError?.call(
+          '⚠️ "$cleanArea" 지역에 이미 "$cleanParent" 주차 구역명이 존재합니다.\n'
+              '상위/단일/복합(자식) 주차 구역명은 지역 내에서 중복될 수 없습니다.',
+        );
+        return false;
+      }
+
+      final conflicts = <String>[];
       for (final sub in normalizedSubs) {
         final n = sub['name']?.toString() ?? '';
         if (existing.contains(_nameKey(n))) conflicts.add(n);

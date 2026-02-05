@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../../../utils/snackbar_helper.dart';
 import 'location_management_package/location_setting.dart';
+import 'location_management_package/location_draft.dart';
 import '../../../../states/location/location_state.dart';
 import '../../../../states/area/area_state.dart';
 import '../../../../models/location_model.dart';
@@ -16,6 +17,10 @@ class LocationManagement extends StatefulWidget {
 
 class _LocationManagementState extends State<LocationManagement> {
   String _filter = 'all';
+
+  // ✅ 이름 정규화(상태 레이어와 동일 규칙): trim + 다중 공백 축약 + 소문자 비교
+  static String _normalizeName(String raw) => raw.trim().replaceAll(RegExp(r'\s+'), ' ');
+  static String _nameKey(String raw) => _normalizeName(raw).toLowerCase();
 
   // ▼ FAB 위치/간격 조절
   static const double _fabBottomGap = 48.0; // 하단에서 띄우기
@@ -77,6 +82,15 @@ class _LocationManagementState extends State<LocationManagement> {
   /// 추가(보텀시트)
   Future<void> _handleAdd(BuildContext context) async {
     final locationState = context.read<LocationState>();
+    final currentArea = context.read<AreaState>().currentArea;
+
+    // ✅ 빠른 UX용(로컬) 중복 체크 기준: 현재 area에 로드된 locationName 집합
+    // - 최종 중복/정합성 검증은 LocationState가 Firestore 기준으로 다시 확인
+    final existingNameKeysInArea = locationState.locations
+        .where((loc) => loc.area == currentArea)
+        .map((loc) => _nameKey(loc.locationName))
+        .toSet();
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -86,61 +100,52 @@ class _LocationManagementState extends State<LocationManagement> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (sheetCtx) {
-        final currentArea = context.read<AreaState>().currentArea;
-
         // 전체 높이로 채우기
         return FractionallySizedBox(
           heightFactor: 1,
           child: LocationSettingBottomSheet(
-            onSave: (location) {
-              if (location is! Map<String, dynamic>) {
-                showFailedSnackbar(context, '❗ 알 수 없는 형식의 주차 구역 데이터입니다.');
-                return;
-              }
+            existingNameKeysInArea: existingNameKeysInArea,
+            onSave: (draft) async {
+              final area = context.read<AreaState>().currentArea;
 
-              final type = location['type'];
-              if (type == 'single') {
-                final name = location['name']?.toString() ?? '';
-                final capacity = (location['capacity'] as int?) ?? 0;
+              if (draft is SingleLocationDraft) {
+                String? err;
+                final ok = await locationState.addSingleLocation(
+                  draft.name,
+                  area,
+                  capacity: draft.capacity,
+                  onError: (e) => err = e,
+                );
 
-                locationState
-                    .addSingleLocation(
-                  name,
-                  currentArea,
-                  capacity: capacity,
-                  onError: (error) => showFailedSnackbar(
-                    context,
-                    '🚨 주차 구역 추가 실패: $error',
-                  ),
-                )
-                    .then((_) => showSuccessSnackbar(context, '✅ 주차 구역이 추가되었습니다.'));
-              } else if (type == 'composite') {
-                final parent = location['parent']?.toString() ?? '';
-                final rawSubs = location['subs'];
-
-                final subs = (rawSubs is List)
-                    ? rawSubs
+                if (!mounted) return;
+                if (!ok) {
+                  showFailedSnackbar(context, err ?? '🚨 주차 구역 추가 실패');
+                  return;
+                }
+                showSuccessSnackbar(context, '✅ 주차 구역이 추가되었습니다.');
+              } else if (draft is CompositeLocationDraft) {
+                final subs = draft.subs
                     .map<Map<String, dynamic>>(
-                      (sub) => {
-                    'name': sub['name']?.toString() ?? '',
-                    'capacity': sub['capacity'] ?? 0,
-                  },
+                      (s) => {'name': s.name, 'capacity': s.capacity},
                 )
-                    .toList()
-                    : <Map<String, dynamic>>[];
+                    .toList();
 
-                locationState
-                    .addCompositeLocation(
-                  parent,
+                String? err;
+                final ok = await locationState.addCompositeLocation(
+                  draft.parent,
                   subs,
-                  currentArea,
-                  onError: (error) => showFailedSnackbar(
-                    context,
-                    '🚨 복합 주차 구역 추가 실패: $error',
-                  ),
-                )
-                    .then((_) => showSuccessSnackbar(context, '✅ 복합 주차 구역이 추가되었습니다.'));
+                  area,
+                  onError: (e) => err = e,
+                );
+
+                if (!mounted) return;
+                if (!ok) {
+                  showFailedSnackbar(context, err ?? '🚨 복합 주차 구역 추가 실패');
+                  return;
+                }
+                showSuccessSnackbar(context, '✅ 복합 주차 구역이 추가되었습니다.');
               } else {
+                if (!mounted) return;
                 showFailedSnackbar(context, '❗ 알 수 없는 주차 구역 유형입니다.');
               }
             },
@@ -160,14 +165,20 @@ class _LocationManagementState extends State<LocationManagement> {
       return;
     }
 
-    final ok = await _confirmDelete(context);
-    if (!ok) return;
+    final confirmed = await _confirmDelete(context);
+    if (!confirmed) return;
 
-    await locationState.deleteLocations(
+    String? err;
+    final ok = await locationState.deleteLocations(
       [selectedId],
-      onError: (error) => showFailedSnackbar(context, '🚨 주차 구역 삭제 실패: $error'),
+      onError: (e) => err = e,
     );
+
     if (!mounted) return;
+    if (!ok) {
+      showFailedSnackbar(context, err ?? '🚨 주차 구역 삭제 실패');
+      return;
+    }
     showSuccessSnackbar(context, '✅ 삭제되었습니다.');
   }
 
@@ -182,9 +193,7 @@ class _LocationManagementState extends State<LocationManagement> {
     // - toString()이 안정적이지 않다면 (ex. 인스턴스 주소) area id/name 같은 고유값으로 바꾸는 걸 권장
     final storageKeyPrefix = 'location_management_${currentArea.toString()}';
 
-    final allLocations = locationState.locations
-        .where((location) => location.area == currentArea)
-        .toList();
+    final allLocations = locationState.locations.where((location) => location.area == currentArea).toList();
 
     final singles = allLocations.where((loc) => loc.type == 'single').toList();
     final composites = allLocations.where((loc) => loc.type == 'composite').toList();

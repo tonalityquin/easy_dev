@@ -1,10 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-class LocationSettingBottomSheet extends StatefulWidget {
-  final Function(dynamic location) onSave;
+import 'location_draft.dart';
 
-  const LocationSettingBottomSheet({super.key, required this.onSave});
+class LocationSettingBottomSheet extends StatefulWidget {
+  final ValueChanged<LocationDraft> onSave;
+
+  /// ✅ 현재 area에서 이미 사용 중인 주차 구역명(단일 + 복합 자식)을
+  /// 정규화하여(lowercase + trim + 다중 공백 축약) 보관한 집합
+  /// - 빠른 UX용(로컬) 검증
+  /// - 최종 검증은 LocationState가 Firestore 기준으로 다시 수행
+  final Set<String> existingNameKeysInArea;
+
+  const LocationSettingBottomSheet({
+    super.key,
+    required this.onSave,
+    required this.existingNameKeysInArea,
+  });
 
   @override
   State<LocationSettingBottomSheet> createState() => _LocationSettingBottomSheetState();
@@ -35,6 +47,10 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
 
   String? _errorMessage;
   bool _isSingle = true;
+
+  // ✅ 이름 정규화 규칙(상태 레이어와 동일)
+  String _normalizeName(String raw) => raw.trim().replaceAll(RegExp(r'\s+'), ' ');
+  String _nameKey(String raw) => _normalizeName(raw).toLowerCase();
 
   @override
   void dispose() {
@@ -79,54 +95,120 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     );
   }
 
-  // ---------- 검증/계산 ----------
+  // ---------- 검증/파싱 ----------
 
-  bool _validateInput() {
-    final parent = _locationController.text.trim();
+  void _setError(String msg) => setState(() => _errorMessage = msg);
+
+  void _clearError() => setState(() => _errorMessage = null);
+
+  /// ✅ 현재 입력값을 기반으로 "저장 가능한 draft"를 만들고,
+  /// 실패 시 에러 메시지를 세팅한 뒤 null 반환.
+  LocationDraft? _tryBuildDraft() {
+    final parent = _normalizeName(_locationController.text);
+    final parentKey = _nameKey(parent);
+
     if (parent.isEmpty) {
       _setError('구역명을 입력하세요.');
-      return false;
+      return null;
     }
 
     if (_isSingle) {
       final capText = _capacityController.text.trim();
       final cap = int.tryParse(capText);
+
       if (cap == null || cap <= 0) {
         _setError('1 이상의 유효한 수용 대수를 입력하세요.');
-        return false;
+        return null;
       }
-      _clearError();
-      return true;
-    } else {
-      // 최소 한 개의 하위 구역: 이름 있고, 수용대수 > 0
-      final hasValidSub = _subControllers.any((c) {
-        final nameOk = c.name.text.trim().isNotEmpty;
-        final cap = int.tryParse(c.capacity.text.trim());
-        final capOk = (cap != null && cap > 0);
-        return nameOk && capOk;
-      });
 
-      if (!hasValidSub) {
-        _setError('상위 구역명과 1개 이상 유효한 하위 구역이 필요합니다.');
-        return false;
+      if (widget.existingNameKeysInArea.contains(parentKey)) {
+        _setError('이미 사용 중인 주차 구역명입니다: "$parent"');
+        return null;
       }
+
       _clearError();
-      return true;
+      return SingleLocationDraft(name: parent, capacity: cap);
     }
+
+    // ---------------- 복합 모드 ----------------
+    // 규칙:
+    // - 완전히 빈 줄(name/cap 모두 빈값)은 무시
+    // - name 또는 cap 둘 중 하나만 입력된 줄은 오류
+    // - cap은 1 이상
+    // - 하위 이름 중복 금지(대소문자/공백 차이 무시)
+    final subs = <CompositeSubDraft>[];
+    final seen = <String>{};
+
+    for (final c in _subControllers) {
+      final rawName = c.name.text;
+      final rawCap = c.capacity.text.trim();
+
+      final name = _normalizeName(rawName);
+      final hasAnyInput = name.isNotEmpty || rawCap.isNotEmpty;
+
+      if (!hasAnyInput) continue;
+
+      if (name.isEmpty) {
+        _setError('하위 구역명을 입력하세요.');
+        return null;
+      }
+
+      final cap = int.tryParse(rawCap);
+      if (cap == null || cap <= 0) {
+        _setError('하위 구역 "$name"의 수용 대수는 1 이상이어야 합니다.');
+        return null;
+      }
+
+      final key = _nameKey(name);
+      if (seen.contains(key)) {
+        _setError('하위 구역명 "$name"이(가) 중복되어 있습니다.');
+        return null;
+      }
+      seen.add(key);
+
+      subs.add(CompositeSubDraft(name: name, capacity: cap));
+    }
+
+    if (subs.isEmpty) {
+      _setError('상위 구역명과 1개 이상 유효한 하위 구역이 필요합니다.');
+      return null;
+    }
+
+    if (seen.contains(parentKey)) {
+      _setError('상위 구역명 "$parent"은 하위 구역명과 같을 수 없습니다.');
+      return null;
+    }
+
+    // ✅ 기존 데이터와 중복(단일 + 복합 자식) 금지
+    final conflicts = <String>[];
+    if (widget.existingNameKeysInArea.contains(parentKey)) {
+      conflicts.add(parent);
+    }
+    for (final s in subs) {
+      if (widget.existingNameKeysInArea.contains(_nameKey(s.name))) {
+        conflicts.add(s.name);
+      }
+    }
+    if (conflicts.isNotEmpty) {
+      final uniq = conflicts.toSet().toList();
+      _setError('이미 사용 중인 주차 구역명이 있습니다: ${uniq.join(', ')}');
+      return null;
+    }
+
+    _clearError();
+    return CompositeLocationDraft(parent: parent, subs: subs);
   }
 
-  int _calculateTotalSubCapacity() {
+  int _previewTotalSubCapacity() {
     int total = 0;
-    for (final s in _subControllers) {
-      final cap = int.tryParse(s.capacity.text.trim()) ?? 0;
+    for (final c in _subControllers) {
+      final name = _normalizeName(c.name.text);
+      final cap = int.tryParse(c.capacity.text.trim());
+      if (name.isEmpty || cap == null || cap <= 0) continue;
       total += cap;
     }
     return total;
   }
-
-  void _setError(String msg) => setState(() => _errorMessage = msg);
-
-  void _clearError() => setState(() => _errorMessage = null);
 
   // ---------- 하위 구역 편집 ----------
 
@@ -134,7 +216,8 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     final name = TextEditingController();
     final capacity = TextEditingController();
 
-    // 입력 시 합계 텍스트 실시간 갱신
+    // 입력 시 합계/검증 UI 실시간 갱신
+    name.addListener(() => setState(() {}));
     capacity.addListener(() => setState(() {}));
 
     setState(() {
@@ -153,31 +236,11 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
 
   void _handleSave() {
     FocusScope.of(context).unfocus();
-    if (!_validateInput()) return;
 
-    if (_isSingle) {
-      widget.onSave({
-        'type': 'single',
-        'name': _locationController.text.trim(),
-        'capacity': int.parse(_capacityController.text.trim()),
-      });
-    } else {
-      final subs = _subControllers.where((c) => c.name.text.trim().isNotEmpty).map((c) {
-        final cap = int.tryParse(c.capacity.text.trim()) ?? 0;
-        return {
-          'name': c.name.text.trim(),
-          'capacity': cap,
-        };
-      }).toList();
+    final draft = _tryBuildDraft();
+    if (draft == null) return;
 
-      widget.onSave({
-        'type': 'composite',
-        'parent': _locationController.text.trim(),
-        'subs': subs,
-        'totalCapacity': _calculateTotalSubCapacity(),
-      });
-    }
-
+    widget.onSave(draft);
     Navigator.pop(context);
   }
 
@@ -406,7 +469,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            '총 수용 차량: ${_calculateTotalSubCapacity()}대',
+                            '총 수용 차량: ${_previewTotalSubCapacity()}대',
                             style: TextStyle(
                               color: cs.onSurfaceVariant.withOpacity(.85),
                               fontWeight: FontWeight.w700,

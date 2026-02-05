@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../enums/plate_type.dart';
 import '../states/page/triple_page_state.dart';
 import '../states/area/area_state.dart';
 import '../states/plate/triple_plate_state.dart';
-import '../states/plate/movement_plate.dart';
 import '../states/user/user_state.dart';
 
 import 'triple_mode/input_package/triple_input_plate_screen.dart';
@@ -84,8 +82,7 @@ class _TripleTypePageState extends State<TripleTypePage> {
   void initState() {
     super.initState();
 
-    // ✅ Triple 진입: PlateState 절대 금지(구독 시작됨)
-    // ✅ TriplePlateState만 1회 로드(get) 수행
+    // ✅ Triple 진입: TriplePlateState만 1회 로드(get) 수행
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<TriplePlateState>().tripleEnableForTypePages(withDefaults: true);
     });
@@ -145,13 +142,13 @@ class _TripleTypePageState extends State<TripleTypePage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: const [
-                    // ✅ (기존: 입차/대시보드 행 자리) -> 현황/출차요청/출차완료 컨트롤바 이동
+                    // ✅ 1행: 현황/테이블 토글 + 출차요청(count) + 출차완료
                     _ParkingCompletedControlBar(),
 
-                    // ✅ (기존: 홈 버튼 자리) -> 입차/대시보드 행 이동
+                    // ✅ 2행: 입차/대시보드
                     _EntryDashboardBar(),
 
-                    // ✅ (기존: 하단 이미지 자리) -> 홈 버튼 이동 (하단 이미지 제거)
+                    // ✅ 3행: 홈
                     _SingleHomeTabBar(),
                   ],
                 ),
@@ -164,47 +161,11 @@ class _TripleTypePageState extends State<TripleTypePage> {
   }
 }
 
-/// ✅ 기존 TripleParkingCompletedPage의 bottomNavigationBar(현황/출차요청/출차완료 포함)를
-/// TripleTypePage 하단 1행으로 올려서 재사용.
-/// - 모드 상태는 TripleParkingCompletedPage.modeNotifier로 동기화.
-/// - (정렬/plateList/정렬토글 등 레거시 기능은 TripleParkingCompletedPage 리팩터링에서 제거됨)
-/// - 출차요청/입차요청 핸들러는 TripleTypePage에서 기존과 동일하게 수행(Provider 접근 용이).
+/// ✅ TripleParkingCompletedPage의 모드(현황/테이블)를 하단 컨트롤바에 반영.
+/// - modeNotifier로 동기화.
+/// - 컨트롤 위젯 리팩터링으로 레거시 인자(정렬/입차요청/사전정산/상태수정 등) 제거됨.
 class _ParkingCompletedControlBar extends StatelessWidget {
   const _ParkingCompletedControlBar();
-
-  void _tripleHandleDepartureRequested(BuildContext context) {
-    final movementPlate = context.read<MovementPlate>();
-    final userName = context.read<UserState>().name;
-    final plateState = context.read<TriplePlateState>();
-
-    final selectedPlate =
-    plateState.tripleGetSelectedPlate(PlateType.parkingCompleted, userName);
-
-    if (selectedPlate != null) {
-      movementPlate
-          .setDepartureRequested(
-        selectedPlate.plateNumber,
-        selectedPlate.area,
-        selectedPlate.location,
-      )
-          .then((_) {
-        Future.delayed(const Duration(milliseconds: 300), () {
-          // 다이얼로그에서 confirm 후 호출되는 경우 pop이 필요
-          if (Navigator.of(context).canPop()) {
-            Navigator.pop(context);
-          }
-          showSuccessSnackbar(context, "출차 요청이 완료되었습니다.");
-        });
-      }).catchError((e) {
-        showFailedSnackbar(context, "출차 요청 중 오류: $e");
-      });
-    }
-  }
-
-  void _handleEntryParkingRequest(BuildContext context, String plateNumber, String area) async {
-    // 기존 stub 동작 유지(컨트롤 버튼 시그니처 호환)
-    showSuccessSnackbar(context, "입차 요청 처리: $plateNumber ($area)");
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -214,19 +175,9 @@ class _ParkingCompletedControlBar extends StatelessWidget {
       valueListenable: TripleParkingCompletedPage.modeNotifier,
       builder: (context, mode, _) {
         final isStatusMode = mode == TripleParkingViewMode.status;
-        final isLocationPickerMode = mode == TripleParkingViewMode.locationPicker;
-
-        // ✅ 리팩터링 반영:
-        // - plateList 모드 제거 → 항상 false
-        // - 정렬 상태(notifier) 제거 → 항상 true로 유지(컨트롤 위젯 시그니처 호환)
-        const bool isParkingAreaMode = false;
-        const bool isSorted = true;
 
         return TripleParkingCompletedControlButtons(
-          isParkingAreaMode: isParkingAreaMode,
           isStatusMode: isStatusMode,
-          isLocationPickerMode: isLocationPickerMode,
-          isSorted: isSorted,
           onToggleViewMode: () {
             TripleParkingCompletedPage.toggleViewMode(pageState.parkingCompletedKey);
           },
@@ -236,14 +187,6 @@ class _ParkingCompletedControlBar extends StatelessWidget {
               context,
             );
           },
-
-          // ✅ 리팩터링 반영:
-          // - TripleParkingCompletedPage.toggleSortIcon(...) 삭제됨
-          // - 컨트롤 위젯이 아직 toggleSortIcon 콜백을 요구하는 경우를 대비해 no-op 처리
-          toggleSortIcon: () {},
-
-          handleEntryParkingRequest: _handleEntryParkingRequest,
-          handleDepartureRequested: _tripleHandleDepartureRequested,
         );
       },
     );
@@ -263,7 +206,7 @@ class _EntryDashboardBar extends StatelessWidget {
           const Expanded(child: _OpenEntryButton()),
           const SizedBox(width: 8),
 
-          // ✅ 우측: 대시보드 버튼 (브랜드 primary)
+          // ✅ 우측: 대시보드 버튼
           Expanded(
             child: ElevatedButton(
               onPressed: () {
@@ -390,7 +333,7 @@ class _SingleHomeTabBar extends StatelessWidget {
                   onError: (msg) => showFailedSnackbar(context, msg),
                 );
 
-                // ✅ 홈 버튼을 탭할 때마다 데이터 갱신(1회 조회 get)
+                // ✅ 홈 버튼 탭 시 데이터 갱신
                 try {
                   context.read<TriplePlateState>().tripleSyncWithAreaState();
                 } catch (_) {}
@@ -440,7 +383,6 @@ class _RefreshableBodyState extends State<RefreshableBody> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    // ✅ Vertical Drag(TopSheet) 제스처 로직 제거 유지
     return Consumer2<TriplePageState, TriplePlateState>(
       builder: (context, pageState, normalPlateState, _) {
         return Stack(

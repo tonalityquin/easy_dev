@@ -4,20 +4,11 @@ import 'package:provider/provider.dart';
 
 import '../../../../enums/plate_type.dart';
 import '../../../../models/plate_model.dart';
-import '../../../../repositories/plate_repo_services/plate_repository.dart';
 import '../../../../states/area/area_state.dart';
 import '../../../../states/page/minor_page_state.dart';
-import '../../../../states/plate/delete_plate.dart';
-import '../../../../states/plate/minor_plate_state.dart';
 import '../../../../states/user/user_state.dart';
-import '../../../../utils/snackbar_helper.dart';
 
-import '../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
-import '../../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
 import '../minor_departure_completed_bottom_sheet.dart';
-import 'widgets/minor_parking_completed_status_bottom_sheet.dart';
-import 'widgets/minor_set_departure_request_dialog.dart';
-import '../../../../widgets/dialog/plate_remove_dialog.dart';
 
 /// Deep Blue 팔레트(서비스 카드와 동일 계열) + 상태 색상
 class _Palette {
@@ -25,7 +16,7 @@ class _Palette {
   static const dark = Color(0xFF37474F); // 강조 텍스트/아이콘
 
   // 상태 강조 색
-  static const danger = Color(0xFFD32F2F); // 출차 요청(붉은색)
+  static const danger = Color(0xFFD32F2F); // (기존) 출차 요청 강조색
   static const success = Color(0xFF2E7D32); // 출차 완료(초록색)
 
   // 입차 요청 강조 색(필요 시 조정)
@@ -84,10 +75,8 @@ class _ParkingRequestsAggregationCountState
 
     final agg = FirebaseFirestore.instance
         .collection('plates')
-        .where(
-      PlateFields.type,
-      isEqualTo: PlateType.parkingRequests.firestoreValue,
-    )
+        .where(PlateFields.type,
+        isEqualTo: PlateType.parkingRequests.firestoreValue)
         .where(PlateFields.area, isEqualTo: area)
         .where(PlateFields.isSelected, isEqualTo: false) // ✅ 주행(선점) 중 제외
         .count();
@@ -158,7 +147,7 @@ class _ParkingRequestsAggregationCountState
   }
 }
 
-/// ✅ 출차 요청(PlateType.departureRequests) 건수(aggregation count) 표시 위젯
+/// ✅ (기존) 출차 요청(PlateType.departureRequests) 건수(aggregation count) 표시 위젯
 /// - plates 컬렉션에서 (type == departure_requests && area == area && isSelected == false) 조건으로 count()
 /// - refreshToken 변경 시(같은 area여도) 다시 count().get()
 class DepartureRequestsAggregationCount extends StatefulWidget {
@@ -213,7 +202,7 @@ class _DepartureRequestsAggregationCountState
         .where(PlateFields.type,
         isEqualTo: PlateType.departureRequests.firestoreValue)
         .where(PlateFields.area, isEqualTo: area)
-        .where(PlateFields.isSelected, isEqualTo: false) // ✅ 추가 조건
+        .where(PlateFields.isSelected, isEqualTo: false)
         .count();
 
     final snap = await agg.get();
@@ -282,448 +271,114 @@ class _DepartureRequestsAggregationCountState
   }
 }
 
+/// ✅ Minor 입차완료 컨트롤바(현재 UX 기준 reachable 로직만 유지)
+///
+/// 유지 기능:
+/// 0) (아이콘) 입차 요청 count 표시 + 탭하면 현황↔테이블 토글
+/// 1) (아이콘) (기존: 출차 요청 count) 표시 + 탭하면 검색 다이얼로그
+/// 2) 출차 완료 바텀시트
+///
+/// ✅ 변경점(요구사항):
+/// - "출차 요청"이라는 텍스트만 "스마트 기능"으로 변경
+/// - 로직/아이콘/카운트 쿼리/refreshToken은 그대로 유지
 class MinorParkingCompletedControlButtons extends StatelessWidget {
-  final bool isParkingAreaMode;
+  /// true: 현황 모드 / false: 테이블 모드
   final bool isStatusMode;
-  final bool isLocationPickerMode;
-  final bool isSorted;
+
+  /// 0번 버튼 탭: 현황 ↔ 테이블
   final VoidCallback onToggleViewMode;
+
+  /// 1번 버튼 탭: 검색 다이얼로그(기존 동작 유지)
   final VoidCallback showSearchDialog;
-  final VoidCallback toggleSortIcon;
-  final Function(BuildContext context, String plateNumber, String area)
-  handleEntryParkingRequest;
-  final Function(BuildContext context) handleDepartureRequested;
 
   const MinorParkingCompletedControlButtons({
     super.key,
-    required this.isParkingAreaMode,
     required this.isStatusMode,
-    required this.isLocationPickerMode,
-    required this.isSorted,
     required this.onToggleViewMode,
     required this.showSearchDialog,
-    required this.toggleSortIcon,
-    required this.handleEntryParkingRequest,
-    required this.handleDepartureRequested,
   });
-
-  /// ✅ area 결정(주석 의도에 맞춰 fallbackArea(선택 plate.area) 우선)
-  String _resolveArea(BuildContext context, {String? fallbackArea}) {
-    final fb = (fallbackArea ?? '').trim();
-    if (fb.isNotEmpty) return fb;
-
-    final userArea = context.read<UserState>().currentArea.trim();
-    if (userArea.isNotEmpty) return userArea;
-
-    final stateArea = context.read<AreaState>().currentArea.trim();
-    if (stateArea.isNotEmpty) return stateArea;
-
-    return '';
-  }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<MinorPlateState>(
-      builder: (context, plateState, _) {
-        final userName = context.read<UserState>().name;
-        final selectedPlate = plateState.minorGetSelectedPlate(
-          PlateType.parkingCompleted,
-          userName,
-        );
-        final isPlateSelected =
-            selectedPlate != null && selectedPlate.isSelected;
+    // ✅ area 변경에 따라 count가 재조회되도록 select로 구독
+    final userArea =
+    context.select<UserState, String>((s) => s.currentArea).trim();
+    final stateArea =
+    context.select<AreaState, String>((s) => s.currentArea).trim();
+    final countArea = userArea.isNotEmpty ? userArea : stateArea;
 
-        final countArea = _resolveArea(
-          context,
-          fallbackArea: selectedPlate?.area,
-        );
+    final Color selectedItemColor = _Palette.base;
+    final Color unselectedItemColor = _Palette.dark.withOpacity(.55);
 
-        // 팔레트 기반 컬러
-        final Color selectedItemColor = _Palette.base;
-        final Color unselectedItemColor = _Palette.dark.withOpacity(.55);
-        final Color muted = _Palette.dark.withOpacity(.60);
-
-        return BottomNavigationBar(
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          elevation: 0,
-          selectedFontSize: 12,
-          unselectedFontSize: 12,
-          iconSize: 24,
-          selectedItemColor: selectedItemColor,
-          unselectedItemColor: unselectedItemColor,
-          items: (isLocationPickerMode || isStatusMode)
-              ? [
-            // ✅ (변경) 모드 전환(현황/테이블) 기능은 유지하되, 아이콘 자리에 "입차 요청" aggregation count 표시
-            BottomNavigationBarItem(
-              icon: Selector<MinorPageState, int>(
-                selector: (_, s) => s.departureRequestsCountRefreshToken,
-                builder: (context, token, _) {
-                  return ParkingRequestsAggregationCount(
-                    area: countArea,
-                    color: _Palette.entryRequest,
-                    fontSize: 18,
-                    refreshToken: token,
-                  );
-                },
-              ),
-              // ✅ 현황 모드: status 화면
-              // ✅ 테이블 모드: locationPicker 화면
-              label: isStatusMode ? '현황 모드' : '테이블 모드',
-            ),
-
-            // ✅ 출차 요청: aggregation count (refreshToken 기반 재조회)
-            BottomNavigationBarItem(
-              icon: Selector<MinorPageState, int>(
-                selector: (_, s) => s.departureRequestsCountRefreshToken,
-                builder: (context, token, _) {
-                  return DepartureRequestsAggregationCount(
-                    area: countArea,
-                    color: _Palette.danger,
-                    fontSize: 18,
-                    refreshToken: token,
-                  );
-                },
-              ),
-              label: '출차 요청',
-            ),
-
-            const BottomNavigationBarItem(
-              icon: Icon(Icons.directions_car, color: _Palette.success),
-              label: '출차 완료',
-            ),
-          ]
-              : [
-            BottomNavigationBarItem(
-              icon: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                transitionBuilder: (child, animation) =>
-                    ScaleTransition(scale: animation, child: child),
-                child: isPlateSelected
-                    ? (selectedPlate.isLockedFee
-                    ? const Icon(Icons.lock_open,
-                    key: ValueKey('unlock'),
-                    color: Color(0xFF37474F))
-                    : const Icon(Icons.lock,
-                    key: ValueKey('lock'),
-                    color: Color(0xFF37474F)))
-                    : Icon(Icons.refresh,
-                    key: const ValueKey('refresh'), color: muted),
-              ),
-              label: isPlateSelected
-                  ? (selectedPlate.isLockedFee ? '정산 취소' : '사전 정산')
-                  : '채팅하기',
-            ),
-
-            // ✅ (선택된 경우) 출차 요청: aggregation count (refreshToken 기반 재조회)
-            BottomNavigationBarItem(
-              icon: isPlateSelected
-                  ? Selector<MinorPageState, int>(
-                selector: (_, s) =>
-                s.departureRequestsCountRefreshToken,
-                builder: (context, token, _) {
-                  return DepartureRequestsAggregationCount(
-                    area: countArea,
-                    color: _Palette.danger,
-                    fontSize: 18,
-                    refreshToken: token,
-                  );
-                },
-              )
-                  : Icon(Icons.search, color: muted),
-              label: isPlateSelected ? '출차 요청' : '번호판 검색',
-            ),
-
-            BottomNavigationBarItem(
-              icon: AnimatedRotation(
-                turns: isSorted ? 0.5 : 0.0,
-                duration: const Duration(milliseconds: 300),
-                child: Transform.scale(
-                  scaleX: isSorted ? -1 : 1,
-                  child: Icon(
-                    isPlateSelected ? Icons.settings : Icons.sort,
-                    color: muted,
-                  ),
-                ),
-              ),
-              label: isPlateSelected ? '상태 수정' : (isSorted ? '최신순' : '오래된 순'),
-            ),
-          ],
-          onTap: (index) async {
-            // 상태/로케이션 선택 모드 전용(여기서는 DB 없음)
-            if (isLocationPickerMode || isStatusMode) {
-              if (index == 0) {
-                // ✅ (변경) 현황 ↔ 테이블 모드 토글
-                onToggleViewMode();
-              } else if (index == 1) {
-                showSearchDialog();
-              } else if (index == 2) {
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (context) => const MinorDepartureCompletedBottomSheet(),
-                );
-              }
-              return;
-            }
-
-            // 일반 모드: 선택 안된 경우(여기서는 DB 없음)
-            if (!isParkingAreaMode || !isPlateSelected) {
-              if (index == 0 || index == 1) {
-                showSearchDialog();
-              } else if (index == 2) {
-                toggleSortIcon();
-              }
-              return;
-            }
-
-            // 선택된 차량 기준 실행
-            final repo = context.read<PlateRepository>();
-            final billingType = selectedPlate.billingType;
-            final now = DateTime.now();
-            final entryTime =
-                selectedPlate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
-            final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
-            final firestore = FirebaseFirestore.instance;
-            final documentId = selectedPlate.id;
-            final selectedArea = selectedPlate.area;
-
-            if (index == 0) {
-              final bool isZeroZero =
-                  ((selectedPlate.basicAmount ?? 0) == 0) &&
-                      ((selectedPlate.addAmount ?? 0) == 0);
-
-              if (isZeroZero && selectedPlate.isLockedFee) {
-                showFailedSnackbar(
-                    context, '이 차량은 0원 규칙으로 잠금 상태이며 해제할 수 없습니다.');
-                return;
-              }
-
-              if (isZeroZero && !selectedPlate.isLockedFee) {
-                final updatedPlate = selectedPlate.copyWith(
-                  isLockedFee: true,
-                  lockedAtTimeInSeconds: currentTime,
-                  lockedFeeAmount: 0,
-                  paymentMethod: null,
-                );
-
-                try {
-                  await repo.addOrUpdatePlate(documentId, updatedPlate);
-                  _reportDbSafe(
-                    area: selectedArea,
-                    action: 'write',
-                    source:
-                    'parkingCompleted.prebill.autoZero.repo.addOrUpdatePlate',
-                    n: 1,
-                  );
-
-                  await context.read<MinorPlateState>().minorUpdatePlateLocally(
-                      PlateType.parkingCompleted, updatedPlate);
-
-                  final autoLog = {
-                    'action': '사전 정산(자동 잠금: 0원)',
-                    'performedBy': userName,
-                    'timestamp': now.toIso8601String(),
-                    'lockedFee': 0,
-                    'auto': true,
-                  };
-
-                  await firestore.collection('plates').doc(documentId).update({
-                    'logs': FieldValue.arrayUnion([autoLog])
-                  });
-                  _reportDbSafe(
-                    area: selectedArea,
-                    action: 'write',
-                    source:
-                    'parkingCompleted.prebill.autoZero.plates.update.logs.arrayUnion',
-                    n: 1,
-                  );
-
-                  showSuccessSnackbar(context, '0원 유형이라 자동으로 잠금되었습니다.');
-                } catch (e) {
-                  showFailedSnackbar(
-                      context, '자동 잠금 처리에 실패했습니다. 다시 시도해 주세요.');
-                }
-                return;
-              }
-
-              if ((billingType ?? '').trim().isEmpty) {
-                showFailedSnackbar(context, '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
-                return;
-              }
-
-              if (selectedPlate.isLockedFee) {
-                final confirm = await showDialog<bool>(
-                  context: context,
-                  builder: (_) => const ConfirmCancelFeeDialog(),
-                );
-                if (confirm != true) return;
-
-                final updatedPlate = selectedPlate.copyWith(
-                  isLockedFee: false,
-                  lockedAtTimeInSeconds: null,
-                  lockedFeeAmount: null,
-                  paymentMethod: null,
-                );
-
-                try {
-                  await repo.addOrUpdatePlate(documentId, updatedPlate);
-                  _reportDbSafe(
-                    area: selectedArea,
-                    action: 'write',
-                    source:
-                    'parkingCompleted.prebill.unlock.repo.addOrUpdatePlate',
-                    n: 1,
-                  );
-
-                  await context.read<MinorPlateState>().minorUpdatePlateLocally(
-                      PlateType.parkingCompleted, updatedPlate);
-
-                  final cancelLog = {
-                    'action': '사전 정산 취소',
-                    'performedBy': userName,
-                    'timestamp': now.toIso8601String(),
-                  };
-
-                  await firestore.collection('plates').doc(documentId).update({
-                    'logs': FieldValue.arrayUnion([cancelLog])
-                  });
-                  _reportDbSafe(
-                    area: selectedArea,
-                    action: 'write',
-                    source:
-                    'parkingCompleted.prebill.unlock.plates.update.logs.arrayUnion',
-                    n: 1,
-                  );
-
-                  showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
-                } catch (e) {
-                  showFailedSnackbar(context, '정산 취소 중 오류가 발생했습니다.');
-                }
-              } else {
-                final result = await showOnTapBillingBottomSheet(
-                  context: context,
-                  entryTimeInSeconds: entryTime,
-                  currentTimeInSeconds: currentTime,
-                  basicStandard: selectedPlate.basicStandard ?? 0,
-                  basicAmount: selectedPlate.basicAmount ?? 0,
-                  addStandard: selectedPlate.addStandard ?? 0,
-                  addAmount: selectedPlate.addAmount ?? 0,
-                  billingType: selectedPlate.billingType ?? '변동',
-                  regularAmount: selectedPlate.regularAmount,
-                  regularDurationHours: selectedPlate.regularDurationHours,
-                );
-                if (result == null) return;
-
-                final updatedPlate = selectedPlate.copyWith(
-                  isLockedFee: true,
-                  lockedAtTimeInSeconds: currentTime,
-                  lockedFeeAmount: result.lockedFee,
-                  paymentMethod: result.paymentMethod,
-                );
-
-                try {
-                  await repo.addOrUpdatePlate(documentId, updatedPlate);
-                  _reportDbSafe(
-                    area: selectedArea,
-                    action: 'write',
-                    source: 'parkingCompleted.prebill.lock.repo.addOrUpdatePlate',
-                    n: 1,
-                  );
-
-                  await context.read<MinorPlateState>().minorUpdatePlateLocally(
-                      PlateType.parkingCompleted, updatedPlate);
-
-                  final log = {
-                    'action': '사전 정산',
-                    'performedBy': userName,
-                    'timestamp': now.toIso8601String(),
-                    'lockedFee': result.lockedFee,
-                    'paymentMethod': result.paymentMethod,
-                    if (result.reason != null &&
-                        result.reason!.trim().isNotEmpty)
-                      'reason': result.reason!.trim(),
-                  };
-
-                  await firestore.collection('plates').doc(documentId).update({
-                    'logs': FieldValue.arrayUnion([log])
-                  });
-                  _reportDbSafe(
-                    area: selectedArea,
-                    action: 'write',
-                    source:
-                    'parkingCompleted.prebill.lock.plates.update.logs.arrayUnion',
-                    n: 1,
-                  );
-
-                  showSuccessSnackbar(
-                    context,
-                    '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})',
-                  );
-                } catch (e) {
-                  showFailedSnackbar(context, '사전 정산 처리 중 오류가 발생했습니다.');
-                }
-              }
-            } else if (index == 1) {
-              showDialog(
-                context: context,
-                builder: (context) => MinorSetDepartureRequestDialog(
-                  onConfirm: () => handleDepartureRequested(context),
-                ),
+    return BottomNavigationBar(
+      type: BottomNavigationBarType.fixed,
+      backgroundColor: Colors.white,
+      elevation: 0,
+      selectedFontSize: 12,
+      unselectedFontSize: 12,
+      iconSize: 24,
+      selectedItemColor: selectedItemColor,
+      unselectedItemColor: unselectedItemColor,
+      items: [
+        // 0) (아이콘) 입차 요청 count / (탭) 모드 토글
+        BottomNavigationBarItem(
+          icon: Selector<MinorPageState, int>(
+            // 기존 코드와 호환: 동일 refreshToken으로 재조회 트리거
+            selector: (_, s) => s.departureRequestsCountRefreshToken,
+            builder: (context, token, _) {
+              return ParkingRequestsAggregationCount(
+                area: countArea,
+                color: _Palette.entryRequest,
+                fontSize: 18,
+                refreshToken: token,
               );
-            } else if (index == 2) {
-              await showMinorParkingCompletedStatusBottomSheet(
-                context: context,
-                plate: selectedPlate,
-                onRequestEntry: () => handleEntryParkingRequest(
-                  context,
-                  selectedPlate.plateNumber,
-                  selectedPlate.area,
-                ),
-                onDelete: () {
-                  showDialog(
-                    context: context,
-                    builder: (_) => PlateRemoveDialog(
-                      onConfirm: () {
-                        try {
-                          context.read<DeletePlate>().deleteFromParkingCompleted(
-                            selectedPlate.plateNumber,
-                            selectedPlate.area,
-                          );
-                          showSuccessSnackbar(
-                              context, "삭제 완료: ${selectedPlate.plateNumber}");
-                        } catch (_) {
-                          // DeletePlate 내부에서 실패 처리
-                        }
-                      },
-                    ),
-                  );
-                },
+            },
+          ),
+          label: isStatusMode ? '현황 모드' : '테이블 모드',
+        ),
+
+        // 1) (아이콘은 그대로) 출차 요청 count / (탭) 검색 다이얼로그
+        // ✅ 텍스트만 "스마트 기능"으로 변경
+        BottomNavigationBarItem(
+          icon: Selector<MinorPageState, int>(
+            selector: (_, s) => s.departureRequestsCountRefreshToken,
+            builder: (context, token, _) {
+              return DepartureRequestsAggregationCount(
+                area: countArea,
+                color: _Palette.danger,
+                fontSize: 18,
+                refreshToken: token,
               );
-            }
-          },
-        );
+            },
+          ),
+          label: '스마트 검색', // ✅ 텍스트만 변경
+        ),
+
+        // 2) 출차 완료
+        const BottomNavigationBarItem(
+          icon: Icon(Icons.directions_car, color: _Palette.success),
+          label: '출차 완료',
+        ),
+      ],
+      onTap: (index) {
+        switch (index) {
+          case 0:
+            onToggleViewMode();
+            break;
+          case 1:
+          // ✅ 기능은 그대로 유지(검색 다이얼로그)
+            showSearchDialog();
+            break;
+          case 2:
+            showModalBottomSheet(
+              context: context,
+              isScrollControlled: true,
+              backgroundColor: Colors.transparent,
+              builder: (_) => const MinorDepartureCompletedBottomSheet(),
+            );
+            break;
+        }
       },
     );
-  }
-}
-
-/// UsageReporter: 파이어베이스 DB 작업만 계측 (read / write / delete)
-void _reportDbSafe({
-  required String area,
-  required String action, // 'read' | 'write' | 'delete'
-  required String source,
-  int n = 1,
-}) {
-  try {
-    /*UsageReporter.instance.report(
-      area: area.trim(),
-      action: action,
-      n: n,
-      source: source,
-    );*/
-  } catch (_) {
-    // 계측 실패는 UX에 영향 없음
   }
 }

@@ -83,13 +83,13 @@ class _DoubleTypePageState extends State<DoubleTypePage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: const [
-                    // ✅ (기존: 입차/대시보드 행 자리) -> 현황/출차요청/출차완료(기존 컨트롤바) 이동
+                    // ✅ 1행: 현황/테이블 토글 + 번호판 검색 + 출차 완료
                     _ParkingCompletedControlBar(),
 
-                    // ✅ (기존: 홈 버튼 자리) -> 입차/대시보드 행 이동
+                    // ✅ 2행: 입차/대시보드
                     _EntryDashboardBar(),
 
-                    // ✅ (기존: 하단 이미지 자리) -> 홈 버튼 이동 (하단 이미지 제거)
+                    // ✅ 3행: 홈
                     _SingleHomeTabBar(),
                   ],
                 ),
@@ -102,10 +102,9 @@ class _DoubleTypePageState extends State<DoubleTypePage> {
   }
 }
 
-/// ✅ 기존 DoubleParkingCompletedPage의 bottomNavigationBar(현황/출차요청/출차완료 포함)를
-/// DoubleTypePage 하단 1행으로 올려서 재사용.
+/// ✅ DoubleParkingCompletedPage의 모드(현황/테이블)를 하단 컨트롤바에 반영.
 /// - 모드 상태는 DoubleParkingCompletedPage.modeNotifier로 동기화.
-/// - (plateList/정렬 관련 레거시 기능은 DoubleParkingCompletedPage 리팩터링에서 제거됨)
+/// - 리팩터링으로 레거시 인자(정렬/입차요청/출차요청 등) 제거됨.
 class _ParkingCompletedControlBar extends StatelessWidget {
   const _ParkingCompletedControlBar();
 
@@ -117,19 +116,9 @@ class _ParkingCompletedControlBar extends StatelessWidget {
       valueListenable: DoubleParkingCompletedPage.modeNotifier,
       builder: (context, mode, _) {
         final isStatusMode = mode == DoubleParkingViewMode.status;
-        final isLocationPickerMode = mode == DoubleParkingViewMode.locationPicker;
-
-        // ✅ 리팩터링 반영:
-        // - plateList 모드 제거 → 항상 false
-        // - 정렬 상태(notifier) 제거 → 컨트롤 위젯 시그니처 호환을 위해 true 고정 전달
-        const bool isParkingAreaMode = false;
-        const bool isSorted = true;
 
         return DoubleParkingCompletedControlButtons(
-          isParkingAreaMode: isParkingAreaMode,
           isStatusMode: isStatusMode,
-          isLocationPickerMode: isLocationPickerMode,
-          isSorted: isSorted,
           onToggleViewMode: () {
             DoubleParkingCompletedPage.toggleViewMode(pageState.parkingCompletedKey);
           },
@@ -138,19 +127,6 @@ class _ParkingCompletedControlBar extends StatelessWidget {
               pageState.parkingCompletedKey,
               context,
             );
-          },
-
-          // ✅ 리팩터링 반영:
-          // - DoubleParkingCompletedPage.toggleSortIcon(...) 삭제됨
-          // - 컨트롤 위젯이 콜백을 요구하는 경우를 대비해 no-op 처리
-          toggleSortIcon: () {},
-
-          // ✅ 더블 모드 정책 유지(기존 stub 동작을 상위에서 처리)
-          handleEntryParkingRequest: (ctx, plateNumber, area) {
-            showFailedSnackbar(ctx, "더블 모드에서는 입차 요청 기능이 없습니다.");
-          },
-          handleDepartureRequested: (ctx) {
-            showFailedSnackbar(ctx, "더블 모드에서는 출차 요청 기능이 없습니다.");
           },
         );
       },
@@ -190,8 +166,9 @@ class _EntryDashboardBar extends StatelessWidget {
                 elevation: 0,
               ).copyWith(
                 overlayColor: MaterialStateProperty.resolveWith<Color?>(
-                      (states) =>
-                  states.contains(MaterialState.pressed) ? cs.onPrimary.withOpacity(0.10) : null,
+                      (states) => states.contains(MaterialState.pressed)
+                      ? cs.onPrimary.withOpacity(0.10)
+                      : null,
                 ),
               ),
               child: const Row(
@@ -255,8 +232,9 @@ class _OpenEntryButton extends StatelessWidget {
         ),
       ).copyWith(
         overlayColor: MaterialStateProperty.resolveWith<Color?>(
-              (states) =>
-          states.contains(MaterialState.pressed) ? cs.outlineVariant.withOpacity(0.18) : null,
+              (states) => states.contains(MaterialState.pressed)
+              ? cs.outlineVariant.withOpacity(0.18)
+              : null,
         ),
       ),
       child: Row(
@@ -266,7 +244,8 @@ class _OpenEntryButton extends StatelessWidget {
           const SizedBox(width: 8),
           Text(
             '입차',
-            style: TextStyle(
+            style: TextStyle
+              (
               fontWeight: FontWeight.w800,
               fontSize: 13,
               color: cs.primary,
