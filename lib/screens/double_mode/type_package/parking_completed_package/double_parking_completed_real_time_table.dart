@@ -14,7 +14,7 @@ import '../../../../states/area/area_state.dart';
 import '../../../../states/location/location_state.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../utils/block_dialogs/blocking_dialog.dart'; // runWithBlockingDialog
-import '../../../../utils/block_dialogs/duration_blocking_dialog.dart'; // showDurationBlockingDialog
+import '../../../../utils/block_dialogs/real_time_duration_dialog.dart';
 import '../../../../utils/init/date_utils.dart';
 import '../../../../utils/snackbar_helper.dart';
 import '../../../../widgets/container/plate_container_fee_calculator.dart';
@@ -92,12 +92,22 @@ class _RowVM {
   final String plateId; // plates 문서 docId
   final String plateNumber;
   final String location;
+
+  /// ✅ VIEW의 primaryTimeField(= parkingCompletedAt)
+  final DateTime? parkingCompletedAt;
+
+  /// ✅ VIEW의 updatedAt
+  final DateTime? updatedAt;
+
+  /// 정렬/그룹핑 용(기존 로직 유지): parkingCompletedAt ?? updatedAt
   final DateTime? createdAt;
 
   const _RowVM({
     required this.plateId,
     required this.plateNumber,
     required this.location,
+    required this.parkingCompletedAt,
+    required this.updatedAt,
     required this.createdAt,
   });
 }
@@ -204,10 +214,17 @@ class _GenericViewRepository {
         if (v is! Map) continue;
         final m = Map<String, dynamic>.from(v);
 
-        final plateNumber =
-            (m['plateNumber'] as String?) ?? _fallbackPlateFromDocId(plateDocId);
+        // ✅ plateNumber / plate_number 둘 다 지원
+        final plateNumber = (m['plateNumber'] as String?) ??
+            (m['plate_number'] as String?) ??
+            _fallbackPlateFromDocId(plateDocId);
+
         final location = _normalizeLocation(m['location'] as String?);
-        final createdAt = _toDate(m[primaryTimeField]) ?? _toDate(m['updatedAt']);
+
+        // ✅ timestamp 분리 보관
+        final parkingCompletedAt = _toDate(m[primaryTimeField]);
+        final updatedAt = _toDate(m['updatedAt']);
+        final createdAt = parkingCompletedAt ?? updatedAt;
 
         if (plateNumber.isEmpty) continue;
 
@@ -216,6 +233,8 @@ class _GenericViewRepository {
             plateId: plateDocId,
             plateNumber: plateNumber,
             location: location,
+            parkingCompletedAt: parkingCompletedAt,
+            updatedAt: updatedAt,
             createdAt: createdAt,
           ),
         );
@@ -396,7 +415,6 @@ class _DoubleParkingCompletedRealTimeTableState
       color: cs.surface,
       child: Column(
         children: [
-          // ✅ 상단 헤더 제거 → 데이터 영역(Expanded)이 그만큼 더 커짐
           Expanded(
             child: TabBarView(
               controller: _tabCtrl,
@@ -534,6 +552,9 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
 
   final Map<String, bool> _groupExpanded = <String, bool>{};
 
+  @override
+  bool get wantKeepAlive => true;
+
   String _dayKey(DateTime? dt) {
     if (dt == null) return 'unknown';
     final d = dt.toLocal();
@@ -550,9 +571,6 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
       meta: meta,
     );
   }
-
-  @override
-  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -679,8 +697,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
   }
 
   Future<void> _toggleViewMode() async {
-    final next =
-    (_viewMode == _ViewMode.plate) ? _ViewMode.zone : _ViewMode.plate;
+    final next = (_viewMode == _ViewMode.plate) ? _ViewMode.zone : _ViewMode.plate;
 
     setState(() {
       _viewMode = next;
@@ -1121,8 +1138,9 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                                                     r.location,
                                                     style: text.bodySmall
                                                         ?.copyWith(
-                                                        color: cs
-                                                            .onSurfaceVariant),
+                                                      color:
+                                                      cs.onSurfaceVariant,
+                                                    ),
                                                     maxLines: 1,
                                                     overflow:
                                                     TextOverflow.ellipsis,
@@ -1430,8 +1448,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
 
   Widget _buildViewModeTogglePill(ColorScheme cs, TextTheme text) {
     final disabled = _loading;
-    final toggleLabel =
-    (_viewMode == _ViewMode.plate) ? '구역으로 보기' : '번호판으로 보기';
+    final toggleLabel = (_viewMode == _ViewMode.plate) ? '구역으로 보기' : '번호판으로 보기';
 
     return Container(
       width: double.infinity,
@@ -1458,8 +1475,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
               borderRadius: BorderRadius.circular(999),
               onTap: disabled ? null : _toggleViewMode,
               child: Padding(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                 child: Row(
                   children: [
                     Expanded(
@@ -1468,8 +1484,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: text.labelMedium?.copyWith(
-                          color:
-                          disabled ? cs.onSurfaceVariant : cs.onSurface,
+                          color: disabled ? cs.onSurfaceVariant : cs.onSurface,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -1491,8 +1506,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
     final options = _locationOptionsForDropdown();
     final disabled = _loading || options.isEmpty;
 
-    if (_selectedLocation != _locationAll &&
-        !options.contains(_selectedLocation)) {
+    if (_selectedLocation != _locationAll && !options.contains(_selectedLocation)) {
       _selectedLocation = _locationAll;
     }
 
@@ -1574,8 +1588,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
         ),
         filled: true,
         fillColor: cs.surfaceContainerLow,
-        contentPadding:
-        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.8)),
@@ -1648,9 +1661,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                       ),
                       const SizedBox(width: 4),
                       Icon(
-                        _sortOldFirst
-                            ? Icons.arrow_upward
-                            : Icons.arrow_downward,
+                        _sortOldFirst ? Icons.arrow_upward : Icons.arrow_downward,
                         size: 14,
                         color: cs.onSurfaceVariant,
                       ),
@@ -1685,8 +1696,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                     ? cs.surface
                     : cs.surfaceContainerLow.withOpacity(.55);
 
-                final rawNo =
-                (i < _displayNos.length) ? _displayNos[i] : (i + 1);
+                final rawNo = (i < _displayNos.length) ? _displayNos[i] : (i + 1);
                 final noText = rawNo.toString().padLeft(2, '0');
 
                 return Material(
@@ -1738,8 +1748,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                               alignment: Alignment.centerLeft,
                               child: Text(
                                 r.location,
-                                style: _cellStyle(cs)
-                                    .copyWith(color: cs.onSurfaceVariant),
+                                style: _cellStyle(cs).copyWith(
+                                    color: cs.onSurfaceVariant),
                                 maxLines: 1,
                                 softWrap: false,
                               ),
@@ -1757,6 +1767,9 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
       ],
     );
   }
+
+  // (이하 _buildZoneAccordion / 다이얼로그 / 상세 팝업 등은 원본 구조 유지)
+  // ─────────────────────────────────────────────────────────
 
   Widget _buildZoneAccordion(ColorScheme cs, TextTheme text) {
     if (_loadingLocationMeta && _cachedLocations.isEmpty) {
@@ -1794,8 +1807,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
             decoration: BoxDecoration(
               color: cs.surface,
               border: Border(
-                  bottom:
-                  BorderSide(color: cs.outlineVariant.withOpacity(.55))),
+                  bottom: BorderSide(
+                      color: cs.outlineVariant.withOpacity(.55))),
             ),
             child: Row(
               children: [
@@ -1816,12 +1829,12 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                 ),
                 const SizedBox(width: 8),
                 Text('현재 ${z.current}대',
-                    style: text.bodySmall
-                        ?.copyWith(color: cs.onSurfaceVariant)),
+                    style:
+                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
                 const SizedBox(width: 10),
                 Text('총 $capText',
-                    style: text.bodySmall
-                        ?.copyWith(color: cs.onSurfaceVariant)),
+                    style:
+                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
                 const SizedBox(width: 10),
                 Text(
                   '잔여 $remainText',
@@ -1852,8 +1865,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
       final groupRemainText = g.totalRemaining == null
           ? '-'
           : (g.totalRemaining! >= 0 ? '${g.totalRemaining}대' : '0대');
-      final groupRemainColor =
-      (g.totalRemaining != null && g.totalRemaining! <= 0)
+      final groupRemainColor = (g.totalRemaining != null && g.totalRemaining! <= 0)
           ? cs.error
           : cs.tertiary;
 
@@ -1868,8 +1880,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
               decoration: BoxDecoration(
                 color: cs.surfaceContainerLow,
                 border: Border(
-                    bottom:
-                    BorderSide(color: cs.outlineVariant.withOpacity(.65))),
+                    bottom: BorderSide(
+                        color: cs.outlineVariant.withOpacity(.65))),
               ),
               child: Row(
                 children: [
@@ -1926,8 +1938,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
           decoration: BoxDecoration(
             color: cs.surfaceContainerLow,
             border: Border(
-                bottom:
-                BorderSide(color: cs.outlineVariant.withOpacity(.85))),
+                bottom: BorderSide(color: cs.outlineVariant.withOpacity(.85))),
           ),
           child: Row(
             children: [
@@ -1946,8 +1957,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                 totalCapAll > 0
                     ? '총 ${totalCapAll}대 / 현재 ${totalCurAll}대 / 잔여 ${totalRemAll ?? 0}대'
                     : '현재 ${totalCurAll}대',
-                style: text.labelMedium
-                    ?.copyWith(color: cs.onSurfaceVariant),
+                style:
+                text.labelMedium?.copyWith(color: cs.onSurfaceVariant),
               ),
             ],
           ),
@@ -1955,10 +1966,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
         Expanded(
           child: Scrollbar(
             controller: _scrollCtrl,
-            child: ListView(
-              controller: _scrollCtrl,
-              children: children,
-            ),
+            child: ListView(controller: _scrollCtrl, children: children),
           ),
         ),
       ],
@@ -2034,6 +2042,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                   subtitle:
                   'VIEW: ${viewRow.location} / ${_fmtDate(viewRow.createdAt)}   ·   '
                       'PLATES: ${plate.location} / ${CustomDateUtils.formatTimestamp(plate.requestTime)}',
+                  showWorkButton: true,
+                  workButtonText: '작업 수행',
                   child: PlateCustomBox(
                     topLeftText: '소속',
                     topCenterText: '${plate.region ?? '전국'} ${plate.plateNumber}',
@@ -2052,8 +2062,6 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                     backgroundColor: backgroundColor,
                     onTap: () {},
                   ),
-                  showWorkButton: true,
-                  workButtonText: '작업 수행',
                 ),
               ),
             ),
@@ -2076,10 +2084,14 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
         return;
       }
 
-      final proceed = await showDurationBlockingDialog(
+      // ✅ duration dialog에는 기본 프리뷰 카드(번호판/구역/시간)를 출력
+      final proceed = await showRealTimeDurationBlockingDialog(
         context,
-        message: '원본 데이터를 불러옵니다.\n(취소하면 조회 비용이 발생하지 않습니다)',
+        message: '', // 메시지 대신 프리뷰 카드 사용
         duration: const Duration(seconds: 5),
+        plateNumber: r.plateNumber,
+        location: r.location,
+        occurredAt: r.createdAt, // 또는 r.parkingCompletedAt
       );
 
       if (!mounted) return;
@@ -2115,10 +2127,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
           currentFee = plate.lockedFeeAmount!;
         } else {
           currentFee = calculateParkingFee(
-            entryTimeInSeconds:
-            plate.requestTime.millisecondsSinceEpoch ~/ 1000,
-            currentTimeInSeconds:
-            DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            entryTimeInSeconds: plate.requestTime.millisecondsSinceEpoch ~/ 1000,
+            currentTimeInSeconds: DateTime.now().millisecondsSinceEpoch ~/ 1000,
             basicStandard: basicStandard,
             basicAmount: basicAmount,
             addStandard: addStandard,
@@ -2188,8 +2198,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                 Expanded(
                   child: Text(
                     widget.description,
-                    style: text.bodySmall
-                        ?.copyWith(color: cs.onSurfaceVariant),
+                    style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -2367,18 +2376,14 @@ class _PlateDetailNotFoundDialog extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text('plateId: $plateId',
-                    style:
-                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                    style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
                 const SizedBox(height: 6),
                 Text('VIEW Plate: $viewPlateNumber',
-                    style:
-                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                    style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
                 Text('VIEW Location: $viewLocation',
-                    style:
-                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                    style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
                 Text('VIEW Time: $viewTimeText',
-                    style:
-                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                    style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
               ],
             ),
           ),
