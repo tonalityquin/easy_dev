@@ -122,11 +122,13 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
 
     _attentionPulse = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween<double>(begin: 0, end: 1).chain(CurveTween(curve: Curves.easeOutCubic)),
+        tween: Tween<double>(begin: 0, end: 1)
+            .chain(CurveTween(curve: Curves.easeOutCubic)),
         weight: 45,
       ),
       TweenSequenceItem(
-        tween: Tween<double>(begin: 1, end: 0).chain(CurveTween(curve: Curves.easeInCubic)),
+        tween: Tween<double>(begin: 1, end: 0)
+            .chain(CurveTween(curve: Curves.easeInCubic)),
         weight: 55,
       ),
     ]).animate(_attentionCtrl);
@@ -460,6 +462,18 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
     final billingType = (_plate.billingType ?? '').trim();
     final location = (_plate.location).trim().isEmpty ? '미지정' : _plate.location.trim();
 
+    // ✅ 추가: 상태 메모(표시용) - customStatus 우선, 없으면 statusList 보조
+    final statusMemo = (() {
+      final v = (_plate.customStatus ?? '').trim();
+      if (v.isNotEmpty) return v;
+
+      final list = _plate.statusList;
+      if (list.isNotEmpty) {
+        return list.map((e) => e.trim()).where((e) => e.isNotEmpty).join(', ');
+      }
+      return '';
+    })();
+
     return SafeArea(
       top: false,
       child: Container(
@@ -520,6 +534,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                             isLocked: isLocked,
                             lockedFee: lockedFee,
                             paymentMethod: paymentMethod,
+                            statusMemo: statusMemo, // ✅ 추가
                             attention: _needsBilling ? attention : 0,
                           ),
                         ),
@@ -874,6 +889,7 @@ class _SheetTitleRow extends StatelessWidget {
     );
   }
 }
+
 class _PlateSummaryCard extends StatelessWidget {
   final String plateNumber;
   final String area;
@@ -882,6 +898,10 @@ class _PlateSummaryCard extends StatelessWidget {
   final bool isLocked;
   final int? lockedFee;
   final String paymentMethod;
+
+  // ✅ 추가: 상태 메모
+  final String statusMemo;
+
   final double attention;
 
   const _PlateSummaryCard({
@@ -892,6 +912,7 @@ class _PlateSummaryCard extends StatelessWidget {
     required this.isLocked,
     required this.lockedFee,
     required this.paymentMethod,
+    required this.statusMemo, // ✅ 추가
     this.attention = 0,
   });
 
@@ -907,6 +928,8 @@ class _PlateSummaryCard extends StatelessWidget {
         : '—';
 
     final billingText = billingType.isNotEmpty ? billingType : '미지정';
+
+    final memoText = statusMemo.trim().isNotEmpty ? statusMemo.trim() : '—';
 
     final borderColor = Color.lerp(
       cs.outlineVariant,
@@ -1017,6 +1040,14 @@ class _PlateSummaryCard extends StatelessWidget {
               Expanded(child: _InfoLine(label: '잠금 금액', value: feeText)),
             ],
           ),
+
+          // ✅ 추가: “정산 타입/잠금 금액” 하단 열에 “상태 메모”
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(child: _InfoLine(label: '상태 메모', value: memoText)),
+            ],
+          ),
         ],
       ),
     );
@@ -1096,9 +1127,19 @@ class _SectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: cs.onSurface)),
+          Text(
+            title,
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+              color: cs.onSurface,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(subtitle, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
+          Text(
+            subtitle,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+          ),
           const SizedBox(height: 12),
           child,
         ],
@@ -1140,8 +1181,10 @@ class _ActionTileButton extends StatelessWidget {
         ? cs.tertiary.withOpacity(0.25)
         : cs.outlineVariant.withOpacity(0.85);
 
-    final Color attentionBorder = Color.lerp(border, cs.error, (attention * 0.9).clamp(0, 1))!;
-    final Color attentionBg = Color.lerp(bg, cs.errorContainer.withOpacity(0.35), (attention * 0.8).clamp(0, 1))!;
+    final Color attentionBorder =
+    Color.lerp(border, cs.error, (attention * 0.9).clamp(0, 1))!;
+    final Color attentionBg =
+    Color.lerp(bg, cs.errorContainer.withOpacity(0.35), (attention * 0.8).clamp(0, 1))!;
 
     return Material(
       color: Colors.transparent,
@@ -1174,7 +1217,11 @@ class _ActionTileButton extends StatelessWidget {
                   Expanded(
                     child: Text(
                       title,
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: cs.onSurface),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                        color: cs.onSurface,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),

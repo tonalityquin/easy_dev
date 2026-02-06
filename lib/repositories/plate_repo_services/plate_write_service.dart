@@ -6,6 +6,11 @@
 // - Header 단일 스위치로 view 삽입(Write) ON/OFF를 통합 관리하므로,
 //   recordWhoPlateClick의 view 동기화 로직도 "토글 ON일 때만" 삭제/복구를 수행하도록 정합성 강화.
 //   (기존: 선택 시 삭제는 항상 수행, 해제 시 복구는 토글 ON일 때만 → OFF 상태에서 view 불일치 발생 가능)
+//
+// ✅ (추가 반영: 사용자 화면 정합성)
+// - deletePlate 시 plates 문서만 삭제하면 사용자 화면(view 컬렉션)에서는 잔상이 남을 수 있으므로,
+//   (옵션으로) parking_requests_view / parking_completed_view / departure_requests_view 에서도 items.{id} 제거를 수행
+// - 삭제 시 Firestore 비용(문서 write 개수) 및 write payload 형태를 debugPrint로 확인 가능
 
 import 'dart:async';
 import 'dart:developer' as dev;
@@ -45,6 +50,9 @@ class PlateWriteService {
   static const String _kParkingCompletedViewTabPrefsKey =
       'parking_completed_realtime_tab_enabled_v1';
 
+  // ✅ (보조) parking_requests_view 탭(조회) 토글 키 (UI에 존재한다면 동일 키로 맞추세요)
+  static const String _kParkingRequestsViewTabPrefsKey =
+      'parking_requests_realtime_tab_enabled_v1';
 
   static SharedPreferences? _prefs;
   static Future<void>? _prefsLoading;
@@ -80,6 +88,11 @@ class PlateWriteService {
     return prefs.getBool(_kParkingCompletedViewTabPrefsKey) ?? false; // 기본 OFF
   }
 
+  static Future<bool> _isParkingRequestsRealtimeTabEnabled() async {
+    final prefs = await _ensurePrefs();
+    return prefs.getBool(_kParkingRequestsViewTabPrefsKey) ?? false; // 기본 OFF
+  }
+
   /// ✅ "정합성" 관점에서 view 동기화를 수행할지 결정
   ///
   /// - 기본적으로는 Write 토글을 따릅니다.
@@ -97,12 +110,21 @@ class PlateWriteService {
     return _isParkingCompletedRealtimeTabEnabled();
   }
 
+  static Future<bool> _shouldSyncParkingRequestsView() async {
+    final write = await _canUpsertParkingRequestsView();
+    if (write) return true;
+    return _isParkingRequestsRealtimeTabEnabled();
+  }
+
+  // ─────────────────────────────────────────
+  // Helpers
+  // ─────────────────────────────────────────
+
   String _fallbackPlateFromDocId(String docId) {
     final idx = docId.lastIndexOf('_');
     if (idx > 0) return docId.substring(0, idx);
     return docId;
   }
-
 
   String _fallbackAreaFromDocId(String docId) {
     final idx = docId.lastIndexOf('_');
@@ -143,6 +165,65 @@ class PlateWriteService {
     final v = (raw ?? '').trim();
     return v.isEmpty ? '미지정' : v;
   }
+
+  dynamic _extractTimestampForAny({
+    required Map<String, dynamic> before,
+    required Map<String, dynamic> fields,
+    required List<String> keys,
+  }) {
+    // 새 값이 Timestamp면 우선 사용, 아니면 기존 값 Timestamp 사용
+    for (final k in keys) {
+      final vNew = fields[k];
+      if (vNew is Timestamp) return vNew;
+      final vOld = before[k];
+      if (vOld is Timestamp) return vOld;
+    }
+    return null;
+  }
+
+  // ─────────────────────────────────────────
+  // Debug helpers (삭제 비용/형태 확인)
+  // ─────────────────────────────────────────
+
+  bool get _dbDebugEnabled => kDebugMode;
+
+  void _debugDeleteCostAndShape({
+    required String plateId,
+    required String area,
+    required bool syncViews,
+  }) {
+    if (!_dbDebugEnabled) return;
+
+    final viewWrites = syncViews ? 3 : 0;
+    final totalWrites = 1 + viewWrites; // plates delete + view set(merge)
+
+    debugPrint(
+      '💸 [DB-COST] deletePlate(plateId=$plateId, area=$area, syncViews=$syncViews) '
+          'expected_billable_ops: writes=$totalWrites (plates.delete=1, view.set=$viewWrites), reads=0',
+    );
+
+    if (!syncViews) return;
+
+    Map<String, dynamic> shape(String col) => <String, dynamic>{
+      'collection': '$col/$area',
+      'op': 'set(merge)',
+      'payload': <String, dynamic>{
+        'area': area,
+        'updatedAt': '<serverTimestamp>',
+        'items': <String, dynamic>{
+          plateId: '<FieldValue.delete()>',
+        },
+      },
+    };
+
+    debugPrint('🧾 [DB-SHAPE] ${shape('parking_requests_view')}');
+    debugPrint('🧾 [DB-SHAPE] ${shape('parking_completed_view')}');
+    debugPrint('🧾 [DB-SHAPE] ${shape('departure_requests_view')}');
+  }
+
+  // ─────────────────────────────────────────
+  // Writes
+  // ─────────────────────────────────────────
 
   Future<void> addOrUpdatePlate(String documentId, PlateModel plate) async {
     final docRef = _firestore.collection('plates').doc(documentId);
@@ -207,10 +288,7 @@ class PlateWriteService {
     // - Write 토글(기본) + (보조) 실시간 테이블 탭 토글(조회 ON) OR 조건으로 정합성 유지
     final bool shouldSyncPcView = await _shouldSyncParkingCompletedView();
     final bool shouldSyncDepView = await _shouldSyncDepartureRequestsView();
-
-    // parking_requests_view는 본 요청의 핵심(입차 완료/출차 요청 테이블)은 아니지만,
-    // updatePlate를 "단일 진실"로 만들기 위해 동일 패턴으로 확장할 수 있습니다.
-    // 여기서는 기존 recordWhoPlateClick 경로가 있으므로 updatePlate에서는 건드리지 않습니다.
+    final bool shouldSyncReqView = await _shouldSyncParkingRequestsView();
 
     try {
       await _firestore.runTransaction((tx) async {
@@ -251,7 +329,8 @@ class PlateWriteService {
         (((fields[PlateFields.type] as String?) ?? beforeType)).trim();
 
         final String beforeArea = _extractAreaFromPlateDoc(before, documentId);
-        final String afterArea = ((fields[PlateFields.area] as String?)?.trim().isNotEmpty ?? false)
+        final String afterArea =
+        ((fields[PlateFields.area] as String?)?.trim().isNotEmpty ?? false)
             ? (fields[PlateFields.area] as String).trim()
             : beforeArea;
 
@@ -286,16 +365,18 @@ class PlateWriteService {
         final bool selectedChanged = beforeSelected != afterSelected;
 
         // 변경이 view에 영향 없는 경우 빠르게 종료(불필요 write 방지)
-        final bool affectsViews =
-            typeChanged || areaChanged || locationChanged || plateNumberChanged || selectedChanged;
+        final bool affectsViews = typeChanged ||
+            areaChanged ||
+            locationChanged ||
+            plateNumberChanged ||
+            selectedChanged;
 
         if (!affectsViews) {
           return;
         }
 
         // ─────────────────────────────────────────
-        // 3) View 동기화(입차 완료/출차 요청)
-        //    - 핵심: Modify 등으로 location/isSelected가 바뀌어도 테이블이 즉시 정합하게 보이도록 함
+        // 3) View 동기화(입차 요청/입차 완료/출차 요청)
         // ─────────────────────────────────────────
 
         DocumentReference<Map<String, dynamic>> _viewRef(
@@ -325,16 +406,6 @@ class PlateWriteService {
           );
         }
 
-        dynamic _extractTimestampFor(String key) {
-          final vNew = fields[key];
-          if (vNew is Timestamp) return vNew;
-
-          final vOld = before[key];
-          if (vOld is Timestamp) return vOld;
-
-          return null;
-        }
-
         void _txUpsertViewItemFields({
           required String collection,
           required String area,
@@ -358,8 +429,6 @@ class PlateWriteService {
               primaryTimeField: primaryTimeValue ?? FieldValue.serverTimestamp(),
           };
 
-          // ✅ set(merge)로 items.{id}를 업서트합니다.
-          // - primaryTimeValue는 plates 문서의 기존 Timestamp를 우선 사용 → 정렬/시간 의미가 리셋되지 않습니다.
           tx.set(
             ref,
             <String, dynamic>{
@@ -373,16 +442,77 @@ class PlateWriteService {
           );
         }
 
+        const String reqCollection = 'parking_requests_view';
         const String pcCollection = 'parking_completed_view';
         const String depCollection = 'departure_requests_view';
 
-        final bool beforeIsPc = beforeType == PlateType.parkingCompleted.firestoreValue;
-        final bool afterIsPc = afterType == PlateType.parkingCompleted.firestoreValue;
+        final bool beforeIsReq =
+            beforeType == PlateType.parkingRequests.firestoreValue;
+        final bool afterIsReq =
+            afterType == PlateType.parkingRequests.firestoreValue;
 
-        final bool beforeIsDep = beforeType == PlateType.departureRequests.firestoreValue;
-        final bool afterIsDep = afterType == PlateType.departureRequests.firestoreValue;
+        final bool beforeIsPc =
+            beforeType == PlateType.parkingCompleted.firestoreValue;
+        final bool afterIsPc =
+            afterType == PlateType.parkingCompleted.firestoreValue;
 
-        // ── 3-A) parking_completed_view 정합성
+        final bool beforeIsDep =
+            beforeType == PlateType.departureRequests.firestoreValue;
+        final bool afterIsDep =
+            afterType == PlateType.departureRequests.firestoreValue;
+
+        // ── 3-A) parking_requests_view 정합성
+        if (shouldSyncReqView) {
+          // ① 이탈(또는 area 이동): 기존 view에서 제거
+          if (beforeIsReq && (!afterIsReq || areaChanged)) {
+            _txRemoveViewItem(
+              collection: reqCollection,
+              area: beforeArea,
+              plateDocId: documentId,
+            );
+          }
+
+          // ② 진입/잔류: 선택 상태 정책 포함(선택=true면 테이블에서 숨김)
+          if (afterIsReq) {
+            if (afterSelected) {
+              if (typeChanged ||
+                  areaChanged ||
+                  selectedChanged ||
+                  locationChanged ||
+                  plateNumberChanged) {
+                _txRemoveViewItem(
+                  collection: reqCollection,
+                  area: afterArea,
+                  plateDocId: documentId,
+                );
+              }
+            } else {
+              if (typeChanged ||
+                  areaChanged ||
+                  selectedChanged ||
+                  locationChanged ||
+                  plateNumberChanged) {
+                final reqAt = _extractTimestampForAny(
+                  before: before,
+                  fields: fields,
+                  keys: const <String>['parkingRequestedAt', 'requestTime'],
+                );
+
+                _txUpsertViewItemFields(
+                  collection: reqCollection,
+                  area: afterArea,
+                  plateDocId: documentId,
+                  plateNumber: afterPlateNumber,
+                  location: afterLocation,
+                  primaryTimeField: 'parkingRequestedAt',
+                  primaryTimeValue: reqAt,
+                );
+              }
+            }
+          }
+        }
+
+        // ── 3-B) parking_completed_view 정합성
         if (shouldSyncPcView) {
           // ① 이탈(또는 area 이동): 기존 view에서 제거
           if (beforeIsPc && (!afterIsPc || areaChanged)) {
@@ -396,7 +526,11 @@ class PlateWriteService {
           // ② 진입/잔류: location(및 plateNumber) 갱신
           if (afterIsPc) {
             if (typeChanged || areaChanged || locationChanged || plateNumberChanged) {
-              final pcAt = _extractTimestampFor('parkingCompletedAt');
+              final pcAt = _extractTimestampForAny(
+                before: before,
+                fields: fields,
+                keys: const <String>['parkingCompletedAt'],
+              );
 
               _txUpsertViewItemFields(
                 collection: pcCollection,
@@ -411,7 +545,7 @@ class PlateWriteService {
           }
         }
 
-        // ── 3-B) departure_requests_view 정합성
+        // ── 3-C) departure_requests_view 정합성
         if (shouldSyncDepView) {
           // ① 이탈(또는 area 이동): 기존 view에서 제거
           if (beforeIsDep && (!afterIsDep || areaChanged)) {
@@ -428,7 +562,11 @@ class PlateWriteService {
             // - isSelected == true  → view에서 제거(숨김)
             // - isSelected == false → view에 upsert(복구)
             if (afterSelected) {
-              if (typeChanged || areaChanged || selectedChanged || locationChanged || plateNumberChanged) {
+              if (typeChanged ||
+                  areaChanged ||
+                  selectedChanged ||
+                  locationChanged ||
+                  plateNumberChanged) {
                 _txRemoveViewItem(
                   collection: depCollection,
                   area: afterArea,
@@ -436,8 +574,16 @@ class PlateWriteService {
                 );
               }
             } else {
-              if (typeChanged || areaChanged || selectedChanged || locationChanged || plateNumberChanged) {
-                final depAt = _extractTimestampFor('departureRequestedAt');
+              if (typeChanged ||
+                  areaChanged ||
+                  selectedChanged ||
+                  locationChanged ||
+                  plateNumberChanged) {
+                final depAt = _extractTimestampForAny(
+                  before: before,
+                  fields: fields,
+                  keys: const <String>['departureRequestedAt'],
+                );
 
                 _txUpsertViewItemFields(
                   collection: depCollection,
@@ -464,14 +610,71 @@ class PlateWriteService {
     }
   }
 
-
-
-  Future<void> deletePlate(String documentId) async {
+  /// ✅ 삭제
+  ///
+  /// - 기존 호출 호환을 위해 signature 유지 + optional params 추가
+  /// - area가 없으면 docId(plate_area)에서 fallback 추출
+  ///
+  /// syncViews=true일 때 예상 Firestore billable write:
+  /// - plates/{id}.delete()                                       -> 1 write
+  /// - parking_requests_view/{area}.set(merge, items.{id}:delete) -> 1 write
+  /// - parking_completed_view/{area}.set(merge, items.{id}:delete)-> 1 write
+  /// - departure_requests_view/{area}.set(merge, items.{id}:delete)->1 write
+  /// => 총 4 writes (batch.commit 1회지만 문서 write는 4개로 과금)
+  Future<void> deletePlate(
+      String documentId, {
+        String? area,
+        bool syncViews = true,
+      }) async {
     final docRef = _firestore.collection('plates').doc(documentId);
 
+    final normalizedArea = (area ?? '').trim().isNotEmpty
+        ? area!.trim()
+        : _fallbackAreaFromDocId(documentId).trim();
+
+    _debugDeleteCostAndShape(
+      plateId: documentId,
+      area: normalizedArea,
+      syncViews: syncViews && normalizedArea.isNotEmpty,
+    );
+
     try {
-      await docRef.delete();
-      dev.log("🗑️ 문서 삭제 완료: $documentId", name: "Firestore");
+      if (!syncViews || normalizedArea.isEmpty) {
+        await docRef.delete();
+        dev.log("🗑️ 문서 삭제 완료(plates only): $documentId", name: "Firestore");
+        return;
+      }
+
+      // ✅ batch로 plates + view 정리를 원샷 커밋
+      final batch = _firestore.batch();
+
+      batch.delete(docRef);
+
+      void removeFromView(String collection) {
+        final viewRef = _firestore.collection(collection).doc(normalizedArea);
+        batch.set(
+          viewRef,
+          <String, dynamic>{
+            'area': normalizedArea,
+            'updatedAt': FieldValue.serverTimestamp(),
+            'items': <String, dynamic>{
+              documentId: FieldValue.delete(),
+            }
+          },
+          SetOptions(merge: true),
+        );
+      }
+
+      removeFromView('parking_requests_view');
+      removeFromView('parking_completed_view');
+      removeFromView('departure_requests_view');
+
+      await batch.commit();
+
+      dev.log(
+        "🗑️ 문서 삭제 완료(+view cleanup): $documentId",
+        name: "Firestore",
+      );
     } on FirebaseException catch (e) {
       if (e.code == 'not-found') {
         debugPrint("⚠️ 삭제 시 문서 없음 (무시): $documentId");
@@ -665,6 +868,7 @@ class PlateWriteService {
                 'items': <String, dynamic>{
                   id: <String, dynamic>{
                     'plateNumber': plateNumber,
+                    PlateFields.plateNumber: plateNumber,
                     'location': location,
                     'departureRequestedAt':
                     depRequestedAt ?? FieldValue.serverTimestamp(),
@@ -723,6 +927,7 @@ class PlateWriteService {
                 'items': <String, dynamic>{
                   id: <String, dynamic>{
                     'plateNumber': plateNumber,
+                    PlateFields.plateNumber: plateNumber,
                     'location': location,
                     'parkingRequestedAt': reqAt ?? FieldValue.serverTimestamp(),
                     'updatedAt': FieldValue.serverTimestamp(),

@@ -805,13 +805,11 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                             horizontal: 12, vertical: 10),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide:
-                          BorderSide(color: _BrandTone.border(cs)),
+                          borderSide: BorderSide(color: _BrandTone.border(cs)),
                         ),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
-                          borderSide:
-                          BorderSide(color: _BrandTone.border(cs)),
+                          borderSide: BorderSide(color: _BrandTone.border(cs)),
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(14),
@@ -1089,8 +1087,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
 
         // 사용자가 취소하면 아무 것도 변경하지 않음(안전)
         if (picked == null || picked.trim().isEmpty) {
-          showSelectedSnackbar(
-              context, '주차 구역 선택이 취소되었습니다. (상태 변경 없음)');
+          showSelectedSnackbar(context, '주차 구역 선택이 취소되었습니다. (상태 변경 없음)');
           return;
         }
 
@@ -1371,6 +1368,19 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
     final location =
     (_plate.location).trim().isEmpty ? '미지정' : _plate.location.trim();
 
+    // ✅ 추가: 상태 메모(표시용) - customStatus 우선, 없으면 statusList 보조
+    final statusMemo = (() {
+      final cs0 = (_plate.customStatus ?? '').trim();
+      if (cs0.isNotEmpty) return cs0;
+
+      final list = _plate.statusList;
+      if (list.isNotEmpty) {
+        final joined = list.map((e) => e.trim()).where((e) => e.isNotEmpty).join(', ');
+        return joined;
+      }
+      return '';
+    })();
+
     IconData primaryIcon = Icons.local_shipping_outlined;
     String primaryTitle = '출차 요청으로 이동';
     String primarySubtitle = '차량을 출차 요청 상태로 전환합니다.';
@@ -1496,6 +1506,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                             isLocked: isLocked,
                             lockedFee: lockedFee,
                             paymentMethod: paymentMethod,
+                            statusMemo: statusMemo, // ✅ 추가
                             attention: _needsBilling ? attention : 0,
                           ),
                         ),
@@ -1759,7 +1770,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                 cs: cs,
                                 icon: Icons.skip_next_rounded,
                                 title: '주행 스킵 후 입차 완료',
-                                subtitle: '주행 과정을 생략하고 바로 입차 완료로 변경합니다. (주차 구역 선택 필요)',
+                                subtitle:
+                                '주행 과정을 생략하고 바로 입차 완료로 변경합니다. (주차 구역 선택 필요)',
                                 onPressed: _skipEntryDrivingToParkingCompleted,
                                 backgroundColor: _BrandTone.ok(cs),
                                 foregroundColor: cs.onTertiary,
@@ -1795,7 +1807,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                       rootContext,
                                       MaterialPageRoute(
                                         builder: (_) => LogViewerBottomSheet(
-                                          initialPlateNumber: widget.plateNumber,
+                                          initialPlateNumber:
+                                          widget.plateNumber,
                                           division: widget.division,
                                           area: widget.area,
                                           requestTime: _plate.requestTime,
@@ -2037,6 +2050,9 @@ class _PlateSummaryCard extends StatelessWidget {
   final int? lockedFee;
   final String paymentMethod;
 
+  // ✅ 추가: 상태 메모
+  final String statusMemo;
+
   final double attention;
 
   const _PlateSummaryCard({
@@ -2048,6 +2064,7 @@ class _PlateSummaryCard extends StatelessWidget {
     required this.isLocked,
     required this.lockedFee,
     required this.paymentMethod,
+    required this.statusMemo, // ✅ 추가
     this.attention = 0,
   });
 
@@ -2061,6 +2078,9 @@ class _PlateSummaryCard extends StatelessWidget {
         : '—';
 
     final billingText = billingType.isNotEmpty ? billingType : '미지정';
+
+    // ✅ 상태 메모 텍스트(표시용)
+    final memoText = statusMemo.trim().isNotEmpty ? statusMemo.trim() : '—';
 
     final borderColor = Color.lerp(
       _BrandTone.border(cs),
@@ -2132,6 +2152,16 @@ class _PlateSummaryCard extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                   child: _InfoLine(cs: cs, label: '잠금 금액', value: feeText)),
+            ],
+          ),
+
+          // ✅ 추가: 하단 열에 "상태 메모" 라인(디자인 동일: _InfoLine 그대로 사용)
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _InfoLine(cs: cs, label: '상태 메모', value: memoText),
+              ),
             ],
           ),
         ],
@@ -2264,7 +2294,9 @@ class _ActionTileButton extends StatelessWidget {
     final Color attentionBorder =
     Color.lerp(border, cs.error, (attention * 0.75).clamp(0, 1))!;
     final Color attentionBg = Color.lerp(
-        bg, cs.errorContainer.withOpacity(0.35), (attention * 0.55).clamp(0, 1))!;
+        bg,
+        cs.errorContainer.withOpacity(0.35),
+        (attention * 0.55).clamp(0, 1))!;
 
     return Material(
       color: Colors.transparent,
@@ -2370,8 +2402,7 @@ class _PrimaryCtaButton extends StatelessWidget {
           backgroundColor: bg,
           foregroundColor: fg,
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-          shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
         ),
         onPressed: () async => onPressed(),

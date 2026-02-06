@@ -61,14 +61,37 @@ class FirestorePlateRepository implements PlateRepository {
     return _writeService.updatePlate(documentId, updatedFields, log: log);
   }
 
+  /// ✅ 수정: deletePlate가 (area/syncViews)를 받아 plates + view 정리까지 가능하도록 위임
+  ///
+  /// - 기존 호출( deletePlate(documentId) )도 그대로 동작 (named optional)
+  /// - area가 넘어오면 더 정확하게 view 정리 가능
+  /// - syncViews=false로 비용 최소화(plates만 삭제) 선택 가능
   @override
-  Future<void> deletePlate(String documentId) {
-    return _writeService.deletePlate(documentId);
+  Future<void> deletePlate(
+      String documentId, {
+        String? area,
+        bool syncViews = true,
+      }) {
+    return _writeService.deletePlate(
+      documentId,
+      area: area,
+      syncViews: syncViews,
+    );
   }
 
   @override
-  Future<void> recordWhoPlateClick(String id, bool isSelected, {String? selectedBy, required String area}) {
-    return _writeService.recordWhoPlateClick(id, isSelected, selectedBy: selectedBy, area: area); // ✅ (2)
+  Future<void> recordWhoPlateClick(
+      String id,
+      bool isSelected, {
+        String? selectedBy,
+        required String area,
+      }) {
+    return _writeService.recordWhoPlateClick(
+      id,
+      isSelected,
+      selectedBy: selectedBy,
+      area: area,
+    ); // ✅ (2)
   }
 
   @override
@@ -243,6 +266,9 @@ class FirestorePlateRepository implements PlateRepository {
     return _statusService.deletePlateStatus(plateNumber, area);
   }
 
+  /// ✅ 수정: updatedAt을 여기서 Timestamp.now()로 넣지 않음
+  /// - PlateWriteService.updatePlate가 트랜잭션 내부에서 updatedAt을 FieldValue.serverTimestamp()로 강제 세팅하므로,
+  ///   여기서 클라이언트 시간을 넣는 것은 의미가 없고 오해 여지가 있어 제거
   @override
   Future<void> transitionPlateState({
     required String documentId,
@@ -256,18 +282,18 @@ class FirestorePlateRepository implements PlateRepository {
     int? lockedFeeAmount,
     PlateLogModel? log,
   }) async {
-    final updateData = {
+    final updateData = <String, dynamic>{
       'type': toType.firestoreValue,
       'location': location,
       'userName': userName,
-      'updatedAt': Timestamp.now(),
       if (resetSelection) ...{
         'isSelected': false,
         'selectedBy': null,
       },
       if (includeEndTime) 'endTime': DateTime.now(),
       if (isLockedFee == true) 'isLockedFee': true,
-      if (lockedAtTimeInSeconds != null) 'lockedAtTimeInSeconds': lockedAtTimeInSeconds,
+      if (lockedAtTimeInSeconds != null)
+        'lockedAtTimeInSeconds': lockedAtTimeInSeconds,
       if (lockedFeeAmount != null) 'lockedFeeAmount': lockedFeeAmount,
       if (log != null) 'logs': FieldValue.arrayUnion([log.toMap()]),
     };

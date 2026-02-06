@@ -15,11 +15,7 @@ import '../../../../states/location/location_state.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../utils/block_dialogs/blocking_dialog.dart'; // runWithBlockingDialog
 import '../../../../utils/block_dialogs/real_time_duration_dialog.dart';
-import '../../../../utils/init/date_utils.dart';
 import '../../../../utils/snackbar_helper.dart';
-import '../../../../widgets/container/plate_container_fee_calculator.dart';
-import '../../../../widgets/container/plate_custom_box.dart';
-import '../../../../widgets/dialog/billing_bottom_sheet/fee_calculator.dart';
 
 import '../../../hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
 import 'widgets/double_parking_completed_status_bottom_sheet.dart';
@@ -34,7 +30,6 @@ const bool _kDialogBarrierDismissible = false;
 enum _ViewMode { plate, zone }
 
 /// ✅ Top-level (Dart 규칙 준수)
-/// ✅ 변경: fullName(원본 매칭 키) 추가
 class _ZoneVM {
   final String fullName; // 드롭다운/집계(rawCounts) 키로 쓰는 "전체 표시명"
   final String group; // composite parent(부모명). 단독은 ''.
@@ -99,7 +94,7 @@ class _RowVM {
   /// ✅ VIEW의 updatedAt
   final DateTime? updatedAt;
 
-  /// 정렬/그룹핑 용(기존 로직 유지): parkingCompletedAt ?? updatedAt
+  /// 정렬/그룹핑 용: parkingCompletedAt ?? updatedAt
   final DateTime? createdAt;
 
   const _RowVM({
@@ -226,7 +221,7 @@ class _GenericViewRepository {
         final updatedAt = _toDate(m['updatedAt']);
         final createdAt = parkingCompletedAt ?? updatedAt;
 
-        if (plateNumber.isEmpty) continue;
+        if (plateNumber.trim().isEmpty) continue;
 
         out.add(
           _RowVM(
@@ -697,7 +692,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
   }
 
   Future<void> _toggleViewMode() async {
-    final next = (_viewMode == _ViewMode.plate) ? _ViewMode.zone : _ViewMode.plate;
+    final next =
+    (_viewMode == _ViewMode.plate) ? _ViewMode.zone : _ViewMode.plate;
 
     setState(() {
       _viewMode = next;
@@ -716,7 +712,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
       final opts = _locationOptionsForDropdown();
       if (!mounted) return;
       setState(() {
-        if (_selectedLocation != _locationAll && !opts.contains(_selectedLocation)) {
+        if (_selectedLocation != _locationAll &&
+            !opts.contains(_selectedLocation)) {
           _selectedLocation = _locationAll;
         }
       });
@@ -1168,7 +1165,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          '항목을 탭하면 번호판 상세로 이동합니다.',
+                          '항목을 탭하면 작업 수행 바텀시트로 이동합니다.',
                           style: text.bodySmall
                               ?.copyWith(color: cs.onSurfaceVariant),
                         ),
@@ -1185,7 +1182,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
   }
 
   // ─────────────────────────────────────────────────────────
-  // plate 상세 / fee 계산 / table 렌더링
+  // plate 상세 / 바텀시트(작업 수행) 직행
   // ─────────────────────────────────────────────────────────
 
   Future<PlateModel?> _fetchPlateDetail(String plateId) async {
@@ -1218,27 +1215,6 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
 
     _plateDetailInflight[id] = fut;
     return fut;
-  }
-
-  FeeMode _parseFeeMode(String? modeString) {
-    switch (modeString) {
-      case 'plus':
-        return FeeMode.plus;
-      case 'minus':
-        return FeeMode.minus;
-      default:
-        return FeeMode.normal;
-    }
-  }
-
-  String _formatElapsed(Duration duration) {
-    final hours = duration.inHours;
-    final minutes = duration.inMinutes.remainder(60);
-    final seconds = duration.inSeconds.remainder(60);
-
-    if (hours > 0) return '$hours시간 $minutes분';
-    if (minutes > 0) return '$minutes분 $seconds초';
-    return '$seconds초';
   }
 
   String _fmtDate(DateTime? v) {
@@ -1448,7 +1424,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
 
   Widget _buildViewModeTogglePill(ColorScheme cs, TextTheme text) {
     final disabled = _loading;
-    final toggleLabel = (_viewMode == _ViewMode.plate) ? '구역으로 보기' : '번호판으로 보기';
+    final toggleLabel =
+    (_viewMode == _ViewMode.plate) ? '구역으로 보기' : '번호판으로 보기';
 
     return Container(
       width: double.infinity,
@@ -1506,7 +1483,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
     final options = _locationOptionsForDropdown();
     final disabled = _loading || options.isEmpty;
 
-    if (_selectedLocation != _locationAll && !options.contains(_selectedLocation)) {
+    if (_selectedLocation != _locationAll &&
+        !options.contains(_selectedLocation)) {
       _selectedLocation = _locationAll;
     }
 
@@ -1661,7 +1639,9 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                       ),
                       const SizedBox(width: 4),
                       Icon(
-                        _sortOldFirst ? Icons.arrow_upward : Icons.arrow_downward,
+                        _sortOldFirst
+                            ? Icons.arrow_upward
+                            : Icons.arrow_downward,
                         size: 14,
                         color: cs.onSurfaceVariant,
                       ),
@@ -1671,16 +1651,16 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
               ),
               const SizedBox(width: 8),
               Expanded(
-                  flex: 7,
-                  child: Text('Plate',
-                      style: _headStyle(cs),
-                      overflow: TextOverflow.ellipsis)),
+                flex: 7,
+                child: Text('Plate',
+                    style: _headStyle(cs), overflow: TextOverflow.ellipsis),
+              ),
               const SizedBox(width: 8),
               Expanded(
-                  flex: 5,
-                  child: Text('Location',
-                      style: _headStyle(cs),
-                      overflow: TextOverflow.ellipsis)),
+                flex: 5,
+                child: Text('Location',
+                    style: _headStyle(cs), overflow: TextOverflow.ellipsis),
+              ),
             ],
           ),
         ),
@@ -1696,7 +1676,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                     ? cs.surface
                     : cs.surfaceContainerLow.withOpacity(.55);
 
-                final rawNo = (i < _displayNos.length) ? _displayNos[i] : (i + 1);
+                final rawNo =
+                (i < _displayNos.length) ? _displayNos[i] : (i + 1);
                 final noText = rawNo.toString().padLeft(2, '0');
 
                 return Material(
@@ -1748,8 +1729,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                               alignment: Alignment.centerLeft,
                               child: Text(
                                 r.location,
-                                style: _cellStyle(cs).copyWith(
-                                    color: cs.onSurfaceVariant),
+                                style: _cellStyle(cs)
+                                    .copyWith(color: cs.onSurfaceVariant),
                                 maxLines: 1,
                                 softWrap: false,
                               ),
@@ -1767,9 +1748,6 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
       ],
     );
   }
-
-  // (이하 _buildZoneAccordion / 다이얼로그 / 상세 팝업 등은 원본 구조 유지)
-  // ─────────────────────────────────────────────────────────
 
   Widget _buildZoneAccordion(ColorScheme cs, TextTheme text) {
     if (_loadingLocationMeta && _cachedLocations.isEmpty) {
@@ -1865,7 +1843,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
       final groupRemainText = g.totalRemaining == null
           ? '-'
           : (g.totalRemaining! >= 0 ? '${g.totalRemaining}대' : '0대');
-      final groupRemainColor = (g.totalRemaining != null && g.totalRemaining! <= 0)
+      final groupRemainColor =
+      (g.totalRemaining != null && g.totalRemaining! <= 0)
           ? cs.error
           : cs.tertiary;
 
@@ -1957,8 +1936,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                 totalCapAll > 0
                     ? '총 ${totalCapAll}대 / 현재 ${totalCurAll}대 / 잔여 ${totalRemAll ?? 0}대'
                     : '현재 ${totalCurAll}대',
-                style:
-                text.labelMedium?.copyWith(color: cs.onSurfaceVariant),
+                style: text.labelMedium?.copyWith(color: cs.onSurfaceVariant),
               ),
             ],
           ),
@@ -2010,91 +1988,31 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
     );
   }
 
-  Future<bool?> _showPlateDetailDialog({
-    required _RowVM viewRow,
-    required PlateModel plate,
-    required String feeText,
-    required String elapsedText,
-    required Color? backgroundColor,
-    required String displayUser,
-  }) async {
-    return showDialog<bool>(
-      context: context,
-      barrierDismissible: _kDialogBarrierDismissible,
-      builder: (_) {
-        final cs = Theme.of(context).colorScheme;
-
-        return Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 520),
-            child: Material(
-              color: Colors.transparent,
-              child: AlertDialog(
-                backgroundColor: cs.surface,
-                elevation: 8,
-                insetPadding:
-                const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(18)),
-                contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-                content: _PlateDetailBodyDialog(
-                  title: '번호판 상세',
-                  subtitle:
-                  'VIEW: ${viewRow.location} / ${_fmtDate(viewRow.createdAt)}   ·   '
-                      'PLATES: ${plate.location} / ${CustomDateUtils.formatTimestamp(plate.requestTime)}',
-                  showWorkButton: true,
-                  workButtonText: '작업 수행',
-                  child: PlateCustomBox(
-                    topLeftText: '소속',
-                    topCenterText: '${plate.region ?? '전국'} ${plate.plateNumber}',
-                    topRightUpText: plate.billingType ?? '없음',
-                    topRightDownText: feeText,
-                    midLeftText: plate.location,
-                    midCenterText: displayUser.isEmpty ? '-' : displayUser,
-                    midRightText:
-                    CustomDateUtils.formatTimeForUI(plate.requestTime),
-                    bottomLeftLeftText: plate.statusList.isNotEmpty
-                        ? plate.statusList.join(", ")
-                        : "",
-                    bottomLeftCenterText: plate.customStatus ?? '',
-                    bottomRightText: elapsedText,
-                    isSelected: plate.isSelected,
-                    backgroundColor: backgroundColor,
-                    onTap: () {},
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
+  /// ✅ 핵심 변경:
+  /// - 번호판 상세 다이얼로그를 띄우지 않고
+  /// - 원본 조회 완료 즉시 "작업 수행" 바텀시트를 띄움
   Future<void> _openHybridDetailPopup(_RowVM r) async {
     if (_openingDetail) return;
     _openingDetail = true;
 
     try {
-      final cs = Theme.of(context).colorScheme;
-
       final plateId = r.plateId.trim();
       if (plateId.isEmpty) {
         showFailedSnackbar(context, '상세 조회 식별자(plateId)가 비어 있습니다.');
         return;
       }
 
-      // ✅ duration dialog에는 기본 프리뷰 카드(번호판/구역/시간)를 출력
       final proceed = await showRealTimeDurationBlockingDialog(
         context,
-        message: '', // 메시지 대신 프리뷰 카드 사용
+        message: '', // 프리뷰 카드 사용(기존 유지)
         duration: const Duration(seconds: 5),
         plateNumber: r.plateNumber,
         location: r.location,
-        occurredAt: r.createdAt, // 또는 r.parkingCompletedAt
+        occurredAt: r.createdAt,
       );
 
       if (!mounted) return;
+
       if (!proceed) {
         showSelectedSnackbar(context, '취소했습니다. 원본 조회를 실행하지 않습니다.');
         return;
@@ -2113,68 +2031,23 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
         return;
       }
 
-      final billType = billTypeFromString(plate.billingType);
-      final bool isRegular = billType == BillType.fixed;
-
-      final int basicStandard = plate.basicStandard ?? 0;
-      final int basicAmount = plate.basicAmount ?? 0;
-      final int addStandard = plate.addStandard ?? 0;
-      final int addAmount = plate.addAmount ?? 0;
-
-      int currentFee = 0;
-      if (!isRegular) {
-        if (plate.isLockedFee && plate.lockedFeeAmount != null) {
-          currentFee = plate.lockedFeeAmount!;
-        } else {
-          currentFee = calculateParkingFee(
-            entryTimeInSeconds: plate.requestTime.millisecondsSinceEpoch ~/ 1000,
-            currentTimeInSeconds: DateTime.now().millisecondsSinceEpoch ~/ 1000,
-            basicStandard: basicStandard,
-            basicAmount: basicAmount,
-            addStandard: addStandard,
-            addAmount: addAmount,
-            isLockedFee: plate.isLockedFee,
-            lockedAtTimeInSeconds: plate.lockedAtTimeInSeconds,
-            userAdjustment: plate.userAdjustment ?? 0,
-            mode: _parseFeeMode(plate.feeMode),
-          ).toInt();
-        }
-      }
-
-      final feeText = isRegular
-          ? '${plate.isLockedFee ? (plate.lockedFeeAmount ?? 0) : (plate.regularAmount ?? 0)}원'
-          : '$currentFee원';
-
-      final elapsedText =
-      _formatElapsed(DateTime.now().difference(plate.requestTime));
-
-      final backgroundColor =
-      ((plate.billingType?.trim().isNotEmpty ?? false) && plate.isLockedFee)
-          ? cs.tertiaryContainer
-          : cs.surface;
-
-      final bool isSelected = plate.isSelected;
-      final String displayUser =
-      isSelected ? (plate.selectedBy ?? '') : plate.userName;
-
-      final bool? doWork = await _showPlateDetailDialog(
-        viewRow: r,
-        plate: plate,
-        feeText: feeText,
-        elapsedText: elapsedText,
-        backgroundColor: backgroundColor,
-        displayUser: displayUser,
+      _trace(
+        '원본 조회 후 즉시 작업 수행 바텀시트 오픈',
+        meta: <String, dynamic>{
+          'screen': 'double_parking_completed_view_embedded',
+          'action': 'open_bottom_sheet_directly',
+          'area': _currentArea,
+          'plateId': plateId,
+          'plateNumber': r.plateNumber,
+          'location': r.location,
+        },
       );
 
-      if (!mounted) return;
-
-      if (doWork == true) {
-        final rootCtx = Navigator.of(context, rootNavigator: true).context;
-        await showDoubleParkingCompletedStatusBottomSheetFromDialog(
-          context: rootCtx,
-          plate: plate,
-        );
-      }
+      final rootCtx = Navigator.of(context, rootNavigator: true).context;
+      await showDoubleParkingCompletedStatusBottomSheetFromDialog(
+        context: rootCtx,
+        plate: plate,
+      );
     } finally {
       _openingDetail = false;
     }
@@ -2389,94 +2262,6 @@ class _PlateDetailNotFoundDialog extends StatelessWidget {
           ),
           const SizedBox(height: 8),
         ],
-      ),
-    );
-  }
-}
-
-class _PlateDetailBodyDialog extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final Widget child;
-
-  final bool showWorkButton;
-  final String workButtonText;
-
-  const _PlateDetailBodyDialog({
-    required this.title,
-    required this.subtitle,
-    required this.child,
-    this.showWorkButton = false,
-    this.workButtonText = '작업 수행',
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final text = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
-
-    return SizedBox(
-      width: 520,
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: text.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      color: cs.onSurface,
-                    ),
-                  ),
-                ),
-                IconButton(
-                  tooltip: '닫기',
-                  onPressed: () => Navigator.of(context).pop(false),
-                  icon: Icon(Icons.close, color: cs.onSurface),
-                ),
-              ],
-            ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                subtitle,
-                style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            const SizedBox(height: 12),
-            child,
-            const SizedBox(height: 8),
-            if (showWorkButton) ...[
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () => Navigator.of(context).pop(true),
-                  icon: const Icon(Icons.playlist_add_check),
-                  label: Text(
-                    workButtonText,
-                    style: const TextStyle(fontWeight: FontWeight.w900),
-                  ),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: cs.primary,
-                    foregroundColor: cs.onPrimary,
-                    padding: const EdgeInsets.symmetric(
-                        vertical: 12, horizontal: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 2),
-            ],
-          ],
-        ),
       ),
     );
   }

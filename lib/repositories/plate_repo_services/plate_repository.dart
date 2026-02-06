@@ -52,7 +52,16 @@ abstract class PlateRepository {
         PlateLogModel? log,
       });
 
-  Future<void> deletePlate(String documentId);
+  /// ✅ 수정: deletePlate에 area/syncViews 옵션 추가
+  ///
+  /// - documentId만 넘기는 기존 호출은 그대로 호환됩니다.
+  /// - area를 넘기면 view(…_view/{area}.items.{id}) 정리 정확도가 올라갑니다.
+  /// - syncViews=false면 비용 최소화를 위해 plates만 삭제합니다.
+  Future<void> deletePlate(
+      String documentId, {
+        String? area,
+        bool syncViews = true,
+      });
 
   Future<void> recordWhoPlateClick(
       String id,

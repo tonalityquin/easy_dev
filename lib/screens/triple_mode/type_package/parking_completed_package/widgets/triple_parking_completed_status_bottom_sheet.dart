@@ -434,37 +434,49 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     OutlinedButton(
-                      onPressed: () => Navigator.pop(context, _DepartureOverrideChoice.cancel),
+                      onPressed: () =>
+                          Navigator.pop(context, _DepartureOverrideChoice.cancel),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: cs.onSurface,
                         side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                       ),
-                      child: const Text('취소', style: TextStyle(fontWeight: FontWeight.w900)),
+                      child: const Text('취소',
+                          style: TextStyle(fontWeight: FontWeight.w900)),
                     ),
                     const SizedBox(width: 10),
                     OutlinedButton(
-                      onPressed: () => Navigator.pop(context, _DepartureOverrideChoice.goBilling),
+                      onPressed: () =>
+                          Navigator.pop(context, _DepartureOverrideChoice.goBilling),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: cs.primary,
                         side: BorderSide(color: cs.primary.withOpacity(0.35)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                         backgroundColor: cs.primaryContainer.withOpacity(0.35),
                       ),
-                      child: const Text('정산하기', style: TextStyle(fontWeight: FontWeight.w900)),
+                      child: const Text('정산하기',
+                          style: TextStyle(fontWeight: FontWeight.w900)),
                     ),
                     const SizedBox(width: 10),
                     FilledButton(
-                      onPressed: () => Navigator.pop(context, _DepartureOverrideChoice.proceed),
+                      onPressed: () =>
+                          Navigator.pop(context, _DepartureOverrideChoice.proceed),
                       style: FilledButton.styleFrom(
                         backgroundColor: cs.error,
                         foregroundColor: cs.onError,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 12),
                       ),
-                      child: const Text('그래도 출차 요청', style: TextStyle(fontWeight: FontWeight.w900)),
+                      child: const Text('그래도 출차 요청',
+                          style: TextStyle(fontWeight: FontWeight.w900)),
                     ),
                   ],
                 ),
@@ -612,7 +624,9 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
 
       final userName = context.read<UserState>().name;
       final selectedBy = (_plate.selectedBy ?? '').trim();
-      if (_plate.isSelected == true && selectedBy.isNotEmpty && selectedBy != userName) {
+      if (_plate.isSelected == true &&
+          selectedBy.isNotEmpty &&
+          selectedBy != userName) {
         _showWarningSafe('다른 사용자가 이미 주행 중입니다. (선택자: $selectedBy)');
         return;
       }
@@ -674,7 +688,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
             final updated = _plate.copyWith(isSelected: false, selectedBy: null);
             if (mounted) setState(() => _plate = updated);
             try {
-              await plateState.tripleUpdatePlateLocally(PlateType.parkingRequests, updated);
+              await plateState.tripleUpdatePlateLocally(
+                  PlateType.parkingRequests, updated);
             } catch (_) {}
 
             try {
@@ -718,7 +733,9 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
 
       final userName = context.read<UserState>().name;
       final selectedBy = (_plate.selectedBy ?? '').trim();
-      if (_plate.isSelected == true && selectedBy.isNotEmpty && selectedBy != userName) {
+      if (_plate.isSelected == true &&
+          selectedBy.isNotEmpty &&
+          selectedBy != userName) {
         _showWarningSafe('다른 사용자가 이미 주행 중입니다. (선택자: $selectedBy)');
         return;
       }
@@ -774,7 +791,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
             final updated = _plate.copyWith(isSelected: false, selectedBy: null);
             if (mounted) setState(() => _plate = updated);
             try {
-              await plateState.tripleUpdatePlateLocally(PlateType.departureRequests, updated);
+              await plateState.tripleUpdatePlateLocally(
+                  PlateType.departureRequests, updated);
             } catch (_) {}
 
             try {
@@ -818,6 +836,18 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
     final paymentMethod = (_plate.paymentMethod ?? '').trim();
     final billingType = (_plate.billingType ?? '').trim();
     final location = (_plate.location).trim().isEmpty ? '미지정' : _plate.location.trim();
+
+    // ✅ 추가: 상태 메모(표시용) - customStatus 우선, 없으면 statusList 보조
+    final statusMemo = (() {
+      final v = (_plate.customStatus ?? '').trim();
+      if (v.isNotEmpty) return v;
+
+      final list = _plate.statusList;
+      if (list.isNotEmpty) {
+        return list.map((e) => e.trim()).where((e) => e.isNotEmpty).join(', ');
+      }
+      return '';
+    })();
 
     IconData primaryIcon = Icons.local_shipping_outlined;
     String primaryTitle = '출차 요청으로 이동';
@@ -921,8 +951,9 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                 builder: (context, _) {
                   final attention = _attentionPulse.value;
 
-                  final shakeDx =
-                      math.sin(_attentionCtrl.value * math.pi * 10) * (1 - _attentionCtrl.value) * 6;
+                  final shakeDx = math.sin(_attentionCtrl.value * math.pi * 10) *
+                      (1 - _attentionCtrl.value) *
+                      6;
                   final scale = 1 + (attention * 0.012);
 
                   return ListView(
@@ -941,6 +972,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                             isLocked: isLocked,
                             lockedFee: lockedFee,
                             paymentMethod: paymentMethod,
+                            statusMemo: statusMemo, // ✅ 추가
                             attention: _needsBilling ? attention : 0,
                           ),
                         ),
@@ -973,8 +1005,10 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                       }
 
                                       final now = DateTime.now();
-                                      final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
-                                      final entryTime = _plate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+                                      final currentTime =
+                                          now.toUtc().millisecondsSinceEpoch ~/ 1000;
+                                      final entryTime =
+                                          _plate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
 
                                       final result = await showOnTapBillingBottomSheet(
                                         context: context,
@@ -1002,7 +1036,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                         _reportDbSafe(
                                           area: _plate.area,
                                           action: 'write',
-                                          source: 'parkingCompletedStatus.prebill.repo.addOrUpdatePlate',
+                                          source:
+                                          'parkingCompletedStatus.prebill.repo.addOrUpdatePlate',
                                           n: 1,
                                         );
 
@@ -1017,16 +1052,21 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                           'timestamp': now.toIso8601String(),
                                           'lockedFee': result.lockedFee,
                                           'paymentMethod': result.paymentMethod,
-                                          if (result.reason != null && result.reason!.trim().isNotEmpty)
+                                          if (result.reason != null &&
+                                              result.reason!.trim().isNotEmpty)
                                             'reason': result.reason!.trim(),
                                         };
-                                        await firestore.collection('plates').doc(_plate.id).update({
+                                        await firestore
+                                            .collection('plates')
+                                            .doc(_plate.id)
+                                            .update({
                                           'logs': FieldValue.arrayUnion([log]),
                                         });
                                         _reportDbSafe(
                                           area: _plate.area,
                                           action: 'write',
-                                          source: 'parkingCompletedStatus.prebill.plates.update.logs.arrayUnion',
+                                          source:
+                                          'parkingCompletedStatus.prebill.plates.update.logs.arrayUnion',
                                           n: 1,
                                         );
 
@@ -1094,7 +1134,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                         _reportDbSafe(
                                           area: _plate.area,
                                           action: 'write',
-                                          source: 'parkingCompletedStatus.unlock.repo.addOrUpdatePlate',
+                                          source:
+                                          'parkingCompletedStatus.unlock.repo.addOrUpdatePlate',
                                           n: 1,
                                         );
 
@@ -1108,13 +1149,17 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                           'performedBy': userName,
                                           'timestamp': now.toIso8601String(),
                                         };
-                                        await firestore.collection('plates').doc(_plate.id).update({
+                                        await firestore
+                                            .collection('plates')
+                                            .doc(_plate.id)
+                                            .update({
                                           'logs': FieldValue.arrayUnion([cancelLog]),
                                         });
                                         _reportDbSafe(
                                           area: _plate.area,
                                           action: 'write',
-                                          source: 'parkingCompletedStatus.unlock.plates.update.logs.arrayUnion',
+                                          source:
+                                          'parkingCompletedStatus.unlock.plates.update.logs.arrayUnion',
                                           n: 1,
                                         );
 
@@ -1127,7 +1172,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                                           showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
                                         } catch (_) {
                                           ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                                            const SnackBar(content: Text('사전 정산이 취소되었습니다.')),
+                                            const SnackBar(
+                                                content: Text('사전 정산이 취소되었습니다.')),
                                           );
                                         }
                                       } catch (e) {
@@ -1398,6 +1444,9 @@ class _PlateSummaryCard extends StatelessWidget {
   final int? lockedFee;
   final String paymentMethod;
 
+  // ✅ 추가: 상태 메모
+  final String statusMemo;
+
   final double attention;
 
   const _PlateSummaryCard({
@@ -1408,6 +1457,7 @@ class _PlateSummaryCard extends StatelessWidget {
     required this.isLocked,
     required this.lockedFee,
     required this.paymentMethod,
+    required this.statusMemo, // ✅ 추가
     this.attention = 0,
   });
 
@@ -1424,6 +1474,8 @@ class _PlateSummaryCard extends StatelessWidget {
         : '—';
 
     final billingText = billingType.isNotEmpty ? billingType : '미지정';
+
+    final memoText = statusMemo.trim().isNotEmpty ? statusMemo.trim() : '—';
 
     // ✅ attention(정산 필요) = error 계열로 강조
     final borderColor =
@@ -1530,6 +1582,14 @@ class _PlateSummaryCard extends StatelessWidget {
               Expanded(child: _InfoLine(label: '정산 타입', value: billingText)),
               const SizedBox(width: 12),
               Expanded(child: _InfoLine(label: '잠금 금액', value: feeText)),
+            ],
+          ),
+
+          // ✅ 추가: “정산 타입/잠금 금액” 하단 열에 “상태 메모”
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(child: _InfoLine(label: '상태 메모', value: memoText)),
             ],
           ),
         ],
