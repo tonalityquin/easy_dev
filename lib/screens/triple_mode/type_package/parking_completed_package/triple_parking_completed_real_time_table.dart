@@ -583,6 +583,7 @@ class _RealtimeTabLockedPanel extends StatelessWidget {
 /// ─────────────────────────────────────────────────────────
 /// 통합 탭(뷰 전용 2종) + 하이브리드 상세 팝업 + 구역보기
 /// ✅ 변경: 번호판 상세 다이얼로그 스킵 → 원본 조회 후 바로 작업 바텀시트
+/// ✅ 변경: No는 "정렬과 무관하게" 날짜별 최신=01 랭킹
 /// ─────────────────────────────────────────────────────────
 class _UnifiedTableTab extends StatefulWidget {
   final _RealtimeTabController controller;
@@ -609,7 +610,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
   List<_RowVM> _allRows = <_RowVM>[];
   List<_RowVM> _rows = <_RowVM>[];
 
-  /// ✅ 일자별 No(날짜가 바뀌면 1부터)
+  /// ✅ 날짜별 No(정렬과 무관): 해당 날짜 내 "최신=01" 랭킹
   List<int> _displayNos = <int>[];
 
   final TextEditingController _searchCtrl = TextEditingController();
@@ -717,6 +718,50 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
     _scrollCtrl.dispose();
     _cooldownTicker?.cancel();
     super.dispose();
+  }
+
+  // ─────────────────────────────────────────
+  // ✅ No 계산(핵심): "정렬과 무관하게" 날짜별 최신=01 랭킹
+  // ─────────────────────────────────────────
+  List<int> _buildDisplayNosByDayNewestFirst(List<_RowVM> rows) {
+    if (rows.isEmpty) return <int>[];
+
+    // dayKey -> indices
+    final indicesByDay = <String, List<int>>{};
+    for (int i = 0; i < rows.length; i++) {
+      final k = _dayKey(rows[i].createdAt);
+      indicesByDay.putIfAbsent(k, () => <int>[]).add(i);
+    }
+
+    final out = List<int>.filled(rows.length, 0);
+
+    for (final e in indicesByDay.entries) {
+      final idxs = e.value;
+
+      // createdAt DESC (최신 우선), null은 마지막(가장 오래된 취급)
+      idxs.sort((ia, ib) {
+        final a = rows[ia].createdAt;
+        final b = rows[ib].createdAt;
+
+        if (a == null && b == null) {
+          return rows[ia].plateId.compareTo(rows[ib].plateId);
+        }
+        if (a == null) return 1; // null은 뒤로
+        if (b == null) return -1;
+
+        final c = b.compareTo(a); // DESC
+        if (c != 0) return c;
+
+        // 동일 시간 tie-break
+        return rows[ia].plateId.compareTo(rows[ib].plateId);
+      });
+
+      for (int rank = 0; rank < idxs.length; rank++) {
+        out[idxs[rank]] = rank + 1; // 최신=1 => "01"
+      }
+    }
+
+    return out;
   }
 
   // ─────────────────────────────────────────
@@ -958,6 +1003,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
       return true;
     }).toList();
 
+    // ✅ 화면 정렬(오래된/최신)
     _rows.sort((a, b) {
       final ca = a.createdAt;
       final cb = b.createdAt;
@@ -968,19 +1014,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
       return _sortOldFirst ? cmp : -cmp;
     });
 
-    _displayNos = List<int>.filled(_rows.length, 0);
-    String prevKey = '';
-    int seq = 0;
-    for (int i = 0; i < _rows.length; i++) {
-      final k = _dayKey(_rows[i].createdAt);
-      if (k != prevKey) {
-        prevKey = k;
-        seq = 1;
-      } else {
-        seq += 1;
-      }
-      _displayNos[i] = seq;
-    }
+    // ✅ No는 정렬과 무관하게: 날짜별 최신=01 랭킹
+    _displayNos = _buildDisplayNosByDayNewestFirst(_rows);
   }
 
   void _toggleSortByNo() {
@@ -1112,6 +1147,9 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
       return _sortOldFirst ? cmp : -cmp;
     });
 
+    // ✅ 다이얼로그 목록도 동일 규칙: 날짜별 최신=01 랭킹
+    final dialogNos = _buildDisplayNosByDayNewestFirst(rows);
+
     final cs = Theme.of(context).colorScheme;
 
     await showDialog<void>(
@@ -1225,6 +1263,12 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                                   final r = rows[i];
                                   final timeText = _fmtDate(r.createdAt);
 
+                                  final rawNo = (i < dialogNos.length)
+                                      ? dialogNos[i]
+                                      : (i + 1);
+                                  final noText =
+                                  rawNo.toString().padLeft(2, '0');
+
                                   return Material(
                                     color: Colors.transparent,
                                     child: InkWell(
@@ -1244,9 +1288,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                                             SizedBox(
                                               width: 30,
                                               child: Text(
-                                                (i + 1)
-                                                    .toString()
-                                                    .padLeft(2, '0'),
+                                                noText,
                                                 style: monoSmall(cs.onSurface),
                                               ),
                                             ),
@@ -1808,8 +1850,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
     return true;
   }
 
-  void _scheduleApplyPlateCountsAfterFrame(
-      Map<String, int> countsByDisplayName) {
+  void _scheduleApplyPlateCountsAfterFrame(Map<String, int> countsByDisplayName) {
     _pendingPlateCountsByDisplayName = countsByDisplayName;
 
     if (_plateCountsApplyScheduled) return;
@@ -2210,8 +2251,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                 final r = _rows[i];
                 final rowBg = i.isEven ? cs.surface : cs.surfaceContainerLowest;
 
-                final rawNo =
-                (i < _displayNos.length) ? _displayNos[i] : (i + 1);
+                final rawNo = (i < _displayNos.length) ? _displayNos[i] : (i + 1);
                 final noText = rawNo.toString().padLeft(2, '0');
 
                 return Material(

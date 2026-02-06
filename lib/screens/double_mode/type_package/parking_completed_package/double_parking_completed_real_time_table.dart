@@ -378,7 +378,8 @@ class _DoubleParkingCompletedRealTimeTableState
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
       decoration: BoxDecoration(
         color: cs.surface,
-        border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(.7))),
+        border:
+        Border(top: BorderSide(color: cs.outlineVariant.withOpacity(.7))),
       ),
       child: Container(
         height: 48,
@@ -505,6 +506,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
   List<_RowVM> _allRows = <_RowVM>[];
   List<_RowVM> _rows = <_RowVM>[];
 
+  /// ✅ 화면 표시용 No. (최신일수록 1에 가까움)
   List<int> _displayNos = <int>[];
 
   final TextEditingController _searchCtrl = TextEditingController();
@@ -515,6 +517,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
   String _selectedLocation = _locationAll;
   List<String> _availableLocations = <String>[];
 
+  /// ✅ true: 오래된 순(asc), false: 최신 순(desc)
   bool _sortOldFirst = true;
 
   final ScrollController _scrollCtrl = ScrollController();
@@ -549,15 +552,6 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
 
   @override
   bool get wantKeepAlive => true;
-
-  String _dayKey(DateTime? dt) {
-    if (dt == null) return 'unknown';
-    final d = dt.toLocal();
-    final y = d.year.toString().padLeft(4, '0');
-    final m = d.month.toString().padLeft(2, '0');
-    final day = d.day.toString().padLeft(2, '0');
-    return '$y-$m-$day';
-  }
 
   void _trace(String name, {Map<String, dynamic>? meta}) {
     DebugActionRecorder.instance.recordAction(
@@ -692,8 +686,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
   }
 
   Future<void> _toggleViewMode() async {
-    final next =
-    (_viewMode == _ViewMode.plate) ? _ViewMode.zone : _ViewMode.plate;
+    final next = (_viewMode == _ViewMode.plate) ? _ViewMode.zone : _ViewMode.plate;
 
     setState(() {
       _viewMode = next;
@@ -712,8 +705,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
       final opts = _locationOptionsForDropdown();
       if (!mounted) return;
       setState(() {
-        if (_selectedLocation != _locationAll &&
-            !opts.contains(_selectedLocation)) {
+        if (_selectedLocation != _locationAll && !opts.contains(_selectedLocation)) {
           _selectedLocation = _locationAll;
         }
       });
@@ -800,6 +792,17 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
     return list;
   }
 
+  /// ✅ No 계산: "최신일수록 01에 가까움 / 오래될수록 숫자가 큼"
+  /// - 현재 화면 정렬이 최신순이면: 1..N (최신=1)
+  /// - 현재 화면 정렬이 오래된순이면: N..1 (최신=1이 되도록 반전)
+  List<int> _buildDisplayNosForCurrentOrder(int total) {
+    if (total <= 0) return const <int>[];
+    return List<int>.generate(total, (i) {
+      // i는 화면 표시 순서 인덱스
+      return _sortOldFirst ? (total - i) : (i + 1);
+    });
+  }
+
   void _applyFilterAndSort() {
     if (_viewMode != _ViewMode.plate) {
       _rows = List<_RowVM>.of(_allRows);
@@ -821,29 +824,24 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
       return true;
     }).toList();
 
+    // ✅ 정렬 기준: createdAt (parkingCompletedAt ?? updatedAt)
+    // ✅ null은 "가장 오래된 것"으로 취급:
+    //    - 오래된순(asc)에서는 앞으로
+    //    - 최신순(desc)에서는 뒤로
     _rows.sort((a, b) {
       final ca = a.createdAt;
       final cb = b.createdAt;
+
       if (ca == null && cb == null) return 0;
-      if (ca == null) return _sortOldFirst ? 1 : -1;
-      if (cb == null) return _sortOldFirst ? -1 : 1;
+      if (ca == null) return _sortOldFirst ? -1 : 1;
+      if (cb == null) return _sortOldFirst ? 1 : -1;
+
       final cmp = ca.compareTo(cb);
       return _sortOldFirst ? cmp : -cmp;
     });
 
-    _displayNos = List<int>.filled(_rows.length, 0);
-    String prevKey = '';
-    int seq = 0;
-    for (int i = 0; i < _rows.length; i++) {
-      final k = _dayKey(_rows[i].createdAt);
-      if (k != prevKey) {
-        prevKey = k;
-        seq = 1;
-      } else {
-        seq += 1;
-      }
-      _displayNos[i] = seq;
-    }
+    // ✅ No 재계산 (요구사항 반영)
+    _displayNos = _buildDisplayNosForCurrentOrder(_rows.length);
   }
 
   void _toggleSortByNo() {
@@ -969,15 +967,21 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
     final text = Theme.of(context).textTheme;
 
     final rows = _rowsForZone(z);
+
+    // ✅ 다이얼로그 내부도 동일 기준 정렬/넘버링
     rows.sort((a, b) {
       final ca = a.createdAt;
       final cb = b.createdAt;
+
       if (ca == null && cb == null) return 0;
-      if (ca == null) return _sortOldFirst ? 1 : -1;
-      if (cb == null) return _sortOldFirst ? -1 : 1;
+      if (ca == null) return _sortOldFirst ? -1 : 1;
+      if (cb == null) return _sortOldFirst ? 1 : -1;
+
       final cmp = ca.compareTo(cb);
       return _sortOldFirst ? cmp : -cmp;
     });
+
+    final dialogNos = _buildDisplayNosForCurrentOrder(rows.length);
 
     await showDialog<void>(
       context: context,
@@ -1087,6 +1091,10 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                                   final r = rows[i];
                                   final timeText = _fmtDate(r.createdAt);
 
+                                  final rawNo =
+                                  (i < dialogNos.length) ? dialogNos[i] : (i + 1);
+                                  final noText = rawNo.toString().padLeft(2, '0');
+
                                   return Material(
                                     color: Colors.transparent,
                                     child: InkWell(
@@ -1106,9 +1114,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                                             SizedBox(
                                               width: 30,
                                               child: Text(
-                                                (i + 1)
-                                                    .toString()
-                                                    .padLeft(2, '0'),
+                                                noText,
                                                 style: monoSmall(cs.onSurface),
                                               ),
                                             ),
@@ -1197,10 +1203,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
 
     final fut = () async {
       try {
-        final doc = await FirebaseFirestore.instance
-            .collection('plates')
-            .doc(id)
-            .get();
+        final doc = await FirebaseFirestore.instance.collection('plates').doc(id).get();
         if (!doc.exists) return null;
 
         final plate = PlateModel.fromDocument(doc);
@@ -1424,8 +1427,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
 
   Widget _buildViewModeTogglePill(ColorScheme cs, TextTheme text) {
     final disabled = _loading;
-    final toggleLabel =
-    (_viewMode == _ViewMode.plate) ? '구역으로 보기' : '번호판으로 보기';
+    final toggleLabel = (_viewMode == _ViewMode.plate) ? '구역으로 보기' : '번호판으로 보기';
 
     return Container(
       width: double.infinity,
@@ -1483,8 +1485,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
     final options = _locationOptionsForDropdown();
     final disabled = _loading || options.isEmpty;
 
-    if (_selectedLocation != _locationAll &&
-        !options.contains(_selectedLocation)) {
+    if (_selectedLocation != _locationAll && !options.contains(_selectedLocation)) {
       _selectedLocation = _locationAll;
     }
 
@@ -1676,8 +1677,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                     ? cs.surface
                     : cs.surfaceContainerLow.withOpacity(.55);
 
-                final rawNo =
-                (i < _displayNos.length) ? _displayNos[i] : (i + 1);
+                final rawNo = (i < _displayNos.length) ? _displayNos[i] : (i + 1);
                 final noText = rawNo.toString().padLeft(2, '0');
 
                 return Material(
@@ -1700,8 +1700,9 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                             flex: 2,
                             child: Text(
                               noText,
-                              style: _monoStyle(cs)
-                                  .copyWith(fontWeight: FontWeight.w900),
+                              style: _monoStyle(cs).copyWith(
+                                fontWeight: FontWeight.w900,
+                              ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -1714,8 +1715,9 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                               alignment: Alignment.centerLeft,
                               child: Text(
                                 r.plateNumber,
-                                style: _cellStyle(cs)
-                                    .copyWith(fontWeight: FontWeight.w900),
+                                style: _cellStyle(cs).copyWith(
+                                  fontWeight: FontWeight.w900,
+                                ),
                                 maxLines: 1,
                                 softWrap: false,
                               ),
@@ -1729,8 +1731,9 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                               alignment: Alignment.centerLeft,
                               child: Text(
                                 r.location,
-                                style: _cellStyle(cs)
-                                    .copyWith(color: cs.onSurfaceVariant),
+                                style: _cellStyle(cs).copyWith(
+                                  color: cs.onSurfaceVariant,
+                                ),
                                 maxLines: 1,
                                 softWrap: false,
                               ),
@@ -1785,8 +1788,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
             decoration: BoxDecoration(
               color: cs.surface,
               border: Border(
-                  bottom: BorderSide(
-                      color: cs.outlineVariant.withOpacity(.55))),
+                bottom: BorderSide(color: cs.outlineVariant.withOpacity(.55)),
+              ),
             ),
             child: Row(
               children: [
@@ -1807,12 +1810,10 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
                 ),
                 const SizedBox(width: 8),
                 Text('현재 ${z.current}대',
-                    style:
-                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                    style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
                 const SizedBox(width: 10),
                 Text('총 $capText',
-                    style:
-                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                    style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
                 const SizedBox(width: 10),
                 Text(
                   '잔여 $remainText',
@@ -1859,8 +1860,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
               decoration: BoxDecoration(
                 color: cs.surfaceContainerLow,
                 border: Border(
-                    bottom: BorderSide(
-                        color: cs.outlineVariant.withOpacity(.65))),
+                  bottom: BorderSide(color: cs.outlineVariant.withOpacity(.65)),
+                ),
               ),
               child: Row(
                 children: [
@@ -1917,7 +1918,8 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
           decoration: BoxDecoration(
             color: cs.surfaceContainerLow,
             border: Border(
-                bottom: BorderSide(color: cs.outlineVariant.withOpacity(.85))),
+              bottom: BorderSide(color: cs.outlineVariant.withOpacity(.85)),
+            ),
           ),
           child: Row(
             children: [

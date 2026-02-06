@@ -594,8 +594,8 @@ class _MinorParkingCompletedRealTimeTableState
                     ? _UnifiedTableTab(
                   controller: _depCtrl,
                   mode: _TabMode.departureRequestsRealtime,
-                  description:
-                  _descriptionForMode(_TabMode.departureRequestsRealtime),
+                  description: _descriptionForMode(
+                      _TabMode.departureRequestsRealtime),
                 )
                     : const _RealtimeTabLockedPanel(
                   title: '출차 요청 실시간 탭이 비활성화되어 있습니다',
@@ -662,6 +662,7 @@ class _RealtimeTabLockedPanel extends StatelessWidget {
 /// 통합 탭(3종) + 하이브리드 상세 팝업 + 구역 보기(단독 먼저 + 복합 트리)
 /// ✅ [정책] 입차 요청 탭: 번호판 보기만 지원(구역 보기 비활성)
 /// ✅ [리팩터링] (변경) 상세 다이얼로그 스킵 → 원본 조회 후 바로 작업 바텀시트
+/// ✅ [요구사항] 최신일수록 No=01, 오래될수록 숫자 증가(정렬 방향 무관)
 /// ─────────────────────────────────────────────────────────
 class _UnifiedTableTab extends StatefulWidget {
   final _RealtimeTabController controller;
@@ -688,7 +689,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
   List<_RowVM> _allRows = <_RowVM>[];
   List<_RowVM> _rows = <_RowVM>[];
 
-  // ✅ 일자별 No(날짜가 바뀌면 1부터)
+  // ✅ 일자별 No(날짜 바뀌면 1부터) - 최신일수록 01
   List<int> _displayNos = <int>[];
 
   final TextEditingController _searchCtrl = TextEditingController();
@@ -699,7 +700,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
   String _selectedLocation = _locationAll;
   List<String> _availableLocations = <String>[];
 
-  bool _sortOldFirst = true;
+  /// ✅ 기본 정렬: 최신 순(요구사항에 맞게)
+  bool _sortOldFirst = false;
 
   final ScrollController _scrollCtrl = ScrollController();
   Timer? _cooldownTicker;
@@ -1080,19 +1082,25 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
       return _sortOldFirst ? cmp : -cmp;
     });
 
-    // ✅ 일자별 No 계산(날짜 바뀌면 1부터)
+    // ✅ [핵심] 일자별 No 계산: 최신일수록 01, 오래될수록 숫자 증가(정렬 방향 무관)
     _displayNos = List<int>.filled(_rows.length, 0);
-    String prevKey = '';
-    int seq = 0;
-    for (int i = 0; i < _rows.length; i++) {
-      final k = _dayKey(_rows[i].createdAt);
-      if (k != prevKey) {
-        prevKey = k;
-        seq = 1;
-      } else {
-        seq += 1;
+
+    int start = 0;
+    while (start < _rows.length) {
+      final k = _dayKey(_rows[start].createdAt);
+      int end = start + 1;
+      while (end < _rows.length && _dayKey(_rows[end].createdAt) == k) {
+        end++;
       }
-      _displayNos[i] = seq;
+
+      final count = end - start;
+      for (int i = 0; i < count; i++) {
+        // - 최신순(내림차순)일 때: 01,02,03...
+        // - 오래된순(오름차순)일 때: count,count-1,...,01 (최신이 01)
+        _displayNos[start + i] = _sortOldFirst ? (count - i) : (i + 1);
+      }
+
+      start = end;
     }
   }
 
@@ -1346,7 +1354,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
   // UI
   // ─────────────────────────────────────────
   Widget _buildRowsChip(ColorScheme cs, TextTheme text) {
-    final count = (_viewMode == _ViewMode.plate) ? _rows.length : _allRows.length;
+    final count =
+    (_viewMode == _ViewMode.plate) ? _rows.length : _allRows.length;
     final accent = _Brand.accentForMode(cs, widget.mode);
 
     return Container(
@@ -1441,7 +1450,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
               borderRadius: BorderRadius.circular(999),
               onTap: disabled ? null : _toggleViewMode,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                 child: Row(
                   children: [
                     if (!_zoneSupported) ...[
@@ -1477,7 +1487,8 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
     final options = _locationOptionsForDropdown();
     final disabled = _loading || options.isEmpty;
 
-    if (_selectedLocation != _locationAll && !options.contains(_selectedLocation)) {
+    if (_selectedLocation != _locationAll &&
+        !options.contains(_selectedLocation)) {
       _selectedLocation = _locationAll;
     }
 
@@ -1947,6 +1958,13 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                                   final r = rows[i];
                                   final timeText = _fmtDate(r.createdAt);
 
+                                  // ✅ [요구사항 반영] 최신이 01이 되도록 표시 번호 역산
+                                  final displayNo = _sortOldFirst
+                                      ? (rows.length - i)
+                                      : (i + 1);
+                                  final noText =
+                                  displayNo.toString().padLeft(2, '0');
+
                                   return Material(
                                     color: Colors.transparent,
                                     child: InkWell(
@@ -1966,9 +1984,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                                             SizedBox(
                                               width: 30,
                                               child: Text(
-                                                (i + 1)
-                                                    .toString()
-                                                    .padLeft(2, '0'),
+                                                noText,
                                                 style: monoSmall(cs.onSurface),
                                               ),
                                             ),
@@ -2238,12 +2254,10 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                 ),
                 const SizedBox(width: 8),
                 Text('현재 ${z.current}대',
-                    style:
-                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                    style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
                 const SizedBox(width: 10),
                 Text('총 $capText',
-                    style:
-                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                    style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
                 const SizedBox(width: 10),
                 Text(
                   '잔여 $remainText',
@@ -2311,13 +2325,13 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
                   ),
                   const SizedBox(width: 8),
                   Text('현재 ${g.totalCurrent}대',
-                      style: text.bodySmall
-                          ?.copyWith(color: cs.onSurfaceVariant)),
+                      style:
+                      text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
                   const SizedBox(width: 10),
                   Text(
                     '총 ${g.totalCapacity > 0 ? "${g.totalCapacity}대" : "-"}',
-                    style: text.bodySmall
-                        ?.copyWith(color: cs.onSurfaceVariant),
+                    style:
+                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                   ),
                   const SizedBox(width: 10),
                   Text(
