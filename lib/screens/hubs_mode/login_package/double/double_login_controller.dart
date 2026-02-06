@@ -18,8 +18,8 @@ import 'package:easydev/services/endtime_reminder_service.dart';
 
 String _ts() => DateTime.now().toIso8601String();
 
-class LiteLoginController {
-  LiteLoginController(
+class DoubleLoginController {
+  DoubleLoginController(
       this.context, {
         this.onLoginSucceeded,
       });

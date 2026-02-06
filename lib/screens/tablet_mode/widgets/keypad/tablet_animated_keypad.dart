@@ -9,6 +9,7 @@ class TabletAnimatedKeypad extends StatelessWidget {
   final VoidCallback onReset;
   final int maxLength;
   final bool enableDigitModeSwitch;
+
   /// Small Pad에서 키패드를 화면 100%로 확장하려면 true
   final bool fullHeight;
 
@@ -26,17 +27,22 @@ class TabletAnimatedKeypad extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+
     final keypad = Container(
       // fullHeight가 true라도 내부 키패드가 전체를 자연스럽게 차지하도록 여백 최소화
       padding: const EdgeInsets.only(bottom: 8),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      decoration: BoxDecoration(
+        // ✅ 전역 Theme(ColorScheme) 기반
+        color: cs.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black12,
+            // ✅ 전역 ThemeData.shadowColor 또는 ColorScheme.shadow 기반 (둘 다 theme에 종속)
+            color: theme.shadowColor.withOpacity(0.12),
             blurRadius: 6,
-            offset: Offset(0, -2),
+            offset: const Offset(0, -2),
           ),
         ],
       ),
@@ -50,6 +56,9 @@ class TabletAnimatedKeypad extends StatelessWidget {
         enableDigitModeSwitch: enableDigitModeSwitch,
         onComplete: onComplete,
         onReset: onReset,
+
+        // ✅ 내부 키패드도 Theme 기반이 기본이므로 굳이 주입할 필요 없음
+        // backgroundColor: cs.surface,
       ),
     );
 

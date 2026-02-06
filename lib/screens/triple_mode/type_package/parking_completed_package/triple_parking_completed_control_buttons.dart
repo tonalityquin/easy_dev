@@ -10,16 +10,6 @@ import '../../../../states/user/user_state.dart';
 
 import '../triple_departure_completed_bottom_sheet.dart';
 
-/// Deep Blue 팔레트(서비스 카드와 동일 계열) + 상태 색상
-class _Palette {
-  static const base = Color(0xFF37474F); // primary
-  static const dark = Color(0xFF37474F); // 강조 텍스트/아이콘
-
-  // 상태 강조 색
-  static const danger = Color(0xFFD32F2F); // 출차 요청(붉은색)
-  static const success = Color(0xFF2E7D32); // 출차 완료(초록색)
-}
-
 /// ✅ 출차 요청(PlateType.departureRequests) 건수(aggregation count) 표시 위젯
 /// - plates 컬렉션에서 (type == departure_requests && area == area && isSelected == false) 조건으로 count()
 /// - refreshToken 변경 시(같은 area여도) 다시 count().get()
@@ -77,7 +67,7 @@ class _DepartureRequestsAggregationCountState
       isEqualTo: PlateType.departureRequests.firestoreValue,
     )
         .where(PlateFields.area, isEqualTo: area)
-        .where(PlateFields.isSelected, isEqualTo: false) // ✅ 추가 조건
+        .where(PlateFields.isSelected, isEqualTo: false)
         .count();
 
     final snap = await agg.get();
@@ -111,6 +101,7 @@ class _DepartureRequestsAggregationCountState
             height: 18,
             child: CircularProgressIndicator(
               strokeWidth: 2.2,
+              // ✅ valueColor 유지 (기존 동작/색 유지)
               valueColor: AlwaysStoppedAnimation<Color>(widget.color),
             ),
           );
@@ -169,6 +160,9 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
     // ✅ area 변경에 따라 count가 재조회되도록 select로 구독
     final userArea =
     context.select<UserState, String>((s) => s.currentArea).trim();
@@ -176,12 +170,21 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
     context.select<AreaState, String>((s) => s.currentArea).trim();
     final departureCountArea = userArea.isNotEmpty ? userArea : stateArea;
 
-    final Color selectedItemColor = _Palette.base;
-    final Color unselectedItemColor = _Palette.dark.withOpacity(.55);
+    // ✅ 브랜드 테마 기반 컬러 (독립 프리셋 포함)
+    final Color navBg = cs.surface; // ❌ Colors.white 제거
+    final Color selectedItemColor = cs.primary;
+    final Color unselectedItemColor = cs.onSurfaceVariant.withOpacity(.65);
+
+    // ✅ 상태 색상
+    // - “출차 요청(붉은색)” 의미: ColorScheme.error 사용(테마/독립프리셋 연동)
+    final Color dangerColor = cs.error;
+
+    // - “출차 완료(성공)”은 ColorScheme에 success가 없으므로 tertiary로 매핑(테마 연동)
+    final Color successColor = cs.tertiary;
 
     return BottomNavigationBar(
       type: BottomNavigationBarType.fixed,
-      backgroundColor: Colors.white,
+      backgroundColor: navBg,
       elevation: 0,
       selectedFontSize: 12,
       unselectedFontSize: 12,
@@ -209,18 +212,18 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
             builder: (context, token, _) {
               return DepartureRequestsAggregationCount(
                 area: departureCountArea,
-                color: _Palette.danger,
+                color: dangerColor, // ✅ _Palette.danger → cs.error
                 fontSize: 18,
                 refreshToken: token,
               );
             },
           ),
-          label: '스마트 검색', // ✅ 기존: '출차 요청' → 텍스트만 변경
+          label: '스마트 검색',
         ),
 
         // 2) 출차 완료
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.directions_car, color: _Palette.success),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.directions_car, color: successColor),
           label: '출차 완료',
         ),
       ],

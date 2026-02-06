@@ -1299,6 +1299,10 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
         }
       },
       child: Scaffold(
+        // ✅ [브랜드테마/독립프리셋 핵심] 배경을 테마 background로 명시
+        // - 독립 프리셋(KB)은 background가 프리셋 토큰으로 설정됨
+        backgroundColor: cs.background,
+
         appBar: AppBar(
           automaticallyImplyLeading: false,
           centerTitle: true,
@@ -1731,7 +1735,8 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
   }) {
     final cs = Theme.of(context).colorScheme;
 
-    final bg = selected ? cs.surface : Colors.transparent;
+    // ✅ selected 배경도 테마 기반으로(독립 프리셋 포함)
+    final bg = selected ? cs.surfaceContainerLow : Colors.transparent;
     final border = selected ? cs.primary.withOpacity(0.55) : cs.outlineVariant.withOpacity(0.85);
     final fg = selected ? cs.onSurface : cs.onSurfaceVariant;
 

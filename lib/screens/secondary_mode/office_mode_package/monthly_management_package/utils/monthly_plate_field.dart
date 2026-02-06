@@ -3,8 +3,7 @@ import 'package:flutter/services.dart';
 
 /// 공통 번호판 입력 필드 위젯
 /// - 기존 로직(키패드 활성 컨트롤러, editMode 비활성화 등) 유지
-/// - 시각적으로 “현재 입력 칸”에 집중되도록 토널/보더/아이콘 정리
-/// - ✅ 고정 팔레트(_SvcColors) 제거 → ColorScheme 기반으로 브랜드 테마 자동 반영
+/// - ✅ 고정 팔레트 제거 → ColorScheme/TextTheme 기반
 class MonthlyPlateField extends StatelessWidget {
   final int frontDigitCount;
   final bool hasMiddleChar;
@@ -49,7 +48,8 @@ class MonthlyPlateField extends StatelessWidget {
           child: _buildBoxInput(
             context,
             frontController,
-            maxLen: 4,
+            // ✅ 앞자리는 2/3자리 모드에 맞춰 maxLen 적용
+            maxLen: frontDigitCount,
             isMiddle: false,
             isKorean: false,
           ),
@@ -72,7 +72,8 @@ class MonthlyPlateField extends StatelessWidget {
           child: _buildBoxInput(
             context,
             backController,
-            maxLen: 4,
+            // 통상 뒷자리는 4자리
+            maxLen: backDigitCount,
             isMiddle: false,
             isKorean: false,
           ),
@@ -100,7 +101,7 @@ class MonthlyPlateField extends StatelessWidget {
       boxShadow: isActive
           ? [
         BoxShadow(
-          color: cs.primary.withOpacity(.08),
+          color: cs.shadow.withOpacity(.12),
           blurRadius: 10,
           offset: const Offset(0, 4),
         ),
@@ -109,12 +110,21 @@ class MonthlyPlateField extends StatelessWidget {
     );
   }
 
-  TextStyle _textStyle(ColorScheme cs, {required bool enabled, required bool isKorean}) {
-    return TextStyle(
+  TextStyle _textStyle(
+      BuildContext context, {
+        required ColorScheme cs,
+        required bool enabled,
+        required bool isKorean,
+      }) {
+    final tt = Theme.of(context).textTheme;
+
+    final base = (isKorean ? tt.titleMedium : tt.titleSmall) ?? const TextStyle(fontSize: 16);
+    return base.copyWith(
       fontSize: isKorean ? 20 : 18,
       color: enabled ? cs.onSurface : cs.onSurface.withOpacity(.45),
       fontWeight: isKorean ? FontWeight.w800 : FontWeight.w700,
       letterSpacing: .6,
+      height: 1.1,
     );
   }
 
@@ -147,7 +157,12 @@ class MonthlyPlateField extends StatelessWidget {
               if (!isKorean) FilteringTextInputFormatter.digitsOnly,
               if (isKorean) FilteringTextInputFormatter.allow(RegExp(r'[ㄱ-ㅎㅏ-ㅣ가-힣]')),
             ],
-            style: _textStyle(cs, enabled: enabled, isKorean: isKorean),
+            style: _textStyle(
+              context,
+              cs: cs,
+              enabled: enabled,
+              isKorean: isKorean,
+            ),
             decoration: const InputDecoration(
               isDense: true,
               counterText: "",
@@ -160,7 +175,7 @@ class MonthlyPlateField extends StatelessWidget {
             onTap: isEditMode ? null : () => onKeypadStateChanged(controller),
           ),
 
-          // 활성 표시(미세한 점/가이드)
+          // 활성 표시(미세한 점)
           Positioned(
             right: 0,
             top: 0,

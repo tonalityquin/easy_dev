@@ -5,8 +5,8 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
-import 'utils/simple_login_network_service.dart';
-import 'utils/simple_login_validate.dart';
+import 'utils/single_login_network_service.dart';
+import 'utils/single_login_validate.dart';
 import '../../../../repositories/user_repo_services/user_repository.dart';
 import '../../../../states/area/area_state.dart';
 import '../../../../states/user/user_state.dart';
@@ -22,8 +22,8 @@ String _ts() => DateTime.now().toIso8601String();
 // UserState 에서 사용하는 cachedUserJson 키와 동일한 문자열
 const String _prefsKeyCachedUser = 'cachedUserJson';
 
-class SimpleLoginController {
-  SimpleLoginController(
+class SingleLoginController {
+  SingleLoginController(
       this.context, {
         this.onLoginSucceeded,
       });
@@ -106,8 +106,8 @@ class SimpleLoginController {
       return;
     }
 
-    final phoneError = SimpleLoginValidate.validatePhone(phone);
-    final passwordError = SimpleLoginValidate.validatePassword(password);
+    final phoneError = SingleLoginValidate.validatePhone(phone);
+    final passwordError = SingleLoginValidate.validatePassword(password);
 
     if (name.isEmpty) {
       showFailedSnackbar(context, '이름을 입력해주세요.');
@@ -175,7 +175,7 @@ class SimpleLoginController {
     // 🔹 2) Firestore 로그인(폴백)
     setState(() => isLoading = true);
 
-    final isConn = await SimpleLoginNetworkService().isConnected();
+    final isConn = await SingleLoginNetworkService().isConnected();
     debugPrint('[LOGIN-SIMPLE][${_ts()}] isConnected=$isConn');
     if (!isConn) {
       if (context.mounted) {

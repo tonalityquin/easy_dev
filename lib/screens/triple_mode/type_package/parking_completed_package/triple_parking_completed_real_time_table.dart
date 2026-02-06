@@ -1796,7 +1796,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
       final proceed = await showRealTimeDurationBlockingDialog(
         context,
         message: '원본 데이터를 불러옵니다.\n(취소하면 조회 비용이 발생하지 않습니다)',
-        duration: const Duration(seconds: 5),
+        duration: const Duration(seconds: 3),
         plateNumber: r.plateNumber,
         location: r.location,
         occurredAt: r.createdAt,

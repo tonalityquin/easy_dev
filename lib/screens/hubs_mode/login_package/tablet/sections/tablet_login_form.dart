@@ -83,13 +83,12 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final baseTheme = Theme.of(context);
+  ThemeData _buildBrandLocalTheme(ThemeData baseTheme) {
     final cs = baseTheme.colorScheme;
 
-    // ✅ 컨셉 테마(ColorScheme)에 맞춰 버튼/아이콘/selection만 정돈
-    final themed = baseTheme.copyWith(
+    // ✅ tablet은 기존 스타일(패딩 0, radius 8, elevation 0)을 유지하되,
+    // 색상/선택/아이콘 등은 ColorScheme 기반으로 통일.
+    return baseTheme.copyWith(
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: cs.primary,
@@ -100,7 +99,7 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
           elevation: 0,
         ),
       ),
-      iconTheme: IconThemeData(color: cs.primary),
+      iconTheme: baseTheme.iconTheme.copyWith(color: cs.primary),
       iconButtonTheme: IconButtonThemeData(
         style: IconButton.styleFrom(
           foregroundColor: cs.primary,
@@ -113,6 +112,25 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
         selectionHandleColor: cs.primary,
       ),
     );
+  }
+
+  TextStyle _screenTagStyle(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+
+    return (text.labelSmall ?? const TextStyle(fontSize: 11)).copyWith(
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
+      color: cs.onSurfaceVariant.withOpacity(0.80),
+      letterSpacing: 0.2,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final baseTheme = Theme.of(context);
+    final themed = _buildBrandLocalTheme(baseTheme);
+    final cs = baseTheme.colorScheme;
 
     return Theme(
       data: themed,
@@ -133,12 +151,7 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
                       label: 'screen_tag: tablet login',
                       child: Text(
                         'tablet login',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: cs.onSurfaceVariant.withOpacity(0.80),
-                          letterSpacing: 0.2,
-                        ),
+                        style: _screenTagStyle(context),
                       ),
                     ),
                   ),

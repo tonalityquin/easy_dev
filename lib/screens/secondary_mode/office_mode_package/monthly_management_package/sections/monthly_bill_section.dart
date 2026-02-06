@@ -1,9 +1,5 @@
 import 'package:flutter/material.dart';
 
-// ✅ AppCardPalette 사용 (프로젝트 경로에 맞게 수정)
-// 예: import 'package:easydev/theme/app_card_palette.dart';
-import '../../../../../theme.dart';
-
 class MonthlyBillSection extends StatelessWidget {
   final TextEditingController nameController;
   final TextEditingController amountController;
@@ -37,7 +33,6 @@ class MonthlyBillSection extends StatelessWidget {
         bool disabledTone = false,
       }) {
     final cs = Theme.of(context).colorScheme;
-    final palette = AppCardPalette.of(context);
 
     return InputDecoration(
       labelText: label,
@@ -45,22 +40,22 @@ class MonthlyBillSection extends StatelessWidget {
       suffixText: suffixText,
       suffixIcon: suffixIcon,
       floatingLabelStyle: TextStyle(
-        color: palette.serviceDark,
+        color: cs.primary,
         fontWeight: FontWeight.w700,
       ),
       filled: true,
       fillColor: disabledTone
           ? cs.surfaceVariant.withOpacity(.55)
-          : palette.serviceLight.withOpacity(.06),
+          : cs.surfaceVariant.withOpacity(.30),
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: palette.serviceLight.withOpacity(.45)),
+        borderSide: BorderSide(color: cs.outlineVariant.withOpacity(.65)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: palette.serviceBase, width: 1.2),
+        borderSide: BorderSide(color: cs.primary, width: 1.2),
       ),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       errorBorder: OutlineInputBorder(
@@ -78,7 +73,6 @@ class MonthlyBillSection extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    final palette = AppCardPalette.of(context);
 
     final regularTypeOptions = ['월 주차', '주간권', '야간권', '주말권'];
     final periodUnitOptions = ['일', '주', '월'];
@@ -91,7 +85,7 @@ class MonthlyBillSection extends StatelessWidget {
         border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.04),
+            color: cs.shadow.withOpacity(.06),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -107,14 +101,11 @@ class MonthlyBillSection extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: palette.serviceLight.withOpacity(.18),
+                  color: cs.primaryContainer.withOpacity(.60),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: palette.serviceLight.withOpacity(.40)),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
                 ),
-                child: Icon(
-                  Icons.receipt_long_outlined,
-                  color: palette.serviceDark,
-                ),
+                child: Icon(Icons.receipt_long_outlined, color: cs.primary),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -122,7 +113,7 @@ class MonthlyBillSection extends StatelessWidget {
                   '정기 정산 입력',
                   style: text.titleMedium?.copyWith(
                     fontWeight: FontWeight.w900,
-                    color: palette.serviceDark,
+                    color: cs.onSurface,
                   ),
                 ),
               ),
@@ -138,7 +129,7 @@ class MonthlyBillSection extends StatelessWidget {
                     '수정 모드',
                     style: text.bodySmall?.copyWith(
                       fontWeight: FontWeight.w800,
-                      color: cs.onSurface.withOpacity(.65),
+                      color: cs.onSurfaceVariant.withOpacity(.85),
                     ),
                   ),
                 ),
@@ -146,7 +137,7 @@ class MonthlyBillSection extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // ✅ 이름(수정 모드 잠금)
+          // 이름(수정 모드 잠금)
           TextField(
             controller: nameController,
             readOnly: isEditMode,
@@ -157,7 +148,7 @@ class MonthlyBillSection extends StatelessWidget {
               hint: '예: 월 정기권',
               disabledTone: isEditMode,
               suffixIcon: isEditMode
-                  ? Icon(Icons.lock_outline, color: palette.serviceDark)
+                  ? Icon(Icons.lock_outline, color: cs.onSurfaceVariant)
                   : null,
             ),
           ),
@@ -171,7 +162,7 @@ class MonthlyBillSection extends StatelessWidget {
                 .map((type) => DropdownMenuItem(value: type, child: Text(type)))
                 .toList(),
             onChanged: onTypeChanged,
-            iconEnabledColor: palette.serviceBase,
+            iconEnabledColor: cs.onSurfaceVariant,
             dropdownColor: cs.surface,
           ),
           const SizedBox(height: 12),
@@ -184,7 +175,7 @@ class MonthlyBillSection extends StatelessWidget {
                 .map((unit) => DropdownMenuItem(value: unit, child: Text(unit)))
                 .toList(),
             onChanged: onPeriodUnitChanged,
-            iconEnabledColor: palette.serviceBase,
+            iconEnabledColor: cs.onSurfaceVariant,
             dropdownColor: cs.surface,
           ),
           const SizedBox(height: 12),
@@ -221,7 +212,7 @@ class MonthlyBillSection extends StatelessWidget {
           Text(
             isEditMode ? '이름/번호판은 수정할 수 없습니다.' : '입력 후 하단 버튼으로 생성하세요.',
             style: text.bodySmall?.copyWith(
-              color: Colors.black.withOpacity(.55),
+              color: cs.onSurfaceVariant.withOpacity(.78),
               fontWeight: FontWeight.w600,
             ),
           ),

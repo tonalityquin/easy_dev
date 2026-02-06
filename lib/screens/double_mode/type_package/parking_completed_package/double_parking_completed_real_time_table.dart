@@ -2007,7 +2007,7 @@ class _UnifiedTableBodyState extends State<_UnifiedTableBody>
       final proceed = await showRealTimeDurationBlockingDialog(
         context,
         message: '', // 프리뷰 카드 사용(기존 유지)
-        duration: const Duration(seconds: 5),
+        duration: const Duration(seconds: 3),
         plateNumber: r.plateNumber,
         location: r.location,
         occurredAt: r.createdAt,

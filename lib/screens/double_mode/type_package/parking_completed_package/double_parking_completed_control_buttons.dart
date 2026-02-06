@@ -2,16 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../double_departure_completed_bottom_sheet.dart';
 
-/// Deep Blue 팔레트(서비스 카드와 동일 계열) + 상태 색상
-class _Palette {
-  static const base = Color(0xFF37474F); // primary
-  static const dark = Color(0xFF37474F); // 강조 텍스트/아이콘
-
-  // 상태 강조 색
-  static const danger = Color(0xFFD32F2F); // ✅ 스마트 검색(붉은색)
-  static const success = Color(0xFF2E7D32); // 출차 완료(초록색)
-}
-
 /// 더블 입차완료 화면 전용 컨트롤 바.
 ///
 /// ✅ 현재 UX에서 사용되는 기능만 유지:
@@ -37,15 +27,28 @@ class DoubleParkingCompletedControlButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color selectedItemColor = _Palette.base;
-    final Color unselectedItemColor = _Palette.dark.withOpacity(.55);
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
-    // ✅ 스마트 검색 색상: 붉은색으로 고정
-    const Color smartSearchColor = _Palette.danger;
+    // ✅ 브랜드 테마 기반 토큰
+    // - 독립 프리셋(KB 등)일 때도 cs.surface/cs.onSurface가 프리셋에 맞게 변하므로 배경 하얀 문제 방지
+    final Color navBg = cs.surface;
+    final Color selectedItemColor = cs.primary; // ✅ 하이라이트(독립 프리셋 highlightText)
+    final Color unselectedItemColor = cs.onSurfaceVariant.withOpacity(.65);
+
+    // ✅ 상태 색상
+    // - “스마트 검색은 붉은색 고정” 요구를 유지하면서도,
+    //   가능한 한 ColorScheme.error를 사용(테마와 동기화)
+    final Color smartSearchColor = cs.error;
+
+    // ✅ 성공(출차 완료) 색: ColorScheme에 별도 success가 없으므로
+    // - 기본은 tertiary 사용(테마 연동)
+    // - 만약 프로젝트에 성공색 토큰이 있다면 그쪽으로 교체 추천
+    final Color departureCompletedColor = cs.tertiary;
 
     return BottomNavigationBar(
       type: BottomNavigationBarType.fixed,
-      backgroundColor: Colors.white,
+      backgroundColor: navBg,
       elevation: 0,
       selectedFontSize: 12,
       unselectedFontSize: 12,
@@ -57,8 +60,7 @@ class DoubleParkingCompletedControlButtons extends StatelessWidget {
         BottomNavigationBarItem(
           icon: AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
-            transitionBuilder: (child, anim) =>
-                ScaleTransition(scale: anim, child: child),
+            transitionBuilder: (child, anim) => ScaleTransition(scale: anim, child: child),
             child: isStatusMode
                 ? const Icon(Icons.analytics, key: ValueKey('status'))
                 : const Icon(Icons.table_rows, key: ValueKey('table')),
@@ -66,15 +68,15 @@ class DoubleParkingCompletedControlButtons extends StatelessWidget {
           label: isStatusMode ? '현황 모드' : '테이블 모드',
         ),
 
-        // 1) 스마트 검색 (✅ 텍스트 변경 + ✅ 아이콘/라벨 붉은색)
-        const BottomNavigationBarItem(
+        // 1) 스마트 검색 (붉은색 고정: cs.error)
+        BottomNavigationBarItem(
           icon: Icon(Icons.search, color: smartSearchColor),
           label: '스마트 검색',
         ),
 
-        // 2) 출차 완료
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.directions_car, color: _Palette.success),
+        // 2) 출차 완료 (테마 연동: cs.tertiary)
+        BottomNavigationBarItem(
+          icon: Icon(Icons.directions_car, color: departureCompletedColor),
           label: '출차 완료',
         ),
       ],
@@ -84,7 +86,6 @@ class DoubleParkingCompletedControlButtons extends StatelessWidget {
             onToggleViewMode();
             break;
           case 1:
-          // ✅ 기존 동작 유지
             showSearchDialog();
             break;
           case 2:

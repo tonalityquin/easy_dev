@@ -1,27 +1,27 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../routes.dart';
-import '../normal_login_controller.dart';
+import '../../../../../routes.dart'; // ✅ AppRoutes 사용
+import '../single_login_controller.dart';
 
 // ✅ Trace 기록용 Recorder
 import '../../../../../screens/hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
 
-class NormalLoginForm extends StatefulWidget {
-  final NormalLoginController controller;
+class SingleLoginForm extends StatefulWidget {
+  final SingleLoginController controller;
 
-  const NormalLoginForm({super.key, required this.controller});
+  const SingleLoginForm({super.key, required this.controller});
 
   @override
-  State<NormalLoginForm> createState() => _NormalLoginFormState();
+  State<SingleLoginForm> createState() => _SingleLoginFormState();
 }
 
-class _NormalLoginFormState extends State<NormalLoginForm> {
-  late final NormalLoginController _controller;
+class _SingleLoginFormState extends State<SingleLoginForm> {
+  late final SingleLoginController _controller;
 
   @override
   void initState() {
     super.initState();
-    _controller = widget.controller;
+    _controller = widget.controller; // ✅ init은 상위(LoginScreen)에서만 수행
   }
 
   void _trace(String name, {Map<String, dynamic>? meta}) {
@@ -40,9 +40,9 @@ class _NormalLoginFormState extends State<NormalLoginForm> {
     if (_controller.isLoading) return;
 
     _trace(
-      '노말 로그인 버튼',
+      '약식 로그인 버튼',
       meta: <String, dynamic>{
-        'screen': 'normal_login',
+        'screen': 'simple_login',
         'action': 'login',
       },
     );
@@ -54,7 +54,7 @@ class _NormalLoginFormState extends State<NormalLoginForm> {
     _trace(
       '회사 로고(상단)',
       meta: <String, dynamic>{
-        'screen': 'normal_login',
+        'screen': 'simple_login',
         'asset': 'assets/images/pelican.png',
         'action': 'tap',
       },
@@ -65,7 +65,7 @@ class _NormalLoginFormState extends State<NormalLoginForm> {
     _trace(
       '회사 로고(펠리컨)',
       meta: <String, dynamic>{
-        'screen': 'normal_login',
+        'screen': 'simple_login',
         'asset': 'assets/images/pelican.png',
         'action': 'back_to_selector',
         'to': AppRoutes.selector,
@@ -78,12 +78,10 @@ class _NormalLoginFormState extends State<NormalLoginForm> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final baseTheme = Theme.of(context);
+  ThemeData _buildBrandLocalTheme(ThemeData baseTheme) {
     final cs = baseTheme.colorScheme;
 
-    final themed = baseTheme.copyWith(
+    return baseTheme.copyWith(
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: cs.primary,
@@ -94,7 +92,7 @@ class _NormalLoginFormState extends State<NormalLoginForm> {
             borderRadius: BorderRadius.circular(10),
           ),
           elevation: 1.5,
-          shadowColor: cs.primary.withOpacity(0.25),
+          shadowColor: cs.shadow.withOpacity(0.18),
         ),
       ),
       iconButtonTheme: IconButtonThemeData(
@@ -109,6 +107,24 @@ class _NormalLoginFormState extends State<NormalLoginForm> {
         selectionHandleColor: cs.primary,
       ),
     );
+  }
+
+  TextStyle _screenTagStyle(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+
+    return (text.labelSmall ?? const TextStyle(fontSize: 11)).copyWith(
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
+      color: cs.onSurfaceVariant.withOpacity(0.80),
+      letterSpacing: 0.2,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final baseTheme = Theme.of(context);
+    final themed = _buildBrandLocalTheme(baseTheme);
 
     return Material(
       color: Colors.transparent,
@@ -120,24 +136,21 @@ class _NormalLoginFormState extends State<NormalLoginForm> {
             child: Column(
               children: [
                 const SizedBox(height: 12),
+
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Padding(
                     padding: const EdgeInsets.only(left: 4, bottom: 8),
                     child: Semantics(
-                      label: 'screen_tag: normal login',
+                      label: 'screen_tag: simple login',
                       child: Text(
-                        'normal login',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: cs.onSurfaceVariant.withOpacity(0.80),
-                          letterSpacing: 0.2,
-                        ),
+                        'simple login',
+                        style: _screenTagStyle(context),
                       ),
                     ),
                   ),
                 ),
+
                 GestureDetector(
                   onTap: _onTopCompanyLogoTapped,
                   child: SizedBox(
@@ -145,6 +158,7 @@ class _NormalLoginFormState extends State<NormalLoginForm> {
                     child: Image.asset('assets/images/pelican.png'),
                   ),
                 ),
+
                 const SizedBox(height: 12),
 
                 TextField(
@@ -197,7 +211,7 @@ class _NormalLoginFormState extends State<NormalLoginForm> {
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.login),
                     label: Text(
-                      _controller.isLoading ? '로딩 중...' : '노말 로그인',
+                      _controller.isLoading ? '로딩 중...' : '약식 로그인',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,

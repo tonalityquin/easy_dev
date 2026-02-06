@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 
 import 'routes.dart';
 
@@ -16,7 +16,9 @@ import 'selector_hubs_package/header.dart';
 import 'selector_hubs_package/update_alert_bar.dart';
 import 'selector_hubs_package/dev_login_bottom_sheet.dart';
 import 'selector_hubs_package/update_bottom_sheet.dart';
-import 'selector_hubs_package/brand_theme.dart';
+
+// ✅ 전역 테마 컨트롤러
+import 'theme_prefs_controller.dart';
 
 @immutable
 class _SelectorHubsTokens {
@@ -38,9 +40,11 @@ class _SelectorHubsTokens {
 
   factory _SelectorHubsTokens.of(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+
+    // ✅ 독립 프리셋 배경이 살아나도록 background 기반으로 잡는 편이 안전
     return _SelectorHubsTokens(
-      pageBackground: cs.surface,
-      appBarBackground: cs.surface,
+      pageBackground: cs.background,
+      appBarBackground: cs.background,
       appBarForeground: cs.onSurface,
       divider: cs.outlineVariant,
       accent: cs.primary,
@@ -60,33 +64,10 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
   String? _savedMode;
   bool _devAuthorized = false;
 
-  String _brandPresetId = 'system';
-  String _themeModeId = 'system'; // system | light | dark
-
   @override
   void initState() {
     super.initState();
     _restorePrefs();
-    _restoreBrandPreset();
-    _restoreThemeMode();
-  }
-
-  Future<void> _restoreBrandPreset() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final saved = (prefs.getString(kBrandPresetKey) ?? 'system').trim();
-      if (!mounted) return;
-      setState(() => _brandPresetId = saved.isEmpty ? 'system' : saved);
-    } catch (_) {}
-  }
-
-  Future<void> _restoreThemeMode() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final saved = (prefs.getString(kThemeModeKey) ?? 'system').trim();
-      if (!mounted) return;
-      setState(() => _themeModeId = saved.isEmpty ? 'system' : saved);
-    } catch (_) {}
   }
 
   Future<void> _restorePrefs() async {
@@ -119,6 +100,8 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
   }
 
   Future<void> _handlePelicanTap(BuildContext context) async {
+    final themeCtrl = context.read<ThemePrefsController>();
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -127,16 +110,18 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
       builder: (ctx) => FractionallySizedBox(
         heightFactor: 1,
         child: DevLoginBottomSheet(
-          initialPresetId: _brandPresetId,
-          initialThemeModeId: _themeModeId,
-          onPresetChanged: (id) {
-            if (!mounted) return;
-            setState(() => _brandPresetId = id);
+          // ✅ 전역 테마값을 그대로 전달
+          initialPresetId: themeCtrl.presetId,
+          initialThemeModeId: themeCtrl.themeModeId,
+
+          // ✅ 선택 즉시 전역 반영(저장 + notify)
+          onPresetChanged: (id) async {
+            await themeCtrl.setPresetId(id);
           },
-          onThemeModeChanged: (id) {
-            if (!mounted) return;
-            setState(() => _themeModeId = id);
+          onThemeModeChanged: (id) async {
+            await themeCtrl.setThemeModeId(id);
           },
+
           onSuccess: (id, pw) async {
             await _setDevAuthorized(true);
             if (mounted) {
@@ -204,205 +189,160 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
     }
   }
 
-  ThemeData _buildThemed(ThemeData baseTheme, Brightness brightness, String presetId) {
-    final base = withBrightness(baseTheme, brightness);
-
-    final effectivePreset = presetById(presetId);
-    final accent = (effectivePreset.id == 'system' || effectivePreset.accent == null)
-        ? base.colorScheme.primary
-        : effectivePreset.accent!;
-
-    final scheme = buildConceptScheme(brightness: brightness, accent: accent);
-
-    return base.copyWith(
-      useMaterial3: true,
-      colorScheme: scheme,
-      appBarTheme: base.appBarTheme.copyWith(
-        backgroundColor: scheme.surface,
-        foregroundColor: scheme.onSurface,
-        surfaceTintColor: Colors.transparent,
-      ),
-      cardTheme: base.cardTheme.copyWith(
-        color: scheme.surfaceContainerLow,
-        surfaceTintColor: Colors.transparent,
-      ),
-      bottomSheetTheme: base.bottomSheetTheme.copyWith(
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-      ),
-      dividerTheme: base.dividerTheme.copyWith(
-        color: scheme.outlineVariant,
-        thickness: 1,
-        space: 1,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    // ✅ 테마 모드 → brightness 결정
-    final systemBrightness = MediaQuery.platformBrightnessOf(context);
-    final brightness = resolveBrightness(_themeModeId, systemBrightness);
+    return Consumer<ThemePrefsController>(
+      builder: (context, themeCtrl, _) {
+        final tokens = _SelectorHubsTokens.of(context);
+        final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // ✅ 컨셉 테마 적용(표면 중립 + 포인트만 accent) + 다크모드 반영
-    final baseTheme = Theme.of(context);
-    final themed = _buildThemed(baseTheme, brightness, _brandPresetId);
+        final mode = _normalizeMode(_savedMode);
 
-    return Theme(
-      data: themed,
-      child: Builder(
-        builder: (context) {
-          final tokens = _SelectorHubsTokens.of(context);
-          final isDark = Theme.of(context).brightness == Brightness.dark;
+        final bool singleEnabled;
+        final bool tabletEnabled;
+        final bool doubleEnabled;
+        final bool tripleEnabled;
+        final bool minorEnabled;
 
-          final mode = _normalizeMode(_savedMode);
+        if (mode == null) {
+          singleEnabled = true;
+          tabletEnabled = true;
+          doubleEnabled = true;
+          tripleEnabled = true;
+          minorEnabled = true;
+        } else if (mode == 'single') {
+          singleEnabled = true;
+          tabletEnabled = false;
+          doubleEnabled = false;
+          tripleEnabled = false;
+          minorEnabled = false;
+        } else if (mode == 'tablet') {
+          singleEnabled = false;
+          tabletEnabled = true;
+          doubleEnabled = false;
+          tripleEnabled = false;
+          minorEnabled = false;
+        } else if (mode == 'double') {
+          singleEnabled = false;
+          tabletEnabled = false;
+          doubleEnabled = true;
+          tripleEnabled = false;
+          minorEnabled = false;
+        } else if (mode == 'triple') {
+          singleEnabled = false;
+          tabletEnabled = false;
+          doubleEnabled = false;
+          tripleEnabled = true;
+          minorEnabled = false;
+        } else if (mode == 'minor') {
+          singleEnabled = false;
+          tabletEnabled = false;
+          doubleEnabled = false;
+          tripleEnabled = false;
+          minorEnabled = true;
+        } else {
+          singleEnabled = true;
+          tabletEnabled = true;
+          doubleEnabled = true;
+          tripleEnabled = true;
+          minorEnabled = true;
+        }
 
-          final bool singleEnabled;
-          final bool tabletEnabled;
-          final bool doubleEnabled;
-          final bool tripleEnabled;
-          final bool minorEnabled;
+        final List<List<Widget>> pages = [
+          [DoubleLoginCard(enabled: doubleEnabled), TripleLoginCard(enabled: tripleEnabled)],
+          [MinorLoginCard(enabled: minorEnabled), SingleLoginCard(enabled: singleEnabled)],
+          [TabletCard(enabled: tabletEnabled), const HeadquarterCard()],
+          [const CommunityCard(), const FaqCard()],
+          if (_devAuthorized)
+            [
+              const ParkingCard(),
+              DevCard(onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.devStub)),
+            ],
+        ];
 
-          if (mode == null) {
-            singleEnabled = true;
-            tabletEnabled = true;
-            doubleEnabled = true;
-            tripleEnabled = true;
-            minorEnabled = true;
-          } else if (mode == 'single') {
-            singleEnabled = true;
-            tabletEnabled = false;
-            doubleEnabled = false;
-            tripleEnabled = false;
-            minorEnabled = false;
-          } else if (mode == 'tablet') {
-            singleEnabled = false;
-            tabletEnabled = true;
-            doubleEnabled = false;
-            tripleEnabled = false;
-            minorEnabled = false;
-          } else if (mode == 'double') {
-            singleEnabled = false;
-            tabletEnabled = false;
-            doubleEnabled = true;
-            tripleEnabled = false;
-            minorEnabled = false;
-          } else if (mode == 'triple') {
-            singleEnabled = false;
-            tabletEnabled = false;
-            doubleEnabled = false;
-            tripleEnabled = true;
-            minorEnabled = false;
-          } else if (mode == 'minor') {
-            singleEnabled = false;
-            tabletEnabled = false;
-            doubleEnabled = false;
-            tripleEnabled = false;
-            minorEnabled = true;
-          } else {
-            singleEnabled = true;
-            tabletEnabled = true;
-            doubleEnabled = true;
-            tripleEnabled = true;
-            minorEnabled = true;
-          }
+        final media = MediaQuery.of(context);
+        final bool isShort = media.size.height < 640;
+        final bool keyboardOpen = media.viewInsets.bottom > 0;
+        final double footerHeight = (isShort || keyboardOpen) ? 72 : 120;
 
-          final List<List<Widget>> pages = [
-            [DoubleLoginCard(enabled: doubleEnabled), TripleLoginCard(enabled: tripleEnabled)],
-            [MinorLoginCard(enabled: minorEnabled), SingleLoginCard(enabled: singleEnabled)],
-            [TabletCard(enabled: tabletEnabled), const HeadquarterCard()],
-            [const CommunityCard(), const FaqCard()],
-            if (_devAuthorized)
-              [
-                const ParkingCard(),
-                DevCard(onTap: () => Navigator.of(context).pushReplacementNamed(AppRoutes.devStub)),
-              ],
-          ];
-
-          final media = MediaQuery.of(context);
-          final bool isShort = media.size.height < 640;
-          final bool keyboardOpen = media.viewInsets.bottom > 0;
-          final double footerHeight = (isShort || keyboardOpen) ? 72 : 120;
-
-          return PopScope(
-            canPop: false,
-            onPopInvoked: (didPop) {},
-            child: Scaffold(
-              backgroundColor: tokens.pageBackground,
-              appBar: AppBar(
-                backgroundColor: tokens.appBarBackground,
-                foregroundColor: tokens.appBarForeground,
-                surfaceTintColor: Colors.transparent,
-                elevation: 0,
-                scrolledUnderElevation: 0,
-                centerTitle: true,
-                systemOverlayStyle: SystemUiOverlayStyle(
-                  statusBarColor: Colors.transparent,
-                  statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-                  statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
-                ),
-                title: Text(
-                  'Pelican Hubs',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.2,
-                    color: tokens.appBarForeground,
-                  ),
-                ),
-                iconTheme: IconThemeData(color: tokens.appBarForeground),
-                actionsIconTheme: IconThemeData(color: tokens.appBarForeground),
-                bottom: PreferredSize(
-                  preferredSize: const Size.fromHeight(1),
-                  child: Container(height: 1, color: tokens.divider),
+        return PopScope(
+          canPop: false,
+          onPopInvoked: (didPop) {},
+          child: Scaffold(
+            backgroundColor: tokens.pageBackground,
+            appBar: AppBar(
+              backgroundColor: tokens.appBarBackground,
+              foregroundColor: tokens.appBarForeground,
+              surfaceTintColor: Colors.transparent,
+              elevation: 0,
+              scrolledUnderElevation: 0,
+              centerTitle: true,
+              systemOverlayStyle: SystemUiOverlayStyle(
+                statusBarColor: Colors.transparent,
+                statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+                statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+              ),
+              title: Text(
+                'Pelican Hubs',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.2,
+                  color: tokens.appBarForeground,
                 ),
               ),
-              body: SafeArea(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 880),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Header(),
-                          const SizedBox(height: 24),
-                          CardsPager(pages: pages),
-                          const SizedBox(height: 16),
-                          UpdateAlertBar(
-                            onTapUpdate: () => _handleUpdateTap(context),
-                            onTapLogs: () => _handleLogsTap(context),
-                            background: tokens.accent,
-                            foreground: tokens.onAccent,
-                          ),
-                        ],
-                      ),
+              iconTheme: IconThemeData(color: tokens.appBarForeground),
+              actionsIconTheme: IconThemeData(color: tokens.appBarForeground),
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(1),
+                child: Container(height: 1, color: tokens.divider),
+              ),
+            ),
+            body: SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 880),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Header(),
+                        const SizedBox(height: 24),
+                        CardsPager(pages: pages),
+                        const SizedBox(height: 16),
+                        UpdateAlertBar(
+                          onTapUpdate: () => _handleUpdateTap(context),
+                          onTapLogs: () => _handleLogsTap(context),
+                          background: tokens.accent,
+                          foreground: tokens.onAccent,
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
-              bottomNavigationBar: AnimatedOpacity(
-                opacity: keyboardOpen ? 0.0 : 1.0,
-                duration: const Duration(milliseconds: 160),
-                child: SafeArea(
-                  top: false,
-                  child: SizedBox(
-                    height: footerHeight,
-                    child: Center(
-                      child: Semantics(
-                        button: true,
-                        label: '개발자 로그인',
-                        hint: '개발자 전용 로그인 시트를 엽니다',
-                        child: Tooltip(
-                          message: '개발자 로그인',
-                          child: InkWell(
-                            borderRadius: BorderRadius.circular(12),
-                            onTap: () => _handlePelicanTap(context),
-                            child: Image.asset(
-                              'assets/images/pelican.png',
-                              fit: BoxFit.contain,
-                              height: footerHeight,
-                            ),
+            ),
+            bottomNavigationBar: AnimatedOpacity(
+              opacity: keyboardOpen ? 0.0 : 1.0,
+              duration: const Duration(milliseconds: 160),
+              child: SafeArea(
+                top: false,
+                child: SizedBox(
+                  height: footerHeight,
+                  child: Center(
+                    child: Semantics(
+                      button: true,
+                      label: '개발자 로그인',
+                      hint: '개발자 전용 로그인 시트를 엽니다',
+                      child: Tooltip(
+                        message: '개발자 로그인',
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () => _handlePelicanTap(context),
+                          child: Image.asset(
+                            'assets/images/pelican.png',
+                            fit: BoxFit.contain,
+                            height: footerHeight,
                           ),
                         ),
                       ),
@@ -411,9 +351,9 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
                 ),
               ),
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }

@@ -78,13 +78,13 @@ class _MinorLoginFormState extends State<MinorLoginForm> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final baseTheme = Theme.of(context);
+  ThemeData _buildBrandLocalTheme(ThemeData baseTheme) {
     final cs = baseTheme.colorScheme;
 
-    // ✅ 컨셉 테마(ColorScheme)에 맞춰 버튼/아이콘/selection만 정돈
-    final themed = baseTheme.copyWith(
+    // ✅ “브랜드 테마 수정안” 반영:
+    // - 모든 색은 ColorScheme 기반
+    // - 그림자는 primary tint 대신 cs.shadow 기반(중립)
+    return baseTheme.copyWith(
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: cs.primary,
@@ -95,7 +95,7 @@ class _MinorLoginFormState extends State<MinorLoginForm> {
             borderRadius: BorderRadius.circular(10),
           ),
           elevation: 1.5,
-          shadowColor: cs.primary.withOpacity(0.25),
+          shadowColor: cs.shadow.withOpacity(0.18),
         ),
       ),
       iconButtonTheme: IconButtonThemeData(
@@ -110,6 +110,24 @@ class _MinorLoginFormState extends State<MinorLoginForm> {
         selectionHandleColor: cs.primary,
       ),
     );
+  }
+
+  TextStyle _screenTagStyle(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+
+    return (text.labelSmall ?? const TextStyle(fontSize: 11)).copyWith(
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
+      color: cs.onSurfaceVariant.withOpacity(0.80),
+      letterSpacing: 0.2,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final baseTheme = Theme.of(context);
+    final themed = _buildBrandLocalTheme(baseTheme);
 
     return Material(
       color: Colors.transparent,
@@ -130,12 +148,7 @@ class _MinorLoginFormState extends State<MinorLoginForm> {
                       label: 'screen_tag: minor login',
                       child: Text(
                         'minor login',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: cs.onSurfaceVariant.withOpacity(0.80),
-                          letterSpacing: 0.2,
-                        ),
+                        style: _screenTagStyle(context),
                       ),
                     ),
                   ),

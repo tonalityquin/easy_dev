@@ -76,7 +76,7 @@ class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
   String? _error;
 
   late String _presetId;
-  late String _themeModeId; // system | light | dark
+  late String _themeModeId; // system | light | dark | independent
 
   @override
   void initState() {
@@ -124,15 +124,38 @@ class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
     // ✅ 전역 테마 즉시 반영
     await context.read<ThemePrefsController>().setThemeModeId(id);
 
+    // ✅ 독립 모드 진입 시: 독립 프리셋이 아니면 자동으로 첫 독립 프리셋으로 교정
+    if (id == 'independent') {
+      final cur = presetById(_presetId);
+      if (cur.independentTokens == null) {
+        final candidates = brandPresetsForThemeMode('independent');
+        if (candidates.isNotEmpty) {
+          final fallback = candidates.first.id;
+          setState(() => _presetId = fallback);
+          await context.read<ThemePrefsController>().setPresetId(fallback);
+          widget.onPresetChanged?.call(fallback);
+        }
+      }
+    } else {
+      // system/light/dark로 돌아올 때: 독립 프리셋이면 system으로 교정(혼선 방지)
+      final cur = presetById(_presetId);
+      if (cur.independentTokens != null) {
+        setState(() => _presetId = 'system');
+        await context.read<ThemePrefsController>().setPresetId('system');
+        widget.onPresetChanged?.call('system');
+      }
+    }
+
     widget.onThemeModeChanged?.call(id);
   }
 
-  ThemeData _buildThemed(ThemeData baseTheme, Brightness brightness, String presetId) {
+  ThemeData _buildConceptThemed(ThemeData baseTheme, Brightness brightness, String presetId) {
     final base = withBrightness(baseTheme, brightness);
 
     final effectivePreset = presetById(presetId);
-    final accent =
-    (effectivePreset.id == 'system' || effectivePreset.accent == null) ? base.colorScheme.primary : effectivePreset.accent!;
+    final accent = (effectivePreset.id == 'system' || effectivePreset.accent == null)
+        ? base.colorScheme.primary
+        : effectivePreset.accent!;
 
     final scheme = buildConceptScheme(brightness: brightness, accent: accent);
 
@@ -160,6 +183,11 @@ class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
     );
   }
 
+  ThemeData _buildIndependentThemed(ThemeData baseTheme, String presetId) {
+    // ✅ 독립 모드는 프리셋 자체 토큰(배경/글자/하이라이트/brightness) 기반으로 ThemeData 생성
+    return applyIndependentTheme(baseTheme, presetId);
+  }
+
   Widget _buildThemeModeChips(BuildContext context) {
     final t = _DevSheetTokens.of(context);
     final text = Theme.of(context).textTheme;
@@ -177,7 +205,7 @@ class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
         ),
         const SizedBox(height: 4),
         Text(
-          '시스템/라이트/다크를 선택합니다. 선택 즉시 전체 화면에 적용됩니다.',
+          '시스템/라이트/다크/독립을 선택합니다. 선택 즉시 전체 화면에 적용됩니다.',
           style: text.bodySmall?.copyWith(color: t.mutedFg),
         ),
         const SizedBox(height: 10),
@@ -207,7 +235,15 @@ class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
   Widget _buildPresetChips(BuildContext context) {
     final t = _DevSheetTokens.of(context);
     final text = Theme.of(context).textTheme;
-    final presets = brandPresets();
+
+    // ✅ 모드별 프리셋 필터링:
+    // - 독립: independentTokens가 있는 프리셋만
+    // - 그 외: 일반 프리셋만
+    final presets = brandPresetsForThemeMode(_themeModeId);
+
+    final helperText = (_themeModeId == 'independent')
+        ? '독립 모드는 프리셋마다 배경/글자색이 고정됩니다(프리셋이 밝기까지 결정).'
+        : '컨셉 컬러는 포인트로만 사용되고, 표면은 중립으로 유지됩니다.';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -221,7 +257,7 @@ class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
         ),
         const SizedBox(height: 4),
         Text(
-          '컨셉 컬러는 포인트로만 사용되고, 표면은 중립으로 유지됩니다.',
+          helperText,
           style: text.bodySmall?.copyWith(color: t.mutedFg),
         ),
         const SizedBox(height: 10),
@@ -277,11 +313,16 @@ class _DevLoginBottomSheetState extends State<DevLoginBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final systemBrightness = MediaQuery.platformBrightnessOf(context);
-    final brightness = resolveBrightness(_themeModeId, systemBrightness);
-
     final baseTheme = Theme.of(context);
-    final themed = _buildThemed(baseTheme, brightness, _presetId);
+
+    final ThemeData themed;
+    if (_themeModeId == 'independent') {
+      themed = _buildIndependentThemed(baseTheme, _presetId);
+    } else {
+      final systemBrightness = MediaQuery.platformBrightnessOf(context);
+      final brightness = resolveBrightness(_themeModeId, systemBrightness);
+      themed = _buildConceptThemed(baseTheme, brightness, _presetId);
+    }
 
     return Theme(
       data: themed,

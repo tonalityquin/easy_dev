@@ -14,8 +14,6 @@ import '../../../../utils/google_auth_session.dart';
 import '../../../../states/location/location_state.dart';
 import '../../../../states/area/area_state.dart';
 
-// import '../../../../utils/usage_reporter.dart';
-
 import '../../../common_package/memo_package/dash_memo.dart';
 
 // ✅ API 디버그(통합 에러 로그) 로거
@@ -221,14 +219,13 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _maybeRunCount();
       _maybeRunNotice();
     });
 
-    final currentArea = context.select<AreaState, String>((s) => s.currentArea.trim());
+    final currentArea =
+    context.select<AreaState, String>((s) => s.currentArea.trim());
 
     if (_lastArea != null && _lastArea != currentArea) {
       _didCountRun = false;
@@ -243,11 +240,15 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
     }
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      // ✅ 전역 ThemeData(scaffoldBackgroundColor) 사용
       body: Consumer<LocationState>(
         builder: (context, locationState, _) {
+          final cs = Theme.of(context).colorScheme;
+
           if (locationState.isLoading || _isCountLoading) {
-            return const Center(child: CircularProgressIndicator());
+            return Center(
+              child: CircularProgressIndicator(color: cs.primary),
+            );
           }
 
           final totalCapacity =
@@ -265,18 +266,21 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.warning_amber,
-                        size: 40, color: Colors.redAccent),
+                    Icon(Icons.warning_amber, size: 40, color: cs.error),
                     const SizedBox(height: 12),
-                    const Text(
+                    Text(
                       '현황 집계 중 오류가 발생했습니다.',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: cs.onSurface,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
                     Text(
                       '영역: $currentArea',
-                      style: const TextStyle(color: Colors.black54),
+                      style: TextStyle(color: cs.onSurfaceVariant),
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton.icon(
@@ -308,42 +312,52 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
               if (_noticeMessage.trim().isNotEmpty || _isNoticeLoading)
                 const SizedBox(height: 12),
 
-              const Text(
+              // ✅ (변경) const 제거 + color 명시
+              Text(
                 '📊 현재 노말 주차 현황',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: cs.onSurface,
+                ),
                 textAlign: TextAlign.center,
               ),
+
               const SizedBox(height: 12),
+
+              // ✅ (변경) color 명시
               Text(
                 '총 $totalCapacity대 중 $occupiedCount대 주차됨',
-                style: const TextStyle(fontSize: 16),
+                style: TextStyle(fontSize: 16, color: cs.onSurface),
                 textAlign: TextAlign.center,
               ),
+
               const SizedBox(height: 8),
               LinearProgressIndicator(
                 value: usageRatio,
-                backgroundColor: Colors.grey[300],
+                backgroundColor: cs.outlineVariant.withOpacity(0.6),
                 valueColor: AlwaysStoppedAnimation<Color>(
-                  usageRatio >= 0.8 ? Colors.red : Colors.blueAccent,
+                  usageRatio >= 0.8 ? cs.error : cs.primary,
                 ),
                 minHeight: 8,
               ),
               const SizedBox(height: 12),
+
+              // ✅ (변경) color 명시
               Text(
                 '$usagePercent% 사용 중',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: cs.onSurface,
+                ),
                 textAlign: TextAlign.center,
               ),
-              // ------ 상단 영역 끝 (수정 없음) ------
 
+              // ------ 상단 영역 끝 ------
               const SizedBox(height: 24),
-
-              // ✅ [삭제] 업무 리마인더 카드 영역(_AutoCyclingReminderCards)
-
               const SizedBox(height: 12),
-
               const _AutoCyclingMemoCards(),
-
               const SizedBox(height: 12),
             ],
           );
@@ -382,7 +396,7 @@ class _TripleParkingNoticeBar extends StatelessWidget {
         decoration: BoxDecoration(
           color: cs.surfaceContainerLow,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
+          border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
         ),
         child: Row(
           children: [
@@ -501,7 +515,8 @@ class TripleParkingNoticeService {
       final cachedAt = prefs.getInt(cacheAtKey) ?? 0;
       final cachedSid = (prefs.getString(cacheSidKey) ?? '').trim();
 
-      final isFresh = cachedAt > 0 && (nowMs - cachedAt) <= cacheTtl.inMilliseconds;
+      final isFresh =
+          cachedAt > 0 && (nowMs - cachedAt) <= cacheTtl.inMilliseconds;
       final isSameSid = cachedSid == spreadsheetId;
 
       if (cached.isNotEmpty && isFresh && isSameSid) {
@@ -647,6 +662,8 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return SizedBox(
       height: 170,
       child: ValueListenableBuilder<List<String>>(
@@ -679,13 +696,17 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                       if (list.isEmpty) {
                         return Center(
                           child: Card(
-                            color: Colors.white,
+                            color: cs.surface,
+                            surfaceTintColor: Colors.transparent,
                             elevation: 2,
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(12),
+                              side: BorderSide(
+                                color: cs.outlineVariant.withOpacity(0.55),
+                              ),
                             ),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
                                 vertical: 16,
                                 horizontal: 16,
                               ),
@@ -696,23 +717,31 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(Icons.notes_rounded, size: 18),
-                                      SizedBox(width: 8),
+                                      Icon(
+                                        Icons.notes_rounded,
+                                        size: 18,
+                                        color: cs.onSurfaceVariant,
+                                      ),
+                                      const SizedBox(width: 8),
                                       Text(
                                         '메모',
                                         style: TextStyle(
                                           fontSize: 16,
-                                          fontWeight: FontWeight.w700,
+                                          fontWeight: FontWeight.w800,
+                                          color: cs.onSurface,
                                         ),
                                         textAlign: TextAlign.center,
                                       ),
                                     ],
                                   ),
-                                  SizedBox(height: 12),
+                                  const SizedBox(height: 12),
                                   Text(
                                     '저장된 메모가 없습니다.',
                                     textAlign: TextAlign.center,
-                                    style: TextStyle(fontSize: 14),
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: cs.onSurfaceVariant,
+                                    ),
                                   ),
                                 ],
                               ),
@@ -724,10 +753,14 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                       final (time, text) = _parseLine(list[index]);
                       return Center(
                         child: Card(
-                          color: Colors.white,
+                          color: cs.surface,
+                          surfaceTintColor: Colors.transparent,
                           elevation: 2,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
+                            side: BorderSide(
+                              color: cs.outlineVariant.withOpacity(0.55),
+                            ),
                           ),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
@@ -740,14 +773,19 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                               children: [
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
-                                    Icon(Icons.notes_rounded, size: 18),
-                                    SizedBox(width: 8),
+                                  children: [
+                                    Icon(
+                                      Icons.notes_rounded,
+                                      size: 18,
+                                      color: cs.onSurfaceVariant,
+                                    ),
+                                    const SizedBox(width: 8),
                                     Text(
                                       '메모',
                                       style: TextStyle(
                                         fontSize: 16,
-                                        fontWeight: FontWeight.w700,
+                                        fontWeight: FontWeight.w800,
+                                        color: cs.onSurface,
                                       ),
                                       textAlign: TextAlign.center,
                                     ),
@@ -760,7 +798,10 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                                     child: Text(
                                       text,
                                       textAlign: TextAlign.center,
-                                      style: const TextStyle(fontSize: 14),
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: cs.onSurface,
+                                      ),
                                       maxLines: 3,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -769,9 +810,9 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                                   Text(
                                     time,
                                     textAlign: TextAlign.center,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 12,
-                                      color: Colors.black54,
+                                      color: cs.onSurfaceVariant,
                                     ),
                                   ),
                               ],
@@ -795,7 +836,9 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                       width: active ? 10 : 6,
                       height: 6,
                       decoration: BoxDecoration(
-                        color: active ? Colors.black87 : Colors.black26,
+                        color: active
+                            ? cs.onSurface
+                            : cs.onSurfaceVariant.withOpacity(0.35),
                         borderRadius: BorderRadius.circular(3),
                       ),
                     );

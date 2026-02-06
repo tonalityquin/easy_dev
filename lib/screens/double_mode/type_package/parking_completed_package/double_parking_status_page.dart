@@ -221,9 +221,9 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
       _maybeRunNotice();
     });
 
-    final cs = Theme.of(context).colorScheme;
+    final currentArea =
+    context.select<AreaState, String>((s) => s.currentArea.trim());
 
-    final currentArea = context.select<AreaState, String>((s) => s.currentArea.trim());
     if (_lastArea != null && _lastArea != currentArea) {
       _didCountRun = false;
       _lastArea = currentArea;
@@ -237,14 +237,14 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
     }
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      // ✅ 전역 ThemeData(scaffoldBackgroundColor) 사용: backgroundColor 강제하지 않음
       body: Consumer<LocationState>(
         builder: (context, locationState, _) {
+          final cs = Theme.of(context).colorScheme;
+
           if (locationState.isLoading || _isCountLoading) {
             return Center(
-              child: CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
-              ),
+              child: CircularProgressIndicator(color: cs.primary),
             );
           }
 
@@ -287,9 +287,8 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
                       },
                       icon: const Icon(Icons.refresh),
                       label: const Text('다시 집계'),
+                      // ✅ 버튼 테마는 전역 ThemeData에 맡기되, 필요 시 최소 토큰만 사용
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: cs.primary,
-                        foregroundColor: cs.onPrimary,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
@@ -303,7 +302,7 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
           }
 
           // ------ 상단 영역: "디자인/텍스트 수정 금지" 요청 반영 ------
-          // ✅ 문구/레이아웃은 유지. 색상만 ColorScheme로 치환.
+          // ✅ 문구/레이아웃 유지. 색상만 ColorScheme 기반.
           return ListView(
             padding: const EdgeInsets.all(20),
             children: [
@@ -318,17 +317,26 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
               if (_noticeMessage.trim().isNotEmpty || _isNoticeLoading)
                 const SizedBox(height: 12),
 
-              const Text(
+              // ✅ (변경) const 제거 + color 명시
+              Text(
                 '📊 현재 주차 현황',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: cs.onSurface,
+                ),
                 textAlign: TextAlign.center,
               ),
+
               const SizedBox(height: 12),
+
+              // ✅ (변경) color 명시 (DefaultTextStyle/TextTheme 불일치 방지)
               Text(
                 '총 $totalCapacity대 중 $occupiedCount대 주차됨',
-                style: const TextStyle(fontSize: 16),
+                style: TextStyle(fontSize: 16, color: cs.onSurface),
                 textAlign: TextAlign.center,
               ),
+
               const SizedBox(height: 8),
               LinearProgressIndicator(
                 value: usageRatio,
@@ -339,19 +347,21 @@ class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
                 minHeight: 8,
               ),
               const SizedBox(height: 12),
+
+              // ✅ (변경) color 명시
               Text(
                 '$usagePercent% 사용 중',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: cs.onSurface,
+                ),
                 textAlign: TextAlign.center,
               ),
-              // ------ 상단 영역 끝 (레이아웃/문구 유지) ------
 
+              // ------ 상단 영역 끝 ------
               const SizedBox(height: 24),
-
-              // ✅ [삭제] 업무 리마인더 카드 영역(_AutoCyclingReminderCards)
-
               const _AutoCyclingMemoCards(),
-
               const SizedBox(height: 12),
             ],
           );
@@ -529,8 +539,7 @@ class DoubleParkingNoticeService {
 
       final lines = <String>[];
       for (final row in values) {
-        final rowStrings =
-        row.map((c) => (c ?? '').toString().trim()).toList();
+        final rowStrings = row.map((c) => (c ?? '').toString().trim()).toList();
         final joined = rowStrings.where((s) => s.isNotEmpty).join(' ');
         if (joined.isNotEmpty) lines.add(joined);
       }

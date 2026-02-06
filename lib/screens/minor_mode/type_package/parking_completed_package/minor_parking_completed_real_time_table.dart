@@ -1207,7 +1207,7 @@ class _UnifiedTableTabState extends State<_UnifiedTableTab>
       final proceed = await showRealTimeDurationBlockingDialog(
         context,
         message: '',
-        duration: const Duration(seconds: 5),
+        duration: const Duration(seconds: 3),
         plateNumber: r.plateNumber,
         location: r.location,
         occurredAt: r.createdAt,

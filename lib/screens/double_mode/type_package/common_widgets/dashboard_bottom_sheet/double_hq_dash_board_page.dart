@@ -45,17 +45,103 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
   }
 
   Future<void> _handleLogout(BuildContext context) async {
-    // 기존 동작 유지
     await LogoutHelper.logoutAndGoToLogin(context);
   }
 
-  String _themeModeLabel(String id) {
-    return themeModeSpecs()
-        .firstWhere((m) => m.id == id, orElse: () => themeModeSpecs().first)
-        .label;
+  /// ✅ themeModeSpecs()에 independent가 없을 수도 있으므로 안전하게 확장(중복 제거)
+  List<ThemeModeSpec> _themeModesExtended() {
+    final base = themeModeSpecs();
+    final ids = <String>{...base.map((e) => e.id)};
+
+    // independent 추가(없으면)
+    if (!ids.contains('independent')) {
+      return [
+        ...base,
+        const ThemeModeSpec(
+          id: 'independent',
+          label: '독립',
+          icon: Icons.layers_rounded,
+        ),
+      ];
+    }
+    return base;
   }
 
-  /// ✅ [추가/확장] 테마 모드 + 테마 색(브랜드 프리셋) 선택 다이얼로그
+  String _themeModeLabel(String id) {
+    final modes = _themeModesExtended();
+    return modes.firstWhere((m) => m.id == id, orElse: () => modes.first).label;
+  }
+
+  /// ✅ 모드에 따라 프리셋 리스트 분리:
+  /// brand_theme.dart의 공식 필터(독립/일반 분리) 사용
+  List<BrandPresetSpec> _presetsForMode(String themeModeId) {
+    final filtered = brandPresetsForThemeMode(themeModeId);
+    return filtered.isNotEmpty ? filtered : brandPresets();
+  }
+
+  /// ✅ 모드 전환 시 프리셋 호환성 자동 교정
+  /// - independent 진입: 현재 프리셋이 독립이 아니면 첫 독립 프리셋으로 변경
+  /// - independent 이탈: 현재 프리셋이 독립이면 system으로 교정
+  Future<void> _setThemeModeWithPresetFix(
+      ThemePrefsController themeCtrl,
+      String nextModeId,
+      ) async {
+    final beforeMode = themeCtrl.themeModeId;
+    final beforePreset = themeCtrl.presetId;
+
+    if (beforeMode == nextModeId) return;
+
+    await themeCtrl.setThemeModeId(nextModeId);
+
+    if (nextModeId == 'independent') {
+      final cur = presetById(themeCtrl.presetId);
+      if (cur.independentTokens == null) {
+        final candidates = brandPresetsForThemeMode('independent');
+        if (candidates.isNotEmpty) {
+          final fallback = candidates.first.id;
+          await themeCtrl.setPresetId(fallback);
+
+          _trace(
+            '독립 모드 프리셋 자동 교정',
+            meta: <String, dynamic>{
+              'screen': 'double_hq_dashboard',
+              'action': 'preset_autofix_on_enter_independent',
+              'presetIdBefore': beforePreset,
+              'presetIdAfter': fallback,
+            },
+          );
+        }
+      }
+    } else {
+      final cur = presetById(themeCtrl.presetId);
+      if (cur.independentTokens != null) {
+        await themeCtrl.setPresetId('system');
+
+        _trace(
+          '일반 모드 프리셋 자동 교정',
+          meta: <String, dynamic>{
+            'screen': 'double_hq_dashboard',
+            'action': 'preset_autofix_on_exit_independent',
+            'presetIdBefore': beforePreset,
+            'presetIdAfter': 'system',
+          },
+        );
+      }
+    }
+
+    _trace(
+      '테마 모드 변경 완료',
+      meta: <String, dynamic>{
+        'screen': 'double_hq_dashboard',
+        'action': 'theme_mode_changed_done',
+        'themeModeBefore': beforeMode,
+        'themeModeAfter': nextModeId,
+        'presetIdNow': themeCtrl.presetId,
+      },
+    );
+  }
+
+  /// ✅ [확장] 테마 모드 + 테마 색(브랜드 프리셋) 선택 다이얼로그
   Future<void> _openThemePresetDialog(BuildContext context) async {
     _trace(
       '테마 설정 다이얼로그 오픈',
@@ -69,14 +155,18 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
       context: context,
       barrierDismissible: true,
       builder: (dialogContext) {
-        // ✅ 전역 테마 컨트롤러를 구독(선택 즉시 UI 반영)
         return Consumer<ThemePrefsController>(
           builder: (ctx, themeCtrl, _) {
             final cs = Theme.of(ctx).colorScheme;
             final text = Theme.of(ctx).textTheme;
 
-            final modes = themeModeSpecs();
-            final presets = brandPresets();
+            final modes = _themeModesExtended();
+            final presets = _presetsForMode(themeCtrl.themeModeId);
+
+            final bool isIndependent = themeCtrl.themeModeId == 'independent';
+            final String modeGuide = isIndependent
+                ? '독립 모드는 색 패키지가 배경/텍스트/하이라이트를 직접 결정합니다.'
+                : '컨셉 모드는 포인트(primary)만 바뀌고, 표면(surfaces)은 중립으로 유지됩니다.';
 
             return AlertDialog(
               insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -103,13 +193,13 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        '테마 모드(시스템/라이트/다크)와 색 프리셋을 선택하면 앱 전체에 즉시 적용됩니다.',
+                        '테마 모드(시스템/라이트/다크/독립)와 색 패키지를 선택하면 앱 전체에 즉시 적용됩니다.',
                         style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                       ),
                       const SizedBox(height: 16),
 
                       // ─────────────────────────────────────────────
-                      // ✅ 테마 모드 섹션 (system/light/dark)
+                      // ✅ 테마 모드 섹션
                       Text(
                         '테마 모드',
                         style: text.titleSmall?.copyWith(
@@ -138,7 +228,7 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
                                 },
                               );
 
-                              await themeCtrl.setThemeModeId(m.id);
+                              await _setThemeModeWithPresetFix(themeCtrl, m.id);
                             },
                             label: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -159,7 +249,7 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
                       // ─────────────────────────────────────────────
                       // ✅ 프리셋 섹션
                       Text(
-                        '테마 색(프리셋)',
+                        '색 패키지',
                         style: text.titleSmall?.copyWith(
                           fontWeight: FontWeight.w800,
                           color: cs.onSurface,
@@ -167,7 +257,7 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '컨셉 컬러는 포인트(primary)만 변경되고, 표면(surfaces)은 중립으로 유지됩니다.',
+                        modeGuide,
                         style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                       ),
                       const SizedBox(height: 12),
@@ -188,6 +278,7 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
                                   'action': 'theme_preset_changed',
                                   'presetIdBefore': themeCtrl.presetId,
                                   'presetIdAfter': p.id,
+                                  'themeModeId': themeCtrl.themeModeId,
                                 },
                               );
 
@@ -433,7 +524,8 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      // ✅ 독립 테마의 “배경색(background)”이 실제로 보이게 background를 사용
+      backgroundColor: cs.background,
       body: Consumer<UserState>(
         builder: (context, userState, _) {
           return SingleChildScrollView(
@@ -468,7 +560,7 @@ class _DoubleHqDashBoardPageState extends State<DoubleHqDashBoardPage> {
                         width: double.infinity,
                         child: ElevatedButton.icon(
                           icon: const Icon(Icons.palette_outlined),
-                          label: const Text('테마 설정(다크/색상)'),
+                          label: const Text('테마 설정(모드/색상)'),
                           style: _themePresetBtnStyle(context),
                           onPressed: () => _openThemePresetDialog(context),
                         ),

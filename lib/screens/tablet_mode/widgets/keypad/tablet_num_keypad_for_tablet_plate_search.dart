@@ -13,8 +13,13 @@ class TabletNumKeypadForTabletPlateSearch extends StatefulWidget {
   final VoidCallback? onComplete;
   final ValueChanged<bool>? onChangeFrontDigitMode;
   final VoidCallback? onReset;
+
+  /// (옵션) 배경색 외부 주입 — null이면 Theme(ColorScheme.surface) 사용
   final Color? backgroundColor;
+
+  /// (옵션) 텍스트 스타일 외부 주입 — null이면 기본 스타일 사용(색은 Theme 기반으로 덮어씀)
   final TextStyle? textStyle;
+
   final bool enableDigitModeSwitch;
 
   const TabletNumKeypadForTabletPlateSearch({
@@ -30,10 +35,12 @@ class TabletNumKeypadForTabletPlateSearch extends StatefulWidget {
   });
 
   @override
-  State<TabletNumKeypadForTabletPlateSearch> createState() => _TabletNumKeypadForTabletPlateSearchState();
+  State<TabletNumKeypadForTabletPlateSearch> createState() =>
+      _TabletNumKeypadForTabletPlateSearchState();
 }
 
-class _TabletNumKeypadForTabletPlateSearchState extends State<TabletNumKeypadForTabletPlateSearch> {
+class _TabletNumKeypadForTabletPlateSearchState
+    extends State<TabletNumKeypadForTabletPlateSearch> {
   Timer? _repeatDeleteTimer;
 
   bool get _isFull => widget.controller.text.length >= widget.maxLength;
@@ -47,16 +54,32 @@ class _TabletNumKeypadForTabletPlateSearchState extends State<TabletNumKeypadFor
 
   @override
   Widget build(BuildContext context) {
-    final bg = widget.backgroundColor ?? Colors.white;
+    final cs = Theme.of(context).colorScheme;
+
+    // ✅ 전역 ThemeData(ColorScheme) 기반 기본 배경 (필요 시 외부 주입 허용)
+    final bg = widget.backgroundColor ?? cs.surface;
+
     return Container(
       color: bg, // 여백 제거를 위해 데코 단순화
       padding: EdgeInsets.zero,
       child: Column(
         mainAxisSize: MainAxisSize.max, // 🔹 가용 높이를 끝까지 사용
         children: [
-          _buildExpandedRow(const [_KeySpec.label('1'), _KeySpec.label('2'), _KeySpec.label('3')]),
-          _buildExpandedRow(const [_KeySpec.label('4'), _KeySpec.label('5'), _KeySpec.label('6')]),
-          _buildExpandedRow(const [_KeySpec.label('7'), _KeySpec.label('8'), _KeySpec.label('9')]),
+          _buildExpandedRow(const [
+            _KeySpec.label('1'),
+            _KeySpec.label('2'),
+            _KeySpec.label('3')
+          ]),
+          _buildExpandedRow(const [
+            _KeySpec.label('4'),
+            _KeySpec.label('5'),
+            _KeySpec.label('6')
+          ]),
+          _buildExpandedRow(const [
+            _KeySpec.label('7'),
+            _KeySpec.label('8'),
+            _KeySpec.label('9')
+          ]),
           _buildExpandedRow(_lastRowKeys()),
         ],
       ),
@@ -91,9 +114,20 @@ class _TabletNumKeypadForTabletPlateSearchState extends State<TabletNumKeypadFor
   }
 
   Widget _buildKey(_KeySpec spec) {
+    final cs = Theme.of(context).colorScheme;
+
     final enabled = _isKeyEnabled(spec);
-    final labelStyle = (widget.textStyle ?? const TextStyle(fontSize: 18, fontWeight: FontWeight.w500))
-        .copyWith(color: enabled ? Colors.black87 : Colors.black38);
+
+    // ✅ 텍스트/아이콘 색상: Theme(ColorScheme) 기반
+    final Color fg = enabled ? cs.onSurface : cs.onSurfaceVariant.withOpacity(0.55);
+
+    // ✅ 버튼 배경/테두리: Theme(ColorScheme) 기반 (M3)
+    final Color tileBg = cs.surfaceContainerLow;
+    final Color border = cs.outlineVariant.withOpacity(0.85);
+
+    final baseStyle =
+        widget.textStyle ?? const TextStyle(fontSize: 18, fontWeight: FontWeight.w500);
+    final labelStyle = baseStyle.copyWith(color: fg);
 
     return Padding(
       padding: const EdgeInsets.all(4.0), // 셀 간 최소 간격(완전 0 원하면 제거)
@@ -114,8 +148,8 @@ class _TabletNumKeypadForTabletPlateSearchState extends State<TabletNumKeypadFor
         child: SizedBox.expand( // 🔹 셀 영역을 100% 채움
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: Colors.grey[50],
-              border: Border.all(color: Colors.grey[300]!),
+              color: tileBg,
+              border: Border.all(color: border),
             ),
             child: Center(
               child: FittedBox( // 🔹 폭이 좁아도 자동 축소
@@ -125,7 +159,7 @@ class _TabletNumKeypadForTabletPlateSearchState extends State<TabletNumKeypadFor
                     : Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(spec.icon, size: 20, color: enabled ? Colors.black87 : Colors.black38),
+                    Icon(spec.icon, size: 20, color: fg),
                     if (spec.label != null) ...[
                       const SizedBox(width: 6),
                       Text(spec.label!, style: labelStyle),
@@ -260,12 +294,18 @@ class _PressableState extends State<_Pressable> {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     final scaledChild = AnimatedScale(
       scale: _pressed ? 0.92 : 1.0,
       duration: const Duration(milliseconds: 90),
       curve: Curves.easeOut,
       child: widget.child,
     );
+
+    // ✅ 잉크 효과도 Theme(ColorScheme.primary) 기반
+    final splash = cs.primary.withOpacity(0.12);
+    final highlight = cs.primary.withOpacity(0.06);
 
     return Material(
       color: Colors.transparent,
@@ -275,8 +315,8 @@ class _PressableState extends State<_Pressable> {
         child: InkWell(
           onTap: widget.enabled ? widget.onTap : null,
           onHighlightChanged: (v) => setState(() => _pressed = v && widget.enabled),
-          splashColor: Colors.lightBlue.withOpacity(0.12),
-          highlightColor: Colors.lightBlue.withOpacity(0.06),
+          splashColor: splash,
+          highlightColor: highlight,
           child: scaledChild,
         ),
       ),

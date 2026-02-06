@@ -140,13 +140,10 @@ class _MonthlyPlateEntryBottomSheetState extends State<MonthlyPlateEntryBottomSh
 
   Widget _buildScreenTag(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final base = Theme.of(context).textTheme.labelSmall;
-    final style = (base ??
-        const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ))
-        .copyWith(
+    final tt = Theme.of(context).textTheme;
+
+    final base = tt.labelSmall ?? const TextStyle(fontSize: 11, fontWeight: FontWeight.w600);
+    final style = base.copyWith(
       color: cs.onSurfaceVariant.withOpacity(.72),
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
@@ -177,6 +174,7 @@ class _MonthlyPlateEntryBottomSheetState extends State<MonthlyPlateEntryBottomSh
     final effectiveHeight = screenHeight - bottomInset;
 
     final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
 
     return SafeArea(
       child: Padding(
@@ -225,7 +223,7 @@ class _MonthlyPlateEntryBottomSheetState extends State<MonthlyPlateEntryBottomSh
                           Expanded(
                             child: Text(
                               widget.isEditMode ? '정기 정보 수정' : '정기 정보 등록',
-                              style: TextStyle(
+                              style: (tt.titleSmall ?? const TextStyle(fontSize: 14)).copyWith(
                                 fontWeight: FontWeight.w800,
                                 color: cs.onSurface,
                               ),
@@ -293,7 +291,13 @@ class _MonthlyPlateEntryBottomSheetState extends State<MonthlyPlateEntryBottomSh
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
-                              child: Text('정기', style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w700)),
+                              child: Text(
+                                '정기',
+                                style: (tt.bodyMedium ?? const TextStyle(fontSize: 14)).copyWith(
+                                  color: cs.onSurface,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                             ),
 
                             const SizedBox(height: 24),
@@ -352,7 +356,7 @@ class _MonthlyPlateEntryBottomSheetState extends State<MonthlyPlateEntryBottomSh
 
                     const SizedBox(height: 16),
 
-                    // 하단 네비: (등록 모드) 키패드/버튼 토글, (수정 모드) 키패드 기본 비표시
+                    // 하단 네비
                     MonthlyBottomNavigation(
                       showKeypad: controller.showKeypad,
                       keypad: _buildKeypad(),

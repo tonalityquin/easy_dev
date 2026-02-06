@@ -2,13 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../../../../utils/snackbar_helper.dart';
 import '../monthly_plate_controller.dart';
 
-// ✅ AppCardPalette 사용 (프로젝트 경로에 맞게 수정)
-// 예: import 'package:your_app/theme/app_card_palette.dart';
-import '../../../../../theme.dart';
-
-/// 결제 섹션(결제 전용)
-/// - 결제 저장/연장 여부/메모
-/// - 실제 저장 로직은 MonthlyPlateController.processPayment로 위임
 class MonthlyPaymentSection extends StatefulWidget {
   final MonthlyPlateController controller;
   final Function(bool?) onExtendedChanged;
@@ -27,7 +20,6 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
   final TextEditingController _noteController = TextEditingController();
   bool _isPaying = false;
 
-  // 로컬 표시용 로그(기존 유지)
   final List<String> _paymentHistoryLog = [];
 
   @override
@@ -55,20 +47,15 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
   Future<void> _handlePayment() async {
     FocusScope.of(context).unfocus();
 
-    // 메모 반영(결제 직전)
     widget.controller.specialNote = _noteController.text.trim();
 
-    // 컨트롤러에서 결제 검증/저장 처리
-    if (!widget.controller.validatePaymentBeforeWrite(context)) {
-      return;
-    }
+    if (!widget.controller.validatePaymentBeforeWrite(context)) return;
 
     setState(() => _isPaying = true);
     try {
       await widget.controller.processPayment(context);
       if (!mounted) return;
 
-      // 로컬 로그(낙관적 업데이트)
       final label = _formatNow();
       setState(() {
         _paymentHistoryLog.insert(
@@ -79,11 +66,9 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
         );
       });
 
-      // 입력값 초기화(기존 흐름 유지)
       _noteController.clear();
       widget.controller.specialNote = '';
 
-      // 연장 여부 초기화(+부모 콜백)
       widget.controller.isExtended = false;
       widget.onExtendedChanged(false);
 
@@ -98,25 +83,24 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
 
   InputDecoration _svcInputDecoration(BuildContext context, {required String label}) {
     final cs = Theme.of(context).colorScheme;
-    final palette = AppCardPalette.of(context);
 
     return InputDecoration(
       labelText: label,
       floatingLabelStyle: TextStyle(
-        color: palette.serviceDark,
+        color: cs.primary,
         fontWeight: FontWeight.w700,
       ),
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       filled: true,
-      fillColor: palette.serviceLight.withOpacity(.06),
+      fillColor: cs.surfaceVariant.withOpacity(.30),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: palette.serviceLight.withOpacity(.45)),
+        borderSide: BorderSide(color: cs.outlineVariant.withOpacity(.65)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: palette.serviceBase, width: 1.2),
+        borderSide: BorderSide(color: cs.primary, width: 1.2),
       ),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
       errorBorder: OutlineInputBorder(
@@ -134,7 +118,6 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-    final palette = AppCardPalette.of(context);
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -144,7 +127,7 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
         border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.04),
+            color: cs.shadow.withOpacity(.06),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -160,11 +143,11 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: palette.serviceLight.withOpacity(.18),
+                  color: cs.primaryContainer.withOpacity(.60),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: palette.serviceLight.withOpacity(.40)),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
                 ),
-                child: Icon(Icons.payment_outlined, color: palette.serviceDark),
+                child: Icon(Icons.payment_outlined, color: cs.primary),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -172,7 +155,7 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
                   '결제',
                   style: text.titleMedium?.copyWith(
                     fontWeight: FontWeight.w900,
-                    color: palette.serviceDark,
+                    color: cs.onSurface,
                   ),
                 ),
               ),
@@ -194,20 +177,20 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
                 child: ElevatedButton.icon(
                   onPressed: _isPaying ? null : _handlePayment,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: palette.serviceBase,
-                    foregroundColor: Colors.white,
+                    backgroundColor: cs.primary,
+                    foregroundColor: cs.onPrimary,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     shape: const StadiumBorder(),
                     textStyle: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                   icon: _isPaying
-                      ? const SizedBox(
+                      ? SizedBox(
                     width: 18,
                     height: 18,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      valueColor: AlwaysStoppedAnimation<Color>(cs.onPrimary),
                     ),
                   )
                       : const Icon(Icons.payment),
@@ -218,9 +201,9 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
               Expanded(
                 child: Container(
                   decoration: BoxDecoration(
-                    color: palette.serviceLight.withOpacity(.06),
+                    color: cs.surfaceVariant.withOpacity(.30),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: palette.serviceLight.withOpacity(.35)),
+                    border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
                   ),
                   child: CheckboxListTile(
                     dense: true,
@@ -237,10 +220,10 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
                       '연장 여부',
                       style: text.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w800,
-                        color: palette.serviceDark,
+                        color: cs.onSurface,
                       ),
                     ),
-                    activeColor: palette.serviceBase,
+                    activeColor: cs.primary,
                   ),
                 ),
               ),
@@ -251,7 +234,7 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
 
           Row(
             children: [
-              Icon(Icons.history, color: palette.serviceDark, size: 18),
+              Icon(Icons.history, color: cs.onSurfaceVariant, size: 18),
               const SizedBox(width: 8),
               Text(
                 '최근 결제 내역(로컬)',
@@ -264,7 +247,7 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
           if (_paymentHistoryLog.isEmpty)
             Text(
               '결제 내역이 없습니다.',
-              style: text.bodyMedium?.copyWith(color: Colors.black.withOpacity(.45)),
+              style: text.bodyMedium?.copyWith(color: cs.onSurfaceVariant.withOpacity(.70)),
             )
           else
             Container(
@@ -286,7 +269,7 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
                         width: 8,
                         height: 8,
                         decoration: BoxDecoration(
-                          color: palette.serviceBase.withOpacity(.85),
+                          color: cs.primary.withOpacity(.85),
                           borderRadius: BorderRadius.circular(99),
                         ),
                       ),

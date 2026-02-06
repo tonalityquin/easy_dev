@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-/// ✅ “결제 버튼(OutlinedButton.icon)”과 동일한 디자인을 공용으로 쓰기 위한 버튼
-/// - StadiumBorder / minHeight 56 / border 1.4 / foreground primary / bg surface
-/// - disabled/pressed/overlay 톤까지 전역 ColorScheme 기반으로 정리
+/// ✅ OutlinedButton.icon 동일 디자인 공용 버튼
+/// - StadiumBorder / minHeight 56 / border 1.4
+/// - ✅ ColorScheme/TextTheme 기반
 /// - 기존 Scale 애니메이션 + 로딩 스위처 유지
 class MonthlyAnimatedActionButton extends StatefulWidget {
   final bool isLoading;
@@ -60,11 +60,6 @@ class _MonthlyAnimatedActionButtonState extends State<MonthlyAnimatedActionButto
   }
 
   ButtonStyle _buttonStyle(ColorScheme cs) {
-    // ✅ 전역 브랜드테마 기준:
-    // - bg: cs.surface
-    // - fg: cs.primary
-    // - side: cs.primary 45% 1.4
-    // - disabled: surfaceVariant / outlineVariant / fg 38%
     return ButtonStyle(
       minimumSize: const MaterialStatePropertyAll(Size.fromHeight(56)),
       padding: const MaterialStatePropertyAll(
@@ -72,33 +67,46 @@ class _MonthlyAnimatedActionButtonState extends State<MonthlyAnimatedActionButto
       ),
       shape: const MaterialStatePropertyAll(StadiumBorder()),
       elevation: const MaterialStatePropertyAll(0),
-
       backgroundColor: MaterialStateProperty.resolveWith((states) {
         if (states.contains(MaterialState.disabled)) {
           return cs.surfaceVariant.withOpacity(.70);
         }
         return cs.surface;
       }),
-
       foregroundColor: MaterialStateProperty.resolveWith((states) {
         if (states.contains(MaterialState.disabled)) {
           return cs.onSurface.withOpacity(.38);
         }
         return cs.primary;
       }),
-
       side: MaterialStateProperty.resolveWith((states) {
         if (states.contains(MaterialState.disabled)) {
           return BorderSide(color: cs.outlineVariant.withOpacity(.85), width: 1.4);
         }
         return BorderSide(color: cs.primary.withOpacity(.45), width: 1.4);
       }),
-
-      overlayColor: MaterialStatePropertyAll(cs.primary.withOpacity(.06)),
+      overlayColor: MaterialStateProperty.resolveWith((states) {
+        if (states.contains(MaterialState.pressed)) {
+          return cs.primary.withOpacity(.10);
+        }
+        return cs.primary.withOpacity(.06);
+      }),
     );
   }
 
-  Widget _buildIdleChild(String label) {
+  TextStyle _labelStyle(BuildContext context, ColorScheme cs) {
+    final tt = Theme.of(context).textTheme;
+    final base = tt.labelLarge ?? const TextStyle(fontSize: 14);
+    return base.copyWith(
+      fontWeight: FontWeight.w900,
+      letterSpacing: .2,
+    );
+  }
+
+
+  Widget _buildIdleChild(BuildContext context, ColorScheme cs, String label) {
+    final style = _labelStyle(context, cs);
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
@@ -107,18 +115,14 @@ class _MonthlyAnimatedActionButtonState extends State<MonthlyAnimatedActionButto
           Icon(widget.leadingIcon, size: 18),
           const SizedBox(width: 8),
         ],
-        Text(
-          label,
-          style: const TextStyle(
-            fontWeight: FontWeight.w900,
-            letterSpacing: .2,
-          ),
-        ),
+        Text(label, style: style),
       ],
     );
   }
 
-  Widget _buildLoadingChild(ColorScheme cs) {
+  Widget _buildLoadingChild(BuildContext context, ColorScheme cs) {
+    final style = _labelStyle(context, cs);
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
@@ -128,20 +132,11 @@ class _MonthlyAnimatedActionButtonState extends State<MonthlyAnimatedActionButto
           height: 18,
           child: CircularProgressIndicator(
             strokeWidth: 2,
-            valueColor: AlwaysStoppedAnimation<Color>(
-              // disabled 상태에선 버튼이 눌리지 않으므로 primary로 고정
-              cs.primary,
-            ),
+            valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
           ),
         ),
         const SizedBox(width: 10),
-        const Text(
-          '처리 중...',
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            letterSpacing: .2,
-          ),
-        ),
+        Text('처리 중...', style: style),
       ],
     );
   }
@@ -170,11 +165,11 @@ class _MonthlyAnimatedActionButtonState extends State<MonthlyAnimatedActionButto
             child: widget.isLoading
                 ? KeyedSubtree(
               key: const ValueKey('loading'),
-              child: _buildLoadingChild(cs),
+              child: _buildLoadingChild(context, cs),
             )
                 : KeyedSubtree(
               key: const ValueKey('idle'),
-              child: _buildIdleChild(label),
+              child: _buildIdleChild(context, cs, label),
             ),
           ),
         ),

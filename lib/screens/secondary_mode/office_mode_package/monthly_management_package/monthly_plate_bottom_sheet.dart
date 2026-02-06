@@ -1,4 +1,3 @@
-// lib/screens/secondary_package/office_mode_package/monthly_management_package/monthly_plate_bottom_sheet.dart
 import 'package:flutter/material.dart';
 
 import 'monthly_plate_controller.dart';
@@ -180,13 +179,10 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
 
   Widget _buildScreenTag(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final base = Theme.of(context).textTheme.labelSmall;
-    final style = (base ??
-        const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ))
-        .copyWith(
+    final tt = Theme.of(context).textTheme;
+
+    final base = tt.labelSmall ?? const TextStyle(fontSize: 11, fontWeight: FontWeight.w600);
+    final style = base.copyWith(
       color: cs.onSurfaceVariant.withOpacity(.72),
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
@@ -206,7 +202,7 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
     );
   }
 
-  Widget _buildTopBar(ColorScheme cs) {
+  Widget _buildTopBar(ColorScheme cs, TextTheme tt) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: BoxDecoration(
@@ -229,8 +225,10 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              widget.isEditMode ? '정기 정산 수정' : (controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리'),
-              style: TextStyle(
+              widget.isEditMode
+                  ? '정기 정산 수정'
+                  : (controller.isThreeDigit ? '현재 앞자리: 세자리' : '현재 앞자리: 두자리'),
+              style: (tt.titleSmall ?? const TextStyle(fontSize: 14)).copyWith(
                 fontWeight: FontWeight.w800,
                 color: cs.onSurface,
               ),
@@ -250,7 +248,6 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
   }
 
   Widget _buildEntryActionArea(ColorScheme cs) {
-    // ✅ 결제 버튼과 정기 정산 생성/수정 버튼을 “동일 컴포넌트”로 통일
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -283,6 +280,7 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
     final effectiveHeight = screenHeight - bottomInset;
 
     final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
 
     return SafeArea(
       child: Padding(
@@ -307,7 +305,7 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                 ),
                 child: Column(
                   children: [
-                    _buildTopBar(cs),
+                    _buildTopBar(cs, tt),
                     const SizedBox(height: 8),
                     Container(height: 1, color: cs.outlineVariant.withOpacity(.75)),
 
@@ -355,7 +353,13 @@ class _MonthlyPlateBottomSheetState extends State<MonthlyPlateBottomSheet> {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
-                              child: Text('정기', style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w700)),
+                              child: Text(
+                                '정기',
+                                style: (tt.bodyMedium ?? const TextStyle(fontSize: 14)).copyWith(
+                                  color: cs.onSurface,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                             ),
 
                             const SizedBox(height: 32),

@@ -1,5 +1,53 @@
 import 'package:flutter/material.dart';
 
+/// UpdateBottomSheet 리팩터링 포인트
+/// - 카드/섹션에 하드코딩 색 최소화: ColorScheme 파생
+/// - 리스트/타일 구조 단순화 + 스타일 토큰화
+/// - divider/handle 등 alpha 사용도 ColorScheme 기반으로 명확화
+@immutable
+class _UpdateSheetTokens {
+  const _UpdateSheetTokens({
+    required this.sheetBg,
+    required this.handle,
+    required this.divider,
+    required this.headerIcon,
+    required this.tileBg,
+    required this.tileBorder,
+    required this.badgeBg,
+    required this.badgeFg,
+    required this.bulletFg,
+  });
+
+  final Color sheetBg;
+  final Color handle;
+  final Color divider;
+
+  final Color headerIcon;
+
+  final Color tileBg;
+  final Color tileBorder;
+
+  final Color badgeBg;
+  final Color badgeFg;
+
+  final Color bulletFg;
+
+  factory _UpdateSheetTokens.of(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return _UpdateSheetTokens(
+      sheetBg: cs.surface,
+      handle: cs.onSurface.withOpacity(0.20),
+      divider: cs.outlineVariant.withOpacity(0.50),
+      headerIcon: cs.primary,
+      tileBg: cs.surfaceContainerHighest.withOpacity(.60),
+      tileBorder: cs.outlineVariant.withOpacity(.40),
+      badgeBg: cs.primary.withOpacity(.12),
+      badgeFg: cs.primary,
+      bulletFg: cs.onSurface,
+    );
+  }
+}
+
 class UpdateBottomSheet extends StatelessWidget {
   const UpdateBottomSheet({super.key, this.entries});
 
@@ -30,7 +78,7 @@ class UpdateBottomSheet extends StatelessWidget {
         '본사 카드 내 1차 앱 사용 설명서 삽입',
         '직원용 플로팅 버블 및 Gmail 발신 기능 개선',
         '본사용 플로팅 버블 개선 및 본사 대표 Gmail로의 발신 기능 추가',
-        '첫 진입 12시 방향 아이콘 내 스프레드 시트 및 직원용 지정 담당자 Gmail 입력 기능 추가'
+        '첫 진입 12시 방향 아이콘 내 스프레드 시트 및 직원용 지정 담당자 Gmail 입력 기능 추가',
       ],
     ),
     UpdateEntry(
@@ -90,15 +138,16 @@ class UpdateBottomSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final t = _UpdateSheetTokens.of(context);
     final text = Theme.of(context).textTheme;
+
     final list = entries ?? defaultEntries;
 
     return Material(
       color: Colors.transparent,
       child: Container(
         decoration: BoxDecoration(
-          color: cs.surface,
+          color: t.sheetBg,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
         ),
         child: Column(
@@ -109,7 +158,7 @@ class UpdateBottomSheet extends StatelessWidget {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: cs.onSurface.withOpacity(0.2),
+                color: t.handle,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -120,7 +169,7 @@ class UpdateBottomSheet extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-                  Icon(Icons.new_releases_rounded, color: cs.primary),
+                  Icon(Icons.new_releases_rounded, color: t.headerIcon),
                   const SizedBox(width: 8),
                   Text(
                     '업데이트',
@@ -137,14 +186,14 @@ class UpdateBottomSheet extends StatelessWidget {
             ),
 
             const SizedBox(height: 8),
-            Divider(height: 1, color: cs.outlineVariant.withOpacity(.5)),
+            Divider(height: 1, color: t.divider),
 
             // Content
             Expanded(
               child: ListView.separated(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
                 itemCount: list.length,
-                separatorBuilder: (_, __) => Divider(height: 24, color: cs.outlineVariant.withOpacity(.3)),
+                separatorBuilder: (_, __) => Divider(height: 24, color: t.divider.withOpacity(.6)),
                 itemBuilder: (context, i) => _UpdateTile(entry: list[i]),
               ),
             ),
@@ -172,33 +221,33 @@ class _UpdateTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final t = _UpdateSheetTokens.of(context);
     final text = Theme.of(context).textTheme;
 
     return Container(
       decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withOpacity(.6),
+        color: t.tileBg,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.outlineVariant.withOpacity(.4)),
+        border: Border.all(color: t.tileBorder),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Version (date 제거)
+            // Version
             Row(
               children: [
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: cs.primary.withOpacity(.12),
+                    color: t.badgeBg,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     entry.version,
                     style: text.labelMedium?.copyWith(
-                      color: cs.primary,
+                      color: t.badgeFg,
                       fontWeight: FontWeight.w800,
                       letterSpacing: .2,
                     ),
@@ -215,12 +264,12 @@ class _UpdateTile extends StatelessWidget {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('•  '),
+                    Text('•  ', style: text.bodyMedium?.copyWith(color: t.bulletFg)),
                     Expanded(
                       child: Text(
                         h,
                         style: text.bodyMedium?.copyWith(
-                          color: cs.onSurface,
+                          color: t.bulletFg,
                           height: 1.3,
                         ),
                       ),

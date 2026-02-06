@@ -182,14 +182,6 @@ class DoubleInputPlateController {
           },
           SetOptions(merge: true),
         );
-
-        /* await UsageReporter.instance.report(
-          area: (area.isEmpty ? 'unknown' : area),
-          action: 'write',
-          n: 1,
-          source: 'DoubleInputPlateController.deleteCustomStatusFromFirestore/monthly_plate_status.doc.set(merge)',
-          useSourceOnlyKey: true,
-        ); */
       }
 
       fetchedCustomStatus = null;
@@ -245,14 +237,6 @@ class DoubleInputPlateController {
       },
       SetOptions(merge: true),
     );
-
-    /* await UsageReporter.instance.report(
-      area: (area.isEmpty ? 'unknown' : area),
-      action: 'write',
-      n: 1,
-      source: 'DoubleInputPlateController._persistMemoAndStatusAfterEntry/monthly_plate_status.doc.set(merge)',
-      useSourceOnlyKey: true,
-    ); */
   }
 
   Future<void> doubleSubmitPlateEntry(
@@ -291,10 +275,18 @@ class DoubleInputPlateController {
     isLoading = true;
     refreshUI();
 
+    // ✅ [브랜드테마/독립프리셋] 로딩 다이얼로그도 ColorScheme 기반으로 표시
+    final cs = Theme.of(context).colorScheme;
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
+      barrierColor: cs.scrim.withOpacity(0.55),
+      builder: (_) => Center(
+        child: CircularProgressIndicator(
+          strokeWidth: 3,
+          color: cs.primary,
+        ),
+      ),
     );
 
     try {

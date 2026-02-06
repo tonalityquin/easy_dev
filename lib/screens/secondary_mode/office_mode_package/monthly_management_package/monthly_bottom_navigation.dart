@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 
 /// 하단 고정 네비: 액션 버튼 vs. 숫자/한글 키패드 토글 표시
-/// - ✅ 바텀시트 배경색과 다르게 노는 문제를 방지하기 위해
-///   기본 배경을 고정 흰색이 아니라 `Theme.colorScheme.surface`로 통일
-/// - showKeypad일 때만 약간 톤 변화(원치 않으면 baseBg 그대로 사용하면 됨)
+/// - ✅ background를 고정 흰색이 아니라 `Theme.colorScheme.surface`로 통일
+/// - ✅ shadow도 ColorScheme.shadow 기반
 /// - Offstage + AnimatedOpacity로 상태 유지 + 자연스러운 페이드
 class MonthlyBottomNavigation extends StatelessWidget {
   final bool showKeypad;
@@ -27,10 +26,7 @@ class MonthlyBottomNavigation extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    // ✅ 기본 배경을 바텀시트/테마 surface로 통일 (배경 이질감 방지)
     final Color baseBg = backgroundColor ?? cs.surface;
-
-    // 키패드 표시 시에만 아주 약한 톤 구분
     final Color effectiveBg = showKeypad ? cs.surfaceVariant.withOpacity(.55) : baseBg;
 
     final Color borderTop =
@@ -49,7 +45,6 @@ class MonthlyBottomNavigation extends StatelessWidget {
             border: Border(top: BorderSide(color: borderTop, width: 1)),
             boxShadow: [
               BoxShadow(
-                // ✅ 하드코딩 black 대신 테마 shadow/scrim 기반
                 color: cs.shadow.withOpacity(.08),
                 blurRadius: 12,
                 offset: const Offset(0, -2),
@@ -65,7 +60,6 @@ class MonthlyBottomNavigation extends StatelessWidget {
   Widget _buildContent() {
     return Stack(
       children: [
-        // 액션 버튼은 키패드가 보일 때 숨김 (상태 유지)
         AnimatedOpacity(
           duration: _kDuration,
           opacity: showKeypad ? 0.0 : 1.0,
@@ -75,8 +69,6 @@ class MonthlyBottomNavigation extends StatelessWidget {
             child: actionButton,
           ),
         ),
-
-        // 키패드는 항상 위젯 트리에 있고 표시 여부만 조절 (상태 유지)
         AnimatedOpacity(
           duration: _kDuration,
           opacity: showKeypad ? 1.0 : 0.0,

@@ -14,8 +14,6 @@ import '../../../../utils/google_auth_session.dart';
 import '../../../../states/location/location_state.dart';
 import '../../../../states/area/area_state.dart';
 
-// import '../../../../utils/usage_reporter.dart';;
-
 import '../../../common_package/memo_package/dash_memo.dart';
 
 // ✅ API 디버그(통합 에러 로그) 로거
@@ -219,8 +217,6 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _maybeRunCount();
       _maybeRunNotice();
@@ -228,6 +224,7 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
 
     final currentArea =
     context.select<AreaState, String>((s) => s.currentArea.trim());
+
     if (_lastArea != null && _lastArea != currentArea) {
       _didCountRun = false;
       _lastArea = currentArea;
@@ -241,14 +238,16 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
     }
 
     return Scaffold(
-      backgroundColor: cs.surface,
+      // ✅ 전역 ThemeData(scaffoldBackgroundColor) 사용
       body: Consumer<LocationState>(
         builder: (context, locationState, _) {
+          final cs = Theme.of(context).colorScheme;
+
           if (locationState.isLoading || _isCountLoading) {
             return Center(
               child: CircularProgressIndicator(
                 strokeWidth: 3,
-                valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                color: cs.primary,
               ),
             );
           }
@@ -292,10 +291,6 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
                       },
                       icon: const Icon(Icons.refresh),
                       label: const Text('다시 집계'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: cs.primary,
-                        foregroundColor: cs.onPrimary,
-                      ),
                     ),
                   ],
                 ),
@@ -317,18 +312,26 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
               if (_noticeMessage.trim().isNotEmpty || _isNoticeLoading)
                 const SizedBox(height: 12),
 
-              // ✅ 텍스트/구성 유지(색상만 브랜드 토큰 기반으로 상향 가능)
-              const Text(
+              // ✅ (변경) const 제거 + color 명시
+              Text(
                 '📊 현재 마이너 주차 현황',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: cs.onSurface,
+                ),
                 textAlign: TextAlign.center,
               ),
+
               const SizedBox(height: 12),
+
+              // ✅ (변경) color 명시
               Text(
                 '총 $totalCapacity대 중 $occupiedCount대 주차됨',
-                style: const TextStyle(fontSize: 16),
+                style: TextStyle(fontSize: 16, color: cs.onSurface),
                 textAlign: TextAlign.center,
               ),
+
               const SizedBox(height: 8),
               LinearProgressIndicator(
                 value: usageRatio,
@@ -339,20 +342,21 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
                 minHeight: 8,
               ),
               const SizedBox(height: 12),
+
+              // ✅ (변경) color 명시
               Text(
                 '$usagePercent% 사용 중',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: cs.onSurface,
+                ),
                 textAlign: TextAlign.center,
               ),
 
               const SizedBox(height: 24),
-
-              // ✅ [삭제] 업무 리마인더 카드 영역(_AutoCyclingReminderCards)
-
               const SizedBox(height: 12),
-
               const _AutoCyclingMemoCards(),
-
               const SizedBox(height: 12),
             ],
           );
@@ -362,7 +366,7 @@ class _MinorParkingStatusPageState extends State<MinorParkingStatusPage> {
   }
 }
 
-/// ✅ 상단 알림바(관리자 공지) — 브랜드(ColorScheme) 기반
+/// ✅ 상단 알림바(관리자 공지) — ColorScheme 기반
 class _MinorParkingNoticeBar extends StatelessWidget {
   final bool isLoading;
   final String message;
@@ -694,7 +698,9 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                             ),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
-                                  vertical: 16, horizontal: 16),
+                                vertical: 16,
+                                horizontal: 16,
+                              ),
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -702,8 +708,11 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                                   Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(Icons.notes_rounded,
-                                          size: 18, color: cs.onSurfaceVariant),
+                                      Icon(
+                                        Icons.notes_rounded,
+                                        size: 18,
+                                        color: cs.onSurfaceVariant,
+                                      ),
                                       const SizedBox(width: 8),
                                       Text(
                                         '메모',
@@ -746,7 +755,9 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                           ),
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
-                                vertical: 16, horizontal: 16),
+                              vertical: 16,
+                              horizontal: 16,
+                            ),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               crossAxisAlignment: CrossAxisAlignment.center,
@@ -754,8 +765,11 @@ class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Icon(Icons.notes_rounded,
-                                        size: 18, color: cs.onSurfaceVariant),
+                                    Icon(
+                                      Icons.notes_rounded,
+                                      size: 18,
+                                      color: cs.onSurfaceVariant,
+                                    ),
                                     const SizedBox(width: 8),
                                     Text(
                                       '메모',

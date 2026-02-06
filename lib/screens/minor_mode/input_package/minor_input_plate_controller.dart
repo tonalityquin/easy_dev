@@ -146,9 +146,12 @@ class MinorInputPlateController {
   }
 
   bool isInputValid() {
-    final validFront =
-    isThreeDigit ? controllerFrontDigit.text.length == 3 : controllerFrontDigit.text.length == 2;
-    return validFront && controllerMidDigit.text.length == 1 && controllerBackDigit.text.length == 4;
+    final validFront = isThreeDigit
+        ? controllerFrontDigit.text.length == 3
+        : controllerFrontDigit.text.length == 2;
+    return validFront &&
+        controllerMidDigit.text.length == 1 &&
+        controllerBackDigit.text.length == 4;
   }
 
   void dispose() {
@@ -174,7 +177,10 @@ class MinorInputPlateController {
       if (!isMonthly) {
         await _plateRepo.deletePlateStatus(plateNumber, area);
       } else {
-        await FirebaseFirestore.instance.collection('monthly_plate_status').doc(docId).set(
+        await FirebaseFirestore.instance
+            .collection('monthly_plate_status')
+            .doc(docId)
+            .set(
           {
             'customStatus': '',
             'statusList': <String>[],
@@ -182,14 +188,6 @@ class MinorInputPlateController {
           },
           SetOptions(merge: true),
         );
-
-        /* await UsageReporter.instance.report(
-          area: (area.isEmpty ? 'unknown' : area),
-          action: 'write',
-          n: 1,
-          source: 'NormalInputPlateController.deleteCustomStatusFromFirestore/monthly_plate_status.doc.set(merge)',
-          useSourceOnlyKey: true,
-        ); */
       }
 
       fetchedCustomStatus = null;
@@ -233,7 +231,10 @@ class MinorInputPlateController {
         ? (selectedBill ?? '').trim()
         : countTypeController.text.trim();
 
-    await FirebaseFirestore.instance.collection('monthly_plate_status').doc(docId).set(
+    await FirebaseFirestore.instance
+        .collection('monthly_plate_status')
+        .doc(docId)
+        .set(
       {
         'customStatus': memo,
         'statusList': statuses,
@@ -245,14 +246,6 @@ class MinorInputPlateController {
       },
       SetOptions(merge: true),
     );
-
-    /* await UsageReporter.instance.report(
-      area: (area.isEmpty ? 'unknown' : area),
-      action: 'write',
-      n: 1,
-      source: 'NormalInputPlateController._persistMemoAndStatusAfterEntry/monthly_plate_status.doc.set(merge)',
-      useSourceOnlyKey: true,
-    ); */
   }
 
   Future<void> minorSubmitPlateEntry(
@@ -265,7 +258,8 @@ class MinorInputPlateController {
     final division = areaState.currentDivision;
     final userName = context.read<UserState>().name;
     final billState = context.read<BillState>();
-    final hasAnyBill = billState.generalBills.isNotEmpty || billState.regularBills.isNotEmpty;
+    final hasAnyBill =
+        billState.generalBills.isNotEmpty || billState.regularBills.isNotEmpty;
 
     // ✅ Minor 모드도 Service 모드와 동일하게
     // - 위치가 없으면 "입차 요청"(parking_requests)
@@ -275,7 +269,8 @@ class MinorInputPlateController {
     isLocationSelected = location.isNotEmpty;
 
     // 정기인데 선택값이 비어있으면 countTypeController를 폴백으로 반영
-    if (selectedBillType == '정기' && (selectedBill == null || selectedBill!.trim().isEmpty)) {
+    if (selectedBillType == '정기' &&
+        (selectedBill == null || selectedBill!.trim().isEmpty)) {
       final ct = countTypeController.text.trim();
       if (ct.isNotEmpty) selectedBill = ct;
     }
@@ -293,7 +288,9 @@ class MinorInputPlateController {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
+      builder: (_) => const Center(
+        child: CircularProgressIndicator.adaptive(),
+      ),
     );
 
     try {
@@ -337,8 +334,6 @@ class MinorInputPlateController {
       }
 
       // 2) ✅ 등록 성공 이후: 메모/상태 저장은 selectedBillType에 따라 분기
-      //    - 정기: monthly_plate_status (plate_status 금지)
-      //    - 비정기: plate_status
       Object? memoStatusError;
       try {
         await _persistMemoAndStatusAfterEntry(

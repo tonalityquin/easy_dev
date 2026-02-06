@@ -2,11 +2,6 @@ import 'package:flutter/material.dart';
 import '../utils/monthly_plate_field.dart';
 import '../widgets/monthly_region_bottom_sheet.dart';
 
-class _SvcColors {
-  static const dark = Color(0xFF09367D);
-  static const light = Color(0xFF5472D3);
-}
-
 class MonthlyPlateSection extends StatelessWidget {
   final String dropdownValue;
   final List<String> regions;
@@ -49,7 +44,7 @@ class MonthlyPlateSection extends StatelessWidget {
         border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(.04),
+            color: cs.shadow.withOpacity(.06),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -65,11 +60,11 @@ class MonthlyPlateSection extends StatelessWidget {
                 width: 34,
                 height: 34,
                 decoration: BoxDecoration(
-                  color: _SvcColors.light.withOpacity(.18),
+                  color: cs.primaryContainer.withOpacity(.60),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _SvcColors.light.withOpacity(.40)),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
                 ),
-                child: const Icon(Icons.directions_car_outlined, color: _SvcColors.dark),
+                child: Icon(Icons.directions_car_outlined, color: cs.primary),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -77,7 +72,7 @@ class MonthlyPlateSection extends StatelessWidget {
                   '번호 입력',
                   style: text.titleMedium?.copyWith(
                     fontWeight: FontWeight.w900,
-                    color: _SvcColors.dark,
+                    color: cs.onSurface,
                   ),
                 ),
               ),
@@ -93,7 +88,7 @@ class MonthlyPlateSection extends StatelessWidget {
                     '수정 모드',
                     style: text.bodySmall?.copyWith(
                       fontWeight: FontWeight.w800,
-                      color: cs.onSurface.withOpacity(.65),
+                      color: cs.onSurfaceVariant.withOpacity(.85),
                     ),
                   ),
                 ),
@@ -104,7 +99,7 @@ class MonthlyPlateSection extends StatelessWidget {
           Text(
             '지역을 선택하고 번호판을 입력하세요.',
             style: text.bodyMedium?.copyWith(
-              color: Colors.black.withOpacity(.60),
+              color: cs.onSurfaceVariant.withOpacity(.78),
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -136,15 +131,13 @@ class MonthlyPlateSection extends StatelessWidget {
                       dropdownValue,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: text.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                      style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w800),
                     ),
                   ),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: _SvcColors.dark,
-                    side: BorderSide(color: _SvcColors.light.withOpacity(.75)),
-                    backgroundColor: _SvcColors.light.withOpacity(.06),
+                    foregroundColor: cs.primary,
+                    side: BorderSide(color: cs.primary.withOpacity(.45)),
+                    backgroundColor: cs.surfaceVariant.withOpacity(.35),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),

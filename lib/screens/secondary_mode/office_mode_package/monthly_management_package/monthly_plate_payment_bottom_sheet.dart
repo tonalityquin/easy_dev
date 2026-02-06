@@ -1,12 +1,11 @@
-// lib/screens/secondary_package/office_mode_package/monthly_management_package/monthly_payment_bottom_sheet.dart
 import 'package:flutter/material.dart';
 
 import 'monthly_plate_controller.dart';
 import 'sections/monthly_payment_section.dart';
 
 /// ✅ 결제 전용 바텀시트
-/// - “수정 모드에서 결제 탭으로 전환” 방식이 아니라
-///   “결제 버튼 → 별도 시트로 독립 진입” 방식
+/// - 별도 시트로 독립 진입
+/// - ✅ ColorScheme/TextTheme 기반
 class MonthlyPaymentBottomSheet extends StatefulWidget {
   final MonthlyPlateController controller;
 
@@ -25,13 +24,10 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
   // 11시 라벨
   Widget _buildScreenTag(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final base = Theme.of(context).textTheme.labelSmall;
-    final style = (base ??
-        const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ))
-        .copyWith(
+    final tt = Theme.of(context).textTheme;
+
+    final base = tt.labelSmall ?? const TextStyle(fontSize: 11, fontWeight: FontWeight.w600);
+    final style = base.copyWith(
       color: cs.onSurfaceVariant.withOpacity(.72),
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
@@ -53,22 +49,17 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
 
   Widget _buildPaymentSummaryCard(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
+    final tt = Theme.of(context).textTheme;
 
     final c = widget.controller;
 
     final plate = c.buildPlateNumber();
-
     final countType = (c.nameController?.text.trim().isNotEmpty ?? false) ? c.nameController!.text.trim() : '-';
-
     final regularType = (c.selectedRegularType?.trim().isNotEmpty ?? false) ? c.selectedRegularType!.trim() : '-';
-
     final amount = (c.amountController?.text.trim().isNotEmpty ?? false) ? c.amountController!.text.trim() : '-';
-
     final duration = (c.durationController?.text.trim().isNotEmpty ?? false) ? c.durationController!.text.trim() : '-';
 
     final periodUnit = c.selectedPeriodUnit;
-
     final startDate = c.startDateController?.text.trim() ?? '';
     final endDate = c.endDateController?.text.trim() ?? '';
 
@@ -80,7 +71,7 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
             width: 92,
             child: Text(
               k,
-              style: text.bodySmall?.copyWith(
+              style: (tt.bodySmall ?? const TextStyle(fontSize: 12)).copyWith(
                 color: cs.onSurfaceVariant.withOpacity(.78),
                 fontWeight: FontWeight.w700,
               ),
@@ -89,7 +80,7 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
           Expanded(
             child: Text(
               v,
-              style: text.bodyMedium?.copyWith(
+              style: (tt.bodyMedium ?? const TextStyle(fontSize: 14)).copyWith(
                 fontWeight: FontWeight.w900,
                 color: cs.onSurface,
               ),
@@ -132,7 +123,7 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
               Expanded(
                 child: Text(
                   '결제 대상 정보',
-                  style: text.titleMedium?.copyWith(
+                  style: (tt.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(
                     fontWeight: FontWeight.w900,
                     color: cs.onSurface,
                   ),
@@ -147,7 +138,7 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
                 ),
                 child: Text(
                   '읽기 전용',
-                  style: text.bodySmall?.copyWith(
+                  style: (tt.bodySmall ?? const TextStyle(fontSize: 12)).copyWith(
                     fontWeight: FontWeight.w800,
                     color: cs.onSurfaceVariant.withOpacity(.85),
                   ),
@@ -171,8 +162,8 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
 
-    // 키보드 여백 반영 + 최상단까지 차오르도록 높이 고정
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final screenHeight = MediaQuery.of(context).size.height;
     final effectiveHeight = screenHeight - bottomInset;
@@ -230,8 +221,7 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
                         Expanded(
                           child: Text(
                             '결제',
-                            style: TextStyle(
-                              fontSize: 18,
+                            style: (tt.titleLarge ?? const TextStyle(fontSize: 18)).copyWith(
                               fontWeight: FontWeight.w900,
                               color: cs.onSurface,
                             ),
@@ -260,7 +250,6 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
                             MonthlyPaymentSection(
                               controller: widget.controller,
                               onExtendedChanged: (val) {
-                                // 요약 카드에는 직접 영향 없지만 상태 정합성 위해 반영
                                 setState(() {
                                   widget.controller.isExtended = val ?? false;
                                 });

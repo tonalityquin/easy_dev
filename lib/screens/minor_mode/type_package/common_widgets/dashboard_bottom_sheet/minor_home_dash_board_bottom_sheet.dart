@@ -12,7 +12,7 @@ import 'widgets/minor_dashboard_punch_recorder_section.dart';
 import 'package:easydev/screens/common_package/camera_package/photo_transfer_mail_page.dart';
 import 'package:easydev/screens/secondary_page.dart';
 
-// ✅ [추가] 전역 테마 컨트롤러 + 브랜드 프리셋/테마모드 스펙
+// ✅ 전역 테마 컨트롤러 + 브랜드 프리셋/테마모드 스펙
 import '../../../../../../theme_prefs_controller.dart';
 import '../../../../../../selector_hubs_package/brand_theme.dart';
 
@@ -27,6 +27,56 @@ class _MinorHomeDashBoardBottomSheetState extends State<MinorHomeDashBoardBottom
   static const String screenTag = 'DashBoard B';
 
   bool _layerHidden = true;
+
+  /// ✅ themeModeSpecs()에 independent가 없을 수도 있으므로 안전하게 확장(중복 제거)
+  List<ThemeModeSpec> _themeModesExtended() {
+    final base = themeModeSpecs();
+    final ids = <String>{...base.map((e) => e.id)};
+
+    if (!ids.contains('independent')) {
+      return [
+        ...base,
+        const ThemeModeSpec(
+          id: 'independent',
+          label: '독립',
+          icon: Icons.layers_rounded,
+        ),
+      ];
+    }
+    return base;
+  }
+
+  /// ✅ 모드에 따라 프리셋 리스트 분리:
+  /// brand_theme.dart의 공식 필터(독립/일반 분리) 사용
+  List<BrandPresetSpec> _presetsForMode(String themeModeId) {
+    final filtered = brandPresetsForThemeMode(themeModeId);
+    return filtered.isNotEmpty ? filtered : brandPresets();
+  }
+
+  /// ✅ 모드 전환 시 프리셋 호환성 자동 교정
+  Future<void> _setThemeModeWithPresetFix(
+      ThemePrefsController themeCtrl,
+      String nextModeId,
+      ) async {
+    if (themeCtrl.themeModeId == nextModeId) return;
+
+    await themeCtrl.setThemeModeId(nextModeId);
+
+    if (nextModeId == 'independent') {
+      final cur = presetById(themeCtrl.presetId);
+      if (cur.independentTokens == null) {
+        final candidates = brandPresetsForThemeMode('independent');
+        if (candidates.isNotEmpty) {
+          await themeCtrl.setPresetId(candidates.first.id);
+        }
+      }
+    } else {
+      final cur = presetById(themeCtrl.presetId);
+      if (cur.independentTokens != null) {
+        await themeCtrl.setPresetId('system');
+      }
+    }
+  }
 
   Widget _buildScreenTag(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -81,12 +131,11 @@ class _MinorHomeDashBoardBottomSheetState extends State<MinorHomeDashBoardBottom
   }
 
   String _themeModeLabel(String id) {
-    return themeModeSpecs()
-        .firstWhere((m) => m.id == id, orElse: () => themeModeSpecs().first)
-        .label;
+    final modes = _themeModesExtended();
+    return modes.firstWhere((m) => m.id == id, orElse: () => modes.first).label;
   }
 
-  /// ✅ [추가] 테마 설정(모드 + 색상 프리셋) 다이얼로그
+  /// ✅ 테마 설정(모드 + 색상 프리셋) 다이얼로그
   Future<void> _openThemeSettingsDialog(BuildContext context) async {
     await showDialog<void>(
       context: context,
@@ -98,8 +147,13 @@ class _MinorHomeDashBoardBottomSheetState extends State<MinorHomeDashBoardBottom
             final cs = Theme.of(ctx).colorScheme;
             final text = Theme.of(ctx).textTheme;
 
-            final modes = themeModeSpecs();
-            final presets = brandPresets();
+            final modes = _themeModesExtended();
+            final presets = _presetsForMode(themeCtrl.themeModeId);
+
+            final bool isIndependent = themeCtrl.themeModeId == 'independent';
+            final String modeGuide = isIndependent
+                ? '독립 모드는 색 패키지가 배경/텍스트/하이라이트를 직접 결정합니다.'
+                : '컨셉 컬러는 포인트(primary)만 변경되고, 표면(surfaces)은 중립으로 유지됩니다.';
 
             return AlertDialog(
               insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
@@ -126,7 +180,7 @@ class _MinorHomeDashBoardBottomSheetState extends State<MinorHomeDashBoardBottom
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        '테마 모드(시스템/라이트/다크)와 색 프리셋을 선택하면 앱 전체에 즉시 적용됩니다.',
+                        '테마 모드(시스템/라이트/다크/독립)와 색 패키지를 선택하면 앱 전체에 즉시 적용됩니다.',
                         style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                       ),
                       const SizedBox(height: 16),
@@ -149,7 +203,7 @@ class _MinorHomeDashBoardBottomSheetState extends State<MinorHomeDashBoardBottom
                           return ChoiceChip(
                             selected: selected,
                             onSelected: (_) async {
-                              await themeCtrl.setThemeModeId(m.id);
+                              await _setThemeModeWithPresetFix(themeCtrl, m.id);
                             },
                             label: Row(
                               mainAxisSize: MainAxisSize.min,
@@ -170,7 +224,7 @@ class _MinorHomeDashBoardBottomSheetState extends State<MinorHomeDashBoardBottom
                       // ─────────────────────────────────────────────
                       // ✅ 프리셋 섹션
                       Text(
-                        '테마 색(프리셋)',
+                        '색 패키지',
                         style: text.titleSmall?.copyWith(
                           fontWeight: FontWeight.w800,
                           color: cs.onSurface,
@@ -178,7 +232,7 @@ class _MinorHomeDashBoardBottomSheetState extends State<MinorHomeDashBoardBottom
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        '컨셉 컬러는 포인트(primary)만 변경되고, 표면(surfaces)은 중립으로 유지됩니다.',
+                        modeGuide,
                         style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                       ),
                       const SizedBox(height: 12),
@@ -327,12 +381,12 @@ class _MinorHomeDashBoardBottomSheetState extends State<MinorHomeDashBoardBottom
                           ),
                           const SizedBox(height: 16),
 
-                          // ✅ [추가] 테마 설정(다크/색상) 버튼
+                          // ✅ 테마 설정 버튼
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
                               icon: const Icon(Icons.palette_outlined),
-                              label: const Text('테마 설정(다크/색상)'),
+                              label: const Text('테마 설정(모드/색상)'),
                               style: _outlinedSurfaceBtnStyle(
                                 context,
                                 borderColor: cs.primary.withOpacity(0.85),

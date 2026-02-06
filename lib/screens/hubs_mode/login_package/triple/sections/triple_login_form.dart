@@ -1,27 +1,27 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../routes.dart'; // ✅ AppRoutes 사용
-import '../simple_login_controller.dart';
+import '../../../../../routes.dart';
+import '../triple_login_controller.dart';
 
 // ✅ Trace 기록용 Recorder
 import '../../../../../screens/hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
 
-class SimpleLoginForm extends StatefulWidget {
-  final SimpleLoginController controller;
+class TripleLoginForm extends StatefulWidget {
+  final TripleLoginController controller;
 
-  const SimpleLoginForm({super.key, required this.controller});
+  const TripleLoginForm({super.key, required this.controller});
 
   @override
-  State<SimpleLoginForm> createState() => _SimpleLoginFormState();
+  State<TripleLoginForm> createState() => _TripleLoginFormState();
 }
 
-class _SimpleLoginFormState extends State<SimpleLoginForm> {
-  late final SimpleLoginController _controller;
+class _TripleLoginFormState extends State<TripleLoginForm> {
+  late final TripleLoginController _controller;
 
   @override
   void initState() {
     super.initState();
-    _controller = widget.controller; // ✅ init은 상위(LoginScreen)에서만 수행
+    _controller = widget.controller;
   }
 
   void _trace(String name, {Map<String, dynamic>? meta}) {
@@ -40,9 +40,9 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
     if (_controller.isLoading) return;
 
     _trace(
-      '약식 로그인 버튼',
+      '노말 로그인 버튼',
       meta: <String, dynamic>{
-        'screen': 'simple_login',
+        'screen': 'normal_login',
         'action': 'login',
       },
     );
@@ -54,7 +54,7 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
     _trace(
       '회사 로고(상단)',
       meta: <String, dynamic>{
-        'screen': 'simple_login',
+        'screen': 'normal_login',
         'asset': 'assets/images/pelican.png',
         'action': 'tap',
       },
@@ -65,7 +65,7 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
     _trace(
       '회사 로고(펠리컨)',
       meta: <String, dynamic>{
-        'screen': 'simple_login',
+        'screen': 'normal_login',
         'asset': 'assets/images/pelican.png',
         'action': 'back_to_selector',
         'to': AppRoutes.selector,
@@ -78,14 +78,10 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final baseTheme = Theme.of(context);
+  ThemeData _buildBrandLocalTheme(ThemeData baseTheme) {
     final cs = baseTheme.colorScheme;
 
-    // ✅ 컨셉 테마(ColorScheme) 기반으로만 로컬 스타일 정리
-    // - AppCardPalette/모드 시그니처 컬러 제거
-    final themed = baseTheme.copyWith(
+    return baseTheme.copyWith(
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: cs.primary,
@@ -96,7 +92,7 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
             borderRadius: BorderRadius.circular(10),
           ),
           elevation: 1.5,
-          shadowColor: cs.primary.withOpacity(0.25),
+          shadowColor: cs.shadow.withOpacity(0.18),
         ),
       ),
       iconButtonTheme: IconButtonThemeData(
@@ -111,6 +107,24 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
         selectionHandleColor: cs.primary,
       ),
     );
+  }
+
+  TextStyle _screenTagStyle(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+
+    return (text.labelSmall ?? const TextStyle(fontSize: 11)).copyWith(
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
+      color: cs.onSurfaceVariant.withOpacity(0.80),
+      letterSpacing: 0.2,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final baseTheme = Theme.of(context);
+    final themed = _buildBrandLocalTheme(baseTheme);
 
     return Material(
       color: Colors.transparent,
@@ -122,27 +136,19 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
             child: Column(
               children: [
                 const SizedBox(height: 12),
-
-                // ⬇️ 화면 식별 태그(하드코딩 제거 → onSurfaceVariant)
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Padding(
                     padding: const EdgeInsets.only(left: 4, bottom: 8),
                     child: Semantics(
-                      label: 'screen_tag: simple login',
+                      label: 'screen_tag: normal login',
                       child: Text(
-                        'simple login',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: cs.onSurfaceVariant.withOpacity(0.80),
-                          letterSpacing: 0.2,
-                        ),
+                        'normal login',
+                        style: _screenTagStyle(context),
                       ),
                     ),
                   ),
                 ),
-
                 GestureDetector(
                   onTap: _onTopCompanyLogoTapped,
                   child: SizedBox(
@@ -150,10 +156,8 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
                     child: Image.asset('assets/images/pelican.png'),
                   ),
                 ),
-
                 const SizedBox(height: 12),
 
-                // 이름
                 TextField(
                   controller: _controller.nameController,
                   focusNode: _controller.nameFocus,
@@ -166,7 +170,6 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
                 ),
                 const SizedBox(height: 16),
 
-                // 전화번호
                 TextField(
                   controller: _controller.phoneController,
                   focusNode: _controller.phoneFocus,
@@ -181,7 +184,6 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
                 ),
                 const SizedBox(height: 16),
 
-                // 비밀번호
                 TextField(
                   controller: _controller.passwordController,
                   focusNode: _controller.passwordFocus,
@@ -201,13 +203,12 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
 
                 const SizedBox(height: 32),
 
-                // ▶ 버튼 라벨: "약식 로그인"
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.login),
                     label: Text(
-                      _controller.isLoading ? '로딩 중...' : '약식 로그인',
+                      _controller.isLoading ? '로딩 중...' : '노말 로그인',
                       style: const TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -220,7 +221,6 @@ class _SimpleLoginFormState extends State<SimpleLoginForm> {
 
                 const SizedBox(height: 1),
 
-                // ▼ 펠리컨: 탭하면 Selector로 복귀 + Trace 기록
                 Center(
                   child: InkWell(
                     onTap: _onPelicanLogoTapped,

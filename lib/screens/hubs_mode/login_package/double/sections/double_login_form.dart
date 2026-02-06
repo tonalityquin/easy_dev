@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../../../../../routes.dart';
-import '../lite_login_controller.dart';
+import '../double_login_controller.dart';
 
 // ✅ Trace 기록용 Recorder
 import '../../../../../screens/hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
 
 class DoubleLoginForm extends StatefulWidget {
-  final LiteLoginController controller;
+  final DoubleLoginController controller;
 
   const DoubleLoginForm({super.key, required this.controller});
 
@@ -16,7 +16,7 @@ class DoubleLoginForm extends StatefulWidget {
 }
 
 class _DoubleLoginFormState extends State<DoubleLoginForm> {
-  late final LiteLoginController _controller;
+  late final DoubleLoginController _controller;
 
   @override
   void initState() {
@@ -78,13 +78,13 @@ class _DoubleLoginFormState extends State<DoubleLoginForm> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final baseTheme = Theme.of(context);
+  ThemeData _buildBrandLocalTheme(ThemeData baseTheme) {
     final cs = baseTheme.colorScheme;
 
-    // ✅ 로컬 스타일은 “현재 컨셉 테마(ColorScheme)”를 그대로 사용
-    final themed = baseTheme.copyWith(
+    // ✅ “브랜드 테마 수정안” 반영:
+    // - 모든 색은 ColorScheme 기반
+    // - 그림자도 primary tint 대신 cs.shadow 기반(중립)
+    return baseTheme.copyWith(
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: cs.primary,
@@ -95,7 +95,7 @@ class _DoubleLoginFormState extends State<DoubleLoginForm> {
             borderRadius: BorderRadius.circular(10),
           ),
           elevation: 1.5,
-          shadowColor: cs.primary.withOpacity(0.25),
+          shadowColor: cs.shadow.withOpacity(0.18),
         ),
       ),
       iconButtonTheme: IconButtonThemeData(
@@ -110,6 +110,24 @@ class _DoubleLoginFormState extends State<DoubleLoginForm> {
         selectionHandleColor: cs.primary,
       ),
     );
+  }
+
+  TextStyle _screenTagStyle(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+
+    return (text.labelSmall ?? const TextStyle(fontSize: 11)).copyWith(
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
+      color: cs.onSurfaceVariant.withOpacity(0.80),
+      letterSpacing: 0.2,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final baseTheme = Theme.of(context);
+    final themed = _buildBrandLocalTheme(baseTheme);
 
     return Material(
       color: Colors.transparent,
@@ -130,12 +148,7 @@ class _DoubleLoginFormState extends State<DoubleLoginForm> {
                       label: 'screen_tag: WorkFlow A login',
                       child: Text(
                         'WorkFlow A login',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: cs.onSurfaceVariant.withOpacity(0.80),
-                          letterSpacing: 0.2,
-                        ),
+                        style: _screenTagStyle(context),
                       ),
                     ),
                   ),

@@ -315,13 +315,9 @@ class MonthlyPlateController {
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // ✅ 결제 전용: 검증 + 처리(섹션에서 호출)
+  // ✅ 결제 전용: 검증 + 처리
   // ─────────────────────────────────────────────────────────────────────────────
 
-  /// 결제 전용 검증
-  /// - 번호판 유효성
-  /// - amountController 유효성(결제 금액)
-  /// - (선택) 결제는 통상 edit 상태에서 수행되므로 isEditMode=false라도 막지 않음
   bool validatePaymentBeforeWrite(BuildContext context) {
     if (!isInputValid()) {
       showFailedSnackbar(context, '번호판을 먼저 정확히 입력하세요.');
@@ -334,28 +330,15 @@ class MonthlyPlateController {
       return false;
     }
 
-    // 결제는 기존 등록된 문서가 있어야 의미가 큼: 필요하면 체크(선택)
-    // final area = context.read<AreaState>().currentArea;
-    // final docId = '${buildPlateNumber()}_$area';
-    // (존재 체크는 processPayment에서 트랜잭션/업데이트로 처리 가능)
-
     return true;
   }
 
-  /// 결제 처리
-  /// - payment_history 기록
-  /// - 연장 체크 시 날짜 자동 연장 반영(로컬 컨트롤러 값 갱신)
-  /// - 연장 후, 연장된 start/end를 monthly_plate_status 문서에 저장(정합성)
   Future<void> processPayment(BuildContext context) async {
-    // 1) 결제 내역 기록
     await recordPaymentHistory(context);
 
-    // 2) 연장 처리(필요 시)
     if (isExtended) {
-      // 컨트롤러 텍스트를 다음 기간으로 갱신
       await extendDatesIfNeeded();
 
-      // 연장된 기간을 문서에 저장(결제 이력만 기록하면 UI/데이터 불일치가 생길 수 있음)
       final area = context.read<AreaState>().currentArea;
       final plateNumber = buildPlateNumber();
       final docId = '${plateNumber}_$area';
@@ -398,7 +381,6 @@ class MonthlyPlateController {
     );
   }
 
-  /// customStatus/statusList 초기화(문서 유지)
   Future<void> deleteCustomStatusFromFirestore(BuildContext context) async {
     final plateNumber = buildPlateNumber();
     final area = context.read<AreaState>().currentArea;
@@ -440,7 +422,6 @@ class MonthlyPlateController {
     }
   }
 
-  /// 기존 문서 데이터 로딩(편집 진입 시)
   Future<void> loadExistingData(
       Map<String, dynamic> data, {
         required String docId,
