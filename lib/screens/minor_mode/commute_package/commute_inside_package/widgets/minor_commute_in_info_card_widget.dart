@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'package:easydev/states/user/user_state.dart';
+import '../../../../../states/user/user_state.dart';
 
 class MinorCommuteInInfoCardWidget extends StatelessWidget {
   const MinorCommuteInInfoCardWidget({super.key});

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:easydev/offlines/sql/offline_auth_service.dart';
+
+import '../../sql/offline_auth_service.dart';
 
 class OfflineLoginController {
   static const String allowedName = 'tester';

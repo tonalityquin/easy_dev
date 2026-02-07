@@ -11,6 +11,34 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../../utils/snackbar_helper.dart';
 
+/// ✅ Triple 파일 내부 전용 mid 정책(외부로 export되지 않음)
+class _PlateMidPolicy {
+  static const List<String> allowedKoreanMids = [
+    '가','나','다','라','마','거','너','더','러','머','버','서','어','저',
+    '고','노','도','로','모','보','소','오','조','구','누','두','루','무','부','수','우','주',
+    '하','허','호','배'
+  ];
+
+  static const Map<String, String> midNormalize = {
+    '리': '러',
+    '이': '어',
+    '지': '저',
+    '히': '허',
+    '기': '거',
+    '니': '너',
+    '디': '더',
+    '미': '머',
+    '비': '버',
+    '시': '서',
+  };
+
+  static String normalizeMid(String mid) => midNormalize[mid] ?? mid;
+
+  static bool isAllowedMid(String mid) => allowedKoreanMids.contains(normalizeMid(mid));
+
+  static String allowedMidCharClass() => allowedKoreanMids.join();
+}
+
 /// 자동 스틸샷 OCR + 하단 후보 칩 탭 삽입 지원
 /// - 일정 간격 takePicture() → OCR
 /// - 자동 삽입(엄격/느슨 매칭) 유지
@@ -32,52 +60,31 @@ class _TripleLiveOcrPageState extends State<TripleLiveOcrPage> {
   bool _shooting = false;
   bool _torch = false;
 
-  // 자동 루프
   int _autoIntervalMs = 900;
   int _attempt = 0;
   final int _hintEvery = 10;
-  bool _completed = false;            // pop 중복 방지
-  bool _allowForceInsert = false;     // (옵션) 임의문자 자동 강제삽입
+  bool _completed = false;
+  bool _allowForceInsert = false;
 
-  // UI
   Timer? _firstHintTimer;
   String? _lastText;
   String? _debugText;
   List<String> _candidates = const [];
 
-  // 칩 하단 여백(시스템 제스처 바와 시각적 간격)
   static const double _chipBottomSpacer = 24;
 
-  // 탭-투-포커스 좌표 보정용
   Size? _previewSizeLogical;
 
-  // 가운데 한글 허용 리스트
-  static const List<String> _allowedKoreanMids = [
-    '가','나','다','라','마','거','너','더','러','머','버','서','어','저',
-    '고','노','도','로','모','보','소','오','조','구','누','두','루','무','부','수','우','주',
-    '하','허','호','배'
-  ];
-
-  // 흔한 OCR 치환
   static const Map<String, String> _charMap = {
-    'O': '0', 'o': '0',
+    'O': '0', 'o': '0', '○': '0',
     'I': '1', 'l': '1', 'í': '1',
     'B': '8', 'S': '5',
+
+    '０':'0','１':'1','２':'2','３':'3','４':'4',
+    '５':'5','６':'6','７':'7','８':'8','９':'9',
   };
 
-  // 가운데 글자 보정(리→러 등)
-  static const Map<String, String> _midNormalize = {
-    '리': '러',
-    '이': '어',
-    '지': '저',
-    '히': '허',
-    '기': '거',
-    '니': '너',
-    '디': '더',
-    '미': '머',
-    '비': '버',
-    '시': '서',
-  };
+  static const String _plateSepPattern = r'[\s\.\-·•_]*';
 
   @override
   void initState() {
@@ -111,14 +118,16 @@ class _TripleLiveOcrPageState extends State<TripleLiveOcrPage> {
       );
       try {
         _controller = CameraController(
-          back, ResolutionPreset.high,
+          back,
+          ResolutionPreset.high,
           enableAudio: false,
           imageFormatGroup: ImageFormatGroup.yuv420,
         );
         await _controller!.initialize();
       } catch (_) {
         _controller = CameraController(
-          back, ResolutionPreset.medium,
+          back,
+          ResolutionPreset.medium,
           enableAudio: false,
           imageFormatGroup: ImageFormatGroup.yuv420,
         );
@@ -188,29 +197,25 @@ class _TripleLiveOcrPageState extends State<TripleLiveOcrPage> {
         _lastText = allText.replaceAll('\n', ' ');
         if (_lastText!.length > 120) _lastText = '${_lastText!.substring(0, 120)}…';
 
-        // 1) 엄격
         final strict = _extractPlateStrict(allText);
         if (strict != null) {
           _return(strict);
           return;
         }
 
-        // 2) 느슨(보정)
         final loose = _extractPlateLoose(allText);
         if (loose != null) {
           _return(loose);
           return;
         }
 
-        // 3) 후보(임의문자/숫자만 6~7/기하 기반) 갱신
         final set = <String>{};
-        set.addAll(_extractPlateCandidatesAnyChar(allText));     // (2~3).(3~4)
-        set.addAll(_extractDigitsOnlyNoMidCandidates(allText));  // 6~7 digits only
-        set.addAll(_extractByGeometryCandidates(result));        // 라인 기하 기반 분리
+        set.addAll(_extractPlateCandidatesAnyChar(allText));
+        set.addAll(_extractDigitsOnlyNoMidCandidates(allText));
+        set.addAll(_extractByGeometryCandidates(result));
         final list = _rankCandidates(set.toList());
         if (mounted) setState(() => _candidates = list);
 
-        // (옵션) 임의문자 자동 강제삽입
         if (_allowForceInsert) {
           final force = _extractPlateAnyChar(allText);
           if (force != null) {
@@ -242,19 +247,42 @@ class _TripleLiveOcrPageState extends State<TripleLiveOcrPage> {
     }
   }
 
-  String _normalize(String text) {
+  // ─────────────── 인식률 최우선 정규화 ───────────────
+
+  String _applyCharMap(String text) {
     var t = text;
-    t = t.replaceAll(RegExp(r'\s+'), ' ');
     _charMap.forEach((k, v) => t = t.replaceAll(k, v));
-    return t.trim();
+    return t;
   }
 
-  /// 엄격: (2~3)숫자 + (허용한글 1) + (4)숫자
+  String _normalizePreserveNewlines(String text) {
+    final src = text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    final lines = src.split('\n');
+    final out = <String>[];
+    for (final line in lines) {
+      var t = _applyCharMap(line);
+      t = t.replaceAll(RegExp(r'[ \t]+'), ' ').trim();
+      out.add(t);
+    }
+    return out.join('\n');
+  }
+
+  String _normalizeFlat(String text) {
+    final t = _normalizePreserveNewlines(text).replaceAll('\n', ' ');
+    return t.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  // ─────────────── 추출 로직 ───────────────
+
   String? _extractPlateStrict(String text) {
-    final norm = _normalize(text);
-    final allowed = _allowedKoreanMids.join();
-    final strict = RegExp(r'(?<!\d)(\d{2,3})\s*([' + allowed + r'])\s*(\d{4})(?!\d)');
-    final lines = norm.split('\n');
+    final normLines = _normalizePreserveNewlines(text);
+    final allowed = _PlateMidPolicy.allowedMidCharClass();
+
+    final strict = RegExp(
+      r'(?<!\d)(\d{2,3})' + _plateSepPattern + r'([' + allowed + r'])' + _plateSepPattern + r'(\d{4})(?!\d)',
+    );
+
+    final lines = normLines.split('\n');
 
     for (final line in lines) {
       final m = strict.firstMatch(line);
@@ -264,35 +292,42 @@ class _TripleLiveOcrPageState extends State<TripleLiveOcrPage> {
       final m = strict.firstMatch('${lines[i]} ${lines[i + 1]}');
       if (m != null) return '${m.group(1)!}${m.group(2)!}${m.group(3)!}';
     }
-    final m = strict.firstMatch(norm.replaceAll('\n', ' '));
+
+    final flat = normLines.replaceAll('\n', ' ');
+    final m = strict.firstMatch(flat);
     if (m != null) return '${m.group(1)!}${m.group(2)!}${m.group(3)!}';
+
     return null;
   }
 
-  /// 느슨 + 가운데 보정 → 허용한글 재검증
   String? _extractPlateLoose(String text) {
-    final norm = _normalize(text).replaceAll('\n', ' ');
-    final m = RegExp(r'(\d{2,3})\s*([가-힣])\s*(\d{4})').firstMatch(norm);
-    if (m == null) return null;
-    var mid = m.group(2)!;
-    mid = _midNormalize[mid] ?? mid;
-    if (!_allowedKoreanMids.contains(mid)) return null;
-    return '${m.group(1)!}$mid${m.group(3)!}';
+    final norm = _normalizeFlat(text);
+
+    final reg = RegExp(
+      r'(?<!\d)(\d{2,3})' + _plateSepPattern + r'([가-힣])' + _plateSepPattern + r'(\d{4})(?!\d)',
+    );
+
+    for (final m in reg.allMatches(norm)) {
+      final rawMid = m.group(2)!;
+      final mid = _PlateMidPolicy.normalizeMid(rawMid);
+      if (!_PlateMidPolicy.isAllowedMid(mid)) continue;
+      return '${m.group(1)!}$mid${m.group(3)!}';
+    }
+    return null;
   }
 
-  /// (옵션 자동강제) 가운데 어떤 문자든 허용 → 하나만
   String? _extractPlateAnyChar(String text) {
-    final norm = _normalize(text).replaceAll('\n', ' ');
+    final norm = _normalizeFlat(text);
     final m = RegExp(r'(\d{2,3})\s*(.)\s*(\d{4})').firstMatch(norm);
     if (m == null) return null;
     return '${m.group(1)!}${m.group(2)!}${m.group(3)!}';
   }
 
-  /// 칩용 후보: (2~3).(3~4) (임의문자 허용, 여러 개)
   List<String> _extractPlateCandidatesAnyChar(String text) {
-    final norm = _normalize(text).replaceAll('\n', ' ');
+    final norm = _normalizeFlat(text);
     final reg = RegExp(r'(\d{2,3})\s*(.)\s*(\d{3,4})');
     final set = <String>{};
+
     for (final m in reg.allMatches(norm)) {
       final f = m.group(1)!;
       final mid = m.group(2)!;
@@ -300,25 +335,22 @@ class _TripleLiveOcrPageState extends State<TripleLiveOcrPage> {
       set.add('$f$mid$b');
 
       if (RegExp(r'^[가-힣]$').hasMatch(mid)) {
-        final fixed = _midNormalize[mid];
+        final fixed = _PlateMidPolicy.midNormalize[mid];
         if (fixed != null) set.add('$f$fixed$b');
       }
     }
     return set.toList();
   }
 
-  /// 숫자만 6/7자리(가운데 누락) → digits-only 후보 반환
   List<String> _extractDigitsOnlyNoMidCandidates(String text) {
-    final t = _normalize(text).replaceAll('\n', ' ');
+    final t = _normalizeFlat(text);
     final list = <String>[];
     for (final m in RegExp(r'(?<!\d)(\d{6,7})(?!\d)').allMatches(t)) {
-      final s = m.group(1)!; // 6 or 7 digits
-      list.add(s);
+      list.add(m.group(1)!);
     }
     return list;
   }
 
-  /// ML Kit 기하(간격/높이) 기반으로 오른쪽 4자리 묶음을 찾아 앞/뒤 분리 → digits-only 후보
   List<String> _extractByGeometryCandidates(RecognizedText result) {
     final outs = <String>{};
 
@@ -327,7 +359,6 @@ class _TripleLiveOcrPageState extends State<TripleLiveOcrPage> {
         final els = line.elements;
         if (els.length < 6) continue;
 
-        // 숫자 엘리먼트만 추출
         final digits = <(TextElement el, Rect box)>[];
         for (final el in els) {
           if (RegExp(r'^\d$').hasMatch(el.text)) {
@@ -336,28 +367,27 @@ class _TripleLiveOcrPageState extends State<TripleLiveOcrPage> {
         }
         if (digits.length < 6) continue;
 
-        digits.sort((a,b) => a.$2.center.dx.compareTo(b.$2.center.dx));
+        digits.sort((a, b) => a.$2.center.dx.compareTo(b.$2.center.dx));
 
-        // 뒤 4자리 탐색
         for (int i = digits.length - 4; i >= 0; i--) {
-          final win = digits.sublist(i, i+4);
+          final win = digits.sublist(i, i + 4);
           final heights = win.map((e) => e.$2.height).toList();
           final gaps = [
             win[1].$2.left - win[0].$2.right,
             win[2].$2.left - win[1].$2.right,
             win[3].$2.left - win[2].$2.right,
           ];
-          final hMax = heights.reduce((a,b)=>a>b?a:b);
-          final hMin = heights.reduce((a,b)=>a<b?a:b);
+          final hMax = heights.reduce((a, b) => a > b ? a : b);
+          final hMin = heights.reduce((a, b) => a < b ? a : b);
           final heightOk = (hMax / (hMin == 0 ? 1 : hMin)) < 1.25;
           final gapOk = gaps.every((g) => g > -2 && g < hMax * 0.8);
           if (!(heightOk && gapOk)) continue;
 
-          final back = win.map((e) => e.$1.text).join(); // 4 digits
+          final back = win.map((e) => e.$1.text).join();
           final left = digits.sublist(0, i);
           if (left.length == 2 || left.length == 3) {
             final front = left.map((e) => e.$1.text).join();
-            outs.add('$front$back'); // digits-only (2+4 or 3+4)
+            outs.add('$front$back');
           }
         }
       }
@@ -365,21 +395,17 @@ class _TripleLiveOcrPageState extends State<TripleLiveOcrPage> {
     return outs.toList();
   }
 
-  /// 후보 정렬: 완전형(2~3.4)에 가까울수록, 다음으로 digits-only(6/7) 우선
   List<String> _rankCandidates(List<String> list) {
     int score(String s) {
-      // 완전형 (2~3)(임의)(4)
       if (RegExp(r'^\d{2,3}.\d{4}$').hasMatch(s)) return 0;
-      // digits-only 7 → 3+4, 6 → 2+4
       if (RegExp(r'^\d{7}$').hasMatch(s)) return 1;
       if (RegExp(r'^\d{6}$').hasMatch(s)) return 2;
-      // 그 외
       return 9;
     }
+
     final uniq = {...list}.toList();
-    uniq.sort((a,b) => score(a).compareTo(score(b)));
-    // 너무 많으면 12개까지만
-    return uniq.length > 12 ? uniq.sublist(0,12) : uniq;
+    uniq.sort((a, b) => score(a).compareTo(score(b)));
+    return uniq.length > 12 ? uniq.sublist(0, 12) : uniq;
   }
 
   void _return(String plate) {
@@ -416,19 +442,17 @@ class _TripleLiveOcrPageState extends State<TripleLiveOcrPage> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        automaticallyImplyLeading: false,                  // 🔹 뒤로가기 화살표 제거
-        backgroundColor: Colors.black,                     // 🔹 검정 배경
-        foregroundColor: Colors.white,                     // 🔹 아이콘/텍스트 흰색
-        systemOverlayStyle: SystemUiOverlayStyle.light,    // 🔹 상태바 아이콘 밝게
+        automaticallyImplyLeading: false,
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        systemOverlayStyle: SystemUiOverlayStyle.light,
         elevation: 0,
         actions: [
-          // 강제 자동삽입 토글(임의문자 허용)
           IconButton(
             tooltip: _allowForceInsert ? '강제삽입 ON' : '강제삽입 OFF',
             onPressed: () => setState(() => _allowForceInsert = !_allowForceInsert),
             icon: Icon(_allowForceInsert ? Icons.fact_check : Icons.fact_check_outlined),
           ),
-          // 토치
           IconButton(
             tooltip: _torch ? '토치 끄기' : '토치 켜기',
             onPressed: () async {
@@ -440,7 +464,6 @@ class _TripleLiveOcrPageState extends State<TripleLiveOcrPage> {
             },
             icon: Icon(_torch ? Icons.flash_on : Icons.flash_off),
           ),
-          // 자동 on/off
           IconButton(
             tooltip: _autoRunning ? '일시정지' : '재생',
             onPressed: () {
@@ -463,8 +486,6 @@ class _TripleLiveOcrPageState extends State<TripleLiveOcrPage> {
       body: Column(
         children: [
           Expanded(child: preview),
-
-          // 디버그/최근 텍스트
           if (_debugText != null || _lastText != null)
             Container(
               width: double.infinity,
@@ -488,11 +509,9 @@ class _TripleLiveOcrPageState extends State<TripleLiveOcrPage> {
                 ],
               ),
             ),
-
-          // 후보 칩 (SafeArea로 하단 시스템 UI와 겹침 방지 + 추가 여백)
           SafeArea(
             top: false, left: false, right: false, bottom: true,
-            minimum: const EdgeInsets.only(bottom: 8), // 조금 더 띄움
+            minimum: const EdgeInsets.only(bottom: 8),
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
@@ -522,13 +541,13 @@ class _TripleLiveOcrPageState extends State<TripleLiveOcrPage> {
     }
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.center, // 칩 묶음도 가운데 정렬
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          alignment: WrapAlignment.center,     // 가로 가운데
-          runAlignment: WrapAlignment.center,  // 줄 바꿈 행도 가운데
+          alignment: WrapAlignment.center,
+          runAlignment: WrapAlignment.center,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: _candidates.map((cand) {
             return ActionChip(

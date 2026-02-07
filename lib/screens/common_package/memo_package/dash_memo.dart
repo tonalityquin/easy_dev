@@ -10,10 +10,8 @@ import 'package:googleapis/gmail/v1.dart' as gmail;
 import '../../../../../../utils/app_navigator.dart';
 import '../../../../../../utils/google_auth_session.dart';
 import '../../../../../../utils/api/email_config.dart';
-
-// ✅ API 디버그(통합 에러 로그) 로거 + (옵션) 디버그 UI
-import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
-import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_bottom_sheet.dart';
+import '../../hubs_mode/dev_package/debug_package/debug_api_logger.dart';
+import '../../hubs_mode/dev_package/debug_package/debug_bottom_sheet.dart';
 
 // ── Brand palette (minimal use)
 const Color _base = Color(0xFF0D47A1);

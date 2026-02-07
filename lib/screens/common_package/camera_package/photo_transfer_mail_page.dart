@@ -8,13 +8,9 @@ import 'package:flutter/services.dart';
 import 'package:googleapis/gmail/v1.dart' as gmail;
 import 'package:mime/mime.dart';
 
-import 'package:easydev/utils/api/email_config.dart';
-import 'package:easydev/utils/google_auth_v7.dart';
-
-// ✅ 기존 프로젝트에 이미 존재하는 API 에러 로거를 재사용(통합 로그 파일: api_log.txt)
-// 경로는 프로젝트 구조에 맞게 조정하세요.
-import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
-
+import '../../../utils/api/email_config.dart';
+import '../../../utils/google_auth_v7.dart';
+import '../../hubs_mode/dev_package/debug_package/debug_api_logger.dart';
 import 'photo_transfer_styles.dart';
 
 class PhotoTransferMailPage extends StatefulWidget {

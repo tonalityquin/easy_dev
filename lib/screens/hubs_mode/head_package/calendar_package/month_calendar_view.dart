@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 
-// ✅ API 디버그(통합 에러 로그) 로거
-// 프로젝트 패키지/경로에 맞게 조정하세요.
-import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
+import '../../dev_package/debug_package/debug_api_logger.dart';
 
 class MonthCalendarView extends StatefulWidget {
   const MonthCalendarView({

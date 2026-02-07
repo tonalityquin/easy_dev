@@ -5,16 +5,12 @@ import '../../../../../../states/user/user_state.dart';
 import '../../../../../../states/area/area_state.dart';
 
 // ✅ 역할별로 다른 문서철 바텀시트를 사용하기 위해 두 파일 모두 import
+import '../../../../common_package/camera_package/photo_transfer_mail_page.dart';
 import '../../../../common_package/memo_package/dash_memo.dart';
 import '../../../../common_package/sheet_tool/fielder_document_box_sheet.dart';
 import '../../../../common_package/sheet_tool/leader_document_box_sheet.dart';
+import '../../../../secondary_page.dart';
 import 'widgets/triple_dashboard_punch_recorder_section.dart';
-
-// ✅ 사진 전송(공용) 페이지
-import 'package:easydev/screens/common_package/camera_package/photo_transfer_mail_page.dart';
-
-// ✅ 보조 페이지
-import 'package:easydev/screens/secondary_page.dart';
 
 // ✅ 전역 테마 컨트롤러 + 브랜드 프리셋/테마모드 스펙
 import '../../../../../../theme_prefs_controller.dart';

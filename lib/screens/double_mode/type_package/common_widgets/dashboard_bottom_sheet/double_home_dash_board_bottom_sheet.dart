@@ -4,13 +4,12 @@ import 'package:provider/provider.dart';
 import '../../../../../../states/user/user_state.dart';
 import '../../../../../../states/area/area_state.dart';
 
+import '../../../../common_package/camera_package/photo_transfer_mail_page.dart';
 import '../../../../common_package/memo_package/dash_memo.dart';
 import '../../../../common_package/sheet_tool/fielder_document_box_sheet.dart';
 import '../../../../common_package/sheet_tool/leader_document_box_sheet.dart';
+import '../../../../secondary_page.dart';
 import 'widgets/double_dashboard_punch_recorder_section.dart';
-
-import 'package:easydev/screens/common_package/camera_package/photo_transfer_mail_page.dart';
-import 'package:easydev/screens/secondary_page.dart';
 
 // ✅ 전역 테마 컨트롤러 + 브랜드 프리셋/테마모드 스펙
 import '../../../../../../theme_prefs_controller.dart';

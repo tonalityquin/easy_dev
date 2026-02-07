@@ -3,10 +3,10 @@ import 'package:provider/provider.dart';
 
 import '../../../../../../states/user/user_state.dart';
 import '../../../../../../utils/snackbar_helper.dart';
+import '../../../../../services/endTime_reminder_service.dart';
 import 'utils/minor_clock_out_save.dart';
 import 'utils/minor_break_save.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:easydev/services/endtime_reminder_service.dart';
 
 // ⬇️ SheetUploadResult import (경로는 snackbar_helper 와 동일 depth)
 import '../../../../../../utils/api/sheet_upload_result.dart';

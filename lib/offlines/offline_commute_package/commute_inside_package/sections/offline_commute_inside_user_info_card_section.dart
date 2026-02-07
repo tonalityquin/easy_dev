@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 
-import 'package:easydev/offlines/sql/offline_auth_service.dart';
-import 'package:easydev/offlines/sql/offline_session_model.dart';
 
 // ✅ AppCardPalette 정의 파일을 프로젝트 경로에 맞게 import 하세요.
-// 예) import 'package:easydev/theme/app_card_palette.dart';
 import '../../../../theme.dart';
+import '../../../sql/offline_auth_service.dart';
+import '../../../sql/offline_session_model.dart';
 
 /// ✅ _Palette 제거
 /// ✅ AppCardPalette(parking*)를 오프라인(=Offline Service) 톤으로 사용

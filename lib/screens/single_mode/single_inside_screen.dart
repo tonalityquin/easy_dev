@@ -13,14 +13,12 @@ import '../../../../states/user/user_state.dart';
 import '../../../utils/init/logout_helper.dart';
 import '../../services/endTime_reminder_service.dart';
 import '../common_package/chat_package/lite_chat_bottom_sheet.dart';
+import '../hubs_mode/dev_package/debug_package/debug_api_logger.dart';
 import 'sections/single_inside_header_widget_section.dart';
 import 'sections/widgets/single_inside_punch_recorder_section.dart';
 import 'sections/single_inside_document_box_button_section.dart';
 import 'sections/single_inside_report_button_section.dart';
 import 'single_inside_controller.dart';
-
-// ✅ API 디버그(통합 에러 로그) 로거
-import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
 
 enum SingleInsideMode {
   leader,

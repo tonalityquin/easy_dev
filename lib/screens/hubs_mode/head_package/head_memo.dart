@@ -11,8 +11,7 @@ import '../../../utils/api/email_config.dart';
 import '../../../utils/google_auth_session.dart';
 import 'package:googleapis/gmail/v1.dart' as gmail;
 
-// ✅ API 디버그(통합 에러 로그) 로거
-import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
+import '../dev_package/debug_package/debug_api_logger.dart';
 
 /// EasyMemo
 /// - 전역 navigatorKey로 안전한 컨텍스트 확보 (showModalBottomSheet)

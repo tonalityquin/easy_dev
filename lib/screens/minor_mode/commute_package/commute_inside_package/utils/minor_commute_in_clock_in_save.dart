@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'package:easydev/states/area/area_state.dart';
-import 'package:easydev/states/user/user_state.dart';
-import 'package:easydev/utils/api/sheet_upload_result.dart';
-
-// 약식 모드 SQLite 저장소 재사용
-import 'package:easydev/screens/single_mode/utils/att_brk_repository.dart';
+import '../../../../../states/area/area_state.dart';
+import '../../../../../states/user/user_state.dart';
+import '../../../../../utils/api/sheet_upload_result.dart';
+import '../../../../single_mode/utils/att_brk_repository.dart';
 
 class MinorCommuteInClockInSave {
   static Future<SheetUploadResult> uploadAttendanceJson({

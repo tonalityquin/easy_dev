@@ -3,11 +3,8 @@
 import 'dart:async';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 
-// ✅ 중앙 인증 세션만 사용
-import 'package:easydev/utils/google_auth_session.dart';
-
-// ✅ API 디버그(통합 에러 로그) 로거
-import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
+import '../../../../utils/google_auth_session.dart';
+import '../../dev_package/debug_package/debug_api_logger.dart';
 
 /// Google Calendar 서비스 (중앙 세션 재사용)
 ///

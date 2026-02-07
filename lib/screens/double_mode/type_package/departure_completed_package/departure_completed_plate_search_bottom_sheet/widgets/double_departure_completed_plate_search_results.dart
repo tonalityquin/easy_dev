@@ -1,8 +1,8 @@
-import 'package:easydev/enums/plate_type.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../../../../models/plate_model.dart';
+import '../../../../../../enums/plate_type.dart';
 
 class DoubleDepartureCompletedPlateSearchResults extends StatelessWidget {
   final List<PlateModel> results;

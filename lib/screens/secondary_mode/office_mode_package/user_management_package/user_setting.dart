@@ -2,14 +2,12 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../../../../models/user_model.dart';
+import '../../../../services/endTime_reminder_service.dart';
 import 'sections/user_password_display_section.dart';
 import 'sections/user_role_type_section.dart';
 import 'sections/user_input_section.dart';
 import 'sections/user_role_dropdown_section.dart';
 import 'sections/user_validation_helpers_section.dart';
-
-// ✅ endTime 리마인더 서비스 (프로젝트에서 실제 사용 중인 경로로 통일 권장)
-import 'package:easydev/services/endtime_reminder_service.dart';
 
 class UserSettingBottomSheet extends StatefulWidget {
   final Function(

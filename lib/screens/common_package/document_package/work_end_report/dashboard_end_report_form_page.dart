@@ -23,9 +23,9 @@ import '../../../../../../../utils/snackbar_helper.dart';
 import '../../../../../../../utils/block_dialogs/blocking_dialog.dart';
 import '../../../../../../../utils/block_dialogs/duration_blocking_dialog.dart';
 import '../../../common_package/document_package/backup/backup_signature_dialog.dart';
+import '../../../hubs_mode/dev_package/debug_package/debug_api_logger.dart';
+import '../../../hubs_mode/dev_package/debug_package/debug_bottom_sheet.dart';
 
-import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
-import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_bottom_sheet.dart';
 
 /// ✅ end-report 전용 버튼 스타일 (ColorScheme 기반)
 /// - 하드코딩 팔레트 제거

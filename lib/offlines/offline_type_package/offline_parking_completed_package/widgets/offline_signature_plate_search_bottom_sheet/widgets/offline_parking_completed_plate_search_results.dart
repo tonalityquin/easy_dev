@@ -1,6 +1,6 @@
-import 'package:easydev/enums/plate_type.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart'; // 추가: 통화 포맷을 위해
+import '../../../../../../enums/plate_type.dart';
 import '../../../../../../models/plate_model.dart';
 
 class ParkingCompletedPlateSearchResults extends StatelessWidget {

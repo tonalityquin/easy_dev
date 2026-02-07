@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:googleapis/sheets/v4.dart' as sheets;
 import 'package:shared_preferences/shared_preferences.dart';
 
-// ✅ 중앙 인증 세션만 사용 (최초 1회 로그인 후 재사용)
-import 'package:easydev/utils/google_auth_session.dart';
+import '../../../utils/google_auth_session.dart';
+
 
 enum TimesheetTab { attendance, breakTime }
 

@@ -11,6 +11,37 @@ import 'package:permission_handler/permission_handler.dart';
 
 import '../../../utils/snackbar_helper.dart';
 
+/// ✅ Double 파일 내부 전용 mid 정책(외부로 export되지 않음)
+class _PlateMidPolicy {
+  static const List<String> allowedKoreanMids = [
+    '가','나','다','라','마','거','너','더','러','머','버','서','어','저',
+    '고','노','도','로','모','보','소','오','조','구','누','두','루','무','부','수','우','주',
+    '하','허','호','배'
+  ];
+
+  static const Map<String, String> midNormalize = {
+    '리': '러',
+    '이': '어',
+    '지': '저',
+    '히': '허',
+    '기': '거',
+    '니': '너',
+    '디': '더',
+    '미': '머',
+    '비': '버',
+    '시': '서',
+  };
+
+  static String normalizeMid(String mid) => midNormalize[mid] ?? mid;
+
+  static bool isAllowedMid(String mid) => allowedKoreanMids.contains(normalizeMid(mid));
+
+  static String allowedMidCharClass() {
+    // 한글만 있으므로 문자클래스 escape 불필요
+    return allowedKoreanMids.join();
+  }
+}
+
 /// 자동 스틸샷 OCR + 하단 후보 칩 탭 삽입 지원
 /// - 일정 간격 takePicture() → OCR
 /// - 자동 삽입(엄격/느슨 매칭) 유지
@@ -47,30 +78,20 @@ class _DoubleLiveOcrPageState extends State<DoubleLiveOcrPage> {
 
   Size? _previewSizeLogical;
 
-  static const List<String> _allowedKoreanMids = [
-    '가','나','다','라','마','거','너','더','러','머','버','서','어','저',
-    '고','노','도','로','모','보','소','오','조','구','누','두','루','무','부','수','우','주',
-    '하','허','호','배'
-  ];
-
+  // 흔한 OCR 치환(인식률 개선)
   static const Map<String, String> _charMap = {
-    'O': '0', 'o': '0',
+    // 알파벳/기호 혼동
+    'O': '0', 'o': '0', '○': '0',
     'I': '1', 'l': '1', 'í': '1',
     'B': '8', 'S': '5',
+
+    // 전각 숫자(０-９)
+    '０':'0','１':'1','２':'2','３':'3','４':'4',
+    '５':'5','６':'6','７':'7','８':'8','９':'9',
   };
 
-  static const Map<String, String> _midNormalize = {
-    '리': '러',
-    '이': '어',
-    '지': '저',
-    '히': '허',
-    '기': '거',
-    '니': '너',
-    '디': '더',
-    '미': '머',
-    '비': '버',
-    '시': '서',
-  };
+  // strict/loose에서만 구분자 허용(오탐 억제 위해 후보/강제삽입은 기존대로)
+  static const String _plateSepPattern = r'[\s\.\-·•_]*';
 
   @override
   void initState() {
@@ -238,18 +259,44 @@ class _DoubleLiveOcrPageState extends State<DoubleLiveOcrPage> {
     }
   }
 
-  String _normalize(String text) {
+  // ─────────────── 인식률 최우선 정규화 ───────────────
+
+  String _applyCharMap(String text) {
     var t = text;
-    t = t.replaceAll(RegExp(r'\s+'), ' ');
     _charMap.forEach((k, v) => t = t.replaceAll(k, v));
-    return t.trim();
+    return t;
   }
 
+  /// ✅ 줄바꿈은 유지한 채(=라인 기반 탐색 가능), 각 라인의 공백만 정리
+  String _normalizePreserveNewlines(String text) {
+    final src = text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    final lines = src.split('\n');
+    final out = <String>[];
+    for (final line in lines) {
+      var t = _applyCharMap(line);
+      t = t.replaceAll(RegExp(r'[ \t]+'), ' ').trim();
+      out.add(t);
+    }
+    return out.join('\n');
+  }
+
+  /// ✅ 전체를 한 줄로 만든 정규화(후보/느슨 탐색에 사용)
+  String _normalizeFlat(String text) {
+    final t = _normalizePreserveNewlines(text).replaceAll('\n', ' ');
+    return t.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  // ─────────────── 추출 로직 ───────────────
+
   String? _extractPlateStrict(String text) {
-    final norm = _normalize(text);
-    final allowed = _allowedKoreanMids.join();
-    final strict = RegExp(r'(?<!\d)(\d{2,3})\s*([' + allowed + r'])\s*(\d{4})(?!\d)');
-    final lines = norm.split('\n');
+    final normLines = _normalizePreserveNewlines(text);
+    final allowed = _PlateMidPolicy.allowedMidCharClass();
+
+    final strict = RegExp(
+      r'(?<!\d)(\d{2,3})' + _plateSepPattern + r'([' + allowed + r'])' + _plateSepPattern + r'(\d{4})(?!\d)',
+    );
+
+    final lines = normLines.split('\n');
 
     for (final line in lines) {
       final m = strict.firstMatch(line);
@@ -259,32 +306,44 @@ class _DoubleLiveOcrPageState extends State<DoubleLiveOcrPage> {
       final m = strict.firstMatch('${lines[i]} ${lines[i + 1]}');
       if (m != null) return '${m.group(1)!}${m.group(2)!}${m.group(3)!}';
     }
-    final m = strict.firstMatch(norm.replaceAll('\n', ' '));
+
+    final flat = normLines.replaceAll('\n', ' ');
+    final m = strict.firstMatch(flat);
     if (m != null) return '${m.group(1)!}${m.group(2)!}${m.group(3)!}';
+
     return null;
   }
 
   String? _extractPlateLoose(String text) {
-    final norm = _normalize(text).replaceAll('\n', ' ');
-    final m = RegExp(r'(\d{2,3})\s*([가-힣])\s*(\d{4})').firstMatch(norm);
-    if (m == null) return null;
-    var mid = m.group(2)!;
-    mid = _midNormalize[mid] ?? mid;
-    if (!_allowedKoreanMids.contains(mid)) return null;
-    return '${m.group(1)!}$mid${m.group(3)!}';
+    final norm = _normalizeFlat(text);
+
+    final reg = RegExp(
+      r'(?<!\d)(\d{2,3})' + _plateSepPattern + r'([가-힣])' + _plateSepPattern + r'(\d{4})(?!\d)',
+    );
+
+    for (final m in reg.allMatches(norm)) {
+      final rawMid = m.group(2)!;
+      final mid = _PlateMidPolicy.normalizeMid(rawMid);
+      if (!_PlateMidPolicy.isAllowedMid(mid)) continue;
+      return '${m.group(1)!}$mid${m.group(3)!}';
+    }
+    return null;
   }
 
+  /// (옵션 자동강제) 가운데 어떤 문자든 허용 → 하나만 (기존처럼 공백만 허용; 구분자까지 허용하면 '.' 같은 오탐 증가)
   String? _extractPlateAnyChar(String text) {
-    final norm = _normalize(text).replaceAll('\n', ' ');
+    final norm = _normalizeFlat(text);
     final m = RegExp(r'(\d{2,3})\s*(.)\s*(\d{4})').firstMatch(norm);
     if (m == null) return null;
     return '${m.group(1)!}${m.group(2)!}${m.group(3)!}';
   }
 
+  /// 칩용 후보: (2~3).(3~4) (임의문자 허용, 여러 개) — 후보는 오탐 허용 영역이므로 기존 수준 유지
   List<String> _extractPlateCandidatesAnyChar(String text) {
-    final norm = _normalize(text).replaceAll('\n', ' ');
+    final norm = _normalizeFlat(text);
     final reg = RegExp(r'(\d{2,3})\s*(.)\s*(\d{3,4})');
     final set = <String>{};
+
     for (final m in reg.allMatches(norm)) {
       final f = m.group(1)!;
       final mid = m.group(2)!;
@@ -292,7 +351,7 @@ class _DoubleLiveOcrPageState extends State<DoubleLiveOcrPage> {
       set.add('$f$mid$b');
 
       if (RegExp(r'^[가-힣]$').hasMatch(mid)) {
-        final fixed = _midNormalize[mid];
+        final fixed = _PlateMidPolicy.midNormalize[mid];
         if (fixed != null) set.add('$f$fixed$b');
       }
     }
@@ -300,7 +359,7 @@ class _DoubleLiveOcrPageState extends State<DoubleLiveOcrPage> {
   }
 
   List<String> _extractDigitsOnlyNoMidCandidates(String text) {
-    final t = _normalize(text).replaceAll('\n', ' ');
+    final t = _normalizeFlat(text);
     final list = <String>[];
     for (final m in RegExp(r'(?<!\d)(\d{6,7})(?!\d)').allMatches(t)) {
       list.add(m.group(1)!);
@@ -373,6 +432,7 @@ class _DoubleLiveOcrPageState extends State<DoubleLiveOcrPage> {
     Navigator.pop(context, plate);
   }
 
+  // ─────────────── UI ───────────────
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -451,7 +511,6 @@ class _DoubleLiveOcrPageState extends State<DoubleLiveOcrPage> {
       body: Column(
         children: [
           Expanded(child: preview),
-
           if (_debugText != null || _lastText != null)
             Container(
               width: double.infinity,
@@ -478,7 +537,6 @@ class _DoubleLiveOcrPageState extends State<DoubleLiveOcrPage> {
                 ],
               ),
             ),
-
           SafeArea(
             top: false,
             left: false,

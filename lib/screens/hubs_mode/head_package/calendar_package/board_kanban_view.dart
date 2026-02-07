@@ -2,8 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 
-// ✅ API 디버그(통합 에러 로그) 로거
-import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
+import '../../dev_package/debug_package/debug_api_logger.dart';
 
 /// ───────────────────────────────────────────────────────────
 /// Company Calendar 팔레트 (추출 색상)

@@ -28,16 +28,6 @@ import '../../../utils/usage/usage_reporter.dart';
 /// 도크에서 어떤 칸을 편집 중인지 구분
 enum _DockField { front, mid, back }
 
-/// ✅ 브랜드(ColorScheme) 기반 공통 헬퍼
-class _Brand {
-  static Color border(ColorScheme cs) => cs.outlineVariant.withOpacity(0.85);
-
-  static Color sheetBg(ColorScheme cs) => cs.surfaceContainerLow;
-
-  static Color warnBg(ColorScheme cs) => cs.tertiaryContainer.withOpacity(0.70);
-  static Color warnBorder(ColorScheme cs) => cs.tertiary.withOpacity(0.35);
-}
-
 class TripleInputPlateScreen extends StatefulWidget {
   const TripleInputPlateScreen({super.key});
 
@@ -295,13 +285,15 @@ class _TripleInputPlateScreenState extends State<TripleInputPlateScreen> {
     _setDockPage(_dockPageMemo);
   }
 
-  /// ✅ 브랜드(ColorScheme) 기반 Dialog
+  /// ✅ ColorScheme 기반 Dialog (scrim 토큰 사용)
   Future<void> _showPlateStatusLoadedDialog({
     required String plateNumber,
     required String area,
     String? customStatus,
   }) async {
     if (!mounted) return;
+
+    final cs = Theme.of(context).colorScheme;
 
     final safeArea = _safeArea(area);
     final customStatusText =
@@ -311,7 +303,8 @@ class _TripleInputPlateScreenState extends State<TripleInputPlateScreen> {
       context: context,
       barrierDismissible: true,
       barrierLabel: 'plate_status_loaded',
-      barrierColor: Colors.black.withOpacity(0.55),
+      // ✅ 정책: Dialog scrim은 cs.scrim 토큰 사용
+      barrierColor: cs.scrim.withOpacity(0.55),
       transitionDuration: const Duration(milliseconds: 220),
       pageBuilder: (ctx, a1, a2) {
         return Center(
@@ -429,7 +422,8 @@ class _TripleInputPlateScreenState extends State<TripleInputPlateScreen> {
             ?.map((e) => e.toString())
             .toList() ??
             [];
-        final String? fetchedCountType = (data['countType'] as String?)?.trim();
+        final String? fetchedCountType =
+        (data['countType'] as String?)?.trim();
 
         setState(() {
           controller.fetchedCustomStatus = fetchedStatus;
@@ -781,7 +775,8 @@ class _TripleInputPlateScreenState extends State<TripleInputPlateScreen> {
         (_resolvedMonthlyDocId == null || _resolvedMonthlyDocId!.trim().isEmpty)) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('정기(월정기) 문서가 없습니다. 먼저 정기 정보를 불러오거나 등록해 주세요.')),
+        const SnackBar(
+            content: Text('정기(월정기) 문서가 없습니다. 먼저 정기 정보를 불러오거나 등록해 주세요.')),
       );
       return;
     }
@@ -860,7 +855,8 @@ class _TripleInputPlateScreenState extends State<TripleInputPlateScreen> {
                 ? SizedBox(
               width: 18,
               height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2, color: cs.onPrimary),
+              child:
+              CircularProgressIndicator(strokeWidth: 2, color: cs.onPrimary),
             )
                 : const Text('반영', style: TextStyle(fontWeight: FontWeight.w900)),
           ),
@@ -886,7 +882,7 @@ class _TripleInputPlateScreenState extends State<TripleInputPlateScreen> {
   }
 
   // ─────────────────────────────
-  // 🔽 OCR 결과 파서(기존 유지)
+  // 🔽 OCR 결과 파서 (strictness: 허용 한글 리스트 기반으로 통일)
   // ─────────────────────────────
   static const Map<String, String> _charMap = {
     'O': '0',
@@ -910,13 +906,31 @@ class _TripleInputPlateScreenState extends State<TripleInputPlateScreen> {
     '시': '서',
   };
 
+  // ✅ 허용 한글 리스트(정책 고정: Double/Minor strictness 기준에 맞춤)
+  static const Set<String> _allowedMidKor = {
+    '가','나','다','라','마',
+    '거','너','더','러','머','버','서','어','저',
+    '고','노','도','로','모','보','소','오','조',
+    '구','누','두','루','무','부','수','우','주',
+    '바','사','아','자',
+    '하','허','호',
+  };
+
+  // ✅ RegExp 문자클래스용(위 allowed set과 동일 문자)
+  static const String _allowedMidCharClass =
+      '가나다라마거너더러머버서어저고노도로모보소오조구누두루무부수우주바사아자하허호';
+
   String _normalize(String s) {
     var t = s.trim().replaceAll(RegExp(r'\s+'), '');
     _charMap.forEach((k, v) => t = t.replaceAll(k, v));
     return t;
   }
 
-  final RegExp _rxStrict = RegExp(r'^(\d{2,3})([가-힣])(\d{4})$');
+  // ✅ strict: 허용 한글 리스트 기반
+  final RegExp _rxStrict =
+  RegExp('^(\\d{2,3})([${_allowedMidCharClass}])(\\d{4})\$');
+
+  // (fallback) 가운데글자 어떤 문자든 허용 후 후처리
   final RegExp _rxAnyMid = RegExp(r'^(\d{2,3})(.)(\d{4})$');
   final RegExp _rxOnly7 = RegExp(r'^\d{7}$');
   final RegExp _rxOnly6 = RegExp(r'^\d{6}$');
@@ -930,8 +944,16 @@ class _TripleInputPlateScreenState extends State<TripleInputPlateScreen> {
       var mid = s.group(2)!;
       final back = s.group(3)!;
 
+      // strict match에서도 normalize 보정은 동일 적용
       mid = _midNormalize[mid] ?? mid;
-      _applyToFields(front: front, mid: mid, back: back);
+
+      final midOk = _allowedMidKor.contains(mid);
+      _applyToFields(
+        front: front,
+        mid: midOk ? mid : '',
+        back: back,
+        promptMid: !midOk,
+      );
       return;
     }
 
@@ -946,7 +968,14 @@ class _TripleInputPlateScreenState extends State<TripleInputPlateScreen> {
         if (fixed != null) mid = fixed;
       }
 
-      _applyToFields(front: front, mid: mid, back: back);
+      // ✅ 허용 리스트에 없으면 mid는 비우고 입력 유도
+      final midOk = _allowedMidKor.contains(mid);
+      _applyToFields(
+        front: front,
+        mid: midOk ? mid : '',
+        back: back,
+        promptMid: !midOk,
+      );
       return;
     }
 
@@ -989,7 +1018,7 @@ class _TripleInputPlateScreenState extends State<TripleInputPlateScreen> {
       if (promptMid || mid.isEmpty) {
         controller.showKeypad = true;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('가운데 글자가 누락되었습니다. 가운데 한 글자를 입력해 주세요.')),
+          const SnackBar(content: Text('가운데 글자가 누락되었거나 허용되지 않습니다. 가운데 한 글자를 입력해 주세요.')),
         );
       } else {
         controller.showKeypad = false;
@@ -1115,7 +1144,7 @@ class _TripleInputPlateScreenState extends State<TripleInputPlateScreen> {
           foregroundColor: cs.onSurface,
           backgroundColor: cs.surface,
           minimumSize: const Size.fromHeight(55),
-          side: BorderSide(color: _Brand.border(cs)),
+          side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         ).copyWith(
           overlayColor: MaterialStateProperty.resolveWith<Color?>(
@@ -1218,9 +1247,9 @@ class _TripleInputPlateScreenState extends State<TripleInputPlateScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: _Brand.warnBg(cs),
+                color: cs.tertiaryContainer.withOpacity(0.70),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: _Brand.warnBorder(cs)),
+                border: Border.all(color: cs.tertiary.withOpacity(0.35)),
               ),
               child: Text(
                 '정기 주차가 제한된 근무지입니다.',
@@ -1290,7 +1319,9 @@ class _TripleInputPlateScreenState extends State<TripleInputPlateScreen> {
       switchInCurve: Curves.easeOutCubic,
       switchOutCurve: Curves.easeInCubic,
       transitionBuilder: (child, animation) {
-        final begin = _dockSlideFromRight ? const Offset(0.10, 0) : const Offset(-0.10, 0);
+        final begin = _dockSlideFromRight
+            ? const Offset(0.10, 0)
+            : const Offset(-0.10, 0);
         final offsetAnim = Tween<Offset>(begin: begin, end: Offset.zero).animate(animation);
         return SlideTransition(
           position: offsetAnim,
@@ -1318,7 +1349,8 @@ class _TripleInputPlateScreenState extends State<TripleInputPlateScreen> {
 
     final viewInset = MediaQuery.of(context).viewInsets.bottom;
     final sysBottom = MediaQuery.of(context).padding.bottom;
-    final bottomSafePadding = (controller.showKeypad ? 280.0 : 140.0) + viewInset + sysBottom;
+    final bottomSafePadding =
+        (controller.showKeypad ? 280.0 : 140.0) + viewInset + sysBottom;
 
     return PopScope(
       canPop: false,
@@ -1335,6 +1367,8 @@ class _TripleInputPlateScreenState extends State<TripleInputPlateScreen> {
         }
       },
       child: Scaffold(
+        // ✅ 정책 고정: Scaffold 배경을 cs.background로 명시
+        backgroundColor: cs.background,
         appBar: AppBar(
           automaticallyImplyLeading: false,
           centerTitle: true,
@@ -1343,7 +1377,7 @@ class _TripleInputPlateScreenState extends State<TripleInputPlateScreen> {
           elevation: 0,
           surfaceTintColor: Colors.transparent,
           shape: Border(
-            bottom: BorderSide(color: _Brand.border(cs), width: 1),
+            bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.85), width: 1),
           ),
           flexibleSpace: GestureDetector(
             behavior: HitTestBehavior.opaque,
@@ -1368,7 +1402,7 @@ class _TripleInputPlateScreenState extends State<TripleInputPlateScreen> {
                         Container(
                           width: 1,
                           height: 16,
-                          color: _Brand.border(cs),
+                          color: cs.outlineVariant.withOpacity(0.85),
                         ),
                         const SizedBox(width: 8),
                         Text(
@@ -1449,7 +1483,9 @@ class _TripleInputPlateScreenState extends State<TripleInputPlateScreen> {
                     final bool canSwipe = !lockScroll;
 
                     final sheetBottomPadding = 16.0 + viewInset;
-                    final sheetBg = _Brand.sheetBg(cs);
+
+                    // ✅ 시트 배경: surfaceContainerLow (톤 차별 유지)
+                    final sheetBg = cs.surfaceContainerLow;
 
                     return Container(
                       decoration: BoxDecoration(
@@ -1478,7 +1514,8 @@ class _TripleInputPlateScreenState extends State<TripleInputPlateScreen> {
                                     notification is OverscrollNotification ||
                                     notification is UserScrollNotification) {
                                   try {
-                                    if (scrollController.hasClients && scrollController.offset != 0) {
+                                    if (scrollController.hasClients &&
+                                        scrollController.offset != 0) {
                                       scrollController.jumpTo(0);
                                     }
                                   } catch (_) {}
@@ -1503,7 +1540,8 @@ class _TripleInputPlateScreenState extends State<TripleInputPlateScreen> {
                                     ),
                                   ),
                                   SliverPadding(
-                                    padding: EdgeInsets.fromLTRB(16, 12, 16, sheetBottomPadding),
+                                    padding:
+                                    EdgeInsets.fromLTRB(16, 12, 16, sheetBottomPadding),
                                     sliver: SliverList(
                                       delegate: SliverChildListDelegate(
                                         [
@@ -1537,7 +1575,7 @@ class _TripleInputPlateScreenState extends State<TripleInputPlateScreen> {
   }
 }
 
-/// ✅ 브랜드(ColorScheme) 기반: plate_status 불러오기 완료 다이얼로그
+/// ✅ plate_status 불러오기 완료 다이얼로그 (ColorScheme 직접 사용)
 class _PlateStatusLoadedDialog extends StatelessWidget {
   final String safeArea;
   final String plateNumber;
@@ -1569,7 +1607,7 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
       decoration: BoxDecoration(
         color: cs.surfaceContainerLow,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _Brand.border(cs).withOpacity(0.75)),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
       ),
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       child: Row(
@@ -1676,7 +1714,7 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: cs.surfaceContainerLow,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: _Brand.border(cs).withOpacity(0.65)),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(0.65)),
                 ),
                 child: Row(
                   children: [
@@ -1732,7 +1770,7 @@ class _PlateStatusLoadedDialog extends StatelessWidget {
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                        side: BorderSide(color: _Brand.border(cs)),
+                        side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
                         foregroundColor: cs.onSurface,
                       ),
                       child: const Text('닫기', style: TextStyle(fontWeight: FontWeight.w900)),
@@ -1810,7 +1848,9 @@ class _SheetHeaderDelegate extends SliverPersistentHeaderDelegate {
             color: selected ? cs.surface : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
-              color: selected ? cs.onSurface.withOpacity(0.65) : _Brand.border(cs),
+              color: selected
+                  ? cs.onSurface.withOpacity(0.65)
+                  : cs.outlineVariant.withOpacity(0.85),
               width: selected ? 1.3 : 1.0,
             ),
           ),
@@ -1973,7 +2013,9 @@ class _PlateDock extends StatelessWidget {
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(
-          color: active ? cs.primary.withOpacity(0.75) : _Brand.border(cs),
+          color: active
+              ? cs.primary.withOpacity(0.75)
+              : cs.outlineVariant.withOpacity(0.85),
           width: active ? 2 : 1,
         ),
       ),
@@ -2066,7 +2108,7 @@ class _PlateDock extends StatelessWidget {
         boxShadow: [
           BoxShadow(color: cs.shadow.withOpacity(0.08), blurRadius: 8, offset: const Offset(0, -2)),
         ],
-        border: Border.all(color: _Brand.border(cs)),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,

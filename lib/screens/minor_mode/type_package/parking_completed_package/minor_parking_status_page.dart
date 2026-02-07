@@ -15,9 +15,7 @@ import '../../../../states/location/location_state.dart';
 import '../../../../states/area/area_state.dart';
 
 import '../../../common_package/memo_package/dash_memo.dart';
-
-// ✅ API 디버그(통합 에러 로그) 로거
-import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
+import '../../../hubs_mode/dev_package/debug_package/debug_api_logger.dart';
 
 // ─────────────────────────────────────────────────────────────
 // ✅ API 디버그 로직: 표준 태그 / 로깅 헬퍼 (file-scope)

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
+import '../../../../services/endTime_reminder_service.dart';
 import 'utils/minor_login_network_service.dart';
 import 'utils/minor_login_validate.dart';
 
@@ -13,8 +14,6 @@ import '../../../../utils/snackbar_helper.dart';
 import '../../../../utils/tts/tts_ownership.dart';
 import '../../../../utils/tts/tts_user_filters.dart';
 
-// ✅ endTime 예약/갱신 서비스
-import 'package:easydev/services/endtime_reminder_service.dart';
 
 String _ts() => DateTime.now().toIso8601String();
 

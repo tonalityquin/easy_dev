@@ -8,13 +8,9 @@ import 'package:googleapis/storage/v1.dart' as gcs;
 import 'package:http/http.dart' as http;
 
 // 사진 다이얼로그(프로젝트 구조에 맞게 조정)
+import '../../../../../utils/google_auth_v7.dart';
+import '../../../../hubs_mode/dev_package/debug_package/debug_api_logger.dart';
 import 'minor_departure_completed_plate_image_dialog.dart';
-
-// ✅ OAuth 헬퍼 (패키지 import로 고정; 필요 시 상대경로로 교체 가능)
-import 'package:easydev/utils/google_auth_v7.dart';
-
-// ✅ API 디버그(통합 에러 로그) 로거
-import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
 
 /// === GCS 설정 ===
 const String kBucketName = 'easydev-image';

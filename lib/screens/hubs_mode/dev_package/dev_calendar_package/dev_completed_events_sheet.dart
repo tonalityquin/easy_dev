@@ -4,12 +4,8 @@ import 'package:intl/intl.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 import 'package:googleapis_auth/googleapis_auth.dart' as auth;
 
-// ✅ 중앙 인증 세션(google_sign_in v7 대응)만 사용합니다.
-//   개별 화면/기능에서는 절대 authenticate/authorizeScopes를 호출하지 않습니다.
-import 'package:easydev/utils/google_auth_session.dart';
-
-// 스낵바 헬퍼(프로젝트에 맞게 경로 유지)
-import 'package:easydev/utils/snackbar_helper.dart';
+import '../../../../utils/google_auth_session.dart';
+import '../../../../utils/snackbar_helper.dart';
 
 /// 설명란에서 진행률(예: "진행률:100%")을 읽어 100%면 100, 아니면 0을 리턴
 int _extractProgress(String? description) {

@@ -6,11 +6,8 @@ import 'package:googleapis/sheets/v4.dart' as sheets;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// ✅ 중앙 인증 세션만 사용 (v7 대응)
-import 'package:easydev/utils/google_auth_session.dart';
-
-// ✅ API 디버그(통합 에러 로그) 로거
-import 'package:easydev/screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
+import '../../../../utils/google_auth_session.dart';
+import '../../dev_package/debug_package/debug_api_logger.dart';
 
 // 내부 저장 키
 const String _kSheetIdKey = 'gsheet_spreadsheet_id';

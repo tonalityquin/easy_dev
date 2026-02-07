@@ -3,15 +3,13 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:easydev/routes.dart';
-import 'package:easydev/services/endtime_reminder_service.dart';
-import 'package:easydev/states/area/area_state.dart';
-import 'package:easydev/states/user/user_state.dart';
-import 'package:easydev/utils/snackbar_helper.dart';
-
-import 'package:easydev/repositories/commute_repo_services/commute_true_false_repository.dart';
-import 'package:easydev/utils/commute_true_false_mode_config.dart';
-
+import '../../../../repositories/commute_repo_services/commute_true_false_repository.dart';
+import '../../../../routes.dart';
+import '../../../../services/endTime_reminder_service.dart';
+import '../../../../states/area/area_state.dart';
+import '../../../../states/user/user_state.dart';
+import '../../../../utils/commute_true_false_mode_config.dart';
+import '../../../../utils/snackbar_helper.dart';
 import 'utils/minor_commute_in_clock_in_save.dart';
 
 const kIsWorkingPrefsKey = 'isWorking';

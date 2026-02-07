@@ -1,25 +1,22 @@
-import 'package:easydev/offlines/offline_type_page.dart';
-import 'package:easydev/screens/triple_headquarter_page.dart';
 import 'package:flutter/material.dart';
 
-// ▼ 오프라인 패키지
-import 'package:easydev/offlines/offline_commute_package/offline_commute_inside_screen.dart';
-import 'package:easydev/offlines/offline_login_package/offline_login_screen.dart';
 
-// ▼ 일반 화면들
-import 'package:easydev/screens/hubs_mode/dev_stub_page.dart';
-import 'package:easydev/screens/hubs_mode/head_stub_page.dart';
-import 'package:easydev/screens/hubs_mode/login_package/login_screen.dart';
-import 'package:easydev/screens/tablet_mode/tablet_page.dart';
-import 'package:easydev/screens/hubs_mode/faq_page.dart';
-import 'package:easydev/screens/hubs_mode/community_stub_page.dart';
-
+import 'offlines/offline_commute_package/offline_commute_inside_screen.dart';
+import 'offlines/offline_login_package/offline_login_screen.dart';
+import 'offlines/offline_type_page.dart';
 import 'screens/double_headquarter_page.dart';
 import 'screens/double_mode/commute_package/double_commute_in_screen.dart';
 import 'screens/double_type_page.dart';
+import 'screens/hubs_mode/community_stub_page.dart';
+import 'screens/hubs_mode/dev_stub_page.dart';
+import 'screens/hubs_mode/faq_page.dart';
+import 'screens/hubs_mode/head_stub_page.dart';
+import 'screens/hubs_mode/login_package/login_screen.dart';
 import 'screens/minor_headquarter_page.dart';
 import 'screens/minor_mode/commute_package/minor_commute_in_screen.dart';
 import 'screens/minor_type_page.dart';
+import 'screens/tablet_mode/tablet_page.dart';
+import 'screens/triple_headquarter_page.dart';
 import 'screens/triple_type_page.dart';
 import 'screens/hubs_mode/dev_package/dev_calendar_page.dart';
 import 'screens/hubs_mode/head_package/company_calendar_page.dart';

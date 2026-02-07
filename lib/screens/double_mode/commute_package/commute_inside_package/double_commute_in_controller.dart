@@ -3,12 +3,12 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../../routes.dart';
+import '../../../../services/endTime_reminder_service.dart';
 import '../../../../states/user/user_state.dart';
 import '../../../../states/area/area_state.dart';
 import '../../../../utils/snackbar_helper.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:easydev/services/endtime_reminder_service.dart';
 
 import '../../../../repositories/commute_repo_services/commute_true_false_repository.dart';
 

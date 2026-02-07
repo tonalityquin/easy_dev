@@ -5,12 +5,8 @@ import 'package:flutter/services.dart' show Clipboard, HapticFeedback;
 import 'package:googleapis/docs/v1.dart' as gdocs;
 import 'package:shared_preferences/shared_preferences.dart';
 
-// ✅ 중앙 인증 세션만 사용 (google_sign_in v7 대응)
-//    - 이 파일에서는 OAuth 호출(authenticate/authorizeScopes 등) 금지
-//    - 모든 Google API는 공통 세션에서 받은 AuthClient로만 생성
-import 'package:easydev/utils/google_auth_session.dart';
-
-import '../../../utils/app_navigator.dart'; // navigatorKey 사용
+import '../../../utils/app_navigator.dart';
+import '../../../utils/google_auth_session.dart'; // navigatorKey 사용
 
 /// 드래그 가능한 플로팅 버블 + 풀높이 바텀시트 UI로
 /// Google Docs 문서를 "플레인 텍스트"로 불러오고/저장하는 패널.

@@ -2,9 +2,8 @@ import 'dart:async';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 import 'package:googleapis_auth/googleapis_auth.dart' as auth;
 
-// ✅ 중앙 인증 세션(v7 대응)을 통해 단 한 번 로그인한 세션을 재사용합니다.
-//   이 파일 안에서는 GoogleSignIn / authorizeScopes / authenticate 등을 호출하지 않습니다.
-import 'package:easydev/utils/google_auth_session.dart';
+import '../../../../utils/google_auth_session.dart';
+
 
 /// 개발용 Google Calendar 서비스
 ///

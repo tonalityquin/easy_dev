@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:shared_preferences/shared_preferences.dart';import '../../../services/endTime_reminder_service.dart';
+import '../../../states/user/user_state.dart';
 
-import 'package:easydev/services/endtime_reminder_service.dart';
-import 'package:easydev/states/user/user_state.dart';
-import 'package:easydev/utils/init/logout_helper.dart';
 
+import '../../../utils/init/logout_helper.dart';
 import 'commute_inside_package/minor_commute_in_controller.dart';
 import 'commute_inside_package/widgets/minor_commute_in_work_button_widget.dart';
 import 'commute_inside_package/widgets/minor_commute_in_info_card_widget.dart';

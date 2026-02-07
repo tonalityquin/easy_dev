@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../utils/snackbar_helper.dart';
 import '../../../utils/api/sheets_config.dart';
-import 'package:easydev/routes.dart';
 
+import '../../routes.dart';
 import '../utils/offline_logout_helper.dart';
 
 import 'commute_inside_package/offline_commute_inside_controller.dart';

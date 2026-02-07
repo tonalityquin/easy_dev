@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'package:easydev/offlines/sql/offline_auth_service.dart';
-import 'package:easydev/offlines/sql/offline_session_model.dart';
+import '../../../../sql/offline_auth_service.dart';
+import '../../../../sql/offline_session_model.dart';
+
 
 /// Offline Service Palette (오프라인 카드 계열)
 class _Palette {
