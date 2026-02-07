@@ -16,6 +16,56 @@ import '../utils/snackbar_helper.dart';
 import 'hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
 import '../services/driving_recovery/driving_recovery_gate.dart';
 
+class _Brand {
+  static Color border(ColorScheme cs) => cs.outlineVariant.withOpacity(0.85);
+
+  static Color overlayOnSurface(ColorScheme cs) => cs.outlineVariant.withOpacity(0.12);
+
+  static ButtonStyle outlinedSurfaceButtonStyle(
+      BuildContext context, {
+        double minHeight = 48,
+        Color? borderColor,
+      }) {
+    final cs = Theme.of(context).colorScheme;
+    final bc = borderColor ?? border(cs);
+
+    return ElevatedButton.styleFrom(
+      backgroundColor: cs.surface,
+      foregroundColor: cs.onSurface,
+      minimumSize: Size.fromHeight(minHeight),
+      padding: EdgeInsets.zero,
+      elevation: 0,
+      side: BorderSide(color: bc, width: 1.0),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ).copyWith(
+      overlayColor: MaterialStateProperty.resolveWith<Color?>(
+            (states) => states.contains(MaterialState.pressed) ? overlayOnSurface(cs) : null,
+      ),
+    );
+  }
+
+  static ButtonStyle filledPrimaryButtonStyle(
+      BuildContext context, {
+        double minHeight = 48,
+      }) {
+    final cs = Theme.of(context).colorScheme;
+
+    return ElevatedButton.styleFrom(
+      backgroundColor: cs.primary,
+      foregroundColor: cs.onPrimary,
+      minimumSize: Size.fromHeight(minHeight),
+      padding: EdgeInsets.zero,
+      elevation: 2,
+      shadowColor: cs.shadow.withOpacity(0.20),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    ).copyWith(
+      overlayColor: MaterialStateProperty.resolveWith<Color?>(
+            (states) => states.contains(MaterialState.pressed) ? cs.onPrimary.withOpacity(0.12) : null,
+      ),
+    );
+  }
+}
+
 class MinorTypePage extends StatefulWidget {
   const MinorTypePage({super.key});
 
@@ -137,8 +187,6 @@ class _EntryDashboardBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
       child: Row(
@@ -159,20 +207,13 @@ class _EntryDashboardBar extends StatelessWidget {
                   builder: (_) => const MinorHomeDashBoardBottomSheet(),
                 );
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: cs.primary,
-                foregroundColor: cs.onPrimary,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                elevation: 2,
-                shadowColor: cs.shadow.withOpacity(0.25),
-              ),
+              style: _Brand.filledPrimaryButtonStyle(context, minHeight: 48),
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.dashboard, size: 20),
                   SizedBox(width: 6),
-                  Text('대시보드'),
+                  Text('대시보드', style: TextStyle(fontWeight: FontWeight.w900)),
                 ],
               ),
             ),
@@ -216,21 +257,10 @@ class _OpenEntryButton extends StatelessWidget {
         );
         await _openEntryScreen(context);
       },
-      style: ElevatedButton.styleFrom(
-        elevation: 0,
-        backgroundColor: cs.surface,
-        foregroundColor: cs.onSurface,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-          side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
-        ),
-      ).copyWith(
-        overlayColor: MaterialStateProperty.resolveWith<Color?>(
-              (states) => states.contains(MaterialState.pressed)
-              ? cs.outlineVariant.withOpacity(0.12)
-              : null,
-        ),
+      style: _Brand.outlinedSurfaceButtonStyle(
+        context,
+        minHeight: 48,
+        borderColor: cs.primary.withOpacity(0.35),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -240,7 +270,7 @@ class _OpenEntryButton extends StatelessWidget {
           Text(
             '입차',
             style: TextStyle(
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w900,
               fontSize: 13,
               color: cs.primary,
             ),
@@ -308,7 +338,7 @@ class _SingleHomeTabBar extends StatelessWidget {
                     '홈',
                     style: TextStyle(
                       fontSize: 13,
-                      fontWeight: FontWeight.bold,
+                      fontWeight: FontWeight.w900,
                       color: cs.primary,
                     ),
                   ),
@@ -373,9 +403,7 @@ PageRouteBuilder _slidePageRoute(Widget page, {required bool fromLeft}) {
     transitionsBuilder: (_, animation, __, child) {
       final begin = Offset(fromLeft ? -1.0 : 1.0, 0);
       final end = Offset.zero;
-      final tween = Tween(begin: begin, end: end).chain(
-        CurveTween(curve: Curves.easeInOut),
-      );
+      final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: Curves.easeInOut));
       return SlideTransition(position: animation.drive(tween), child: child);
     },
   );

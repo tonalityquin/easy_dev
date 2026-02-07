@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../states/page/triple_page_state.dart';
-import '../states/area/area_state.dart';
 import '../states/plate/triple_plate_state.dart';
 import '../states/user/user_state.dart';
 
@@ -12,7 +11,6 @@ import 'triple_mode/type_package/triple_parking_completed_page.dart';
 import 'triple_mode/type_package/parking_completed_package/triple_parking_completed_control_buttons.dart';
 
 import '../utils/snackbar_helper.dart';
-import '../services/latest_message_service.dart';
 
 // ✅ Trace 기록용 Recorder
 import 'hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
@@ -62,9 +60,7 @@ class _Brand {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     ).copyWith(
       overlayColor: MaterialStateProperty.resolveWith<Color?>(
-            (states) => states.contains(MaterialState.pressed)
-            ? cs.onPrimary.withOpacity(0.12)
-            : null,
+            (states) => states.contains(MaterialState.pressed) ? cs.onPrimary.withOpacity(0.12) : null,
       ),
     );
   }
@@ -107,12 +103,6 @@ class _TripleTypePageState extends State<TripleTypePage> {
           final pageState = context.read<TriplePageState>();
           final userName = context.read<UserState>().name;
 
-          // ★ 현재 area 기반으로 전역 리스너 시작 — idempotent
-          final currentArea = context.read<AreaState>().currentArea.trim();
-          if (currentArea.isNotEmpty) {
-            LatestMessageService.instance.start(currentArea);
-          }
-
           return PopScope(
             canPop: false,
             onPopInvoked: (didPop) async {
@@ -120,8 +110,7 @@ class _TripleTypePageState extends State<TripleTypePage> {
 
               final currentPage = pageState.pages[pageState.selectedIndex];
               final collection = currentPage.collectionKey;
-              final normalSelectedPlate =
-              normalPlateState.tripleGetSelectedPlate(collection, userName);
+              final normalSelectedPlate = normalPlateState.tripleGetSelectedPlate(collection, userName);
 
               if (normalSelectedPlate != null && normalSelectedPlate.id.isNotEmpty) {
                 await normalPlateState.tripleTogglePlateIsSelected(
