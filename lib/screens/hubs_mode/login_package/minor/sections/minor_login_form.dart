@@ -6,6 +6,69 @@ import '../minor_login_controller.dart';
 // ✅ Trace 기록용 Recorder
 import '../../../../../screens/hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
 
+/// ─────────────────────────────────────────────────────────────
+/// ✅ 로고(PNG) 가독성 보장 유틸
+double _contrastRatio(Color a, Color b) {
+  final la = a.computeLuminance();
+  final lb = b.computeLuminance();
+  final l1 = la >= lb ? la : lb;
+  final l2 = la >= lb ? lb : la;
+  return (l1 + 0.05) / (l2 + 0.05);
+}
+
+Color _resolveLogoTint({
+  required Color background,
+  required Color preferred,
+  required Color fallback,
+  double minContrast = 3.0,
+}) {
+  if (_contrastRatio(preferred, background) >= minContrast) return preferred;
+  return fallback;
+}
+
+class _BrandTintedLogo extends StatelessWidget {
+  const _BrandTintedLogo({
+    required this.assetPath,
+    required this.height,
+    this.preferredColor,
+    this.fallbackColor,
+    this.minContrast = 3.0,
+  });
+
+  final String assetPath;
+  final double height;
+
+  final Color? preferredColor;
+  final Color? fallbackColor;
+  final double minContrast;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    final bg = theme.scaffoldBackgroundColor;
+
+    final preferred = preferredColor ?? cs.primary;
+    final fallback = fallbackColor ?? cs.onBackground;
+
+    final tint = _resolveLogoTint(
+      background: bg,
+      preferred: preferred,
+      fallback: fallback,
+      minContrast: minContrast,
+    );
+
+    return Image.asset(
+      assetPath,
+      fit: BoxFit.contain,
+      height: height,
+      color: tint,
+      colorBlendMode: BlendMode.srcIn,
+    );
+  }
+}
+
 class MinorLoginForm extends StatefulWidget {
   final MinorLoginController controller;
 
@@ -17,6 +80,12 @@ class MinorLoginForm extends StatefulWidget {
 
 class _MinorLoginFormState extends State<MinorLoginForm> {
   late final MinorLoginController _controller;
+
+  // ✅ (신규) 상단 screen tag 이미지
+  static const String _kPelicanTagAsset = 'assets/images/pelican_text.png';
+
+  // ✅ (신규) “보이는 크기만” 키우는 스케일
+  static const double _kTagScale = 3.0;
 
   @override
   void initState() {
@@ -55,7 +124,7 @@ class _MinorLoginFormState extends State<MinorLoginForm> {
       '회사 로고(상단)',
       meta: <String, dynamic>{
         'screen': 'minor_login',
-        'asset': 'assets/images/pelican.png',
+        'asset': 'assets/images/ParkinWorkin_logo.png',
         'action': 'tap',
       },
     );
@@ -66,7 +135,7 @@ class _MinorLoginFormState extends State<MinorLoginForm> {
       '회사 로고(펠리컨)',
       meta: <String, dynamic>{
         'screen': 'minor_login',
-        'asset': 'assets/images/pelican.png',
+        'asset': 'assets/images/ParkinWorkin_text.png',
         'action': 'back_to_selector',
         'to': AppRoutes.selector,
       },
@@ -81,9 +150,6 @@ class _MinorLoginFormState extends State<MinorLoginForm> {
   ThemeData _buildBrandLocalTheme(ThemeData baseTheme) {
     final cs = baseTheme.colorScheme;
 
-    // ✅ “브랜드 테마 수정안” 반영:
-    // - 모든 색은 ColorScheme 기반
-    // - 그림자는 primary tint 대신 cs.shadow 기반(중립)
     return baseTheme.copyWith(
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
@@ -124,6 +190,44 @@ class _MinorLoginFormState extends State<MinorLoginForm> {
     );
   }
 
+  Widget _buildPelicanTag(BuildContext context) {
+    final tagStyle = _screenTagStyle(context);
+    final tagFontSize = (tagStyle.fontSize ?? 11.0).toDouble();
+    final tagLayoutHeight = tagFontSize + 3.0;
+
+    final cs = Theme.of(context).colorScheme;
+    final tagPreferredTint = cs.onSurfaceVariant.withOpacity(0.80);
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: const EdgeInsets.only(left: 4, bottom: 8),
+        child: Semantics(
+          label: 'screen_tag: minor login image',
+          child: ExcludeSemantics(
+            child: SizedBox(
+              height: tagLayoutHeight,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Transform.scale(
+                  scale: _kTagScale,
+                  alignment: Alignment.centerLeft,
+                  child: _BrandTintedLogo(
+                    assetPath: _kPelicanTagAsset,
+                    height: tagLayoutHeight,
+                    preferredColor: tagPreferredTint,
+                    fallbackColor: cs.onBackground,
+                    minContrast: 3.0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final baseTheme = Theme.of(context);
@@ -140,25 +244,20 @@ class _MinorLoginFormState extends State<MinorLoginForm> {
               children: [
                 const SizedBox(height: 12),
 
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 4, bottom: 8),
-                    child: Semantics(
-                      label: 'screen_tag: minor login',
-                      child: Text(
-                        'minor login',
-                        style: _screenTagStyle(context),
-                      ),
-                    ),
-                  ),
-                ),
+                // ✅ (변경) 텍스트 tag 대신 pelican_text.png (레이아웃 고정 + 스케일 확대)
+                _buildPelicanTag(context),
 
+                // ✅ (변경) 상단 로고 tint 적용
                 GestureDetector(
                   onTap: _onTopCompanyLogoTapped,
                   child: SizedBox(
                     height: 360,
-                    child: Image.asset('assets/images/pelican.png'),
+                    child: Center(
+                      child: _BrandTintedLogo(
+                        assetPath: 'assets/images/ParkinWorkin_logo.png',
+                        height: 360,
+                      ),
+                    ),
                   ),
                 ),
 
@@ -168,7 +267,8 @@ class _MinorLoginFormState extends State<MinorLoginForm> {
                   controller: _controller.nameController,
                   focusNode: _controller.nameFocus,
                   textInputAction: TextInputAction.next,
-                  onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.phoneFocus),
+                  onSubmitted: (_) =>
+                      FocusScope.of(context).requestFocus(_controller.phoneFocus),
                   decoration: _controller.inputDecoration(
                     label: "이름",
                     icon: Icons.person,
@@ -181,8 +281,10 @@ class _MinorLoginFormState extends State<MinorLoginForm> {
                   focusNode: _controller.phoneFocus,
                   keyboardType: TextInputType.phone,
                   textInputAction: TextInputAction.next,
-                  onChanged: (value) => _controller.formatPhoneNumber(value, setState),
-                  onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.passwordFocus),
+                  onChanged: (value) =>
+                      _controller.formatPhoneNumber(value, setState),
+                  onSubmitted: (_) =>
+                      FocusScope.of(context).requestFocus(_controller.passwordFocus),
                   decoration: _controller.inputDecoration(
                     label: "전화번호",
                     icon: Icons.phone,
@@ -200,8 +302,11 @@ class _MinorLoginFormState extends State<MinorLoginForm> {
                     label: "비밀번호(5자리 이상)",
                     icon: Icons.lock,
                     suffixIcon: IconButton(
-                      icon: Icon(_controller.obscurePassword ? Icons.visibility_off : Icons.visibility),
-                      onPressed: () => setState(() => _controller.togglePassword()),
+                      icon: Icon(_controller.obscurePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility),
+                      onPressed: () =>
+                          setState(() => _controller.togglePassword()),
                       tooltip: _controller.obscurePassword ? '표시' : '숨기기',
                     ),
                   ),
@@ -221,7 +326,8 @@ class _MinorLoginFormState extends State<MinorLoginForm> {
                         letterSpacing: 1.1,
                       ),
                     ),
-                    onPressed: _controller.isLoading ? null : _onLoginButtonPressed,
+                    onPressed:
+                    _controller.isLoading ? null : _onLoginButtonPressed,
                   ),
                 ),
 
@@ -233,7 +339,10 @@ class _MinorLoginFormState extends State<MinorLoginForm> {
                     borderRadius: BorderRadius.circular(8),
                     child: SizedBox(
                       height: 80,
-                      child: Image.asset('assets/images/pelican.png'),
+                      child: _BrandTintedLogo(
+                        assetPath: 'assets/images/ParkinWorkin_text.png',
+                        height: 80,
+                      ),
                     ),
                   ),
                 ),

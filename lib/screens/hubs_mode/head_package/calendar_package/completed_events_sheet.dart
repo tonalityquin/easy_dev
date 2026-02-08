@@ -46,6 +46,62 @@ Future<void> _logApiError({
   }
 }
 
+@immutable
+class _CompletedTokens {
+  const _CompletedTokens({
+    required this.accent,
+    required this.onAccent,
+    required this.surface,
+    required this.onSurface,
+    required this.onSurfaceVariant,
+    required this.divider,
+    required this.error,
+    required this.scrim,
+    required this.handle,
+    required this.fieldFill,
+    required this.fieldBorder,
+    required this.cardTint,
+  });
+
+  final Color accent;
+  final Color onAccent;
+
+  final Color surface;
+  final Color onSurface;
+  final Color onSurfaceVariant;
+
+  final Color divider;
+  final Color error;
+  final Color scrim;
+  final Color handle;
+
+  final Color fieldFill;
+  final Color fieldBorder;
+
+  final Color cardTint;
+
+  factory _CompletedTokens.of(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final accent = cs.primary;
+    final surface = cs.surface;
+
+    return _CompletedTokens(
+      accent: accent,
+      onAccent: cs.onPrimary,
+      surface: surface,
+      onSurface: cs.onSurface,
+      onSurfaceVariant: cs.onSurfaceVariant,
+      divider: cs.outlineVariant,
+      error: cs.error,
+      scrim: cs.scrim,
+      handle: cs.onSurfaceVariant.withOpacity(0.42),
+      fieldFill: Color.alphaBlend(accent.withOpacity(0.10), cs.surface),
+      fieldBorder: cs.outlineVariant.withOpacity(0.75),
+      cardTint: Color.alphaBlend(accent.withOpacity(0.08), cs.surface),
+    );
+  }
+}
+
 // 완료/진행률 파싱: 예) "[progress:100]" 이면 100 반환
 int _extractProgress(String? description) {
   final m = RegExp(r'\[\s*progress\s*:\s*(0|100)\s*\]', caseSensitive: false)
@@ -55,17 +111,21 @@ int _extractProgress(String? description) {
   return v == 100 ? 100 : 0;
 }
 
-/// 완료된 이벤트 바텀시트(흰 배경) 오픈
+/// 완료된 이벤트 바텀시트 오픈(브랜드 테마 적용)
 Future<void> openCompletedEventsSheet({
   required BuildContext context,
   required List<gcal.Event> allEvents,
   void Function(BuildContext, gcal.Event)? onEdit,
 }) async {
+  final tokens = _CompletedTokens.of(context);
+
   // 1) 완료 이벤트 필터
-  final completed = allEvents.where((e) => _extractProgress(e.description) == 100).toList();
+  final completed =
+  allEvents.where((e) => _extractProgress(e.description) == 100).toList();
 
   DateTime _startOf(gcal.Event e) =>
-      (e.start?.dateTime?.toLocal()) ?? (e.start?.date ?? DateTime.fromMillisecondsSinceEpoch(0));
+      (e.start?.dateTime?.toLocal()) ??
+          (e.start?.date ?? DateTime.fromMillisecondsSinceEpoch(0));
   completed.sort((a, b) => _startOf(a).compareTo(_startOf(b)));
 
   // 2) 포맷터
@@ -79,164 +139,198 @@ Future<void> openCompletedEventsSheet({
       context: context,
       useSafeArea: true,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (_) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.7,
-          minChildSize: 0.4,
-          maxChildSize: 0.95,
-          builder: (context, controller) {
-            return Material(
-              color: Colors.white,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              child: Column(
-                children: [
-                  const SizedBox(height: 8),
-                  Container(
-                    width: 36,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.black12,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
+      backgroundColor: Colors.transparent,
+      barrierColor: tokens.scrim.withOpacity(0.60),
+      builder: (sheetCtx) {
+        return _FullSheetFrame(
+          child: DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 0.7,
+            minChildSize: 0.4,
+            maxChildSize: 0.95,
+            builder: (ctx, controller) {
+              final t = _CompletedTokens.of(ctx);
 
-                  // ===== 헤더 + 액션 =====
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '완료된 이벤트 (${completed.length})',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w700,
-                              color: Colors.black87,
+              return Material(
+                color: t.surface,
+                surfaceTintColor: Colors.transparent,
+                child: Column(
+                  children: [
+                    const SizedBox(height: 10),
+                    Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: t.handle,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // ===== 헤더 + 액션 =====
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '완료된 이벤트 (${completed.length})',
+                              style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: t.onSurface,
+                              ),
                             ),
                           ),
-                        ),
 
-                        // 🗑️ 완료 이벤트 삭제(캘린더)
-                        IconButton(
-                          tooltip: '완료 이벤트 삭제',
-                          icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-                          onPressed: () async {
-                            try {
-                              await _deleteCompletedEventsFromGoogleCalendar(context, completed);
-                            } catch (e) {
-                              // 하위에서 로깅하지만, UI 호출 레벨에서도 안전하게 방어
-                              await _logApiError(
-                                tag: 'openCompletedEventsSheet.deleteTap',
-                                message: '완료 이벤트 삭제 버튼 처리 실패',
-                                error: e,
-                                extra: <String, dynamic>{'count': completed.length},
-                                tags: const <String>[_tCal, _tCalUi, _tCalCompleted, _tCalGcal],
-                              );
-                            }
-                          },
-                        ),
-
-                        // ⬆️ 시트로 저장
-                        IconButton(
-                          tooltip: '스프레드시트 저장',
-                          icon: const Icon(Icons.upload, color: Colors.black87),
-                          onPressed: () async {
-                            try {
-                              await _saveCompletedEventsToGoogleSheet(context, completed);
-                            } catch (e) {
-                              await _logApiError(
-                                tag: 'openCompletedEventsSheet.saveTap',
-                                message: '스프레드시트 저장 버튼 처리 실패',
-                                error: e,
-                                extra: <String, dynamic>{'count': completed.length},
-                                tags: const <String>[_tCal, _tCalUi, _tCalCompleted, _tCalSheet],
-                              );
-                            }
-                          },
-                        ),
-
-                        // ⚙️ 시트 설정
-                        IconButton(
-                          tooltip: '스프레드시트 설정',
-                          icon: const Icon(Icons.settings, color: Colors.black87),
-                          onPressed: () async {
-                            try {
-                              await _openSpreadsheetConfigSheet(context);
-                            } catch (e) {
-                              await _logApiError(
-                                tag: 'openCompletedEventsSheet.configTap',
-                                message: '스프레드시트 설정 시트 오픈 실패',
-                                error: e,
-                                tags: const <String>[_tCal, _tCalUi, _tCalPrefs],
-                              );
-                            }
-                          },
-                        ),
-
-                        IconButton(
-                          icon: const Icon(Icons.close, color: Colors.black87),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(height: 1, color: Color(0x14000000)),
-
-                  // ===== 목록 =====
-                  Expanded(
-                    child: completed.isEmpty
-                        ? const Center(
-                      child: Text('완료된 이벤트가 없습니다.', style: TextStyle(color: Colors.black87)),
-                    )
-                        : ListView.separated(
-                      controller: controller,
-                      itemCount: completed.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, i) {
-                        final e = completed[i];
-                        final isAllDay = (e.start?.date != null) && (e.start?.dateTime == null);
-
-                        final startUtc = e.start?.dateTime;
-                        final startLocal = (startUtc != null) ? startUtc.toLocal() : e.start?.date;
-
-                        final endUtc = e.end?.dateTime;
-                        final endLocal = (endUtc != null) ? endUtc.toLocal() : e.end?.date;
-
-                        String when;
-                        if (startLocal == null) {
-                          when = '(시작 시간 미정)';
-                        } else if (isAllDay) {
-                          when = fmtDate.format(startLocal);
-                        } else if (endLocal != null) {
-                          when = '${fmtDateTime.format(startLocal)} ~ ${fmtTime.format(endLocal)}';
-                        } else {
-                          when = fmtDateTime.format(startLocal);
-                        }
-
-                        return ListTile(
-                          leading: const Icon(Icons.done, color: Colors.red),
-                          title: Text(
-                            e.summary ?? '(제목 없음)',
-                            style: const TextStyle(
-                              color: Colors.black87,
-                              decoration: TextDecoration.lineThrough,
+                          // 🗑️ 완료 이벤트 삭제(캘린더)
+                          IconButton(
+                            tooltip: '완료 이벤트 삭제',
+                            icon: Icon(
+                              Icons.delete_outline_rounded,
+                              color: t.error,
                             ),
+                            onPressed: () async {
+                              try {
+                                await _deleteCompletedEventsFromGoogleCalendar(
+                                  ctx,
+                                  completed,
+                                );
+                              } catch (e) {
+                                await _logApiError(
+                                  tag: 'openCompletedEventsSheet.deleteTap',
+                                  message: '완료 이벤트 삭제 버튼 처리 실패',
+                                  error: e,
+                                  extra: <String, dynamic>{
+                                    'count': completed.length
+                                  },
+                                  tags: const <String>[
+                                    _tCal,
+                                    _tCalUi,
+                                    _tCalCompleted,
+                                    _tCalGcal
+                                  ],
+                                );
+                              }
+                            },
                           ),
-                          subtitle: Text(when, style: const TextStyle(color: Colors.black54)),
-                          onTap: onEdit != null ? () => onEdit(context, e) : null,
-                        );
-                      },
+
+                          // ⬆️ 시트로 저장
+                          IconButton(
+                            tooltip: '스프레드시트 저장',
+                            icon: Icon(Icons.upload_rounded, color: t.onSurface),
+                            onPressed: () async {
+                              try {
+                                await _saveCompletedEventsToGoogleSheet(ctx, completed);
+                              } catch (e) {
+                                await _logApiError(
+                                  tag: 'openCompletedEventsSheet.saveTap',
+                                  message: '스프레드시트 저장 버튼 처리 실패',
+                                  error: e,
+                                  extra: <String, dynamic>{
+                                    'count': completed.length
+                                  },
+                                  tags: const <String>[
+                                    _tCal,
+                                    _tCalUi,
+                                    _tCalCompleted,
+                                    _tCalSheet
+                                  ],
+                                );
+                              }
+                            },
+                          ),
+
+                          // ⚙️ 시트 설정
+                          IconButton(
+                            tooltip: '스프레드시트 설정',
+                            icon: Icon(Icons.settings_rounded, color: t.onSurface),
+                            onPressed: () async {
+                              try {
+                                await _openSpreadsheetConfigSheet(ctx);
+                              } catch (e) {
+                                await _logApiError(
+                                  tag: 'openCompletedEventsSheet.configTap',
+                                  message: '스프레드시트 설정 시트 오픈 실패',
+                                  error: e,
+                                  tags: const <String>[_tCal, _tCalUi, _tCalPrefs],
+                                );
+                              }
+                            },
+                          ),
+
+                          IconButton(
+                            tooltip: '닫기',
+                            icon: Icon(Icons.close_rounded, color: t.onSurface),
+                            onPressed: () => Navigator.of(ctx).maybePop(),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            );
-          },
+                    Divider(height: 1, color: t.divider),
+
+                    // ===== 목록 =====
+                    Expanded(
+                      child: completed.isEmpty
+                          ? Center(
+                        child: Text(
+                          '완료된 이벤트가 없습니다.',
+                          style: TextStyle(color: t.onSurfaceVariant),
+                        ),
+                      )
+                          : ListView.separated(
+                        controller: controller,
+                        itemCount: completed.length,
+                        separatorBuilder: (_, __) =>
+                            Divider(height: 1, color: t.divider),
+                        itemBuilder: (context, i) {
+                          final e = completed[i];
+                          final isAllDay =
+                              (e.start?.date != null) &&
+                                  (e.start?.dateTime == null);
+
+                          final startUtc = e.start?.dateTime;
+                          final startLocal =
+                          (startUtc != null) ? startUtc.toLocal() : e.start?.date;
+
+                          final endUtc = e.end?.dateTime;
+                          final endLocal =
+                          (endUtc != null) ? endUtc.toLocal() : e.end?.date;
+
+                          String when;
+                          if (startLocal == null) {
+                            when = '(시작 시간 미정)';
+                          } else if (isAllDay) {
+                            when = fmtDate.format(startLocal);
+                          } else if (endLocal != null) {
+                            when =
+                            '${fmtDateTime.format(startLocal)} ~ ${fmtTime.format(endLocal)}';
+                          } else {
+                            when = fmtDateTime.format(startLocal);
+                          }
+
+                          return ListTile(
+                            leading: Icon(Icons.done_rounded, color: t.accent),
+                            title: Text(
+                              e.summary ?? '(제목 없음)',
+                              style: TextStyle(
+                                color: t.onSurface,
+                                decoration: TextDecoration.lineThrough,
+                              ),
+                            ),
+                            subtitle: Text(
+                              when,
+                              style: TextStyle(color: t.onSurfaceVariant),
+                            ),
+                            onTap: onEdit != null ? () => onEdit(context, e) : null,
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
         );
       },
     );
@@ -254,8 +348,49 @@ Future<void> openCompletedEventsSheet({
   }
 }
 
-/// 시트 설정(Spreadsheet ID / Range)
+// ===== 공용 “풀 높이” 프레임(브랜드 스크림/서피스/그림자) =====
+class _FullSheetFrame extends StatelessWidget {
+  const _FullSheetFrame({required this.child});
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = _CompletedTokens.of(context);
+
+    return FractionallySizedBox(
+      heightFactor: 1.0,
+      widthFactor: 1.0,
+      child: SafeArea(
+        top: true,
+        bottom: true,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              boxShadow: [
+                BoxShadow(
+                  blurRadius: 24,
+                  spreadRadius: 8,
+                  color: t.scrim.withOpacity(0.18),
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: child,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 시트 설정(Spreadsheet ID / Range) — 브랜드 테마 적용
 Future<void> _openSpreadsheetConfigSheet(BuildContext context) async {
+  final tokens = _CompletedTokens.of(context);
+
   SharedPreferences prefs;
   try {
     prefs = await SharedPreferences.getInstance();
@@ -270,7 +405,8 @@ Future<void> _openSpreadsheetConfigSheet(BuildContext context) async {
   }
 
   final idCtrl = TextEditingController(text: prefs.getString(_kSheetIdKey) ?? '');
-  final rangeCtrl = TextEditingController(text: prefs.getString(_kSheetRangeKey) ?? '완료!A2');
+  final rangeCtrl =
+  TextEditingController(text: prefs.getString(_kSheetRangeKey) ?? '완료!A2');
   final idFocus = FocusNode();
   final rangeFocus = FocusNode();
 
@@ -297,8 +433,12 @@ Future<void> _openSpreadsheetConfigSheet(BuildContext context) async {
 
     if (context.mounted) Navigator.pop(context);
     if (context.mounted) {
+      final t = _CompletedTokens.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('스프레드시트 설정을 저장했습니다.')),
+        SnackBar(
+          backgroundColor: t.cardTint,
+          content: Text('스프레드시트 설정을 저장했습니다.', style: TextStyle(color: t.onSurface)),
+        ),
       );
     }
   }
@@ -307,11 +447,52 @@ Future<void> _openSpreadsheetConfigSheet(BuildContext context) async {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
+      backgroundColor: Colors.transparent,
+      barrierColor: tokens.scrim.withOpacity(0.60),
       builder: (ctx) {
+        final t = _CompletedTokens.of(ctx);
+
+        InputDecoration deco({
+          required String label,
+          required String hint,
+          required TextEditingController controller,
+          required FocusNode focusNode,
+          FocusNode? nextFocus,
+          required VoidCallback onClear,
+        }) {
+          return InputDecoration(
+            labelText: label,
+            hintText: hint,
+            filled: true,
+            fillColor: t.fieldFill,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: t.fieldBorder),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: t.accent, width: 1.2),
+            ),
+            isDense: true,
+            prefixIcon: Icon(Icons.link_rounded, color: t.accent),
+            suffixIcon: ValueListenableBuilder<TextEditingValue>(
+              valueListenable: controller,
+              builder: (_, v, __) {
+                if (v.text.isEmpty) return const SizedBox.shrink();
+                return IconButton(
+                  tooltip: '지우기',
+                  icon: Icon(Icons.clear_rounded, color: t.onSurfaceVariant),
+                  onPressed: () {
+                    onClear();
+                    focusNode.requestFocus();
+                  },
+                );
+              },
+            ),
+          );
+        }
+
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: () => FocusScope.of(ctx).unfocus(),
@@ -320,94 +501,114 @@ Future<void> _openSpreadsheetConfigSheet(BuildContext context) async {
             duration: const Duration(milliseconds: 200),
             curve: Curves.easeOut,
             child: SafeArea(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      '스프레드시트 설정',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 12),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    boxShadow: [
+                      BoxShadow(
+                        blurRadius: 24,
+                        spreadRadius: 8,
+                        color: t.scrim.withOpacity(0.18),
+                        offset: const Offset(0, 8),
+                      )
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Material(
+                      color: t.surface,
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 36,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: t.handle,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              '스프레드시트 설정',
+                              style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w900,
+                                color: t.onSurface,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
 
-                    // Spreadsheet ID
-                    ValueListenableBuilder<TextEditingValue>(
-                      valueListenable: idCtrl,
-                      builder: (context, value, _) {
-                        return TextField(
-                          controller: idCtrl,
-                          focusNode: idFocus,
-                          autofocus: true,
-                          textInputAction: TextInputAction.next,
-                          onSubmitted: (_) => rangeFocus.requestFocus(),
-                          decoration: InputDecoration(
-                            labelText: 'Spreadsheet ID',
-                            hintText: '예: 1fjN8k...(URL 중간의 ID)',
-                            border: const OutlineInputBorder(),
-                            isDense: true,
-                            suffixIcon: value.text.isNotEmpty
-                                ? IconButton(
-                              tooltip: '지우기',
-                              icon: const Icon(Icons.clear),
-                              onPressed: () {
-                                idCtrl.clear();
-                                idFocus.requestFocus();
-                              },
-                            )
-                                : null,
-                          ),
-                        );
-                      },
-                    ),
+                            TextField(
+                              controller: idCtrl,
+                              focusNode: idFocus,
+                              autofocus: true,
+                              textInputAction: TextInputAction.next,
+                              onSubmitted: (_) => rangeFocus.requestFocus(),
+                              decoration: deco(
+                                label: 'Spreadsheet ID',
+                                hint: '예: 1fjN8k...(URL 중간의 ID)',
+                                controller: idCtrl,
+                                focusNode: idFocus,
+                                nextFocus: rangeFocus,
+                                onClear: () => idCtrl.clear(),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
 
-                    const SizedBox(height: 10),
+                            TextField(
+                              controller: rangeCtrl,
+                              focusNode: rangeFocus,
+                              textInputAction: TextInputAction.done,
+                              onSubmitted: (_) => save(),
+                              decoration: deco(
+                                label: 'Range',
+                                hint: '예: 완료!A2',
+                                controller: rangeCtrl,
+                                focusNode: rangeFocus,
+                                onClear: () => rangeCtrl.clear(),
+                              ).copyWith(prefixIcon: Icon(Icons.grid_on_rounded, color: t.accent)),
+                            ),
 
-                    // Range
-                    ValueListenableBuilder<TextEditingValue>(
-                      valueListenable: rangeCtrl,
-                      builder: (context, value, _) {
-                        return TextField(
-                          controller: rangeCtrl,
-                          focusNode: rangeFocus,
-                          textInputAction: TextInputAction.done,
-                          onSubmitted: (_) => save(),
-                          decoration: InputDecoration(
-                            labelText: 'Range',
-                            hintText: '예: 완료!A2',
-                            border: const OutlineInputBorder(),
-                            isDense: true,
-                            suffixIcon: value.text.isNotEmpty
-                                ? IconButton(
-                              tooltip: '지우기',
-                              icon: const Icon(Icons.clear),
-                              onPressed: () {
-                                rangeCtrl.clear();
-                                rangeFocus.requestFocus();
-                              },
-                            )
-                                : null,
-                          ),
-                        );
-                      },
-                    ),
-
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            child: const Text('취소'),
-                          ),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton(
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: t.onSurface,
+                                      side: BorderSide(color: t.divider.withOpacity(0.85)),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    onPressed: () => Navigator.pop(ctx),
+                                    child: const Text('취소'),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: FilledButton(
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: t.accent,
+                                      foregroundColor: t.onAccent,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    onPressed: save,
+                                    child: const Text('저장'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: ElevatedButton(onPressed: save, child: const Text('저장')),
-                        ),
-                      ],
+                      ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -430,14 +631,19 @@ Future<void> _openSpreadsheetConfigSheet(BuildContext context) async {
   }
 }
 
-/// 완료된 이벤트들을 Google Sheet에 Append
+/// 완료된 이벤트들을 Google Sheet에 Append — 브랜드 테마 적용
 Future<void> _saveCompletedEventsToGoogleSheet(
     BuildContext context,
     List<gcal.Event> completed,
     ) async {
+  final tokens = _CompletedTokens.of(context);
+
   if (completed.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('저장할 완료 이벤트가 없습니다.')),
+      SnackBar(
+        backgroundColor: tokens.cardTint,
+        content: Text('저장할 완료 이벤트가 없습니다.', style: TextStyle(color: tokens.onSurface)),
+      ),
     );
     return;
   }
@@ -453,7 +659,12 @@ Future<void> _saveCompletedEventsToGoogleSheet(
       tags: const <String>[_tCal, _tCalPrefs],
     );
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('저장 실패: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: tokens.cardTint,
+          content: Text('저장 실패: $e', style: TextStyle(color: tokens.onSurface)),
+        ),
+      );
     }
     return;
   }
@@ -468,7 +679,10 @@ Future<void> _saveCompletedEventsToGoogleSheet(
     range = prefs.getString(_kSheetRangeKey) ?? '완료!A2';
     if (spreadsheetId.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('스프레드시트 설정이 필요합니다.')),
+        SnackBar(
+          backgroundColor: tokens.cardTint,
+          content: Text('스프레드시트 설정이 필요합니다.', style: TextStyle(color: tokens.onSurface)),
+        ),
       );
       return;
     }
@@ -476,46 +690,21 @@ Future<void> _saveCompletedEventsToGoogleSheet(
 
   final ok = await showModalBottomSheet<bool>(
     context: context,
-    backgroundColor: Colors.white,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-    ),
-    builder: (context) {
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('저장 확인',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 12),
-              Text(
-                '완료된 ${completed.length}개 이벤트를\n스프레드시트로 저장할까요?\n\nID: $spreadsheetId\nRange: $range',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('취소'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      child: const Text('저장'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
+    backgroundColor: Colors.transparent,
+    barrierColor: tokens.scrim.withOpacity(0.60),
+    builder: (ctx) {
+      final t = _CompletedTokens.of(ctx);
+      return _ConfirmSheetFrame(
+        title: '저장 확인',
+        body: Text(
+          '완료된 ${completed.length}개 이벤트를\n스프레드시트로 저장할까요?\n\nID: $spreadsheetId\nRange: $range',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: t.onSurface),
         ),
+        cancelLabel: '취소',
+        confirmLabel: '저장',
+        confirmColor: t.accent,
+        confirmFg: t.onAccent,
       );
     },
   ) ??
@@ -532,7 +721,6 @@ Future<void> _saveCompletedEventsToGoogleSheet(
       final d = event.start?.date;
       final dt = event.start?.dateTime?.toLocal();
       final dateStr = (d != null) ? fmt.format(d) : (dt != null ? fmt.format(dt) : '');
-      // ✅ 민감정보 최소화 옵션이 필요하면 description 제외 가능
       return [dateStr, event.summary ?? '', event.description ?? ''];
     }).toList();
 
@@ -545,8 +733,12 @@ Future<void> _saveCompletedEventsToGoogleSheet(
     );
 
     if (context.mounted) {
+      final t = _CompletedTokens.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Google Sheet에 저장 완료')),
+        SnackBar(
+          backgroundColor: t.cardTint,
+          content: Text('Google Sheet에 저장 완료', style: TextStyle(color: t.onSurface)),
+        ),
       );
     }
   } catch (e) {
@@ -563,20 +755,31 @@ Future<void> _saveCompletedEventsToGoogleSheet(
     );
 
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('저장 실패: $e')));
+      final t = _CompletedTokens.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: t.cardTint,
+          content: Text('저장 실패: $e', style: TextStyle(color: t.onSurface)),
+        ),
+      );
     }
   }
 }
 
-/// 완료된 이벤트들을 Google Calendar에서 일괄 삭제
+/// 완료된 이벤트들을 Google Calendar에서 일괄 삭제 — 브랜드 테마 적용
 Future<void> _deleteCompletedEventsFromGoogleCalendar(
     BuildContext context,
     List<gcal.Event> completed, {
       String? calendarId,
     }) async {
+  final tokens = _CompletedTokens.of(context);
+
   if (completed.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('삭제할 완료 이벤트가 없습니다.')),
+      SnackBar(
+        backgroundColor: tokens.cardTint,
+        content: Text('삭제할 완료 이벤트가 없습니다.', style: TextStyle(color: tokens.onSurface)),
+      ),
     );
     return;
   }
@@ -600,48 +803,22 @@ Future<void> _deleteCompletedEventsFromGoogleCalendar(
 
   final ok = await showModalBottomSheet<bool>(
     context: context,
-    backgroundColor: Colors.white,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-    ),
+    backgroundColor: Colors.transparent,
+    barrierColor: tokens.scrim.withOpacity(0.60),
     builder: (ctx) {
-      return SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('삭제 확인',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 12),
-              Text(
-                '완료된 ${completed.length}개 이벤트를 캘린더에서 삭제할까요?\n'
-                    '이 작업은 되돌릴 수 없습니다.\n\nCalendar: $calId',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(ctx, false),
-                      child: const Text('취소'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('삭제'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
+      final t = _CompletedTokens.of(ctx);
+      return _ConfirmSheetFrame(
+        title: '삭제 확인',
+        body: Text(
+          '완료된 ${completed.length}개 이벤트를 캘린더에서 삭제할까요?\n'
+              '이 작업은 되돌릴 수 없습니다.\n\nCalendar: $calId',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: t.onSurface),
         ),
+        cancelLabel: '취소',
+        confirmLabel: '삭제',
+        confirmColor: t.error,
+        confirmFg: Theme.of(ctx).colorScheme.onError,
       );
     },
   ) ??
@@ -681,8 +858,12 @@ Future<void> _deleteCompletedEventsFromGoogleCalendar(
     }
 
     if (context.mounted) {
+      final t = _CompletedTokens.of(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('삭제 완료: $success건 / 실패: $failed건')),
+        SnackBar(
+          backgroundColor: t.cardTint,
+          content: Text('삭제 완료: $success건 / 실패: $failed건', style: TextStyle(color: t.onSurface)),
+        ),
       );
     }
   } catch (e) {
@@ -698,7 +879,119 @@ Future<void> _deleteCompletedEventsFromGoogleCalendar(
     );
 
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('삭제 실패: $e')));
+      final t = _CompletedTokens.of(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: t.cardTint,
+          content: Text('삭제 실패: $e', style: TextStyle(color: t.onSurface)),
+        ),
+      );
     }
+  }
+}
+
+class _ConfirmSheetFrame extends StatelessWidget {
+  const _ConfirmSheetFrame({
+    required this.title,
+    required this.body,
+    required this.cancelLabel,
+    required this.confirmLabel,
+    required this.confirmColor,
+    required this.confirmFg,
+  });
+
+  final String title;
+  final Widget body;
+  final String cancelLabel;
+  final String confirmLabel;
+  final Color confirmColor;
+  final Color confirmFg;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = _CompletedTokens.of(context);
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            boxShadow: [
+              BoxShadow(
+                blurRadius: 24,
+                spreadRadius: 8,
+                color: t.scrim.withOpacity(0.18),
+                offset: const Offset(0, 8),
+              )
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Material(
+              color: t.surface,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 36,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: t.handle,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        color: t.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    body,
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: t.onSurface,
+                              side: BorderSide(color: t.divider.withOpacity(0.85)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onPressed: () => Navigator.pop(context, false),
+                            child: Text(cancelLabel),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: confirmColor,
+                              foregroundColor: confirmFg,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onPressed: () => Navigator.pop(context, true),
+                            child: Text(confirmLabel),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

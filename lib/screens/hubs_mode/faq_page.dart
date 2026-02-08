@@ -1,15 +1,139 @@
 // lib/screens/faq_page.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../routes.dart'; // ← 라우트 사용
+import '../../routes.dart';
 
-// === FAQ 페이지 전용 팔레트 (SelectorHubs의 FAQ 카드와 동일) ===
-// base  : #3949AB (Indigo 600)  - 배지/강조/버튼
-// dark  : #283593 (Indigo 800)  - 제목 텍스트
-// light : #7986CB (Indigo 300)  - 서피스 틴트/보더
-const Color _faqBase = Color(0xFF3949AB);
-const Color _faqDark = Color(0xFF283593);
-const Color _faqLight = Color(0xFF7986CB);
+/// ─────────────────────────────────────────────────────────────
+/// ✅ ParkinWorkin_text.png “브랜드 테마 tint” 유틸 (Head/Community/Selector와 동일 컨셉)
+double _contrastRatio(Color a, Color b) {
+  final la = a.computeLuminance();
+  final lb = b.computeLuminance();
+  final l1 = la >= lb ? la : lb;
+  final l2 = la >= lb ? lb : la;
+  return (l1 + 0.05) / (l2 + 0.05);
+}
+
+Color _resolveLogoTint({
+  required Color background,
+  required Color preferred,
+  required Color fallback,
+  double minContrast = 3.0,
+}) {
+  if (_contrastRatio(preferred, background) >= minContrast) return preferred;
+  return fallback;
+}
+
+/// ✅ 경고 방지: optional 파라미터 제거(실사용만)
+class _BrandTintedLogo extends StatelessWidget {
+  const _BrandTintedLogo({required this.height});
+
+  static const String _assetPath = 'assets/images/ParkinWorkin_text.png';
+  static const double _minContrast = 3.0;
+
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final bg = cs.background;
+
+    final tint = _resolveLogoTint(
+      background: bg,
+      preferred: cs.primary,
+      fallback: cs.onBackground,
+      minContrast: _minContrast,
+    );
+
+    return Image.asset(
+      _assetPath,
+      fit: BoxFit.contain,
+      height: height,
+      color: tint,
+      colorBlendMode: BlendMode.srcIn,
+    );
+  }
+}
+
+/// ✅ FAQ 화면 토큰(브랜드테마 기반)
+@immutable
+class _FaqTokens {
+  const _FaqTokens({
+    required this.pageBackground,
+    required this.appBarBackground,
+    required this.appBarForeground,
+    required this.divider,
+
+    required this.searchFill,
+    required this.searchBorder,
+    required this.searchFocusBorder,
+    required this.searchIcon,
+
+    required this.itemSurface,
+    required this.itemBorder,
+    required this.itemTitle,
+    required this.itemBody,
+
+    required this.metaText,
+    required this.emptySurface,
+    required this.emptyBorder,
+
+    required this.primaryActionBg,
+    required this.primaryActionFg,
+  });
+
+  final Color pageBackground;
+  final Color appBarBackground;
+  final Color appBarForeground;
+  final Color divider;
+
+  final Color searchFill;
+  final Color searchBorder;
+  final Color searchFocusBorder;
+  final Color searchIcon;
+
+  final Color itemSurface;
+  final Color itemBorder;
+  final Color itemTitle;
+  final Color itemBody;
+
+  final Color metaText;
+  final Color emptySurface;
+  final Color emptyBorder;
+
+  final Color primaryActionBg;
+  final Color primaryActionFg;
+
+  factory _FaqTokens.of(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    // ✅ FAQ는 “Indigo 고정” 대신, 테마가 제공하는 primary/secondary에 맞춰 자동 반영
+    // - 검색 강조/버튼: primary
+    // - 리스트 아이템: surface 기반 + outlineVariant
+    return _FaqTokens(
+      pageBackground: cs.background,
+      appBarBackground: cs.background,
+      appBarForeground: cs.onSurface,
+      divider: cs.outlineVariant,
+
+      searchFill: Color.alphaBlend(cs.primary.withOpacity(0.08), cs.surface),
+      searchBorder: cs.outlineVariant.withOpacity(0.85),
+      searchFocusBorder: cs.primary,
+      searchIcon: cs.primary,
+
+      itemSurface: cs.surfaceContainerLow,
+      itemBorder: cs.outlineVariant.withOpacity(0.85),
+      itemTitle: cs.onSurface,
+      itemBody: cs.onSurfaceVariant,
+
+      metaText: cs.onSurfaceVariant,
+      emptySurface: cs.surfaceContainerLow,
+      emptyBorder: cs.outlineVariant.withOpacity(0.85),
+
+      primaryActionBg: cs.primary,
+      primaryActionFg: cs.onPrimary,
+    );
+  }
+}
 
 class FaqPage extends StatefulWidget {
   const FaqPage({super.key});
@@ -166,54 +290,53 @@ class _FaqPageState extends State<FaqPage> {
   List<_FaqData> get _filtered {
     if (_query.trim().isEmpty) return _allFaqs;
     final key = _query.trim().toLowerCase();
-    // question(= "code. xxx") 텍스트에 부분 일치
     return _allFaqs.where((e) => e.question.toLowerCase().contains(key)).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = _FaqTokens.of(context);
     final text = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // ✅ 이 화면에서만 뒤로가기 pop을 막아 앱 종료 방지 (스낵바 안내 없음)
     return PopScope(
       canPop: false,
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: tokens.pageBackground,
         appBar: AppBar(
-          backgroundColor: Colors.transparent,
+          backgroundColor: tokens.appBarBackground,
           surfaceTintColor: Colors.transparent,
           elevation: 0,
           scrolledUnderElevation: 0,
           centerTitle: true,
-          systemOverlayStyle: const SystemUiOverlayStyle(
+          systemOverlayStyle: SystemUiOverlayStyle(
             statusBarColor: Colors.transparent,
-            statusBarIconBrightness: Brightness.dark,
-            statusBarBrightness: Brightness.light,
+            statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+            statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
           ),
           title: Text(
             'FAQ / 문의',
             style: text.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
               letterSpacing: 0.2,
-              color: cs.onSurface,
+              color: tokens.appBarForeground,
             ),
           ),
-          iconTheme: IconThemeData(color: cs.onSurface),
-          actionsIconTheme: IconThemeData(color: cs.onSurface),
+          iconTheme: IconThemeData(color: tokens.appBarForeground),
+          actionsIconTheme: IconThemeData(color: tokens.appBarForeground),
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1),
-            child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
+            child: Container(height: 1, color: tokens.divider),
           ),
         ),
         body: SafeArea(
           child: Container(
-            color: Colors.white,
+            color: tokens.pageBackground,
             width: double.infinity,
             child: ListView(
               padding: const EdgeInsets.all(24),
               children: [
-                // 검색바 (FAQ 팔레트 반영)
+                // ── 검색바 (브랜드테마 반영) ──
                 TextField(
                   controller: _searchCtrl,
                   onChanged: (v) => setState(() => _query = v),
@@ -223,12 +346,12 @@ class _FaqPageState extends State<FaqPage> {
                     hintText: 'common_user_00, service_area_page_01 등',
                     isDense: true,
                     filled: true,
-                    fillColor: _faqLight.withOpacity(0.08),
-                    prefixIcon: const Icon(Icons.search_rounded, color: _faqBase),
+                    fillColor: tokens.searchFill,
+                    prefixIcon: Icon(Icons.search_rounded, color: tokens.searchIcon),
                     suffixIcon: _query.isEmpty
                         ? null
                         : IconButton(
-                      icon: const Icon(Icons.clear_rounded, color: _faqBase),
+                      icon: Icon(Icons.clear_rounded, color: tokens.searchIcon),
                       tooltip: '지우기',
                       onPressed: () {
                         _searchCtrl.clear();
@@ -237,29 +360,32 @@ class _FaqPageState extends State<FaqPage> {
                     ),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: _faqLight.withOpacity(0.6)),
+                      borderSide: BorderSide(color: tokens.searchBorder),
                     ),
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: _faqLight.withOpacity(0.6)),
+                      borderSide: BorderSide(color: tokens.searchBorder),
                     ),
                     focusedBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: _faqBase, width: 1.6),
+                      borderSide: BorderSide(color: tokens.searchFocusBorder, width: 1.6),
                     ),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   ),
                 ),
                 const SizedBox(height: 12),
 
-                // 결과 개수 표시 (FAQ 팔레트 반영)
+                // ── 결과 개수 표시 ──
                 Row(
                   children: [
-                    const Icon(Icons.filter_alt_rounded, size: 16, color: _faqBase),
+                    Icon(Icons.filter_alt_rounded, size: 16, color: tokens.searchIcon),
                     const SizedBox(width: 6),
                     Text(
                       _query.isEmpty ? '전체 ${_allFaqs.length}건' : '검색 결과 ${_filtered.length}건',
-                      style: text.bodySmall?.copyWith(color: _faqDark.withOpacity(0.9)),
+                      style: text.bodySmall?.copyWith(
+                        color: tokens.metaText,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
@@ -269,25 +395,33 @@ class _FaqPageState extends State<FaqPage> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: _faqLight.withOpacity(0.16),
+                      color: tokens.emptySurface,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: _faqLight.withOpacity(0.45)),
+                      border: Border.all(color: tokens.emptyBorder),
                     ),
                     child: Text(
                       '검색 결과가 없습니다. 철자를 다시 확인해주세요.',
-                      style: text.bodyMedium?.copyWith(color: Colors.black87),
+                      style: text.bodyMedium?.copyWith(
+                        color: tokens.itemTitle,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   )
                 else
-                  ..._filtered.map((e) => _FaqItem(question: e.question, answer: e.answer)),
+                  ..._filtered.map(
+                        (e) => _FaqItem(
+                      question: e.question,
+                      answer: e.answer,
+                    ),
+                  ),
 
                 const SizedBox(height: 24),
 
-                // 문의하기 버튼 (FAQ 팔레트 반영)
+                // ── 문의하기 버튼 (브랜드테마 반영) ──
                 FilledButton.icon(
                   style: FilledButton.styleFrom(
-                    backgroundColor: _faqBase,
-                    foregroundColor: Colors.white,
+                    backgroundColor: tokens.primaryActionBg,
+                    foregroundColor: tokens.primaryActionFg,
                   ),
                   onPressed: () {
                     // TODO: 실제 문의 채널(오픈채팅/메일/폼)로 연결
@@ -303,13 +437,13 @@ class _FaqPageState extends State<FaqPage> {
           ),
         ),
 
-        // ▼ 바텀 펠리컨 이미지 (탭하면 선택화면으로 이동) — 화이트 배경 최적화 + 상단 구분선
+        // ── 하단 로고 (브랜드테마 tint + 테마 divider) ──
         bottomNavigationBar: SafeArea(
           top: false,
-          child: Container(
+          child: DecoratedBox(
             decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(top: BorderSide(color: Colors.black.withOpacity(0.06))),
+              color: tokens.pageBackground,
+              border: Border(top: BorderSide(color: tokens.divider, width: 1)),
             ),
             child: Material(
               color: Colors.transparent,
@@ -318,12 +452,13 @@ class _FaqPageState extends State<FaqPage> {
                   AppRoutes.selector,
                       (route) => false,
                 ),
-                borderRadius: BorderRadius.zero,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
                   child: SizedBox(
                     height: 120,
-                    child: Image.asset('assets/images/pelican.png'),
+                    child: Center(
+                      child: _BrandTintedLogo(height: 56),
+                    ),
                   ),
                 ),
               ),
@@ -353,15 +488,16 @@ class _FaqItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = _FaqTokens.of(context);
     final text = Theme.of(context).textTheme;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: _faqLight.withOpacity(0.16),
+        color: tokens.itemSurface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _faqLight.withOpacity(0.45)),
+        border: Border.all(color: tokens.itemBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -369,14 +505,17 @@ class _FaqItem extends StatelessWidget {
           Text(
             question,
             style: text.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: _faqDark, // 제목에 dark 톤 적용
+              fontWeight: FontWeight.w800,
+              color: tokens.itemTitle,
             ),
           ),
           const SizedBox(height: 8),
           Text(
             answer,
-            style: text.bodyMedium?.copyWith(color: Colors.black87),
+            style: text.bodyMedium?.copyWith(
+              color: tokens.itemBody,
+              height: 1.25,
+            ),
           ),
         ],
       ),

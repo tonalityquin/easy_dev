@@ -58,6 +58,10 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
   static const _success = Color(0xFF2E7D32);
   static const _warning = Color(0xFFF9A825);
 
+  // ✅ [리팩터링] TableCalendar 연도 범위 동적 확장용 패딩
+  //    _focusedDay.year 기준으로 ±_yearRangePadding 년을 보여줌
+  static const int _yearRangePadding = 5;
+
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
 
@@ -88,6 +92,20 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
   final Map<String, Map<int, String>> _outLoadedCache = {};
 
   final CommuteLogRepository _repo = CommuteLogRepository();
+
+  // ✅ [리팩터링] 연도 안전 범위(1~9999)
+  int _clampYear(int y) {
+    if (y < 1) return 1;
+    if (y > 9999) return 9999;
+    return y;
+  }
+
+  // ✅ [리팩터링] TableCalendar firstDay/lastDay를 focusedDay 기준으로 동적 산출
+  DateTime get _calendarFirstDay =>
+      DateTime(_clampYear(_focusedDay.year - _yearRangePadding), 1, 1);
+
+  DateTime get _calendarLastDay =>
+      DateTime(_clampYear(_focusedDay.year + _yearRangePadding), 12, 31);
 
   // 안전한 스낵바 호출(빌드 이후에만)
   void _showFailedAfterBuild(String msg) {
@@ -145,7 +163,7 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
       _outLoadedCache.clear();
 
       _selectedDay = null;
-      _focusedDay = DateTime.now();
+      _focusedDay = DateTime.now(); // ✅ 동적 범위이므로 그대로 사용 가능
     });
     context.read<CalendarSelectionState>().setUser(null);
     showSelectedSnackbar(context, '모든 데이터를 초기화했어요.');
@@ -589,8 +607,9 @@ class _AttendanceCalendarState extends State<AttendanceCalendar> {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(6, 8, 6, 10),
                 child: TableCalendar(
-                  firstDay: DateTime.utc(2025, 1, 1),
-                  lastDay: DateTime.utc(2025, 12, 31),
+                  // ✅ [리팩터링] 고정(2025) 범위 제거 → focusedDay 기준 동적 범위
+                  firstDay: _calendarFirstDay,
+                  lastDay: _calendarLastDay,
                   focusedDay: _focusedDay,
                   rowHeight: 84,
                   selectedDayPredicate: (day) => isSameDay(_selectedDay, day),

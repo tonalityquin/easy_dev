@@ -10,6 +10,81 @@ import 'commute_inside_package/widgets/double_commute_in_work_button_widget.dart
 import 'commute_inside_package/widgets/double_commute_in_info_card_widget.dart';
 import 'commute_inside_package/widgets/double_commute_in_header_widget.dart';
 
+/// ─────────────────────────────────────────────────────────────
+/// ✅ 로고(PNG) 가독성 보장 유틸
+///
+/// - 단색/검정 고정 PNG가 다크/브랜드 배경에서 안 보이는 문제를 방지:
+///   알파(투명도)를 마스크로 사용해 tint.
+/// - preferred가 배경과 대비가 부족하면 fallback으로 자동 폴백.
+///
+/// NOTE: 로고/큰 텍스트는 minContrast=3.0 기준을 기본으로 둡니다.
+double _contrastRatio(Color a, Color b) {
+  final la = a.computeLuminance();
+  final lb = b.computeLuminance();
+  final l1 = la >= lb ? la : lb;
+  final l2 = la >= lb ? lb : la;
+  return (l1 + 0.05) / (l2 + 0.05);
+}
+
+Color _resolveLogoTint({
+  required Color background,
+  required Color preferred,
+  required Color fallback,
+  double minContrast = 3.0,
+}) {
+  if (_contrastRatio(preferred, background) >= minContrast) return preferred;
+  return fallback;
+}
+
+/// ✅ 단색(검정 고정) PNG 로고를 테마에 맞춰 tint 하는 위젯
+class _BrandTintedLogo extends StatelessWidget {
+  const _BrandTintedLogo({
+    required this.assetPath,
+    required this.height,
+    this.preferredColor,
+    this.fallbackColor,
+    this.minContrast = 3.0,
+  });
+
+  final String assetPath;
+  final double height;
+
+  /// (선택) 기본은 cs.primary
+  final Color? preferredColor;
+
+  /// (선택) 기본은 cs.onBackground
+  final Color? fallbackColor;
+
+  final double minContrast;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    // ✅ 실제 화면 배경에 가장 근접한 scaffoldBackgroundColor를 기준으로 대비 판단
+    final bg = theme.scaffoldBackgroundColor;
+
+    final preferred = preferredColor ?? cs.primary;
+    final fallback = fallbackColor ?? cs.onBackground;
+
+    final tint = _resolveLogoTint(
+      background: bg,
+      preferred: preferred,
+      fallback: fallback,
+      minContrast: minContrast,
+    );
+
+    return Image.asset(
+      assetPath,
+      fit: BoxFit.contain,
+      height: height,
+      color: tint,
+      colorBlendMode: BlendMode.srcIn,
+    );
+  }
+}
+
 class DoubleCommuteInScreen extends StatefulWidget {
   const DoubleCommuteInScreen({super.key});
 
@@ -21,6 +96,12 @@ class _DoubleCommuteInScreenState extends State<DoubleCommuteInScreen> {
   final controller = DoubleCommuteInController();
 
   bool _isLoading = false;
+
+  // ✅ (변경) screen tag 텍스트 대신 표시할 “첨부 이미지” 에셋 경로
+  static const String _kPelicanTagAsset = 'assets/images/pelican_text.png';
+
+  // ✅ (신규) “보이는 크기만” 키우는 스케일 (레이아웃 높이에는 거의 영향 없음)
+  static const double _kTagScale = 3.0;
 
   @override
   void initState() {
@@ -63,11 +144,11 @@ class _DoubleCommuteInScreenState extends State<DoubleCommuteInScreen> {
     );
   }
 
-  Widget _buildScreenTag(BuildContext context) {
+  TextStyle _screenTagStyle(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final base = Theme.of(context).textTheme.labelSmall;
 
-    final style = (base ??
+    return (base ??
         const TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
@@ -77,6 +158,22 @@ class _DoubleCommuteInScreenState extends State<DoubleCommuteInScreen> {
       fontWeight: FontWeight.w600,
       letterSpacing: 0.2,
     );
+  }
+
+  /// ✅ (변경) 기존 텍스트 tag → pelican_text.png
+  /// - 레이아웃 점유 높이: fontSize + 3.0 (고정)
+  /// - 보이는 크기: Transform.scale 로 확대 (세로 길이 영향 최소화)
+  Widget _buildScreenTag(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    final style = _screenTagStyle(context);
+    final fontSize = (style.fontSize ?? 11.0).toDouble();
+
+    // ✅ 레이아웃 점유 높이(=텍스트 1줄 체감치)
+    final tagLayoutHeight = fontSize + 3.0;
+
+    // ✅ 기존 텍스트 색감(onSurfaceVariant 0.80)으로 이미지 tint
+    final tagPreferredTint = cs.onSurfaceVariant.withOpacity(0.80);
 
     return Positioned(
       top: 12,
@@ -84,7 +181,25 @@ class _DoubleCommuteInScreenState extends State<DoubleCommuteInScreen> {
       child: IgnorePointer(
         child: Semantics(
           label: 'screen_tag: WorkFlow A commute screen',
-          child: Text('WorkFlow A commute screen', style: style),
+          child: ExcludeSemantics(
+            child: SizedBox(
+              height: tagLayoutHeight, // ✅ 레이아웃 높이 고정
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Transform.scale(
+                  scale: _kTagScale, // ✅ 여기만 조절하면 “보이는 크기”가 변함
+                  alignment: Alignment.centerLeft,
+                  child: _BrandTintedLogo(
+                    assetPath: _kPelicanTagAsset,
+                    height: tagLayoutHeight,
+                    preferredColor: tagPreferredTint,
+                    fallbackColor: cs.onBackground,
+                    minContrast: 3.0,
+                  ),
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );
@@ -102,6 +217,7 @@ class _DoubleCommuteInScreenState extends State<DoubleCommuteInScreen> {
             return SafeArea(
               child: Stack(
                 children: [
+                  // ✅ (변경) screen tag 텍스트 → pelican_text.png
                   _buildScreenTag(context),
 
                   SingleChildScrollView(
@@ -128,7 +244,11 @@ class _DoubleCommuteInScreenState extends State<DoubleCommuteInScreen> {
                             Center(
                               child: SizedBox(
                                 height: 80,
-                                child: Image.asset('assets/images/pelican.png'),
+                                // ✅ (변경) 하단 텍스트 로고도 tint 적용
+                                child: _BrandTintedLogo(
+                                  assetPath: 'assets/images/ParkinWorkin_text.png',
+                                  height: 80,
+                                ),
                               ),
                             ),
                           ],

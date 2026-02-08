@@ -4,15 +4,118 @@ import 'package:googleapis/calendar/v3.dart' as gcal;
 
 import '../../dev_package/debug_package/debug_api_logger.dart';
 
-/// ───────────────────────────────────────────────────────────
-/// Company Calendar 팔레트 (추출 색상)
-/// base: #43A047, dark: #2E7D32, light: #A5D6A7, fg: #FFFFFF
-/// ───────────────────────────────────────────────────────────
-class _BoardColors {
-  static const base = Color(0xFF43A047);
-  static const dark = Color(0xFF2E7D32);
-  static const light = Color(0xFFA5D6A7);
-  static const fg = Color(0xFFFFFFFF);
+@immutable
+class _BoardTokens {
+  const _BoardTokens({
+    required this.divider,
+    required this.surface,
+    required this.surfaceLow,
+    required this.surfaceVariant,
+
+    required this.text,
+    required this.textSub,
+    required this.textMuted,
+
+    required this.accent,
+    required this.onAccent,
+    required this.accentContainer,
+    required this.onAccentContainer,
+
+    required this.badgeBgSelected,
+    required this.badgeFgSelected,
+    required this.badgeBg,
+    required this.badgeFg,
+
+    required this.todoDot,
+    required this.todoDotFg,
+    required this.doneDot,
+    required this.doneDotFg,
+
+    required this.cardTint,
+  });
+
+  final Color divider;
+
+  final Color surface;
+  final Color surfaceLow;
+  final Color surfaceVariant;
+
+  final Color text;
+  final Color textSub;
+  final Color textMuted;
+
+  final Color accent;
+  final Color onAccent;
+  final Color accentContainer;
+  final Color onAccentContainer;
+
+  final Color badgeBgSelected;
+  final Color badgeFgSelected;
+  final Color badgeBg;
+  final Color badgeFg;
+
+  final Color todoDot;
+  final Color todoDotFg;
+  final Color doneDot;
+  final Color doneDotFg;
+
+  final Color cardTint;
+
+  factory _BoardTokens.of(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    // ✅ 회사 캘린더 보드도 “브랜드테마”로 일관: primary 기반
+    final accent = cs.primary;
+    final onAccent = cs.onPrimary;
+
+    final accentContainer = cs.primaryContainer;
+    final onAccentContainer = cs.onPrimaryContainer;
+
+    // 배지: 선택은 primary, 비선택은 surfaceVariant 계열
+    final badgeBgSelected = accent;
+    final badgeFgSelected = onAccent;
+
+    final badgeBg = cs.surfaceVariant;
+    final badgeFg = cs.onSurfaceVariant;
+
+    // 도트: 미완료는 secondary, 완료는 primary(강조)
+    final todoDot = cs.secondary;
+    final todoDotFg = cs.onSecondary;
+    final doneDot = accent;
+    final doneDotFg = onAccent;
+
+    final surfaceLow = cs.surfaceContainerLow;
+    final cardTint = Color.alphaBlend(accent.withOpacity(0.08), cs.surface);
+
+    return _BoardTokens(
+      divider: cs.outlineVariant,
+
+      surface: cs.surface,
+      surfaceLow: surfaceLow,
+      surfaceVariant: cs.surfaceVariant,
+
+      text: cs.onSurface,
+      textSub: cs.onSurfaceVariant,
+      textMuted: cs.onSurfaceVariant.withOpacity(0.85),
+
+      accent: accent,
+      onAccent: onAccent,
+      accentContainer: accentContainer,
+      onAccentContainer: onAccentContainer,
+
+      badgeBgSelected: badgeBgSelected,
+      badgeFgSelected: badgeFgSelected,
+      badgeBg: badgeBg,
+      badgeFg: badgeFg,
+
+      todoDot: todoDot,
+      todoDotFg: todoDotFg,
+      doneDot: doneDot,
+      doneDotFg: doneDotFg,
+
+      cardTint: cardTint,
+    );
+  }
 }
 
 /// 보드 버킷 정의
@@ -71,7 +174,7 @@ class _BoardKanbanViewState extends State<BoardKanbanView> {
         tags: tags,
       );
     } catch (_) {
-      // 로깅 실패는 UI 기능에 영향 없도록 무시
+      // ignore
     }
   }
 
@@ -90,13 +193,13 @@ class _BoardKanbanViewState extends State<BoardKanbanView> {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = _BoardTokens.of(context);
     final now = DateTime.now();
 
     late final Map<BoardBucket, List<gcal.Event>> buckets;
     try {
       buckets = _splitByBucket(widget.allEvents, widget.progressOf, now);
     } catch (e) {
-      // bucket 분류 로직이 깨져도 화면이 죽지 않도록 로그 후 fallback
       _logApiError(
         tag: 'BoardKanbanView._splitByBucket',
         message: 'Kanban 버킷 분류 실패(예외)',
@@ -150,7 +253,7 @@ class _BoardKanbanViewState extends State<BoardKanbanView> {
             }
           },
         ),
-        const Divider(height: 1),
+        Divider(height: 1, color: tokens.divider),
         Expanded(
           child: PageView(
             controller: _pageController,
@@ -162,9 +265,7 @@ class _BoardKanbanViewState extends State<BoardKanbanView> {
                   tag: 'BoardKanbanView.onPageChanged',
                   message: '페이지 전환 상태 반영(setState) 실패',
                   error: e,
-                  extra: <String, dynamic>{
-                    'targetIndex': i,
-                  },
+                  extra: <String, dynamic>{'targetIndex': i},
                   tags: const <String>[_tCal, _tKanban, _tUi],
                 );
               }
@@ -263,26 +364,34 @@ class _TopTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = _BoardTokens.of(context);
+
     return Container(
-      color: _BoardColors.light.withOpacity(.15),
+      color: tokens.surfaceLow,
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
       child: Row(
         children: List.generate(pages.length, (i) {
           final sel = i == index;
           final p = pages[i];
+
+          final tabBg = sel ? tokens.accentContainer : Colors.transparent;
+          final tabBorder = sel ? tokens.accent.withOpacity(0.30) : Colors.transparent;
+
+          final titleColor = sel ? tokens.accent : tokens.text;
+          final badgeBg = sel ? tokens.badgeBgSelected : tokens.badgeBg;
+          final badgeFg = sel ? tokens.badgeFgSelected : tokens.badgeFg;
+
           return Expanded(
             child: InkWell(
               onTap: () => onTap(i),
               borderRadius: BorderRadius.circular(10),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                decoration: sel
-                    ? BoxDecoration(
-                  color: _BoardColors.light.withOpacity(.35),
+                decoration: BoxDecoration(
+                  color: tabBg,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _BoardColors.base.withOpacity(.35)),
-                )
-                    : null,
+                  border: Border.all(color: tabBorder),
+                ),
                 child: Center(
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -290,22 +399,22 @@ class _TopTabs extends StatelessWidget {
                       Text(
                         p.title,
                         style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          color: sel ? _BoardColors.dark : Colors.black87,
+                          fontWeight: FontWeight.w900,
+                          color: titleColor,
                         ),
                       ),
                       const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                         decoration: BoxDecoration(
-                          color: sel ? _BoardColors.base : _BoardColors.light,
+                          color: badgeBg,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
                           '${p.events.length}',
-                          style: const TextStyle(
-                            color: _BoardColors.fg,
-                            fontWeight: FontWeight.w700,
+                          style: TextStyle(
+                            color: badgeFg,
+                            fontWeight: FontWeight.w800,
                             fontSize: 12,
                           ),
                         ),
@@ -340,10 +449,12 @@ class _KanbanColumnPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = _BoardTokens.of(context);
+
     return Column(
       children: [
         _ColumnHeader(title: title, count: events.length),
-        const Divider(height: 1),
+        Divider(height: 1, color: tokens.divider),
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.all(8),
@@ -374,7 +485,6 @@ Future<void> _safeToggleProgress(
   try {
     await onToggleProgress(context, e, nextDone);
   } catch (err) {
-    // 토글 실패도 개발자가 DebugBottomSheet에서 즉시 확인 가능하게 로깅
     try {
       await DebugApiLogger().log(
         <String, dynamic>{
@@ -402,24 +512,32 @@ class _ColumnHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = _BoardTokens.of(context);
+
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-      color: _BoardColors.light.withOpacity(.15),
+      color: tokens.surfaceLow,
       child: Row(
         children: [
-          Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+          Text(
+            title,
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              color: tokens.text,
+            ),
+          ),
           const SizedBox(width: 6),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
-              color: _BoardColors.light,
+              color: tokens.badgeBg,
               borderRadius: BorderRadius.circular(12),
             ),
             child: Text(
               '$count',
-              style: const TextStyle(
-                color: _BoardColors.fg,
-                fontWeight: FontWeight.w700,
+              style: TextStyle(
+                color: tokens.badgeFg,
+                fontWeight: FontWeight.w800,
                 fontSize: 12,
               ),
             ),
@@ -443,15 +561,24 @@ class _EventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = _BoardTokens.of(context);
+
     final title = event.summary?.trim().isNotEmpty == true ? event.summary!.trim() : '(제목 없음)';
     final subtitle = _formatWhen(event);
     final isDone = progress == 100;
 
-    final card = Card(
+    final dotBg = isDone ? tokens.doneDot : tokens.todoDot;
+    final dotFg = isDone ? tokens.doneDotFg : tokens.todoDotFg;
+
+    return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
       elevation: 0,
-      color: Colors.white,
-      surfaceTintColor: _BoardColors.light.withOpacity(.15),
+      color: tokens.surface,
+      surfaceTintColor: tokens.cardTint,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: tokens.divider.withOpacity(0.85)),
+      ),
       child: ListTile(
         dense: true,
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -460,12 +587,12 @@ class _EventCard extends StatelessWidget {
           height: 32,
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: isDone ? Colors.green.shade600 : _BoardColors.base,
+            color: dotBg,
             shape: BoxShape.circle,
           ),
           child: Icon(
             isDone ? Icons.check_rounded : Icons.circle_outlined,
-            color: _BoardColors.fg,
+            color: dotFg,
             size: 18,
           ),
         ),
@@ -474,7 +601,8 @@ class _EventCard extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
+            color: tokens.text,
             decoration: isDone ? TextDecoration.lineThrough : null,
           ),
         ),
@@ -483,7 +611,7 @@ class _EventCard extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
-            color: Colors.grey.shade600,
+            color: tokens.textSub,
             decoration: isDone ? TextDecoration.lineThrough : null,
           ),
         ),
@@ -495,8 +623,6 @@ class _EventCard extends StatelessWidget {
         ),
       ),
     );
-
-    return card;
   }
 
   String _formatWhen(gcal.Event e) {
@@ -507,8 +633,7 @@ class _EventCard extends StatelessWidget {
     final s = e.start?.dateTime?.toLocal();
     final en = e.end?.dateTime?.toLocal();
     if (s == null) return '';
-    String hhmm(DateTime t) =>
-        '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+    String hhmm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
     if (en != null) return '${hhmm(s)}–${hhmm(en)}';
     return hhmm(s);
   }

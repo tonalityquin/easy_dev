@@ -16,12 +16,13 @@ class Field extends StatefulWidget {
 
   /// 전체 화면 바텀시트(92%)로 열기
   static Future<T?> showAsBottomSheet<T>(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
     return showModalBottomSheet<T>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      barrierColor: Colors.black54,
+      barrierColor: cs.scrim.withOpacity(0.45), // ✅ 브랜드 테마 scrim 사용
       builder: (sheetCtx) {
         final insets = MediaQuery.of(sheetCtx).viewInsets;
         return Padding(
@@ -69,11 +70,6 @@ class _FieldState extends State<Field> {
   static final DateFormat _fmtClockInBase = DateFormat('yyyy.MM.dd HH:mm:ss');
   static final DateFormat _fmtTodayBase = DateFormat('yyyy년 MM월 dd일');
   static final DateFormat _fmtUpdatedBase = DateFormat('yyyy.MM.dd HH:mm');
-
-  // ✅ 단색(회색) 톤
-  static const Color _neutral = Color(0xFF616161); // Grey 700
-  static const Color _neutralBorder = Color(0xFFE0E0E0); // Grey 300
-  static const Color _neutralBg = Color(0xFFF5F5F5); // Grey 100
 
   @override
   void initState() {
@@ -156,9 +152,7 @@ class _FieldState extends State<Field> {
   /// 지원 케이스:
   /// 1) 중첩 구조: { "<area>": { "<worker>": Timestamp, ... }, ... }
   /// 2) 플랫 키:  { "<area>.<worker>": Timestamp, ... }
-  Map<String, Map<String, Object?>> _normalizeByArea(
-      Map<String, dynamic> raw,
-      ) {
+  Map<String, Map<String, Object?>> _normalizeByArea(Map<String, dynamic> raw) {
     final Map<String, Map<String, Object?>> grouped = {};
 
     void put(String area, String worker, Object? value) {
@@ -436,7 +430,7 @@ class _FieldState extends State<Field> {
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      barrierColor: Colors.black54,
+      barrierColor: Theme.of(context).colorScheme.scrim.withOpacity(0.45), // ✅ 테마 scrim
       builder: (_) {
         return _AreaPickerSheet(
           allAreas: _allAreas,
@@ -471,6 +465,9 @@ class _FieldState extends State<Field> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final cs = theme.colorScheme;
+
         return AlertDialog(
           title: const Text('직원 삭제'),
           content: Text(
@@ -486,8 +483,8 @@ class _FieldState extends State<Field> {
             ),
             FilledButton(
               style: FilledButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-                foregroundColor: Colors.white,
+                backgroundColor: cs.error, // ✅ 테마 error
+                foregroundColor: cs.onError, // ✅ 테마 onError
               ),
               onPressed: () => Navigator.pop(ctx, true),
               child: const Text('삭제'),
@@ -581,6 +578,9 @@ class _FieldState extends State<Field> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
     final division = _division;
 
     final Widget pageBody = Padding(
@@ -608,20 +608,21 @@ class _FieldState extends State<Field> {
     // ===== 페이지 모드 =====
     if (!widget.asBottomSheet) {
       return Scaffold(
+        backgroundColor: cs.surface,
         appBar: AppBar(
-          backgroundColor: Colors.white,
+          backgroundColor: cs.surface,
           elevation: 0,
-          foregroundColor: Colors.black87,
-          surfaceTintColor: Colors.white,
-          title: const Text(
+          foregroundColor: cs.onSurface,
+          surfaceTintColor: Colors.transparent,
+          title: Text(
             '근무지 현황',
-            style: TextStyle(fontWeight: FontWeight.bold),
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
           ),
           centerTitle: true,
           automaticallyImplyLeading: false,
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1),
-            child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
+            child: Divider(height: 1, thickness: 1, color: cs.outlineVariant.withOpacity(0.6)),
           ),
         ),
         body: pageBody,
@@ -637,6 +638,9 @@ class _FieldState extends State<Field> {
   }
 
   Widget _buildCachedBody(BuildContext context, String? division) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
     // 1) prefs 로딩 중
     if (division == null) {
       return const Center(child: CircularProgressIndicator());
@@ -650,6 +654,7 @@ class _FieldState extends State<Field> {
           child: Text(
             'division 로드 실패: $_loadError',
             textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface),
           ),
         ),
       );
@@ -657,13 +662,14 @@ class _FieldState extends State<Field> {
 
     // 3) division 값 없음
     if (division.trim().isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
           child: Text(
             'SharedPreferences에 division 값이 없습니다.\n'
                 'division을 저장한 뒤 다시 시도하세요.',
             textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface),
           ),
         ),
       );
@@ -682,6 +688,7 @@ class _FieldState extends State<Field> {
           child: Text(
             'Firestore 문서 로드 오류: $_docError',
             textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface),
           ),
         ),
       );
@@ -689,17 +696,20 @@ class _FieldState extends State<Field> {
 
     // 6) 표시 데이터 없음(= 로컬 캐시 없음/비었음)
     if (_groupedCache.isEmpty) {
+      final msg = _hasLocalCache
+          ? '표시할 데이터가 없습니다.'
+          : '저장된 데이터(로컬 캐시)가 없습니다.\n'
+          '새로고침을 눌러 데이터를 가져오세요.\n\n'
+          'collection: commute_true_false\n'
+          'docId: ${division.trim()}';
+
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Text(
-            _hasLocalCache
-                ? '표시할 데이터가 없습니다.'
-                : '저장된 데이터(로컬 캐시)가 없습니다.\n'
-                '새로고침을 눌러 데이터를 가져오세요.\n\n'
-                'collection: commute_true_false\n'
-                'docId: ${division.trim()}',
+            msg,
             textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface),
           ),
         ),
       );
@@ -710,12 +720,13 @@ class _FieldState extends State<Field> {
     (_selectedAreas.isEmpty) ? _allAreas : _allAreas.where((a) => _selectedAreas.contains(a)).toList();
 
     if (visibleAreas.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
           child: Text(
             '선택된 지역에 표시할 데이터가 없습니다.',
             textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface),
           ),
         ),
       );
@@ -729,7 +740,7 @@ class _FieldState extends State<Field> {
         child: Divider(
           height: 1,
           thickness: 1,
-          color: Colors.black.withOpacity(0.06),
+          color: cs.outlineVariant.withOpacity(0.6),
         ),
       ),
       itemBuilder: (context, index) {
@@ -751,7 +762,7 @@ class _FieldState extends State<Field> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ✅ 대제목: 지역명 (단색 회색)
+            // ✅ 대제목: 지역명 (브랜드 테마 기반)
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 4, 4, 10),
               child: Row(
@@ -760,7 +771,7 @@ class _FieldState extends State<Field> {
                     width: 4,
                     height: 18,
                     decoration: BoxDecoration(
-                      color: _neutral.withOpacity(0.95),
+                      color: cs.primary, // ✅ 브랜드 primary
                       borderRadius: BorderRadius.circular(99),
                     ),
                   ),
@@ -768,10 +779,10 @@ class _FieldState extends State<Field> {
                   Expanded(
                     child: Text(
                       area,
-                      style: const TextStyle(
-                        fontSize: 16,
+                      style: theme.textTheme.titleSmall?.copyWith(
                         fontWeight: FontWeight.w900,
                         letterSpacing: 0.2,
+                        color: cs.onSurface,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -780,16 +791,15 @@ class _FieldState extends State<Field> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: _neutralBg,
+                      color: cs.surfaceVariant, // ✅ 중립 배경(테마)
                       borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: _neutralBorder),
+                      border: Border.all(color: cs.outlineVariant.withOpacity(0.7)),
                     ),
                     child: Text(
                       '${entries.length}명',
-                      style: TextStyle(
-                        fontSize: 12,
+                      style: theme.textTheme.labelMedium?.copyWith(
                         fontWeight: FontWeight.w900,
-                        color: _neutral.withOpacity(0.95),
+                        color: cs.onSurface,
                       ),
                     ),
                   ),
@@ -797,42 +807,42 @@ class _FieldState extends State<Field> {
               ),
             ),
 
-            // ✅ 카드: 지역별 사용자 목록 (단색 회색, 미일치만 빨강 + 삭제 기능)
+            // ✅ 카드: 지역별 사용자 목록 (테마 surface/outlineVariant)
             Card(
               elevation: 0,
-              color: Colors.white,
-              surfaceTintColor: Colors.white,
+              color: cs.surface,
+              surfaceTintColor: Colors.transparent,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(14),
-                side: const BorderSide(color: _neutralBorder),
+                side: BorderSide(color: cs.outlineVariant.withOpacity(0.7)),
               ),
               clipBehavior: Clip.antiAlias,
               child: Column(
                 children: [
-                  // 상단 헤더 (회색)
+                  // 상단 헤더 (테마 surfaceVariant)
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    decoration: const BoxDecoration(
-                      color: _neutralBg,
+                    decoration: BoxDecoration(
+                      color: cs.surfaceVariant,
                       border: Border(
-                        bottom: BorderSide(color: _neutralBorder),
+                        bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.7)),
                       ),
                     ),
                     child: Row(
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.location_on_rounded,
                           size: 18,
-                          color: _neutral,
+                          color: cs.onSurfaceVariant,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             '최근 출근 목록',
-                            style: TextStyle(
+                            style: theme.textTheme.bodyMedium?.copyWith(
                               fontWeight: FontWeight.w900,
-                              color: Colors.black.withOpacity(0.78),
+                              color: cs.onSurface,
                             ),
                           ),
                         ),
@@ -848,7 +858,7 @@ class _FieldState extends State<Field> {
                     separatorBuilder: (_, __) => Divider(
                       height: 1,
                       thickness: 1,
-                      color: Colors.black.withOpacity(0.06),
+                      color: cs.outlineVariant.withOpacity(0.6),
                     ),
                     itemBuilder: (context, i) {
                       final e = entries[i];
@@ -856,9 +866,8 @@ class _FieldState extends State<Field> {
                       final lastClockInText = _formatTimestamp(e.value); // ✅ 요일 포함
                       final isToday = _isTodayValue(e.value);
 
-                      // ✅ 오늘 불일치면 빨강 강조, 일치면 회색(단색)
-                      const warnColor = Colors.redAccent;
-                      final accent = isToday ? _neutral : warnColor;
+                      // ✅ 오늘=브랜드 primary, 미일치=테마 error
+                      final accent = isToday ? cs.primary : cs.error;
 
                       final delKey = _delKey(area, workerName);
                       final deleting = _deletingKeys.contains(delKey);
@@ -871,7 +880,7 @@ class _FieldState extends State<Field> {
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // 좌측 아이콘 - 미일치면 붉은 강조
+                            // 좌측 아이콘
                             Container(
                               width: 34,
                               height: 34,
@@ -879,14 +888,14 @@ class _FieldState extends State<Field> {
                                 color: accent.withOpacity(0.10),
                                 borderRadius: BorderRadius.circular(10),
                                 border: Border.all(
-                                  color: accent.withOpacity(0.22),
+                                  color: accent.withOpacity(0.28),
                                 ),
                               ),
                               alignment: Alignment.center,
                               child: Icon(
                                 Icons.badge_rounded,
                                 size: 18,
-                                color: accent.withOpacity(0.95),
+                                color: accent,
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -903,18 +912,15 @@ class _FieldState extends State<Field> {
                                         // ✅ 사용자 UI: "지역.이름"이 아니라 이름만 표시
                                         child: Text(
                                           workerName,
-                                          style: TextStyle(
-                                            fontSize: 13,
+                                          style: theme.textTheme.bodyMedium?.copyWith(
                                             fontWeight: FontWeight.w900,
-                                            color: isToday
-                                                ? Colors.black.withOpacity(0.9)
-                                                : warnColor.withOpacity(0.95),
+                                            color: isToday ? cs.onSurface : cs.error,
                                           ),
                                         ),
                                       ),
                                       const SizedBox(width: 8),
 
-                                      // 오늘 여부 배지 (오늘이 아니면 붉게)
+                                      // 오늘 여부 배지
                                       Container(
                                         padding: const EdgeInsets.symmetric(
                                           horizontal: 8,
@@ -924,15 +930,14 @@ class _FieldState extends State<Field> {
                                           color: accent.withOpacity(0.10),
                                           borderRadius: BorderRadius.circular(999),
                                           border: Border.all(
-                                            color: accent.withOpacity(0.22),
+                                            color: accent.withOpacity(0.28),
                                           ),
                                         ),
                                         child: Text(
                                           isToday ? '오늘' : '미일치',
-                                          style: TextStyle(
-                                            fontSize: 11,
+                                          style: theme.textTheme.labelSmall?.copyWith(
                                             fontWeight: FontWeight.w900,
-                                            color: accent.withOpacity(0.95),
+                                            color: accent,
                                           ),
                                         ),
                                       ),
@@ -940,7 +945,7 @@ class _FieldState extends State<Field> {
 
                                       // ✅ 삭제 버튼 (퇴사자 등)
                                       if (deleting)
-                                        const SizedBox(
+                                        SizedBox(
                                           width: 34,
                                           height: 28,
                                           child: Center(
@@ -949,6 +954,7 @@ class _FieldState extends State<Field> {
                                               height: 14,
                                               child: CircularProgressIndicator(
                                                 strokeWidth: 2,
+                                                color: cs.primary,
                                               ),
                                             ),
                                           ),
@@ -957,7 +963,7 @@ class _FieldState extends State<Field> {
                                         IconButton(
                                           tooltip: '직원 삭제',
                                           icon: const Icon(Icons.delete_outline),
-                                          color: Colors.black.withOpacity(0.55),
+                                          color: cs.onSurfaceVariant.withOpacity(0.8),
                                           onPressed: () => _confirmDeleteWorker(
                                             area: area,
                                             worker: workerName,
@@ -975,7 +981,7 @@ class _FieldState extends State<Field> {
                                       color: accent.withOpacity(0.06),
                                       borderRadius: BorderRadius.circular(12),
                                       border: Border.all(
-                                        color: accent.withOpacity(0.18),
+                                        color: accent.withOpacity(0.20),
                                       ),
                                     ),
                                     child: Row(
@@ -983,16 +989,15 @@ class _FieldState extends State<Field> {
                                         Icon(
                                           Icons.schedule_rounded,
                                           size: 16,
-                                          color: accent.withOpacity(0.85),
+                                          color: accent,
                                         ),
                                         const SizedBox(width: 8),
                                         Expanded(
                                           child: Text(
                                             lastClockInText,
-                                            style: TextStyle(
-                                              fontSize: 13,
+                                            style: theme.textTheme.bodyMedium?.copyWith(
                                               fontWeight: FontWeight.w900,
-                                              color: accent.withOpacity(0.95),
+                                              color: accent,
                                             ),
                                           ),
                                         ),
@@ -1025,6 +1030,8 @@ class _NinetyTwoPercentBottomSheetFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return FractionallySizedBox(
       heightFactor: 1,
       widthFactor: 1.0,
@@ -1034,20 +1041,21 @@ class _NinetyTwoPercentBottomSheetFrame extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
           child: DecoratedBox(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               boxShadow: [
                 BoxShadow(
                   blurRadius: 24,
                   spreadRadius: 8,
-                  color: Color(0x33000000),
-                  offset: Offset(0, 8),
+                  color: cs.shadow.withOpacity(0.18), // ✅ 테마 shadow
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
               child: Material(
-                color: Colors.white,
+                color: cs.surface, // ✅ 테마 surface
+                surfaceTintColor: Colors.transparent,
                 child: child,
               ),
             ),
@@ -1072,34 +1080,40 @@ class _SheetScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        const SizedBox(height: 8),
-        Container(
-          width: 36,
-          height: 4,
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(2),
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Container(
+      color: cs.surface,
+      child: Column(
+        children: [
+          const SizedBox(height: 8),
+          Container(
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+              color: cs.onSurfaceVariant.withOpacity(0.35),
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        ListTile(
-          dense: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-          title: Text(
-            title,
-            style: const TextStyle(fontWeight: FontWeight.w800),
+          const SizedBox(height: 8),
+          ListTile(
+            dense: true,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+            title: Text(
+              title,
+              style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            trailing: IconButton(
+              tooltip: '닫기',
+              icon: const Icon(Icons.close_rounded),
+              onPressed: onClose,
+            ),
           ),
-          trailing: IconButton(
-            tooltip: '닫기',
-            icon: const Icon(Icons.close_rounded),
-            onPressed: onClose,
-          ),
-        ),
-        const Divider(height: 1),
-        Expanded(child: body),
-      ],
+          Divider(height: 1, thickness: 1, color: cs.outlineVariant.withOpacity(0.6)),
+          Expanded(child: body),
+        ],
+      ),
     );
   }
 }
@@ -1110,25 +1124,29 @@ class _InfoBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.03),
+        color: cs.surfaceVariant.withOpacity(0.6),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.black.withOpacity(0.06)),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.7)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline_rounded, size: 22),
+          Icon(Icons.info_outline_rounded, size: 22, color: cs.onSurfaceVariant),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               '가장 마지막에 출근한 날짜를 출력합니다.',
-              style: const TextStyle(
+              style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w700,
                 height: 1.25,
+                color: cs.onSurface,
               ),
             ),
           ),
@@ -1159,6 +1177,9 @@ class _AreaFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
     String subLine = '$today입니다.';
     if (docLoading) subLine = '문서 로딩 중...';
     if (docError != null) subLine = '문서 로드 오류';
@@ -1167,9 +1188,9 @@ class _AreaFilterBar extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: cs.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.black.withOpacity(0.08)),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.7)),
       ),
       child: Row(
         children: [
@@ -1178,19 +1199,22 @@ class _AreaFilterBar extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 4),
-                Text(subLine, style: TextStyle(color: Colors.grey.shade700)),
+                Text(
+                  subLine,
+                  style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                ),
               ],
             ),
           ),
           IconButton(
             tooltip: '지역 선택',
             onPressed: onPickAreas,
-            icon: const Icon(Icons.filter_alt_rounded),
+            icon: Icon(Icons.filter_alt_rounded, color: cs.primary),
           ),
           IconButton(
             tooltip: '새로고침',
             onPressed: onRefresh,
-            icon: const Icon(Icons.refresh),
+            icon: Icon(Icons.refresh, color: cs.primary),
           ),
         ],
       ),
@@ -1249,7 +1273,8 @@ class _AreaPickerSheetState extends State<_AreaPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
     return SafeArea(
       child: DraggableScrollableSheet(
@@ -1259,12 +1284,12 @@ class _AreaPickerSheetState extends State<_AreaPickerSheet> {
         builder: (_, controller) {
           return Container(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: cs.surface,
               borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-              border: Border.all(color: cs.outlineVariant.withOpacity(.35)),
+              border: Border.all(color: cs.outlineVariant.withOpacity(.7)),
               boxShadow: [
                 BoxShadow(
-                  color: cs.primary.withOpacity(.06),
+                  color: cs.shadow.withOpacity(.14),
                   blurRadius: 20,
                   offset: const Offset(0, -6),
                 ),
@@ -1277,19 +1302,19 @@ class _AreaPickerSheetState extends State<_AreaPickerSheet> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: cs.outlineVariant.withOpacity(.6),
+                    color: cs.onSurfaceVariant.withOpacity(.35),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
                 const SizedBox(height: 8),
                 ListTile(
-                  title: const Text(
+                  title: Text(
                     '지역 선택',
-                    style: TextStyle(fontWeight: FontWeight.w800),
+                    style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
                   ),
                   subtitle: Text(
                     _isAll ? '전체 표시' : '${_tempSelected.length}개 선택됨',
-                    style: TextStyle(color: cs.outline),
+                    style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                   ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -1312,12 +1337,16 @@ class _AreaPickerSheetState extends State<_AreaPickerSheet> {
                     ],
                   ),
                 ),
-                const Divider(height: 1),
+                Divider(height: 1, thickness: 1, color: cs.outlineVariant.withOpacity(0.6)),
                 Expanded(
                   child: ListView.separated(
                     controller: controller,
                     itemCount: widget.allAreas.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    separatorBuilder: (_, __) => Divider(
+                      height: 1,
+                      thickness: 1,
+                      color: cs.outlineVariant.withOpacity(0.6),
+                    ),
                     itemBuilder: (_, i) {
                       final area = widget.allAreas[i];
                       final checked = _isAll ? false : _tempSelected.contains(area);
@@ -1327,11 +1356,11 @@ class _AreaPickerSheetState extends State<_AreaPickerSheet> {
                         onChanged: (_) => _toggleOne(area),
                         title: Text(
                           area,
-                          style: const TextStyle(fontWeight: FontWeight.w700),
+                          style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         subtitle: Text(
                           '해당 지역만 표시/숨김',
-                          style: TextStyle(color: cs.outline),
+                          style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                         ),
                         controlAffinity: ListTileControlAffinity.leading,
                       );

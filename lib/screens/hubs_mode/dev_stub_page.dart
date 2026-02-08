@@ -18,22 +18,148 @@ import '../hubs_mode/dev_package/dev_calendar_page.dart';
 // ✅ 추가: 개발용 플로팅 버블 on/off 토글을 위해 가져옴
 import '../hubs_mode/dev_package/dev_quick_actions.dart';
 
-/// ====== 개발 전용 팔레트 (개발 카드와 동일 톤) ======
-/// 버튼/Badge 배경
-const kDevPrimary = Color(0xFF6A1B9A); // Deep Purple
-const kDevPrimaryHover = Color(0xFF7B1FA2); // (옵션) Hover
-const kDevPrimaryPressed = Color(0xFF4A148C); // Pressed / Dark
+/// ─────────────────────────────────────────────────────────────
+/// ✅ ParkinWorkin_text.png “브랜드 테마 tint” 유틸 (Head/Community/Faq와 동일 컨셉)
+double _contrastRatio(Color a, Color b) {
+  final la = a.computeLuminance();
+  final lb = b.computeLuminance();
+  final l1 = la >= lb ? la : lb;
+  final l2 = la >= lb ? lb : la;
+  return (l1 + 0.05) / (l2 + 0.05);
+}
 
-/// 밝은 포인트(카드 tint/표면 강조)
-const kDevTint = Color(0xFFCE93D8); // Purple 200
+Color _resolveLogoTint({
+  required Color background,
+  required Color preferred,
+  required Color fallback,
+  double minContrast = 3.0,
+}) {
+  if (_contrastRatio(preferred, background) >= minContrast) return preferred;
+  return fallback;
+}
 
-/// 제목/링크성 텍스트(화이트 배경에서 가독성 우수)
-const kDevDarkText = Color(0xFF4A148C);
+/// ✅ 경고 방지: optional 파라미터 제거(실사용만)
+class _BrandTintedLogo extends StatelessWidget {
+  const _BrandTintedLogo({required this.height});
 
-/// Primary 위 텍스트/아이콘
-const kDevOnPrimary = Colors.white;
+  static const String _assetPath = 'assets/images/ParkinWorkin_text.png';
+  static const double _minContrast = 3.0;
 
-/// ====== 회사 달력(그린) 팔레트: Head/Hub 카드와 동일 톤 ======
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final bg = cs.background;
+
+    final tint = _resolveLogoTint(
+      background: bg,
+      preferred: cs.primary,
+      fallback: cs.onBackground,
+      minContrast: _minContrast,
+    );
+
+    return Image.asset(
+      _assetPath,
+      fit: BoxFit.contain,
+      height: height,
+      color: tint,
+      colorBlendMode: BlendMode.srcIn,
+    );
+  }
+}
+
+/// ─────────────────────────────────────────────────────────────
+/// ✅ Dev 허브 토큰: “브랜드 테마” 기준으로 전체 화면 요소를 결정
+@immutable
+class _DevTokens {
+  const _DevTokens({
+    required this.pageBackground,
+    required this.appBarBackground,
+    required this.appBarForeground,
+    required this.divider,
+
+    required this.cardSurface,
+    required this.cardBorder,
+
+    required this.titleColor,
+    required this.subtitleColor,
+
+    required this.headerTintSurface,
+    required this.headerBadgeBg,
+    required this.headerBadgeFg,
+    required this.headerTextColor,
+
+    required this.bubbleChipBgOn,
+    required this.bubbleChipBgOff,
+    required this.bubbleChipBorderOn,
+    required this.bubbleChipBorderOff,
+    required this.bubbleChipTextOn,
+    required this.bubbleChipTextOff,
+  });
+
+  final Color pageBackground;
+  final Color appBarBackground;
+  final Color appBarForeground;
+  final Color divider;
+
+  final Color cardSurface;
+  final Color cardBorder;
+
+  final Color titleColor;
+  final Color subtitleColor;
+
+  final Color headerTintSurface;
+  final Color headerBadgeBg;
+  final Color headerBadgeFg;
+  final Color headerTextColor;
+
+  final Color bubbleChipBgOn;
+  final Color bubbleChipBgOff;
+  final Color bubbleChipBorderOn;
+  final Color bubbleChipBorderOff;
+  final Color bubbleChipTextOn;
+  final Color bubbleChipTextOff;
+
+  factory _DevTokens.of(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    // Dev “느낌”은 유지하되(보라톤), 화면 전체는 테마 기반으로 반영
+    // - 헤더/토글은 primary 계열을 적극 사용
+    // - 카드/보더/텍스트는 surface/onSurfaceVariant 규칙 준수
+    final headerTint = Color.alphaBlend(cs.primary.withOpacity(0.16), cs.surfaceContainerLow);
+    final badgeBg = cs.primary;
+    final badgeFg = cs.onPrimary;
+
+    return _DevTokens(
+      pageBackground: cs.background,
+      appBarBackground: cs.background,
+      appBarForeground: cs.onSurface,
+      divider: cs.outlineVariant,
+
+      cardSurface: cs.surface,
+      cardBorder: cs.outlineVariant.withOpacity(0.85),
+
+      titleColor: cs.onSurface,
+      subtitleColor: cs.onSurfaceVariant,
+
+      headerTintSurface: headerTint,
+      headerBadgeBg: badgeBg,
+      headerBadgeFg: badgeFg,
+      headerTextColor: cs.onSurface,
+
+      bubbleChipBgOn: cs.primary.withOpacity(0.12),
+      bubbleChipBgOff: cs.surfaceVariant,
+      bubbleChipBorderOn: cs.primary.withOpacity(0.35),
+      bubbleChipBorderOff: cs.outlineVariant,
+      bubbleChipTextOn: cs.primary,
+      bubbleChipTextOff: cs.outline,
+    );
+  }
+}
+
+/// ─────────────────────────────────────────────────────────────
+/// ✅ 회사 달력(그린) 팔레트: 기존 의도 유지(카드별 대표색)
 const calBase = Color(0xFF43A047); // base
 const calDark = Color(0xFF2E7D32); // dark (title)
 const calLight = Color(0xFFA5D6A7); // light (tint)
@@ -44,49 +170,50 @@ class DevStubPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final tokens = _DevTokens.of(context);
     final text = Theme.of(context).textTheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     // ✅ 이 화면에서만 뒤로가기 pop을 막아 앱 종료 방지 (알림 스낵바 없음)
     return PopScope(
       canPop: false,
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: tokens.pageBackground,
         appBar: AppBar(
-          backgroundColor: Colors.transparent,
+          backgroundColor: tokens.appBarBackground,
           surfaceTintColor: Colors.transparent,
           elevation: 0,
           scrolledUnderElevation: 0,
           centerTitle: true,
-          systemOverlayStyle: const SystemUiOverlayStyle(
+          systemOverlayStyle: SystemUiOverlayStyle(
             statusBarColor: Colors.transparent,
-            statusBarIconBrightness: Brightness.dark,
-            statusBarBrightness: Brightness.light,
+            statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+            statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
           ),
           title: Text(
             '개발 허브',
             style: text.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
               letterSpacing: 0.2,
-              color: cs.onSurface,
+              color: tokens.appBarForeground,
             ),
           ),
-          iconTheme: IconThemeData(color: cs.onSurface),
-          actionsIconTheme: IconThemeData(color: cs.onSurface),
+          iconTheme: IconThemeData(color: tokens.appBarForeground),
+          actionsIconTheme: IconThemeData(color: tokens.appBarForeground),
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1),
-            child: Container(height: 1, color: Colors.black.withOpacity(0.06)),
+            child: Container(height: 1, color: tokens.divider),
           ),
         ),
         body: SafeArea(
           child: Container(
-            color: Colors.white,
+            color: tokens.pageBackground,
             width: double.infinity,
             padding: const EdgeInsets.all(24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const _HeaderBanner(),
+                _HeaderBanner(tokens: tokens),
                 const SizedBox(height: 16),
 
                 // ✅ 반응형 Grid
@@ -100,14 +227,14 @@ class DevStubPage extends StatelessWidget {
                           ? 3
                           : 2;
                       const spacing = 12.0;
-                      final textScale =
-                      MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
+                      final textScale = MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
 
-                      final tileWidth =
-                          (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
-                      final baseTileHeight = 150.0;
+                      final tileWidth = (width - spacing * (crossAxisCount - 1)) / crossAxisCount;
+                      const baseTileHeight = 150.0;
                       final tileHeight = baseTileHeight * textScale;
                       final childAspectRatio = tileWidth / tileHeight;
+
+                      final cs = Theme.of(context).colorScheme;
 
                       final cards = <Widget>[
                         _ActionCard(
@@ -176,7 +303,7 @@ class DevStubPage extends StatelessWidget {
                               context: context,
                               isScrollControlled: true,
                               backgroundColor: Colors.transparent,
-                              builder: (_) => const DebugBottomSheet(),  // ✅ 깔끔하게 이 한 줄
+                              builder: (_) => const DebugBottomSheet(),
                             );
                           },
                         ),
@@ -188,14 +315,14 @@ class DevStubPage extends StatelessWidget {
                           subtitle: 'Obsidian',
                           bg: cs.primaryContainer,
                           fg: cs.onPrimaryContainer,
-                          tintColor: kDevTint.withOpacity(0.45),
-                          titleColor: kDevDarkText,
+                          tintColor: cs.primary.withOpacity(0.10),
+                          titleColor: cs.primary,
                           onTap: () async {
                             await DevMemo.togglePanel();
                           },
                         ),
 
-                        // ✅ 개인 달력 (그린 팔레트) — 바텀시트(92%)로 열기
+                        // ✅ 개인 달력(그린 팔레트) — 바텀시트로 열기
                         _ActionCard(
                           icon: Icons.calendar_month_rounded,
                           title: '개인 달력',
@@ -216,30 +343,29 @@ class DevStubPage extends StatelessWidget {
                           subtitle: '문서 편집 · Docs API',
                           bg: cs.primaryContainer,
                           fg: cs.onPrimaryContainer,
-                          tintColor: kDevTint.withOpacity(0.35),
-                          titleColor: kDevDarkText,
+                          tintColor: cs.primary.withOpacity(0.08),
+                          titleColor: cs.primary,
                           onTap: () async {
                             GoogleDocsDocPanel.enabled.value = true;
                             await GoogleDocsDocPanel.togglePanel();
                           },
                         ),
 
-                        // ✅ NEW: SQLite 탐색기
+                        // ✅ SQLite 탐색기
                         _ActionCard(
                           icon: Icons.storage_rounded,
                           title: 'SQLite',
                           subtitle: 'DB 탐색기 · 미리보기',
                           bg: cs.primaryContainer,
                           fg: cs.onPrimaryContainer,
-                          tintColor: Colors.blueGrey.withOpacity(.15),
+                          tintColor: cs.secondary.withOpacity(0.08),
                           onTap: () {
                             showModalBottomSheet(
                               context: context,
                               isScrollControlled: true,
                               backgroundColor: Colors.transparent,
                               builder: (_) => const Material(
-                                borderRadius:
-                                BorderRadius.vertical(top: Radius.circular(16)),
+                                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                                 clipBehavior: Clip.antiAlias,
                                 child: SizedBox(
                                   height: 560,
@@ -270,15 +396,13 @@ class DevStubPage extends StatelessWidget {
           ),
         ),
 
-        // ✅ Pelican 이미지는 하얀 배경에 최적화 → 탭 시 '/selector'로 이동
+        // ✅ 하단 로고: 브랜드 테마 tint 적용 + divider 적용
         bottomNavigationBar: SafeArea(
           top: false,
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(
-                top: BorderSide(color: Colors.black.withOpacity(0.06), width: 1),
-              ),
+              color: tokens.pageBackground,
+              border: Border(top: BorderSide(color: tokens.divider, width: 1)),
             ),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
@@ -290,7 +414,9 @@ class DevStubPage extends StatelessWidget {
                 ),
                 child: SizedBox(
                   height: 120,
-                  child: Image.asset('assets/images/pelican.png'),
+                  child: Center(
+                    child: _BrandTintedLogo(height: 56),
+                  ),
                 ),
               ),
             ),
@@ -302,44 +428,46 @@ class DevStubPage extends StatelessWidget {
 }
 
 class _HeaderBanner extends StatelessWidget {
-  const _HeaderBanner();
+  const _HeaderBanner({required this.tokens});
+
+  final _DevTokens tokens;
 
   @override
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
-    final cs = Theme.of(context).colorScheme;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: kDevTint.withOpacity(0.75), // ✅ 개발 tint 적용
+        color: tokens.headerTintSurface,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: tokens.divider.withOpacity(0.85)),
       ),
       child: Row(
         children: [
-          // 아이콘 배지 — Dev Primary 대비 White 아이콘
+          // 아이콘 배지 — 테마 primary 기반
           Container(
             width: 44,
             height: 44,
-            decoration: const BoxDecoration(
-              color: kDevPrimary, // ✅ 개발 Primary
+            decoration: BoxDecoration(
+              color: tokens.headerBadgeBg,
               shape: BoxShape.circle,
             ),
             alignment: Alignment.center,
-            child: const Icon(Icons.developer_mode_rounded, color: kDevOnPrimary),
+            child: Icon(Icons.developer_mode_rounded, color: tokens.headerBadgeFg),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               '개발 허브 입니다.',
               style: text.bodyMedium?.copyWith(
-                color: kDevDarkText, // ✅ 가독성 좋은 Deep Purple 계열 텍스트
+                color: tokens.headerTextColor,
                 fontWeight: FontWeight.w700,
               ),
             ),
           ),
 
-          // 🔘 ON/OFF 토글 — 오른쪽에 고정
+          // 🔘 ON/OFF 토글 — 오른쪽 고정(브랜드 테마 반영)
           ValueListenableBuilder<bool>(
             valueListenable: DevQuickActions.enabled,
             builder: (context, on, _) {
@@ -349,16 +477,16 @@ class _HeaderBanner extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: on ? kDevPrimary.withOpacity(.12) : cs.surfaceVariant,
+                      color: on ? tokens.bubbleChipBgOn : tokens.bubbleChipBgOff,
                       borderRadius: BorderRadius.circular(999),
                       border: Border.all(
-                        color: on ? kDevPrimary.withOpacity(.35) : cs.outlineVariant,
+                        color: on ? tokens.bubbleChipBorderOn : tokens.bubbleChipBorderOff,
                       ),
                     ),
                     child: Text(
                       on ? 'Bubble ON' : 'Bubble OFF',
                       style: text.labelMedium?.copyWith(
-                        color: on ? kDevDarkText : cs.outline,
+                        color: on ? tokens.bubbleChipTextOn : tokens.bubbleChipTextOff,
                         fontWeight: FontWeight.w700,
                         letterSpacing: .2,
                       ),
@@ -370,7 +498,6 @@ class _HeaderBanner extends StatelessWidget {
                     onChanged: (v) async {
                       DevQuickActions.setEnabled(v);
                       if (v) {
-                        // 켜질 때 바로 부착 시도
                         await DevQuickActions.mountIfNeeded();
                       }
                       HapticFeedback.selectionClick();
@@ -397,10 +524,15 @@ class _ActionCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final Color bg; // 배지 배경(base)
-  final Color fg; // 배지 아이콘(onBase)
-  final Color? tintColor; // 카드 surfaceTint(light)
-  final Color? titleColor; // 제목 색(dark)
+
+  // 배지 색(카드 아이콘 원형)
+  final Color bg;
+  final Color fg;
+
+  // 카드 표면 tint, 제목 컬러(옵션)
+  final Color? tintColor;
+  final Color? titleColor;
+
   final VoidCallback? onTap;
 
   const _ActionCard({
@@ -416,15 +548,21 @@ class _ActionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
     return Card(
-      color: Colors.white,
+      // ✅ white 고정 제거 → 테마 surface
+      color: cs.surface,
       elevation: 1,
       clipBehavior: Clip.antiAlias,
       surfaceTintColor: tintColor ?? bg,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+      ),
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          // 여백 최적화
           padding: const EdgeInsets.all(12),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -451,8 +589,8 @@ class _ActionCard extends StatelessWidget {
                 title,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: titleColor ?? Colors.black,
+                  fontWeight: FontWeight.w800,
+                  color: titleColor ?? cs.onSurface,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -462,9 +600,10 @@ class _ActionCard extends StatelessWidget {
                 subtitle,
                 textAlign: TextAlign.center,
                 style: TextStyle(
-                  color: Colors.grey.shade600,
+                  // ✅ grey 하드코딩 제거 → onSurfaceVariant
+                  color: cs.onSurfaceVariant,
                   fontSize: 12,
-                  height: 1.15, // 2줄일 때도 촘촘하게
+                  height: 1.15,
                 ),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,

@@ -11,6 +11,68 @@ import '../tablet_mode/body_panels/tablet_right_panel.dart';
 import '../tablet_mode/widgets/tablet_top_navigation.dart';
 import '../tablet_mode/states/tablet_pad_mode_state.dart';
 
+/// ─────────────────────────────────────────────────────────────
+/// ✅ 로고(PNG) 가독성 보장 유틸
+/// - 단색/검정 고정 PNG 로고가 다크/브랜드 배경에서 안 보이는 문제 방지
+/// - scaffoldBackgroundColor 기준으로 대비 계산 후 tint / 폴백
+double _contrastRatio(Color a, Color b) {
+  final la = a.computeLuminance();
+  final lb = b.computeLuminance();
+  final l1 = la >= lb ? la : lb;
+  final l2 = la >= lb ? lb : la;
+  return (l1 + 0.05) / (l2 + 0.05);
+}
+
+Color _resolveLogoTint({
+  required Color background,
+  required Color preferred,
+  required Color fallback,
+  double minContrast = 3.0,
+}) {
+  if (_contrastRatio(preferred, background) >= minContrast) return preferred;
+  return fallback;
+}
+
+/// ✅ (경고 방지) required 파라미터만 사용하는 tint 로고 위젯
+/// - BlendMode.srcIn: 원본 RGB 버리고 알파만 유지한 채 tint 적용
+class _BrandTintedLogo extends StatelessWidget {
+  const _BrandTintedLogo({
+    required this.assetPath,
+    required this.height,
+    required this.preferredColor,
+    required this.fallbackColor,
+    this.minContrast = 3.0,
+  });
+
+  final String assetPath;
+  final double height;
+
+  final Color preferredColor;
+  final Color fallbackColor;
+  final double minContrast;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bg = theme.scaffoldBackgroundColor;
+
+    final tint = _resolveLogoTint(
+      background: bg,
+      preferred: preferredColor,
+      fallback: fallbackColor,
+      minContrast: minContrast,
+    );
+
+    return Image.asset(
+      assetPath,
+      fit: BoxFit.contain,
+      height: height,
+      color: tint,
+      colorBlendMode: BlendMode.srcIn,
+    );
+  }
+}
+
 class TabletPage extends StatefulWidget {
   const TabletPage({super.key});
 
@@ -25,6 +87,9 @@ class _TabletPageState extends State<TabletPage> {
   final Set<String> _completedChipSet = <String>{};
   final Set<String> _selectedChips = <String>{};
   String? _areaCache;
+
+  // ✅ 하단 로고 크기(여기만 바꾸면 크기 조절)
+  static const double _kBottomLogoHeight = 44.0;
 
   void _addCompletedChip(String plateNumber) {
     if (_completedChipSet.add(plateNumber)) {
@@ -248,8 +313,15 @@ class _TabletPageState extends State<TabletPage> {
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 10),
                   child: SizedBox(
-                    height: 44,
-                    child: Image.asset('assets/images/pelican.png'),
+                    height: _kBottomLogoHeight,
+                    // ✅ (변경) 하단 텍스트 로고 tint 적용 + 대비 부족 시 폴백
+                    child: _BrandTintedLogo(
+                      assetPath: 'assets/images/ParkinWorkin_text.png',
+                      height: _kBottomLogoHeight,
+                      preferredColor: cs.primary,
+                      fallbackColor: cs.onBackground,
+                      minContrast: 3.0,
+                    ),
                   ),
                 ),
               ],

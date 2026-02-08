@@ -24,6 +24,65 @@ import 'double_live_ocr_page.dart';
 
 import '../../../utils/usage/usage_reporter.dart';
 
+/// ─────────────────────────────────────────────────────────────
+/// ✅ 로고(PNG) 가독성 보장 유틸
+double _contrastRatio(Color a, Color b) {
+  final la = a.computeLuminance();
+  final lb = b.computeLuminance();
+  final l1 = la >= lb ? la : lb;
+  final l2 = la >= lb ? lb : la;
+  return (l1 + 0.05) / (l2 + 0.05);
+}
+
+Color _resolveLogoTint({
+  required Color background,
+  required Color preferred,
+  required Color fallback,
+  double minContrast = 3.0,
+}) {
+  if (_contrastRatio(preferred, background) >= minContrast) return preferred;
+  return fallback;
+}
+
+/// ✅ (경고 방지) required 파라미터만 사용하는 tint 로고 위젯
+class _BrandTintedLogo extends StatelessWidget {
+  const _BrandTintedLogo({
+    required this.assetPath,
+    required this.height,
+    required this.preferredColor,
+    required this.fallbackColor,
+    this.minContrast = 3.0,
+  });
+
+  final String assetPath;
+  final double height;
+
+  final Color preferredColor;
+  final Color fallbackColor;
+  final double minContrast;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bg = theme.scaffoldBackgroundColor;
+
+    final tint = _resolveLogoTint(
+      background: bg,
+      preferred: preferredColor,
+      fallback: fallbackColor,
+      minContrast: minContrast,
+    );
+
+    return Image.asset(
+      assetPath,
+      fit: BoxFit.contain,
+      height: height,
+      color: tint,
+      colorBlendMode: BlendMode.srcIn,
+    );
+  }
+}
+
 /// 도크에서 어떤 칸을 편집 중인지 구분
 enum _DockField { front, mid, back }
 
@@ -42,6 +101,12 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
   final FirestorePlateRepository _plateRepo = FirestorePlateRepository();
 
   static const String screenTag = 'double plate input';
+
+  // ✅ (신규) screen tag 텍스트 대신 사용할 이미지
+  static const String _kScreenTagAsset = 'assets/images/pelican_text.png';
+
+  // ✅ (권장 고정) 좌측 상단 태그 이미지 높이
+  static const double _kScreenTagHeight = 54.0;
 
   static const String _prefsHasMonthlyKey = 'has_monthly_parking';
 
@@ -1135,20 +1200,16 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
     }
   }
 
+  /// ✅ (수정) 기존 좌측상단 screenTag 텍스트 → pelican_text.png 태그 이미지로 교체
+  /// - 기존과 동일한 위치(SafeArea top-left, left 12 / top 4)
+  /// - IgnorePointer 유지(탭 이벤트 방해 없음)
+  /// - Semantics label 유지(접근성/로그 태그)
   Widget _buildScreenTag(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    final base = Theme.of(context).textTheme.labelSmall;
-    final style = (base ??
-        const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ))
-        .copyWith(
-      color: cs.onSurfaceVariant,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.2,
-    );
+    // ✅ 기존 텍스트 태그 톤(onSurfaceVariant 0.80)으로 tint 우선 시도
+    // 대비 부족 시 onBackground로 폴백
+    final tagPreferredTint = cs.onSurfaceVariant.withOpacity(0.80);
 
     return SafeArea(
       child: IgnorePointer(
@@ -1158,7 +1219,15 @@ class _DoubleInputPlateScreenState extends State<DoubleInputPlateScreen> {
             padding: const EdgeInsets.only(left: 12, top: 4),
             child: Semantics(
               label: 'screen_tag: $screenTag',
-              child: Text(screenTag, style: style),
+              child: ExcludeSemantics(
+                child: _BrandTintedLogo(
+                  assetPath: _kScreenTagAsset,
+                  height: _kScreenTagHeight,
+                  preferredColor: tagPreferredTint,
+                  fallbackColor: cs.onBackground,
+                  minContrast: 3.0,
+                ),
+              ),
             ),
           ),
         ),

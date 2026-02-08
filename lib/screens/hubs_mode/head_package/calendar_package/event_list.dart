@@ -6,7 +6,6 @@ import 'package:googleapis/calendar/v3.dart' as gcal;
 
 import '../../dev_package/debug_package/debug_api_logger.dart';
 
-
 class EventList extends StatelessWidget {
   const EventList({
     super.key,
@@ -25,8 +24,18 @@ class EventList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
     if (events.isEmpty) {
-      return const Center(child: Text('이벤트가 없습니다.'));
+      return Center(
+        child: Text(
+          '이벤트가 없습니다.',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: cs.onSurfaceVariant,
+          ),
+        ),
+      );
     }
 
     final fmtDate = DateFormat('yyyy-MM-dd (EEE)');
@@ -34,7 +43,10 @@ class EventList extends StatelessWidget {
 
     return ListView.separated(
       itemCount: events.length,
-      separatorBuilder: (_, __) => const Divider(height: 1),
+      separatorBuilder: (_, __) => Divider(
+        height: 1,
+        color: cs.outlineVariant.withOpacity(0.6),
+      ),
       itemBuilder: (context, i) {
         final e = events[i];
 
@@ -47,25 +59,49 @@ class EventList extends StatelessWidget {
             : '(시작 시간 미정)';
 
         final done = progressOf(e) == 100;
+        final title = (e.summary?.trim().isNotEmpty == true) ? e.summary!.trim() : '(제목 없음)';
 
         return ListTile(
-          leading: Checkbox(
-            value: done,
-            onChanged: (v) async {
-              await _safeToggleProgress(context, e, v ?? false, onToggleProgress);
-            },
+          leading: Theme(
+            // ✅ Checkbox도 테마 기반 컬러로 일관 적용
+            data: theme.copyWith(
+              checkboxTheme: theme.checkboxTheme.copyWith(
+                fillColor: WidgetStateProperty.resolveWith<Color?>((states) {
+                  if (states.contains(WidgetState.selected)) return cs.primary;
+                  return cs.onSurfaceVariant.withOpacity(0.25);
+                }),
+                checkColor: WidgetStateProperty.all<Color>(cs.onPrimary),
+              ),
+            ),
+            child: Checkbox(
+              value: done,
+              onChanged: (v) async {
+                await _safeToggleProgress(context, e, v ?? false, onToggleProgress);
+              },
+            ),
           ),
           title: Text(
-            (e.summary?.trim().isNotEmpty == true) ? e.summary!.trim() : '(제목 없음)',
+            title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: done ? const TextStyle(decoration: TextDecoration.lineThrough) : null,
+            style: done
+                ? theme.textTheme.bodyLarge?.copyWith(
+              decoration: TextDecoration.lineThrough,
+              color: cs.onSurfaceVariant,
+            )
+                : theme.textTheme.bodyLarge?.copyWith(
+              color: cs.onSurface,
+            ),
           ),
           subtitle: Text(
             when,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: cs.onSurfaceVariant,
+            ),
           ),
+
           // ▶︎ 탭하면 "보기(읽기 전용) 시트"를 띄움 (수정 아이콘으로만 편집 진입)
           onTap: () => _showEventViewSheet(
             context,
@@ -76,18 +112,18 @@ class EventList extends StatelessWidget {
             progressOf: progressOf,
           ),
 
-          // ▶︎ 우측 액션: 편집/삭제
+          // ▶︎ 우측 액션: 편집/삭제 (테마 컬러)
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
                 tooltip: '수정',
-                icon: const Icon(Icons.edit_outlined),
+                icon: Icon(Icons.edit_outlined, color: cs.primary),
                 onPressed: () => _safeEdit(context, e, onEdit),
               ),
               IconButton(
                 tooltip: '삭제',
-                icon: const Icon(Icons.delete_outline),
+                icon: Icon(Icons.delete_outline, color: cs.error),
                 onPressed: () => _safeDelete(context, e, onDelete),
               ),
             ],
@@ -142,7 +178,11 @@ Map<String, dynamic> _eventCtx(gcal.Event e) {
   };
 }
 
-Future<void> _safeEdit(BuildContext context, gcal.Event e, void Function(BuildContext, gcal.Event) onEdit) async {
+Future<void> _safeEdit(
+    BuildContext context,
+    gcal.Event e,
+    void Function(BuildContext, gcal.Event) onEdit,
+    ) async {
   try {
     onEdit(context, e);
   } catch (err) {
@@ -153,11 +193,14 @@ Future<void> _safeEdit(BuildContext context, gcal.Event e, void Function(BuildCo
       extra: _eventCtx(e),
       tags: const <String>[_tCal, _tCalUi, _tCalEventList, _tCalAction],
     );
-    // UI에서는 조용히 실패(필요 시 SnackBar 추가 가능)
   }
 }
 
-Future<void> _safeDelete(BuildContext context, gcal.Event e, void Function(BuildContext, gcal.Event) onDelete) async {
+Future<void> _safeDelete(
+    BuildContext context,
+    gcal.Event e,
+    void Function(BuildContext, gcal.Event) onDelete,
+    ) async {
   try {
     onDelete(context, e);
   } catch (err) {
@@ -193,7 +236,7 @@ Future<void> _safeToggleProgress(
   }
 }
 
-/// 읽기 전용 상세 보기 시트 - 화면 높이의 90% + 배경 흰색
+/// 읽기 전용 상세 보기 시트 - 화면 높이의 90% + 테마 surface
 Future<void> _showEventViewSheet(
     BuildContext context,
     gcal.Event e, {
@@ -220,9 +263,8 @@ Future<void> _showEventViewSheet(
     String hhmm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
     if (localEnd != null) {
-      final sameDay = localStart.year == localEnd.year &&
-          localStart.month == localEnd.month &&
-          localStart.day == localEnd.day;
+      final sameDay =
+          localStart.year == localEnd.year && localStart.month == localEnd.month && localStart.day == localEnd.day;
       final dateStr = fmtDate.format(localStart);
       final timeStr = sameDay
           ? '${hhmm(localStart)}–${hhmm(localEnd)}'
@@ -233,20 +275,26 @@ Future<void> _showEventViewSheet(
   }
 
   try {
+    final rootTheme = Theme.of(context);
+    final cs = rootTheme.colorScheme;
+
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
       useSafeArea: true,
-      backgroundColor: Colors.white,
+      backgroundColor: cs.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (context) {
+      builder: (sheetContext) {
+        final theme = Theme.of(sheetContext);
+        final cs = theme.colorScheme;
+
         return FractionallySizedBox(
           heightFactor: 0.9,
           child: Material(
-            color: Colors.white,
+            color: cs.surface,
             surfaceTintColor: Colors.transparent,
             child: SafeArea(
               child: Padding(
@@ -254,7 +302,7 @@ Future<void> _showEventViewSheet(
                   left: 16,
                   right: 16,
                   top: 12,
-                  bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
+                  bottom: 16 + MediaQuery.of(sheetContext).viewInsets.bottom,
                 ),
                 child: SingleChildScrollView(
                   child: Column(
@@ -266,17 +314,19 @@ Future<void> _showEventViewSheet(
                           Expanded(
                             child: Text(
                               title,
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: cs.onSurface,
+                              ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           IconButton(
                             tooltip: '수정',
-                            icon: const Icon(Icons.edit_outlined),
+                            icon: Icon(Icons.edit_outlined, color: cs.primary),
                             onPressed: () {
-                              Navigator.of(context).pop();
-                              // 안전 실행
+                              Navigator.of(sheetContext).pop();
                               _safeEdit(context, e, onEdit);
                             },
                           ),
@@ -288,10 +338,17 @@ Future<void> _showEventViewSheet(
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(done ? Icons.check_circle : Icons.radio_button_unchecked, size: 18),
+                          Icon(
+                            done ? Icons.check_circle : Icons.radio_button_unchecked,
+                            size: 18,
+                            color: done ? cs.primary : cs.onSurfaceVariant,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
-                            child: Text(whenText(), style: const TextStyle(fontSize: 14)),
+                            child: Text(
+                              whenText(),
+                              style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface),
+                            ),
                           ),
                         ],
                       ),
@@ -301,18 +358,23 @@ Future<void> _showEventViewSheet(
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.place_outlined, size: 18),
+                            Icon(Icons.place_outlined, size: 18, color: cs.onSurfaceVariant),
                             const SizedBox(width: 8),
-                            Expanded(child: Text(location, style: const TextStyle(fontSize: 14))),
+                            Expanded(
+                              child: Text(
+                                location,
+                                style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface),
+                              ),
+                            ),
                           ],
                         ),
                       ],
 
                       if (desc != null && desc.isNotEmpty) ...[
                         const SizedBox(height: 12),
-                        const Text('메모', style: TextStyle(fontWeight: FontWeight.w700)),
+                        Text('메모', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
                         const SizedBox(height: 6),
-                        Text(desc, style: const TextStyle(fontSize: 14)),
+                        Text(desc, style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface)),
                       ],
 
                       const SizedBox(height: 16),
@@ -325,7 +387,7 @@ Future<void> _showEventViewSheet(
                               icon: Icon(done ? Icons.undo_rounded : Icons.done_rounded),
                               label: Text(done ? '미완료로' : '완료하기'),
                               onPressed: () async {
-                                Navigator.of(context).pop();
+                                Navigator.of(sheetContext).pop();
                                 await _safeToggleProgress(context, e, !done, onToggleProgress);
                               },
                             ),
@@ -336,7 +398,7 @@ Future<void> _showEventViewSheet(
                               icon: const Icon(Icons.edit_outlined),
                               label: const Text('수정'),
                               onPressed: () {
-                                Navigator.of(context).pop();
+                                Navigator.of(sheetContext).pop();
                                 _safeEdit(context, e, onEdit);
                               },
                             ),
@@ -344,10 +406,13 @@ Future<void> _showEventViewSheet(
                           const SizedBox(width: 8),
                           Expanded(
                             child: OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: cs.error, // ✅ 삭제는 테마 error로
+                              ),
                               icon: const Icon(Icons.delete_outline),
                               label: const Text('삭제'),
                               onPressed: () {
-                                Navigator.of(context).pop();
+                                Navigator.of(sheetContext).pop();
                                 _safeDelete(context, e, onDelete);
                               },
                             ),

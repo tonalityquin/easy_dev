@@ -160,12 +160,18 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
     final events = _eventsOnDay(day);
     final fmtDay = DateFormat('yyyy-MM-dd (EEE)');
     final fmtTime = DateFormat('HH:mm');
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
     try {
       await showModalBottomSheet<void>(
         context: context,
         useSafeArea: true,
         isScrollControlled: true,
+        backgroundColor: cs.surface, // ✅ 테마 surface
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
         builder: (_) {
           return DraggableScrollableSheet(
             expand: false,
@@ -173,8 +179,12 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
             minChildSize: 0.4,
             maxChildSize: 0.9,
             builder: (context, controller) {
+              final theme = Theme.of(context);
+              final cs = theme.colorScheme;
+
               return Material(
-                color: Theme.of(context).colorScheme.surface,
+                color: cs.surface,
+                surfaceTintColor: Colors.transparent,
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                 child: Column(
                   children: [
@@ -183,7 +193,7 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
                       width: 36,
                       height: 4,
                       decoration: BoxDecoration(
-                        color: Colors.black12,
+                        color: cs.onSurfaceVariant.withOpacity(0.35), // ✅ 핸들도 테마화
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -195,26 +205,37 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
                           Expanded(
                             child: Text(
                               fmtDay.format(day),
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              style: theme.textTheme.titleMedium?.copyWith(
                                 fontWeight: FontWeight.w700,
+                                color: cs.onSurface,
                               ),
                             ),
                           ),
                           IconButton(
-                            icon: const Icon(Icons.close),
+                            icon: Icon(Icons.close, color: cs.onSurface),
                             onPressed: () => Navigator.pop(context),
                           ),
                         ],
                       ),
                     ),
-                    const Divider(height: 1),
+                    Divider(height: 1, color: cs.outlineVariant.withOpacity(0.6)),
                     Expanded(
                       child: events.isEmpty
-                          ? const Center(child: Text('이 날짜에 이벤트가 없습니다.'))
+                          ? Center(
+                        child: Text(
+                          '이 날짜에 이벤트가 없습니다.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      )
                           : ListView.separated(
                         controller: controller,
                         itemCount: events.length,
-                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        separatorBuilder: (_, __) => Divider(
+                          height: 1,
+                          color: cs.outlineVariant.withOpacity(0.6),
+                        ),
                         itemBuilder: (context, i) {
                           final e = events[i];
                           final isAllDay = (e.start?.date != null) && (e.start?.dateTime == null);
@@ -237,14 +258,28 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
                           final done = widget.progressOf(e) == 100;
 
                           return ListTile(
-                            leading: done
-                                ? const Icon(Icons.check_circle, size: 20)
-                                : const Icon(Icons.radio_button_unchecked, size: 20),
+                            leading: Icon(
+                              done ? Icons.check_circle : Icons.radio_button_unchecked,
+                              size: 20,
+                              color: done ? cs.primary : cs.onSurfaceVariant,
+                            ),
                             title: Text(
                               e.summary ?? '(제목 없음)',
-                              style: done ? const TextStyle(decoration: TextDecoration.lineThrough) : null,
+                              style: done
+                                  ? theme.textTheme.bodyLarge?.copyWith(
+                                decoration: TextDecoration.lineThrough,
+                                color: cs.onSurfaceVariant,
+                              )
+                                  : theme.textTheme.bodyLarge?.copyWith(
+                                color: cs.onSurface,
+                              ),
                             ),
-                            subtitle: Text(whenText),
+                            subtitle: Text(
+                              whenText,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
                           );
                         },
                       ),
@@ -272,9 +307,12 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
     final days = _daysInGrid(_visibleMonth);
     final monthLabel = DateFormat('yyyy년 M월').format(_visibleMonth);
-    final isLight = Theme.of(context).brightness == Brightness.light;
+    final isLight = theme.brightness == Brightness.light;
 
     return Column(
       children: [
@@ -283,7 +321,7 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
           children: [
             IconButton(
               tooltip: '이전 달',
-              icon: const Icon(Icons.chevron_left),
+              icon: Icon(Icons.chevron_left, color: cs.primary),
               onPressed: () {
                 setState(() {
                   _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month - 1, 1);
@@ -295,13 +333,16 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
               child: Center(
                 child: Text(
                   monthLabel,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                  ),
                 ),
               ),
             ),
             IconButton(
               tooltip: '다음 달',
-              icon: const Icon(Icons.chevron_right),
+              icon: Icon(Icons.chevron_right, color: cs.primary),
               onPressed: () {
                 setState(() {
                   _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month + 1, 1);
@@ -338,6 +379,9 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
             ),
             itemCount: days.length,
             itemBuilder: (context, i) {
+              final theme = Theme.of(context);
+              final cs = theme.colorScheme;
+
               final d = days[i];
               final inMonth = d.month == _visibleMonth.month;
               final isToday = _isSameDay(d, DateTime.now());
@@ -348,23 +392,28 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
               final cnt = eventsOfDay.length;
 
               final bg = isSelected
-                  ? Theme.of(context).colorScheme.primary.withOpacity(isLight ? .12 : .22)
+                  ? cs.primary.withOpacity(isLight ? .12 : .22)
                   : Colors.transparent;
 
               final fg = inMonth
-                  ? (isSelected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface)
-                  : Colors.grey;
+                  ? (isSelected ? cs.primary : cs.onSurface)
+                  : cs.onSurfaceVariant.withOpacity(0.45);
 
               return InkWell(
                 onTap: () {
                   setState(() => _selectedDay = d);
                   _openDaySheet(context, d);
                 },
+                borderRadius: BorderRadius.circular(10),
                 child: Container(
                   margin: const EdgeInsets.all(4),
                   decoration: BoxDecoration(
                     color: bg,
                     borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: isSelected ? cs.primary.withOpacity(0.35) : Colors.transparent,
+                      width: 1,
+                    ),
                   ),
                   child: Stack(
                     children: [
@@ -375,7 +424,12 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Text('${d.day}', style: TextStyle(fontSize: 12, color: fg)),
+                            Text(
+                              '${d.day}',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: fg,
+                              ),
+                            ),
                             if (isToday)
                               Padding(
                                 padding: const EdgeInsets.only(left: 4),
@@ -383,7 +437,7 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
                                   width: 6,
                                   height: 6,
                                   decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.primary,
+                                    color: cs.primary,
                                     shape: BoxShape.circle,
                                   ),
                                 ),
@@ -401,8 +455,8 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
                             children: [
                               ...eventsOfDay.take(3).map((e) {
                                 final p = widget.progressOf(e);
-                                // 원 코드 유지: 완료=red, 미완료=black
-                                final color = (p == 100) ? Colors.red : Colors.black;
+                                // ✅ 완료/미완료 도트도 하드코딩 제거 → 테마 기반
+                                final color = (p == 100) ? cs.primary : cs.secondary;
                                 return Padding(
                                   padding: const EdgeInsets.only(left: 4),
                                   child: Container(
@@ -420,10 +474,9 @@ class _MonthCalendarViewState extends State<MonthCalendarView> {
                                   padding: const EdgeInsets.only(left: 4),
                                   child: Text(
                                     '+${cnt - 3}',
-                                    style: TextStyle(
-                                      fontSize: 9,
+                                    style: theme.textTheme.labelSmall?.copyWith(
                                       height: 1.0,
-                                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                                      color: cs.onSurfaceVariant.withOpacity(0.7),
                                     ),
                                   ),
                                 ),
@@ -449,14 +502,25 @@ class _DowCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
     final isSun = label == '일';
     final isSat = label == '토';
+
+    // ✅ 주말 컬러도 하드코딩 제거: Sunday=error, Saturday=primary(혹은 secondary로 바꿔도 됨)
     final color = isSun
-        ? Colors.redAccent
-        : (isSat ? Colors.blueAccent : Theme.of(context).colorScheme.onSurface.withOpacity(.7));
+        ? cs.error
+        : (isSat ? cs.primary : cs.onSurfaceVariant.withOpacity(.8));
+
     return Expanded(
       child: Center(
-        child: Text(label, style: TextStyle(fontSize: 12, color: color)),
+        child: Text(
+          label,
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: color,
+          ),
+        ),
       ),
     );
   }

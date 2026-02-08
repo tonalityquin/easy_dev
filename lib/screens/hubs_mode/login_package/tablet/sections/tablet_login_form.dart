@@ -7,6 +7,67 @@ import '../tablet_login_controller.dart';
 // ✅ Trace 기록용 Recorder
 import '../../../../../screens/hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
 
+/// ─────────────────────────────────────────────────────────────
+/// ✅ 로고(PNG) 가독성 보장 유틸
+double _contrastRatio(Color a, Color b) {
+  final la = a.computeLuminance();
+  final lb = b.computeLuminance();
+  final l1 = la >= lb ? la : lb;
+  final l2 = la >= lb ? lb : la;
+  return (l1 + 0.05) / (l2 + 0.05);
+}
+
+Color _resolveLogoTint({
+  required Color background,
+  required Color preferred,
+  required Color fallback,
+  double minContrast = 3.0,
+}) {
+  if (_contrastRatio(preferred, background) >= minContrast) return preferred;
+  return fallback;
+}
+
+/// ✅ (경고 방지) required만 두는 간단 버전
+/// - 단색/검정 고정 PNG를 theme 기반으로 tint
+/// - 대비 부족 시 onBackground로 폴백
+class _BrandTintedLogo extends StatelessWidget {
+  const _BrandTintedLogo({
+    required this.assetPath,
+    required this.height,
+    required this.preferredColor,
+    required this.fallbackColor,
+    this.minContrast = 3.0,
+  });
+
+  final String assetPath;
+  final double height;
+
+  final Color preferredColor;
+  final Color fallbackColor;
+  final double minContrast;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bg = theme.scaffoldBackgroundColor;
+
+    final tint = _resolveLogoTint(
+      background: bg,
+      preferred: preferredColor,
+      fallback: fallbackColor,
+      minContrast: minContrast,
+    );
+
+    return Image.asset(
+      assetPath,
+      fit: BoxFit.contain,
+      height: height,
+      color: tint,
+      colorBlendMode: BlendMode.srcIn,
+    );
+  }
+}
+
 class TabletLoginForm extends StatefulWidget {
   final TabletLoginController controller;
 
@@ -18,6 +79,12 @@ class TabletLoginForm extends StatefulWidget {
 
 class _TabletLoginFormState extends State<TabletLoginForm> {
   late final TabletLoginController _controller;
+
+  // ✅ (신규) screen tag 텍스트 대신 표시할 pelican tag 이미지
+  static const String _kPelicanTagAsset = 'assets/images/pelican_text.png';
+
+  // ✅ tag 이미지 높이 보정값(화면 세로 길이와 무관한 상수)
+  static const double _kTagExtraHeight = 70.0;
 
   @override
   void initState() {
@@ -56,7 +123,7 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
       '회사 로고(상단)',
       meta: <String, dynamic>{
         'screen': 'tablet_login',
-        'asset': 'assets/images/pelican.png',
+        'asset': 'assets/images/ParkinWorkin_logo.png',
         'action': 'tap',
       },
     );
@@ -69,7 +136,7 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
       '회사 로고(펠리컨)',
       meta: <String, dynamic>{
         'screen': 'tablet_login',
-        'asset': 'assets/images/pelican.png',
+        'asset': 'assets/images/ParkinWorkin_text.png',
         'action': 'back_to_selector',
         'to': AppRoutes.selector,
       },
@@ -132,6 +199,14 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
     final themed = _buildBrandLocalTheme(baseTheme);
     final cs = baseTheme.colorScheme;
 
+    // ✅ (신규) 기존 tag 텍스트 크기(=fontSize 11)와 체감 일치하도록 이미지 높이 계산
+    final tagStyle = _screenTagStyle(context);
+    final tagFontSize = (tagStyle.fontSize ?? 11).toDouble();
+    final tagImageHeight = tagFontSize + _kTagExtraHeight;
+
+    // ✅ (신규) 기존 텍스트 색감(onSurfaceVariant 0.80)으로 tag 이미지 tint
+    final tagPreferredTint = cs.onSurfaceVariant.withOpacity(0.80);
+
     return Theme(
       data: themed,
       child: Material(
@@ -148,20 +223,34 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
                   child: Padding(
                     padding: const EdgeInsets.only(left: 4, bottom: 8),
                     child: Semantics(
-                      label: 'screen_tag: tablet login',
-                      child: Text(
-                        'tablet login',
-                        style: _screenTagStyle(context),
+                      label: 'screen_tag: tablet login (image)',
+                      child: ExcludeSemantics(
+                        child: _BrandTintedLogo(
+                          assetPath: _kPelicanTagAsset,
+                          height: tagImageHeight,
+                          preferredColor: tagPreferredTint,
+                          fallbackColor: cs.onBackground,
+                          minContrast: 3.0,
+                        ),
                       ),
                     ),
                   ),
                 ),
 
+                // ✅ (변경) 상단 로고도 tint 적용(단색/검정 고정 로고 대비 보장)
                 GestureDetector(
                   onTap: _onTopCompanyLogoTapped,
                   child: SizedBox(
                     height: 360,
-                    child: Image.asset('assets/images/pelican.png'),
+                    child: Center(
+                      child: _BrandTintedLogo(
+                        assetPath: 'assets/images/ParkinWorkin_logo.png',
+                        height: 360,
+                        preferredColor: cs.primary,
+                        fallbackColor: cs.onBackground,
+                        minContrast: 3.0,
+                      ),
+                    ),
                   ),
                 ),
 
@@ -244,7 +333,14 @@ class _TabletLoginFormState extends State<TabletLoginForm> {
                     borderRadius: BorderRadius.circular(8),
                     child: SizedBox(
                       height: 80,
-                      child: Image.asset('assets/images/pelican.png'),
+                      // ✅ (변경) 하단 텍스트 로고도 tint 적용
+                      child: _BrandTintedLogo(
+                        assetPath: 'assets/images/ParkinWorkin_text.png',
+                        height: 80,
+                        preferredColor: cs.primary,
+                        fallbackColor: cs.onBackground,
+                        minContrast: 3.0,
+                      ),
                     ),
                   ),
                 ),

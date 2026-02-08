@@ -1,9 +1,67 @@
+// lib/screens/head_package/calendar_package/event_editor_bottom_sheet.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+@immutable
+class _EditorTokens {
+  const _EditorTokens({
+    required this.accent,
+    required this.onAccent,
+    required this.accentContainer,
+    required this.onAccentContainer,
+    required this.surface,
+    required this.onSurface,
+    required this.onSurfaceVariant,
+    required this.divider,
+    required this.scrim,
+    required this.handle,
+    required this.fieldFill,
+    required this.fieldBorder,
+    required this.cardTint,
+  });
+
+  final Color accent;
+  final Color onAccent;
+
+  final Color accentContainer;
+  final Color onAccentContainer;
+
+  final Color surface;
+  final Color onSurface;
+  final Color onSurfaceVariant;
+
+  final Color divider;
+  final Color scrim;
+  final Color handle;
+
+  final Color fieldFill;
+  final Color fieldBorder;
+
+  final Color cardTint;
+
+  factory _EditorTokens.of(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final accent = cs.primary;
+
+    return _EditorTokens(
+      accent: accent,
+      onAccent: cs.onPrimary,
+      accentContainer: cs.primaryContainer,
+      onAccentContainer: cs.onPrimaryContainer,
+      surface: cs.surface,
+      onSurface: cs.onSurface,
+      onSurfaceVariant: cs.onSurfaceVariant,
+      divider: cs.outlineVariant,
+      scrim: cs.scrim,
+      handle: cs.onSurfaceVariant.withOpacity(0.42),
+      fieldFill: Color.alphaBlend(accent.withOpacity(0.10), cs.surface),
+      fieldBorder: cs.outlineVariant.withOpacity(0.75),
+      cardTint: Color.alphaBlend(accent.withOpacity(0.08), cs.surface),
+    );
+  }
+}
+
 /// ✅ 하단 고정 버튼바 높이(대략치) + 여유를 위한 예약 값
-/// - SafeArea + 버튼 높이 + 패딩을 고려해 충분히 크게 잡습니다.
-/// - ListView bottom padding 및 TextField scrollPadding에 같이 사용합니다.
 const double _kEditorBottomActionBarReserve = 96.0;
 
 /// 호출 헬퍼
@@ -18,13 +76,16 @@ Future<EditResult?> showEventEditorBottomSheet(
       String? initialColorId,
       int initialProgress = 0, // 0 또는 100
       bool isEditMode = false, // 편집 모드
-      List<EventTemplate>? templates, // ★ 탭 확장/삭제를 위한 동적 템플릿
+      List<EventTemplate>? templates, // 동적 템플릿
     }) {
+  final t = _EditorTokens.of(context);
+
   return showModalBottomSheet<EditResult>(
     context: context,
     useSafeArea: true,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
+    barrierColor: t.scrim.withOpacity(0.60),
     builder: (_) => EventEditorBottomSheet(
       title: title,
       initialSummary: initialSummary,
@@ -49,11 +110,11 @@ class EventEditorBottomSheet extends StatefulWidget {
     required this.initialStart,
     required this.initialEnd,
     this.initialDescription = '',
-    this.initialAllDay = true, // 항상 종일
-    this.initialColorId, // 선택 색상(없으면 null)
-    this.initialProgress = 0, // 0 또는 100
-    this.isEditMode = false, // 편집 모드
-    this.templates, // 동적 템플릿
+    this.initialAllDay = true,
+    this.initialColorId,
+    this.initialProgress = 0,
+    this.isEditMode = false,
+    this.templates,
   });
 
   final String title;
@@ -62,8 +123,8 @@ class EventEditorBottomSheet extends StatefulWidget {
   final DateTime initialStart;
   final DateTime initialEnd;
   final bool initialAllDay;
-  final String? initialColorId; // Google Calendar event colorId ("1"~"11") 또는 null
-  final int initialProgress; // 0 또는 100
+  final String? initialColorId;
+  final int initialProgress;
   final bool isEditMode;
   final List<EventTemplate>? templates;
 
@@ -73,35 +134,26 @@ class EventEditorBottomSheet extends StatefulWidget {
 
 class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
     with SingleTickerProviderStateMixin {
-  // 공통(자동/자율 생성 대상)
-  late final TextEditingController _summary; // 제목(미리보기 & 결과)
-  late final TextEditingController _desc; // 설명(미리보기 & 결과)
+  late final TextEditingController _summary;
+  late final TextEditingController _desc;
 
-  // 이벤트 자체(종일)
-  late DateTime _start; // yyyy-MM-dd만 사용
-  late DateTime _end; // yyyy-MM-dd만 사용
-  static const bool _allDay = true; // 정책상 항상 종일
+  late DateTime _start;
+  late DateTime _end;
+  static const bool _allDay = true;
 
-  // 색상
   String? _colorId;
-
-  // 진행도(0 또는 100)
   late int _progress;
 
-  // 템플릿/탭
   late final List<EventTemplate> _templates;
   late final TabController _tabController;
 
-  // ★ 2개씩 묶어 넘기는 헤더용 PageView
   late final PageController _tabsPageController;
-  int _headerPage = 0; // 현재 헤더 페이지(2개 단위)
+  int _headerPage = 0;
 
-  // 헬퍼
   int get _currentTabIndex => _tabController.index;
   int get _currentPage => _currentTabIndex ~/ 2;
   int get _pageCount => (_templates.length + 1) ~/ 2;
 
-  // Google Calendar event colorId 팔레트
   static const Map<String, Color> _eventColors = {
     "1": Color(0xFF7986CB),
     "2": Color(0xFF33B679),
@@ -130,26 +182,22 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
 
     _start = _toLocalDateOnly(widget.initialStart);
     _end = _toLocalDateOnly(widget.initialEnd);
-    if (!_end.isAfter(_start)) {
-      _end = _start.add(const Duration(days: 1));
-    }
+    if (!_end.isAfter(_start)) _end = _start.add(const Duration(days: 1));
 
     _colorId = widget.initialColorId;
-    _progress = (widget.initialProgress == 100) ? 100 : 0; // 0/100만 허용
+    _progress = (widget.initialProgress == 100) ? 100 : 0;
 
-    // ★ 템플릿 세트 구성(외부 주입 없으면 기본 세트) — 출근 탭 포함
     _templates = widget.templates ??
         [
           ApplyTemplate(),
           HireTemplate(),
-          CheckInTemplate(), // ★ 출근
+          CheckInTemplate(),
           FreeTemplate(
             initialTitle: widget.initialSummary,
             initialBody: widget.initialDescription,
           ),
         ];
 
-    // 시작 탭: 편집모드면 free, 생성모드면 키워드로 추론(입사/지원/출근 없으면 free)
     int initialIndex;
     if (widget.isEditMode) {
       initialIndex = _templates.indexWhere((t) => t.id == 'free');
@@ -162,7 +210,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
       } else if (s.contains('지원')) {
         idx = _templates.indexWhere((t) => t.id == 'apply');
       } else if (s.contains('출근')) {
-        idx = _templates.indexWhere((t) => t.id == 'checkin'); // ★ 출근
+        idx = _templates.indexWhere((t) => t.id == 'checkin');
       } else {
         idx = _templates.indexWhere((t) => t.id == 'free');
       }
@@ -175,17 +223,16 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
       initialIndex: initialIndex.clamp(0, _templates.length - 1),
     );
 
-    // ★ 헤더 PageView 초기 페이지를 현재 탭의 '2개 묶음' 페이지로 설정
     _headerPage = _currentPage;
     _tabsPageController = PageController(initialPage: _headerPage);
 
-    // 탭 전환 시: 헤더 PageView도 해당 페이지로 맞추고, 미리보기 재생성(생성 모드만)
     _tabController.addListener(() {
       if (!mounted) return;
 
       final page = _currentPage;
       if (_tabsPageController.hasClients) {
-        final current = _tabsPageController.page?.round() ?? _tabsPageController.initialPage;
+        final current =
+            _tabsPageController.page?.round() ?? _tabsPageController.initialPage;
         if (current != page) {
           _tabsPageController.animateToPage(
             page,
@@ -194,18 +241,15 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
           );
         }
       }
-      if (_headerPage != page) {
-        setState(() => _headerPage = page);
-      }
+      if (_headerPage != page) setState(() => _headerPage = page);
 
       if (!widget.isEditMode) {
-        _rebuildTemplate(); // 내부에서 setState() 처리
+        _rebuildTemplate();
       } else {
-        setState(() {}); // 폼만 갱신
+        setState(() {});
       }
     });
 
-    // 생성 모드에서는 첫 진입 시에도 미리보기 생성
     if (!widget.isEditMode) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _rebuildTemplate());
     }
@@ -233,6 +277,7 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
 
   @override
   Widget build(BuildContext context) {
+    final t = _EditorTokens.of(context);
     final viewInsets = MediaQuery.of(context).viewInsets;
     final fmtDate = DateFormat('yyyy-MM-dd');
 
@@ -241,31 +286,32 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
       child: AnimatedPadding(
         duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
-        // ✅ 키보드가 올라오면 시트 전체를 위로 밀어 올림(하단 고정 바도 함께 올라가서 키보드에 가리지 않게 됨)
         padding: EdgeInsets.only(bottom: viewInsets.bottom),
         child: DraggableScrollableSheet(
           expand: false,
-          initialChildSize: 1.0, // ★ 처음부터 끝까지
+          initialChildSize: 1.0,
           minChildSize: 0.5,
-          maxChildSize: 1.0, // ★ 최댓값도 끝까지
+          maxChildSize: 1.0,
           builder: (context, scrollController) {
+            final tt = _EditorTokens.of(context);
+
             return Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+              decoration: BoxDecoration(
+                color: tt.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
               ),
               child: Column(
                 children: [
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
                   Container(
                     width: 36,
                     height: 4,
                     decoration: BoxDecoration(
-                      color: Colors.black12,
+                      color: tt.handle,
                       borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 10),
 
                   // 헤더
                   Padding(
@@ -275,14 +321,15 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                         Expanded(
                           child: Text(
                             widget.title,
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w700),
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w900,
+                              color: tt.onSurface,
+                            ),
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.close),
+                          tooltip: '닫기',
+                          icon: Icon(Icons.close_rounded, color: tt.onSurface),
                           onPressed: () => Navigator.pop(context),
                         ),
                       ],
@@ -295,9 +342,14 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // 편집 모드에서 원본 미리보기 표시
                         if (widget.isEditMode) ...[
-                          Text('원본 내용', style: Theme.of(context).textTheme.titleSmall),
+                          Text(
+                            '원본 내용',
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              color: tt.onSurface,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                           const SizedBox(height: 8),
                           _ReadOnlyCard(
                             summary: widget.initialSummary,
@@ -307,40 +359,35 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                         ],
                         Text(
                           widget.isEditMode ? '새 내용 미리보기' : '미리보기',
-                          style: Theme.of(context).textTheme.titleSmall,
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: _summary,
-                          readOnly: true,
-                          decoration: const InputDecoration(
-                            labelText: '제목',
-                            isDense: true,
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            color: tt.onSurface,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                         const SizedBox(height: 8),
-                        TextField(
+
+                        // ✅ 미리보기 필드들도 테마 필 적용
+                        _PreviewField(
+                          label: '제목',
+                          controller: _summary,
+                        ),
+                        const SizedBox(height: 8),
+                        _PreviewField(
+                          label: '설명',
                           controller: _desc,
-                          readOnly: true,
                           minLines: 3,
                           maxLines: 6,
-                          decoration: const InputDecoration(
-                            labelText: '설명',
-                            isDense: true,
-                          ),
                         ),
                       ],
                     ),
                   ),
-                  const Divider(height: 1),
+                  Divider(height: 1, color: tt.divider),
 
                   // ===== 스크롤 영역 =====
                   Expanded(
                     child: ListView(
                       controller: scrollController,
                       keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                      // ✅ 하단 고정 버튼바(취소/저장) 영역만큼 bottom padding을 확보
-                      //    -> 마지막 입력칸/컨텐츠가 버튼 뒤로 숨어서 터치 불가가 되는 문제를 방지
                       padding: const EdgeInsets.fromLTRB(
                         16,
                         12,
@@ -361,12 +408,22 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                                     initialDate: _start,
                                     firstDate: DateTime(2000),
                                     lastDate: DateTime(2100),
+                                    builder: (ctx, child) {
+                                      final th = Theme.of(ctx);
+                                      return Theme(
+                                        data: th.copyWith(
+                                          colorScheme: th.colorScheme.copyWith(
+                                            primary: t.accent,
+                                            onPrimary: t.onAccent,
+                                          ),
+                                        ),
+                                        child: child!,
+                                      );
+                                    },
                                   );
                                   if (picked == null) return;
                                   _start = DateTime(picked.year, picked.month, picked.day);
-                                  if (!_end.isAfter(_start)) {
-                                    _end = _start.add(const Duration(days: 1));
-                                  }
+                                  if (!_end.isAfter(_start)) _end = _start.add(const Duration(days: 1));
                                   setState(() {});
                                 },
                               ),
@@ -382,12 +439,22 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                                     initialDate: _end,
                                     firstDate: DateTime(2000),
                                     lastDate: DateTime(2100),
+                                    builder: (ctx, child) {
+                                      final th = Theme.of(ctx);
+                                      return Theme(
+                                        data: th.copyWith(
+                                          colorScheme: th.colorScheme.copyWith(
+                                            primary: t.accent,
+                                            onPrimary: t.onAccent,
+                                          ),
+                                        ),
+                                        child: child!,
+                                      );
+                                    },
                                   );
                                   if (picked == null) return;
                                   _end = DateTime(picked.year, picked.month, picked.day);
-                                  if (!_end.isAfter(_start)) {
-                                    _end = _start.add(const Duration(days: 1));
-                                  }
+                                  if (!_end.isAfter(_start)) _end = _start.add(const Duration(days: 1));
                                   setState(() {});
                                 },
                               ),
@@ -399,7 +466,13 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                         // 색상
                         Align(
                           alignment: Alignment.centerLeft,
-                          child: Text('이벤트 색상', style: Theme.of(context).textTheme.bodyMedium),
+                          child: Text(
+                            '이벤트 색상',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: tt.onSurface,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                         ),
                         const SizedBox(height: 8),
                         _ColorPicker(
@@ -412,7 +485,13 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                         // 진행도 (0/100만)
                         Align(
                           alignment: Alignment.centerLeft,
-                          child: Text('진행도', style: Theme.of(context).textTheme.bodyMedium),
+                          child: Text(
+                            '진행도',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: tt.onSurface,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Wrap(
@@ -421,11 +500,25 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                             ChoiceChip(
                               label: const Text('0%'),
                               selected: _progress == 0,
+                              selectedColor: tt.accentContainer,
+                              backgroundColor: tt.cardTint,
+                              checkmarkColor: tt.onAccentContainer,
+                              labelStyle: TextStyle(
+                                color: _progress == 0 ? tt.onAccentContainer : tt.onSurfaceVariant,
+                                fontWeight: FontWeight.w800,
+                              ),
                               onSelected: (_) => setState(() => _progress = 0),
                             ),
                             ChoiceChip(
                               label: const Text('100%'),
                               selected: _progress == 100,
+                              selectedColor: tt.accentContainer,
+                              backgroundColor: tt.cardTint,
+                              checkmarkColor: tt.onAccentContainer,
+                              labelStyle: TextStyle(
+                                color: _progress == 100 ? tt.onAccentContainer : tt.onSurfaceVariant,
+                                fontWeight: FontWeight.w800,
+                              ),
                               onSelected: (_) => setState(() => _progress = 100),
                             ),
                           ],
@@ -435,10 +528,9 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                         // === 2개씩 가로 스와이프 가능한 탭 헤더 + 폼 ===
                         Column(
                           children: [
-                            // 2개씩 보여주는 헤더 (가로 스와이프)
                             DecoratedBox(
-                              decoration: const BoxDecoration(
-                                border: Border(bottom: BorderSide(color: Colors.black12)),
+                              decoration: BoxDecoration(
+                                border: Border(bottom: BorderSide(color: tt.divider)),
                               ),
                               child: SizedBox(
                                 height: 46,
@@ -474,15 +566,11 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                                 ),
                               ),
                             ),
-
                             const SizedBox(height: 8),
 
-                            // 현재 선택된 템플릿의 폼
                             _templates[_currentTabIndex].buildForm(context, _rebuildTemplate),
 
                             const SizedBox(height: 8),
-
-                            // 페이지 인디케이터
                             _PageDots(
                               count: _pageCount,
                               current: _headerPage,
@@ -496,21 +584,20 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                         ),
 
                         const SizedBox(height: 8),
-                        const Align(
+                        Align(
                           alignment: Alignment.centerLeft,
                           child: Text(
                             '※ 종일 이벤트는 종료가 “다음날 0시”로 해석됩니다.',
-                            style: TextStyle(fontSize: 12, color: Colors.black54),
+                            style: TextStyle(fontSize: 12, color: tt.onSurfaceVariant),
                           ),
                         ),
-
                         const SizedBox(height: 8),
                       ],
                     ),
                   ),
 
-                  // ✅ 하단 고정 액션바(취소/저장) — SafeArea로 홈 인디케이터/제스처 바 회피
-                  const Divider(height: 1),
+                  // 하단 고정 액션바
+                  Divider(height: 1, color: tt.divider),
                   SafeArea(
                     top: false,
                     minimum: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -518,6 +605,13 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                       children: [
                         Expanded(
                           child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: tt.onSurface,
+                              side: BorderSide(color: tt.divider.withOpacity(0.85)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
                             onPressed: () => Navigator.pop(context),
                             child: const Text('취소'),
                           ),
@@ -525,6 +619,13 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
                         const SizedBox(width: 12),
                         Expanded(
                           child: FilledButton(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: tt.accent,
+                              foregroundColor: tt.onAccent,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
                             onPressed: () {
                               if (_summary.text.trim().isEmpty) return;
                               Navigator.pop(
@@ -558,18 +659,16 @@ class _EventEditorBottomSheetState extends State<EventEditorBottomSheet>
 
 // ====== 템플릿 인터페이스 & 구현들 ======
 
-/// 각 탭을 데이터/로직 단위로 독립시키는 추상 클래스
 abstract class EventTemplate {
-  String get id; // 내부 아이디 (예: 'apply', 'hire', 'free', 'checkin')
-  String get label; // 탭 라벨 (예: '지원', '입사', '출근', '자율')
+  String get id;
+  String get label;
   Widget buildForm(BuildContext context, VoidCallback onChanged);
   void computePreview(TextEditingController summary, TextEditingController desc);
-  void dispose(); // 내부 컨트롤러 정리
+  void dispose();
 }
 
-/// 지원 템플릿
 class ApplyTemplate implements EventTemplate {
-  final worker = TextEditingController(); // 업무자
+  final worker = TextEditingController();
   final region = TextEditingController();
   final name = TextEditingController();
   final reason = TextEditingController();
@@ -623,7 +722,6 @@ class ApplyTemplate implements EventTemplate {
   }
 }
 
-/// 입사 템플릿 (★ 날짜 입력을 텍스트 필드로)
 class HireTemplate implements EventTemplate {
   final region = TextEditingController();
   final name = TextEditingController();
@@ -634,7 +732,6 @@ class HireTemplate implements EventTemplate {
   final salary = TextEditingController();
   final contractType = TextEditingController();
 
-  // ★ 텍스트 입력용 컨트롤러 추가
   final workStartDateText = TextEditingController();
   final firstEndDateText = TextEditingController();
 
@@ -700,8 +797,6 @@ class HireTemplate implements EventTemplate {
         hint: '예: 정규직/계약직',
         onChanged: (_) => onChanged(),
       ),
-
-      // ★ 숫자 입력 텍스트 필드 (YYYY-MM-DD / YYYYMMDD)
       _LabeledField(
         label: '근무 시작일',
         controller: workStartDateText,
@@ -767,14 +862,13 @@ class HireTemplate implements EventTemplate {
   }
 }
 
-/// 출근 템플릿
 class CheckInTemplate implements EventTemplate {
-  final name = TextEditingController(); // 이름
-  final contractAmount = TextEditingController(); // 계약액
-  final contractType = TextEditingController(); // 계약 형태
-  final requestedDocs = TextEditingController(); // 요청 문서(쉼표/줄바꿈 구분)
-  final workDateText = TextEditingController(); // ★ 출근일(텍스트 입력)
-  DateTime? workDate; // 출근일(파싱된 값)
+  final name = TextEditingController();
+  final contractAmount = TextEditingController();
+  final contractType = TextEditingController();
+  final requestedDocs = TextEditingController();
+  final workDateText = TextEditingController();
+  DateTime? workDate;
 
   @override
   String get id => 'checkin';
@@ -834,8 +928,9 @@ class CheckInTemplate implements EventTemplate {
           maxLines: 6,
           textInputAction: TextInputAction.newline,
           onChanged: (_) => onChanged(),
-          // ✅ 멀티라인 TextField도 키보드/하단 고정바 위로 충분히 올라오도록 scrollPadding 적용
-          scrollPadding: EdgeInsets.only(bottom: bottomInset + _kEditorBottomActionBarReserve + 24),
+          scrollPadding: EdgeInsets.only(
+            bottom: bottomInset + _kEditorBottomActionBarReserve + 24,
+          ),
           decoration: const InputDecoration(
             labelText: '요청 문서',
             hintText: '쉼표(,) 또는 줄바꿈으로 구분해 입력',
@@ -884,7 +979,6 @@ class CheckInTemplate implements EventTemplate {
   }
 }
 
-/// 자율 템플릿
 class FreeTemplate implements EventTemplate {
   final TextEditingController title = TextEditingController();
   final TextEditingController body = TextEditingController();
@@ -918,8 +1012,9 @@ class FreeTemplate implements EventTemplate {
           minLines: 3,
           maxLines: 8,
           textInputAction: TextInputAction.newline,
-          // ✅ 멀티라인 TextField도 키보드/하단 고정바 위로 충분히 올라오도록 scrollPadding 적용
-          scrollPadding: EdgeInsets.only(bottom: bottomInset + _kEditorBottomActionBarReserve + 24),
+          scrollPadding: EdgeInsets.only(
+            bottom: bottomInset + _kEditorBottomActionBarReserve + 24,
+          ),
           decoration: const InputDecoration(
             labelText: '설명',
             hintText: '자유롭게 설명을 입력하세요',
@@ -945,6 +1040,47 @@ class FreeTemplate implements EventTemplate {
 
 // ====== 보조 위젯들 / DTO ======
 
+class _PreviewField extends StatelessWidget {
+  const _PreviewField({
+    required this.label,
+    required this.controller,
+    this.minLines = 1,
+    this.maxLines = 1,
+  });
+
+  final String label;
+  final TextEditingController controller;
+  final int minLines;
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = _EditorTokens.of(context);
+
+    return TextField(
+      controller: controller,
+      readOnly: true,
+      minLines: minLines,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        labelText: label,
+        filled: true,
+        fillColor: t.fieldFill,
+        isDense: true,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: t.fieldBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: t.accent, width: 1.2),
+        ),
+      ),
+    );
+  }
+}
+
 class _ReadOnlyCard extends StatelessWidget {
   const _ReadOnlyCard({required this.summary, required this.description});
 
@@ -953,22 +1089,24 @@ class _ReadOnlyCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = _EditorTokens.of(context);
+
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        border: Border.all(color: Colors.black12),
-        borderRadius: BorderRadius.circular(10),
+        color: t.cardTint,
+        border: Border.all(color: t.divider),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(summary, style: const TextStyle(fontWeight: FontWeight.w700)),
+          Text(summary, style: TextStyle(fontWeight: FontWeight.w800, color: t.onSurface)),
           if (description.trim().isNotEmpty) ...[
             const SizedBox(height: 6),
             Text(
               description,
-              style: const TextStyle(color: Colors.black87, height: 1.3),
+              style: TextStyle(color: t.onSurfaceVariant, height: 1.3),
             ),
           ],
         ],
@@ -994,6 +1132,7 @@ class _LabeledField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = _EditorTokens.of(context);
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
     return Padding(
@@ -1003,13 +1142,24 @@ class _LabeledField extends StatelessWidget {
         keyboardType: keyboardType,
         textInputAction: TextInputAction.next,
         onChanged: onChanged,
-        // ✅ 포커스 시 키보드 위로 충분히 자동 스크롤되도록
-        //    키보드 높이 + 하단 고정바 영역 + 여유를 확보
-        scrollPadding: EdgeInsets.only(bottom: bottomInset + _kEditorBottomActionBarReserve + 24),
+        scrollPadding: EdgeInsets.only(
+          bottom: bottomInset + _kEditorBottomActionBarReserve + 24,
+        ),
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
+          filled: true,
+          fillColor: t.fieldFill,
           isDense: true,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: t.fieldBorder),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: t.accent, width: 1.2),
+          ),
         ),
       ),
     );
@@ -1029,12 +1179,14 @@ class _DateField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = _EditorTokens.of(context);
+
     return ListTile(
       contentPadding: EdgeInsets.zero,
       dense: true,
-      title: Text(label),
-      subtitle: Text(valueText),
-      trailing: const Icon(Icons.edit_calendar),
+      title: Text(label, style: TextStyle(color: t.onSurface, fontWeight: FontWeight.w700)),
+      subtitle: Text(valueText, style: TextStyle(color: t.onSurfaceVariant)),
+      trailing: Icon(Icons.edit_calendar_rounded, color: t.accent),
       onTap: onPick,
     );
   }
@@ -1053,14 +1205,16 @@ class _ColorPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = _EditorTokens.of(context);
     final entries = palette.entries.toList();
+
     return Wrap(
       spacing: 10,
       runSpacing: 10,
       children: [
         _ColorDot(
-          color: Colors.white,
-          borderColor: Colors.grey.shade400,
+          color: t.surface,
+          borderColor: t.divider,
           isSelected: selectedId == null,
           label: '없음',
           onTap: () => onSelected(null),
@@ -1068,6 +1222,7 @@ class _ColorPicker extends StatelessWidget {
         for (final e in entries)
           _ColorDot(
             color: e.value,
+            borderColor: t.divider.withOpacity(0.6),
             isSelected: selectedId == e.key,
             label: e.key,
             onTap: () => onSelected(e.key),
@@ -1094,6 +1249,7 @@ class _ColorDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = _EditorTokens.of(context);
     final isLight = color.computeLuminance() > 0.6;
     final checkColor = isLight ? Colors.black : Colors.white;
 
@@ -1103,10 +1259,7 @@ class _ColorDot extends StatelessWidget {
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
-        border: Border.all(
-          color: borderColor ?? Colors.black12,
-          width: 1,
-        ),
+        border: Border.all(color: borderColor ?? t.divider, width: 1),
       ),
       child: isSelected ? Icon(Icons.check, size: 18, color: checkColor) : null,
     );
@@ -1119,7 +1272,7 @@ class _ColorDot extends StatelessWidget {
         children: [
           dot,
           const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 10, color: Colors.black54)),
+          Text(label, style: TextStyle(fontSize: 10, color: t.onSurfaceVariant)),
         ],
       ),
     );
@@ -1140,8 +1293,7 @@ class _UnderlineTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final textColor = selected ? theme.colorScheme.primary : Colors.black54;
+    final t = _EditorTokens.of(context);
 
     return InkWell(
       onTap: onTap,
@@ -1154,8 +1306,8 @@ class _UnderlineTab extends StatelessWidget {
                 label,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  color: textColor,
-                  fontWeight: FontWeight.w600,
+                  color: selected ? t.accent : t.onSurfaceVariant,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
             ),
@@ -1163,7 +1315,7 @@ class _UnderlineTab extends StatelessWidget {
           AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             height: 2,
-            color: selected ? theme.colorScheme.primary : Colors.transparent,
+            color: selected ? t.accent : Colors.transparent,
           ),
         ],
       ),
@@ -1185,7 +1337,9 @@ class _PageDots extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final t = _EditorTokens.of(context);
     if (count <= 1) return const SizedBox.shrink();
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(count, (i) {
@@ -1198,7 +1352,7 @@ class _PageDots extends StatelessWidget {
             margin: const EdgeInsets.symmetric(horizontal: 4),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: selected ? Colors.black87 : Colors.black26,
+              color: selected ? t.accent : t.divider.withOpacity(0.55),
             ),
           ),
         );
@@ -1214,16 +1368,16 @@ class EditResult {
     this.description,
     required this.start,
     required this.end,
-    this.allDay = true, // 항상 종일
-    this.colorId, // "1"~"11" 또는 null
-    this.progress = 0, // 0 또는 100
+    this.allDay = true,
+    this.colorId,
+    this.progress = 0,
   });
 
   final String summary;
   final String? description;
-  final DateTime start; // yyyy-MM-dd 의도(시간 없이)
-  final DateTime end; // yyyy-MM-dd 의도(다음날 0시 의미)
+  final DateTime start;
+  final DateTime end;
   final bool allDay;
   final String? colorId;
-  final int progress; // 0 or 100
+  final int progress;
 }

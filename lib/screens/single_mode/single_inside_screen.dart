@@ -84,6 +84,72 @@ Future<sheets.SheetsApi> _sheetsApi() async {
   }
 }
 
+/// ─────────────────────────────────────────────────────────────
+/// ✅ 로고(PNG) 가독성 보장 유틸 (파일 내부 로컬 정의)
+double _contrastRatio(Color a, Color b) {
+  final la = a.computeLuminance();
+  final lb = b.computeLuminance();
+  final l1 = la >= lb ? la : lb;
+  final l2 = la >= lb ? lb : la;
+  return (l1 + 0.05) / (l2 + 0.05);
+}
+
+Color _resolveLogoTint({
+  required Color background,
+  required Color preferred,
+  required Color fallback,
+  double minContrast = 3.0,
+}) {
+  if (_contrastRatio(preferred, background) >= minContrast) return preferred;
+  return fallback;
+}
+
+/// ✅ 단색(검정 고정) PNG 로고를 테마에 맞춰 tint 하는 위젯
+/// - screen tag에서 preferredColor/fallbackColor/minContrast를 실제로 전달해서
+///   "optional parameter isn't ever given" 경고가 나지 않게 함.
+class _BrandTintedLogo extends StatelessWidget {
+  const _BrandTintedLogo({
+    required this.assetPath,
+    required this.height,
+    this.preferredColor,
+    this.fallbackColor,
+    this.minContrast = 3.0,
+  });
+
+  final String assetPath;
+  final double height;
+
+  final Color? preferredColor;
+  final Color? fallbackColor;
+  final double minContrast;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    final bg = theme.scaffoldBackgroundColor;
+
+    final preferred = preferredColor ?? cs.primary;
+    final fallback = fallbackColor ?? cs.onBackground;
+
+    final tint = _resolveLogoTint(
+      background: bg,
+      preferred: preferred,
+      fallback: fallback,
+      minContrast: minContrast,
+    );
+
+    return Image.asset(
+      assetPath,
+      fit: BoxFit.contain,
+      height: height,
+      color: tint,
+      colorBlendMode: BlendMode.srcIn,
+    );
+  }
+}
+
 class SingleInsideScreen extends StatefulWidget {
   const SingleInsideScreen({
     super.key,
@@ -106,6 +172,12 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
   String _noticeSheetId = '';
 
   final ScrollController _noticeScroll = ScrollController();
+
+  // ✅ (변경) screen tag 텍스트 대신 표시할 pelican 이미지
+  static const String _kPelicanTagAsset = 'assets/images/pelican_text.png';
+
+  // ✅ (고정) tag 이미지 높이 보정값(화면 세로 길이와 무관한 상수)
+  static const double _kTagExtraHeight = 70.0;
 
   @override
   void initState() {
@@ -372,28 +444,38 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
     }
   }
 
+  /// ✅ (변경) screen tag 텍스트 → pelican_text.png 이미지
+  /// - 기존 텍스트의 스타일(11px, onSurfaceVariant 0.8) 느낌을 동일하게 유지
   Widget _buildScreenTag(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final base = Theme.of(context).textTheme.labelSmall;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
-    final style = (base ??
+    final base = theme.textTheme.labelSmall ??
         const TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
-        ))
-        .copyWith(
-      color: cs.onSurfaceVariant.withOpacity(0.80),
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.2,
-    );
+        );
+
+    final fontSize = (base.fontSize ?? 11).toDouble();
+    final tagImageHeight = fontSize + _kTagExtraHeight;
+
+    final tagPreferredTint = cs.onSurfaceVariant.withOpacity(0.80);
 
     return Positioned(
       top: 12,
       left: 12,
       child: IgnorePointer(
         child: Semantics(
-          label: 'screen_tag: Single screen',
-          child: Text('Single screen', style: style),
+          label: 'screen_tag: Single screen (image)',
+          child: ExcludeSemantics(
+            child: _BrandTintedLogo(
+              assetPath: _kPelicanTagAsset,
+              height: tagImageHeight,
+              preferredColor: tagPreferredTint,
+              fallbackColor: cs.onBackground,
+              minContrast: 3.0,
+            ),
+          ),
         ),
       ),
     );
@@ -449,6 +531,7 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
               child: Stack(
                 children: [
                   _buildScreenTag(context),
+
                   SingleChildScrollView(
                     child: Center(
                       child: Padding(
@@ -476,18 +559,25 @@ class _SingleInsideScreenState extends State<SingleInsideScreen> {
                               const _TeamModeButtonGrid(),
 
                             const SizedBox(height: 1),
+
+                            // ✅ (변경) 하단 텍스트 로고도 tint 적용
                             Center(
                               child: SizedBox(
                                 height: 80,
-                                child: Image.asset('assets/images/pelican.png'),
+                                child: _BrandTintedLogo(
+                                  assetPath: 'assets/images/ParkinWorkin_text.png',
+                                  height: 80,
+                                ),
                               ),
                             ),
+
                             const SizedBox(height: 24),
                           ],
                         ),
                       ),
                     ),
                   ),
+
                   Positioned(
                     top: 16,
                     right: 16,

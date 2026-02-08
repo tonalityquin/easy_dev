@@ -17,26 +17,39 @@ import 'theme.dart';
 class ThemePrefsController extends ChangeNotifier {
   ThemePrefsController();
 
+  // ✅ 최초 실행 기본값을 독립 Soft Linen으로 고정
+  static const String _kDefaultPresetId = 'soft_linen';
+  static const String _kDefaultThemeModeId = 'independent';
+
   bool _loaded = false;
   bool get loaded => _loaded;
 
-  String _presetId = 'system'; // kBrandPresetKey
+  // ✅ (변경) 최초 프레임에서도 Soft Linen이 보이도록 필드 초기값 자체를 변경
+  String _presetId = _kDefaultPresetId; // kBrandPresetKey
   String get presetId => _presetId;
 
-  String _themeModeId = 'system'; // kThemeModeKey: system|light|dark|independent
+  // ✅ (변경) 최초 프레임에서도 독립 모드가 적용되도록 초기값 변경
+  String _themeModeId = _kDefaultThemeModeId; // kThemeModeKey: system|light|dark|independent
   String get themeModeId => _themeModeId;
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
 
-    _presetId = (prefs.getString(kBrandPresetKey) ?? 'system').trim();
-    if (_presetId.isEmpty) _presetId = 'system';
+    // ✅ (신규) “최초 실행” 판별: 두 키 모두 없을 때만 first-run로 간주
+    final hasPresetKey = prefs.containsKey(kBrandPresetKey);
+    final hasModeKey = prefs.containsKey(kThemeModeKey);
+    final isFirstRun = !hasPresetKey && !hasModeKey;
 
-    _themeModeId = (prefs.getString(kThemeModeKey) ?? 'system').trim();
-    if (_themeModeId.isEmpty) _themeModeId = 'system';
+    // ✅ (변경) prefs에 값이 없으면 Soft Linen/Independent로 폴백
+    _presetId = (prefs.getString(kBrandPresetKey) ?? _kDefaultPresetId).trim();
+    if (_presetId.isEmpty) _presetId = _kDefaultPresetId;
+
+    _themeModeId = (prefs.getString(kThemeModeKey) ?? _kDefaultThemeModeId).trim();
+    if (_themeModeId.isEmpty) _themeModeId = _kDefaultThemeModeId;
 
     // ✅ 저장된 조합이 모드 규칙에 맞는지 교정
-    await _ensureConsistency(persist: false);
+    // ✅ (변경) 최초 실행이면 교정된 기본값을 prefs에 저장하여 “재실행해도 유지”
+    await _ensureConsistency(persist: isFirstRun);
 
     _loaded = true;
     notifyListeners();
@@ -63,12 +76,13 @@ class ThemePrefsController extends ChangeNotifier {
 
   Future<void> setPresetId(String id) async {
     id = id.trim();
-    if (id.isEmpty) id = 'system';
+    if (id.isEmpty) id = _kDefaultPresetId;
     if (_presetId == id) return;
 
     _presetId = id;
 
     // ✅ 모드-프리셋 조합 교정(필요 시 presetId가 바뀔 수도 있음)
+    // ✅ persist=true → 사용자가 바꾼 값은 prefs에 저장되어 재실행 후에도 유지
     await _ensureConsistency(persist: true);
 
     notifyListeners();
@@ -76,12 +90,13 @@ class ThemePrefsController extends ChangeNotifier {
 
   Future<void> setThemeModeId(String id) async {
     id = id.trim();
-    if (id.isEmpty) id = 'system';
+    if (id.isEmpty) id = _kDefaultThemeModeId;
     if (_themeModeId == id) return;
 
     _themeModeId = id;
 
     // ✅ 모드-프리셋 조합 교정(필요 시 presetId가 바뀔 수도 있음)
+    // ✅ persist=true → 사용자가 바꾼 값은 prefs에 저장되어 재실행 후에도 유지
     await _ensureConsistency(persist: true);
 
     notifyListeners();
@@ -118,7 +133,7 @@ class ThemePrefsController extends ChangeNotifier {
     // themeModeId 정규화
     const validModes = {'system', 'light', 'dark', 'independent'};
     if (!validModes.contains(_themeModeId)) {
-      _themeModeId = 'system';
+      _themeModeId = _kDefaultThemeModeId;
     }
 
     // presetId 정규화(존재하지 않는 id면 presetById가 system으로 떨어짐)
@@ -126,12 +141,16 @@ class ThemePrefsController extends ChangeNotifier {
     _presetId = normalizedPreset.id;
 
     if (_themeModeId == 'independent') {
-      // 독립 모드인데 독립 프리셋이 아니면 → 첫 독립 프리셋으로 교정
+      // 독립 모드인데 독립 프리셋이 아니면 → Soft Linen 우선으로 교정
       final cur = presetById(_presetId);
       if (cur.independentTokens == null) {
         final candidates = brandPresetsForThemeMode('independent');
         if (candidates.isNotEmpty) {
-          _presetId = candidates.first.id;
+          final preferred = candidates.firstWhere(
+                (p) => p.id == _kDefaultPresetId,
+            orElse: () => candidates.first,
+          );
+          _presetId = preferred.id;
         } else {
           // 독립 프리셋이 아예 없다면 안전하게 system으로 폴백
           _presetId = 'system';

@@ -1,14 +1,77 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';import '../../../services/endTime_reminder_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../../states/user/user_state.dart';
-
-
 import '../../../utils/init/logout_helper.dart';
+import '../../../services/endtime_reminder_service.dart';
 import 'commute_inside_package/minor_commute_in_controller.dart';
 import 'commute_inside_package/widgets/minor_commute_in_work_button_widget.dart';
 import 'commute_inside_package/widgets/minor_commute_in_info_card_widget.dart';
 import 'commute_inside_package/widgets/minor_commute_in_header_widget.dart';
+
+/// ─────────────────────────────────────────────────────────────
+/// ✅ 로고(PNG) 가독성 보장 유틸 (파일 내부 로컬 정의)
+double _contrastRatio(Color a, Color b) {
+  final la = a.computeLuminance();
+  final lb = b.computeLuminance();
+  final l1 = la >= lb ? la : lb;
+  final l2 = la >= lb ? lb : la;
+  return (l1 + 0.05) / (l2 + 0.05);
+}
+
+Color _resolveLogoTint({
+  required Color background,
+  required Color preferred,
+  required Color fallback,
+  double minContrast = 3.0,
+}) {
+  if (_contrastRatio(preferred, background) >= minContrast) return preferred;
+  return fallback;
+}
+
+class _BrandTintedLogo extends StatelessWidget {
+  const _BrandTintedLogo({
+    required this.assetPath,
+    required this.height,
+    this.preferredColor,
+    this.fallbackColor,
+    this.minContrast = 3.0,
+  });
+
+  final String assetPath;
+  final double height;
+
+  final Color? preferredColor;
+  final Color? fallbackColor;
+  final double minContrast;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    final bg = theme.scaffoldBackgroundColor;
+
+    final preferred = preferredColor ?? cs.primary;
+    final fallback = fallbackColor ?? cs.onBackground;
+
+    final tint = _resolveLogoTint(
+      background: bg,
+      preferred: preferred,
+      fallback: fallback,
+      minContrast: minContrast,
+    );
+
+    return Image.asset(
+      assetPath,
+      fit: BoxFit.contain,
+      height: height,
+      color: tint,
+      colorBlendMode: BlendMode.srcIn,
+    );
+  }
+}
 
 class MinorCommuteInScreen extends StatefulWidget {
   const MinorCommuteInScreen({super.key});
@@ -20,6 +83,10 @@ class MinorCommuteInScreen extends StatefulWidget {
 class _MinorCommuteInScreenState extends State<MinorCommuteInScreen> {
   final controller = MinorCommuteInController();
   bool _isLoading = false;
+
+  // ✅ (변경) 상단 screen tag 이미지
+  static const String _kPelicanTagAsset = 'assets/images/pelican_text.png';
+  static const double _kTagExtraHeight = 70.0;
 
   @override
   void initState() {
@@ -63,19 +130,19 @@ class _MinorCommuteInScreenState extends State<MinorCommuteInScreen> {
   }
 
   Widget _buildScreenTag(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final base = Theme.of(context).textTheme.labelSmall;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
 
-    final style = (base ??
+    final base = theme.textTheme.labelSmall ??
         const TextStyle(
           fontSize: 11,
           fontWeight: FontWeight.w600,
-        ))
-        .copyWith(
-      color: cs.onSurfaceVariant.withOpacity(0.80),
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.2,
-    );
+        );
+
+    final fontSize = (base.fontSize ?? 11).toDouble();
+    final tagImageHeight = fontSize + _kTagExtraHeight;
+
+    final tagPreferredTint = cs.onSurfaceVariant.withOpacity(0.80);
 
     return Positioned(
       top: 12,
@@ -83,7 +150,15 @@ class _MinorCommuteInScreenState extends State<MinorCommuteInScreen> {
       child: IgnorePointer(
         child: Semantics(
           label: 'screen_tag: minor commute screen',
-          child: Text('minor commute screen', style: style),
+          child: ExcludeSemantics(
+            child: _BrandTintedLogo(
+              assetPath: _kPelicanTagAsset,
+              height: tagImageHeight,
+              preferredColor: tagPreferredTint,
+              fallbackColor: cs.onBackground,
+              minContrast: 3.0,
+            ),
+          ),
         ),
       ),
     );
@@ -112,24 +187,25 @@ class _MinorCommuteInScreenState extends State<MinorCommuteInScreen> {
                             const MinorCommuteInHeaderWidget(),
                             const MinorCommuteInInfoCardWidget(),
                             const SizedBox(height: 12),
-
                             SizedBox(
                               width: double.infinity,
                               child: MinorCommuteInWorkButtonWidget(
                                 controller: controller,
                                 onLoadingChanged: (value) {
-                                  setState(() {
-                                    _isLoading = value;
-                                  });
+                                  setState(() => _isLoading = value);
                                 },
                               ),
                             ),
-
                             const SizedBox(height: 8),
+
+                            // ✅ (변경) 하단 텍스트 로고 tint 적용
                             Center(
                               child: SizedBox(
                                 height: 80,
-                                child: Image.asset('assets/images/pelican.png'),
+                                child: _BrandTintedLogo(
+                                  assetPath: 'assets/images/ParkinWorkin_text.png',
+                                  height: 80,
+                                ),
                               ),
                             ),
                           ],
@@ -143,9 +219,7 @@ class _MinorCommuteInScreenState extends State<MinorCommuteInScreen> {
                     right: 16,
                     child: PopupMenuButton<String>(
                       onSelected: (value) {
-                        if (value == 'logout') {
-                          _handleLogout(context);
-                        }
+                        if (value == 'logout') _handleLogout(context);
                       },
                       itemBuilder: (context) => [
                         PopupMenuItem(

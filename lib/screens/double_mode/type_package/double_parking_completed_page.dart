@@ -14,6 +14,65 @@ import 'parking_completed_package/widgets/signature_plate_search_bottom_sheet/do
 import 'parking_completed_package/double_parking_completed_real_time_table.dart';
 import 'parking_completed_package/double_parking_status_page.dart';
 
+/// ─────────────────────────────────────────────────────────────
+/// ✅ 로고(PNG) 가독성 보장 유틸
+double _contrastRatio(Color a, Color b) {
+  final la = a.computeLuminance();
+  final lb = b.computeLuminance();
+  final l1 = la >= lb ? la : lb;
+  final l2 = la >= lb ? lb : la;
+  return (l1 + 0.05) / (l2 + 0.05);
+}
+
+Color _resolveLogoTint({
+  required Color background,
+  required Color preferred,
+  required Color fallback,
+  double minContrast = 3.0,
+}) {
+  if (_contrastRatio(preferred, background) >= minContrast) return preferred;
+  return fallback;
+}
+
+/// ✅ (경고 방지) required 파라미터만 사용하는 tint 로고 위젯
+class _BrandTintedLogo extends StatelessWidget {
+  const _BrandTintedLogo({
+    required this.assetPath,
+    required this.height,
+    required this.preferredColor,
+    required this.fallbackColor,
+    this.minContrast = 3.0,
+  });
+
+  final String assetPath;
+  final double height;
+
+  final Color preferredColor;
+  final Color fallbackColor;
+  final double minContrast;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final bg = theme.scaffoldBackgroundColor;
+
+    final tint = _resolveLogoTint(
+      background: bg,
+      preferred: preferredColor,
+      fallback: fallbackColor,
+      minContrast: minContrast,
+    );
+
+    return Image.asset(
+      assetPath,
+      fit: BoxFit.contain,
+      height: height,
+      color: tint,
+      colorBlendMode: BlendMode.srcIn,
+    );
+  }
+}
+
 /// ✅ 더블 입차완료 페이지는 "현황(status) ↔ 실시간 테이블(locationPicker)" 2가지 화면만 제공합니다.
 /// - 과거 레거시였던 plateList/정렬/구역필터 UI는 현재 흐름에서 사용되지 않아 제거됨.
 enum DoubleParkingViewMode { status, locationPicker }
@@ -49,6 +108,12 @@ class _DoubleParkingCompletedPageState extends State<DoubleParkingCompletedPage>
 
   // ✅ Status 페이지 강제 재생성용 키 시드 (홈 버튼 리셋 시 증가)
   int _statusKeySeed = 0;
+
+  // ✅ (신규) 좌측 상단 태그 이미지(첨부파일)
+  static const String _kScreenTagAsset = 'assets/images/pelican_text.png';
+
+  // ✅ (요청) 좌측 상단 태그 이미지 높이 고정
+  static const double _kScreenTagHeight = 54.0;
 
   void _log(String msg) {
     if (kDebugMode) debugPrint('[ParkingCompleted] $msg');
@@ -104,6 +169,11 @@ class _DoubleParkingCompletedPageState extends State<DoubleParkingCompletedPage>
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
+    // ✅ MinorDashBoard 방식과 동일:
+    // - 기존 텍스트 태그 톤(onSurfaceVariant 0.80)으로 tint 우선 시도
+    // - 대비 부족 시 onBackground 폴백
+    final tagPreferredTint = cs.onSurfaceVariant.withOpacity(0.80);
+
     return WillPopScope(
       // 시스템/뒤로가기 처리:
       // 1) 선택된 번호판이 있으면 선택 해제
@@ -149,6 +219,30 @@ class _DoubleParkingCompletedPageState extends State<DoubleParkingCompletedPage>
           surfaceTintColor: Colors.transparent,
           shape: Border(
             bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.85), width: 1),
+          ),
+
+          // ✅ (신규) MinorDashBoard와 동일한 위치/방식으로 좌측 상단 태그 이미지 삽입
+          flexibleSpace: SafeArea(
+            child: IgnorePointer(
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 12, top: 4),
+                  child: Semantics(
+                    label: 'screen_tag: DoubleParkingCompletedPage',
+                    child: ExcludeSemantics(
+                      child: _BrandTintedLogo(
+                        assetPath: _kScreenTagAsset,
+                        height: _kScreenTagHeight,
+                        preferredColor: tagPreferredTint,
+                        fallbackColor: cs.onBackground,
+                        minContrast: 3.0,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
 

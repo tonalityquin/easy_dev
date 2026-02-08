@@ -56,6 +56,9 @@ class _BreakCalendarState extends State<BreakCalendar> {
   static const _light = Color(0xFF5472D3);
   static const _fg = Color(0xFFFFFFFF);
 
+  // ✅ [추가] TableCalendar 연도 범위를 동적으로 계산하기 위한 패딩(±N년)
+  static const int _yearRangePadding = 5;
+
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
 
@@ -76,6 +79,20 @@ class _BreakCalendarState extends State<BreakCalendar> {
   bool _isSendingMail = false;
 
   final CommuteLogRepository _repo = CommuteLogRepository();
+
+  // ✅ [추가] DateTime의 year 안전 범위 보정(1~9999)
+  int _clampYear(int y) {
+    if (y < 1) return 1;
+    if (y > 9999) return 9999;
+    return y;
+  }
+
+  // ✅ [추가] focusedDay 기준으로 달력 범위를 동적으로 산출
+  DateTime get _calendarFirstDay =>
+      DateTime(_clampYear(_focusedDay.year - _yearRangePadding), 1, 1);
+
+  DateTime get _calendarLastDay =>
+      DateTime(_clampYear(_focusedDay.year + _yearRangePadding), 12, 31);
 
   void _showFailedAfterBuild(String msg) {
     if (!mounted) return;
@@ -415,10 +432,10 @@ class _BreakCalendarState extends State<BreakCalendar> {
       onPressed: (_selectedUser == null || _isSendingMail) ? null : _sendMonthlyExcelMail,
       icon: _isSendingMail
           ? const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
+        width: 20,
+        height: 20,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      )
           : const Icon(Icons.mail_outline_rounded),
     );
   }
@@ -492,8 +509,9 @@ class _BreakCalendarState extends State<BreakCalendar> {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(6, 8, 6, 10),
                 child: TableCalendar(
-                  firstDay: DateTime.utc(2025, 1, 1),
-                  lastDay: DateTime.utc(2025, 12, 31),
+                  // ✅ [변경] 고정 연도(2025) 제거 → focusedDay 기준 동적 범위 사용
+                  firstDay: _calendarFirstDay,
+                  lastDay: _calendarLastDay,
                   focusedDay: _focusedDay,
                   rowHeight: 84,
                   selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
@@ -565,12 +583,12 @@ class _BreakCalendarState extends State<BreakCalendar> {
     final fab = _selectedUser == null
         ? null
         : FloatingActionButton.extended(
-            onPressed: _saveAllChangesToFirestore,
-            backgroundColor: _base,
-            foregroundColor: _fg,
-            icon: const Icon(Icons.save_rounded),
-            label: const Text('변경사항 저장'),
-          );
+      onPressed: _saveAllChangesToFirestore,
+      backgroundColor: _base,
+      foregroundColor: _fg,
+      icon: const Icon(Icons.save_rounded),
+      label: const Text('변경사항 저장'),
+    );
 
     if (!widget.asBottomSheet) {
       return Scaffold(
@@ -695,18 +713,18 @@ class _BreakCalendarState extends State<BreakCalendar> {
                         SizedBox(height: vGap),
                         hasBreak
                             ? Text(
-                                breakTime,
-                                maxLines: 1,
-                                overflow: TextOverflow.fade,
-                                softWrap: false,
-                                style: TextStyle(
-                                  fontSize: timeFs,
-                                  fontWeight: FontWeight.w800,
-                                  color: Colors.black87,
-                                  fontFeatures: const [FontFeature.tabularFigures()],
-                                  letterSpacing: .2,
-                                ),
-                              )
+                          breakTime,
+                          maxLines: 1,
+                          overflow: TextOverflow.fade,
+                          softWrap: false,
+                          style: TextStyle(
+                            fontSize: timeFs,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.black87,
+                            fontFeatures: const [FontFeature.tabularFigures()],
+                            letterSpacing: .2,
+                          ),
+                        )
                             : Text('—', style: TextStyle(fontSize: smallFs, color: Colors.black38)),
                       ],
                     ),
@@ -880,35 +898,35 @@ class _LegendRowBreak extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget dot(Color c) => Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(color: c, shape: BoxShape.circle),
-        );
+      width: 10,
+      height: 10,
+      decoration: BoxDecoration(color: c, shape: BoxShape.circle),
+    );
 
     Widget itemDot(Color c, String t) => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            dot(c),
-            const SizedBox(width: 6),
-            Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
-          ],
-        );
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        dot(c),
+        const SizedBox(width: 6),
+        Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+      ],
+    );
 
     Widget itemSquare(String t) => Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 14,
-              height: 14,
-              decoration: BoxDecoration(
-                border: Border.all(color: base, width: 1.6),
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-            const SizedBox(width: 6),
-            Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
-          ],
-        );
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            border: Border.all(color: base, width: 1.6),
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(t, style: const TextStyle(fontSize: 12, color: Colors.black87)),
+      ],
+    );
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

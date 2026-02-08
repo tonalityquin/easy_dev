@@ -53,6 +53,69 @@ class _SelectorHubsTokens {
   }
 }
 
+/// ─────────────────────────────────────────────────────────────
+/// ✅ 로고(이미지) 컬러 자동 결정 유틸
+///
+/// - ParkinWorkin_text.png는 “검정색 픽셀로 박힌” 래스터 이미지라,
+///   배경이 어두운 테마에서 그대로 쓰면 보이지 않습니다.
+/// - 해결: 알파(투명도)를 마스크로 사용해 colorScheme 기반으로 tint.
+/// - 우선은 브랜드/하이라이트(primary)를 사용하되,
+///   배경(background)과 대비가 부족하면 onBackground로 자동 폴백.
+///
+/// NOTE: WCAG 대비 기준을 엄격히 적용하려면 4.5:1 등을 쓰지만,
+///       여기서는 로고 성격(큰 텍스트)에 맞춰 3.0:1을 기본으로 사용.
+double _contrastRatio(Color a, Color b) {
+  final la = a.computeLuminance();
+  final lb = b.computeLuminance();
+  final l1 = la >= lb ? la : lb;
+  final l2 = la >= lb ? lb : la;
+  return (l1 + 0.05) / (l2 + 0.05);
+}
+
+Color _resolveLogoTint({
+  required Color background,
+  required Color preferred,
+  required Color fallback,
+  double minContrast = 3.0,
+}) {
+  // preferred(primary)가 충분히 읽히면 그대로 사용
+  if (_contrastRatio(preferred, background) >= minContrast) {
+    return preferred;
+  }
+  // 아니면 onBackground(가독성 우선)로 폴백
+  return fallback;
+}
+
+class _BrandTintedLogo extends StatelessWidget {
+  const _BrandTintedLogo({
+    required this.height,
+  });
+
+  static const String _assetPath = 'assets/images/ParkinWorkin_text.png';
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final bg = cs.background;
+
+    final tint = _resolveLogoTint(
+      background: bg,
+      preferred: cs.primary,
+      fallback: cs.onBackground,
+      minContrast: 3.0,
+    );
+
+    return Image.asset(
+      _assetPath,
+      fit: BoxFit.contain,
+      height: height,
+      color: tint,
+      colorBlendMode: BlendMode.srcIn,
+    );
+  }
+}
+
 class SelectorHubsPage extends StatefulWidget {
   const SelectorHubsPage({super.key});
 
@@ -283,7 +346,7 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
                 statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
               ),
               title: Text(
-                'Pelican Hubs',
+                'ParkinWorkin Hubs',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w700,
                   letterSpacing: 0.2,
@@ -339,11 +402,7 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
                         child: InkWell(
                           borderRadius: BorderRadius.circular(12),
                           onTap: () => _handlePelicanTap(context),
-                          child: Image.asset(
-                            'assets/images/pelican.png',
-                            fit: BoxFit.contain,
-                            height: footerHeight,
-                          ),
+                          child: _BrandTintedLogo(height: footerHeight),
                         ),
                       ),
                     ),

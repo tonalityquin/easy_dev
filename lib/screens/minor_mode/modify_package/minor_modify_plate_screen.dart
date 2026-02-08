@@ -19,6 +19,67 @@ import 'widgets/minor_modify_bottom_navigation.dart';
 import 'widgets/minor_modify_camera_preview_dialog.dart';
 import 'widgets/minor_modify_location_bottom_sheet.dart';
 
+/// ─────────────────────────────────────────────────────────────
+/// ✅ 로고(PNG) 가독성 보장 유틸 (수정안)
+double _contrastRatio(Color a, Color b) {
+  final la = a.computeLuminance();
+  final lb = b.computeLuminance();
+  final l1 = la >= lb ? la : lb;
+  final l2 = la >= lb ? lb : la;
+  return (l1 + 0.05) / (l2 + 0.05);
+}
+
+Color _resolveLogoTint({
+  required Color background,
+  required Color preferred,
+  required Color fallback,
+  double minContrast = 3.0,
+}) {
+  if (_contrastRatio(preferred, background) >= minContrast) return preferred;
+  return fallback;
+}
+
+/// ✅ required 파라미터만 사용하는 tint 로고 위젯 (수정안)
+class _BrandTintedLogo extends StatelessWidget {
+  const _BrandTintedLogo({
+    required this.assetPath,
+    required this.height,
+    required this.preferredColor,
+    required this.fallbackColor,
+    this.minContrast = 3.0,
+  });
+
+  final String assetPath;
+  final double height;
+
+  final Color preferredColor;
+  final Color fallbackColor;
+  final double minContrast;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    // reference 코드와 동일 기준
+    final bg = theme.scaffoldBackgroundColor;
+
+    final tint = _resolveLogoTint(
+      background: bg,
+      preferred: preferredColor,
+      fallback: fallbackColor,
+      minContrast: minContrast,
+    );
+
+    return Image.asset(
+      assetPath,
+      fit: BoxFit.contain,
+      height: height,
+      color: tint,
+      colorBlendMode: BlendMode.srcIn,
+    );
+  }
+}
+
 class MinorModifyPlateScreen extends StatefulWidget {
   final PlateModel plate;
   final PlateType collectionKey;
@@ -36,6 +97,16 @@ class MinorModifyPlateScreen extends StatefulWidget {
 class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
   // ⬇️ 화면 식별 태그(FAQ/에러 리포트 연계용)
   static const String screenTag = 'plate modify';
+
+  // ✅ (수정안) 좌측 상단 태그 텍스트 대신 사용할 이미지
+  static const String _kScreenTagAsset = 'assets/images/pelican_text.png';
+
+  // ✅ (요청) 좌측 상단 태그 이미지 크기
+  static const double _kScreenTagHeight = 54.0;
+
+  // ✅ (수정안) 하단 ParkinWorkin 로고도 동일 방식 적용
+  static const String _kBottomBrandAsset = 'assets/images/ParkinWorkin_text.png';
+  static const double _kBottomBrandHeight = 48.0;
 
   late final MinorModifyPlateController _controller;
 
@@ -171,20 +242,10 @@ class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
     super.dispose();
   }
 
-  // 좌측 상단(11시) 화면 태그 위젯
+  // ✅ (수정안) 좌측 상단(11시) 화면 태그: 텍스트 → 이미지(pelican_text.png)
   Widget _buildScreenTag(BuildContext context) {
-    final base = Theme.of(context).textTheme.labelSmall;
-    final style = (base ??
-        const TextStyle(
-          fontSize: 11,
-          color: Colors.black54,
-          fontWeight: FontWeight.w600,
-        ))
-        .copyWith(
-      color: Colors.black54,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.2,
-    );
+    final cs = Theme.of(context).colorScheme;
+    final preferred = cs.onSurfaceVariant.withOpacity(0.80);
 
     return SafeArea(
       child: IgnorePointer(
@@ -194,9 +255,36 @@ class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
             padding: const EdgeInsets.only(left: 12, top: 4),
             child: Semantics(
               label: 'screen_tag: $screenTag',
-              child: Text(screenTag, style: style),
+              child: ExcludeSemantics(
+                child: _BrandTintedLogo(
+                  assetPath: _kScreenTagAsset,
+                  height: _kScreenTagHeight,
+                  preferredColor: preferred,
+                  fallbackColor: cs.onBackground,
+                  minContrast: 3.0,
+                ),
+              ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  // ✅ (수정안) 하단 ParkinWorkin_text 로고: 동일 방식(tint + 대비 폴백)
+  Widget _buildBottomBrandLogo(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final preferred = cs.onSurfaceVariant.withOpacity(0.90);
+
+    return Semantics(
+      label: 'brand_logo: ParkinWorkin',
+      child: ExcludeSemantics(
+        child: _BrandTintedLogo(
+          assetPath: _kBottomBrandAsset,
+          height: _kBottomBrandHeight,
+          preferredColor: preferred,
+          fallbackColor: cs.onBackground,
+          minContrast: 3.0,
         ),
       ),
     );
@@ -224,7 +312,10 @@ class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
         foregroundColor: cs.onSurface,
         elevation: 1,
         surfaceTintColor: Colors.transparent,
+
+        // ✅ 좌측 상단 태그: 이미지로 교체
         flexibleSpace: _buildScreenTag(context),
+
         title: Text(
           '번호판 수정',
           style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -455,13 +546,15 @@ class _MinorModifyPlateScreenState extends State<MinorModifyPlateScreen> {
               ],
             ),
           ),
+
+          // ✅ (수정안) 하단 ParkinWorkin_text 로고: tint/대비 보장 적용
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: SafeArea(
               top: false,
               child: SizedBox(
-                height: 48,
-                child: Image.asset('assets/images/pelican.png'),
+                height: _kBottomBrandHeight,
+                child: _buildBottomBrandLogo(context),
               ),
             ),
           ),
