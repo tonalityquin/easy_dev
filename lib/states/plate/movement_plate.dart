@@ -61,7 +61,8 @@ class MovementPlate extends ChangeNotifier {
   static const String _parkingCompletedViewCollection = 'parking_completed_view';
 
   /// ✅ (기존) 출차 요청 View 컬렉션명
-  static const String _departureRequestsViewCollection = 'departure_requests_view';
+  static const String _departureRequestsViewCollection =
+      'departure_requests_view';
 
   /// ✅ (기존/신규) 입차 요청 View 컬렉션명
   static const String _parkingRequestsViewCollection = 'parking_requests_view';
@@ -71,7 +72,8 @@ class MovementPlate extends ChangeNotifier {
   // ─────────────────────────────────────────
 
   static const String _kPcWrite = 'parking_completed_realtime_write_enabled_v1';
-  static const String _kDepWrite = 'departure_requests_realtime_write_enabled_v1';
+  static const String _kDepWrite =
+      'departure_requests_realtime_write_enabled_v1';
   static const String _kReqWrite = 'parking_requests_realtime_write_enabled_v1';
 
   static const String _kPcTab = 'parking_completed_realtime_tab_enabled_v1';
@@ -104,13 +106,19 @@ class MovementPlate extends ChangeNotifier {
 
   /// ✅ view 문서는 area 1개(=..._view/{area})
   DocumentReference<Map<String, dynamic>> _pcViewRef(String area) =>
-      FirebaseFirestore.instance.collection(_parkingCompletedViewCollection).doc(area);
+      FirebaseFirestore.instance
+          .collection(_parkingCompletedViewCollection)
+          .doc(area);
 
   DocumentReference<Map<String, dynamic>> _depViewRef(String area) =>
-      FirebaseFirestore.instance.collection(_departureRequestsViewCollection).doc(area);
+      FirebaseFirestore.instance
+          .collection(_departureRequestsViewCollection)
+          .doc(area);
 
   DocumentReference<Map<String, dynamic>> _reqViewRef(String area) =>
-      FirebaseFirestore.instance.collection(_parkingRequestsViewCollection).doc(area);
+      FirebaseFirestore.instance
+          .collection(_parkingRequestsViewCollection)
+          .doc(area);
 
   void _debugOps({
     required String action,
@@ -142,11 +150,13 @@ class MovementPlate extends ChangeNotifier {
     required String plateDocId,
     required String plateNumber,
     required String location,
+    bool forceViewSync = false,
   }) async {
-    final should = await _pcGate.shouldSync();
+    final should = forceViewSync ? true : await _pcGate.shouldSync();
     if (!should) {
       if (kDebugMode) {
-        debugPrint('🚫 [MovementPlate] skip parking_completed_view upsert (${await _pcGate.debugReason()})');
+        debugPrint(
+            '🚫 [MovementPlate] skip parking_completed_view upsert (${await _pcGate.debugReason()})');
       }
       return;
     }
@@ -176,11 +186,13 @@ class MovementPlate extends ChangeNotifier {
   Future<void> _removeParkingCompletedViewItem({
     required String area,
     required String plateDocId,
+    bool forceViewSync = false,
   }) async {
-    final should = await _pcGate.shouldSync();
+    final should = forceViewSync ? true : await _pcGate.shouldSync();
     if (!should) {
       if (kDebugMode) {
-        debugPrint('🚫 [MovementPlate] skip parking_completed_view remove (${await _pcGate.debugReason()})');
+        debugPrint(
+            '🚫 [MovementPlate] skip parking_completed_view remove (${await _pcGate.debugReason()})');
       }
       return;
     }
@@ -211,11 +223,13 @@ class MovementPlate extends ChangeNotifier {
     required String plateDocId,
     required String plateNumber,
     required String location,
+    bool forceViewSync = false,
   }) async {
-    final should = await _depGate.shouldSync();
+    final should = forceViewSync ? true : await _depGate.shouldSync();
     if (!should) {
       if (kDebugMode) {
-        debugPrint('🚫 [MovementPlate] skip departure_requests_view upsert (${await _depGate.debugReason()})');
+        debugPrint(
+            '🚫 [MovementPlate] skip departure_requests_view upsert (${await _depGate.debugReason()})');
       }
       return;
     }
@@ -245,11 +259,13 @@ class MovementPlate extends ChangeNotifier {
   Future<void> _removeDepartureRequestsViewItem({
     required String area,
     required String plateDocId,
+    bool forceViewSync = false,
   }) async {
-    final should = await _depGate.shouldSync();
+    final should = forceViewSync ? true : await _depGate.shouldSync();
     if (!should) {
       if (kDebugMode) {
-        debugPrint('🚫 [MovementPlate] skip departure_requests_view remove (${await _depGate.debugReason()})');
+        debugPrint(
+            '🚫 [MovementPlate] skip departure_requests_view remove (${await _depGate.debugReason()})');
       }
       return;
     }
@@ -280,11 +296,13 @@ class MovementPlate extends ChangeNotifier {
     required String plateDocId,
     required String plateNumber,
     required String location,
+    bool forceViewSync = false,
   }) async {
-    final should = await _reqGate.shouldSync();
+    final should = forceViewSync ? true : await _reqGate.shouldSync();
     if (!should) {
       if (kDebugMode) {
-        debugPrint('🚫 [MovementPlate] skip parking_requests_view upsert (${await _reqGate.debugReason()})');
+        debugPrint(
+            '🚫 [MovementPlate] skip parking_requests_view upsert (${await _reqGate.debugReason()})');
       }
       return;
     }
@@ -314,11 +332,13 @@ class MovementPlate extends ChangeNotifier {
   Future<void> _removeParkingRequestsViewItem({
     required String area,
     required String plateDocId,
+    bool forceViewSync = false,
   }) async {
-    final should = await _reqGate.shouldSync();
+    final should = forceViewSync ? true : await _reqGate.shouldSync();
     if (!should) {
       if (kDebugMode) {
-        debugPrint('🚫 [MovementPlate] skip parking_requests_view remove (${await _reqGate.debugReason()})');
+        debugPrint(
+            '🚫 [MovementPlate] skip parking_requests_view remove (${await _reqGate.debugReason()})');
       }
       return;
     }
@@ -350,6 +370,7 @@ class MovementPlate extends ChangeNotifier {
       String area,
       String location, {
         bool forceOverride = true,
+        bool forceViewSync = false,
       }) async {
     final actor = _user.name;
     final plateDocId = _plateDocId(plateNumber, area);
@@ -366,7 +387,8 @@ class MovementPlate extends ChangeNotifier {
       txWrites: 1,
       viewWritesMin: 0,
       viewWritesMax: 2,
-      gateReason: 'pc(${await _pcGate.debugReason()}), req(${await _reqGate.debugReason()})',
+      gateReason:
+      'pc(${await _pcGate.debugReason()}), req(${await _reqGate.debugReason()})',
     );
 
     await _write.transitionPlateType(
@@ -383,12 +405,17 @@ class MovementPlate extends ChangeNotifier {
       forceOverride: forceOverride,
     );
 
-    await _removeParkingRequestsViewItem(area: area, plateDocId: plateDocId);
+    await _removeParkingRequestsViewItem(
+      area: area,
+      plateDocId: plateDocId,
+      forceViewSync: forceViewSync,
+    );
     await _upsertParkingCompletedViewItem(
       area: area,
       plateDocId: plateDocId,
       plateNumber: plateNumber,
       location: location,
+      forceViewSync: forceViewSync,
     );
   }
 
@@ -398,6 +425,7 @@ class MovementPlate extends ChangeNotifier {
       String area,
       String location, {
         bool forceOverride = true,
+        bool forceViewSync = false,
       }) async {
     final actor = _user.name;
     final plateDocId = _plateDocId(plateNumber, area);
@@ -411,7 +439,8 @@ class MovementPlate extends ChangeNotifier {
       txWrites: 1,
       viewWritesMin: 0,
       viewWritesMax: 2,
-      gateReason: 'pc(${await _pcGate.debugReason()}), dep(${await _depGate.debugReason()})',
+      gateReason:
+      'pc(${await _pcGate.debugReason()}), dep(${await _depGate.debugReason()})',
     );
 
     await _write.transitionPlateType(
@@ -428,12 +457,17 @@ class MovementPlate extends ChangeNotifier {
       forceOverride: forceOverride,
     );
 
-    await _removeParkingCompletedViewItem(area: area, plateDocId: plateDocId);
+    await _removeParkingCompletedViewItem(
+      area: area,
+      plateDocId: plateDocId,
+      forceViewSync: forceViewSync,
+    );
     await _upsertDepartureRequestsViewItem(
       area: area,
       plateDocId: plateDocId,
       plateNumber: plateNumber,
       location: location,
+      forceViewSync: forceViewSync,
     );
   }
 
@@ -443,12 +477,14 @@ class MovementPlate extends ChangeNotifier {
       String area,
       String location, {
         bool forceOverride = true,
+        bool forceViewSync = false,
       }) async {
     final actor = _user.name;
     final plateDocId = _plateDocId(plateNumber, area);
 
     _debugOps(
-      action: 'setDepartureCompletedDirectFromParkingCompleted(completed→departure_completed)',
+      action:
+      'setDepartureCompletedDirectFromParkingCompleted(completed→departure_completed)',
       plateNumber: plateNumber,
       area: area,
       plateDocId: plateDocId,
@@ -473,13 +509,18 @@ class MovementPlate extends ChangeNotifier {
       forceOverride: forceOverride,
     );
 
-    await _removeParkingCompletedViewItem(area: area, plateDocId: plateDocId);
+    await _removeParkingCompletedViewItem(
+      area: area,
+      plateDocId: plateDocId,
+      forceViewSync: forceViewSync,
+    );
   }
 
   /// 출차 완료 (departure_requests → departure_completed)
   Future<void> setDepartureCompleted(
       PlateModel selectedPlate, {
         bool forceOverride = true,
+        bool forceViewSync = false,
       }) async {
     final actor = _user.name;
 
@@ -513,7 +554,11 @@ class MovementPlate extends ChangeNotifier {
       forceOverride: forceOverride,
     );
 
-    await _removeDepartureRequestsViewItem(area: selectedPlate.area, plateDocId: plateDocId);
+    await _removeDepartureRequestsViewItem(
+      area: selectedPlate.area,
+      plateDocId: plateDocId,
+      forceViewSync: forceViewSync,
+    );
   }
 
   /// (옵션) 출차 요청 → 입차 완료 되돌리기
@@ -522,6 +567,7 @@ class MovementPlate extends ChangeNotifier {
       String area,
       String location, {
         bool forceOverride = true,
+        bool forceViewSync = false,
       }) async {
     final actor = _user.name;
     final plateDocId = _plateDocId(plateNumber, area);
@@ -535,7 +581,8 @@ class MovementPlate extends ChangeNotifier {
       txWrites: 1,
       viewWritesMin: 0,
       viewWritesMax: 2, // dep remove + pc upsert
-      gateReason: 'dep(${await _depGate.debugReason()}), pc(${await _pcGate.debugReason()})',
+      gateReason:
+      'dep(${await _depGate.debugReason()}), pc(${await _pcGate.debugReason()})',
     );
 
     await _write.transitionPlateType(
@@ -552,12 +599,17 @@ class MovementPlate extends ChangeNotifier {
       forceOverride: forceOverride,
     );
 
-    await _removeDepartureRequestsViewItem(area: area, plateDocId: plateDocId);
+    await _removeDepartureRequestsViewItem(
+      area: area,
+      plateDocId: plateDocId,
+      forceViewSync: forceViewSync,
+    );
     await _upsertParkingCompletedViewItem(
       area: area,
       plateDocId: plateDocId,
       plateNumber: plateNumber,
       location: location,
+      forceViewSync: forceViewSync,
     );
   }
 
@@ -570,6 +622,7 @@ class MovementPlate extends ChangeNotifier {
     required String area,
     required String newLocation,
     bool forceOverride = true,
+    bool forceViewSync = false,
   }) async {
     final actor = _user.name;
     final plateDocId = _plateDocId(plateNumber, area);
@@ -602,9 +655,17 @@ class MovementPlate extends ChangeNotifier {
 
     // ✅ 기존 view 정리
     if (fromType == PlateType.parkingCompleted) {
-      await _removeParkingCompletedViewItem(area: area, plateDocId: plateDocId);
+      await _removeParkingCompletedViewItem(
+        area: area,
+        plateDocId: plateDocId,
+        forceViewSync: forceViewSync,
+      );
     } else if (fromType == PlateType.departureRequests) {
-      await _removeDepartureRequestsViewItem(area: area, plateDocId: plateDocId);
+      await _removeDepartureRequestsViewItem(
+        area: area,
+        plateDocId: plateDocId,
+        forceViewSync: forceViewSync,
+      );
     }
 
     await _upsertParkingRequestsViewItem(
@@ -612,6 +673,7 @@ class MovementPlate extends ChangeNotifier {
       plateDocId: plateDocId,
       plateNumber: plateNumber,
       location: newLocation,
+      forceViewSync: forceViewSync,
     );
   }
 }

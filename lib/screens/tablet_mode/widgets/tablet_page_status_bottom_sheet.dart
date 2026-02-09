@@ -33,14 +33,18 @@ Future<bool?> showTabletPageStatusBottomSheet({
 
           final handleBg = cs.outlineVariant.withOpacity(.8);
 
-          final headerIconBg = tintOnSurface(cs.brightness == Brightness.dark ? 0.18 : 0.10);
-          final plateBg = tintOnSurface(cs.brightness == Brightness.dark ? 0.16 : 0.08);
-          final plateBorder = cs.primary.withOpacity(cs.brightness == Brightness.dark ? 0.30 : 0.22);
+          final headerIconBg =
+          tintOnSurface(cs.brightness == Brightness.dark ? 0.18 : 0.10);
+          final plateBg =
+          tintOnSurface(cs.brightness == Brightness.dark ? 0.16 : 0.08);
+          final plateBorder = cs.primary.withOpacity(
+              cs.brightness == Brightness.dark ? 0.30 : 0.22);
 
           return Container(
             decoration: BoxDecoration(
               color: sheetBg,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              borderRadius:
+              const BorderRadius.vertical(top: Radius.circular(20)),
               border: Border(top: BorderSide(color: sheetBorder)),
             ),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -69,7 +73,8 @@ Future<bool?> showTabletPageStatusBottomSheet({
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: cs.outline.withOpacity(.10)),
                       ),
-                      child: Icon(Icons.directions_car, color: cs.primary, size: 18),
+                      child: Icon(Icons.directions_car,
+                          color: cs.primary, size: 18),
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -86,7 +91,8 @@ Future<bool?> showTabletPageStatusBottomSheet({
 
                 Center(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
                     decoration: BoxDecoration(
                       color: plateBg,
                       borderRadius: BorderRadius.circular(12),
@@ -94,7 +100,8 @@ Future<bool?> showTabletPageStatusBottomSheet({
                     ),
                     child: Text(
                       plate.plateNumber,
-                      style: (text.headlineSmall ?? const TextStyle()).copyWith(
+                      style:
+                      (text.headlineSmall ?? const TextStyle()).copyWith(
                         fontSize: 26,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 1.2,
@@ -137,8 +144,10 @@ Future<bool?> showTabletPageStatusBottomSheet({
                             borderRadius: BorderRadius.circular(12),
                           ),
                         ).copyWith(
-                          overlayColor: MaterialStateProperty.resolveWith<Color?>(
-                                (states) => states.contains(MaterialState.pressed)
+                          overlayColor:
+                          MaterialStateProperty.resolveWith<Color?>(
+                                (states) =>
+                            states.contains(MaterialState.pressed)
                                 ? cs.outlineVariant.withOpacity(.20)
                                 : null,
                           ),
@@ -156,6 +165,9 @@ Future<bool?> showTabletPageStatusBottomSheet({
                             plate.plateNumber,
                             plate.area,
                             plate.location,
+                            // ✅ Tablet 전환에서도 view(parking_completed_view / departure_requests_view)
+                            //    동기화를 강제해 다른 사용자 UI 혼동을 방지
+                            forceViewSync: true,
                           );
                           if (!context.mounted) return;
                           Navigator.pop(context, true);
@@ -169,8 +181,10 @@ Future<bool?> showTabletPageStatusBottomSheet({
                           ),
                           elevation: 0,
                         ).copyWith(
-                          overlayColor: MaterialStateProperty.resolveWith<Color?>(
-                                (states) => states.contains(MaterialState.pressed)
+                          overlayColor:
+                          MaterialStateProperty.resolveWith<Color?>(
+                                (states) =>
+                            states.contains(MaterialState.pressed)
                                 ? cs.onPrimary.withOpacity(.12)
                                 : null,
                           ),
