@@ -1,4 +1,4 @@
-// lib/utils/tts_ownership.dart
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum TtsOwner { app, foreground }

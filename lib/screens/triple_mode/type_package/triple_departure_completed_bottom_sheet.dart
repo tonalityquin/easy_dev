@@ -2,13 +2,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../enums/plate_type.dart';
-import '../../../models/plate_model.dart';
-import '../../../states/calendar/field_calendar_state.dart';
-import '../../../states/area/area_state.dart';
-import '../../../states/plate/triple_plate_state.dart';
-import '../../../states/user/user_state.dart';
-
+import '../../../features/account/applications/user_state.dart';
+import '../../../features/dev/application/area_state.dart';
+import '../../../features/dev/application/field_calendar_state.dart';
+import '../../../features/plate/application/triple/triple_plate_state.dart';
+import '../../../features/plate/domain/enums/plate_type.dart';
+import '../../../features/plate/domain/models/plate_model.dart';
 import 'departure_completed_package/triple_departure_completed_tab_settled.dart';
 import 'departure_completed_package/triple_departure_completed_tab_unsettled.dart';
 import 'departure_completed_package/widgets/triple_departure_completed_selected_date_bar.dart';
@@ -23,16 +22,16 @@ class TripleDepartureCompletedBottomSheet extends StatefulWidget {
 
 class _TripleDepartureCompletedBottomSheetState
     extends State<TripleDepartureCompletedBottomSheet> {
-  // 화면 식별 태그(FAQ/에러 리포트 연계용)
+  
   static const String screenTag = 'departure completed';
 
-  // 기존 로직 유지(현재 파일 내에서는 토글 UI 없음)
+  
   final bool _isSorted = true;
 
   bool _areaEquals(String a, String b) =>
       a.trim().toLowerCase() == b.trim().toLowerCase();
 
-  // 좌측 상단(11시) 태그 위젯
+  
   Widget _buildScreenTag(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final base = Theme.of(context).textTheme.labelSmall;
@@ -50,7 +49,7 @@ class _TripleDepartureCompletedBottomSheetState
     );
 
     return IgnorePointer(
-      // 시트 제스처와의 간섭 방지
+      
       child: Align(
         alignment: Alignment.topLeft,
         child: Padding(
@@ -85,7 +84,7 @@ class _TripleDepartureCompletedBottomSheetState
       selectedDate: selectedDate,
     );
 
-    // ✅ 안전하게 bool? 대응: "미정산" 판정은 isLockedFee != true
+    
     List<PlateModel> firestorePlates = baseList.where((p) {
       final sameArea = _areaEquals(p.area, area);
       return (p.isLockedFee != true) && sameArea;
@@ -105,7 +104,7 @@ class _TripleDepartureCompletedBottomSheetState
 
     return WillPopScope(
       onWillPop: () async {
-        // ✅ stale 캡처 방지: 뒤로가기 순간에 최신 selectedPlate 다시 조회
+        
         final latestSelected = context.read<TriplePlateState>().tripleGetSelectedPlate(
           PlateType.departureCompleted,
           userName,
@@ -147,7 +146,7 @@ class _TripleDepartureCompletedBottomSheetState
                         children: [
                           const SizedBox(height: 12),
 
-                          // 상단 드래그 핸들
+                          
                           Center(
                             child: Container(
                               width: 60,
@@ -159,7 +158,7 @@ class _TripleDepartureCompletedBottomSheetState
                             ),
                           ),
 
-                          // ⬇️ 좌측 상단(11시) 화면 태그
+                          
                           _buildScreenTag(context),
 
                           const SizedBox(height: 8),
@@ -180,7 +179,7 @@ class _TripleDepartureCompletedBottomSheetState
 
                           const SizedBox(height: 8),
 
-                          // 정산 탭에서는 날짜바 숨김(기존 정책 유지)
+                          
                           TripleDepartureCompletedSelectedDateBar(visible: !isSettled),
 
                           const SizedBox(height: 8),

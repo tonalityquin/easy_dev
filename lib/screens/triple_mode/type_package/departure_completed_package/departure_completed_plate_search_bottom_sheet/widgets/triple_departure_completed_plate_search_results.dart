@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
-import '../../../../../../../models/plate_model.dart';
-import '../../../../../../enums/plate_type.dart';
+import '../../../../../../features/plate/domain/enums/plate_type.dart';
+import '../../../../../../features/plate/domain/models/plate_model.dart';
 
 class _Brand {
   static Color border(ColorScheme cs) => cs.outlineVariant.withOpacity(0.85);
@@ -117,7 +116,7 @@ class TripleDepartureCompletedPlateSearchResults extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 상단: 번호 + 칩
+                      
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [

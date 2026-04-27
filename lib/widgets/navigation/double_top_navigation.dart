@@ -2,9 +2,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../states/area/area_state.dart';
-import '../../states/plate/double_plate_state.dart';
-import '../dialog/double_area_picker_bottom_sheet.dart';
+import '../../features/dev/application/area_state.dart';
+import '../../features/plate/application/double/double_plate_state.dart';
+import '../bottom_sheet/picker_bottom_sheet/double_area_picker_bottom_sheet.dart';
 
 class DoubleTopNavigation extends StatelessWidget {
   final bool isAreaSelectable;
@@ -32,7 +32,7 @@ class DoubleTopNavigation extends StatelessWidget {
           litePlateState: plateState,
         )
             : null,
-        // ✅ 하드코딩 splash/highlight 제거 → 테마 기반 overlay
+        
         overlayColor: MaterialStateProperty.resolveWith<Color?>(
               (states) {
             if (!isAreaSelectable) return null;

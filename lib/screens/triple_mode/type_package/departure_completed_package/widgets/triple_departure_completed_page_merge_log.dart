@@ -6,23 +6,17 @@ import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 import 'package:googleapis/storage/v1.dart' as gcs;
 import 'package:http/http.dart' as http;
 
-// 사진 다이얼로그(프로젝트 구조에 맞게 조정)
-import '../../../../../utils/google_auth_v7.dart';
-import '../../../../hubs_mode/dev_package/debug_package/debug_api_logger.dart';
+import '../../../../../features/dev/debug/debug_api_logger.dart';
+import '../../../../../utils/auth/google_auth_v7.dart';
+import '../../../../../widgets/dialog/status_dialog_package/status_dialog.dart';
 import 'triple_departure_completed_plate_image_dialog.dart';
 
-/// === GCS 설정 ===
-const String kBucketName = 'easydev-image';
-
-/// === 내부 레이아웃 상수 ===
+import '../../../../../core/config/external_ids.dart';
 const double _kRowHeight = 56.0;
-const double _kTimeColWidth = 84.0; // HH:mm:ss 고정폭
-const double _kFeeColWidth = 108.0; // 요금/결제 표시
-const double _kChevronWidth = 28.0; // 펼침 아이콘
+const double _kTimeColWidth = 84.0;
+const double _kFeeColWidth = 108.0;
+const double _kChevronWidth = 28.0;
 
-// ─────────────────────────────────────────────────────────────
-// ✅ API 디버그 로직: 표준 태그 / 로깅 헬퍼 (file-scope)
-// ─────────────────────────────────────────────────────────────
 const String _tLogs = 'logs';
 const String _tLogsUi = 'logs/ui';
 const String _tLogsLoad = 'logs/load';
@@ -51,17 +45,14 @@ Future<void> _logApiError({
       level: 'error',
       tags: tags,
     );
-  } catch (_) {
-    // 로깅 실패는 기능에 영향 없도록 무시
-  }
+  } catch (_) {}
 }
 
-/// ✅ 브랜드(ColorScheme) 기반 UI 헬퍼
 class _Brand {
   static Color border(ColorScheme cs) => cs.outlineVariant.withOpacity(0.85);
+
   static Color divider(ColorScheme cs) => cs.outlineVariant.withOpacity(0.55);
 
-  /// 액션 색상: 하드코딩 제거 → ColorScheme 기반
   static Color actionColor(ColorScheme cs, String action) {
     if (action.contains('사전 정산')) return cs.primary;
     if (action.contains('출차')) return cs.secondary;
@@ -71,11 +62,8 @@ class _Brand {
   }
 }
 
-/// === GCS 헬퍼 (OAuth 사용) ===
 class _GcsHelper {
-  /// prefix 하위 object 목록 (페이지네이션 대응)
   Future<List<String>> listObjects(String prefix) async {
-    // OAuth client 생성 실패도 로깅
     late final http.Client client;
     try {
       client = await GoogleAuthV7.authedClient(
@@ -133,11 +121,9 @@ class _GcsHelper {
     }
   }
 
-  /// public URL로 JSON 로드(버킷이 공개라면 그대로 사용).
-  /// 비공개 버킷이면 주석의 objects.get(fullMedia) 방식으로 교체하세요.
-  /// (웹 호환을 위해 package:http 사용)
   Future<Map<String, dynamic>> loadJsonByObjectName(String objectName) async {
-    final url = Uri.parse('https://storage.googleapis.com/$kBucketName/$objectName');
+    final url =
+        Uri.parse('https://storage.googleapis.com/$kBucketName/$objectName');
 
     http.Response resp;
     try {
@@ -147,7 +133,10 @@ class _GcsHelper {
         tag: '_GcsHelper.loadJsonByObjectName',
         message: 'HTTP GET 실패',
         error: e,
-        extra: <String, dynamic>{'url': url.toString(), 'objectName': objectName},
+        extra: <String, dynamic>{
+          'url': url.toString(),
+          'objectName': objectName
+        },
         tags: const <String>[_tLogs, _tGcs, _tGcsGet],
       );
       rethrow;
@@ -163,7 +152,8 @@ class _GcsHelper {
           'objectName': objectName,
           'statusCode': resp.statusCode,
           'bodyPreview': resp.bodyBytes.isNotEmpty
-              ? utf8.decode(resp.bodyBytes.take(120).toList(), allowMalformed: true)
+              ? utf8.decode(resp.bodyBytes.take(120).toList(),
+                  allowMalformed: true)
               : '',
         },
         tags: const <String>[_tLogs, _tGcs, _tGcsGet],
@@ -193,33 +183,9 @@ class _GcsHelper {
       );
       rethrow;
     }
-
-    /*
-    // 🔒 비공개 버킷일 때는 아래처럼 OAuth 클라이언트로 직접 다운(캐스팅 주의)
-    final client = await GoogleAuthV7.authedClient(
-      [gcs.StorageApi.devstorageReadOnlyScope],
-    );
-    try {
-      final storage = gcs.StorageApi(client);
-      final dynamic res = await storage.objects.get(
-        kBucketName,
-        objectName,
-        downloadOptions: gcs.DownloadOptions.fullMedia,
-      );
-      if (res is! gcs.Media) {
-        throw StateError('Unexpected response type: ${res.runtimeType}');
-      }
-      final bytes = await res.stream.expand((e) => e).toList();
-      final decoded = jsonDecode(utf8.decode(bytes));
-      return (decoded is Map<String, dynamic>) ? decoded : <String, dynamic>{};
-    } finally {
-      client.close();
-    }
-    */
   }
 }
 
-/// === 상단 컨트롤: 날짜 범위 버튼 + 불러오기 ===
 class RangeControls extends StatelessWidget {
   const RangeControls({
     super.key,
@@ -237,6 +203,7 @@ class RangeControls extends StatelessWidget {
   final VoidCallback onLoad;
 
   String _two(int n) => n.toString().padLeft(2, '0');
+
   String _ymd(DateTime d) => '${d.year}-${_two(d.month)}-${_two(d.day)}';
 
   Future<void> _pickRange(BuildContext context) async {
@@ -269,17 +236,19 @@ class RangeControls extends StatelessWidget {
                 child: Text(
                   '${_ymd(start)}  ~  ${_ymd(end)}',
                   maxLines: 1,
-                  style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w800),
+                  style: TextStyle(
+                      color: cs.onSurface, fontWeight: FontWeight.w800),
                 ),
               ),
               style: OutlinedButton.styleFrom(
                 backgroundColor: cs.surface,
                 foregroundColor: cs.onSurface,
                 side: BorderSide(color: _Brand.border(cs)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ).copyWith(
                 overlayColor: MaterialStateProperty.resolveWith<Color?>(
-                      (states) => states.contains(MaterialState.pressed)
+                  (states) => states.contains(MaterialState.pressed)
                       ? cs.outlineVariant.withOpacity(0.12)
                       : null,
                 ),
@@ -293,19 +262,20 @@ class RangeControls extends StatelessWidget {
               onPressed: loading ? null : onLoad,
               icon: loading
                   ? SizedBox(
-                width: 16,
-                height: 16,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: cs.onPrimary,
-                ),
-              )
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: cs.onPrimary,
+                      ),
+                    )
                   : const Icon(Icons.download),
               label: const FittedBox(child: Text('불러오기', maxLines: 1)),
               style: FilledButton.styleFrom(
                 backgroundColor: cs.primary,
                 foregroundColor: cs.onPrimary,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
             ),
           ),
@@ -315,9 +285,8 @@ class RangeControls extends StatelessWidget {
   }
 }
 
-/// === 위젯 ===
 class TripleMergedLogSection extends StatefulWidget {
-  final List<Map<String, dynamic>> mergedLogs; // 시그니처 호환용(내부 미사용)
+  final List<Map<String, dynamic>> mergedLogs;
   final String division;
   final String area;
 
@@ -333,23 +302,19 @@ class TripleMergedLogSection extends StatefulWidget {
 }
 
 class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
-  // 날짜 범위(기본: 최근 7일)
   DateTime _start = DateTime.now().subtract(const Duration(days: 6));
   DateTime _end = DateTime.now();
 
-  // 상태
   bool _loading = false;
   String? _error;
 
   final List<_DayBundle> _days = [];
   final Set<String> _expandedDocIds = {};
 
-  // 검색
   final _tailCtrl = TextEditingController();
   List<_SearchHit> _hits = [];
   _SearchHit? _selectedHit;
 
-  // 내부 페이지(0: 목록, 1: 검색)
   final PageController _pageController = PageController(initialPage: 0);
   int _currentPage = 0;
 
@@ -360,12 +325,14 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     super.dispose();
   }
 
-  // ===== 유틸 =====
   String _two(int n) => n.toString().padLeft(2, '0');
+
   String _yyyymmdd(DateTime d) => '${d.year}-${_two(d.month)}-${_two(d.day)}';
+
   String _yyyymm(DateTime d) => '${d.year}${_two(d.month)}';
 
   bool _validTail(String s) => RegExp(r'^\d{4}$').hasMatch(s);
+
   String _digitsOnly(String s) => s.replaceAll(RegExp(r'\D'), '');
 
   String? _toStr(dynamic v) {
@@ -386,7 +353,8 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     if (ts is DateTime) return ts.toLocal();
     if (ts is Timestamp) return ts.toDate().toLocal();
     if (ts is int) {
-      if (ts > 100000000000) return DateTime.fromMillisecondsSinceEpoch(ts).toLocal();
+      if (ts > 100000000000)
+        return DateTime.fromMillisecondsSinceEpoch(ts).toLocal();
       return DateTime.fromMillisecondsSinceEpoch(ts * 1000).toLocal();
     }
     if (ts is String) return DateTime.tryParse(ts)?.toLocal();
@@ -423,13 +391,10 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     return Icons.history;
   }
 
-  // ✅ 하드코딩 제거: ColorScheme 기반
   Color _actionColor(BuildContext context, String action) {
     final cs = Theme.of(context).colorScheme;
     return _Brand.actionColor(cs, action);
   }
-
-  // ===== 파싱/호환 리팩터링 =====
 
   Map<String, dynamic>? _asMap(dynamic v) {
     if (v is Map<String, dynamic>) return v;
@@ -437,13 +402,9 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     return null;
   }
 
-  /// item의 root 필드 + data 필드를 병합하여 meta로 만든다.
-  /// - root/data 어느 쪽에 있어도 UI에서 동일하게 접근 가능
-  /// - data가 우선(override)되도록 병합
   Map<String, dynamic> _extractMeta(Map<String, dynamic> item) {
     final meta = <String, dynamic>{};
 
-    // root에서 docId/data/logs는 제외하고 meta로 편입
     item.forEach((k, v) {
       if (k == 'docId' || k == 'data' || k == 'logs') return;
       meta[k] = v;
@@ -452,15 +413,15 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     final dataMap = _asMap(item['data']);
     if (dataMap != null) {
       dataMap.forEach((k, v) {
-        if (k == 'logs') return; // logs는 별도 추출
-        meta[k] = v; // data가 root를 override
+        if (k == 'logs') return;
+        meta[k] = v;
       });
     }
     return meta;
   }
 
-  /// plate 후보 추출 (혼재 스키마 호환)
-  String _extractPlate(Map<String, dynamic> item, Map<String, dynamic> meta, String docId) {
+  String _extractPlate(
+      Map<String, dynamic> item, Map<String, dynamic> meta, String docId) {
     final v = item['plateNumber'] ??
         meta['plateNumber'] ??
         meta['plate_number'] ??
@@ -468,20 +429,20 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     return (v ?? '').toString();
   }
 
-  /// logs 후보 추출 (혼재 스키마 호환)
-  /// 우선순위: root.logs -> data.logs
   List<Map<String, dynamic>> _extractLogs(Map<String, dynamic> item) {
     final dataMap = _asMap(item['data']);
     final raw = item['logs'] ?? dataMap?['logs'];
 
     if (raw is! List) return <Map<String, dynamic>>[];
 
-    final logs = raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+    final logs =
+        raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
 
-    // 오름차순(과거->최근) 정렬
     logs.sort((a, b) {
-      final at = _parseTs(a['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final bt = _parseTs(b['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final at =
+          _parseTs(a['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final bt =
+          _parseTs(b['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
       return at.compareTo(bt);
     });
 
@@ -510,7 +471,8 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     return null;
   }
 
-  String _tail4OfPlate(String plateNumber, String docId, {String? plateFourDigit}) {
+  String _tail4OfPlate(String plateNumber, String docId,
+      {String? plateFourDigit}) {
     if (plateFourDigit != null && plateFourDigit.trim().length == 4) {
       return plateFourDigit.trim();
     }
@@ -530,7 +492,8 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     return '$ts|$action|$by|$from|$to|$fee|$pay';
   }
 
-  List<Map<String, dynamic>> _mergeLogs(List<Map<String, dynamic>> a, List<Map<String, dynamic>> b) {
+  List<Map<String, dynamic>> _mergeLogs(
+      List<Map<String, dynamic>> a, List<Map<String, dynamic>> b) {
     final combined = <Map<String, dynamic>>[];
     combined.addAll(a);
     combined.addAll(b);
@@ -543,8 +506,10 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     }
 
     unique.sort((x, y) {
-      final xt = _parseTs(x['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final yt = _parseTs(y['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final xt =
+          _parseTs(x['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
+      final yt =
+          _parseTs(y['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
       return xt.compareTo(yt);
     });
 
@@ -557,7 +522,8 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     required Map<String, dynamic> meta,
     required List<Map<String, dynamic>> logs,
   }) {
-    final plateFourDigit = _toStr(meta['plate_four_digit']) ?? _toStr(meta['plateFourDigit']);
+    final plateFourDigit =
+        _toStr(meta['plate_four_digit']) ?? _toStr(meta['plateFourDigit']);
     final billingType = _toStr(meta['billingType']);
     final location = _toStr(meta['location']);
     final userName = _toStr(meta['userName']);
@@ -569,19 +535,21 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     final regularAmount = _toNum(meta['regularAmount']);
     final userAdjustment = _toNum(meta['userAdjustment']);
 
-    final lockedFeeAmount =
-        _toNum(meta['lockedFeeAmount']) ??
-            _toNum(meta['lockedFee']) ??
-            _pickNumFromLogs(logs, ['lockedFee', 'lockedFeeAmount', 'lockedFeeAmount']);
+    final lockedFeeAmount = _toNum(meta['lockedFeeAmount']) ??
+        _toNum(meta['lockedFee']) ??
+        _pickNumFromLogs(
+            logs, ['lockedFee', 'lockedFeeAmount', 'lockedFeeAmount']);
 
-    final paymentMethod = _toStr(meta['paymentMethod']) ?? _pickStrFromLogs(logs, ['paymentMethod']);
+    final paymentMethod = _toStr(meta['paymentMethod']) ??
+        _pickStrFromLogs(logs, ['paymentMethod']);
 
     final requestTime = _parseTs(meta['request_time'] ?? meta['requestTime']);
     final updatedAt = _parseTs(meta['updatedAt']);
     final parkingCompletedAt = _parseTs(meta['parkingCompletedAt']);
     final departureCompletedAt = _parseTs(meta['departureCompletedAt']);
 
-    final lastLogTime = logs.isNotEmpty ? _parseTs(logs.last['timestamp']) : null;
+    final lastLogTime =
+        logs.isNotEmpty ? _parseTs(logs.last['timestamp']) : null;
 
     return _DocBundle(
       docId: docId,
@@ -618,11 +586,13 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
 
     final mergedMeta = <String, dynamic>{};
     mergedMeta.addAll(secondary.meta);
-    mergedMeta.addAll(primary.meta); // primary override
+    mergedMeta.addAll(primary.meta);
 
     final mergedLogs = _mergeLogs(a.logs, b.logs);
 
-    final mergedPlate = primary.plateNumber.isNotEmpty ? primary.plateNumber : secondary.plateNumber;
+    final mergedPlate = primary.plateNumber.isNotEmpty
+        ? primary.plateNumber
+        : secondary.plateNumber;
 
     return _makeDocBundle(
       docId: primary.docId,
@@ -636,13 +606,14 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     final s = DateTime(start.year, start.month, 1);
     final e = DateTime(end.year, end.month, 1);
     final acc = <String>[];
-    for (DateTime cur = s; !cur.isAfter(e); cur = DateTime(cur.year, cur.month + 1, 1)) {
+    for (DateTime cur = s;
+        !cur.isAfter(e);
+        cur = DateTime(cur.year, cur.month + 1, 1)) {
       acc.add(_yyyymm(cur));
     }
     return acc;
   }
 
-  // ===== 사진 다이얼로그 열기 =====
   void _openPlateImageDialog(String plateNumber) {
     try {
       final cs = Theme.of(context).colorScheme;
@@ -667,7 +638,6 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     }
   }
 
-  // ===== GCS 로드 (월 prefix 최적화 + 혼재 스키마 + 날짜/문서 병합) =====
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -679,14 +649,12 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     });
 
     try {
-      // 1) 기본 가드: division/area 필수
       final division = widget.division.trim();
       final area = widget.area.trim();
       if (division.isEmpty || area.isEmpty) {
         throw StateError('지역/사업부가 설정되지 않았습니다. (division/area)');
       }
 
-      // 2) 날짜 범위 유효화(swap)
       final s0 = DateTime(_start.year, _start.month, _start.day);
       final e0 = DateTime(_end.year, _end.month, _end.day);
       final start = s0.isAfter(e0) ? e0 : s0;
@@ -694,7 +662,6 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
 
       final gcsHelper = _GcsHelper();
 
-      // 3) 월 단위 prefix로 먼저 리스트업 (속도 개선)
       final monthKeys = _monthKeysBetween(start, end);
 
       final names = <String>[];
@@ -704,37 +671,43 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
         names.addAll(partial);
       }
 
-      // 3-1) 월 prefix 결과가 전혀 없으면 구형 구조 fallback
       if (names.isEmpty) {
         final legacyPrefix = '$division/$area/logs/';
         final legacy = await gcsHelper.listObjects(legacyPrefix);
         names.addAll(legacy);
       }
 
-      // 4) endsWith("_ToDoLogs_YYYY-MM-DD.json") 매칭
       final wantedSuffix = <String>{};
-      for (DateTime d = start; !d.isAfter(end); d = d.add(const Duration(days: 1))) {
+      for (DateTime d = start;
+          !d.isAfter(end);
+          d = d.add(const Duration(days: 1))) {
         wantedSuffix.add('_ToDoLogs_${_yyyymmdd(d)}.json');
       }
 
-      final inRange = names.where((n) => wantedSuffix.any((suf) => n.endsWith(suf))).toList()..sort();
+      final inRange = names
+          .where((n) => wantedSuffix.any((suf) => n.endsWith(suf)))
+          .toList()
+        ..sort();
 
       if (inRange.isEmpty) {
         final prefixHint = '$division/$area/logs/<YYYYMM>/...';
-        throw StateError('해당 기간에 파일이 없습니다.\nprefix=$prefixHint\nrange=${_yyyymmdd(start)}~${_yyyymmdd(end)}');
+        throw StateError(
+            '해당 기간에 파일이 없습니다.\nprefix=$prefixHint\nrange=${_yyyymmdd(start)}~${_yyyymmdd(end)}');
       }
 
-      // 5) 날짜별(docId별) 병합 구조
       final Map<String, Map<String, _DocBundle>> dayDocMap = {};
 
       for (final objectName in inRange) {
-        final m = RegExp(r'_ToDoLogs_(\d{4}-\d{2}-\d{2})\.json$').firstMatch(objectName);
+        final m = RegExp(r'_ToDoLogs_(\d{4}-\d{2}-\d{2})\.json$')
+            .firstMatch(objectName);
         final dateStr = m?.group(1) ?? 'Unknown';
 
         final json = await gcsHelper.loadJsonByObjectName(objectName);
-        final List items = (json['items'] as List?) ?? (json['data'] as List?) ?? const [];
+        final List items =
+            (json['items'] as List?) ?? (json['data'] as List?) ?? const [];
 
-        final Map<String, _DocBundle> docsById = dayDocMap.putIfAbsent(dateStr, () => <String, _DocBundle>{});
+        final Map<String, _DocBundle> docsById =
+            dayDocMap.putIfAbsent(dateStr, () => <String, _DocBundle>{});
 
         for (final raw in items) {
           final item = _asMap(raw);
@@ -763,7 +736,6 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
         }
       }
 
-      // 6) _days 생성(날짜 오름차순)
       final dayKeys = dayDocMap.keys.toList()..sort();
       for (final dateStr in dayKeys) {
         final docs = dayDocMap[dateStr]!.values.toList();
@@ -796,10 +768,15 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
         _loading = false;
         _error = '로드 실패: $e';
       });
+
+      if (!mounted) return;
+      await StatusDialog.showFailure(
+        context,
+        title: StatusDialog.pastEntryLogLoadFailed,
+      );
     }
   }
 
-  // ===== 검색 =====
   Future<void> _search() async {
     final q = _tailCtrl.text.trim();
 
@@ -822,7 +799,8 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
       final hits = <_SearchHit>[];
       for (final day in _days) {
         for (final doc in day.docs) {
-          final tail = _tail4OfPlate(doc.plateNumber, doc.docId, plateFourDigit: doc.plateFourDigit);
+          final tail = _tail4OfPlate(doc.plateNumber, doc.docId,
+              plateFourDigit: doc.plateFourDigit);
           if (tail == q) {
             hits.add(_SearchHit(dateStr: day.dateStr, doc: doc));
           }
@@ -832,7 +810,8 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
       setState(() => _hits = hits);
 
       if (_currentPage != 1) {
-        _pageController.animateToPage(1, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+        _pageController.animateToPage(1,
+            duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
       }
     } catch (e) {
       await _logApiError(
@@ -850,7 +829,6 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     }
   }
 
-  // ===== UI 헬퍼: 문서 요약 =====
   Widget _infoChip(BuildContext context, String label, String value) {
     final cs = Theme.of(context).colorScheme;
 
@@ -863,7 +841,8 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
       ),
       child: Text(
         '$label: $value',
-        style: TextStyle(fontSize: 12, color: cs.onSurface, fontWeight: FontWeight.w700),
+        style: TextStyle(
+            fontSize: 12, color: cs.onSurface, fontWeight: FontWeight.w700),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
@@ -877,7 +856,10 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     final billingText = doc.billingType ?? '—';
     final locText = doc.location ?? '—';
     final userText = doc.userName ?? '—';
-    final customText = (doc.customStatus != null && doc.customStatus!.trim().isNotEmpty) ? doc.customStatus! : '—';
+    final customText =
+        (doc.customStatus != null && doc.customStatus!.trim().isNotEmpty)
+            ? doc.customStatus!
+            : '—';
     final typeText = doc.type ?? '—';
 
     final basicText = _fmtWon(doc.basicAmount);
@@ -904,13 +886,15 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1) 상단: 번호판 + 요금/결제
           Row(
             children: [
               Expanded(
                 child: Text(
                   doc.plateNumber.isNotEmpty ? doc.plateNumber : doc.docId,
-                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: cs.onSurface),
+                  style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w900,
+                      color: cs.onSurface),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -919,16 +903,21 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(feeText, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: cs.onSurface)),
-                  Text(payText, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
+                  Text(feeText,
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          color: cs.onSurface)),
+                  Text(payText,
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurfaceVariant,
+                          fontWeight: FontWeight.w700)),
                 ],
               ),
             ],
           ),
-
           const SizedBox(height: 10),
-
-          // 2) 칩: 주요 메타
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -940,10 +929,7 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
               _infoChip(context, '메모', customText),
             ],
           ),
-
           const SizedBox(height: 10),
-
-          // 3) 금액 상세
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -954,31 +940,42 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
               _infoChip(context, '조정', adjText),
             ],
           ),
-
           const SizedBox(height: 10),
-
-          // 4) 시간 필드
-          Text('요청: $reqText', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
-          Text('업데이트: $updText', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
-          Text('입차완료: $parkText', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
-          Text('출차완료: $depText', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
+          Text('요청: $reqText',
+              style: TextStyle(
+                  fontSize: 12,
+                  color: cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w700)),
+          Text('업데이트: $updText',
+              style: TextStyle(
+                  fontSize: 12,
+                  color: cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w700)),
+          Text('입차완료: $parkText',
+              style: TextStyle(
+                  fontSize: 12,
+                  color: cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w700)),
+          Text('출차완료: $depText',
+              style: TextStyle(
+                  fontSize: 12,
+                  color: cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w700)),
         ],
       ),
     );
   }
 
-  // ===== UI =====
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
     final hasData = !_loading && _days.isNotEmpty;
-    final mono = const TextStyle(fontFeatures: [FontFeature.tabularFigures()]); // 시간 숫자 정렬
+    final mono = const TextStyle(fontFeatures: [FontFeature.tabularFigures()]);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 상단 컨트롤
         Row(
           children: [
             Expanded(
@@ -987,8 +984,10 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
                 end: _end,
                 loading: _loading,
                 onRangePicked: (range) {
-                  final s = DateTime(range.start.year, range.start.month, range.start.day);
-                  final e = DateTime(range.end.year, range.end.month, range.end.day);
+                  final s = DateTime(
+                      range.start.year, range.start.month, range.start.day);
+                  final e =
+                      DateTime(range.end.year, range.end.month, range.end.day);
                   setState(() {
                     if (s.isAfter(e)) {
                       _start = e;
@@ -1020,207 +1019,255 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
                       tag: '_TripleMergedLogSectionState.build.togglePage',
                       message: '페이지 전환(animateToPage) 실패',
                       error: e,
-                      extra: <String, dynamic>{'from': _currentPage, 'to': next},
+                      extra: <String, dynamic>{
+                        'from': _currentPage,
+                        'to': next
+                      },
                       tags: const <String>[_tLogs, _tLogsUi],
                     );
                   }
                 },
-                icon: Icon(_currentPage == 0 ? Icons.search : Icons.list, color: cs.onSurface),
+                icon: Icon(_currentPage == 0 ? Icons.search : Icons.list,
+                    color: cs.onSurface),
                 visualDensity: VisualDensity.compact,
               ),
             ),
           ],
         ),
-
         if (_error != null) ...[
           const SizedBox(height: 8),
-          Text(_error!, style: TextStyle(color: cs.error, fontWeight: FontWeight.w800)),
+          Text(_error!,
+              style: TextStyle(color: cs.error, fontWeight: FontWeight.w800)),
         ],
         const SizedBox(height: 8),
-
         Expanded(
           child: _loading
               ? Center(
-            child: CircularProgressIndicator(
-              color: cs.primary,
-            ),
-          )
+                  child: CircularProgressIndicator(
+                    color: cs.primary,
+                  ),
+                )
               : !hasData
-              ? Text(
-            '기간을 설정하고 불러오기를 눌러주세요.',
-            style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
-            textAlign: TextAlign.center,
-          )
-              : PageView(
-            controller: _pageController,
-            onPageChanged: (i) => setState(() => _currentPage = i),
-            children: [
-              // 페이지 0: 날짜/문서 목록
-              Scrollbar(
-                child: ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  itemCount: _days.length,
-                  itemBuilder: (_, i) {
-                    final day = _days[i];
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                  ? Text(
+                      '기간을 설정하고 불러오기를 눌러주세요.',
+                      style: TextStyle(
+                          color: cs.onSurfaceVariant,
+                          fontWeight: FontWeight.w700),
+                      textAlign: TextAlign.center,
+                    )
+                  : PageView(
+                      controller: _pageController,
+                      onPageChanged: (i) => setState(() => _currentPage = i),
                       children: [
-                        // 날짜 헤더 + 컬럼 헤더
-                        Container(
-                          color: cs.surfaceContainerLow,
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                day.dateStr,
-                                style: TextStyle(fontWeight: FontWeight.w900, color: cs.onSurface),
-                              ),
-                              const SizedBox(height: 8),
-                              SizedBox(
-                                height: 24,
-                                child: Row(
-                                  children: [
-                                    SizedBox(
-                                      width: _kTimeColWidth,
-                                      child: Text(
-                                        '시간',
-                                        style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w800),
-                                        textAlign: TextAlign.center,
-                                      ),
+                        Scrollbar(
+                          child: ListView.builder(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            itemCount: _days.length,
+                            itemBuilder: (_, i) {
+                              final day = _days[i];
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Container(
+                                    color: cs.surfaceContainerLow,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 12, vertical: 8),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          day.dateStr,
+                                          style: TextStyle(
+                                              fontWeight: FontWeight.w900,
+                                              color: cs.onSurface),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        SizedBox(
+                                          height: 24,
+                                          child: Row(
+                                            children: [
+                                              SizedBox(
+                                                width: _kTimeColWidth,
+                                                child: Text(
+                                                  '시간',
+                                                  style: TextStyle(
+                                                      fontSize: 12,
+                                                      color:
+                                                          cs.onSurfaceVariant,
+                                                      fontWeight:
+                                                          FontWeight.w800),
+                                                  textAlign: TextAlign.center,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  '번호판',
+                                                  style: TextStyle(
+                                                      fontSize: 12,
+                                                      color:
+                                                          cs.onSurfaceVariant,
+                                                      fontWeight:
+                                                          FontWeight.w800),
+                                                  textAlign: TextAlign.center,
+                                                ),
+                                              ),
+                                              SizedBox(
+                                                width: _kFeeColWidth,
+                                                child: Text(
+                                                  '요금/결제',
+                                                  style: TextStyle(
+                                                      fontSize: 12,
+                                                      color:
+                                                          cs.onSurfaceVariant,
+                                                      fontWeight:
+                                                          FontWeight.w800),
+                                                  textAlign: TextAlign.center,
+                                                ),
+                                              ),
+                                              const SizedBox(
+                                                  width: _kChevronWidth),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        '번호판',
-                                        style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w800),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ),
-                                    SizedBox(
-                                      width: _kFeeColWidth,
-                                      child: Text(
-                                        '요금/결제',
-                                        style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w800),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ),
-                                    const SizedBox(width: _kChevronWidth),
-                                  ],
-                                ),
-                              ),
-                            ],
+                                  ),
+                                  ...day.docs.map((doc) {
+                                    final expanded =
+                                        _expandedDocIds.contains(doc.docId);
+                                    final lastTs = doc.lastLogTime;
+
+                                    final feeText =
+                                        _fmtWon(doc.lockedFeeAmount);
+                                    final payText = doc.paymentMethod ?? '—';
+
+                                    return Column(
+                                      children: [
+                                        InkWell(
+                                          onTap: () {
+                                            setState(() {
+                                              if (expanded) {
+                                                _expandedDocIds
+                                                    .remove(doc.docId);
+                                              } else {
+                                                _expandedDocIds.add(doc.docId);
+                                              }
+                                            });
+                                          },
+                                          child: Container(
+                                            height: _kRowHeight,
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 12),
+                                            decoration: BoxDecoration(
+                                              color: cs.surface,
+                                              border: Border(
+                                                  bottom: BorderSide(
+                                                      color:
+                                                          _Brand.divider(cs))),
+                                            ),
+                                            child: Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.center,
+                                              children: [
+                                                SizedBox(
+                                                  width: _kTimeColWidth,
+                                                  child: Text(
+                                                    _fmtTime(lastTs),
+                                                    maxLines: 1,
+                                                    softWrap: false,
+                                                    overflow: TextOverflow.clip,
+                                                    textAlign: TextAlign.center,
+                                                    style: mono.copyWith(
+                                                        fontSize: 15,
+                                                        color: cs.onSurface),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: Text(
+                                                    doc.plateNumber.isNotEmpty
+                                                        ? doc.plateNumber
+                                                        : doc.docId,
+                                                    maxLines: 1,
+                                                    softWrap: false,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                    textAlign: TextAlign.center,
+                                                    style: TextStyle(
+                                                        fontSize: 16,
+                                                        color: cs.onSurface,
+                                                        fontWeight:
+                                                            FontWeight.w800),
+                                                  ),
+                                                ),
+                                                SizedBox(
+                                                  width: _kFeeColWidth,
+                                                  child: Column(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children: [
+                                                      Text(
+                                                        feeText,
+                                                        style: TextStyle(
+                                                            fontSize: 13,
+                                                            fontWeight:
+                                                                FontWeight.w900,
+                                                            color:
+                                                                cs.onSurface),
+                                                      ),
+                                                      Text(
+                                                        payText,
+                                                        style: TextStyle(
+                                                            fontSize: 11,
+                                                            color: cs
+                                                                .onSurfaceVariant,
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .w700),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                                SizedBox(
+                                                  width: _kChevronWidth,
+                                                  child: Icon(
+                                                    expanded
+                                                        ? Icons.expand_less
+                                                        : Icons.expand_more,
+                                                    size: 20,
+                                                    color: cs.onSurfaceVariant,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        if (expanded) ...[
+                                          _buildDocSummary(doc),
+                                          _buildLogsDetail(
+                                            doc.logs,
+                                            plateNumber: doc.plateNumber,
+                                            scrollable: false,
+                                          ),
+                                        ],
+                                      ],
+                                    );
+                                  }),
+                                ],
+                              );
+                            },
                           ),
                         ),
-
-                        // 데이터 행들
-                        ...day.docs.map((doc) {
-                          final expanded = _expandedDocIds.contains(doc.docId);
-                          final lastTs = doc.lastLogTime;
-
-                          final feeText = _fmtWon(doc.lockedFeeAmount);
-                          final payText = doc.paymentMethod ?? '—';
-
-                          return Column(
-                            children: [
-                              InkWell(
-                                onTap: () {
-                                  setState(() {
-                                    if (expanded) {
-                                      _expandedDocIds.remove(doc.docId);
-                                    } else {
-                                      _expandedDocIds.add(doc.docId);
-                                    }
-                                  });
-                                },
-                                child: Container(
-                                  height: _kRowHeight,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                                  decoration: BoxDecoration(
-                                    color: cs.surface,
-                                    border: Border(bottom: BorderSide(color: _Brand.divider(cs))),
-                                  ),
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.center,
-                                    children: [
-                                      SizedBox(
-                                        width: _kTimeColWidth,
-                                        child: Text(
-                                          _fmtTime(lastTs),
-                                          maxLines: 1,
-                                          softWrap: false,
-                                          overflow: TextOverflow.clip,
-                                          textAlign: TextAlign.center,
-                                          style: mono.copyWith(fontSize: 15, color: cs.onSurface),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          doc.plateNumber.isNotEmpty ? doc.plateNumber : doc.docId,
-                                          maxLines: 1,
-                                          softWrap: false,
-                                          overflow: TextOverflow.ellipsis,
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(fontSize: 16, color: cs.onSurface, fontWeight: FontWeight.w800),
-                                        ),
-                                      ),
-                                      SizedBox(
-                                        width: _kFeeColWidth,
-                                        child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Text(
-                                              feeText,
-                                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: cs.onSurface),
-                                            ),
-                                            Text(
-                                              payText,
-                                              style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      SizedBox(
-                                        width: _kChevronWidth,
-                                        child: Icon(
-                                          expanded ? Icons.expand_less : Icons.expand_more,
-                                          size: 20,
-                                          color: cs.onSurfaceVariant,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-
-                              // 펼침부: 요약 + 로그 상세
-                              if (expanded) ...[
-                                _buildDocSummary(doc),
-                                _buildLogsDetail(
-                                  doc.logs,
-                                  plateNumber: doc.plateNumber,
-                                  scrollable: false,
-                                ),
-                              ],
-                            ],
-                          );
-                        }),
+                        _buildSearchPage(),
                       ],
-                    );
-                  },
-                ),
-              ),
-
-              // 페이지 1: 검색
-              _buildSearchPage(),
-            ],
-          ),
+                    ),
         ),
-
-        // 페이지 인디케이터
         Padding(
           padding: const EdgeInsets.only(top: 6.0),
           child: Row(
@@ -1236,14 +1283,12 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     );
   }
 
-  // ===== 검색 페이지 구성 =====
   Widget _buildSearchPage() {
     final cs = Theme.of(context).colorScheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 검색 입력줄
         Row(
           children: [
             Expanded(
@@ -1276,139 +1321,162 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
           ],
         ),
         const SizedBox(height: 8),
-
-        // 결과/상세
         Expanded(
           child: _hits.isEmpty
               ? Text(
-            '검색 결과가 없습니다.',
-            style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
-            textAlign: TextAlign.center,
-          )
+                  '검색 결과가 없습니다.',
+                  style: TextStyle(
+                      color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+                  textAlign: TextAlign.center,
+                )
               : (_selectedHit == null
-          // 결과 리스트
-              ? ListView.separated(
-            itemCount: _hits.length,
-            separatorBuilder: (_, __) => Divider(height: 1, color: _Brand.divider(cs)),
-            itemBuilder: (_, i) {
-              final h = _hits[i];
-              final feeText = _fmtWon(h.doc.lockedFeeAmount);
-              final payText = h.doc.paymentMethod ?? '—';
-              final lastTs = h.doc.lastLogTime;
+                  ? ListView.separated(
+                      itemCount: _hits.length,
+                      separatorBuilder: (_, __) =>
+                          Divider(height: 1, color: _Brand.divider(cs)),
+                      itemBuilder: (_, i) {
+                        final h = _hits[i];
+                        final feeText = _fmtWon(h.doc.lockedFeeAmount);
+                        final payText = h.doc.paymentMethod ?? '—';
+                        final lastTs = h.doc.lastLogTime;
 
-              return ListTile(
-                dense: true,
-                title: Text(
-                  h.doc.plateNumber.isNotEmpty ? h.doc.plateNumber : h.doc.docId,
-                  style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w800),
-                ),
-                subtitle: Text(
-                  '${h.dateStr} • $feeText • $payText',
-                  style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
-                ),
-                trailing: Text(
-                  _fmtTime(lastTs),
-                  style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
-                ),
-                onTap: () => setState(() => _selectedHit = h),
-              );
-            },
-          )
-          // 선택된 문서 상세
-              : Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                color: cs.surfaceContainerLow,
-                child: Row(
-                  children: [
-                    IconButton(
-                      tooltip: '선택 해제',
-                      onPressed: () => setState(() => _selectedHit = null),
-                      icon: Icon(Icons.close, color: cs.onSurface),
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _selectedHit!.doc.plateNumber.isNotEmpty
-                                ? _selectedHit!.doc.plateNumber
-                                : _selectedHit!.doc.docId,
-                            style: TextStyle(fontWeight: FontWeight.w900, color: cs.onSurface),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                        return ListTile(
+                          dense: true,
+                          title: Text(
+                            h.doc.plateNumber.isNotEmpty
+                                ? h.doc.plateNumber
+                                : h.doc.docId,
+                            style: TextStyle(
+                                color: cs.onSurface,
+                                fontWeight: FontWeight.w800),
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${_selectedHit!.dateStr} • ${_selectedHit!.doc.docId}',
-                            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          subtitle: Text(
+                            '${h.dateStr} • $feeText • $payText',
+                            style: TextStyle(
+                                color: cs.onSurfaceVariant,
+                                fontWeight: FontWeight.w700),
                           ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    // 사진 보기 버튼
-                    OutlinedButton.icon(
-                      onPressed: () {
-                        final plate = _selectedHit!.doc.plateNumber.isNotEmpty
-                            ? _selectedHit!.doc.plateNumber
-                            : _selectedHit!.doc.docId.split('_').first;
-                        _openPlateImageDialog(plate);
+                          trailing: Text(
+                            _fmtTime(lastTs),
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: cs.onSurfaceVariant,
+                                fontWeight: FontWeight.w700),
+                          ),
+                          onTap: () => setState(() => _selectedHit = h),
+                        );
                       },
-                      style: OutlinedButton.styleFrom(
-                        backgroundColor: cs.surfaceContainerLow,
-                        foregroundColor: cs.onSurface,
-                        side: BorderSide(color: _Brand.border(cs)),
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                      ),
-                      icon: Icon(Icons.photo, size: 18, color: cs.onSurface),
-                      label: Text('사진', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: cs.onSurface)),
-                    ),
-                  ],
-                ),
-              ),
-
-              // ✅ 요약 표시
-              _buildDocSummary(_selectedHit!.doc),
-
-              Expanded(
-                child: _buildLogsDetail(
-                  _selectedHit!.doc.logs,
-                  plateNumber: _selectedHit!.doc.plateNumber,
-                  scrollable: true,
-                ),
-              ),
-            ],
-          )),
+                    )
+                  : Column(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                          color: cs.surfaceContainerLow,
+                          child: Row(
+                            children: [
+                              IconButton(
+                                tooltip: '선택 해제',
+                                onPressed: () =>
+                                    setState(() => _selectedHit = null),
+                                icon: Icon(Icons.close, color: cs.onSurface),
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _selectedHit!.doc.plateNumber.isNotEmpty
+                                          ? _selectedHit!.doc.plateNumber
+                                          : _selectedHit!.doc.docId,
+                                      style: TextStyle(
+                                          fontWeight: FontWeight.w900,
+                                          color: cs.onSurface),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${_selectedHit!.dateStr} • ${_selectedHit!.doc.docId}',
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: cs.onSurfaceVariant,
+                                          fontWeight: FontWeight.w700),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              OutlinedButton.icon(
+                                onPressed: () {
+                                  final plate =
+                                      _selectedHit!.doc.plateNumber.isNotEmpty
+                                          ? _selectedHit!.doc.plateNumber
+                                          : _selectedHit!.doc.docId
+                                              .split('_')
+                                              .first;
+                                  _openPlateImageDialog(plate);
+                                },
+                                style: OutlinedButton.styleFrom(
+                                  backgroundColor: cs.surfaceContainerLow,
+                                  foregroundColor: cs.onSurface,
+                                  side: BorderSide(color: _Brand.border(cs)),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 10, vertical: 8),
+                                ),
+                                icon: Icon(Icons.photo,
+                                    size: 18, color: cs.onSurface),
+                                label: Text('사진',
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w900,
+                                        color: cs.onSurface)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        _buildDocSummary(_selectedHit!.doc),
+                        Expanded(
+                          child: _buildLogsDetail(
+                            _selectedHit!.doc.logs,
+                            plateNumber: _selectedHit!.doc.plateNumber,
+                            scrollable: true,
+                          ),
+                        ),
+                      ],
+                    )),
         ),
       ],
     );
   }
 
-  /// 로그 상세 리스트
   Widget _buildLogsDetail(
-      List<Map<String, dynamic>> logs, {
-        required String plateNumber,
-        bool scrollable = false,
-      }) {
+    List<Map<String, dynamic>> logs, {
+    required String plateNumber,
+    bool scrollable = false,
+  }) {
     final cs = Theme.of(context).colorScheme;
 
     if (logs.isEmpty) {
       return Padding(
         padding: const EdgeInsets.all(12),
-        child: Text('로그가 없습니다.', style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
+        child: Text('로그가 없습니다.',
+            style: TextStyle(
+                color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
       );
     }
 
     final listView = ListView.separated(
-      physics: scrollable ? const AlwaysScrollableScrollPhysics() : const NeverScrollableScrollPhysics(),
+      physics: scrollable
+          ? const AlwaysScrollableScrollPhysics()
+          : const NeverScrollableScrollPhysics(),
       shrinkWrap: !scrollable,
       itemCount: logs.length,
-      separatorBuilder: (_, __) => Divider(height: 1, color: _Brand.divider(cs)),
+      separatorBuilder: (_, __) =>
+          Divider(height: 1, color: _Brand.divider(cs)),
       itemBuilder: (_, i) {
         final e = logs[i];
         final action = (e['action'] ?? '-').toString();
@@ -1419,15 +1487,22 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
         final tsText = _fmtDateTime(ts);
 
         final feeNum = (e['lockedFee'] ?? e['lockedFeeAmount']);
-        final fee = (feeNum is num) ? _fmtWon(feeNum) : (feeNum is String ? _fmtWon(num.tryParse(feeNum)) : null);
-        final pay = (e['paymentMethod']?.toString().trim().isNotEmpty ?? false) ? e['paymentMethod'].toString() : null;
-        final reason = (e['reason']?.toString().trim().isNotEmpty ?? false) ? e['reason'].toString() : null;
+        final fee = (feeNum is num)
+            ? _fmtWon(feeNum)
+            : (feeNum is String ? _fmtWon(num.tryParse(feeNum)) : null);
+        final pay = (e['paymentMethod']?.toString().trim().isNotEmpty ?? false)
+            ? e['paymentMethod'].toString()
+            : null;
+        final reason = (e['reason']?.toString().trim().isNotEmpty ?? false)
+            ? e['reason'].toString()
+            : null;
 
         final color = _actionColor(context, action);
 
         return ListTile(
           dense: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           leading: Icon(_actionIcon(action), color: color),
           title: Text(
             action,
@@ -1437,19 +1512,51 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (from.isNotEmpty || to.isNotEmpty)
-                Text('$from → $to', style: TextStyle(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
+                Text('$from → $to',
+                    style: TextStyle(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700)),
               if (by.isNotEmpty) const SizedBox(height: 2),
-              if (by.isNotEmpty) Text('담당자:', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
-              if (by.isNotEmpty) Text(by, style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
-              if (fee != null || pay != null || reason != null) const SizedBox(height: 2),
-              if (fee != null) Text('확정요금: $fee', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
-              if (pay != null) Text('결제수단: $pay', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
-              if (reason != null) Text('사유: $reason', style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
+              if (by.isNotEmpty)
+                Text('담당자:',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700)),
+              if (by.isNotEmpty)
+                Text(by,
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700)),
+              if (fee != null || pay != null || reason != null)
+                const SizedBox(height: 2),
+              if (fee != null)
+                Text('확정요금: $fee',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700)),
+              if (pay != null)
+                Text('결제수단: $pay',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700)),
+              if (reason != null)
+                Text('사유: $reason',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700)),
             ],
           ),
           trailing: Text(
             tsText,
-            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+            style: TextStyle(
+                fontSize: 12,
+                color: cs.onSurfaceVariant,
+                fontWeight: FontWeight.w700),
           ),
           isThreeLine: true,
         );
@@ -1464,7 +1571,6 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
   }
 }
 
-// ===== 내부 모델 =====
 class _DayBundle {
   final String dateStr;
   final List<_DocBundle> docs;
@@ -1498,7 +1604,7 @@ class _DocBundle {
   final DateTime? lastLogTime;
 
   final Map<String, dynamic> meta;
-  final List<Map<String, dynamic>> logs; // 시간 오름차순
+  final List<Map<String, dynamic>> logs;
 
   _DocBundle({
     required this.docId,

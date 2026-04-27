@@ -18,7 +18,7 @@ class MinorSetDepartureRequestDialog extends StatelessWidget {
     final Color onSurfaceVariant = cs.onSurfaceVariant;
     final Color border = cs.outlineVariant.withOpacity(0.85);
 
-    // ✅ CTA는 브랜드 primary 사용
+    
     final Color ctaBg = cs.primary;
     final Color ctaFg = cs.onPrimary;
 

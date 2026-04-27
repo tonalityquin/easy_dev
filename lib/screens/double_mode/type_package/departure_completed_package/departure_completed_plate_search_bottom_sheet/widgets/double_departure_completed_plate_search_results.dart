@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
-import '../../../../../../../models/plate_model.dart';
-import '../../../../../../enums/plate_type.dart';
+import '../../../../../../features/plate/domain/enums/plate_type.dart';
+import '../../../../../../features/plate/domain/models/plate_model.dart';
 
 class DoubleDepartureCompletedPlateSearchResults extends StatelessWidget {
   final List<PlateModel> results;
@@ -116,7 +115,7 @@ class DoubleDepartureCompletedPlateSearchResults extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 상단: 번호 + 칩
+                      
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [

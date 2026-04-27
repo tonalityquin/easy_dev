@@ -1,16 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../../models/plate_model.dart';
+import '../../../../../features/plate/data/repositories/firestore_plate_repository.dart';
+import '../../../../../features/plate/domain/models/plate_model.dart';
 import '../widgets/minor_departure_completed_status_bottom_sheet.dart';
 import 'keypad/animated_keypad.dart';
 import 'widgets/minor_departure_completed_plate_number_display.dart';
 import 'widgets/minor_departure_completed_plate_search_header.dart';
 import 'widgets/minor_departure_completed_plate_search_results.dart';
 import 'widgets/minor_departure_completed_search_button.dart';
-import '../../../../../../repositories/plate_repo_services/firestore_plate_repository.dart';
-
-// ✅ 프로젝트 공통 스낵바 헬퍼 사용(기존 SnackBar 직접 호출 제거)
-import '../../../../../../utils/snackbar_helper.dart';
 
 class MinorDepartureCompletedSearchBottomSheet extends StatefulWidget {
   final void Function(String) onSearch;
@@ -30,9 +27,8 @@ class MinorDepartureCompletedSearchBottomSheet extends StatefulWidget {
 class _MinorDepartureCompletedSearchBottomSheetState
     extends State<MinorDepartureCompletedSearchBottomSheet>
     with SingleTickerProviderStateMixin {
-  // ✅ 요청 팔레트(기존 톤 유지)
-  static const Color _base = Color(0xFF546E7A); // BlueGrey 600
-  static const Color _dark = Color(0xFF37474F); // BlueGrey 800
+  static const Color _base = Color(0xFF546E7A);
+  static const Color _dark = Color(0xFF37474F);
 
   final TextEditingController _controller = TextEditingController();
 
@@ -56,7 +52,8 @@ class _MinorDepartureCompletedSearchBottomSheetState
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.2),
       end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _keypadController, curve: Curves.easeOut));
+    ).animate(
+        CurvedAnimation(parent: _keypadController, curve: Curves.easeOut));
     _fadeAnimation =
         CurvedAnimation(parent: _keypadController, curve: Curves.easeIn);
     _keypadController.forward();
@@ -78,15 +75,13 @@ class _MinorDepartureCompletedSearchBottomSheetState
     final q = _controller.text.trim();
     final area = widget.area.trim();
 
-    // ✅ 방어: invalid 입력이면 쿼리하지 않음
     if (!_isValidPlate(q)) {
-      showSelectedSnackbar(context, '숫자 4자리를 입력해주세요.');
+      debugPrint('번호판 검색 불가: 숫자 4자리를 입력해주세요.');
       return;
     }
 
-    // ✅ 방어: area 비어있으면 쿼리하지 않음
     if (area.isEmpty) {
-      showFailedSnackbar(context, '현재 지역(area)이 설정되지 않아 검색할 수 없습니다.');
+      debugPrint('번호판 검색 불가: 현재 지역(area)이 설정되지 않아 검색할 수 없습니다.');
       return;
     }
 
@@ -109,8 +104,8 @@ class _MinorDepartureCompletedSearchBottomSheetState
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      // ✅ 기존 SnackBar 직접 호출 제거 → 공통 헬퍼로 통일
-      showFailedSnackbar(context, '검색 중 오류가 발생했습니다: $e');
+
+      debugPrint('검색 중 오류가 발생했습니다: $e');
     }
   }
 
@@ -120,7 +115,7 @@ class _MinorDepartureCompletedSearchBottomSheetState
       _controller.clear();
       _hasSearched = false;
       _results.clear();
-      _navigating = false; // ✅ 재진입 안전(패턴 통일)
+      _navigating = false;
     });
   }
 
@@ -141,13 +136,13 @@ class _MinorDepartureCompletedSearchBottomSheetState
             builder: (context, scrollController) {
               return Container(
                 decoration: BoxDecoration(
-                  color: cs.surface, // ✅ 테마 대응(기존 white 하드코딩 최소화)
+                  color: cs.surface,
                   borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(20)),
+                      const BorderRadius.vertical(top: Radius.circular(20)),
                 ),
                 child: ClipRRect(
                   borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(20)),
+                      const BorderRadius.vertical(top: Radius.circular(20)),
                   child: Column(
                     children: [
                       const SizedBox(height: 10),
@@ -162,8 +157,6 @@ class _MinorDepartureCompletedSearchBottomSheetState
                         ),
                       ),
                       const SizedBox(height: 12),
-
-                      // 상단 헤더(닫기 버튼 포함)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Row(
@@ -179,15 +172,12 @@ class _MinorDepartureCompletedSearchBottomSheetState
                           ],
                         ),
                       ),
-
                       const SizedBox(height: 8),
-
                       Expanded(
                         child: ListView(
                           controller: scrollController,
                           padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                           children: [
-                            // 입력 카드
                             _CardSection(
                               title: '번호 4자리 입력',
                               subtitle: '예: 1234',
@@ -198,21 +188,16 @@ class _MinorDepartureCompletedSearchBottomSheetState
                               ),
                             ),
                             const SizedBox(height: 12),
-
-                            // 결과 영역
                             AnimatedSwitcher(
                               duration: const Duration(milliseconds: 220),
                               switchInCurve: Curves.easeOut,
                               switchOutCurve: Curves.easeIn,
                               child: _buildResultSection(rootContext),
                             ),
-
                             const SizedBox(height: 12),
                           ],
                         ),
                       ),
-
-                      // 하단 CTA (검색 버튼)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
                         child: ValueListenableBuilder<TextEditingValue>(
@@ -224,11 +209,10 @@ class _MinorDepartureCompletedSearchBottomSheetState
                               isLoading: _isLoading,
                               onPressed: valid
                                   ? () async {
-                                await _refreshSearchResults();
-                                // ✅ 외부 콜백은 검색 시도 시점에 호출(기존 정책 유지)
-                                // 필요하면 성공 시에만 호출하도록 변경 가능
-                                widget.onSearch(value.text.trim());
-                              }
+                                      await _refreshSearchResults();
+
+                                      widget.onSearch(value.text.trim());
+                                    }
                                   : null,
                             );
                           },
@@ -241,24 +225,21 @@ class _MinorDepartureCompletedSearchBottomSheetState
             },
           ),
         ),
-
-        // 키패드(검색 전만 노출)
         bottomNavigationBar: _hasSearched
             ? const SizedBox.shrink()
             : AnimatedKeypad(
-          slideAnimation: _slideAnimation,
-          fadeAnimation: _fadeAnimation,
-          controller: _controller,
-          maxLength: 4,
-          enableDigitModeSwitch: false,
-          onComplete: () => setState(() {}),
-          onReset: _resetSearch, // ✅ 공통 reset 함수로 통일
-        ),
+                slideAnimation: _slideAnimation,
+                fadeAnimation: _fadeAnimation,
+                controller: _controller,
+                maxLength: 4,
+                enableDigitModeSwitch: false,
+                onComplete: () => setState(() {}),
+                onReset: _resetSearch,
+              ),
       ),
     );
   }
 
-  // ✅ scrollController는 내부에서 사용하지 않으므로 제거(불필요 인자/경고 예방)
   Widget _buildResultSection(BuildContext rootContext) {
     final text = _controller.text.trim();
     final valid = _isValidPlate(text);
@@ -350,12 +331,14 @@ class _CardSection extends StatelessWidget {
               Container(
                 width: 8,
                 height: 8,
-                decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+                decoration:
+                    BoxDecoration(color: accent, shape: BoxShape.circle),
               ),
               const SizedBox(width: 8),
               Text(
                 title,
-                style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
+                style:
+                    const TextStyle(fontWeight: FontWeight.w900, fontSize: 15),
               ),
             ],
           ),
@@ -394,7 +377,7 @@ class _EmptyState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color fg =
-    (tone == _EmptyTone.danger) ? Colors.redAccent : Colors.black54;
+        (tone == _EmptyTone.danger) ? Colors.redAccent : Colors.black54;
     final Color bg = (tone == _EmptyTone.danger)
         ? Colors.red.withOpacity(0.05)
         : Colors.grey.shade100;

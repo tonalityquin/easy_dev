@@ -1,9 +1,10 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
-import '../../../../../models/plate_model.dart';
-import '../../../../../utils/snackbar_helper.dart';
-import '../../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
+import '../../../../../features/plate/domain/models/plate_log_model.dart';
+import '../../../../../features/plate/domain/models/plate_model.dart';
+import '../../../../../features/plate/domain/repositories/plate_repository.dart';
+import '../../../../../widgets/bottom_sheet/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../../common_package/log_package/log_viewer_bottom_sheet.dart';
 
 Future<PlateModel?> showDoubleDepartureCompletedStatusBottomSheet({
@@ -93,8 +94,6 @@ class _DoubleDepartureCompletedFullHeightSheet extends StatelessWidget {
             const SizedBox(height: 16),
             _SummaryCard(plate: plate),
             const SizedBox(height: 24),
-
-            // 정산(사전 정산)
             ElevatedButton.icon(
               icon: const Icon(Icons.receipt_long),
               label: Text(_isLocked ? '정산 완료됨' : '정산(사전 정산)'),
@@ -130,8 +129,6 @@ class _DoubleDepartureCompletedFullHeightSheet extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-
-            // 정산 취소
             ElevatedButton.icon(
               icon: const Icon(Icons.lock_open),
               label: const Text('정산 취소'),
@@ -170,10 +167,7 @@ class _DoubleDepartureCompletedFullHeightSheet extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(height: 24),
-
-            // 로그 확인
             ElevatedButton.icon(
               icon: const Icon(Icons.history),
               label: const Text('로그 확인'),
@@ -198,10 +192,7 @@ class _DoubleDepartureCompletedFullHeightSheet extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(height: 12),
-
-            // 정보 수정 (비활성)
             ElevatedButton.icon(
               icon: const Icon(Icons.edit),
               label: const Text('정보 수정'),
@@ -217,10 +208,7 @@ class _DoubleDepartureCompletedFullHeightSheet extends StatelessWidget {
                 ),
               ),
             ),
-
             const SizedBox(height: 12),
-
-            // 닫기
             TextButton.icon(
               icon: Icon(Icons.close, color: cs.onSurfaceVariant),
               label: Text('닫기', style: TextStyle(color: cs.onSurfaceVariant)),
@@ -333,13 +321,13 @@ Future<PlateModel?> _settlePlate({
   required String performedBy,
 }) async {
   if (plate.isLockedFee == true) {
-    showFailedSnackbar(context, '이미 정산 완료된 데이터입니다.');
+    debugPrint('이미 정산 완료된 데이터입니다.');
     return null;
   }
 
   final bt = (plate.billingType ?? '').trim();
   if (bt.isEmpty) {
-    showFailedSnackbar(context, '정산 타입(billingType)이 지정되지 않아 정산할 수 없습니다.');
+    debugPrint('정산 타입(billingType)이 지정되지 않아 정산할 수 없습니다.');
     return null;
   }
 
@@ -369,34 +357,37 @@ Future<PlateModel?> _settlePlate({
     paymentMethod: result.paymentMethod,
   );
 
+  final repo = context.read<PlateRepository>();
+
   try {
-    final docRef = FirebaseFirestore.instance.collection('plates').doc(plate.id);
-
-    final log = {
-      'action': '사전 정산',
-      'performedBy': performedBy,
-      'timestamp': now.toIso8601String(),
-      'lockedFee': result.lockedFee,
-      'paymentMethod': result.paymentMethod,
-      if (result.reason != null && result.reason!.trim().isNotEmpty) 'reason': result.reason!.trim(),
-    };
-
-    await docRef.update({
-      'isLockedFee': true,
-      'lockedAtTimeInSeconds': currentTime,
-      'lockedFeeAmount': result.lockedFee,
-      'paymentMethod': result.paymentMethod,
-      'updatedAt': FieldValue.serverTimestamp(),
-      'logs': FieldValue.arrayUnion([log]),
-    });
+    await repo.settlePlateBilling(
+      documentId: plate.id,
+      lockedAtTimeInSeconds: currentTime,
+      lockedFeeAmount: result.lockedFee,
+      paymentMethod: result.paymentMethod,
+      log: PlateLogModel(
+        action: '사전 정산',
+        area: plate.area,
+        billingType: plate.billingType,
+        from: plate.type,
+        performedBy: performedBy,
+        plateNumber: plate.plateNumber,
+        timestamp: now,
+        to: plate.type,
+        type: plate.type,
+        lockedFee: result.lockedFee,
+        paymentMethod: result.paymentMethod,
+        reason: result.reason,
+      ),
+    );
 
     if (!context.mounted) return null;
-    showSuccessSnackbar(context, '정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
+    debugPrint('정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
 
-    return updatedPlate;
+    return await repo.getPlate(plate.id) ?? updatedPlate;
   } catch (e) {
     if (!context.mounted) return null;
-    showFailedSnackbar(context, '정산 중 오류가 발생했습니다: $e');
+    debugPrint('정산 중 오류가 발생했습니다: $e');
     return null;
   }
 }
@@ -407,37 +398,37 @@ Future<PlateModel?> _cancelSettlement({
   required String performedBy,
 }) async {
   if (plate.isLockedFee != true) {
-    showFailedSnackbar(context, '정산 완료된 데이터만 취소할 수 있습니다.');
+    debugPrint('정산 완료된 데이터만 취소할 수 있습니다.');
     return null;
   }
 
   final now = DateTime.now();
 
+  final repo = context.read<PlateRepository>();
+
   try {
-    final docRef = FirebaseFirestore.instance.collection('plates').doc(plate.id);
-
-    final log = {
-      'action': '정산 취소',
-      'performedBy': performedBy,
-      'timestamp': now.toIso8601String(),
-    };
-
-    await docRef.update({
-      'isLockedFee': false,
-      'lockedAtTimeInSeconds': FieldValue.delete(),
-      'lockedFeeAmount': FieldValue.delete(),
-      'paymentMethod': FieldValue.delete(),
-      'updatedAt': FieldValue.serverTimestamp(),
-      'logs': FieldValue.arrayUnion([log]),
-    });
+    await repo.cancelPlateBilling(
+      documentId: plate.id,
+      log: PlateLogModel(
+        action: '정산 취소',
+        area: plate.area,
+        billingType: plate.billingType,
+        from: plate.type,
+        performedBy: performedBy,
+        plateNumber: plate.plateNumber,
+        timestamp: now,
+        to: plate.type,
+        type: plate.type,
+      ),
+    );
 
     if (!context.mounted) return null;
-    showSuccessSnackbar(context, '정산이 취소되었습니다.');
+    debugPrint('정산이 취소되었습니다.');
 
-    return plate.copyWith(isLockedFee: false);
+    return await repo.getPlate(plate.id) ?? plate.copyWith(isLockedFee: false);
   } catch (e) {
     if (!context.mounted) return null;
-    showFailedSnackbar(context, '정산 취소 중 오류가 발생했습니다: $e');
+    debugPrint('정산 취소 중 오류가 발생했습니다: $e');
     return null;
   }
 }

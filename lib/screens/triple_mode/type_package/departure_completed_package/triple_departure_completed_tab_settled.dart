@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 
-import '../../../../models/plate_log_model.dart';
-import '../../../../models/plate_model.dart';
-import '../../../../repositories/plate_repo_services/firestore_plate_repository.dart';
-
-// ⛔️ GCS 직접 로드는 MergedLogSection 내부에서 처리
+import '../../../../features/plate/data/repositories/firestore_plate_repository.dart';
+import '../../../../features/plate/domain/models/plate_log_model.dart';
+import '../../../../features/plate/domain/models/plate_model.dart';
 import '../departure_completed_package/widgets/triple_departure_completed_page_merge_log.dart';
 import '../departure_completed_package/widgets/triple_departure_completed_page_today_log.dart';
-import '../../../../utils/snackbar_helper.dart';
 
 class TripleDepartureCompletedSettledTab extends StatefulWidget {
   const TripleDepartureCompletedSettledTab({
@@ -30,7 +27,6 @@ class TripleDepartureCompletedSettledTab extends StatefulWidget {
 
 class _TripleDepartureCompletedSettledTabState
     extends State<TripleDepartureCompletedSettledTab> {
-  // ===== 아코디언 상태: 최대 1개만 열림 =====
   bool _openToday = true;
   bool _openMerged = false;
 
@@ -58,7 +54,6 @@ class _TripleDepartureCompletedSettledTabState
     });
   }
 
-  // ===== Firestore 검색 상태 (오늘 로그용) =====
   final TextEditingController _fourDigitCtrl = TextEditingController();
   bool _isLoading = false;
   bool _hasSearched = false;
@@ -134,14 +129,13 @@ class _TripleDepartureCompletedSettledTabState
         _hasSearched = true;
         _isLoading = false;
         _selectedResultIndex = initialIndex;
-        // 검색하면 자연스럽게 '오늘' 섹션이 열리도록 유도
         _openToday = true;
         _openMerged = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      showFailedSnackbar(context, '검색 중 오류가 발생했습니다: $e');
+      debugPrint('검색 중 오류가 발생했습니다: $e');
     }
   }
 
@@ -165,7 +159,6 @@ class _TripleDepartureCompletedSettledTabState
     super.dispose();
   }
 
-  // ===== 섹션 본문 위젯 빌더들 =====
   Widget _buildTodaySectionBody() {
     final cs = Theme.of(context).colorScheme;
 
@@ -195,7 +188,6 @@ class _TripleDepartureCompletedSettledTabState
       );
     }
 
-    // 다건 결과 칩
     final chips = _results.asMap().entries.map((entry) {
       final i = entry.key;
       final p = entry.value;
@@ -240,7 +232,6 @@ class _TripleDepartureCompletedSettledTabState
               child: Row(children: chips),
             ),
           ),
-        // TodayLogSection 내부에 Expanded가 있으므로, 여기서는 Expanded로 감싸서 공간 할당
         Expanded(
           child: TripleTodayLogSection(
             plateNumber: plate,
@@ -252,9 +243,8 @@ class _TripleDepartureCompletedSettledTabState
   }
 
   Widget _buildMergedSectionBody() {
-    // 리팩토링된 MergedLogSection은 내부에서 날짜 선택/불러오기/검색을 모두 처리
     return TripleMergedLogSection(
-      mergedLogs: const <Map<String, dynamic>>[], // 시그니처 호환용, 내부 미사용
+      mergedLogs: const <Map<String, dynamic>>[],
       division: widget.division,
       area: widget.area,
     );
@@ -267,7 +257,6 @@ class _TripleDepartureCompletedSettledTabState
     final bool canSearch =
         !_isLoading && _isValidFourDigit(_fourDigitCtrl.text.trim());
 
-    // 오늘 검색바 (오늘 섹션과 연동)
     final searchBar = SafeArea(
       top: false,
       child: Row(
@@ -329,7 +318,6 @@ class _TripleDepartureCompletedSettledTabState
       padding: const EdgeInsets.all(8.0),
       child: Column(
         children: [
-          // === (1) 오늘 헤더 — 항상 보임 ===
           _SectionHeader(
             key: const ValueKey('today-header'),
             icon: Icons.receipt_long,
@@ -338,13 +326,8 @@ class _TripleDepartureCompletedSettledTabState
             onTap: _toggleToday,
           ),
           const SizedBox(height: 6),
-
-          // === (2) 오늘 본문 — 열렸을 때만 Expanded 로 표시 ===
           if (_openToday) Expanded(child: _buildTodaySectionBody()),
-
           const SizedBox(height: 6),
-
-          // === (3) 과거 헤더 — 항상 보임 ===
           _SectionHeader(
             key: const ValueKey('merged-header'),
             icon: Icons.merge_type,
@@ -353,13 +336,8 @@ class _TripleDepartureCompletedSettledTabState
             onTap: _toggleMerged,
           ),
           const SizedBox(height: 6),
-
-          // === (4) 과거 본문 — 열렸을 때만 Expanded 로 표시 ===
           if (_openMerged) Expanded(child: _buildMergedSectionBody()),
-
           const SizedBox(height: 8),
-
-          // === (5) 오늘 검색 입력 — 하단 고정 ===
           searchBar,
         ],
       ),
@@ -371,7 +349,6 @@ class _SectionHeader extends StatelessWidget {
   final IconData icon;
   final String title;
 
-  // 아코디언 제어용
   final bool? isOpen;
   final VoidCallback? onTap;
 
@@ -388,8 +365,9 @@ class _SectionHeader extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final theme = Theme.of(context);
 
-    final chevron =
-    (onTap != null) ? (isOpen == true ? Icons.expand_less : Icons.expand_more) : null;
+    final chevron = (onTap != null)
+        ? (isOpen == true ? Icons.expand_less : Icons.expand_more)
+        : null;
 
     final content = Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
@@ -425,7 +403,7 @@ class _SectionHeader extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(10),
-        overlayColor: MaterialStateProperty.all(
+        overlayColor: WidgetStateProperty.all(
           cs.outlineVariant.withOpacity(0.12),
         ),
         child: content,

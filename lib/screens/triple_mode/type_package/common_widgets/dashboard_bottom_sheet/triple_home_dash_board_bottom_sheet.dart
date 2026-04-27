@@ -1,93 +1,41 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
-import '../../../../../../states/user/user_state.dart';
-import '../../../../../../states/area/area_state.dart';
-
-// ✅ 역할별로 다른 문서철 바텀시트를 사용하기 위해 두 파일 모두 import
+import '../../../../../app/di/routes.dart';
+import '../../../../../features/account/applications/user_state.dart';
+import '../../../../../features/dev/application/area_state.dart';
+import '../../../../../features/selector/sheets/service_bottom_sheet.dart';
+import '../../../../../shared/secondary/pages/secondary_page.dart';
 import '../../../../common_package/camera_package/photo_transfer_mail_page.dart';
-import '../../../../common_package/memo_package/dash_memo.dart';
+import '../../../../common_package/memo_package/chat_bot.dart';
+import '../../../../common_package/sheet_tool/document_box_action_executor.dart';
 import '../../../../common_package/sheet_tool/fielder_document_box_sheet.dart';
 import '../../../../common_package/sheet_tool/leader_document_box_sheet.dart';
-import '../../../../secondary_page.dart';
 import 'widgets/triple_dashboard_punch_recorder_section.dart';
-
-// ✅ 전역 테마 컨트롤러 + 브랜드 프리셋/테마모드 스펙
-import '../../../../../../theme_prefs_controller.dart';
-import '../../../../../../selector_hubs_package/brand_theme.dart';
 
 class TripleHomeDashBoardBottomSheet extends StatefulWidget {
   const TripleHomeDashBoardBottomSheet({super.key});
 
   @override
-  State<TripleHomeDashBoardBottomSheet> createState() => _TripleHomeDashBoardBottomSheetState();
+  State<TripleHomeDashBoardBottomSheet> createState() =>
+      _TripleHomeDashBoardBottomSheetState();
 }
 
-class _TripleHomeDashBoardBottomSheetState extends State<TripleHomeDashBoardBottomSheet> {
+class _TripleHomeDashBoardBottomSheetState
+    extends State<TripleHomeDashBoardBottomSheet> {
   static const String screenTag = 'DashBoard B';
 
   bool _layerHidden = true;
-
-  /// ✅ themeModeSpecs()에 independent가 없을 수도 있으므로 안전하게 확장(중복 제거)
-  List<ThemeModeSpec> _themeModesExtended() {
-    final base = themeModeSpecs();
-    final ids = <String>{...base.map((e) => e.id)};
-
-    if (!ids.contains('independent')) {
-      return [
-        ...base,
-        const ThemeModeSpec(
-          id: 'independent',
-          label: '독립',
-          icon: Icons.layers_rounded,
-        ),
-      ];
-    }
-    return base;
-  }
-
-  /// ✅ 모드에 따라 프리셋 리스트 분리:
-  /// brand_theme.dart의 공식 필터(독립/일반 분리) 사용
-  List<BrandPresetSpec> _presetsForMode(String themeModeId) {
-    final filtered = brandPresetsForThemeMode(themeModeId);
-    return filtered.isNotEmpty ? filtered : brandPresets();
-  }
-
-  /// ✅ 모드 전환 시 프리셋 호환성 자동 교정
-  Future<void> _setThemeModeWithPresetFix(
-      ThemePrefsController themeCtrl,
-      String nextModeId,
-      ) async {
-    if (themeCtrl.themeModeId == nextModeId) return;
-
-    await themeCtrl.setThemeModeId(nextModeId);
-
-    if (nextModeId == 'independent') {
-      final cur = presetById(themeCtrl.presetId);
-      if (cur.independentTokens == null) {
-        final candidates = brandPresetsForThemeMode('independent');
-        if (candidates.isNotEmpty) {
-          await themeCtrl.setPresetId(candidates.first.id);
-        }
-      }
-    } else {
-      final cur = presetById(themeCtrl.presetId);
-      if (cur.independentTokens != null) {
-        await themeCtrl.setPresetId('system');
-      }
-    }
-  }
 
   Widget _buildScreenTag(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final baseText = Theme.of(context).textTheme.labelSmall;
 
     final style = (baseText ??
-        TextStyle(
-          fontSize: 11,
-          color: cs.onSurfaceVariant,
-          fontWeight: FontWeight.w700,
-        ))
+            TextStyle(
+              fontSize: 11,
+              color: cs.onSurfaceVariant,
+              fontWeight: FontWeight.w700,
+            ))
         .copyWith(
       color: cs.onSurfaceVariant,
       fontWeight: FontWeight.w700,
@@ -109,13 +57,55 @@ class _TripleHomeDashBoardBottomSheetState extends State<TripleHomeDashBoardBott
   }
 
   bool _isFieldCommon(UserState userState) {
-    final dynamic rawRole = userState.user?.role;
-    final String role = rawRole is String ? rawRole.trim() : (rawRole?.toString().trim() ?? '');
+    final dynamic rawRole = userState.session?.role;
+    final String role =
+        rawRole is String ? rawRole.trim() : (rawRole?.toString().trim() ?? '');
     return role == 'fieldCommon';
   }
 
+  Future<void> _closeCurrentSheetAndRun(
+    BuildContext context,
+    Future<void> Function(BuildContext rootContext) action,
+  ) async {
+    final rootNavigator = Navigator.of(context, rootNavigator: true);
+    final nav = Navigator.of(context);
+    if (nav.canPop()) {
+      nav.pop();
+      await Future<void>.delayed(Duration.zero);
+    }
+    await action(rootNavigator.context);
+  }
+
+  Future<void> _openDocumentBox(
+    BuildContext context, {
+    required bool isFieldCommon,
+  }) async {
+    await _closeCurrentSheetAndRun(context, (rootContext) async {
+      final action = isFieldCommon
+          ? await openFielderDocumentBox(rootContext)
+          : await openLeaderDocumentBox(rootContext);
+      if (action == null) return;
+      await executeDocumentBoxAction(rootContext, action);
+    });
+  }
+
+  Future<void> _toggleMemoPanel(BuildContext context) async {
+    await _closeCurrentSheetAndRun(context, (rootContext) async {
+      await ChatBot.init();
+      ChatBot.mountIfNeeded();
+      await ChatBot.togglePanel();
+    });
+  }
+
+  Future<void> _openServiceSettings(BuildContext context) async {
+    await _closeCurrentSheetAndRun(context, (rootContext) async {
+      await ServiceBottomSheet.show(
+        context: rootContext,
+      );
+    });
+  }
+
   void _onPhotoTransferPressed(BuildContext context) {
-    // ✅ 바텀시트 닫고, 루트 네비게이터로 push
     final rootNav = Navigator.of(context, rootNavigator: true);
 
     final nav = Navigator.of(context);
@@ -127,7 +117,6 @@ class _TripleHomeDashBoardBottomSheetState extends State<TripleHomeDashBoardBott
   }
 
   void _onOpenSecondaryPressed(BuildContext context) {
-    // ✅ 바텀시트 닫고, 루트 네비게이터로 push
     final rootNav = Navigator.of(context, rootNavigator: true);
 
     final nav = Navigator.of(context);
@@ -138,175 +127,167 @@ class _TripleHomeDashBoardBottomSheetState extends State<TripleHomeDashBoardBott
     );
   }
 
-  String _themeModeLabel(String id) {
-    final modes = _themeModesExtended();
-    return modes.firstWhere((m) => m.id == id, orElse: () => modes.first).label;
+  Future<void> _onOpenCommunityPressed(BuildContext context) async {
+    await _closeCurrentSheetAndRun(context, (rootContext) async {
+      await Navigator.of(rootContext, rootNavigator: true).pushNamed(
+        AppRoutes.communityStub,
+      );
+    });
   }
 
-  /// ✅ 테마 설정(모드 + 색상 프리셋) 다이얼로그
-  Future<void> _openThemeSettingsDialog(BuildContext context) async {
-    await showDialog<void>(
-      context: context,
-      useRootNavigator: true, // ✅ 바텀시트 위에 중앙 다이얼로그를 확실히 올림
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        return Consumer<ThemePrefsController>(
-          builder: (ctx, themeCtrl, _) {
-            final cs = Theme.of(ctx).colorScheme;
-            final text = Theme.of(ctx).textTheme;
+  Future<void> _onOpenFaqPressed(BuildContext context) async {
+    await _closeCurrentSheetAndRun(context, (rootContext) async {
+      await Navigator.of(rootContext, rootNavigator: true).pushNamed(
+        AppRoutes.faq,
+      );
+    });
+  }
 
-            final modes = _themeModesExtended();
-            final presets = _presetsForMode(themeCtrl.themeModeId);
+  Widget _buildFixedHeader(
+    BuildContext context, {
+    required ColorScheme cs,
+    required UserState userState,
+    required AreaState areaState,
+  }) {
+    return Column(
+      children: [
+        const SizedBox(height: 12),
+        Container(
+          width: 60,
+          height: 6,
+          decoration: BoxDecoration(
+            color: cs.outlineVariant.withOpacity(0.75),
+            borderRadius: BorderRadius.circular(3),
+          ),
+        ),
+        const SizedBox(height: 4),
+        _buildScreenTag(context),
+        const SizedBox(height: 16),
+        TripleDashboardInsidePunchRecorderSection(
+          userId: userState.name,
+          userName: userState.name,
+          area: areaState.currentArea,
+          division: areaState.currentDivision,
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
 
-            final bool isIndependent = themeCtrl.themeModeId == 'independent';
-            final String modeGuide = isIndependent
-                ? '독립 모드는 색 패키지가 배경/텍스트/하이라이트를 직접 결정합니다.'
-                : '컨셉 컬러는 포인트(primary)만 변경되고, 표면(surfaces)은 중립으로 유지됩니다.';
-
-            return AlertDialog(
-              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-              titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
-              contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-              title: Row(
-                children: [
-                  const Icon(Icons.tune_rounded),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      '테마 설정',
-                      style: text.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+  Widget _buildScrollableBody(
+    BuildContext context, {
+    required ScrollController scrollController,
+    required ColorScheme cs,
+    required bool isFieldCommon,
+  }) {
+    return SingleChildScrollView(
+      controller: scrollController,
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        children: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              icon: Icon(_layerHidden ? Icons.layers : Icons.layers_clear),
+              label: Text(_layerHidden ? '작업 버튼 펼치기' : '작업 버튼 숨기기'),
+              style: _outlinedSurfaceBtnStyle(context, height: 48),
+              onPressed: () => setState(() => _layerHidden = !_layerHidden),
+            ),
+          ),
+          const SizedBox(height: 16),
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 200),
+            crossFadeState: _layerHidden
+                ? CrossFadeState.showFirst
+                : CrossFadeState.showSecond,
+            firstChild: const SizedBox.shrink(),
+            secondChild: Column(
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.groups_rounded),
+                    label: const Text('Community'),
+                    style: _outlinedSurfaceBtnStyle(context, height: 55),
+                    onPressed: () => _onOpenCommunityPressed(context),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.help_center_rounded),
+                    label: const Text('FAQ'),
+                    style: _outlinedSurfaceBtnStyle(context, height: 55),
+                    onPressed: () => _onOpenFaqPressed(context),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.sticky_note_2_rounded),
+                    label: const Text('메모'),
+                    style: _outlinedSurfaceBtnStyle(context, height: 55),
+                    onPressed: () => _toggleMemoPanel(context),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.settings_rounded),
+                    label: const Text('설정'),
+                    style: _outlinedSurfaceBtnStyle(
+                      context,
+                      height: 55,
+                      borderColor: cs.primary.withOpacity(0.85),
+                      pressedOverlayColor: cs.primary.withOpacity(0.10),
+                    ),
+                    onPressed: () => _openServiceSettings(context),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.photo_camera_back_rounded),
+                    label: const Text('사진 전송'),
+                    style: _outlinedSurfaceBtnStyle(context, height: 55),
+                    onPressed: () => _onPhotoTransferPressed(context),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.folder_open),
+                    label: const Text('서류함 열기'),
+                    style: _outlinedSurfaceBtnStyle(context, height: 55),
+                    onPressed: () => _openDocumentBox(
+                      context,
+                      isFieldCommon: isFieldCommon,
                     ),
                   ),
-                ],
-              ),
-              content: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 560),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(
-                        '테마 모드(시스템/라이트/다크/독립)와 색 패키지를 선택하면 앱 전체에 즉시 적용됩니다.',
-                        style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // ─────────────────────────────────────────────
-                      // ✅ 테마 모드 섹션
-                      Text(
-                        '테마 모드',
-                        style: text.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: modes.map((m) {
-                          final selected = m.id == themeCtrl.themeModeId;
-                          return ChoiceChip(
-                            selected: selected,
-                            onSelected: (_) async {
-                              await _setThemeModeWithPresetFix(themeCtrl, m.id);
-                            },
-                            label: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(m.icon, size: 16),
-                                const SizedBox(width: 6),
-                                Text(m.label),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                      ),
-
-                      const SizedBox(height: 14),
-                      Divider(height: 1, color: cs.outlineVariant.withOpacity(0.7)),
-                      const SizedBox(height: 14),
-
-                      // ─────────────────────────────────────────────
-                      // ✅ 프리셋 섹션
-                      Text(
-                        '색 패키지',
-                        style: text.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        modeGuide,
-                        style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: presets.map((p) {
-                          final selected = p.id == themeCtrl.presetId;
-                          return ChoiceChip(
-                            selected: selected,
-                            onSelected: (_) async {
-                              await themeCtrl.setPresetId(p.id);
-                            },
-                            label: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                _PresetPreviewDots(colors: p.preview),
-                                const SizedBox(width: 8),
-                                Text(p.label),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // ─────────────────────────────────────────────
-                      // ✅ 현재 선택 요약
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: cs.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.info_outline, color: cs.onSurfaceVariant, size: 18),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                '현재: ${_themeModeLabel(themeCtrl.themeModeId)} / ${presetById(themeCtrl.presetId).label}',
-                                style: text.bodySmall?.copyWith(
-                                  color: cs.onSurfaceVariant,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.open_in_new),
+                    label: const Text('보조 페이지 열기'),
+                    style: _outlinedSurfaceBtnStyle(context, height: 55),
+                    onPressed: () => _onOpenSecondaryPressed(context),
                   ),
                 ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('닫기'),
-                ),
+                const SizedBox(height: 16),
               ],
-            );
-          },
-        );
-      },
+            ),
+          ),
+          if (_layerHidden) const SizedBox(height: 16),
+          const SizedBox(height: 32),
+        ],
+      ),
     );
   }
 
@@ -326,136 +307,33 @@ class _TripleHomeDashBoardBottomSheetState extends State<TripleHomeDashBoardBott
             borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             border: Border.all(color: cs.outlineVariant.withOpacity(0.7)),
           ),
-          child: Consumer<UserState>(
-            builder: (context, userState, _) {
-              final areaState = context.read<AreaState>();
-              final bool isFieldCommon = _isFieldCommon(userState);
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Consumer<UserState>(
+              builder: (context, userState, _) {
+                final areaState = context.read<AreaState>();
+                final bool isFieldCommon = _isFieldCommon(userState);
 
-              return SingleChildScrollView(
-                controller: scrollController,
-                padding: const EdgeInsets.all(24),
-                child: Column(
+                return Column(
                   children: [
-                    const SizedBox(height: 12),
-                    Container(
-                      width: 60,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: cs.outlineVariant.withOpacity(0.75),
-                        borderRadius: BorderRadius.circular(3),
+                    _buildFixedHeader(
+                      context,
+                      cs: cs,
+                      userState: userState,
+                      areaState: areaState,
+                    ),
+                    Expanded(
+                      child: _buildScrollableBody(
+                        context,
+                        scrollController: scrollController,
+                        cs: cs,
+                        isFieldCommon: isFieldCommon,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    _buildScreenTag(context),
-                    const SizedBox(height: 16),
-
-                    /// ⬇️ 출퇴근 기록기 카드
-                    TripleDashboardInsidePunchRecorderSection(
-                      userId: userState.name,
-                      userName: userState.name,
-                      area: areaState.currentArea,
-                      division: areaState.currentDivision,
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        icon: Icon(_layerHidden ? Icons.layers : Icons.layers_clear),
-                        label: Text(_layerHidden ? '작업 버튼 펼치기' : '작업 버튼 숨기기'),
-                        style: _outlinedSurfaceBtnStyle(context, height: 48),
-                        onPressed: () => setState(() => _layerHidden = !_layerHidden),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    AnimatedCrossFade(
-                      duration: const Duration(milliseconds: 200),
-                      crossFadeState: _layerHidden ? CrossFadeState.showFirst : CrossFadeState.showSecond,
-                      firstChild: const SizedBox.shrink(),
-                      secondChild: Column(
-                        children: [
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              icon: const Icon(Icons.sticky_note_2_rounded),
-                              label: const Text('메모'),
-                              style: _outlinedSurfaceBtnStyle(context, height: 55),
-                              onPressed: () async {
-                                await DashMemo.init();
-                                DashMemo.mountIfNeeded();
-                                await DashMemo.togglePanel();
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          // ✅ 테마 설정 버튼
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              icon: const Icon(Icons.palette_outlined),
-                              label: const Text('테마 설정(모드/색상)'),
-                              style: _outlinedSurfaceBtnStyle(
-                                context,
-                                height: 55,
-                                borderColor: cs.primary.withOpacity(0.85),
-                                pressedOverlayColor: cs.primary.withOpacity(0.10),
-                              ),
-                              onPressed: () => _openThemeSettingsDialog(context),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              icon: const Icon(Icons.photo_camera_back_rounded),
-                              label: const Text('사진 전송'),
-                              style: _outlinedSurfaceBtnStyle(context, height: 55),
-                              onPressed: () => _onPhotoTransferPressed(context),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              icon: const Icon(Icons.folder_open),
-                              label: const Text('서류함 열기'),
-                              style: _outlinedSurfaceBtnStyle(context, height: 55),
-                              onPressed: () {
-                                if (isFieldCommon) {
-                                  openFielderDocumentBox(context);
-                                } else {
-                                  openLeaderDocumentBox(context);
-                                }
-                              },
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              icon: const Icon(Icons.open_in_new),
-                              label: const Text('보조 페이지 열기'),
-                              style: _outlinedSurfaceBtnStyle(context, height: 55),
-                              onPressed: () => _onOpenSecondaryPressed(context),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-                    if (_layerHidden) const SizedBox(height: 16),
                   ],
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         );
       },
@@ -464,15 +342,17 @@ class _TripleHomeDashBoardBottomSheetState extends State<TripleHomeDashBoardBott
 }
 
 ButtonStyle _outlinedSurfaceBtnStyle(
-    BuildContext context, {
-      double height = 55,
-      Color? borderColor,
-      Color? pressedOverlayColor,
-    }) {
+  BuildContext context, {
+  double height = 55,
+  Color? borderColor,
+  Color? pressedOverlayColor,
+}) {
   final cs = Theme.of(context).colorScheme;
 
-  final Color effectiveBorder = borderColor ?? cs.outlineVariant.withOpacity(0.85);
-  final Color effectiveOverlay = pressedOverlayColor ?? cs.outlineVariant.withOpacity(0.12);
+  final Color effectiveBorder =
+      borderColor ?? cs.outlineVariant.withOpacity(0.85);
+  final Color effectiveOverlay =
+      pressedOverlayColor ?? cs.outlineVariant.withOpacity(0.12);
 
   return ElevatedButton.styleFrom(
     backgroundColor: cs.surface,
@@ -484,37 +364,8 @@ ButtonStyle _outlinedSurfaceBtnStyle(
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
   ).copyWith(
     overlayColor: MaterialStateProperty.resolveWith<Color?>(
-          (states) => states.contains(MaterialState.pressed) ? effectiveOverlay : null,
+      (states) =>
+          states.contains(MaterialState.pressed) ? effectiveOverlay : null,
     ),
   );
-}
-
-/// ✅ 프리셋 UI 미리보기(3색 점)
-class _PresetPreviewDots extends StatelessWidget {
-  const _PresetPreviewDots({required this.colors});
-
-  final List<Color> colors;
-
-  @override
-  Widget build(BuildContext context) {
-    final dots = colors.take(3).toList();
-    final outline = Theme.of(context).colorScheme.outlineVariant.withOpacity(0.6);
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(dots.length, (i) {
-        final c = dots[i];
-        return Container(
-          width: 10,
-          height: 10,
-          margin: EdgeInsets.only(right: i == dots.length - 1 ? 0 : 4),
-          decoration: BoxDecoration(
-            color: c,
-            shape: BoxShape.circle,
-            border: Border.all(color: outline),
-          ),
-        );
-      }),
-    );
-  }
 }

@@ -3,7 +3,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 
 import 'user_statement_styles.dart';
 import 'user_statement_signature_painter.dart';
@@ -50,12 +49,10 @@ class _UserStatementSignatureFullScreenDialogState
   bool get _hasAny => _points.any((p) => p != null);
 
   void _clear() {
-    HapticFeedback.selectionClick();
     setState(() => _points.clear());
   }
 
   void _undo() {
-    HapticFeedback.selectionClick();
     if (_points.isEmpty) return;
 
     int i = _points.length - 1;
@@ -75,28 +72,21 @@ class _UserStatementSignatureFullScreenDialogState
 
   Future<void> _save() async {
     try {
-      HapticFeedback.lightImpact();
       setState(() {
         _signDateTime = DateTime.now();
       });
-      // Repaint 적용 위해 한 프레임 대기
+
       await Future.delayed(const Duration(milliseconds: 16));
 
       final boundary =
       _boundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
       if (boundary == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('캡처 영역을 찾을 수 없습니다.')),
-        );
         return;
       }
 
       final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('PNG 변환에 실패했습니다.')),
-        );
         return;
       }
 
@@ -107,11 +97,7 @@ class _UserStatementSignatureFullScreenDialogState
           signDateTime: _signDateTime!,
         ),
       );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('서명 저장 오류: $e')),
-      );
-    }
+    } catch (_) {}
   }
 
   @override
@@ -122,12 +108,10 @@ class _UserStatementSignatureFullScreenDialogState
     final name = widget.name.isEmpty ? '이름 미입력' : widget.name;
     final timeText = _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
 
-    // ✅ 서명 패드도 전역 테마 기반
     final penColor = cs.onSurface;
     final padBg = cs.surface;
 
     return Material(
-      // ✅ 하드코딩 black54 제거 → scrim 기반
       color: cs.scrim.withOpacity(0.55),
       child: SafeArea(
         child: Scaffold(
@@ -163,7 +147,6 @@ class _UserStatementSignatureFullScreenDialogState
           ),
           body: Column(
             children: [
-              // 상단 서명자 정보 바
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
                 decoration: BoxDecoration(
@@ -218,8 +201,6 @@ class _UserStatementSignatureFullScreenDialogState
                   ],
                 ),
               ),
-
-              // 서명 캔버스
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.all(12),
@@ -248,7 +229,6 @@ class _UserStatementSignatureFullScreenDialogState
                                   background: padBg,
                                   overlayName: name,
                                   overlayDateText: timeText,
-                                  // ✅ painter 내부 하드코딩 제거용 토큰 전달
                                   guideColor: cs.outlineVariant.withOpacity(0.9),
                                   hintColor: cs.onSurfaceVariant.withOpacity(0.55),
                                   overlayTextColor: cs.onSurfaceVariant.withOpacity(0.7),
@@ -263,8 +243,6 @@ class _UserStatementSignatureFullScreenDialogState
                   ),
                 ),
               ),
-
-              // 하단 버튼
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 child: Row(
@@ -274,7 +252,6 @@ class _UserStatementSignatureFullScreenDialogState
                         onPressed: () => Navigator.of(context).pop(),
                         icon: const Icon(Icons.cancel_outlined),
                         label: const Text('취소'),
-                        // ✅ context 기반 스타일(전역 테마 반영)
                         style: UserStatementButtonStyles.outlined(context),
                       ),
                     ),
@@ -284,7 +261,6 @@ class _UserStatementSignatureFullScreenDialogState
                         onPressed: _hasAny ? _save : null,
                         icon: const Icon(Icons.save_alt),
                         label: const Text('저장'),
-                        // ✅ context 기반 스타일(전역 테마 반영)
                         style: UserStatementButtonStyles.primary(context),
                       ),
                     ),

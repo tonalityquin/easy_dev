@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 
-/// ✅ "주행 중" 완전 차단(Blocking) 다이얼로그
-/// - barrierDismissible: false -> 바깥 터치로 닫히지 않음
-/// - PopScope(canPop: false) -> 시스템 뒤로가기/제스처로 닫히지 않음
-/// - 모달 barrier가 아래 UI 터치를 모두 차단함(다른 곳 눌러도 아무 동작 없음)
-///
-/// ✅ 요구사항 반영
-/// 1) "주행 취소" 버튼 추가
-/// 2) canCancel=false이면 "주행 취소" 비활성화(선점자만 취소 가능)
+
+
+
+
+
+
+
+
 Future<void> showDrivingBlockingDialog({
   required BuildContext context,
   required String message,
   required Future<void> Function() onComplete,
   required Future<void> Function() onCancel,
-  required bool canCancel, // ✅ 선점자만 취소 가능
+  required bool canCancel, 
   String? cancelDisabledHint,
   Future<void> Function(Object err, StackTrace st)? onError,
 }) async {

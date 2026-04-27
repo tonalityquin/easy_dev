@@ -1,11 +1,8 @@
-// lib/screens/simple_package/simple_inside_package/sections/simple_inside_report_signature_dialog.dart
-
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 
 import 'backup_styles.dart';
 import 'backup_signature_painter.dart';
@@ -28,7 +25,8 @@ class SignatureFullScreenDialog extends StatefulWidget {
   final DateTime? initialDateTime;
 
   @override
-  State<SignatureFullScreenDialog> createState() => _SignatureFullScreenDialogState();
+  State<SignatureFullScreenDialog> createState() =>
+      _SignatureFullScreenDialogState();
 }
 
 class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
@@ -47,12 +45,10 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
   bool get _hasAny => _points.any((p) => p != null);
 
   void _clear() {
-    HapticFeedback.selectionClick();
     setState(() => _points.clear());
   }
 
   void _undo() {
-    HapticFeedback.selectionClick();
     if (_points.isEmpty) return;
 
     int i = _points.length - 1;
@@ -72,26 +68,20 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
 
   Future<void> _save() async {
     try {
-      HapticFeedback.lightImpact();
       setState(() {
         _signDateTime = DateTime.now();
       });
       await Future.delayed(const Duration(milliseconds: 16));
 
-      final boundary = _boundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      final boundary = _boundaryKey.currentContext?.findRenderObject()
+      as RenderRepaintBoundary?;
       if (boundary == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('캡처 영역을 찾을 수 없습니다.')),
-        );
         return;
       }
 
       final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('PNG 변환에 실패했습니다.')),
-        );
         return;
       }
 
@@ -102,10 +92,8 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
           signDateTime: _signDateTime!,
         ),
       );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('서명 저장 오류: $e')),
-      );
+    } catch (_) {
+      return;
     }
   }
 
@@ -115,18 +103,16 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
     final textTheme = Theme.of(context).textTheme;
 
     final name = widget.name.isEmpty ? '이름 미입력' : widget.name;
-    final timeText = _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
+    final timeText =
+    _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
 
-    // ✅ 서명 패드 색도 테마(ColorScheme) 기반으로 통일 (다크/브랜드 프리셋 자동 반영)
     final penColor = cs.onSurface;
     final padBg = cs.surface;
 
     return Material(
-      // ✅ 다크모드에서도 일관되게 scrim 기반 dim 처리
       color: cs.scrim.withOpacity(0.55),
       child: SafeArea(
         child: Scaffold(
-          // ✅ 하드코딩(white) 제거 → 테마 표면색 사용
           backgroundColor: cs.surface,
           appBar: AppBar(
             backgroundColor: cs.surface,
@@ -135,9 +121,11 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
             centerTitle: true,
             elevation: 0,
             surfaceTintColor: Colors.transparent,
-            // ✅ 하드코딩(black12) 제거 → outlineVariant 사용
             shape: Border(
-              bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.9), width: 1),
+              bottom: BorderSide(
+                color: cs.outlineVariant.withOpacity(0.9),
+                width: 1,
+              ),
             ),
             leading: IconButton(
               icon: const Icon(Icons.close),
@@ -161,11 +149,13 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
           body: Column(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                padding:
+                const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
                 decoration: BoxDecoration(
                   color: cs.surface,
                   border: Border(
-                    bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.6)),
+                    bottom:
+                    BorderSide(color: cs.outlineVariant.withOpacity(0.6)),
                   ),
                 ),
                 child: Row(
@@ -173,7 +163,11 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
                     Expanded(
                       child: Row(
                         children: [
-                          Icon(Icons.person_outline, size: 18, color: cs.onSurfaceVariant),
+                          Icon(
+                            Icons.person_outline,
+                            size: 18,
+                            color: cs.onSurfaceVariant,
+                          ),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
@@ -181,7 +175,8 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               softWrap: false,
-                              style: textTheme.bodyMedium?.copyWith(color: cs.onSurface),
+                              style: textTheme.bodyMedium
+                                  ?.copyWith(color: cs.onSurface),
                             ),
                           ),
                         ],
@@ -191,7 +186,11 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
                     Expanded(
                       child: Row(
                         children: [
-                          Icon(Icons.access_time, size: 18, color: cs.onSurfaceVariant),
+                          Icon(
+                            Icons.access_time,
+                            size: 18,
+                            color: cs.onSurfaceVariant,
+                          ),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
@@ -199,7 +198,8 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               softWrap: false,
-                              style: textTheme.bodyMedium?.copyWith(color: cs.onSurface),
+                              style: textTheme.bodyMedium
+                                  ?.copyWith(color: cs.onSurface),
                             ),
                           ),
                         ],
@@ -207,7 +207,8 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
                     ),
                     const SizedBox(width: 8),
                     TextButton.icon(
-                      onPressed: () => setState(() => _signDateTime = DateTime.now()),
+                      onPressed: () =>
+                          setState(() => _signDateTime = DateTime.now()),
                       icon: const Icon(Icons.schedule),
                       label: const Text('지금'),
                     ),
@@ -224,21 +225,25 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           color: padBg,
-                          border: Border.all(color: cs.outlineVariant.withOpacity(0.8)),
+                          border: Border.all(
+                            color: cs.outlineVariant.withOpacity(0.8),
+                          ),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: LayoutBuilder(
                           builder: (context, constraints) {
                             return GestureDetector(
                               behavior: HitTestBehavior.translucent,
-                              onPanStart: (d) => setState(() => _points.add(d.localPosition)),
-                              onPanUpdate: (d) => setState(() => _points.add(d.localPosition)),
-                              onPanEnd: (_) => setState(() => _points.add(null)),
+                              onPanStart: (d) =>
+                                  setState(() => _points.add(d.localPosition)),
+                              onPanUpdate: (d) =>
+                                  setState(() => _points.add(d.localPosition)),
+                              onPanEnd: (_) =>
+                                  setState(() => _points.add(null)),
                               child: CustomPaint(
                                 painter: SignaturePainter(
                                   points: _points,
                                   strokeWidth: _strokeWidth,
-                                  // ✅ 테마 기반 컬러 적용
                                   color: penColor,
                                   background: padBg,
                                   overlayName: name,
@@ -263,7 +268,6 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
                         onPressed: () => Navigator.of(context).pop(),
                         icon: const Icon(Icons.cancel_outlined),
                         label: const Text('취소'),
-                        // ✅ context 기반 스타일(전역 테마 반영)
                         style: BackupButtonStyles.outlined(context),
                       ),
                     ),
@@ -273,7 +277,6 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
                         onPressed: _hasAny ? _save : null,
                         icon: const Icon(Icons.save_alt),
                         label: const Text('저장'),
-                        // ✅ context 기반 스타일(전역 테마 반영)
                         style: BackupButtonStyles.primary(context),
                       ),
                     ),

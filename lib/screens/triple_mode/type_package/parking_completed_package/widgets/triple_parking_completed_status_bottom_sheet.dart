@@ -1,66 +1,71 @@
 import 'dart:math' as math;
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../../models/plate_model.dart';
-
-import '../../../../../states/area/area_state.dart';
-import '../../../../../states/plate/triple_plate_state.dart';
-import '../../../../../states/plate/movement_plate.dart';
-import '../../../../../states/user/user_state.dart';
-import '../../../../../enums/plate_type.dart';
-
-import '../../../../../repositories/plate_repo_services/plate_repository.dart';
-import '../../../../../utils/snackbar_helper.dart';
-import '../../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
+import '../../../../../features/account/applications/user_state.dart';
+import '../../../../../features/dev/application/area_state.dart';
+import '../../../../../features/plate/application/common/movement_plate.dart';
+import '../../../../../features/plate/application/triple/triple_plate_state.dart';
+import '../../../../../features/plate/domain/enums/plate_type.dart';
+import '../../../../../features/plate/domain/models/plate_log_model.dart';
+import '../../../../../features/plate/domain/models/plate_model.dart';
+import '../../../../../features/plate/domain/repositories/plate_repository.dart';
+import '../../../../../shared/page/modify/pages/modify_plate_screen.dart';
+import '../../../../../widgets/bottom_sheet/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
-
 import '../../../../common_package/log_package/log_viewer_bottom_sheet.dart';
-import '../../../modify_package/triple_modify_plate_screen.dart';
+import '../../../../common_package/type_page/parking_completed_page/parking_completed_bottom_sheet/parking_completed_status_helpers.dart';
+import '../../../../common_package/type_page/parking_completed_page/parking_completed_bottom_sheet/parking_completed_status_widgets.dart';
 
-/// ✅ 추가: 다이얼로그/테이블에서 “콜백 없이” 바로 열기 위한 wrapper
-/// - 기존 showTripleParkingCompletedStatusBottomSheet 시그니처(콜백 required)는 유지
+Future<bool> _showDeleteDialog(BuildContext context, PlateModel plate) async {
+  return showParkingCompletedDeleteDialog(context, plate);
+}
+
 Future<void> showTripleParkingCompletedStatusBottomSheetFromDialog({
   required BuildContext context,
   required PlateModel plate,
+  bool popParentOnDelete = true,
 }) async {
-  await showTripleParkingCompletedStatusBottomSheet(
+  final deleted = await showTripleParkingCompletedStatusBottomSheet(
     context: context,
     plate: plate,
     onRequestEntry: () async {
       final area = context.read<AreaState>().currentArea;
-      await handleEntryParkingRequest(context, plate.plateNumber, area);
+      await handleParkingCompletedEntryRequest(
+          context, plate.plateNumber, area);
     },
-    onDelete: () {
-      // 테이블 상세 → 작업 수행 경로에서는 삭제 기본 비활성화(정책 유지)
-      try {
-        showFailedSnackbar(context, '이 경로에서는 삭제 기능을 사용할 수 없습니다.');
-      } catch (_) {
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          const SnackBar(content: Text('이 경로에서는 삭제 기능을 사용할 수 없습니다.')),
-        );
-      }
+    onDelete: () async {
+      return await _showDeleteDialog(context, plate);
     },
   );
+
+  if (deleted == true && popParentOnDelete) {
+    final nav = Navigator.of(context);
+    if (nav.canPop()) {
+      nav.pop();
+    }
+  }
 }
 
-Future<void> showTripleParkingCompletedStatusBottomSheet({
+Future<bool?> showTripleParkingCompletedStatusBottomSheet({
   required BuildContext context,
   required PlateModel plate,
   required Future<void> Function() onRequestEntry,
-  required VoidCallback onDelete,
+  required Future<bool> Function() onDelete,
 }) async {
   final plateNumber = plate.plateNumber;
   final division = context.read<UserState>().division;
   final area = context.read<AreaState>().currentArea;
 
-  await showModalBottomSheet(
+  return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
     backgroundColor: Colors.transparent,
+    isDismissible: false,
+    enableDrag: false,
     builder: (_) => FractionallySizedBox(
       heightFactor: 1,
       child: _FullHeightSheet(
@@ -76,7 +81,6 @@ Future<void> showTripleParkingCompletedStatusBottomSheet({
 }
 
 enum _DepartureOverrideChoice { proceed, goBilling, cancel }
-enum _DrivingResult { completed, cancelled, failed }
 
 class _FullHeightSheet extends StatefulWidget {
   const _FullHeightSheet({
@@ -93,7 +97,7 @@ class _FullHeightSheet extends StatefulWidget {
   final String division;
   final String area;
   final Future<void> Function() onRequestEntry;
-  final VoidCallback onDelete;
+  final Future<bool> Function() onDelete;
 
   @override
   State<_FullHeightSheet> createState() => _FullHeightSheetState();
@@ -110,10 +114,11 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
 
   bool _departureOverrideArmed = false;
   DateTime? _departureOverrideArmedAt;
-
   static const Duration _overrideWindow = Duration(seconds: 12);
 
   bool _primaryBusy = false;
+
+  final GlobalKey _billingTileKey = GlobalKey();
 
   @override
   void initState() {
@@ -148,16 +153,16 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
 
   PlateType? get _type => _plate.typeEnum;
 
-  /// ✅ (기능 유지) parkingCompleted인데 아직 사전정산(잠금) 아니면 billing 필요
+  bool get _isDrivingType =>
+      _type == PlateType.parkingRequests ||
+      _type == PlateType.departureRequests;
+
   bool get _needsBilling =>
       (_type == PlateType.parkingCompleted) && (_plate.isLockedFee != true);
 
-  /// ✅ 무료 판정: basicAmount == 0 && addAmount == 0
   bool get _isFreeBilling =>
       (_plate.basicAmount ?? 0) == 0 && (_plate.addAmount ?? 0) == 0;
 
-  /// ✅ 앱 강제 종료/재실행 등으로 '주행 중(선점)' 상태가 남아있을 때,
-  /// 동일 사용자가 다시 진입하면 UI 문구를 '시작'이 아닌 '계속'으로 노출합니다.
   bool get _isMyDriving {
     final userName = (context.read<UserState>().name).trim();
     final selectedBy = (_plate.selectedBy ?? '').trim();
@@ -170,9 +175,26 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
         (t == PlateType.parkingRequests || t == PlateType.departureRequests);
   }
 
+  bool get _isOtherDriving {
+    final userName = (context.read<UserState>().name).trim();
+    final selectedBy = (_plate.selectedBy ?? '').trim();
+    final t = _type;
+
+    return _plate.isSelected == true &&
+        userName.isNotEmpty &&
+        selectedBy.isNotEmpty &&
+        selectedBy != userName &&
+        (t == PlateType.parkingRequests || t == PlateType.departureRequests);
+  }
+
+  bool get _drivingLocked => _isMyDriving;
+
   bool get _overrideActive {
-    if (!_departureOverrideArmed || _departureOverrideArmedAt == null) return false;
-    return DateTime.now().difference(_departureOverrideArmedAt!) <= _overrideWindow;
+    if (!_departureOverrideArmed || _departureOverrideArmedAt == null) {
+      return false;
+    }
+    return DateTime.now().difference(_departureOverrideArmedAt!) <=
+        _overrideWindow;
   }
 
   void _resetOverride() {
@@ -186,12 +208,11 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
   }
 
   String _plateDocId() {
-    if (_plate.id.trim().isNotEmpty) return _plate.id.trim();
-    return '${_plate.plateNumber}_${_plate.area}';
+    return resolveParkingCompletedDocId(_plate);
   }
 
   String get _effectiveLocation =>
-      _plate.location.trim().isEmpty ? '미지정' : _plate.location.trim();
+      resolveParkingCompletedEffectiveLocation(_plate);
 
   Future<void> _runPrimary(Future<void> Function() fn) async {
     if (_primaryBusy) return;
@@ -203,44 +224,26 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
     }
   }
 
-  void _showWarningSafe(String message) {
+  Future<bool> _runPrimaryBool(Future<bool> Function() fn) async {
+    if (_primaryBusy) return false;
+    setState(() => _primaryBusy = true);
     try {
-      showFailedSnackbar(context, message);
-      return;
-    } catch (_) {}
-
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    if (messenger != null) {
-      messenger.showSnackBar(SnackBar(content: Text(message)));
-      return;
+      return await fn();
+    } finally {
+      if (mounted) setState(() => _primaryBusy = false);
     }
-
-    final nav = Navigator.of(context, rootNavigator: true);
-    final messenger2 = ScaffoldMessenger.maybeOf(nav.context);
-    if (messenger2 != null) {
-      messenger2.showSnackBar(SnackBar(content: Text(message)));
-      return;
-    }
-
-    showDialog<void>(
-      context: nav.context,
-      builder: (_) => AlertDialog(
-        title: const Text('안내'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(nav.context).pop(),
-            child: const Text('확인'),
-          ),
-        ],
-      ),
-    );
   }
 
-  Future<void> _triggerBillingRequiredAttention({required String message}) async {
-    _showWarningSafe(message);
-
-    if (_scrollController.hasClients) {
+  Future<void> _triggerBillingRequiredAttention() async {
+    final ctx = _billingTileKey.currentContext;
+    if (ctx != null) {
+      await Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOut,
+        alignment: 0.12,
+      );
+    } else if (_scrollController.hasClients) {
       await _scrollController.animateTo(
         0,
         duration: const Duration(milliseconds: 320),
@@ -255,15 +258,19 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
     if (_plate.isLockedFee == true) return true;
     if (!_isFreeBilling) return false;
 
+    if (_drivingLocked || _isOtherDriving) {
+      return false;
+    }
+
     final userName = context.read<UserState>().name;
     final repo = context.read<PlateRepository>();
     final plateState = context.read<TriplePlateState>();
-    final firestore = FirebaseFirestore.instance;
 
     final now = DateTime.now();
     final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
+    final id = _plateDocId();
 
-    final updatedPlate = _plate.copyWith(
+    final fallbackPlate = _plate.copyWith(
       isLockedFee: true,
       lockedAtTimeInSeconds: currentTime,
       lockedFeeAmount: 0,
@@ -271,45 +278,47 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
     );
 
     try {
-      await repo.addOrUpdatePlate(_plate.id, updatedPlate);
-      _reportDbSafe(
+      await repo.settlePlateBilling(
+        documentId: id,
+        lockedAtTimeInSeconds: currentTime,
+        lockedFeeAmount: 0,
+        paymentMethod: '무료',
+        log: PlateLogModel(
+          action: '무료 자동 정산',
+          area: _plate.area,
+          billingType: _plate.billingType,
+          from: _plate.type,
+          performedBy: userName,
+          plateNumber: _plate.plateNumber,
+          timestamp: now,
+          to: _plate.type,
+          type: _plate.type,
+          lockedFee: 0,
+          paymentMethod: '무료',
+        ),
+      );
+      reportParkingCompletedDbSafe(
         area: _plate.area,
         action: 'write',
-        source: 'parkingCompletedStatus.freeAutoPrebill.repo.addOrUpdatePlate',
+        source:
+            'parkingCompletedStatus.freeAutoPrebill.repo.settlePlateBilling',
         n: 1,
       );
+
+      final freshPlate = await repo.getPlate(id) ?? fallbackPlate;
 
       await plateState.tripleUpdatePlateLocally(
         PlateType.parkingCompleted,
-        updatedPlate,
-      );
-
-      final log = {
-        'action': '무료 자동 정산',
-        'performedBy': userName,
-        'timestamp': now.toIso8601String(),
-        'lockedFee': 0,
-        'paymentMethod': '무료',
-      };
-
-      await firestore.collection('plates').doc(_plate.id).update({
-        'logs': FieldValue.arrayUnion([log]),
-      });
-      _reportDbSafe(
-        area: _plate.area,
-        action: 'write',
-        source: 'parkingCompletedStatus.freeAutoPrebill.plates.update.logs.arrayUnion',
-        n: 1,
+        freshPlate,
       );
 
       if (!mounted) return false;
-      setState(() => _plate = updatedPlate);
+      setState(() => _plate = freshPlate);
 
       _resetOverride();
       return true;
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return false;
-      _showWarningSafe('무료 자동 정산 중 오류가 발생했습니다: $e');
       return false;
     }
   }
@@ -323,7 +332,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
       barrierColor: cs.scrim.withOpacity(0.45),
       builder: (_) {
         return Dialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
           backgroundColor: Colors.transparent,
           elevation: 0,
           child: Container(
@@ -375,11 +385,13 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                 const SizedBox(height: 12),
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
                     color: cs.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+                    border:
+                        Border.all(color: cs.outlineVariant.withOpacity(0.85)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -403,7 +415,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                       ),
                       const SizedBox(height: 10),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
                         decoration: BoxDecoration(
                           color: cs.errorContainer.withOpacity(0.35),
                           borderRadius: BorderRadius.circular(12),
@@ -411,11 +424,14 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.directions_car_filled, size: 16, color: cs.error),
+                            Icon(Icons.directions_car_filled,
+                                size: 16, color: cs.error),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 '차량: ${_plate.plateNumber}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   color: cs.error,
                                   fontWeight: FontWeight.w900,
@@ -434,49 +450,65 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     OutlinedButton(
-                      onPressed: () =>
-                          Navigator.pop(context, _DepartureOverrideChoice.cancel),
+                      onPressed: () => Navigator.pop(
+                          context, _DepartureOverrideChoice.cancel),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: cs.onSurface,
-                        side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+                        side: BorderSide(
+                            color: cs.outlineVariant.withOpacity(0.85)),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 12),
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
                       ),
-                      child: const Text('취소',
-                          style: TextStyle(fontWeight: FontWeight.w900)),
+                      child: const Text(
+                        '취소',
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
                     ),
                     const SizedBox(width: 10),
                     OutlinedButton(
-                      onPressed: () =>
-                          Navigator.pop(context, _DepartureOverrideChoice.goBilling),
+                      onPressed: () => Navigator.pop(
+                          context, _DepartureOverrideChoice.goBilling),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: cs.primary,
                         side: BorderSide(color: cs.primary.withOpacity(0.35)),
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 12),
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
                         backgroundColor: cs.primaryContainer.withOpacity(0.35),
                       ),
-                      child: const Text('정산하기',
-                          style: TextStyle(fontWeight: FontWeight.w900)),
+                      child: const Text(
+                        '정산하기',
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
                     ),
                     const SizedBox(width: 10),
                     FilledButton(
-                      onPressed: () =>
-                          Navigator.pop(context, _DepartureOverrideChoice.proceed),
+                      onPressed: () => Navigator.pop(
+                          context, _DepartureOverrideChoice.proceed),
                       style: FilledButton.styleFrom(
                         backgroundColor: cs.error,
                         foregroundColor: cs.onError,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 14, vertical: 12),
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
                       ),
-                      child: const Text('그래도 출차 요청',
-                          style: TextStyle(fontWeight: FontWeight.w900)),
+                      child: const Text(
+                        '그래도 출차 요청',
+                        style: TextStyle(fontWeight: FontWeight.w900),
+                      ),
                     ),
                   ],
                 ),
@@ -489,6 +521,12 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
   }
 
   Future<void> _goDepartureRequested() async {
+    if (_drivingLocked) return;
+
+    if (_isOtherDriving) {
+      return;
+    }
+
     final movementPlate = context.read<MovementPlate>();
 
     await movementPlate.setDepartureRequested(
@@ -501,14 +539,24 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
     Navigator.pop(context);
   }
 
-  /// ✅ 신규: "주행 스킵 → 바로 출차 완료" 타입 전환
-  /// - departure_requests 상태에서만 허용
-  /// - 다른 사용자가 이미 선점(주행 중)인 경우에는 차단(정합성/충돌 방지)
-  /// - 주행 다이얼로그 없이 곧바로 departure_completed로 transition
+  Future<void> _goBackToParkingCompleted() async {
+    if (_drivingLocked) return;
+    if (_isOtherDriving) return;
+
+    await handleParkingCompletedBackToCompletedRequest(
+      context,
+      plate: _plate,
+      fallbackArea: widget.area,
+    );
+
+    if (!mounted) return;
+    Navigator.pop(context);
+  }
+
   Future<void> _skipDepartureDrivingToCompleted() async {
+    if (_drivingLocked) return;
     await _runPrimary(() async {
       if (_type != PlateType.departureRequests) {
-        _showWarningSafe('현재 상태에서는 출차 완료 처리(스킵)가 불가능합니다.');
         return;
       }
 
@@ -518,7 +566,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
       if (_plate.isSelected == true &&
           selectedBy.isNotEmpty &&
           selectedBy != userName) {
-        _showWarningSafe('다른 사용자가 이미 주행 중입니다. (선택자: $selectedBy)');
         return;
       }
 
@@ -529,20 +576,13 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
 
         if (!mounted) return;
 
-        // UI 정리(선점 표시가 남아있다면 정리)
         setState(() {
           _plate = _plate.copyWith(isSelected: false, selectedBy: null);
         });
 
-        try {
-          showSuccessSnackbar(context, '주행을 스킵하고 출차 완료로 변경했습니다.');
-        } catch (_) {}
-
         Navigator.pop(context);
-      } on FirebaseException catch (e) {
-        _showWarningSafe('출차 완료 처리 실패: ${e.message ?? e.code}');
-      } catch (e) {
-        _showWarningSafe('출차 완료 처리 실패: $e');
+      } catch (_) {
+        return;
       }
     });
   }
@@ -552,7 +592,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
     required String phase,
     required String userName,
   }) async {
-    final firestore = FirebaseFirestore.instance;
+    final repo = context.read<PlateRepository>();
     final now = DateTime.now();
     final cancelLog = {
       'action': '주행 취소',
@@ -561,269 +601,312 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
       'phase': phase,
     };
 
-    await firestore.collection('plates').doc(plateId).update({
-      'logs': FieldValue.arrayUnion([cancelLog]),
-    });
-  }
-
-  Future<_DrivingResult> _showDrivingBlockingDialog({
-    required String message,
-    required bool canCancel,
-    required String cancelDisabledHint,
-    required Future<void> Function() onComplete,
-    required Future<void> Function() onCancel,
-  }) async {
-    Object? err;
-
-    final result = await showDialog<_DrivingResult>(
-      context: context,
-      useRootNavigator: true,
-      barrierDismissible: false,
-      barrierColor: Theme.of(context).colorScheme.scrim.withOpacity(0.55),
-      builder: (_) => PopScope(
-        canPop: false,
-        child: _DrivingBlockingDialog(
-          message: message,
-          canCancel: canCancel,
-          cancelDisabledHint: cancelDisabledHint,
-          onComplete: () async {
-            try {
-              await onComplete();
-              return _DrivingResult.completed;
-            } catch (e) {
-              err = e;
-              return _DrivingResult.failed;
-            }
-          },
-          onCancel: () async {
-            try {
-              await onCancel();
-              return _DrivingResult.cancelled;
-            } catch (e) {
-              err = e;
-              return _DrivingResult.failed;
-            }
-          },
-        ),
-      ),
+    await repo.appendPlateLog(
+      plateId: plateId,
+      log: cancelLog,
     );
+  }
 
-    final r = result ?? _DrivingResult.failed;
-    if (r == _DrivingResult.failed && err != null) {
-      _showWarningSafe('주행 처리 실패: $err');
+  Future<bool> _engageDrivingByGear() async {
+    return _runPrimaryBool(() async {
+      final t = _type;
+      if (t != PlateType.parkingRequests && t != PlateType.departureRequests) {
+        return false;
+      }
+
+      final userName = context.read<UserState>().name.trim();
+      final selectedBy = (_plate.selectedBy ?? '').trim();
+
+      if (_plate.isSelected == true &&
+          selectedBy.isNotEmpty &&
+          selectedBy != userName) {
+        return false;
+      }
+
+      final repo = context.read<PlateRepository>();
+      final id = _plateDocId();
+
+      final alreadySelectedByMe =
+          (_plate.isSelected == true) && (selectedBy == userName);
+
+      try {
+        if (!alreadySelectedByMe) {
+          await repo.recordWhoPlateClick(
+            id,
+            true,
+            selectedBy: userName,
+            area: _plate.area,
+          );
+        }
+
+        if (!mounted) return false;
+
+        setState(() {
+          _plate = _plate.copyWith(isSelected: true, selectedBy: userName);
+        });
+
+        try {
+          HapticFeedback.mediumImpact();
+        } catch (_) {}
+
+        return true;
+      } catch (_) {
+        return false;
+      }
+    });
+  }
+
+  Future<void> _completeDrivingByGear() async {
+    await _runPrimary(() async {
+      if (!_drivingLocked || !_isDrivingType) {
+        return;
+      }
+
+      final repo = context.read<PlateRepository>();
+      final movementPlate = context.read<MovementPlate>();
+      final id = _plateDocId();
+
+      try {
+        if (_type == PlateType.parkingRequests) {
+          await movementPlate.setParkingCompleted(
+            _plate.plateNumber,
+            _plate.area,
+            _effectiveLocation,
+          );
+        } else if (_type == PlateType.departureRequests) {
+          await movementPlate.setDepartureCompleted(_plate);
+        }
+
+        try {
+          await repo.recordWhoPlateClick(id, false, area: _plate.area);
+        } catch (_) {}
+
+        if (!mounted) return;
+        Navigator.pop(context);
+      } catch (_) {
+        return;
+      }
+    });
+  }
+
+  Future<void> _cancelDrivingByGear() async {
+    await _runPrimary(() async {
+      if (!_drivingLocked || !_isDrivingType) {
+        return;
+      }
+
+      final userName = context.read<UserState>().name.trim();
+      final currentSelectedBy = (_plate.selectedBy ?? '').trim();
+      if (currentSelectedBy != userName) {
+        return;
+      }
+
+      final repo = context.read<PlateRepository>();
+      final plateState = context.read<TriplePlateState>();
+      final id = _plateDocId();
+
+      try {
+        await repo.recordWhoPlateClick(
+          id,
+          false,
+          area: _plate.area,
+        );
+
+        await _logDrivingCancel(
+          plateId: id,
+          phase: (_type == PlateType.parkingRequests) ? '입차' : '출차',
+          userName: userName,
+        );
+
+        final updated = _plate.copyWith(isSelected: false, selectedBy: null);
+        if (mounted) {
+          setState(() {
+            _plate = updated;
+          });
+        }
+
+        try {
+          await plateState.tripleUpdatePlateLocally(
+            _type!,
+            updated,
+          );
+        } catch (_) {}
+
+        try {
+          HapticFeedback.selectionClick();
+        } catch (_) {}
+      } catch (_) {
+        return;
+      }
+    });
+  }
+
+  Future<void> _handlePrebill() async {
+    if (_drivingLocked) return;
+
+    if (_isOtherDriving) {
+      return;
     }
-    return r;
-  }
 
-  Future<void> _startEntryDriving() async {
     await _runPrimary(() async {
-      if (_type != PlateType.parkingRequests) {
-        _showWarningSafe('현재 상태에서는 입차 주행 시작이 불가능합니다.');
-        return;
-      }
-
       final userName = context.read<UserState>().name;
-      final selectedBy = (_plate.selectedBy ?? '').trim();
-      if (_plate.isSelected == true &&
-          selectedBy.isNotEmpty &&
-          selectedBy != userName) {
-        _showWarningSafe('다른 사용자가 이미 주행 중입니다. (선택자: $selectedBy)');
+      final repo = context.read<PlateRepository>();
+      final plateState = context.read<TriplePlateState>();
+
+      final bt = (_plate.billingType ?? '').trim();
+      if (bt.isEmpty) {
         return;
       }
 
-      final repo = context.read<PlateRepository>();
-      final movementPlate = context.read<MovementPlate>();
-      final plateState = context.read<TriplePlateState>();
+      final now = DateTime.now();
+      final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
+      final entryTime =
+          _plate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+
+      final result = await showOnTapBillingBottomSheet(
+        context: context,
+        entryTimeInSeconds: entryTime,
+        currentTimeInSeconds: currentTime,
+        basicStandard: _plate.basicStandard ?? 0,
+        basicAmount: _plate.basicAmount ?? 0,
+        addStandard: _plate.addStandard ?? 0,
+        addAmount: _plate.addAmount ?? 0,
+        billingType: _plate.billingType ?? '변동',
+        regularAmount: _plate.regularAmount,
+        regularDurationHours: _plate.regularDurationHours,
+      );
+      if (result == null) return;
+
       final id = _plateDocId();
+      final fallbackPlate = _plate.copyWith(
+        isLockedFee: true,
+        lockedAtTimeInSeconds: currentTime,
+        lockedFeeAmount: result.lockedFee,
+        paymentMethod: result.paymentMethod,
+      );
 
       try {
-        // 1) 주행 시작(선점)
-        await repo.recordWhoPlateClick(
-          id,
-          true,
-          selectedBy: userName,
-          area: _plate.area,
-        );
-
-        if (mounted) {
-          setState(() {
-            _plate = _plate.copyWith(
-              isSelected: true,
-              selectedBy: userName,
-            );
-          });
-        }
-
-        // 2) 블로킹 다이얼로그 (완료/취소)
-        final canCancel = ((_plate.selectedBy ?? '').trim() == userName);
-        final result = await _showDrivingBlockingDialog(
-          message: '입차 주행 중입니다.',
-          canCancel: canCancel,
-          cancelDisabledHint: '선점자만 주행 취소가 가능합니다.',
-          onComplete: () async {
-            await movementPlate.setParkingCompleted(
-              _plate.plateNumber,
-              _plate.area,
-              _effectiveLocation,
-            );
-          },
-          onCancel: () async {
-            final currentSelectedBy = (_plate.selectedBy ?? '').trim();
-            if (currentSelectedBy != userName) {
-              throw StateError('권한 없음: 선점자만 취소 가능');
-            }
-
-            await repo.recordWhoPlateClick(
-              id,
-              false,
-              area: _plate.area,
-            );
-
-            await _logDrivingCancel(
-              plateId: id,
-              phase: '입차',
-              userName: userName,
-            );
-
-            final updated = _plate.copyWith(isSelected: false, selectedBy: null);
-            if (mounted) setState(() => _plate = updated);
-            try {
-              await plateState.tripleUpdatePlateLocally(
-                  PlateType.parkingRequests, updated);
-            } catch (_) {}
-
-            try {
-              showSuccessSnackbar(context, '주행이 취소되었습니다.');
-            } catch (_) {}
-          },
-        );
-
-        if (result == _DrivingResult.completed) {
-          if (!mounted) return;
-          Navigator.pop(context);
-          return;
-        }
-
-        if (result == _DrivingResult.cancelled) {
-          return;
-        }
-
-        // 실패 시 선점 해제(잠김 방지)
-        try {
-          await repo.recordWhoPlateClick(
-            id,
-            false,
+        await repo.settlePlateBilling(
+          documentId: id,
+          lockedAtTimeInSeconds: currentTime,
+          lockedFeeAmount: result.lockedFee,
+          paymentMethod: result.paymentMethod,
+          log: PlateLogModel(
+            action: '사전 정산',
             area: _plate.area,
-          );
-        } catch (_) {}
-      } on FirebaseException catch (e) {
-        _showWarningSafe('입차 주행 시작 실패: ${e.message ?? e.code}');
-      } catch (e) {
-        _showWarningSafe('입차 주행 시작 실패: $e');
+            billingType: _plate.billingType,
+            from: _plate.type,
+            performedBy: userName,
+            plateNumber: _plate.plateNumber,
+            timestamp: now,
+            to: _plate.type,
+            type: _plate.type,
+            lockedFee: result.lockedFee,
+            paymentMethod: result.paymentMethod,
+            reason: result.reason?.trim(),
+          ),
+        );
+        reportParkingCompletedDbSafe(
+          area: _plate.area,
+          action: 'write',
+          source: 'parkingCompletedStatus.prebill.repo.settlePlateBilling',
+          n: 1,
+        );
+
+        final freshPlate = await repo.getPlate(id) ?? fallbackPlate;
+
+        await plateState.tripleUpdatePlateLocally(
+          PlateType.parkingCompleted,
+          freshPlate,
+        );
+
+        if (!mounted) return;
+
+        setState(() => _plate = freshPlate);
+        _resetOverride();
+      } catch (_) {
+        if (!mounted) return;
+        return;
       }
     });
   }
 
-  Future<void> _startDepartureDriving() async {
+  Future<void> _handleCancelPrebill() async {
+    if (_drivingLocked) return;
+
+    if (_isOtherDriving) {
+      return;
+    }
+
     await _runPrimary(() async {
-      if (_type != PlateType.departureRequests) {
-        _showWarningSafe('현재 상태에서는 출차 주행 시작이 불가능합니다.');
-        return;
-      }
-
       final userName = context.read<UserState>().name;
-      final selectedBy = (_plate.selectedBy ?? '').trim();
-      if (_plate.isSelected == true &&
-          selectedBy.isNotEmpty &&
-          selectedBy != userName) {
-        _showWarningSafe('다른 사용자가 이미 주행 중입니다. (선택자: $selectedBy)');
+      final repo = context.read<PlateRepository>();
+      final plateState = context.read<TriplePlateState>();
+
+      if (_plate.isLockedFee != true) {
         return;
       }
 
-      final repo = context.read<PlateRepository>();
-      final movementPlate = context.read<MovementPlate>();
-      final plateState = context.read<TriplePlateState>();
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (_) => const ConfirmCancelFeeDialog(),
+      );
+      if (confirm != true) return;
+
+      final now = DateTime.now();
       final id = _plateDocId();
+      final fallbackPlate = _plate.copyWith(
+        isLockedFee: false,
+        lockedAtTimeInSeconds: null,
+        lockedFeeAmount: null,
+        paymentMethod: null,
+      );
 
       try {
-        await repo.recordWhoPlateClick(
-          id,
-          true,
-          selectedBy: userName,
-          area: _plate.area,
-        );
-
-        if (mounted) {
-          setState(() {
-            _plate = _plate.copyWith(
-              isSelected: true,
-              selectedBy: userName,
-            );
-          });
-        }
-
-        final canCancel = ((_plate.selectedBy ?? '').trim() == userName);
-        final result = await _showDrivingBlockingDialog(
-          message: '출차 주행 중입니다.',
-          canCancel: canCancel,
-          cancelDisabledHint: '선점자만 주행 취소가 가능합니다.',
-          onComplete: () async {
-            await movementPlate.setDepartureCompleted(_plate);
-          },
-          onCancel: () async {
-            final currentSelectedBy = (_plate.selectedBy ?? '').trim();
-            if (currentSelectedBy != userName) {
-              throw StateError('권한 없음: 선점자만 취소 가능');
-            }
-
-            await repo.recordWhoPlateClick(
-              id,
-              false,
-              area: _plate.area,
-            );
-
-            await _logDrivingCancel(
-              plateId: id,
-              phase: '출차',
-              userName: userName,
-            );
-
-            final updated = _plate.copyWith(isSelected: false, selectedBy: null);
-            if (mounted) setState(() => _plate = updated);
-            try {
-              await plateState.tripleUpdatePlateLocally(
-                  PlateType.departureRequests, updated);
-            } catch (_) {}
-
-            try {
-              showSuccessSnackbar(context, '주행이 취소되었습니다.');
-            } catch (_) {}
-          },
-        );
-
-        if (result == _DrivingResult.completed) {
-          if (!mounted) return;
-          Navigator.pop(context);
-          return;
-        }
-
-        if (result == _DrivingResult.cancelled) {
-          return;
-        }
-
-        try {
-          await repo.recordWhoPlateClick(
-            id,
-            false,
+        await repo.cancelPlateBilling(
+          documentId: id,
+          log: PlateLogModel(
+            action: '사전 정산 취소',
             area: _plate.area,
-          );
-        } catch (_) {}
-      } on FirebaseException catch (e) {
-        _showWarningSafe('출차 주행 시작 실패: ${e.message ?? e.code}');
-      } catch (e) {
-        _showWarningSafe('출차 주행 시작 실패: $e');
+            billingType: _plate.billingType,
+            from: _plate.type,
+            performedBy: userName,
+            plateNumber: _plate.plateNumber,
+            timestamp: now,
+            to: _plate.type,
+            type: _plate.type,
+          ),
+        );
+        reportParkingCompletedDbSafe(
+          area: _plate.area,
+          action: 'write',
+          source: 'parkingCompletedStatus.unlock.repo.cancelPlateBilling',
+          n: 1,
+        );
+
+        final freshPlate = await repo.getPlate(id) ?? fallbackPlate;
+
+        await plateState.tripleUpdatePlateLocally(
+          PlateType.parkingCompleted,
+          freshPlate,
+        );
+
+        if (!mounted) return;
+
+        setState(() => _plate = freshPlate);
+        _resetOverride();
+      } catch (_) {
+        if (!mounted) return;
+        return;
       }
     });
+  }
+
+  void _tryClose() {
+    if (_drivingLocked) {
+      return;
+    }
+    Navigator.pop(context);
   }
 
   @override
@@ -835,24 +918,22 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
     final lockedFee = _plate.lockedFeeAmount;
     final paymentMethod = (_plate.paymentMethod ?? '').trim();
     final billingType = (_plate.billingType ?? '').trim();
-    final location = (_plate.location).trim().isEmpty ? '미지정' : _plate.location.trim();
+    final location =
+        (_plate.location).trim().isEmpty ? '미지정' : _plate.location.trim();
 
-    // ✅ 추가: 상태 메모(표시용) - customStatus 우선, 없으면 statusList 보조
-    final statusMemo = (() {
-      final v = (_plate.customStatus ?? '').trim();
-      if (v.isNotEmpty) return v;
-
-      final list = _plate.statusList;
-      if (list.isNotEmpty) {
-        return list.map((e) => e.trim()).where((e) => e.isNotEmpty).join(', ');
-      }
-      return '';
-    })();
+    final statusMemo = resolveParkingCompletedStatusMemo(_plate);
 
     IconData primaryIcon = Icons.local_shipping_outlined;
     String primaryTitle = '출차 요청으로 이동';
     String primarySubtitle = '차량을 출차 요청 상태로 전환합니다.';
+
     Future<void> Function() primaryOnPressed = () async {
+      if (_drivingLocked) return;
+
+      if (_isOtherDriving) {
+        return;
+      }
+
       await _runPrimary(() async {
         if (_needsBilling) {
           if (_isFreeBilling) {
@@ -874,9 +955,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
             }
 
             if (choice == _DepartureOverrideChoice.goBilling) {
-              await _triggerBillingRequiredAttention(
-                message: '정산을 진행해주세요. 정산 후 출차 요청으로 이동할 수 있습니다.',
-              );
+              await _triggerBillingRequiredAttention();
               return;
             }
 
@@ -884,10 +963,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
           }
 
           _armOverride();
-          await _triggerBillingRequiredAttention(
-            message: '정산이 필요합니다. 먼저 정산을 진행하세요.\n'
-                '정산 없이 출차 요청이 필요하면, 출차 요청 버튼을 한 번 더 누르세요.',
-          );
+          await _triggerBillingRequiredAttention();
           return;
         }
 
@@ -896,701 +972,484 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
       });
     };
 
+    final bool isDrivingPrimary = (_type == PlateType.parkingRequests ||
+        _type == PlateType.departureRequests);
+
     if (_type == PlateType.parkingRequests) {
       primaryIcon = Icons.play_circle_fill;
       primaryTitle = _isMyDriving ? '입차 주행 계속' : '입차 주행 시작';
       primarySubtitle = _isMyDriving
           ? '이전에 시작된 주행 상태가 유지되었습니다. 완료 또는 취소로 정리하세요.'
-          : '주행 중으로 전환 후, 완료 시 입차 완료로 변경됩니다.';
-      primaryOnPressed = _startEntryDriving;
+          : '기어를 위로 올려 주행을 시작합니다. (주행 중에는 뒤로가기가 잠깁니다)';
     } else if (_type == PlateType.departureRequests) {
       primaryIcon = Icons.play_circle_fill;
       primaryTitle = _isMyDriving ? '출차 주행 계속' : '출차 주행 시작';
       primarySubtitle = _isMyDriving
           ? '이전에 시작된 주행 상태가 유지되었습니다. 완료 또는 취소로 정리하세요.'
-          : '주행 중으로 전환 후, 완료 시 출차 완료로 변경됩니다.';
-      primaryOnPressed = _startDepartureDriving;
+          : '기어를 위로 올려 주행을 시작합니다. (주행 중에는 뒤로가기가 잠깁니다)';
     }
 
-    return SafeArea(
-      top: false,
-      child: Container(
-        decoration: BoxDecoration(
-          color: cs.surface,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
-        ),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-              child: Column(
-                children: [
-                  Center(
-                    child: Container(
-                      width: 44,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 12),
-                      decoration: BoxDecoration(
-                        color: cs.outlineVariant.withOpacity(0.85),
-                        borderRadius: BorderRadius.circular(4),
+    final bool disableOthers = _drivingLocked;
+
+    final String sheetTitle = () {
+      if (_type == PlateType.parkingRequests) return '입차 요청 상태 처리';
+      if (_type == PlateType.departureRequests) return '출차 요청 상태 처리';
+      return '입차 완료 상태 처리';
+    }();
+
+    return PopScope(
+      canPop: !_drivingLocked,
+      onPopInvoked: (didPop) {},
+      child: SafeArea(
+        top: false,
+        child: Container(
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+            border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+          ),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                child: Column(
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 44,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: cs.outlineVariant.withOpacity(0.85),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
                       ),
                     ),
-                  ),
-                  const _SheetTitleRow(
-                    title: '입차 완료 상태 처리',
-                    icon: Icons.settings,
-                  ),
-                  const SizedBox(height: 12),
-                ],
+                    ParkingCompletedSheetTitleRow(
+                      title: sheetTitle,
+                      icon: Icons.settings,
+                      onClose: _tryClose,
+                      closeEnabled: !disableOthers,
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
               ),
-            ),
-            Expanded(
-              child: AnimatedBuilder(
-                animation: _attentionPulse,
-                builder: (context, _) {
-                  final attention = _attentionPulse.value;
+              Expanded(
+                child: AnimatedBuilder(
+                  animation: _attentionPulse,
+                  builder: (context, _) {
+                    final attention = _attentionPulse.value;
 
-                  final shakeDx = math.sin(_attentionCtrl.value * math.pi * 10) *
-                      (1 - _attentionCtrl.value) *
-                      6;
-                  final scale = 1 + (attention * 0.012);
+                    final shakeDx =
+                        math.sin(_attentionCtrl.value * math.pi * 10) *
+                            (1 - _attentionCtrl.value) *
+                            6;
+                    final scale = 1 + (attention * 0.012);
 
-                  return ListView(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-                    children: [
-                      Transform.translate(
-                        offset: Offset(_needsBilling ? shakeDx : 0, 0),
-                        child: Transform.scale(
-                          scale: _needsBilling ? scale : 1,
-                          child: _PlateSummaryCard(
-                            plateNumber: widget.plateNumber,
-                            area: _plate.area,
-                            location: location,
-                            billingType: billingType,
-                            isLocked: isLocked,
-                            lockedFee: lockedFee,
-                            paymentMethod: paymentMethod,
-                            statusMemo: statusMemo, // ✅ 추가
-                            attention: _needsBilling ? attention : 0,
+                    return ListView(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                      children: [
+                        if (_drivingLocked) ...[
+                          _DrivingLockBanner(
+                            selectedBy: (_plate.selectedBy ?? '').trim(),
+                            phase: (_type == PlateType.parkingRequests)
+                                ? '입차'
+                                : '출차',
+                          ),
+                          const SizedBox(height: 12),
+                        ] else if (_isOtherDriving) ...[
+                          _OtherDrivingBanner(
+                            selectedBy: (_plate.selectedBy ?? '').trim(),
+                            phase: (_type == PlateType.parkingRequests)
+                                ? '입차'
+                                : '출차',
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        Transform.translate(
+                          offset: Offset(_needsBilling ? shakeDx : 0, 0),
+                          child: Transform.scale(
+                            scale: _needsBilling ? scale : 1,
+                            child: ParkingCompletedPlateSummaryCard(
+                              plateNumber: widget.plateNumber,
+                              area: _plate.area,
+                              location: location,
+                              billingType: billingType,
+                              isLocked: isLocked,
+                              lockedFee: lockedFee,
+                              paymentMethod: paymentMethod,
+                              statusMemo: statusMemo,
+                              attention: _needsBilling ? attention : 0,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 14),
-                      _SectionCard(
-                        title: '핵심 작업',
-                        subtitle: '자주 사용하는 기능을 상단에 배치했습니다.',
-                        child: Column(
-                          children: [
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _ActionTileButton(
-                                    icon: Icons.receipt_long,
-                                    title: '정산',
-                                    subtitle: '사전 정산',
-                                    tone: _ActionTone.positive,
-                                    attention: _needsBilling ? attention : 0,
-                                    onTap: () async {
-                                      final userName = context.read<UserState>().name;
-                                      final repo = context.read<PlateRepository>();
-                                      final plateState = context.read<TriplePlateState>();
-                                      final firestore = FirebaseFirestore.instance;
-
-                                      final bt = (_plate.billingType ?? '').trim();
-                                      if (bt.isEmpty) {
-                                        _showWarningSafe('정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
-                                        return;
-                                      }
-
-                                      final now = DateTime.now();
-                                      final currentTime =
-                                          now.toUtc().millisecondsSinceEpoch ~/ 1000;
-                                      final entryTime =
-                                          _plate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
-
-                                      final result = await showOnTapBillingBottomSheet(
-                                        context: context,
-                                        entryTimeInSeconds: entryTime,
-                                        currentTimeInSeconds: currentTime,
-                                        basicStandard: _plate.basicStandard ?? 0,
-                                        basicAmount: _plate.basicAmount ?? 0,
-                                        addStandard: _plate.addStandard ?? 0,
-                                        addAmount: _plate.addAmount ?? 0,
-                                        billingType: _plate.billingType ?? '변동',
-                                        regularAmount: _plate.regularAmount,
-                                        regularDurationHours: _plate.regularDurationHours,
-                                      );
-                                      if (result == null) return;
-
-                                      final updatedPlate = _plate.copyWith(
-                                        isLockedFee: true,
-                                        lockedAtTimeInSeconds: currentTime,
-                                        lockedFeeAmount: result.lockedFee,
-                                        paymentMethod: result.paymentMethod,
-                                      );
-
-                                      try {
-                                        await repo.addOrUpdatePlate(_plate.id, updatedPlate);
-                                        _reportDbSafe(
-                                          area: _plate.area,
-                                          action: 'write',
-                                          source:
-                                          'parkingCompletedStatus.prebill.repo.addOrUpdatePlate',
-                                          n: 1,
-                                        );
-
-                                        await plateState.tripleUpdatePlateLocally(
-                                          PlateType.parkingCompleted,
-                                          updatedPlate,
-                                        );
-
-                                        final log = {
-                                          'action': '사전 정산',
-                                          'performedBy': userName,
-                                          'timestamp': now.toIso8601String(),
-                                          'lockedFee': result.lockedFee,
-                                          'paymentMethod': result.paymentMethod,
-                                          if (result.reason != null &&
-                                              result.reason!.trim().isNotEmpty)
-                                            'reason': result.reason!.trim(),
-                                        };
-                                        await firestore
-                                            .collection('plates')
-                                            .doc(_plate.id)
-                                            .update({
-                                          'logs': FieldValue.arrayUnion([log]),
-                                        });
-                                        _reportDbSafe(
-                                          area: _plate.area,
-                                          action: 'write',
-                                          source:
-                                          'parkingCompletedStatus.prebill.plates.update.logs.arrayUnion',
-                                          n: 1,
-                                        );
-
-                                        if (!mounted) return;
-
-                                        setState(() => _plate = updatedPlate);
-                                        _resetOverride();
-
-                                        try {
-                                          showSuccessSnackbar(
-                                            context,
-                                            '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})',
-                                          );
-                                        } catch (_) {
-                                          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})',
-                                              ),
-                                            ),
-                                          );
-                                        }
-                                      } catch (e) {
-                                        if (!mounted) return;
-                                        _showWarningSafe('사전 정산 중 오류가 발생했습니다: $e');
-                                      }
-                                    },
-                                  ),
+                        const SizedBox(height: 14),
+                        ParkingCompletedSectionCard(
+                          title: '핵심 작업',
+                          subtitle: '자주 사용하는 기능을 상단에 배치했습니다.',
+                          child: Column(
+                            children: [
+                              if (isDrivingPrimary)
+                                _GearShiftDrivingControl(
+                                  cs: cs,
+                                  icon: primaryIcon,
+                                  title: primaryTitle,
+                                  subtitle: primarySubtitle,
+                                  locked: _drivingLocked,
+                                  enabled: !_primaryBusy && !_isOtherDriving,
+                                  onEngage: _engageDrivingByGear,
+                                  onComplete: _completeDrivingByGear,
+                                  onCancel: _cancelDrivingByGear,
+                                  upThreshold: 0.86,
+                                  downThreshold: 0.14,
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: _ActionTileButton(
-                                    icon: Icons.lock_open,
-                                    title: '정산 취소',
-                                    subtitle: isLocked ? '잠금 해제' : '잠금 아님',
-                                    tone: _ActionTone.neutral,
-                                    badgeText: isLocked ? '잠김' : '비잠김',
-                                    onTap: () async {
-                                      final userName = context.read<UserState>().name;
-                                      final repo = context.read<PlateRepository>();
-                                      final plateState = context.read<TriplePlateState>();
-                                      final firestore = FirebaseFirestore.instance;
-
-                                      if (_plate.isLockedFee != true) {
-                                        _showWarningSafe('현재 사전 정산 상태가 아닙니다.');
-                                        return;
-                                      }
-
-                                      final confirm = await showDialog<bool>(
-                                        context: context,
-                                        builder: (_) => const ConfirmCancelFeeDialog(),
-                                      );
-                                      if (confirm != true) return;
-
-                                      final now = DateTime.now();
-                                      final updatedPlate = _plate.copyWith(
-                                        isLockedFee: false,
-                                        lockedAtTimeInSeconds: null,
-                                        lockedFeeAmount: null,
-                                        paymentMethod: null,
-                                      );
-
-                                      try {
-                                        await repo.addOrUpdatePlate(_plate.id, updatedPlate);
-                                        _reportDbSafe(
-                                          area: _plate.area,
-                                          action: 'write',
-                                          source:
-                                          'parkingCompletedStatus.unlock.repo.addOrUpdatePlate',
-                                          n: 1,
-                                        );
-
-                                        await plateState.tripleUpdatePlateLocally(
-                                          PlateType.parkingCompleted,
-                                          updatedPlate,
-                                        );
-
-                                        final cancelLog = {
-                                          'action': '사전 정산 취소',
-                                          'performedBy': userName,
-                                          'timestamp': now.toIso8601String(),
-                                        };
-                                        await firestore
-                                            .collection('plates')
-                                            .doc(_plate.id)
-                                            .update({
-                                          'logs': FieldValue.arrayUnion([cancelLog]),
-                                        });
-                                        _reportDbSafe(
-                                          area: _plate.area,
-                                          action: 'write',
-                                          source:
-                                          'parkingCompletedStatus.unlock.plates.update.logs.arrayUnion',
-                                          n: 1,
-                                        );
-
-                                        if (!mounted) return;
-
-                                        setState(() => _plate = updatedPlate);
-                                        _resetOverride();
-
-                                        try {
-                                          showSuccessSnackbar(context, '사전 정산이 취소되었습니다.');
-                                        } catch (_) {
-                                          ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                                            const SnackBar(
-                                                content: Text('사전 정산이 취소되었습니다.')),
-                                          );
-                                        }
-                                      } catch (e) {
-                                        if (!mounted) return;
-                                        _showWarningSafe('정산 취소 중 오류가 발생했습니다: $e');
-                                      }
-                                    },
-                                  ),
+                              if (!isDrivingPrimary)
+                                ParkingCompletedPrimaryCtaButton(
+                                  icon: primaryIcon,
+                                  title: primaryTitle,
+                                  subtitle: primarySubtitle,
+                                  enabled: !_primaryBusy && !disableOthers,
+                                  onPressed: primaryOnPressed,
+                                ),
+                              if (_type == PlateType.departureRequests) ...[
+                                const SizedBox(height: 10),
+                                ParkingCompletedPrimaryCtaButton(
+                                  icon: Icons.skip_next_rounded,
+                                  title: '주행 스킵 후 출차 완료',
+                                  subtitle: '주행 과정을 생략하고 바로 출차 완료로 변경합니다.',
+                                  enabled: !_primaryBusy &&
+                                      !disableOthers &&
+                                      !_isOtherDriving,
+                                  onPressed: _skipDepartureDrivingToCompleted,
+                                  backgroundColor: cs.tertiary,
+                                  foregroundColor: cs.onTertiary,
                                 ),
                               ],
-                            ),
-                            const SizedBox(height: 12),
-                            _PrimaryCtaButton(
-                              icon: primaryIcon,
-                              title: primaryTitle,
-                              subtitle: primarySubtitle,
-                              onPressed: primaryOnPressed,
-                            ),
-
-                            /// ✅ 신규 버튼 위치: "출차 주행 시작" 하단
-                            /// - departure_requests 타입일 때만 표시
-                            if (_type == PlateType.departureRequests) ...[
-                              const SizedBox(height: 10),
-                              _PrimaryCtaButton(
-                                icon: Icons.skip_next_rounded,
-                                title: '주행 스킵 후 출차 완료',
-                                subtitle: '주행 과정을 생략하고 바로 출차 완료로 변경합니다.',
-                                onPressed: _skipDepartureDrivingToCompleted,
-                                // 동일 컴포넌트/레이아웃 유지 + 색만 구분(오동작 방지)
-                                backgroundColor: cs.tertiary,
-                                foregroundColor: cs.onTertiary,
-                              ),
                             ],
-                          ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 14),
-                      _SectionCard(
-                        title: '기타',
-                        subtitle: '로그 확인, 정보 수정, 삭제 등',
-                        child: Column(
-                          children: [
-                            GridView.count(
-                              crossAxisCount: 2,
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              crossAxisSpacing: 12,
-                              mainAxisSpacing: 12,
-                              childAspectRatio: 2.6,
-                              children: [
-                                _SecondaryActionButton(
-                                  icon: Icons.history,
-                                  label: '로그 확인',
-                                  onPressed: () {
-                                    Navigator.pop(context);
-                                    Navigator.push(
-                                      rootContext,
-                                      MaterialPageRoute(
-                                        builder: (_) => LogViewerBottomSheet(
-                                          initialPlateNumber: widget.plateNumber,
-                                          division: widget.division,
-                                          area: widget.area,
-                                          requestTime: _plate.requestTime,
+                        const SizedBox(height: 14),
+                        AbsorbPointer(
+                          absorbing: disableOthers,
+                          child: Opacity(
+                            opacity: disableOthers ? 0.55 : 1.0,
+                            child: ParkingCompletedSectionCard(
+                              title: '기타',
+                              subtitle: disableOthers
+                                  ? '주행 중에는 다른 기능을 사용할 수 없습니다.'
+                                  : (_isOtherDriving
+                                      ? '타 사용자가 주행 중입니다. 변경 기능은 제한될 수 있습니다.'
+                                      : '로그 확인, 정보 수정, 정산/취소, 삭제 등'),
+                              child: Column(
+                                children: [
+                                  Builder(
+                                    builder: (_) {
+                                      final bool blockMutations =
+                                          _isOtherDriving;
+
+                                      final tiles = <Widget>[
+                                        ParkingCompletedSecondaryActionButton(
+                                          icon: Icons.history,
+                                          label: '로그 확인',
+                                          enabled: !_primaryBusy,
+                                          onPressed: () async {
+                                            Navigator.pop(context);
+                                            Navigator.push(
+                                              rootContext,
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    LogViewerBottomSheet(
+                                                  initialPlateNumber:
+                                                      widget.plateNumber,
+                                                  division: widget.division,
+                                                  area: widget.area,
+                                                  requestTime:
+                                                      _plate.requestTime,
+                                                ),
+                                              ),
+                                            );
+                                          },
                                         ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                                _SecondaryActionButton(
-                                  icon: Icons.edit_note_outlined,
-                                  label: '정보 수정',
-                                  onPressed: () {
-                                    Navigator.pop(context);
-                                    Navigator.push(
-                                      rootContext,
-                                      MaterialPageRoute(
-                                        builder: (_) => TripleModifyPlateScreen(
-                                          plate: _plate,
-                                          collectionKey: PlateType.parkingCompleted,
+                                        ParkingCompletedSecondaryActionButton(
+                                          icon: Icons.edit_note_outlined,
+                                          label: '정보 수정',
+                                          enabled:
+                                              !_primaryBusy && !blockMutations,
+                                          onPressed: () async {
+                                            if (blockMutations) {
+                                              return;
+                                            }
+                                            Navigator.pop(context);
+                                            Navigator.push(
+                                              rootContext,
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    ModifyPlateScreen(
+                                                  plate: _plate,
+                                                  collectionKey: PlateType
+                                                      .parkingCompleted,
+                                                ),
+                                              ),
+                                            );
+                                          },
                                         ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ],
+                                        KeyedSubtree(
+                                          key: _billingTileKey,
+                                          child:
+                                              ParkingCompletedSecondaryActionButton(
+                                            icon: Icons.receipt_long,
+                                            label: '정산',
+                                            enabled: !_primaryBusy &&
+                                                !blockMutations,
+                                            badgeText:
+                                                _needsBilling ? '필수' : null,
+                                            attention:
+                                                _needsBilling ? attention : 0,
+                                            backgroundColor: _needsBilling
+                                                ? cs.errorContainer
+                                                    .withOpacity(0.35)
+                                                : cs.surfaceContainerLow,
+                                            borderColor: _needsBilling
+                                                ? cs.error.withOpacity(0.45)
+                                                : cs.outlineVariant
+                                                    .withOpacity(0.85),
+                                            foregroundColor: _needsBilling
+                                                ? cs.error
+                                                : cs.onSurface,
+                                            onPressed: _handlePrebill,
+                                          ),
+                                        ),
+                                        ParkingCompletedSecondaryActionButton(
+                                          icon: Icons.lock_open,
+                                          label: '정산 취소',
+                                          enabled:
+                                              !_primaryBusy && !blockMutations,
+                                          badgeText: isLocked ? '잠김' : '비잠김',
+                                          backgroundColor: isLocked
+                                              ? cs.tertiaryContainer
+                                                  .withOpacity(0.45)
+                                              : cs.surfaceContainerLow,
+                                          borderColor: isLocked
+                                              ? cs.tertiary.withOpacity(0.35)
+                                              : cs.outlineVariant
+                                                  .withOpacity(0.85),
+                                          foregroundColor: isLocked
+                                              ? cs.tertiary
+                                              : cs.onSurface,
+                                          onPressed: _handleCancelPrebill,
+                                        ),
+                                        if (_type == PlateType.parkingCompleted)
+                                          ParkingCompletedSecondaryActionButton(
+                                            icon: Icons.undo_rounded,
+                                            label: '입차 요청으로',
+                                            enabled: !_primaryBusy &&
+                                                !blockMutations,
+                                            onPressed: () async {
+                                              if (blockMutations) {
+                                                return;
+                                              }
+                                              Navigator.pop(context);
+                                              await widget.onRequestEntry();
+                                            },
+                                          ),
+                                        if (_type ==
+                                            PlateType.departureRequests)
+                                          ParkingCompletedSecondaryActionButton(
+                                            icon: Icons.undo_rounded,
+                                            label: '입차 완료로',
+                                            enabled: !_primaryBusy &&
+                                                !blockMutations,
+                                            onPressed: () async {
+                                              if (blockMutations) {
+                                                return;
+                                              }
+                                              await _goBackToParkingCompleted();
+                                            },
+                                          ),
+                                      ];
+
+                                      if (tiles.length.isOdd) {
+                                        tiles.add(const SizedBox.shrink());
+                                      }
+
+                                      return GridView.count(
+                                        crossAxisCount: 2,
+                                        shrinkWrap: true,
+                                        physics:
+                                            const NeverScrollableScrollPhysics(),
+                                        crossAxisSpacing: 12,
+                                        mainAxisSpacing: 12,
+                                        childAspectRatio: 2.6,
+                                        children: tiles,
+                                      );
+                                    },
+                                  ),
+                                  const SizedBox(height: 12),
+                                  ParkingCompletedDangerActionButton(
+                                    icon: Icons.delete_forever,
+                                    label: '삭제',
+                                    enabled: !_primaryBusy && !_isOtherDriving,
+                                    onPressed: () async {
+                                      if (_isOtherDriving) {
+                                        return;
+                                      }
+                                      final deleted = await widget.onDelete();
+                                      if (!mounted) return;
+                                      if (deleted) {
+                                        Navigator.of(context).pop(true);
+                                      }
+                                    },
+                                  ),
+                                ],
+                              ),
                             ),
-                            const SizedBox(height: 12),
-                            _DangerActionButton(
-                              icon: Icons.delete_forever,
-                              label: '삭제',
-                              onPressed: () {
-                                Navigator.pop(context);
-                                widget.onDelete();
-                              },
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                    ],
-                  );
-                },
+                        const SizedBox(height: 10),
+                      ],
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-/// ✅ 주행 중(선점) 다이얼로그: ColorScheme 기반으로 색 통일
-class _DrivingBlockingDialog extends StatefulWidget {
-  const _DrivingBlockingDialog({
-    required this.message,
-    required this.canCancel,
-    required this.cancelDisabledHint,
-    required this.onComplete,
-    required this.onCancel,
+class _DrivingLockBanner extends StatelessWidget {
+  const _DrivingLockBanner({
+    required this.selectedBy,
+    required this.phase,
   });
 
-  final String message;
-  final bool canCancel;
-  final String cancelDisabledHint;
-
-  final Future<_DrivingResult> Function() onComplete;
-  final Future<_DrivingResult> Function() onCancel;
-
-  @override
-  State<_DrivingBlockingDialog> createState() => _DrivingBlockingDialogState();
-}
-
-class _DrivingBlockingDialogState extends State<_DrivingBlockingDialog> {
-  bool _busy = false;
-
-  Future<void> _run(Future<_DrivingResult> Function() fn) async {
-    if (_busy) return;
-    setState(() => _busy = true);
-    final r = await fn();
-    if (!mounted) return;
-    Navigator.of(context, rootNavigator: true).pop(r);
-  }
+  final String selectedBy;
+  final String phase;
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final who = selectedBy.isEmpty ? '나' : selectedBy;
 
-    return Dialog(
-      insetPadding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-      backgroundColor: cs.surface,
-      surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: cs.primaryContainer.withOpacity(0.35),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.primary.withOpacity(0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 30,
-              height: 30,
-              child: CircularProgressIndicator(
-                strokeWidth: 3,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  _busy ? cs.onSurfaceVariant : cs.primary,
-                ),
-              ),
+      child: Row(
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: cs.primary.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: cs.primary.withOpacity(0.22)),
             ),
-            const SizedBox(height: 12),
-            Text(
-              widget.message,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
-                color: cs.onSurface,
-              ),
-            ),
-            if (!widget.canCancel) ...[
-              const SizedBox(height: 10),
-              Text(
-                widget.cancelDisabledHint,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: cs.error,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ],
-            const SizedBox(height: 14),
-            Row(
+            child: Icon(Icons.lock, size: 20, color: cs.primary),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: (_busy || !widget.canCancel) ? null : () => _run(widget.onCancel),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
-                      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-                      foregroundColor: cs.onSurface,
-                    ),
-                    child: Text(_busy ? '처리 중...' : '주행 취소'),
+                Text(
+                  '$phase 주행 중 · 화면 잠금',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                    color: cs.onSurface,
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: _busy ? null : () => _run(widget.onComplete),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: cs.primary,
-                      foregroundColor: cs.onPrimary,
-                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                      textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-                    ),
-                    child: Text(_busy ? '처리 중...' : '주행 완료'),
+                const SizedBox(height: 4),
+                Text(
+                  '선점자: $who · 뒤로가기/닫기 불가\n아래 버튼으로 “주행 완료/취소”를 선택하세요.',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                    color: cs.onSurfaceVariant,
                   ),
                 ),
               ],
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SheetTitleRow extends StatelessWidget {
-  final String title;
-  final IconData icon;
-
-  const _SheetTitleRow({
-    required this.title,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Row(
-      children: [
-        Icon(icon, color: cs.primary),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: cs.onSurface,
           ),
-        ),
-      ],
-    );
-  }
-}
-
-class _PlateSummaryCard extends StatelessWidget {
-  final String plateNumber;
-  final String area;
-  final String location;
-  final String billingType;
-  final bool isLocked;
-  final int? lockedFee;
-  final String paymentMethod;
-
-  // ✅ 추가: 상태 메모
-  final String statusMemo;
-
-  final double attention;
-
-  const _PlateSummaryCard({
-    required this.plateNumber,
-    required this.area,
-    required this.location,
-    required this.billingType,
-    required this.isLocked,
-    required this.lockedFee,
-    required this.paymentMethod,
-    required this.statusMemo, // ✅ 추가
-    this.attention = 0,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    // ✅ 사전정산 완료 = 성공 톤(tertiary), 미정산 = 중립 톤
-    final badgeColor = isLocked ? cs.tertiary : cs.onSurfaceVariant;
-    final badgeText = isLocked ? '사전정산 잠김' : '사전정산 없음';
-
-    final feeText = (isLocked && lockedFee != null)
-        ? '₩$lockedFee${paymentMethod.isNotEmpty ? " ($paymentMethod)" : ""}'
-        : '—';
-
-    final billingText = billingType.isNotEmpty ? billingType : '미지정';
-
-    final memoText = statusMemo.trim().isNotEmpty ? statusMemo.trim() : '—';
-
-    // ✅ attention(정산 필요) = error 계열로 강조
-    final borderColor =
-    Color.lerp(cs.outlineVariant.withOpacity(0.85), cs.error, (attention * 0.9).clamp(0, 1))!;
-    final bgColor = Color.lerp(
-      cs.surfaceContainerLow,
-      cs.errorContainer.withOpacity(0.35),
-      (attention * 0.8).clamp(0, 1),
-    )!;
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor, width: 1.2),
-        boxShadow: [
-          BoxShadow(
-            color: cs.shadow.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 6),
-          ),
-          if (attention > 0.001)
-            BoxShadow(
-              color: cs.error.withOpacity(0.18 * attention),
-              blurRadius: 18 * attention,
-              spreadRadius: 1 * attention,
-              offset: const Offset(0, 6),
-            ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    );
+  }
+}
+
+class _OtherDrivingBanner extends StatelessWidget {
+  const _OtherDrivingBanner({
+    required this.selectedBy,
+    required this.phase,
+  });
+
+  final String selectedBy;
+  final String phase;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final who = selectedBy.isEmpty ? '알 수 없음' : selectedBy;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+      ),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  plateNumber,
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: cs.outlineVariant.withOpacity(0.65)),
+            ),
+            child: Icon(Icons.directions_car_filled,
+                size: 20, color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$phase 주행 진행 중(타 사용자)',
                   style: TextStyle(
-                    fontSize: 22,
                     fontWeight: FontWeight.w900,
-                    letterSpacing: 0.2,
+                    fontSize: 13,
                     color: cs.onSurface,
                   ),
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: badgeColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: badgeColor.withOpacity(0.35)),
-                ),
-                child: Text(
-                  badgeText,
+                const SizedBox(height: 4),
+                Text(
+                  '선점자: $who · 주행 시작 제스처가 비활성화됩니다.',
                   style: TextStyle(
-                    color: badgeColor,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     fontSize: 12,
+                    color: cs.onSurfaceVariant,
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (attention > 0.001 && !isLocked) ...[
-            Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: cs.errorContainer.withOpacity(0.35),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: cs.error.withOpacity(0.35)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.warning_amber_rounded, color: cs.error, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '정산이 필요합니다. 정산 후 출차 요청으로 이동할 수 있습니다.',
-                      style: TextStyle(
-                        color: cs.error,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              ],
             ),
-          ],
-          Row(
-            children: [
-              Expanded(child: _InfoLine(label: '지역', value: area)),
-              const SizedBox(width: 12),
-              Expanded(child: _InfoLine(label: '위치', value: location)),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(child: _InfoLine(label: '정산 타입', value: billingText)),
-              const SizedBox(width: 12),
-              Expanded(child: _InfoLine(label: '잠금 금액', value: feeText)),
-            ],
-          ),
-
-          // ✅ 추가: “정산 타입/잠금 금액” 하단 열에 “상태 메모”
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(child: _InfoLine(label: '상태 메모', value: memoText)),
-            ],
           ),
         ],
       ),
@@ -1598,210 +1457,361 @@ class _PlateSummaryCard extends StatelessWidget {
   }
 }
 
-class _InfoLine extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _InfoLine({
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final v = value.trim().isEmpty ? '—' : value.trim();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            color: cs.onSurfaceVariant,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          v,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: cs.onSurface,
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SectionCard extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final Widget child;
-
-  const _SectionCard({
-    required this.title,
-    required this.subtitle,
-    required this.child,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
-        boxShadow: [
-          BoxShadow(
-            color: cs.shadow.withOpacity(0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title,
-              style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: cs.onSurface)),
-          const SizedBox(height: 4),
-          Text(subtitle, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
-          const SizedBox(height: 12),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-enum _ActionTone { positive, neutral }
-
-class _ActionTileButton extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final _ActionTone tone;
-  final String? badgeText;
-  final VoidCallback onTap;
-
-  final double attention;
-
-  const _ActionTileButton({
+class _GearShiftDrivingControl extends StatefulWidget {
+  const _GearShiftDrivingControl({
+    required this.cs,
     required this.icon,
     required this.title,
     required this.subtitle,
-    required this.tone,
-    required this.onTap,
-    this.badgeText,
-    this.attention = 0,
+    required this.locked,
+    required this.enabled,
+    required this.onEngage,
+    required this.onComplete,
+    required this.onCancel,
+    this.upThreshold = 0.86,
+    this.downThreshold = 0.14,
   });
+
+  final ColorScheme cs;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool locked;
+  final bool enabled;
+  final Future<bool> Function() onEngage;
+  final Future<void> Function() onComplete;
+  final Future<void> Function() onCancel;
+  final double upThreshold;
+  final double downThreshold;
+
+  @override
+  State<_GearShiftDrivingControl> createState() =>
+      _GearShiftDrivingControlState();
+}
+
+class _GearShiftDrivingControlState extends State<_GearShiftDrivingControl>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  bool _armedHapticSent = false;
+  bool _busyInternal = false;
+
+  static const double _trackHeight = 132;
+  static const double _trackWidth = 92;
+  static const double _handleHeight = 48;
+  static const double _pad = 12;
+  static const double _slotWidth = 32;
+
+  double get _travel => _trackHeight - (_pad * 2) - _handleHeight;
+
+  double get _slotHeight => _trackHeight - (_pad * 2);
+
+  bool get _canInteract => widget.enabled && !_busyInternal;
+
+  bool get _armedUp => _ctrl.value >= widget.upThreshold;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 210),
+      value: widget.locked ? 1 : 0,
+    );
+  }
+
+  @override
+  void didUpdateWidget(covariant _GearShiftDrivingControl oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.locked != widget.locked) {
+      _armedHapticSent = false;
+      _animateTo(widget.locked ? 1 : 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _animateTo(double v) async {
+    try {
+      await _ctrl.animateTo(
+        v.clamp(0.0, 1.0).toDouble(),
+        curve: Curves.easeOutCubic,
+      );
+    } catch (_) {}
+  }
+
+  void _onDragStart(DragStartDetails d) {
+    if (!_canInteract) return;
+    if (widget.locked) return;
+    _armedHapticSent = false;
+  }
+
+  void _onDragUpdate(DragUpdateDetails d) {
+    if (!_canInteract) return;
+    if (widget.locked) return;
+
+    final delta = (-d.delta.dy) / _travel;
+    final next = (_ctrl.value + delta).clamp(0.0, 1.0).toDouble();
+    _ctrl.value = next;
+
+    if (_armedUp && !_armedHapticSent) {
+      _armedHapticSent = true;
+      try {
+        HapticFeedback.selectionClick();
+      } catch (_) {}
+    }
+
+    if (!_armedUp) {
+      _armedHapticSent = false;
+    }
+  }
+
+  Future<void> _onDragEnd(DragEndDetails d) async {
+    if (!_canInteract) return;
+    if (widget.locked) return;
+
+    if (_armedUp) {
+      setState(() => _busyInternal = true);
+      try {
+        try {
+          HapticFeedback.mediumImpact();
+        } catch (_) {}
+
+        await _animateTo(1);
+        final ok = await widget.onEngage();
+
+        if (!ok && mounted) {
+          await _animateTo(0);
+        }
+      } finally {
+        if (mounted) setState(() => _busyInternal = false);
+      }
+      return;
+    }
+
+    await _animateTo(0);
+  }
+
+  Future<void> _runAction(Future<void> Function() fn) async {
+    if (!_canInteract) return;
+    setState(() => _busyInternal = true);
+    try {
+      await fn();
+    } finally {
+      if (mounted) setState(() => _busyInternal = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final cs = widget.cs;
 
-    final Color base = (tone == _ActionTone.positive) ? cs.tertiary : cs.onSurfaceVariant;
-    final Color bg = (tone == _ActionTone.positive)
-        ? cs.tertiaryContainer.withOpacity(0.45)
-        : cs.surfaceContainerLow;
-    final Color border = (tone == _ActionTone.positive)
-        ? cs.tertiary.withOpacity(0.35)
-        : cs.outlineVariant.withOpacity(0.85);
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (context, _) {
+        final p = _ctrl.value.clamp(0.0, 1.0).toDouble();
 
-    final Color attentionBorder =
-    Color.lerp(border, cs.error, (attention * 0.9).clamp(0, 1))!;
-    final Color attentionBg =
-    Color.lerp(bg, cs.errorContainer.withOpacity(0.35), (attention * 0.8).clamp(0, 1))!;
+        final active = widget.locked || _armedUp;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(14),
-        onTap: onTap,
-        child: Ink(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: attentionBg,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: attentionBorder, width: 1.2),
-            boxShadow: [
-              if (attention > 0.001)
-                BoxShadow(
-                  color: cs.error.withOpacity(0.18 * attention),
-                  blurRadius: 16 * attention,
-                  spreadRadius: 1 * attention,
-                  offset: const Offset(0, 6),
-                ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(icon, color: base),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      title,
-                      style: TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 15,
-                        color: cs.onSurface,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (badgeText != null) ...[
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: base.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: base.withOpacity(0.25)),
-                      ),
+        final bg = Color.lerp(
+          cs.primary.withOpacity(0.10),
+          cs.primary.withOpacity(0.18),
+          active ? 1 : 0,
+        )!;
+        final border = Color.lerp(
+          cs.primary.withOpacity(0.28),
+          cs.primary.withOpacity(0.48),
+          active ? 1 : 0,
+        )!;
+
+        final hint = _busyInternal
+            ? '처리 중...'
+            : (widget.locked
+                ? '주행 중: 아래 버튼으로 완료/취소'
+                : (_armedUp ? '놓으면 주행 시작' : '기어를 위로 올려 START'));
+
+        final handleTop = _pad + ((1 - p) * _travel);
+        final fillH = (_slotHeight * p).clamp(0.0, _slotHeight).toDouble();
+        final slotLeft = (_trackWidth - _slotWidth) / 2;
+
+        final bool dragEnabled = _canInteract && !widget.locked;
+
+        return Opacity(
+          opacity: widget.enabled ? 1 : 0.55,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: border, width: 1.2),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Icon(widget.icon, color: cs.primary),
+                    const SizedBox(width: 10),
+                    Expanded(
                       child: Text(
-                        badgeText!,
+                        widget.title,
                         style: TextStyle(
-                          color: base,
                           fontWeight: FontWeight.w900,
-                          fontSize: 11,
+                          fontSize: 16,
+                          color: cs.onSurface,
                         ),
                       ),
                     ),
                   ],
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  color: cs.onSurfaceVariant,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
                 ),
-              ),
-              if (attention > 0.001) ...[
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    widget.subtitle,
+                    style: TextStyle(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Center(
+                  child: SizedBox(
+                    width: _trackWidth,
+                    height: _trackHeight,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onVerticalDragStart: dragEnabled ? _onDragStart : null,
+                      onVerticalDragUpdate: dragEnabled ? _onDragUpdate : null,
+                      onVerticalDragEnd: dragEnabled ? _onDragEnd : null,
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(18),
+                                color: cs.surfaceContainerLow,
+                                border: Border.all(
+                                  color: cs.outlineVariant.withOpacity(0.85),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: cs.shadow.withOpacity(0.12),
+                                    blurRadius: 18,
+                                    offset: const Offset(0, 10),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Positioned.fill(
+                            child: Padding(
+                              padding: const EdgeInsets.all(10),
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  color: cs.surface,
+                                  border: Border.all(
+                                    color: cs.outlineVariant.withOpacity(0.50),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: slotLeft,
+                            right: slotLeft,
+                            top: _pad,
+                            bottom: _pad,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(999),
+                                color: cs.surfaceContainerHigh,
+                                border: Border.all(
+                                  color: cs.outlineVariant.withOpacity(0.55),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: slotLeft + 2,
+                            right: slotLeft + 2,
+                            bottom: _pad + 2,
+                            height: (fillH - 4).clamp(0.0, _slotHeight),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(999),
+                                color: cs.primary.withOpacity(0.18),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            top: 6,
+                            left: 0,
+                            right: 0,
+                            child: Center(
+                              child: Text(
+                                widget.locked ? 'LOCKED' : 'START',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.8,
+                                  color:
+                                      active ? cs.primary : cs.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            left: 8,
+                            right: 8,
+                            top: handleTop,
+                            height: _handleHeight,
+                            child: _ShifterHandle(
+                              cs: cs,
+                              active: active,
+                              busy: _busyInternal,
+                              locked: widget.locked,
+                            ),
+                          ),
+                          if (_busyInternal)
+                            Positioned.fill(
+                              child: Container(
+                                decoration: BoxDecoration(
+                                  color: cs.scrim.withOpacity(0.05),
+                                  borderRadius: BorderRadius.circular(18),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.arrow_forward_rounded, size: 16, color: cs.error),
+                    Icon(
+                      widget.locked
+                          ? Icons.directions_car_filled
+                          : Icons.keyboard_arrow_up,
+                      size: 18,
+                      color: active ? cs.primary : cs.onSurfaceVariant,
+                    ),
                     const SizedBox(width: 6),
-                    Expanded(
+                    Flexible(
                       child: Text(
-                        '정산을 먼저 진행하세요',
+                        hint,
+                        textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: cs.error,
+                          color: active ? cs.primary : cs.onSurfaceVariant,
                           fontWeight: FontWeight.w900,
                           fontSize: 12,
                         ),
@@ -1809,173 +1819,132 @@ class _ActionTileButton extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (widget.locked) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: _canInteract
+                              ? () => _runAction(widget.onCancel)
+                              : null,
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor:
+                                cs.errorContainer.withOpacity(0.35),
+                            foregroundColor: cs.error,
+                            side: BorderSide(color: cs.error.withOpacity(0.45)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: Text(
+                            _busyInternal ? '처리 중...' : '주행 취소',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w900,
+                              color: cs.error,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: _canInteract
+                              ? () => _runAction(widget.onComplete)
+                              : null,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: cs.primary,
+                            foregroundColor: cs.onPrimary,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          child: Text(
+                            _busyInternal ? '처리 중...' : '주행 완료',
+                            style: const TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
-            ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ShifterHandle extends StatelessWidget {
+  const _ShifterHandle({
+    required this.cs,
+    required this.active,
+    required this.busy,
+    required this.locked,
+  });
+
+  final ColorScheme cs;
+  final bool active;
+  final bool busy;
+  final bool locked;
+
+  @override
+  Widget build(BuildContext context) {
+    final base = active ? cs.primary : cs.surfaceContainerHigh;
+    final hi = active ? cs.primary.withOpacity(0.92) : cs.surface;
+    final lo = active ? cs.primary.withOpacity(0.82) : cs.surfaceContainerLow;
+
+    final border = active
+        ? cs.primary.withOpacity(0.55)
+        : cs.outlineVariant.withOpacity(0.60);
+
+    final fg = active ? cs.onPrimary : cs.onSurfaceVariant;
+
+    final icon = busy
+        ? Icons.more_horiz
+        : (locked ? Icons.lock_open : Icons.drag_handle_rounded);
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [hi, base, lo],
+          stops: const [0.0, 0.55, 1.0],
+        ),
+        border: Border.all(color: border, width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: cs.shadow.withOpacity(active ? 0.22 : 0.14),
+            blurRadius: 16,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Padding(
+          padding: const EdgeInsets.only(right: 10),
+          child: Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: (active ? cs.onPrimary : cs.surface).withOpacity(0.12),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(
+                color: (active ? cs.onPrimary : cs.onSurfaceVariant)
+                    .withOpacity(0.22),
+              ),
+            ),
+            child: Icon(icon, size: 18, color: fg),
           ),
         ),
       ),
     );
   }
-}
-
-class _PrimaryCtaButton extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Future<void> Function() onPressed;
-
-  /// ✅ 리팩터링: 동일한 버튼 디자인 유지하면서, 상황별(스킵 버튼 등) 색만 구분 가능하게 확장
-  final Color? backgroundColor;
-  final Color? foregroundColor;
-
-  const _PrimaryCtaButton({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onPressed,
-    this.backgroundColor,
-    this.foregroundColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    final bg = backgroundColor ?? cs.primary;
-    final fg = foregroundColor ?? cs.onPrimary;
-
-    return SizedBox(
-      width: double.infinity,
-      child: FilledButton(
-        style: FilledButton.styleFrom(
-          backgroundColor: bg,
-          foregroundColor: fg,
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
-        ),
-        onPressed: () async => onPressed(),
-        child: Row(
-          children: [
-            Icon(icon),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: fg.withOpacity(0.90),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Icon(Icons.chevron_right),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _SecondaryActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-
-  const _SecondaryActionButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return OutlinedButton.icon(
-      icon: Icon(icon, size: 18),
-      label: Text(label, style: const TextStyle(fontWeight: FontWeight.w800)),
-      onPressed: onPressed,
-      style: OutlinedButton.styleFrom(
-        minimumSize: const Size(double.infinity, 46),
-        foregroundColor: cs.onSurface,
-        side: BorderSide(color: cs.outlineVariant.withOpacity(0.85)),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        backgroundColor: cs.surface,
-      ),
-    );
-  }
-}
-
-class _DangerActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onPressed;
-
-  const _DangerActionButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton.icon(
-        icon: Icon(icon, color: cs.error),
-        label: Text(
-          label,
-          style: TextStyle(color: cs.error, fontWeight: FontWeight.w900),
-        ),
-        onPressed: onPressed,
-        style: OutlinedButton.styleFrom(
-          minimumSize: const Size(double.infinity, 48),
-          side: BorderSide(color: cs.error.withOpacity(0.45)),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          backgroundColor: cs.errorContainer.withOpacity(0.35),
-        ),
-      ),
-    );
-  }
-}
-
-/// UsageReporter: 파이어베이스 DB 작업만 계측 (read / write / delete)
-void _reportDbSafe({
-  required String area,
-  required String action,
-  required String source,
-  int n = 1,
-}) {
-  try {
-    /*UsageReporter.instance.report(
-      area: area.trim(),
-      action: action,
-      n: n,
-      source: source,
-    );*/
-  } catch (_) {}
-}
-
-Future<void> handleEntryParkingRequest(
-    BuildContext context,
-    String plateNumber,
-    String area,
-    ) async {
-  final movementPlate = context.read<MovementPlate>();
-  await movementPlate.goBackToParkingRequest(
-    fromType: PlateType.parkingCompleted,
-    plateNumber: plateNumber,
-    area: area,
-    newLocation: "미지정",
-  );
 }

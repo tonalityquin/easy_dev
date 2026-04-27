@@ -1,20 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../enums/plate_type.dart';
-import '../../../../states/plate/triple_plate_state.dart';
-import '../../../../states/user/user_state.dart';
-import '../../../../states/area/area_state.dart';
+import '../../../../features/account/applications/user_state.dart';
+import '../../../../features/dev/application/area_state.dart';
+import '../../../../features/plate/application/triple/triple_plate_state.dart';
+import '../../../../features/plate/domain/enums/plate_type.dart';
 import 'departure_completed_plate_search_bottom_sheet/triple_departure_completed_search_bottom_sheet.dart';
 import 'widgets/triple_departure_completed_status_bottom_sheet.dart';
 
 class TripleDepartureCompletedControlButtons extends StatelessWidget {
   final bool isSearchMode;
   final VoidCallback onResetSearch;
-
-  /// ✅ 시그니처 호환 유지
-  /// - 기존 상위에서 callback을 넘기던 구조 유지
-  /// - 이 위젯 내부에서도 검색 바텀시트를 직접 열고, callback은 "부수효과(로그/추적 등)" 용도로 호출
   final VoidCallback onShowSearchDialog;
 
   const TripleDepartureCompletedControlButtons({
@@ -27,9 +23,6 @@ class TripleDepartureCompletedControlButtons extends StatelessWidget {
   Future<void> _openPlateSearchBottomSheet(BuildContext context) async {
     final area = context.read<AreaState>().currentArea.trim();
     if (area.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('현재 지역(area)이 설정되지 않아 검색을 열 수 없습니다.')),
-      );
       return;
     }
 
@@ -40,7 +33,7 @@ class TripleDepartureCompletedControlButtons extends StatelessWidget {
       backgroundColor: Colors.transparent,
       builder: (_) => TripleDepartureCompletedSearchBottomSheet(
         area: area,
-        onSearch: (_) {}, // ✅ 이 화면은 별도 상태 토글 없음
+        onSearch: (_) {},
       ),
     );
   }
@@ -59,7 +52,6 @@ class TripleDepartureCompletedControlButtons extends StatelessWidget {
     final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
 
     Future<void> handleSearchPressed() async {
-      // ✅ 검색 모드면 reset, 아니면 내부에서 바텀시트를 직접 열기
       if (isSearchMode) {
         onResetSearch();
         return;
@@ -67,7 +59,6 @@ class TripleDepartureCompletedControlButtons extends StatelessWidget {
 
       await _openPlateSearchBottomSheet(context);
 
-      // ✅ 기존 시그니처 호환(로그/추적 등 용도)
       onShowSearchDialog();
     }
 
@@ -81,7 +72,10 @@ class TripleDepartureCompletedControlButtons extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
             border: Border(
-              top: BorderSide(color: cs.outlineVariant.withOpacity(0.85), width: 1),
+              top: BorderSide(
+                color: cs.outlineVariant.withOpacity(0.85),
+                width: 1,
+              ),
             ),
           ),
           child: Center(
@@ -103,7 +97,10 @@ class TripleDepartureCompletedControlButtons extends StatelessWidget {
                 ),
               ),
               style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 foregroundColor: cs.onSurface,
                 overlayColor: cs.outlineVariant.withOpacity(0.12),
               ),
@@ -122,7 +119,10 @@ class TripleDepartureCompletedControlButtons extends StatelessWidget {
                 ),
               ),
               style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 foregroundColor: cs.onSurface,
                 overlayColor: cs.outlineVariant.withOpacity(0.12),
               ),

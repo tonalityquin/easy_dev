@@ -1,9 +1,10 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../../models/plate_model.dart';
-import '../../../../../utils/snackbar_helper.dart';
-import '../../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
+import '../../../../../features/plate/domain/models/plate_log_model.dart';
+import '../../../../../features/plate/domain/models/plate_model.dart';
+import '../../../../../features/plate/domain/repositories/plate_repository.dart';
+import '../../../../../widgets/bottom_sheet/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../../common_package/log_package/log_viewer_bottom_sheet.dart';
 
 Future<PlateModel?> showMinorDepartureCompletedStatusBottomSheet({
@@ -11,7 +12,8 @@ Future<PlateModel?> showMinorDepartureCompletedStatusBottomSheet({
   required PlateModel plate,
   String? performedBy,
 }) async {
-  final String who = (performedBy ?? '').trim().isEmpty ? '-' : performedBy!.trim();
+  final String who =
+      (performedBy ?? '').trim().isEmpty ? '-' : performedBy!.trim();
   final BuildContext hostContext = context;
 
   return showModalBottomSheet<PlateModel?>(
@@ -88,64 +90,64 @@ class _MinorDepartureCompletedFullHeightSheet extends StatelessWidget {
             const SizedBox(height: 16),
             _SummaryCard(plate: plate),
             const SizedBox(height: 24),
-
-            // 정산(사전 정산)
             ElevatedButton.icon(
               icon: const Icon(Icons.receipt_long),
               label: Text(_isLocked ? '정산 완료됨' : '정산(사전 정산)'),
               onPressed: _isLocked
                   ? null
                   : () async {
-                final updated = await _settlePlate(
-                  context: context,
-                  plate: plate,
-                  performedBy: performedBy,
-                );
-                if (!context.mounted) return;
-                if (updated != null) Navigator.pop(context, updated);
-              },
+                      final updated = await _settlePlate(
+                        context: context,
+                        plate: plate,
+                        performedBy: performedBy,
+                      );
+                      if (!context.mounted) return;
+                      if (updated != null) Navigator.pop(context, updated);
+                    },
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 52),
-                backgroundColor: _isLocked ? cs.surfaceContainerLow : cs.primary,
+                backgroundColor:
+                    _isLocked ? cs.surfaceContainerLow : cs.primary,
                 foregroundColor: _isLocked ? cs.onSurfaceVariant : cs.onPrimary,
                 elevation: 0,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
             ),
             const SizedBox(height: 12),
-
-            // 정산 취소
             ElevatedButton.icon(
               icon: const Icon(Icons.lock_open),
               label: const Text('정산 취소'),
               onPressed: !_isLocked
                   ? null
                   : () async {
-                final bool ok = await _confirmCancelSettlement(context);
-                if (!ok) return;
+                      final bool ok = await _confirmCancelSettlement(context);
+                      if (!ok) return;
 
-                final updated = await _cancelSettlement(
-                  context: context,
-                  plate: plate,
-                  performedBy: performedBy,
-                );
+                      final updated = await _cancelSettlement(
+                        context: context,
+                        plate: plate,
+                        performedBy: performedBy,
+                      );
 
-                if (!context.mounted) return;
-                if (updated != null) Navigator.pop(context, updated);
-              },
+                      if (!context.mounted) return;
+                      if (updated != null) Navigator.pop(context, updated);
+                    },
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 52),
-                backgroundColor: _isLocked ? cs.secondary : cs.surfaceContainerLow,
-                foregroundColor: _isLocked ? cs.onSecondary : cs.onSurfaceVariant,
+                backgroundColor:
+                    _isLocked ? cs.secondary : cs.surfaceContainerLow,
+                foregroundColor:
+                    _isLocked ? cs.onSecondary : cs.onSurfaceVariant,
                 elevation: 0,
-                side: _isLocked ? null : BorderSide(color: cs.outlineVariant.withOpacity(0.8)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                side: _isLocked
+                    ? null
+                    : BorderSide(color: cs.outlineVariant.withOpacity(0.8)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
             ),
-
             const SizedBox(height: 24),
-
-            // 로그 확인
             ElevatedButton.icon(
               icon: const Icon(Icons.history),
               label: const Text('로그 확인'),
@@ -165,13 +167,11 @@ class _MinorDepartureCompletedFullHeightSheet extends StatelessWidget {
                 foregroundColor: cs.onSurface,
                 elevation: 0,
                 side: BorderSide(color: cs.outlineVariant.withOpacity(0.8)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
             ),
-
             const SizedBox(height: 12),
-
-            // 정보 수정 (비활성)
             ElevatedButton.icon(
               icon: const Icon(Icons.edit),
               label: const Text('정보 수정'),
@@ -182,13 +182,11 @@ class _MinorDepartureCompletedFullHeightSheet extends StatelessWidget {
                 foregroundColor: cs.onSurfaceVariant.withOpacity(0.6),
                 elevation: 0,
                 side: BorderSide(color: cs.outlineVariant.withOpacity(0.8)),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
             ),
-
             const SizedBox(height: 12),
-
-            // 닫기
             TextButton.icon(
               icon: Icon(Icons.close, color: cs.onSurfaceVariant),
               label: Text('닫기', style: TextStyle(color: cs.onSurfaceVariant)),
@@ -203,6 +201,7 @@ class _MinorDepartureCompletedFullHeightSheet extends StatelessWidget {
 
 class _SummaryCard extends StatelessWidget {
   const _SummaryCard({required this.plate});
+
   final PlateModel plate;
 
   @override
@@ -212,9 +211,11 @@ class _SummaryCard extends StatelessWidget {
     final bool isLocked = plate.isLockedFee == true;
 
     final String area = plate.area.trim();
-    final String location = plate.location.trim().isEmpty ? '미지정' : plate.location.trim();
-    final String billingType =
-    (plate.billingType ?? '').trim().isEmpty ? '미지정' : (plate.billingType ?? '').trim();
+    final String location =
+        plate.location.trim().isEmpty ? '미지정' : plate.location.trim();
+    final String billingType = (plate.billingType ?? '').trim().isEmpty
+        ? '미지정'
+        : (plate.billingType ?? '').trim();
 
     return Container(
       width: double.infinity,
@@ -229,14 +230,21 @@ class _SummaryCard extends StatelessWidget {
         children: [
           Text(
             plate.plateNumber,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: cs.onSurface),
+            style: TextStyle(
+                fontSize: 18, fontWeight: FontWeight.w900, color: cs.onSurface),
           ),
           const SizedBox(height: 6),
-          Text('지역: $area', style: TextStyle(fontWeight: FontWeight.w700, color: cs.onSurface)),
+          Text('지역: $area',
+              style:
+                  TextStyle(fontWeight: FontWeight.w700, color: cs.onSurface)),
           const SizedBox(height: 2),
-          Text('위치: $location', style: TextStyle(fontWeight: FontWeight.w700, color: cs.onSurface)),
+          Text('위치: $location',
+              style:
+                  TextStyle(fontWeight: FontWeight.w700, color: cs.onSurface)),
           const SizedBox(height: 2),
-          Text('정산 타입: $billingType', style: TextStyle(fontWeight: FontWeight.w700, color: cs.onSurface)),
+          Text('정산 타입: $billingType',
+              style:
+                  TextStyle(fontWeight: FontWeight.w700, color: cs.onSurface)),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -289,19 +297,20 @@ Future<PlateModel?> _settlePlate({
   required String performedBy,
 }) async {
   if (plate.isLockedFee == true) {
-    showFailedSnackbar(context, '이미 정산 완료된 데이터입니다.');
+    debugPrint('이미 정산 완료된 데이터입니다.');
     return null;
   }
 
   final bt = (plate.billingType ?? '').trim();
   if (bt.isEmpty) {
-    showFailedSnackbar(context, '정산 타입(billingType)이 지정되지 않아 정산할 수 없습니다.');
+    debugPrint('정산 타입(billingType)이 지정되지 않아 정산할 수 없습니다.');
     return null;
   }
 
   final now = DateTime.now();
   final int currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
-  final int entryTime = plate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+  final int entryTime =
+      plate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
 
   final result = await showOnTapBillingBottomSheet(
     context: context,
@@ -326,33 +335,36 @@ Future<PlateModel?> _settlePlate({
   );
 
   try {
-    final docRef = FirebaseFirestore.instance.collection('plates').doc(plate.id);
+    final repo = context.read<PlateRepository>();
 
-    final log = {
-      'action': '사전 정산',
-      'performedBy': performedBy,
-      'timestamp': now.toIso8601String(),
-      'lockedFee': result.lockedFee,
-      'paymentMethod': result.paymentMethod,
-      if (result.reason != null && result.reason!.trim().isNotEmpty) 'reason': result.reason!.trim(),
-    };
-
-    await docRef.update({
-      'isLockedFee': true,
-      'lockedAtTimeInSeconds': currentTime,
-      'lockedFeeAmount': result.lockedFee,
-      'paymentMethod': result.paymentMethod,
-      'updatedAt': FieldValue.serverTimestamp(),
-      'logs': FieldValue.arrayUnion([log]),
-    });
+    await repo.settlePlateBilling(
+      documentId: plate.id,
+      lockedAtTimeInSeconds: currentTime,
+      lockedFeeAmount: result.lockedFee,
+      paymentMethod: result.paymentMethod,
+      log: PlateLogModel(
+        action: '사전 정산',
+        area: plate.area,
+        billingType: plate.billingType,
+        from: plate.type,
+        performedBy: performedBy,
+        plateNumber: plate.plateNumber,
+        timestamp: now,
+        to: plate.type,
+        type: plate.type,
+        lockedFee: result.lockedFee,
+        paymentMethod: result.paymentMethod,
+        reason: result.reason,
+      ),
+    );
 
     if (!context.mounted) return null;
-    showSuccessSnackbar(context, '정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
+    debugPrint('정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
 
-    return updatedPlate;
+    return await repo.getPlate(plate.id) ?? updatedPlate;
   } catch (e) {
     if (!context.mounted) return null;
-    showFailedSnackbar(context, '정산 중 오류가 발생했습니다: $e');
+    debugPrint('정산 중 오류가 발생했습니다: $e');
     return null;
   }
 }
@@ -363,37 +375,37 @@ Future<PlateModel?> _cancelSettlement({
   required String performedBy,
 }) async {
   if (plate.isLockedFee != true) {
-    showFailedSnackbar(context, '정산 완료된 데이터만 취소할 수 있습니다.');
+    debugPrint('정산 완료된 데이터만 취소할 수 있습니다.');
     return null;
   }
 
   final now = DateTime.now();
 
   try {
-    final docRef = FirebaseFirestore.instance.collection('plates').doc(plate.id);
+    final repo = context.read<PlateRepository>();
 
-    final log = {
-      'action': '정산 취소',
-      'performedBy': performedBy,
-      'timestamp': now.toIso8601String(),
-    };
-
-    await docRef.update({
-      'isLockedFee': false,
-      'lockedAtTimeInSeconds': FieldValue.delete(),
-      'lockedFeeAmount': FieldValue.delete(),
-      'paymentMethod': FieldValue.delete(),
-      'updatedAt': FieldValue.serverTimestamp(),
-      'logs': FieldValue.arrayUnion([log]),
-    });
+    await repo.cancelPlateBilling(
+      documentId: plate.id,
+      log: PlateLogModel(
+        action: '정산 취소',
+        area: plate.area,
+        billingType: plate.billingType,
+        from: plate.type,
+        performedBy: performedBy,
+        plateNumber: plate.plateNumber,
+        timestamp: now,
+        to: plate.type,
+        type: plate.type,
+      ),
+    );
 
     if (!context.mounted) return null;
-    showSuccessSnackbar(context, '정산이 취소되었습니다.');
+    debugPrint('정산이 취소되었습니다.');
 
-    return plate.copyWith(isLockedFee: false);
+    return await repo.getPlate(plate.id) ?? plate.copyWith(isLockedFee: false);
   } catch (e) {
     if (!context.mounted) return null;
-    showFailedSnackbar(context, '정산 취소 중 오류가 발생했습니다: $e');
+    debugPrint('정산 취소 중 오류가 발생했습니다: $e');
     return null;
   }
 }

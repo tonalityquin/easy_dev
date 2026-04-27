@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../../../../enums/plate_type.dart';
-import '../../../../../../../models/plate_model.dart';
+import '../../../../../../../features/plate/domain/enums/plate_type.dart';
+import '../../../../../../../features/plate/domain/models/plate_model.dart';
 
 class DoubleParkingCompletedPlateSearchResults extends StatelessWidget {
   final List<PlateModel> results;
@@ -48,11 +48,15 @@ class DoubleParkingCompletedPlateSearchResults extends StatelessWidget {
             final paymentMethod = plate.paymentMethod;
             final lockedAtSec = plate.lockedAtTimeInSeconds;
 
-            final locationText = plate.location.trim().isEmpty ? '-' : plate.location.trim();
+            final locationText =
+                plate.location.trim().isEmpty ? '-' : plate.location.trim();
 
             final selected = plate.isSelected == true;
-            final backgroundColor = selected ? cs.tertiaryContainer.withOpacity(0.45) : cs.surface;
-            final borderColor = selected ? cs.tertiary.withOpacity(0.75) : cs.outlineVariant.withOpacity(0.85);
+            final backgroundColor =
+                selected ? cs.tertiaryContainer.withOpacity(0.45) : cs.surface;
+            final borderColor = selected
+                ? cs.tertiary.withOpacity(0.75)
+                : cs.outlineVariant.withOpacity(0.85);
 
             final (typeFg, typeBg) = _typeChipColors(cs, plate.typeEnum);
             final typeChip = _buildChip(
@@ -65,21 +69,23 @@ class DoubleParkingCompletedPlateSearchResults extends StatelessWidget {
 
             final settledChip = isLocked
                 ? _buildChip(
-              cs: cs,
-              text: lockedFeeAmount != null ? '사전 정산 ₩${currency.format(lockedFeeAmount)}' : '사전 정산',
-              fg: cs.tertiary,
-              bg: cs.tertiaryContainer.withOpacity(0.55),
-              borderColor: cs.tertiary.withOpacity(0.55),
-              icon: Icons.lock,
-            )
+                    cs: cs,
+                    text: lockedFeeAmount != null
+                        ? '사전 정산 ₩${currency.format(lockedFeeAmount)}'
+                        : '사전 정산',
+                    fg: cs.tertiary,
+                    bg: cs.tertiaryContainer.withOpacity(0.55),
+                    borderColor: cs.tertiary.withOpacity(0.55),
+                    icon: Icons.lock,
+                  )
                 : _buildChip(
-              cs: cs,
-              text: '미정산',
-              fg: cs.onSurfaceVariant,
-              bg: cs.surfaceContainerLow,
-              borderColor: cs.outlineVariant.withOpacity(0.85),
-              icon: Icons.lock_open,
-            );
+                    cs: cs,
+                    text: '미정산',
+                    fg: cs.onSurfaceVariant,
+                    bg: cs.surfaceContainerLow,
+                    borderColor: cs.outlineVariant.withOpacity(0.85),
+                    icon: Icons.lock_open,
+                  );
 
             final showDetailSection = selected ||
                 (plate.selectedBy?.isNotEmpty ?? false) ||
@@ -88,7 +94,9 @@ class DoubleParkingCompletedPlateSearchResults extends StatelessWidget {
                 isLocked;
 
             final lockedAtText = (lockedAtSec is int)
-                ? _formatTime(DateTime.fromMillisecondsSinceEpoch(lockedAtSec * 1000).toLocal())
+                ? _formatTime(
+                    DateTime.fromMillisecondsSinceEpoch(lockedAtSec * 1000)
+                        .toLocal())
                 : null;
 
             return Material(
@@ -113,7 +121,6 @@ class DoubleParkingCompletedPlateSearchResults extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 상단: 아이콘 + 번호 + 칩
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -123,9 +130,11 @@ class DoubleParkingCompletedPlateSearchResults extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: cs.primary.withOpacity(0.10),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: cs.primary.withOpacity(0.25)),
+                              border: Border.all(
+                                  color: cs.primary.withOpacity(0.25)),
                             ),
-                            child: Icon(Icons.directions_car, size: 18, color: cs.primary),
+                            child: Icon(Icons.directions_car,
+                                size: 18, color: cs.primary),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -153,8 +162,6 @@ class DoubleParkingCompletedPlateSearchResults extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 12),
-
-                      // 요약 정보
                       _InfoRow(
                         icon: Icons.access_time,
                         text: '요청 시간: $formattedTime',
@@ -164,7 +171,6 @@ class DoubleParkingCompletedPlateSearchResults extends StatelessWidget {
                         icon: Icons.location_on,
                         text: '주차 구역: $locationText',
                       ),
-
                       if (showDetailSection) ...[
                         const SizedBox(height: 10),
                         Container(
@@ -173,7 +179,8 @@ class DoubleParkingCompletedPlateSearchResults extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: cs.surfaceContainerLow,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+                            border: Border.all(
+                                color: cs.outlineVariant.withOpacity(0.85)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -187,8 +194,8 @@ class DoubleParkingCompletedPlateSearchResults extends StatelessWidget {
                                     fontWeight: FontWeight.w900,
                                   ),
                                 ),
-
-                              if (plate.selectedBy != null && plate.selectedBy!.isNotEmpty) ...[
+                              if (plate.selectedBy != null &&
+                                  plate.selectedBy!.isNotEmpty) ...[
                                 const SizedBox(height: 6),
                                 _LabeledPill(
                                   icon: Icons.person,
@@ -198,32 +205,35 @@ class DoubleParkingCompletedPlateSearchResults extends StatelessWidget {
                                   cs: cs,
                                 ),
                               ],
-
-                              if (plate.billingType != null && plate.billingType!.isNotEmpty) ...[
+                              if (plate.billingType != null &&
+                                  plate.billingType!.isNotEmpty) ...[
                                 const SizedBox(height: 8),
                                 Text(
                                   '과금 유형: ${plate.billingType}',
-                                  style: TextStyle(fontSize: 13, color: cs.onSurface),
+                                  style: TextStyle(
+                                      fontSize: 13, color: cs.onSurface),
                                 ),
                               ],
-
-                              if (plate.customStatus != null && plate.customStatus!.isNotEmpty) ...[
+                              if (plate.customStatus != null &&
+                                  plate.customStatus!.isNotEmpty) ...[
                                 const SizedBox(height: 4),
                                 Text(
                                   '커스텀 상태: ${plate.customStatus}',
-                                  style: TextStyle(fontSize: 13, color: cs.onSurface),
+                                  style: TextStyle(
+                                      fontSize: 13, color: cs.onSurface),
                                 ),
                               ],
-
                               if (isLocked) ...[
                                 const SizedBox(height: 10),
                                 _InfoRow(
                                   icon: Icons.receipt_long,
                                   iconColor: cs.tertiary,
-                                  text: '정산 금액: ${lockedFeeAmount != null ? '₩${currency.format(lockedFeeAmount)}' : '-'}',
+                                  text:
+                                      '정산 금액: ${lockedFeeAmount != null ? '₩${currency.format(lockedFeeAmount)}' : '-'}',
                                   strong: true,
                                 ),
-                                if (paymentMethod != null && paymentMethod.isNotEmpty) ...[
+                                if (paymentMethod != null &&
+                                    paymentMethod.isNotEmpty) ...[
                                   const SizedBox(height: 4),
                                   _InfoRow(
                                     icon: Icons.payment,
@@ -380,12 +390,14 @@ class _LabeledPill extends StatelessWidget {
           const SizedBox(width: 8),
           Text(
             '$label: ',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: toneColor),
+            style: TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w900, color: toneColor),
           ),
           Expanded(
             child: Text(
               value,
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: toneColor),
+              style: TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w800, color: toneColor),
               overflow: TextOverflow.ellipsis,
             ),
           ),

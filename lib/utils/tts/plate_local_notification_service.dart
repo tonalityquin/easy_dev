@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-/// Plate(번호판) 이벤트용 로컬 알림 서비스.
-///
-/// - 채팅 알림과 동일하게 heads-up(Importance.high / Priority.high)로 노출
-/// - FG isolate(포그라운드 서비스)에서도 사용할 수 있도록 "isolate-safe" 초기화 제공
+
+
+
+
 class PlateLocalNotificationService {
   PlateLocalNotificationService._();
 
@@ -21,7 +21,7 @@ class PlateLocalNotificationService {
   static bool _ready = false;
   static Completer<void>? _inFlight;
 
-  /// 여러 isolate에서 중복 호출되어도 안전하게 1회만 초기화되도록 게이트합니다.
+  
   Future<void> ensureInitialized() async {
     if (_ready) return;
     if (_inFlight != null) return _inFlight!.future;
@@ -61,9 +61,9 @@ class PlateLocalNotificationService {
     }
   }
 
-  /// docId 기반으로 비교적 안정적인 notification id를 생성합니다.
+  
   int _makeId(String docId, {int salt = 17}) {
-    // String.hashCode는 세션 내 안정적이며, 알림 ID로는 충분합니다.
+    
     final int v = docId.hashCode ^ salt;
     return v & 0x7fffffff;
   }

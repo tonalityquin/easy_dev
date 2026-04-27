@@ -1,17 +1,13 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
-import '../../../../../../utils/app_exit_flag.dart';
-import '../../../../../../utils/block_dialogs/work_end_duration_blocking_dialog.dart';
-import '../../../../../single_mode/utils/att_brk_repository.dart';
+import '../../../../../../features/commute/domain/repositories/commute_true_false_repository.dart';
+import '../../../../../../features/mode_single/application/att_brk_repository.dart';
+import '../../../../../../utils/init/app_exit_service.dart';
+import '../../../../../../widgets/dialog/block_dialog_package/work_end_duration_blocking_dialog.dart';
 import 'minor_dashboard_punch_card_feedback.dart';
-
-import '../../../../../../repositories/commute_repo_services/commute_true_false_repository.dart';
-import '../../../../../../utils/commute_true_false_mode_config.dart';
+import '../../../../../../utils/config/commute_true_false_mode_config.dart';
 
 class MinorDashboardPunchRecorderSection extends StatefulWidget {
   const MinorDashboardPunchRecorderSection({
@@ -32,7 +28,8 @@ class MinorDashboardPunchRecorderSection extends StatefulWidget {
       _MinorDashboardPunchRecorderSectionState();
 }
 
-class _MinorDashboardPunchRecorderSectionState extends State<MinorDashboardPunchRecorderSection> {
+class _MinorDashboardPunchRecorderSectionState
+    extends State<MinorDashboardPunchRecorderSection> {
   late DateTime _selectedDate;
 
   String? _workInTime;
@@ -40,12 +37,13 @@ class _MinorDashboardPunchRecorderSectionState extends State<MinorDashboardPunch
   String? _workOutTime;
   bool _loading = true;
 
-  final CommuteTrueFalseRepository _commuteTrueFalseRepo = CommuteTrueFalseRepository();
+  final CommuteTrueFalseRepository _commuteTrueFalseRepo =
+      CommuteTrueFalseRepository();
 
   bool get _hasWorkIn => _workInTime != null && _workInTime!.isNotEmpty;
+
   bool get _hasBreak => _breakTime != null && _breakTime!.isNotEmpty;
 
-  // ✅ 서비스 로그인에서 처리 → 여기서는 출근 펀칭 금지
   bool get _disableWorkInPunch => true;
 
   Color _accentForType(ColorScheme cs, AttBrkModeType type) {
@@ -97,12 +95,6 @@ class _MinorDashboardPunchRecorderSectionState extends State<MinorDashboardPunch
     await _loadForDate(picked);
   }
 
-  void _showGuardSnack(String message) {
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    messenger?.hideCurrentSnackBar();
-    messenger?.showSnackBar(SnackBar(content: Text(message)));
-  }
-
   Future<void> _recordClockInAtToCommuteTrueFalse(DateTime clockInAt) async {
     final enabled = await CommuteTrueFalseModeConfig.isEnabled();
     if (!enabled) return;
@@ -121,64 +113,21 @@ class _MinorDashboardPunchRecorderSectionState extends State<MinorDashboardPunch
   }
 
   Future<void> _exitAppAfterClockOut(BuildContext context) async {
-    AppExitFlag.beginExit();
-
-    try {
-      if (Platform.isAndroid) {
-        bool running = false;
-
-        try {
-          running = await FlutterForegroundTask.isRunningService;
-        } catch (_) {
-          running = false;
-        }
-
-        if (running) {
-          try {
-            final stopped = await FlutterForegroundTask.stopService();
-            if (stopped != true && context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('포그라운드 서비스 중지 실패(플러그인 반환값 false)')),
-              );
-            }
-          } catch (e) {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('포그라운드 서비스 중지 실패: $e')),
-              );
-            }
-          }
-
-          await Future.delayed(const Duration(milliseconds: 150));
-        }
-      }
-
-      await SystemNavigator.pop();
-    } catch (e) {
-      AppExitFlag.reset();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('앱 종료 실패: $e')),
-        );
-      }
-    }
+    await AppExitService.exitApp(context);
   }
 
   Future<void> _punch(AttBrkModeType type) async {
     if (_loading) return;
 
     if (type == AttBrkModeType.workIn && _disableWorkInPunch) {
-      _showGuardSnack('출근은 서비스 로그인에서 처리됩니다. 이 화면에서는 변경할 수 없습니다.');
       return;
     }
 
     if (type == AttBrkModeType.breakTime && !_hasWorkIn) {
-      _showGuardSnack('먼저 출근을 펀칭한 뒤 휴게시간을 펀칭할 수 있습니다.');
       return;
     }
 
     if (type == AttBrkModeType.workOut && (!_hasWorkIn || !_hasBreak)) {
-      _showGuardSnack('출근과 휴게시간을 모두 펀칭한 뒤 퇴근을 펀칭할 수 있습니다.');
       return;
     }
 
@@ -273,11 +222,13 @@ class _MinorDashboardPunchRecorderSectionState extends State<MinorDashboardPunch
                   borderRadius: BorderRadius.circular(999),
                   onTap: _pickDate,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.calendar_today_rounded, size: 14, color: cs.onSurfaceVariant),
+                        Icon(Icons.calendar_today_rounded,
+                            size: 14, color: cs.onSurfaceVariant),
                         const SizedBox(width: 6),
                         Text(
                           '$monthStr · $dateStr',
@@ -296,7 +247,7 @@ class _MinorDashboardPunchRecorderSectionState extends State<MinorDashboardPunch
             const SizedBox(height: 6),
             Text(
               '선택한 날짜($dateStr) 기준으로 휴게 · 퇴근을 순서대로 펀칭하세요.\n'
-                  '출근은 서비스 로그인에서 처리되며, 이 화면에서는 변경할 수 없습니다.',
+              '출근은 서비스 로그인에서 처리되며, 이 화면에서는 변경할 수 없습니다.',
               style: TextStyle(
                 fontSize: 11,
                 color: cs.onSurfaceVariant,
@@ -304,12 +255,14 @@ class _MinorDashboardPunchRecorderSectionState extends State<MinorDashboardPunch
               ),
             ),
             const SizedBox(height: 12),
-
             if (_loading)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 16),
                 child: Center(
-                  child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                  child: SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2)),
                 ),
               )
             else
@@ -319,9 +272,12 @@ class _MinorDashboardPunchRecorderSectionState extends State<MinorDashboardPunch
                     decoration: BoxDecoration(
                       color: cs.surfaceContainerLow,
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: cs.outlineVariant.withOpacity(.60), width: 0.9),
+                      border: Border.all(
+                          color: cs.outlineVariant.withOpacity(.60),
+                          width: 0.9),
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 10),
                     child: Row(
                       children: [
                         Expanded(
@@ -341,7 +297,8 @@ class _MinorDashboardPunchRecorderSectionState extends State<MinorDashboardPunch
                             type: AttBrkModeType.breakTime,
                             time: _breakTime,
                             enabled: canPunchBreak,
-                            accent: _accentForType(cs, AttBrkModeType.breakTime),
+                            accent:
+                                _accentForType(cs, AttBrkModeType.breakTime),
                             onTap: () => _punch(AttBrkModeType.breakTime),
                           ),
                         ),
@@ -433,7 +390,9 @@ class _PunchSlot extends StatelessWidget {
               Icon(
                 _icon,
                 size: 14,
-                color: enabled ? accent.withOpacity(0.92) : cs.onSurfaceVariant.withOpacity(0.35),
+                color: enabled
+                    ? accent.withOpacity(0.92)
+                    : cs.onSurfaceVariant.withOpacity(0.35),
               ),
               const SizedBox(width: 4),
               Text(
@@ -441,7 +400,9 @@ class _PunchSlot extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w900,
-                  color: enabled ? accent.withOpacity(0.92) : cs.onSurfaceVariant.withOpacity(0.35),
+                  color: enabled
+                      ? accent.withOpacity(0.92)
+                      : cs.onSurfaceVariant.withOpacity(0.35),
                 ),
               ),
             ],
@@ -450,7 +411,9 @@ class _PunchSlot extends StatelessWidget {
           Icon(
             punched ? Icons.check_circle_rounded : Icons.radio_button_unchecked,
             size: 18,
-            color: punched ? accent.withOpacity(0.95) : cs.outlineVariant.withOpacity(enabled ? .9 : .4),
+            color: punched
+                ? accent.withOpacity(0.95)
+                : cs.outlineVariant.withOpacity(enabled ? .9 : .4),
           ),
           const SizedBox(height: 2),
           Text(

@@ -31,7 +31,7 @@ class DoubleDepartureCompletedPlateNumberDisplay extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 4자리 박스 표시
+            
             Row(
               children: List.generate(4, (i) {
                 final char = (i < text.length) ? text[i] : '';
@@ -102,7 +102,7 @@ class DoubleDepartureCompletedPlateNumberDisplay extends StatelessWidget {
               ),
             ),
 
-            // 입력 가이드
+            
             if (text.isEmpty) ...[
               const SizedBox(height: 8),
               Row(

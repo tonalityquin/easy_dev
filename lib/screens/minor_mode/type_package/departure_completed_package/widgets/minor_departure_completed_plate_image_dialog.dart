@@ -3,7 +3,7 @@ import 'dart:io';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 
-import '../../../modify_package/utils/minor_modify_plate_service.dart';
+import '../../../../../shared/page/modify/application/modify_plate_service.dart';
 
 class MinorDepartureCompletedPlateImageDialog extends StatelessWidget {
   final String plateNumber;
@@ -28,7 +28,7 @@ class MinorDepartureCompletedPlateImageDialog extends StatelessWidget {
         surfaceTintColor: Colors.transparent,
       ),
       body: FutureBuilder<List<String>>(
-        future: MinorModifyPlateService.listPlateImages(
+        future: ModifyPlateService.listPlateImages(
           context: context,
           plateNumber: plateNumber,
         ),
@@ -44,7 +44,7 @@ class MinorDepartureCompletedPlateImageDialog extends StatelessWidget {
               title: '이미지 불러오기 실패',
               message: '${snapshot.error}',
               onRetry: () {
-                // ✅ 간단 재시도: pop 후 다시 열게 유도(서비스 호출 재트리거)
+                
                 Navigator.of(context).maybePop();
               },
             );
@@ -132,7 +132,7 @@ class MinorDepartureCompletedPlateImageDialog extends StatelessWidget {
   }
 }
 
-/// ✅ URL 리스트 전용(현재 다이얼로그에서 사용하는 경로)
+
 Future<void> showMinorDepartureCompletedFullScreenImageViewerFromUrls(
     BuildContext context,
     List<String> urls,
@@ -151,7 +151,7 @@ Future<void> showMinorDepartureCompletedFullScreenImageViewerFromUrls(
   );
 }
 
-/// ✅ 파일 리스트 전용(혹시 재사용 필요할 때)
+
 Future<void> showMinorDepartureCompletedFullScreenImageViewerFromFiles(
     BuildContext context,
     List<XFile> files,
@@ -170,9 +170,9 @@ Future<void> showMinorDepartureCompletedFullScreenImageViewerFromFiles(
   );
 }
 
-// ─────────────────────────────────────────────
-// Viewer
-// ─────────────────────────────────────────────
+
+
+
 enum _ViewerMode { urls, files }
 
 class _MinorFullScreenImageViewer extends StatefulWidget {
@@ -316,7 +316,7 @@ class _MinorFullScreenImageViewerState extends State<_MinorFullScreenImageViewer
               },
             ),
 
-            // 상단 오른쪽: 닫기
+            
             Align(
               alignment: Alignment.topRight,
               child: Padding(
@@ -329,7 +329,7 @@ class _MinorFullScreenImageViewerState extends State<_MinorFullScreenImageViewer
               ),
             ),
 
-            // 상단 중앙: 인덱스 표시
+            
             Align(
               alignment: Alignment.topCenter,
               child: Padding(
@@ -359,9 +359,9 @@ class _MinorFullScreenImageViewerState extends State<_MinorFullScreenImageViewer
   }
 }
 
-// ─────────────────────────────────────────────
-// Thumbnail
-// ─────────────────────────────────────────────
+
+
+
 class _Thumb extends StatelessWidget {
   final String url;
   final double width;
@@ -401,9 +401,9 @@ class _Thumb extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────
-// Empty / Error
-// ─────────────────────────────────────────────
+
+
+
 class _EmptyState extends StatelessWidget {
   final String message;
   const _EmptyState({required this.message});
@@ -480,13 +480,13 @@ class _ErrorState extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────
-// Metadata parsing (robust)
-// ─────────────────────────────────────────────
+
+
+
 class _ImageMeta {
-  final String rawFileName; // 디버그/표시용
-  final String date; // YYYY-MM-DD
-  final String time; // HH:mm:ss
+  final String rawFileName; 
+  final String date; 
+  final String time; 
   final String plate;
   final String user;
 
@@ -516,7 +516,7 @@ class _ImageMeta {
       final fileName = Uri.decodeComponent(seg.split('?').first);
       return fromFileName(fileName);
     } catch (_) {
-      // 파싱 실패 시 최소 fallback
+      
       return const _ImageMeta(rawFileName: '', date: '', time: '', plate: '', user: '');
     }
   }
@@ -528,22 +528,22 @@ class _ImageMeta {
         return const _ImageMeta(rawFileName: '', date: '', time: '', plate: '', user: '');
       }
 
-      // query 제거(혹시 남아있으면)
+      
       if (f.contains('?')) f = f.split('?').first;
 
       final raw = f;
 
-      // 확장자 제거(대소문자 대응)
+      
       final lower = f.toLowerCase();
       if (lower.endsWith('.jpg') || lower.endsWith('.jpeg') || lower.endsWith('.png') || lower.endsWith('.webp')) {
         final dot = f.lastIndexOf('.');
         if (dot > 0) f = f.substring(0, dot);
       }
 
-      // 기대 포맷: YYYY-MM-DD_{millis}_{plate}_{user...}
+      
       final parts = f.split('_');
       if (parts.length < 4) {
-        // 포맷 불명: raw만 남김
+        
         return _ImageMeta(rawFileName: raw, date: '', time: '', plate: '', user: '');
       }
 
@@ -551,7 +551,7 @@ class _ImageMeta {
       final millis = int.tryParse(parts[1].trim()) ?? 0;
       final plate = parts[2].trim();
 
-      // ✅ user는 '_' 포함 가능하므로 나머지 join
+      
       final user = parts.sublist(3).join('_').trim();
 
       String time = '';

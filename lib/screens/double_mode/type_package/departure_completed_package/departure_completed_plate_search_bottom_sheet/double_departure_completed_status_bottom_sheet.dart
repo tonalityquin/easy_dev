@@ -1,16 +1,13 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../../models/plate_model.dart';
-import '../../../../../states/area/area_state.dart';
-import '../../../../../states/plate/double_plate_state.dart';
-import '../../../../../states/user/user_state.dart';
-import '../../../../../enums/plate_type.dart';
-
-import '../../../../../repositories/plate_repo_services/plate_repository.dart';
-import '../../../../../utils/snackbar_helper.dart';
-import '../../../../../widgets/dialog/billing_bottom_sheet/billing_bottom_sheet.dart';
+import '../../../../../features/account/applications/user_state.dart';
+import '../../../../../features/dev/application/area_state.dart';
+import '../../../../../features/plate/application/double/double_plate_state.dart';
+import '../../../../../features/plate/domain/enums/plate_type.dart';
+import '../../../../../features/plate/domain/models/plate_model.dart';
+import '../../../../../features/plate/domain/repositories/plate_repository.dart';
+import '../../../../../widgets/bottom_sheet/billing_bottom_sheet/billing_bottom_sheet.dart';
 import '../../../../common_package/log_package/log_viewer_bottom_sheet.dart';
 
 Future<PlateModel?> showDoubleDepartureCompletedStatusBottomSheet({
@@ -66,48 +63,9 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
 
   bool get _isLocked => _plate.isLockedFee == true;
 
-  /// ✅ 무료 판정: basicAmount == 0 && addAmount == 0
-  bool get _isFreeBilling => (_plate.basicAmount ?? 0) == 0 && (_plate.addAmount ?? 0) == 0;
+  bool get _isFreeBilling =>
+      (_plate.basicAmount ?? 0) == 0 && (_plate.addAmount ?? 0) == 0;
 
-  void _showMessageSafe({required bool success, required String message}) {
-    try {
-      if (success) {
-        showSuccessSnackbar(context, message);
-      } else {
-        showFailedSnackbar(context, message);
-      }
-      return;
-    } catch (_) {}
-
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    if (messenger != null) {
-      messenger.showSnackBar(SnackBar(content: Text(message)));
-      return;
-    }
-
-    final nav = Navigator.of(context, rootNavigator: true);
-    final messenger2 = ScaffoldMessenger.maybeOf(nav.context);
-    if (messenger2 != null) {
-      messenger2.showSnackBar(SnackBar(content: Text(message)));
-      return;
-    }
-
-    showDialog<void>(
-      context: nav.context,
-      builder: (_) => AlertDialog(
-        title: const Text('안내'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(nav.context).pop(),
-            child: const Text('확인'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// ✅ 무료면 자동 “사전정산(0원 잠금)” 처리
   Future<bool> _autoPrebillFreeIfNeeded() async {
     if (_isLocked) return true;
     if (!_isFreeBilling) return false;
@@ -115,7 +73,6 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
     final userName = context.read<UserState>().name;
     final repo = context.read<PlateRepository>();
     final plateState = context.read<DoublePlateState>();
-    final firestore = FirebaseFirestore.instance;
 
     final now = DateTime.now();
     final currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
@@ -141,7 +98,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
         updatedPlate,
       );
 
-      final log = {
+      final log = <String, dynamic>{
         'action': '무료 자동 정산',
         'performedBy': userName,
         'timestamp': now.toIso8601String(),
@@ -149,32 +106,33 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
         'paymentMethod': '무료',
       };
 
-      await firestore.collection('plates').doc(_plate.id).update({
-        'logs': FieldValue.arrayUnion([log]),
-      });
+      await repo.appendPlateLog(
+        plateId: _plate.id,
+        log: log,
+      );
       _reportDbSafe(
         area: _plate.area,
         action: 'write',
-        source: 'departureCompletedStatus.freeAutoPrebill.plates.update.logs.arrayUnion',
+        source: 'departureCompletedStatus.freeAutoPrebill.repo.appendPlateLog',
         n: 1,
       );
 
       if (!mounted) return false;
 
       setState(() => _plate = updatedPlate);
-      _showMessageSafe(success: true, message: '무료 정산이 자동 처리되었습니다. (₩0)');
+      debugPrint('무료 정산이 자동 처리되었습니다. (₩0)');
 
       return true;
     } catch (e) {
       if (!mounted) return false;
-      _showMessageSafe(success: false, message: '무료 자동 정산 중 오류가 발생했습니다: $e');
+      debugPrint('무료 자동 정산 중 오류가 발생했습니다: $e');
       return false;
     }
   }
 
   Future<void> _handlePrebill() async {
     if (_isLocked) {
-      _showMessageSafe(success: false, message: '이미 정산(잠금) 완료된 차량입니다.');
+      debugPrint('이미 정산(잠금) 완료된 차량입니다.');
       return;
     }
 
@@ -186,11 +144,10 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
     final userName = context.read<UserState>().name;
     final repo = context.read<PlateRepository>();
     final plateState = context.read<DoublePlateState>();
-    final firestore = FirebaseFirestore.instance;
 
     final bt = (_plate.billingType ?? '').trim();
     if (bt.isEmpty) {
-      _showMessageSafe(success: false, message: '정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
+      debugPrint('정산 타입이 지정되지 않아 사전 정산이 불가능합니다.');
       return;
     }
 
@@ -233,22 +190,24 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
         updatedPlate,
       );
 
-      final log = {
+      final log = <String, dynamic>{
         'action': '사전 정산',
         'performedBy': userName,
         'timestamp': now.toIso8601String(),
         'lockedFee': result.lockedFee,
         'paymentMethod': result.paymentMethod,
-        if (result.reason != null && result.reason!.trim().isNotEmpty) 'reason': result.reason!.trim(),
+        if (result.reason != null && result.reason!.trim().isNotEmpty)
+          'reason': result.reason!.trim(),
       };
 
-      await firestore.collection('plates').doc(_plate.id).update({
-        'logs': FieldValue.arrayUnion([log]),
-      });
+      await repo.appendPlateLog(
+        plateId: _plate.id,
+        log: log,
+      );
       _reportDbSafe(
         area: _plate.area,
         action: 'write',
-        source: 'departureCompletedStatus.prebill.plates.update.logs.arrayUnion',
+        source: 'departureCompletedStatus.prebill.repo.appendPlateLog',
         n: 1,
       );
 
@@ -256,13 +215,10 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
 
       setState(() => _plate = updatedPlate);
 
-      _showMessageSafe(
-        success: true,
-        message: '사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})',
-      );
+      debugPrint('사전 정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
     } catch (e) {
       if (!mounted) return;
-      _showMessageSafe(success: false, message: '사전 정산 중 오류가 발생했습니다: $e');
+      debugPrint('사전 정산 중 오류가 발생했습니다: $e');
     }
   }
 
@@ -274,7 +230,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
     final lockedFee = _plate.lockedFeeAmount;
     final paymentMethod = (_plate.paymentMethod ?? '').trim();
     final billingType = (_plate.billingType ?? '').trim();
-    final location = (_plate.location).trim().isEmpty ? '미지정' : _plate.location.trim();
+    final location =
+        (_plate.location).trim().isEmpty ? '미지정' : _plate.location.trim();
 
     return SafeArea(
       top: false,
@@ -334,7 +291,9 @@ class _FullHeightSheetState extends State<_FullHeightSheet> {
                           subtitle: _isLocked
                               ? '이미 사전 정산(잠금) 처리됨'
                               : (_isFreeBilling ? '무료(₩0) 자동 정산 가능' : '사전 정산'),
-                          tone: _isLocked ? _ActionTone.neutral : _ActionTone.positive,
+                          tone: _isLocked
+                              ? _ActionTone.neutral
+                              : _ActionTone.positive,
                           onTap: _handlePrebill,
                         ),
                       ],
@@ -591,9 +550,19 @@ class _SectionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: cs.onSurface)),
+          Text(
+            title,
+            style: TextStyle(
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+              color: cs.onSurface,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(subtitle, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
+          Text(
+            subtitle,
+            style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12),
+          ),
           const SizedBox(height: 12),
           child,
         ],
@@ -623,9 +592,14 @@ class _ActionTileButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    final Color base = (tone == _ActionTone.positive) ? cs.tertiary : cs.onSurface;
-    final Color bg = (tone == _ActionTone.positive) ? cs.tertiaryContainer.withOpacity(0.55) : cs.surfaceContainerLow;
-    final Color border = (tone == _ActionTone.positive) ? cs.tertiary.withOpacity(0.25) : cs.outlineVariant.withOpacity(0.85);
+    final Color base =
+        (tone == _ActionTone.positive) ? cs.tertiary : cs.onSurface;
+    final Color bg = (tone == _ActionTone.positive)
+        ? cs.tertiaryContainer.withOpacity(0.55)
+        : cs.surfaceContainerLow;
+    final Color border = (tone == _ActionTone.positive)
+        ? cs.tertiary.withOpacity(0.25)
+        : cs.outlineVariant.withOpacity(0.85);
 
     return Material(
       color: Colors.transparent,
@@ -649,7 +623,11 @@ class _ActionTileButton extends StatelessWidget {
                   Expanded(
                     child: Text(
                       title,
-                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: cs.onSurface),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15,
+                        color: cs.onSurface,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -707,19 +685,11 @@ class _SecondaryActionButton extends StatelessWidget {
   }
 }
 
-/// UsageReporter: 파이어베이스 DB 작업만 계측 (read / write / delete)
 void _reportDbSafe({
   required String area,
   required String action,
   required String source,
   int n = 1,
 }) {
-  try {
-    /*UsageReporter.instance.report(
-      area: area.trim(),
-      action: action,
-      n: n,
-      source: source,
-    );*/
-  } catch (_) {}
+  try {} catch (_) {}
 }

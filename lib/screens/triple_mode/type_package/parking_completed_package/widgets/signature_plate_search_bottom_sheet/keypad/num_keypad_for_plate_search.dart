@@ -7,8 +7,11 @@ class NumKeypadForPlateSearch extends StatefulWidget {
   final VoidCallback? onComplete;
   final ValueChanged<bool>? onChangeFrontDigitMode;
   final VoidCallback? onReset;
+
+  
   final Color? backgroundColor;
   final TextStyle? textStyle;
+
   final bool enableDigitModeSwitch;
 
   const NumKeypadForPlateSearch({
@@ -27,7 +30,8 @@ class NumKeypadForPlateSearch extends StatefulWidget {
   State<NumKeypadForPlateSearch> createState() => _NumKeypadForPlateSearchState();
 }
 
-class _NumKeypadForPlateSearchState extends State<NumKeypadForPlateSearch> with TickerProviderStateMixin {
+class _NumKeypadForPlateSearchState extends State<NumKeypadForPlateSearch>
+    with TickerProviderStateMixin {
   final Map<String, AnimationController> _controllers = {};
   final Map<String, bool> _isPressed = {};
 
@@ -41,17 +45,25 @@ class _NumKeypadForPlateSearchState extends State<NumKeypadForPlateSearch> with 
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    
+    final Color panelBg = widget.backgroundColor ?? cs.surface;
+    final Color divider = cs.outlineVariant.withOpacity(0.9);
+    final Color shadowColor = cs.shadow.withOpacity(0.10);
+
     return Container(
       decoration: BoxDecoration(
-        color: widget.backgroundColor ?? Colors.white,
+        color: panelBg,
         borderRadius: BorderRadius.zero,
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Colors.black12,
-            blurRadius: 6,
-            offset: Offset(0, -2),
+            color: shadowColor,
+            blurRadius: 10,
+            offset: const Offset(0, -2),
           ),
         ],
+        border: Border(top: BorderSide(color: divider)),
       ),
       padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 12),
       child: Column(
@@ -70,6 +82,7 @@ class _NumKeypadForPlateSearchState extends State<NumKeypadForPlateSearch> with 
     if (widget.enableDigitModeSwitch) {
       return ['두자리', '0', '세자리'];
     } else if (widget.onReset != null) {
+      
       return ['처음', '0', '처음'];
     } else {
       return ['', '0', ''];
@@ -79,7 +92,7 @@ class _NumKeypadForPlateSearchState extends State<NumKeypadForPlateSearch> with 
   Widget _buildRow(List<String> keys) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: keys.map((key) => _buildKeyButton(key)).toList(),
+      children: keys.map(_buildKeyButton).toList(),
     );
   }
 
@@ -90,7 +103,7 @@ class _NumKeypadForPlateSearchState extends State<NumKeypadForPlateSearch> with 
 
     _controllers.putIfAbsent(
       key,
-      () => AnimationController(
+          () => AnimationController(
         duration: const Duration(milliseconds: 80),
         vsync: this,
         lowerBound: 0.0,
@@ -99,15 +112,56 @@ class _NumKeypadForPlateSearchState extends State<NumKeypadForPlateSearch> with 
     );
     _isPressed.putIfAbsent(key, () => false);
 
+    final cs = Theme.of(context).colorScheme;
+
     final controller = _controllers[key]!;
     final animation = Tween(begin: 1.0, end: 0.85).animate(
       CurvedAnimation(parent: controller, curve: Curves.easeOut),
     );
 
+    final bool pressed = _isPressed[key] ?? false;
+
+    
+    final bool isDigit = RegExp(r'^\d$').hasMatch(key);
+    final bool isModeKey = (key == '두자리' || key == '세자리');
+    final bool isResetKey = (key == '처음');
+
+    
+    final Color baseBg = cs.surfaceContainerLow;
+    final Color pressedBg = cs.primaryContainer.withOpacity(0.55);
+
+    
+    final Color functionBaseBg = cs.surfaceContainerHighest.withOpacity(0.65);
+    final Color functionPressedBg = cs.primaryContainer.withOpacity(0.70);
+
+    final Color bgColor = pressed
+        ? (isDigit ? pressedBg : functionPressedBg)
+        : (isDigit ? baseBg : functionBaseBg);
+
+    final Color borderColor = cs.outlineVariant.withOpacity(0.9);
+
+    
+    final TextStyle baseTextStyle = widget.textStyle ??
+        TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
+          color: cs.onSurface,
+        );
+
+    
+    final TextStyle textStyle = (isModeKey || isResetKey)
+        ? baseTextStyle.copyWith(
+      fontSize: 16,
+      fontWeight: FontWeight.w700,
+      color: cs.onSurface,
+    )
+        : baseTextStyle.copyWith(color: cs.onSurface);
+
     return Expanded(
       child: Padding(
         padding: const EdgeInsets.all(4.0),
         child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTapDown: (_) {
             HapticFeedback.selectionClick();
             setState(() => _isPressed[key] = true);
@@ -127,25 +181,15 @@ class _NumKeypadForPlateSearchState extends State<NumKeypadForPlateSearch> with 
           child: ScaleTransition(
             scale: animation,
             child: Container(
-              constraints: const BoxConstraints(
-                minHeight: 48,
-              ),
+              constraints: const BoxConstraints(minHeight: 48),
               padding: const EdgeInsets.symmetric(vertical: 12.0),
               decoration: BoxDecoration(
-                color: _isPressed[key]! ? Colors.lightBlue[100] : Colors.grey[50],
+                color: bgColor,
                 borderRadius: BorderRadius.zero,
-                border: Border.all(color: Colors.grey[300]!),
+                border: Border.all(color: borderColor),
               ),
               child: Center(
-                child: Text(
-                  key,
-                  style: (widget.textStyle ??
-                          const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w500,
-                          ))
-                      .copyWith(color: Colors.black87),
-                ),
+                child: Text(key, style: textStyle),
               ),
             ),
           ),
@@ -166,12 +210,13 @@ class _NumKeypadForPlateSearchState extends State<NumKeypadForPlateSearch> with 
       return;
     }
 
+    
+    if (!RegExp(r'^\d$').hasMatch(key)) return;
+
     if (widget.controller.text.length < widget.maxLength) {
       widget.controller.text += key;
       if (widget.controller.text.length == widget.maxLength) {
-        Future.microtask(() {
-          widget.onComplete?.call();
-        });
+        Future.microtask(() => widget.onComplete?.call());
       }
     }
   }

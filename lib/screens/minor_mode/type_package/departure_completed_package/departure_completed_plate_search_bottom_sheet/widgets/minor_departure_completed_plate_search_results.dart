@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
-import '../../../../../../../models/plate_model.dart';
-import '../../../../../../enums/plate_type.dart';
+import '../../../../../../features/plate/domain/enums/plate_type.dart';
+import '../../../../../../features/plate/domain/models/plate_model.dart';
 
 class MinorDepartureCompletedPlateSearchResults extends StatelessWidget {
   final List<PlateModel> results;
   final void Function(PlateModel) onSelect;
 
-  /// ✅ (기존 시그니처 유지) 필요 시 결과 새로고침 버튼으로 사용
+  
   final VoidCallback? onRefresh;
 
   const MinorDepartureCompletedPlateSearchResults({
@@ -134,7 +133,7 @@ class MinorDepartureCompletedPlateSearchResults extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 상단: 번호 + 칩
+                      
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [

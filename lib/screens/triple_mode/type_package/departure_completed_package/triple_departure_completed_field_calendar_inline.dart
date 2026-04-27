@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 
-import '../../../../enums/plate_type.dart';
-import '../../../../models/plate_model.dart';
-import '../../../../states/area/area_state.dart';
-import '../../../../states/calendar/field_calendar_state.dart';
-import '../../../../states/plate/triple_plate_state.dart';
-import '../../../../utils/snackbar_helper.dart';
+import '../../../../features/dev/application/area_state.dart';
+import '../../../../features/dev/application/field_calendar_state.dart';
+import '../../../../features/plate/application/triple/triple_plate_state.dart';
+import '../../../../features/plate/domain/enums/plate_type.dart';
+import '../../../../features/plate/domain/models/plate_model.dart';
 
 class TripleDepartureCompletedFieldCalendarInline extends StatefulWidget {
   const TripleDepartureCompletedFieldCalendarInline({super.key});
@@ -84,28 +83,19 @@ class _TripleDepartureCompletedFieldCalendarInlineState
       firstDay: DateTime.utc(2020, 1, 1),
       lastDay: DateTime.utc(2100, 12, 31),
       focusedDay: _focusedDay,
-
       selectedDayPredicate: (day) => isSameDay(calendar.selectedDate, day),
-
       onDaySelected: (selectedDay, focusedDay) {
         final d = DateTime(selectedDay.year, selectedDay.month, selectedDay.day);
         calendar.selectDate(d);
         context.read<FieldSelectedDateState>().setSelectedDate(d);
-
         setState(() => _focusedDay = focusedDay);
-
-        showSelectedSnackbar(context, '선택된 날짜: ${calendar.formatDate(d)}');
       },
-
       onPageChanged: (focusedDay) => setState(() => _focusedDay = focusedDay),
-
       eventLoader: (day) {
         final key = _dateKey(DateTime(day.year, day.month, day.day));
         final count = unsettledMap[key] ?? 0;
         return count > 0 ? const ['UNSETTLED'] : const [];
       },
-
-      // ✅ 브랜드 팔레트(ColorScheme)만 사용: const 제거
       calendarStyle: CalendarStyle(
         todayDecoration: BoxDecoration(
           color: cs.primaryContainer,
@@ -122,7 +112,6 @@ class _TripleDepartureCompletedFieldCalendarInlineState
         markersAlignment: Alignment.bottomCenter,
         outsideDaysVisible: true,
       ),
-
       availableGestures: AvailableGestures.horizontalSwipe,
     );
   }

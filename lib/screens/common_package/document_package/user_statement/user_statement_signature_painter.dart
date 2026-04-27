@@ -9,7 +9,7 @@ class UserStatementSignaturePainter extends CustomPainter {
     required this.overlayName,
     required this.overlayDateText,
 
-    // ✅ 테마 기반 색 주입(하드코딩 제거)
+    
     required this.guideColor,
     required this.hintColor,
     required this.overlayTextColor,
@@ -28,11 +28,11 @@ class UserStatementSignaturePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // 배경
+    
     final bg = Paint()..color = background;
     canvas.drawRect(Offset.zero & size, bg);
 
-    // 가이드 라인
+    
     final guide = Paint()
       ..color = guideColor
       ..strokeWidth = 1;
@@ -47,7 +47,7 @@ class UserStatementSignaturePainter extends CustomPainter {
       guide,
     );
 
-    // 실제 서명 선
+    
     final p = Paint()
       ..color = color
       ..strokeWidth = strokeWidth
@@ -63,7 +63,7 @@ class UserStatementSignaturePainter extends CustomPainter {
       }
     }
 
-    // 아무 서명도 없을 때 안내 문구
+    
     final hasAny = points.any((e) => e != null);
     if (!hasAny) {
       final hint = TextSpan(
@@ -86,7 +86,7 @@ class UserStatementSignaturePainter extends CustomPainter {
       );
     }
 
-    // 오른쪽 아래 서명자/시간 오버레이
+    
     final overlayTP = TextPainter(
       text: TextSpan(
         text: '서명자: $overlayName   서명일시: $overlayDateText',

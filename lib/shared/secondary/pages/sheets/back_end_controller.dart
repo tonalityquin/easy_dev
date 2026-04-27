@@ -1,0 +1,193 @@
+import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../features/selector/application/dev_auth.dart';
+import '../../../../features/selector/sheets/service_bottom_sheet.dart';
+import '../../../../utils/snackbar_helper.dart';
+
+const String kDevModeEnabledKey = 'dev_mode_enabled_v1';
+
+class BackEndController extends StatefulWidget {
+  const BackEndController({super.key});
+
+  @override
+  State<BackEndController> createState() => _BackEndControllerState();
+}
+
+class _BackEndControllerState extends State<BackEndController> {
+  bool _checkingDevAuth = true;
+  bool _devAuthorized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDevAuth();
+  }
+
+  Future<void> _loadDevAuth() async {
+    try {
+      final restored = await DevAuth.restorePrefs();
+      final prefs = await SharedPreferences.getInstance();
+      final devModeEnabled = prefs.getBool(kDevModeEnabledKey) ?? false;
+
+      if (!mounted) return;
+      setState(() {
+        _devAuthorized = restored.devAuthorized || devModeEnabled;
+        _checkingDevAuth = false;
+      });
+    } catch (_) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final devModeEnabled = prefs.getBool(kDevModeEnabledKey) ?? false;
+
+        if (!mounted) return;
+        setState(() {
+          _devAuthorized = devModeEnabled;
+          _checkingDevAuth = false;
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _devAuthorized = false;
+          _checkingDevAuth = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _openServiceSettings() async {
+    final before = _devAuthorized;
+
+    await ServiceBottomSheet.show(
+      context: context,
+    );
+
+    if (!mounted) return;
+    await _loadDevAuth();
+    if (!mounted) return;
+
+    if (!before && _devAuthorized) {
+      showSuccessSnackbar(context, '개발자 모드가 활성화되었습니다.');
+    }
+  }
+
+  Future<void> _resetDevAuthInline() async {
+    await DevAuth.resetDevAuth();
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(kDevModeEnabledKey, false);
+
+    if (!mounted) return;
+    await _loadDevAuth();
+    if (!mounted) return;
+
+    showSelectedSnackbar(context, '개발자 모드가 비활성화되었습니다.');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Scaffold(
+      appBar: AppBar(
+        automaticallyImplyLeading: true,
+        title: const Text(
+          '실시간 컨트롤러',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        centerTitle: true,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
+        elevation: 0,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: cs.outlineVariant.withOpacity(.6)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'PlateState(스냅샷 구독) 기능 제거됨',
+                    style: (tt.titleMedium ?? const TextStyle(fontSize: 16))
+                        .copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '요구사항에 따라 Firestore QuerySnapshot 기반 실시간 구독 로직을 완전히 제거했습니다.\n이 화면은 개발자 인증/설정 진입만 제공합니다.',
+                    style: (tt.bodyMedium ?? const TextStyle(fontSize: 14))
+                        .copyWith(
+                      color: cs.onSurfaceVariant,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: cs.outlineVariant.withOpacity(.6)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    _devAuthorized ? Icons.verified_user : Icons.lock_outline,
+                    color: _devAuthorized ? cs.primary : cs.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _checkingDevAuth
+                          ? '개발자 모드 확인 중...'
+                          : (_devAuthorized ? '개발자 모드: 활성' : '개발자 모드: 비활성'),
+                      style: (tt.bodyLarge ?? const TextStyle(fontSize: 15))
+                          .copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    onPressed: _checkingDevAuth ? null : _openServiceSettings,
+                    icon: const Icon(Icons.settings_outlined),
+                    label: const Text('서비스 설정'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _checkingDevAuth ? null : _resetDevAuthInline,
+                    icon: const Icon(Icons.restart_alt),
+                    label: const Text('개발자 모드 초기화'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

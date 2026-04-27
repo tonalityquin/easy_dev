@@ -2,9 +2,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../states/area/area_state.dart';
-import '../../states/plate/triple_plate_state.dart';
-import '../dialog/triple_area_picker_bottom_sheet.dart';
+import '../../features/dev/application/area_state.dart';
+import '../../features/plate/application/triple/triple_plate_state.dart';
+import '../bottom_sheet/picker_bottom_sheet/triple_area_picker_bottom_sheet.dart';
 
 class TripleTopNavigation extends StatelessWidget {
   final bool isAreaSelectable;
@@ -32,7 +32,7 @@ class TripleTopNavigation extends StatelessWidget {
           plateState: plateState,
         )
             : null,
-        // ✅ 하드코딩 splash/highlight 제거 → ColorScheme 기반
+        
         overlayColor: MaterialStateProperty.resolveWith<Color?>(
               (states) {
             if (!isAreaSelectable) return null;

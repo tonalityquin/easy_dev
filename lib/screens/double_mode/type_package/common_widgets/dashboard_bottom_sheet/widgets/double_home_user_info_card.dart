@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../../../states/user/user_state.dart';
+import '../../../../../../features/account/applications/user_state.dart';
 
 class DoubleHomeUserInfoCard extends StatelessWidget {
   const DoubleHomeUserInfoCard({super.key});
@@ -28,7 +28,7 @@ class DoubleHomeUserInfoCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 헤더 라벨
+              
               Row(
                 children: [
                   Icon(Icons.badge, size: 14, color: cs.onSurfaceVariant),
@@ -46,7 +46,7 @@ class DoubleHomeUserInfoCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
 
-              // 프로필 영역
+              
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

@@ -4,23 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../../../states/user/user_state.dart';
-import '../../../../../../states/area/area_state.dart';
-
-import '../../../../../../repositories/commute_repo_services/commute_log_repository.dart';
-import '../../../../../../utils/block_dialogs/break_duration_blocking_dialog.dart';
-import '../../../../../../utils/block_dialogs/work_end_duration_blocking_dialog.dart';
-
-import '../../common_package/document_package/backup/backup_form_page.dart';
-import '../../single_mode/utils/att_brk_mode_db.dart';
-import '../document_package/user_statement/user_statement_form_page.dart';
-import '../document_package/work_end_report/dashboard_end_report_form_page.dart';
-import '../document_package/work_start_report/dashboard_start_report_form_page.dart';
+import '../../../features/account/applications/user_state.dart';
+import '../../../features/commute/domain/repositories/commute_log_repository.dart';
+import '../../../features/dev/application/area_state.dart';
+import '../../../features/mode_single/application/att_brk_mode_db.dart';
+import 'document_box_action.dart';
 import 'fielder_document_inventory_repository.dart';
 import 'document_item.dart';
 
-Future<void> openFielderDocumentBox(BuildContext context) async {
-  await showModalBottomSheet<void>(
+Future<DocumentBoxAction?> openFielderDocumentBox(BuildContext context) async {
+  return showModalBottomSheet<DocumentBoxAction>(
     context: context,
     useRootNavigator: false,
     isScrollControlled: true,
@@ -84,13 +77,15 @@ class _FielderDocumentBoxSheet extends StatelessWidget {
                               child: StreamBuilder<List<DocumentItem>>(
                                 stream: repo.streamForUser(userState),
                                 builder: (context, snapshot) {
-                                  if (snapshot.connectionState == ConnectionState.waiting) {
+                                  if (snapshot.connectionState ==
+                                      ConnectionState.waiting) {
                                     return const Center(
                                       child: CircularProgressIndicator(),
                                     );
                                   }
 
-                                  final items = snapshot.data ?? const <DocumentItem>[];
+                                  final items =
+                                      snapshot.data ?? const <DocumentItem>[];
 
                                   if (items.isEmpty) {
                                     return const _EmptyState();
@@ -106,71 +101,47 @@ class _FielderDocumentBoxSheet extends StatelessWidget {
                                       final item = items[index];
                                       return _DocumentListItem(
                                         item: item,
-                                        onTap: () async {
+                                        onTap: () {
                                           switch (item.type) {
                                             case DocumentType.statementForm:
-                                            // ✅ statementForm 안에서 id 기준 분기
-                                              if (item.id == 'template-commute-record') {
-                                                // 출퇴근 기록 제출
-                                                final proceed = await showWorkEndDurationBlockingDialog(
-                                                  context,
-                                                  message: '단말기에 저장된 출퇴근 기록을\n서버에 제출합니다.\n\n'
-                                                      '제출을 원치 않으면 아래 [취소] 버튼을 눌러 주세요.',
-                                                  duration: const Duration(seconds: 5),
+                                              if (item.id ==
+                                                  'template-commute-record') {
+                                                Navigator.of(context).pop(
+                                                  DocumentBoxAction
+                                                      .submitFielderCommuteRecords,
                                                 );
-                                                if (!proceed) return;
-
-                                                await _submitCommuteRecordsFromSqlite(context);
-                                              } else if (item.id == 'template-resttime-record') {
-                                                // 휴게시간 기록 제출
-                                                final proceed = await showBreakDurationBlockingDialog(
-                                                  context,
-                                                  message: '단말기에 저장된 휴게시간 기록을\n서버에 제출합니다.\n\n'
-                                                      '제출을 원치 않으면 아래 [취소] 버튼을 눌러 주세요.',
-                                                  duration: const Duration(seconds: 5),
+                                              } else if (item.id ==
+                                                  'template-resttime-record') {
+                                                Navigator.of(context).pop(
+                                                  DocumentBoxAction
+                                                      .submitFielderRestTimeRecords,
                                                 );
-                                                if (!proceed) return;
-
-                                                await _submitRestTimeRecordsFromSqlite(context);
                                               } else {
-                                                // 그 외(일반 경위서) → 경위서 작성 화면
-                                                Navigator.of(context).push(
-                                                  MaterialPageRoute(
-                                                    builder: (_) => const UserStatementFormPage(),
-                                                    fullscreenDialog: true,
-                                                  ),
+                                                Navigator.of(context).pop(
+                                                  DocumentBoxAction
+                                                      .openUserStatementForm,
                                                 );
                                               }
                                               break;
-
                                             case DocumentType.workEndReportForm:
-                                            // ✅ 업무 종료/퇴근 보고 양식은 모두 새 DashboardEndReportFormPage 로 이동
-                                              Navigator.of(context).push(
-                                                MaterialPageRoute(
-                                                  builder: (_) => const DashboardEndReportFormPage(),
-                                                  fullscreenDialog: true,
-                                                ),
+                                              Navigator.of(context).pop(
+                                                DocumentBoxAction
+                                                    .openWorkEndReportForm,
                                               );
                                               break;
-
-                                            case DocumentType.workStartReportForm:
-                                            // ✅ 업무 시작 보고 양식 → 새로 만든 화면으로 이동
-                                              Navigator.of(context).push(
-                                                MaterialPageRoute(
-                                                  builder: (_) => const DashboardStartReportFormPage(),
-                                                  fullscreenDialog: true,
-                                                ),
+                                            case DocumentType
+                                                  .workStartReportForm:
+                                              Navigator.of(context).pop(
+                                                DocumentBoxAction
+                                                    .openWorkStartReportForm,
                                               );
                                               break;
-
                                             case DocumentType.generic:
-                                            // ✅ generic 문서 중 연차(결근) 지원 신청서 연결
-                                              if (item.id == 'template-annual-leave-application') {
-                                                Navigator.of(context).push(
-                                                  MaterialPageRoute(
-                                                    builder: (_) => const BackupFormPage(),
-                                                    fullscreenDialog: true,
-                                                  ),
+                                              if (item.id ==
+                                                  'template-annual-leave-application') {
+                                                Navigator.of(context).pop(
+                                                  DocumentBoxAction
+                                                      .openBackupForm,
                                                 );
                                               }
                                               break;
@@ -197,7 +168,6 @@ class _FielderDocumentBoxSheet extends StatelessWidget {
   }
 }
 
-/// 상단 드래그 핸들
 class _SheetHandle extends StatelessWidget {
   const _SheetHandle();
 
@@ -217,7 +187,6 @@ class _SheetHandle extends StatelessWidget {
   }
 }
 
-/// 문서철 왼쪽 스파인(바인더 느낌)
 class _BinderSpine extends StatelessWidget {
   const _BinderSpine();
 
@@ -235,7 +204,7 @@ class _BinderSpine extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: List.generate(
           5,
-              (index) => Padding(
+          (index) => Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Container(
               width: 10,
@@ -259,7 +228,6 @@ class _BinderSpine extends StatelessWidget {
   }
 }
 
-/// 상단 헤더(문서철 제목/설명)
 class _SheetHeader extends StatelessWidget {
   const _SheetHeader();
 
@@ -324,7 +292,6 @@ class _SheetHeader extends StatelessWidget {
   }
 }
 
-/// 각각의 문서를 카드 형태로 보여주는 위젯
 class _DocumentListItem extends StatelessWidget {
   final DocumentItem item;
   final VoidCallback onTap;
@@ -336,8 +303,8 @@ class _DocumentListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final accentColor = _accentColorForItem(item); // ← item 기준 색상
-    final typeLabel = _typeLabelForItem(item); // ← item 기준 라벨
+    final accentColor = _accentColorForItem(item);
+    final typeLabel = _typeLabelForItem(item);
     final iconData = _iconForType(item.type);
     final textTheme = Theme.of(context).textTheme;
 
@@ -361,7 +328,6 @@ class _DocumentListItem extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // 좌측 컬러 인덱스 바
               Container(
                 width: 6,
                 height: 80,
@@ -516,10 +482,6 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-/// ─────────────────────────
-/// SQLite → Firestore 동기화용 모델/함수 (출퇴근/휴게 기록)
-/// ─────────────────────────
-
 class LocalCommuteRecord {
   final String status;
   final DateTime dateTime;
@@ -536,10 +498,48 @@ class LocalCommuteRecord {
   });
 }
 
+DateTime _dayOnly(DateTime dt) => DateTime(dt.year, dt.month, dt.day);
+
+class _FilteredLocalRecords {
+  final List<LocalCommuteRecord> uploadTargets;
+  final DateTime latestDay;
+  final DateTime cutoffDay;
+
+  const _FilteredLocalRecords({
+    required this.uploadTargets,
+    required this.latestDay,
+    required this.cutoffDay,
+  });
+}
+
+_FilteredLocalRecords _filterUpToDayBeforeLatest(
+    List<LocalCommuteRecord> records) {
+  if (records.isEmpty) {
+    return _FilteredLocalRecords(
+      uploadTargets: const <LocalCommuteRecord>[],
+      latestDay: DateTime(1970, 1, 1),
+      cutoffDay: DateTime(1970, 1, 1),
+    );
+  }
+
+  final latestDay = records
+      .map((r) => _dayOnly(r.dateTime))
+      .reduce((a, b) => a.isAfter(b) ? a : b);
+
+  final cutoffDay = latestDay.subtract(const Duration(days: 1));
+
+  final targets =
+      records.where((r) => !_dayOnly(r.dateTime).isAfter(cutoffDay)).toList();
+
+  return _FilteredLocalRecords(
+    uploadTargets: targets,
+    latestDay: latestDay,
+    cutoffDay: cutoffDay,
+  );
+}
+
 Future<List<LocalCommuteRecord>> _loadLocalCommuteRecordsFromSqlite({
-  required BuildContext context,
   required List<String> statuses,
-  required String userId,
 }) async {
   final db = await AttBrkModeDb.instance.database;
   final result = <LocalCommuteRecord>[];
@@ -629,42 +629,36 @@ Future<int> _deleteLocalAttendanceRow(LocalCommuteRecord record) async {
   );
 }
 
-Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
-  final messenger = ScaffoldMessenger.of(context);
-
+Future<void> _submitLocalAttendanceRecordsToFirestore(
+  BuildContext context, {
+  required List<String> statuses,
+  required String debugTag,
+}) async {
   final userState = context.read<UserState>();
   final areaState = context.read<AreaState>();
 
-  final userId = (userState.user?.id ?? '').trim();
+  final userId = (userState.session?.id ?? '').trim();
   final userName = userState.name.trim();
-  final area = (userState.user?.selectedArea ?? '').trim();
+  final area = (userState.session?.selectedArea ?? '').trim();
   final division = areaState.currentDivision.trim();
 
   if (userId.isEmpty || userName.isEmpty || area.isEmpty || division.isEmpty) {
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Text(
-          '출퇴근 기록 제출 실패: 사용자/근무지 정보가 비어 있습니다.\n'
-              '관리자에게 계정 및 근무지 설정을 확인해 달라고 요청해 주세요.',
-        ),
-      ),
-    );
     return;
   }
 
   try {
     final records = await _loadLocalCommuteRecordsFromSqlite(
-      context: context,
-      statuses: const ['출근', '퇴근'],
-      userId: userId,
+      statuses: statuses,
     );
 
     if (records.isEmpty) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('제출할 출퇴근 기록이 없습니다.'),
-        ),
-      );
+      return;
+    }
+
+    final filtered = _filterUpToDayBeforeLatest(records);
+    final uploadTargets = filtered.uploadTargets;
+
+    if (uploadTargets.isEmpty) {
       return;
     }
 
@@ -672,12 +666,7 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
     final dateFormatter = DateFormat('yyyy-MM-dd');
     final timeFormatter = DateFormat('HH:mm');
 
-    var successCount = 0;
-    var skippedCount = 0;
-    var failedCount = 0;
-    var deletedCount = 0;
-
-    for (final record in records) {
+    for (final record in uploadTargets) {
       final status = record.status;
       final eventDateTime = record.dateTime;
 
@@ -691,8 +680,7 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
       );
 
       if (alreadyExists) {
-        skippedCount++;
-        deletedCount += await _deleteLocalAttendanceRow(record);
+        await _deleteLocalAttendanceRow(record);
         continue;
       }
 
@@ -714,158 +702,31 @@ Future<void> _submitCommuteRecordsFromSqlite(BuildContext context) async {
       );
 
       if (nowExists) {
-        successCount++;
-        deletedCount += await _deleteLocalAttendanceRow(record);
-      } else {
-        failedCount++;
+        await _deleteLocalAttendanceRow(record);
       }
     }
-
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          '출퇴근 기록 제출 결과: '
-              '$successCount건 업로드, '
-              '서버 중복 $skippedCount건, '
-              '실패 $failedCount건, '
-              '로컬 정리 $deletedCount건.',
-        ),
-      ),
-    );
   } catch (e, st) {
-    debugPrint('❌ [FielderDocumentBoxSheet] 출퇴근 기록 제출 중 오류: $e');
-    debugPrint('stack: $st'); // ✅ DebugDatabaseLogger 로직 제거(스택은 debugPrint로만)
-
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Text(
-          '출퇴근 기록 제출 중 오류가 발생했습니다.\n'
-              '네트워크 또는 Firebase 설정을 확인해 주세요.',
-        ),
-      ),
-    );
+    debugPrint('❌ [$debugTag] 기록 제출 중 오류: $e');
+    debugPrint('stack: $st');
   }
 }
 
-Future<void> _submitRestTimeRecordsFromSqlite(BuildContext context) async {
-  final messenger = ScaffoldMessenger.of(context);
-
-  final userState = context.read<UserState>();
-  final areaState = context.read<AreaState>();
-
-  final userId = (userState.user?.id ?? '').trim();
-  final userName = userState.name.trim();
-  final area = (userState.user?.selectedArea ?? '').trim();
-  final division = areaState.currentDivision.trim();
-
-  if (userId.isEmpty || userName.isEmpty || area.isEmpty || division.isEmpty) {
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Text(
-          '휴게시간 기록 제출 실패: 사용자/근무지 정보가 비어 있습니다.\n'
-              '관리자에게 계정 및 근무지 설정을 확인해 달라고 요청해 주세요.',
-        ),
-      ),
-    );
-    return;
-  }
-
-  try {
-    final records = await _loadLocalCommuteRecordsFromSqlite(
-      context: context,
-      statuses: const ['휴게'],
-      userId: userId,
-    );
-
-    if (records.isEmpty) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('제출할 휴게시간 기록이 없습니다.'),
-        ),
-      );
-      return;
-    }
-
-    final repo = CommuteLogRepository();
-    final dateFormatter = DateFormat('yyyy-MM-dd');
-    final timeFormatter = DateFormat('HH:mm');
-
-    var successCount = 0;
-    var skippedCount = 0;
-    var failedCount = 0;
-    var deletedCount = 0;
-
-    for (final record in records) {
-      final eventDateTime = record.dateTime;
-      final dateStr = dateFormatter.format(eventDateTime);
-      final recordedTime = timeFormatter.format(eventDateTime);
-
-      final alreadyExists = await repo.hasLogForDate(
-        status: '휴게',
-        userId: userId,
-        dateStr: dateStr,
-      );
-
-      if (alreadyExists) {
-        skippedCount++;
-        deletedCount += await _deleteLocalAttendanceRow(record);
-        continue;
-      }
-
-      await repo.addLog(
-        status: '휴게',
-        userId: userId,
-        userName: userName,
-        area: area,
-        division: division,
-        dateStr: dateStr,
-        recordedTime: recordedTime,
-        dateTime: eventDateTime,
-      );
-
-      final nowExists = await repo.hasLogForDate(
-        status: '휴게',
-        userId: userId,
-        dateStr: dateStr,
-      );
-
-      if (nowExists) {
-        successCount++;
-        deletedCount += await _deleteLocalAttendanceRow(record);
-      } else {
-        failedCount++;
-      }
-    }
-
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          '휴게시간 기록 제출 결과: '
-              '$successCount건 업로드, '
-              '서버 중복 $skippedCount건, '
-              '실패 $failedCount건, '
-              '로컬 정리 $deletedCount건.',
-        ),
-      ),
-    );
-  } catch (e, st) {
-    debugPrint('❌ [FielderDocumentBoxSheet] 휴게시간 기록 제출 중 오류: $e');
-    debugPrint('stack: $st'); // ✅ DebugDatabaseLogger 로직 제거(스택은 debugPrint로만)
-
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Text(
-          '휴게시간 기록 제출 중 오류가 발생했습니다.\n'
-              '네트워크 또는 Firebase 설정을 확인해 주세요.',
-        ),
-      ),
-    );
-  }
+Future<void> submitFielderCommuteRecordsFromSqlite(BuildContext context) async {
+  return _submitLocalAttendanceRecordsToFirestore(
+    context,
+    statuses: const ['출근', '퇴근'],
+    debugTag: 'FielderDocumentBoxSheet/CommuteSubmit',
+  );
 }
 
-/// ─────────────────────────
-/// 디자인/텍스트 헬퍼 함수 모음
-/// ─────────────────────────
+Future<void> submitFielderRestTimeRecordsFromSqlite(
+    BuildContext context) async {
+  return _submitLocalAttendanceRecordsToFirestore(
+    context,
+    statuses: const ['휴게'],
+    debugTag: 'FielderDocumentBoxSheet/BreakSubmit',
+  );
+}
 
 String _buildSubtitle(DocumentItem item) {
   final parts = <String>[];

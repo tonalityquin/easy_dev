@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../../single_mode/utils/att_brk_repository.dart';
-import '../../../../../hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
+import '../../../../../../features/dev/debug/debug_action_recorder.dart';
+import '../../../../../../features/mode_single/application/att_brk_repository.dart';
 
 void _traceDoublePunch(BuildContext context, AttBrkModeType type, DateTime dateTime) {
   final String name;
@@ -97,15 +97,15 @@ IconData _iconForType(AttBrkModeType type) {
   }
 }
 
-/// ✅ 하드코딩 색 제거: ColorScheme 기반으로 타입별 강조색 매핑
+
 Color _accentColorForType(ColorScheme cs, AttBrkModeType type) {
   switch (type) {
     case AttBrkModeType.workIn:
-      return cs.primary;  // 출근
+      return cs.primary;  
     case AttBrkModeType.breakTime:
-      return cs.tertiary; // 휴게
+      return cs.tertiary; 
     case AttBrkModeType.workOut:
-      return cs.error;    // 퇴근
+      return cs.error;    
   }
 }
 
@@ -232,7 +232,7 @@ class _PunchCardSheetState extends State<_PunchCardSheet> with SingleTickerProvi
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          // 펀칭 헤드
+                          
                           Transform.translate(
                             offset: Offset(0, headDy),
                             child: Opacity(
@@ -263,7 +263,7 @@ class _PunchCardSheetState extends State<_PunchCardSheet> with SingleTickerProvi
                           ),
                           const SizedBox(height: 8),
 
-                          // 헤더
+                          
                           Row(
                             children: [
                               Text(
@@ -284,7 +284,7 @@ class _PunchCardSheetState extends State<_PunchCardSheet> with SingleTickerProvi
                           ),
                           const SizedBox(height: 6),
 
-                          // 타입 안내
+                          
                           Row(
                             children: [
                               Container(
@@ -322,7 +322,7 @@ class _PunchCardSheetState extends State<_PunchCardSheet> with SingleTickerProvi
                           ),
                           const SizedBox(height: 12),
 
-                          // 카드 테이블
+                          
                           Container(
                             decoration: BoxDecoration(
                               color: cs.surface,

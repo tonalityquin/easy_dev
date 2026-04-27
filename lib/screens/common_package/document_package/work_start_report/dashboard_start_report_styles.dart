@@ -1,14 +1,14 @@
-// lib/screens/simple_package/simple_inside_package/sections/simple_inside_report_styles.dart
+
 
 import 'package:flutter/material.dart';
 
-/// 경위서 화면에서 공통으로 사용하는 버튼 스타일 모음
-/// - 하드코딩 팔레트 제거
-/// - ColorScheme 기반으로 전역 프리셋/다크모드를 자동 반영
+
+
+
 class DashboardReportButtonStyles {
   static const double _radius = 8.0;
 
-  /// 메인 액션 버튼
+  
   static ButtonStyle primary(
       BuildContext context, {
         double minHeight = 55,
@@ -35,7 +35,7 @@ class DashboardReportButtonStyles {
     );
   }
 
-  /// 서브/보조 액션 버튼
+  
   static ButtonStyle outlined(
       BuildContext context, {
         double minHeight = 55,

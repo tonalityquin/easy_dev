@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 
-import '../../../../enums/plate_type.dart';
-import '../../../../models/plate_model.dart';
-import '../../../../states/area/area_state.dart';
-import '../../../../states/calendar/field_calendar_state.dart';
-import '../../../../states/plate/minor_plate_state.dart';
-import '../../../../utils/snackbar_helper.dart';
+import '../../../../features/dev/application/area_state.dart';
+import '../../../../features/dev/application/field_calendar_state.dart';
+import '../../../../features/plate/application/minor/minor_plate_state.dart';
+import '../../../../features/plate/domain/enums/plate_type.dart';
+import '../../../../features/plate/domain/models/plate_model.dart';
 
 class MinorDepartureCompletedFieldCalendarInline extends StatefulWidget {
   const MinorDepartureCompletedFieldCalendarInline({super.key});
@@ -31,14 +30,15 @@ class _MinorDepartureCompletedFieldCalendarInlineState
     _focusedDay = calendar.selectedDate;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<FieldSelectedDateState>().setSelectedDate(calendar.selectedDate);
+      context
+          .read<FieldSelectedDateState>()
+          .setSelectedDate(calendar.selectedDate);
     });
   }
 
-  String _dateKey(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-'
-          '${d.month.toString().padLeft(2, '0')}-'
-          '${d.day.toString().padLeft(2, '0')}';
+  String _dateKey(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
 
   Map<String, int> _unsettledCountByDay({
     required Iterable<PlateModel> plates,
@@ -79,29 +79,21 @@ class _MinorDepartureCompletedFieldCalendarInlineState
       firstDay: DateTime.utc(2020, 1, 1),
       lastDay: DateTime.utc(2100, 12, 31),
       focusedDay: _focusedDay,
-
       selectedDayPredicate: (day) => isSameDay(calendar.selectedDate, day),
-
       onDaySelected: (selectedDay, focusedDay) {
-        final d = DateTime(selectedDay.year, selectedDay.month, selectedDay.day);
+        final d =
+            DateTime(selectedDay.year, selectedDay.month, selectedDay.day);
         calendar.selectDate(d);
         context.read<FieldSelectedDateState>().setSelectedDate(d);
         setState(() => _focusedDay = focusedDay);
-
-        showSelectedSnackbar(context, '선택된 날짜: ${calendar.formatDate(d)}');
       },
-
       onPageChanged: (focusedDay) => setState(() => _focusedDay = focusedDay),
-
       eventLoader: (day) {
-        // TableCalendar에서 넘어오는 day는 시각이 있을 수 있으므로 ymd로 정규화
         final ymd = DateTime(day.year, day.month, day.day);
         final key = _dateKey(ymd);
         final count = unsettledMap[key] ?? 0;
         return count > 0 ? const ['UNSETTLED'] : const [];
       },
-
-      // ✅ (리팩터링) 하드코딩 색 제거 → ColorScheme 기반
       calendarStyle: CalendarStyle(
         todayDecoration: BoxDecoration(
           color: cs.primaryContainer.withOpacity(0.85),
@@ -112,15 +104,15 @@ class _MinorDepartureCompletedFieldCalendarInlineState
           shape: BoxShape.circle,
         ),
         markerDecoration: BoxDecoration(
-          color: cs.error, // 미정산 마커는 에러 톤(강조)
+          color: cs.error,
           shape: BoxShape.circle,
         ),
         markersAlignment: Alignment.bottomCenter,
-        outsideTextStyle: TextStyle(color: cs.onSurfaceVariant.withOpacity(0.55)),
+        outsideTextStyle:
+            TextStyle(color: cs.onSurfaceVariant.withOpacity(0.55)),
         weekendTextStyle: TextStyle(color: cs.onSurface),
         defaultTextStyle: TextStyle(color: cs.onSurface),
       ),
-
       availableGestures: AvailableGestures.horizontalSwipe,
     );
   }

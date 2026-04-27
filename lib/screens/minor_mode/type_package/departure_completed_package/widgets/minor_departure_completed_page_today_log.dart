@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import 'minor_departure_completed_plate_image_dialog.dart';
@@ -20,20 +19,27 @@ class MinorTodayLogSection extends StatefulWidget {
 class _MinorTodayLogSectionState extends State<MinorTodayLogSection> {
   bool _expanded = false;
 
-  // ===== 공통 로직: 로그 정규화 =====
+  
   List<Map<String, dynamic>> _normalizeLogs(List<dynamic> raw) {
     return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
   }
 
-  // ===== 공통 로직: 타임스탬프 파싱 =====
+  
   DateTime? _parseTs(dynamic ts) {
     if (ts == null) return null;
 
-    if (ts is Timestamp) return ts.toDate().toLocal();
+    try {
+      final dynamic candidate = ts;
+      final dynamic converted = candidate.toDate();
+      if (converted is DateTime) return converted.toLocal();
+    } catch (_) {}
+
     if (ts is DateTime) return ts.toLocal();
 
     if (ts is int) {
-      if (ts > 100000000000) return DateTime.fromMillisecondsSinceEpoch(ts).toLocal();
+      if (ts > 100000000000) {
+        return DateTime.fromMillisecondsSinceEpoch(ts).toLocal();
+      }
       return DateTime.fromMillisecondsSinceEpoch(ts * 1000).toLocal();
     }
 
@@ -45,7 +51,7 @@ class _MinorTodayLogSectionState extends State<MinorTodayLogSection> {
     return null;
   }
 
-  // ===== 공통 로직: 타임스탬프 포맷(로컬) =====
+  
   String _formatTs(dynamic ts) {
     final dt = _parseTs(ts);
     if (dt == null) return '--';
@@ -53,7 +59,7 @@ class _MinorTodayLogSectionState extends State<MinorTodayLogSection> {
     return '${dt.year}-${two(dt.month)}-${two(dt.day)} ${two(dt.hour)}:${two(dt.minute)}:${two(dt.second)}';
   }
 
-  // ===== 원화 포맷 (intl 없이 콤마만) =====
+  
   int? _asInt(dynamic v) {
     if (v == null) return null;
     if (v is num) return v.toInt();
@@ -76,7 +82,7 @@ class _MinorTodayLogSectionState extends State<MinorTodayLogSection> {
     return '₩${_formatIntWithComma(n)}';
   }
 
-  // ===== 공통 로직: 액션에 따른 아이콘/색상 매핑 =====
+  
   IconData _actionIcon(String action) {
     if (action.contains('사전 정산')) return Icons.receipt_long;
     if (action.contains('입차 완료')) return Icons.local_parking;
@@ -100,7 +106,7 @@ class _MinorTodayLogSectionState extends State<MinorTodayLogSection> {
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
 
-    // 정규화 + "오래된순(오름차순)" 정렬
+    
     final logs = _normalizeLogs(widget.logsRaw)
       ..sort((a, b) {
         final aT = _parseTs(a['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
@@ -111,7 +117,7 @@ class _MinorTodayLogSectionState extends State<MinorTodayLogSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 헤더: 번호판 영역(탭→펼치기/접기) + 사진 버튼
+        
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
           child: Row(
@@ -169,7 +175,7 @@ class _MinorTodayLogSectionState extends State<MinorTodayLogSection> {
         ),
         Divider(height: 1, color: cs.outlineVariant.withOpacity(0.65)),
 
-        // 본문 리스트: 번호판 영역을 눌러야 펼쳐짐
+        
         Expanded(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),

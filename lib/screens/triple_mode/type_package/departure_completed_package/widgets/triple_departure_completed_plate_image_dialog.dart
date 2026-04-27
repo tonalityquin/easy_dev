@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 
-import '../../../modify_package/utils/triple_modify_plate_service.dart';
+import '../../../../../shared/page/modify/application/modify_plate_service.dart';
 
 class TripleDepartureCompletedPlateImageDialog extends StatelessWidget {
   final String plateNumber;
@@ -31,7 +31,7 @@ class TripleDepartureCompletedPlateImageDialog extends StatelessWidget {
         ),
       ),
       body: FutureBuilder<List<String>>(
-        future: TripleModifyPlateService.listPlateImages(
+        future: ModifyPlateService.listPlateImages(
           context: context,
           plateNumber: plateNumber,
         ),
@@ -156,7 +156,7 @@ void modifyshowFullScreenImageViewer(
     barrierDismissible: true,
     builder: (_) {
       return Dialog(
-        backgroundColor: cs.scrim, // ✅ 하드코딩 black → scrim
+        backgroundColor: cs.scrim, 
         insetPadding: EdgeInsets.zero,
         child: SafeArea(
           child: Stack(
@@ -236,7 +236,7 @@ void modifyshowFullScreenImageViewer(
                               child: Text(
                                 metadata,
                                 style: TextStyle(
-                                  color: cs.inverseSurface, // ✅ white → inverseSurface
+                                  color: cs.inverseSurface, 
                                   fontSize: 14,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -273,7 +273,7 @@ String _parseMetadataFromFileName(String fileName) {
     final name = fileName.replaceAll('.jpg', '');
     final parts = name.split('_');
     if (parts.length < 4) return '';
-    final date = parts[0]; // YYYY-MM-DD
+    final date = parts[0]; 
     final millis = int.tryParse(parts[1]) ?? 0;
     final plate = parts[2];
     final user = parts.sublist(3).join('_');

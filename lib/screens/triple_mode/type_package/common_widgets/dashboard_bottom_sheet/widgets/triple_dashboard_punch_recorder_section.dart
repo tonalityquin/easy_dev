@@ -1,20 +1,14 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
-import '../../../../../../utils/app_exit_flag.dart';
-import '../../../../../../utils/block_dialogs/work_end_duration_blocking_dialog.dart';
-import '../../../../../single_mode/utils/att_brk_repository.dart';
+import '../../../../../../features/commute/domain/repositories/commute_true_false_repository.dart';
+import '../../../../../../features/mode_single/application/att_brk_repository.dart';
+import '../../../../../../utils/init/app_exit_service.dart';
+import '../../../../../../widgets/dialog/block_dialog_package/work_end_duration_blocking_dialog.dart';
 import 'triple_dashboard_punch_card_feedback.dart';
+import '../../../../../../utils/config/commute_true_false_mode_config.dart';
 
-import '../../../../../../repositories/commute_repo_services/commute_true_false_repository.dart';
-import '../../../../../../utils/commute_true_false_mode_config.dart';
-
-/// 중립 톤(텍스트/보더)은 브랜드(ColorScheme) 기반으로 사용하고,
-/// "출근/휴게/퇴근" 강조색은 타입별(기존 정책)로 유지합니다.
 class _NeutralTone {
   final Color text;
   final Color border;
@@ -25,14 +19,6 @@ class _NeutralTone {
   });
 }
 
-/// 약식 모드용 출퇴근 기록기 카드
-/// - 출근/휴게/퇴근 3개 펀칭
-/// - 로컬 SQLite 기록
-/// - 정책:
-///   - 서비스 로그인에서 이미 출근을 처리하므로, 이 화면에서는 "출근" 펀칭 금지(버튼 비활성)
-///   - 휴게/퇴근만 사용자 조작 가능
-///   - 출근(workIn) 시 commute_true_false 기록 로직은 안전망으로만 유지(사실상 실행되지 않음)
-///   - 퇴근(workOut) 시 commute_true_false 미사용(절대 호출하지 않음)
 class TripleDashboardInsidePunchRecorderSection extends StatefulWidget {
   const TripleDashboardInsidePunchRecorderSection({
     super.key,
@@ -67,7 +53,6 @@ class _TripleDashboardInsidePunchRecorderSectionState
   bool get _hasWorkIn => _workInTime != null && _workInTime!.isNotEmpty;
   bool get _hasBreak => _breakTime != null && _breakTime!.isNotEmpty;
 
-  // ✅ 이 화면에서는 출근 펀칭 금지
   bool get _disableWorkInPunch => true;
 
   @override
@@ -108,13 +93,6 @@ class _TripleDashboardInsidePunchRecorderSectionState
     await _loadForDate(picked);
   }
 
-  void _showGuardSnack(String message) {
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    messenger?.hideCurrentSnackBar();
-    messenger?.showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  /// ✅ 출근(workIn) 시에만 commute_true_false에 출근시각 기록
   Future<void> _recordClockInAtToCommuteTrueFalse(DateTime clockInAt) async {
     final enabled = await CommuteTrueFalseModeConfig.isEnabled();
     if (!enabled) {
@@ -136,71 +114,24 @@ class _TripleDashboardInsidePunchRecorderSectionState
   }
 
   Future<void> _exitAppAfterClockOut(BuildContext context) async {
-    AppExitFlag.beginExit();
-
-    try {
-      if (Platform.isAndroid) {
-        bool running = false;
-
-        try {
-          running = await FlutterForegroundTask.isRunningService;
-        } catch (_) {
-          running = false;
-        }
-
-        if (running) {
-          try {
-            final stopped = await FlutterForegroundTask.stopService();
-            if (stopped != true && context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('포그라운드 서비스 중지 실패(플러그인 반환값 false)'),
-                ),
-              );
-            }
-          } catch (e) {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('포그라운드 서비스 중지 실패: $e')),
-              );
-            }
-          }
-
-          await Future.delayed(const Duration(milliseconds: 150));
-        }
-      }
-
-      await SystemNavigator.pop();
-    } catch (e) {
-      AppExitFlag.reset();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('앱 종료 실패: $e')),
-        );
-      }
-    }
+    await AppExitService.exitApp(context);
   }
 
   Future<void> _punch(AttBrkModeType type) async {
     if (_loading) return;
 
-    // ✅ 출근 금지
     if (type == AttBrkModeType.workIn && _disableWorkInPunch) {
-      _showGuardSnack('출근은 서비스 로그인에서 처리됩니다. 이 화면에서는 변경할 수 없습니다.');
       return;
     }
 
     if (type == AttBrkModeType.breakTime && !_hasWorkIn) {
-      _showGuardSnack('먼저 출근을 펀칭한 뒤 휴게시간을 펀칭할 수 있습니다.');
       return;
     }
 
     if (type == AttBrkModeType.workOut && (!_hasWorkIn || !_hasBreak)) {
-      _showGuardSnack('출근과 휴게시간을 모두 펀칭한 뒤 퇴근을 펀칭할 수 있습니다.');
       return;
     }
 
-    // 출근/퇴근은 확인 다이얼로그 유지(정책)
     if (type == AttBrkModeType.workIn || type == AttBrkModeType.workOut) {
       final isClockIn = type == AttBrkModeType.workIn;
 
@@ -239,7 +170,6 @@ class _TripleDashboardInsidePunchRecorderSectionState
       dateTime: targetDateTime,
     );
 
-    // 안전망(실사용 거의 없음)
     if (type == AttBrkModeType.workIn) {
       await _recordClockInAtToCommuteTrueFalse(targetDateTime);
     }
@@ -268,7 +198,6 @@ class _TripleDashboardInsidePunchRecorderSectionState
     final dateStr = DateFormat('MM.dd').format(_selectedDate);
     final textTheme = Theme.of(context).textTheme;
 
-    // 출근은 항상 false
     final bool canPunchWorkIn = !_disableWorkInPunch ? true : false;
     final bool canPunchBreak = _hasWorkIn;
     final bool canPunchWorkOut = _hasWorkIn && _hasBreak;
@@ -430,7 +359,6 @@ class _PunchSlot extends StatelessWidget {
     required this.onTap,
   });
 
-  // ✅ 강조색은 타입별 유지(정책)
   Color get _accent {
     switch (type) {
       case AttBrkModeType.workIn:

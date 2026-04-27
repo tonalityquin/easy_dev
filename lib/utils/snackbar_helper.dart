@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-void showCustomSnackbar({
+void showCustomSnackBar({
   required BuildContext context,
   required String message,
   required Color backgroundColor,
@@ -41,7 +41,7 @@ void showCustomSnackbar({
 }
 
 void showSuccessSnackbar(BuildContext context, String message) {
-  showCustomSnackbar(
+  showCustomSnackBar(
     context: context,
     message: message,
     backgroundColor: Colors.green,
@@ -50,7 +50,7 @@ void showSuccessSnackbar(BuildContext context, String message) {
 }
 
 void showFailedSnackbar(BuildContext context, String message) {
-  showCustomSnackbar(
+  showCustomSnackBar(
     context: context,
     message: message,
     backgroundColor: Colors.redAccent,
@@ -59,7 +59,7 @@ void showFailedSnackbar(BuildContext context, String message) {
 }
 
 void showSelectedSnackbar(BuildContext context, String message) {
-  showCustomSnackbar(
+  showCustomSnackBar(
     context: context,
     message: message,
     backgroundColor: Colors.yellow[800]!,

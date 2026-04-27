@@ -9,18 +9,17 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:googleapis/gmail/v1.dart' as gmail;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../../../utils/google_auth_v7.dart';
-import '../../../../../../utils/api/email_config.dart';
+import '../../../../../../utils/auth/google_auth_v7.dart';
+import '../../../../../../utils/config/email_config.dart';
 
-import '../../../hubs_mode/dev_package/debug_package/debug_api_logger.dart';
-import '../../../hubs_mode/dev_package/debug_package/debug_bottom_sheet.dart';
+import '../../../../features/dev/debug/debug_api_logger.dart';
 import 'backup_styles.dart';
 import 'backup_signature_dialog.dart';
+import '../../../../widgets/dialog/status_dialog_package/status_dialog.dart';
 
-/// 계약 형태
 enum ContractType {
-  contract, // 계약직
-  freelancer, // 프리랜서
+  contract,
+  freelancer,
 }
 
 class BackupFormPage extends StatefulWidget {
@@ -33,23 +32,19 @@ class BackupFormPage extends StatefulWidget {
 class _BackupFormPageState extends State<BackupFormPage> {
   final _formKey = GlobalKey<FormState>();
 
-  // 기본 정보 컨트롤러
   final _nameCtrl = TextEditingController();
   final _rrnCtrl = TextEditingController();
   final _positionCtrl = TextEditingController();
   final _deptCtrl = TextEditingController();
 
-  // 3번 카드: 괄호 안 입력용 컨트롤러
-  final _reasonCtrl = TextEditingController(); // 첫 번째 괄호
-  final _targetCtrl = TextEditingController(); // 두 번째 괄호
-  final _timeCtrl = TextEditingController(); // 세 번째 괄호 (시간대)
-  final _processCtrl = TextEditingController(); // 네 번째 괄호 (처리 방식)
+  final _reasonCtrl = TextEditingController();
+  final _targetCtrl = TextEditingController();
+  final _timeCtrl = TextEditingController();
+  final _processCtrl = TextEditingController();
 
-  // 메일 제목/본문 컨트롤러
   final _mailSubjectCtrl = TextEditingController();
   final _mailBodyCtrl = TextEditingController();
 
-  // 포커스 노드
   final _nameNode = FocusNode();
   final _rrnNode = FocusNode();
   final _positionNode = FocusNode();
@@ -58,27 +53,18 @@ class _BackupFormPageState extends State<BackupFormPage> {
   Uint8List? _signaturePngBytes;
   DateTime? _signDateTime;
 
-  // 계약 형태: null = 미선택
   ContractType? _contractType;
 
-  // SharedPreferences에서 불러오는 선택 영역 (업무명)
   String? _selectedArea;
 
   String get _signerName => _nameCtrl.text.trim();
 
   bool _sending = false;
 
-  // 페이지 컨트롤러 (섹션별 좌우 스와이프)
   final PageController _pageController = PageController();
 
-  // 현재 페이지 인덱스 (0~4)
   int _currentPageIndex = 0;
 
-  // ─────────────────────────────────────────────────────────────
-  // ✅ API 디버그 로직: 표준 태그 / 로깅 헬퍼
-  // ─────────────────────────────────────────────────────────────
-
-  // DebugBottomSheet에서 tag로 즉시 필터링 가능하도록 "/" 기반 네임스페이스 사용
   static const String _tBackup = 'backup';
   static const String _tBackupForm = 'backup/form';
   static const String _tBackupPdf = 'backup/pdf';
@@ -106,28 +92,14 @@ class _BackupFormPageState extends State<BackupFormPage> {
         level: 'error',
         tags: tags,
       );
-    } catch (_) {
-      // 로깅 실패는 UX에 영향 없도록 무시
-    }
-  }
-
-  // (선택) 이 페이지에서 DebugBottomSheet 즉시 오픈
-  Future<void> _openDebugBottomSheet() async {
-    HapticFeedback.selectionClick();
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const DebugBottomSheet(),
-    );
+    } catch (_) {}
   }
 
   @override
   void initState() {
     super.initState();
     _nameCtrl.addListener(() => setState(() {}));
-    _updateMailBody(); // 메일 본문 자동 생성
+    _updateMailBody();
     _loadSelectedArea();
   }
 
@@ -140,7 +112,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
         _selectedArea = area.isEmpty ? null : area;
       });
 
-      // 사용자가 아직 제목을 입력하지 않은 경우에만 자동 채움
       if (_mailSubjectCtrl.text.trim().isEmpty) {
         _updateMailSubject();
       }
@@ -220,7 +191,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
     }
   }
 
-  /// 3번 카드: 괄호 4개를 합쳐 실제 문장을 만들어주는 함수
   String _buildBodySentence() {
     final reason = _reasonCtrl.text.trim();
     final target = _targetCtrl.text.trim();
@@ -232,7 +202,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
   }
 
   void _reset() {
-    HapticFeedback.lightImpact();
     _formKey.currentState?.reset();
 
     _nameCtrl.clear();
@@ -261,7 +230,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
     _pageController.jumpToPage(0);
   }
 
-  /// 계약 형태 + SharedPreferences 선택 영역에 따라 메일 제목 자동 생성
   void _updateMailSubject() {
     final now = DateTime.now();
     final month = now.month;
@@ -276,10 +244,10 @@ class _BackupFormPageState extends State<BackupFormPage> {
         ? _selectedArea!.trim()
         : '업무';
 
-    _mailSubjectCtrl.text = '$area 연차(결근) 지원 신청서 – ${month}월 ${day}일자$suffixType';
+    _mailSubjectCtrl.text =
+        '$area 연차(결근) 지원 신청서 – ${month}월 ${day}일자$suffixType';
   }
 
-  /// 메일 본문 자동 생성 (작성 일시 포함)
   void _updateMailBody({bool force = false}) {
     if (!force && _mailBodyCtrl.text.trim().isNotEmpty) return;
     final now = DateTime.now();
@@ -289,20 +257,25 @@ class _BackupFormPageState extends State<BackupFormPage> {
     final hh = now.hour.toString().padLeft(2, '0');
     final mm = now.minute.toString().padLeft(2, '0');
     _mailBodyCtrl.text =
-    '본 신청서는 ${y}년 ${m}월 ${d}일 ${hh}시 ${mm}분 기준으로 작성된 연차(결근) 지원 신청서입니다.';
+        '본 신청서는 ${y}년 ${m}월 ${d}일 ${hh}시 ${mm}분 기준으로 작성된 연차(결근) 지원 신청서입니다.';
   }
 
   String _buildPreviewText(BuildContext context) {
     final signInfo = (_signaturePngBytes != null)
         ? '전자서명: ${_signerName.isEmpty ? "(이름 미입력)" : _signerName} / '
-        '${_signDateTime != null ? _fmtCompact(_signDateTime!) : "저장 시각 미기록"}'
+            '${_signDateTime != null ? _fmtCompact(_signDateTime!) : "저장 시각 미기록"}'
         : '전자서명: (미첨부)';
 
     final contractText = _contractTypeText(_contractType);
-    final name = _nameCtrl.text.trim().isEmpty ? '(성명 미입력)' : _nameCtrl.text.trim();
-    final rrn = _rrnCtrl.text.trim().isEmpty ? '(주민등록번호 미입력)' : _rrnCtrl.text.trim();
-    final position = _positionCtrl.text.trim().isEmpty ? '(직위 미입력)' : _positionCtrl.text.trim();
-    final dept = _deptCtrl.text.trim().isEmpty ? '(부서명 미입력)' : _deptCtrl.text.trim();
+    final name =
+        _nameCtrl.text.trim().isEmpty ? '(성명 미입력)' : _nameCtrl.text.trim();
+    final rrn =
+        _rrnCtrl.text.trim().isEmpty ? '(주민등록번호 미입력)' : _rrnCtrl.text.trim();
+    final position = _positionCtrl.text.trim().isEmpty
+        ? '(직위 미입력)'
+        : _positionCtrl.text.trim();
+    final dept =
+        _deptCtrl.text.trim().isEmpty ? '(부서명 미입력)' : _deptCtrl.text.trim();
 
     final bodySentence = _buildBodySentence();
 
@@ -327,17 +300,18 @@ class _BackupFormPageState extends State<BackupFormPage> {
   }
 
   Future<void> _showPreview() async {
-    HapticFeedback.lightImpact();
     _updateMailBody();
     final text = _buildPreviewText(context);
 
     final contractText = _contractTypeText(_contractType);
     final signName = _signerName.isEmpty ? '이름 미입력' : _signerName;
-    final signTimeText = _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
+    final signTimeText =
+        _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
     final createdAtText = _fmtDT(context, DateTime.now());
     final bodySentence = _buildBodySentence();
 
-    Widget _infoPill(ColorScheme cs, IconData icon, String label, String value) {
+    Widget _infoPill(
+        ColorScheme cs, IconData icon, String label, String value) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
@@ -383,7 +357,8 @@ class _BackupFormPageState extends State<BackupFormPage> {
 
         return Dialog(
           backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           child: LayoutBuilder(
             builder: (ctx, constraints) {
               final maxHeight = MediaQuery.of(ctx).size.height * 0.8;
@@ -416,11 +391,13 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         '연차(결근) 지원 신청서 미리보기',
-                                        style: theme.textTheme.titleMedium?.copyWith(
+                                        style: theme.textTheme.titleMedium
+                                            ?.copyWith(
                                           color: cs.onPrimary,
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -428,7 +405,8 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                       const SizedBox(height: 2),
                                       Text(
                                         '전송 전 신청서 내용을 한 번 더 확인해 주세요.',
-                                        style: theme.textTheme.bodySmall?.copyWith(
+                                        style:
+                                            theme.textTheme.bodySmall?.copyWith(
                                           color: cs.onPrimary.withOpacity(0.82),
                                         ),
                                       ),
@@ -446,38 +424,49 @@ class _BackupFormPageState extends State<BackupFormPage> {
                           Flexible(
                             child: Scrollbar(
                               child: SingleChildScrollView(
-                                padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                                padding:
+                                    const EdgeInsets.fromLTRB(20, 16, 20, 12),
                                 child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
                                     Wrap(
                                       spacing: 8,
                                       runSpacing: 8,
                                       children: [
-                                        _infoPill(cs, Icons.calendar_today_outlined, '작성일', createdAtText),
-                                        _infoPill(cs, Icons.work_outline, '계약 형태', contractText),
+                                        _infoPill(
+                                            cs,
+                                            Icons.calendar_today_outlined,
+                                            '작성일',
+                                            createdAtText),
+                                        _infoPill(cs, Icons.work_outline,
+                                            '계약 형태', contractText),
                                       ],
                                     ),
                                     const SizedBox(height: 16),
-
-                                    // 메일 정보
                                     Container(
                                       decoration: BoxDecoration(
                                         color: cs.surfaceContainerLow,
                                         borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
+                                        border: Border.all(
+                                            color: cs.outlineVariant
+                                                .withOpacity(0.75)),
                                       ),
                                       padding: const EdgeInsets.all(12),
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Row(
                                             children: [
-                                              Icon(Icons.email_outlined, size: 18, color: cs.primary),
+                                              Icon(Icons.email_outlined,
+                                                  size: 18, color: cs.primary),
                                               const SizedBox(width: 6),
                                               Text(
                                                 '메일 전송 정보',
-                                                style: theme.textTheme.bodyMedium?.copyWith(
+                                                style: theme
+                                                    .textTheme.bodyMedium
+                                                    ?.copyWith(
                                                   fontWeight: FontWeight.w600,
                                                   color: cs.onSurface,
                                                 ),
@@ -485,11 +474,15 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                             ],
                                           ),
                                           const SizedBox(height: 8),
-                                          Divider(height: 20, color: cs.outlineVariant.withOpacity(0.9)),
+                                          Divider(
+                                              height: 20,
+                                              color: cs.outlineVariant
+                                                  .withOpacity(0.9)),
                                           const SizedBox(height: 2),
                                           Text(
                                             '제목',
-                                            style: theme.textTheme.bodySmall?.copyWith(
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
                                               color: cs.onSurfaceVariant,
                                               fontWeight: FontWeight.w600,
                                             ),
@@ -497,7 +490,8 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                           const SizedBox(height: 2),
                                           Text(
                                             _mailSubjectCtrl.text,
-                                            style: theme.textTheme.bodyMedium?.copyWith(
+                                            style: theme.textTheme.bodyMedium
+                                                ?.copyWith(
                                               fontWeight: FontWeight.w500,
                                               color: cs.onSurface,
                                             ),
@@ -505,7 +499,8 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                           const SizedBox(height: 10),
                                           Text(
                                             '본문 (자동 생성)',
-                                            style: theme.textTheme.bodySmall?.copyWith(
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
                                               color: cs.onSurfaceVariant,
                                               fontWeight: FontWeight.w600,
                                             ),
@@ -516,38 +511,46 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                             padding: const EdgeInsets.all(10),
                                             decoration: BoxDecoration(
                                               color: cs.surface,
-                                              borderRadius: BorderRadius.circular(10),
-                                              border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              border: Border.all(
+                                                  color: cs.outlineVariant
+                                                      .withOpacity(0.75)),
                                             ),
                                             child: Text(
                                               _mailBodyCtrl.text,
-                                              style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface),
+                                              style: theme.textTheme.bodyMedium
+                                                  ?.copyWith(
+                                                      color: cs.onSurface),
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
-
                                     const SizedBox(height: 16),
-
-                                    // 문장
                                     Container(
                                       decoration: BoxDecoration(
                                         color: cs.surface,
                                         borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
+                                        border: Border.all(
+                                            color: cs.outlineVariant
+                                                .withOpacity(0.75)),
                                       ),
                                       padding: const EdgeInsets.all(12),
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Row(
                                             children: [
-                                              Icon(Icons.description_outlined, size: 18, color: cs.primary),
+                                              Icon(Icons.description_outlined,
+                                                  size: 18, color: cs.primary),
                                               const SizedBox(width: 6),
                                               Text(
                                                 '업무 공백 및 인력 지원 문장',
-                                                style: theme.textTheme.bodyMedium?.copyWith(
+                                                style: theme
+                                                    .textTheme.bodyMedium
+                                                    ?.copyWith(
                                                   fontWeight: FontWeight.w600,
                                                   color: cs.onSurface,
                                                 ),
@@ -555,50 +558,63 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                             ],
                                           ),
                                           const SizedBox(height: 8),
-                                          Divider(height: 20, color: cs.outlineVariant.withOpacity(0.9)),
+                                          Divider(
+                                              height: 20,
+                                              color: cs.outlineVariant
+                                                  .withOpacity(0.9)),
                                           const SizedBox(height: 2),
                                           Container(
                                             width: double.infinity,
                                             padding: const EdgeInsets.all(10),
                                             decoration: BoxDecoration(
                                               color: cs.surfaceContainerLow,
-                                              borderRadius: BorderRadius.circular(10),
-                                              border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              border: Border.all(
+                                                  color: cs.outlineVariant
+                                                      .withOpacity(0.75)),
                                             ),
                                             child: Text(
-                                              bodySentence.trim().isEmpty ? '입력된 문장이 없습니다.' : bodySentence,
-                                              style: theme.textTheme.bodyMedium?.copyWith(
+                                              bodySentence.trim().isEmpty
+                                                  ? '입력된 문장이 없습니다.'
+                                                  : bodySentence,
+                                              style: theme.textTheme.bodyMedium
+                                                  ?.copyWith(
                                                 height: 1.4,
-                                                color: bodySentence.trim().isEmpty
-                                                    ? cs.onSurfaceVariant
-                                                    : cs.onSurface,
+                                                color:
+                                                    bodySentence.trim().isEmpty
+                                                        ? cs.onSurfaceVariant
+                                                        : cs.onSurface,
                                               ),
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
-
                                     const SizedBox(height: 16),
-
-                                    // 서명
                                     Container(
                                       decoration: BoxDecoration(
                                         color: cs.surface,
                                         borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
+                                        border: Border.all(
+                                            color: cs.outlineVariant
+                                                .withOpacity(0.75)),
                                       ),
                                       padding: const EdgeInsets.all(12),
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Row(
                                             children: [
-                                              Icon(Icons.edit_outlined, size: 18, color: cs.primary),
+                                              Icon(Icons.edit_outlined,
+                                                  size: 18, color: cs.primary),
                                               const SizedBox(width: 6),
                                               Text(
                                                 '전자서명 정보',
-                                                style: theme.textTheme.bodyMedium?.copyWith(
+                                                style: theme
+                                                    .textTheme.bodyMedium
+                                                    ?.copyWith(
                                                   fontWeight: FontWeight.w600,
                                                   color: cs.onSurface,
                                                 ),
@@ -606,26 +622,37 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                             ],
                                           ),
                                           const SizedBox(height: 8),
-                                          Divider(height: 20, color: cs.outlineVariant.withOpacity(0.9)),
+                                          Divider(
+                                              height: 20,
+                                              color: cs.outlineVariant
+                                                  .withOpacity(0.9)),
                                           const SizedBox(height: 2),
                                           Row(
                                             children: [
                                               Expanded(
                                                 child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
                                                   children: [
                                                     Text(
                                                       '서명자',
-                                                      style: theme.textTheme.bodySmall?.copyWith(
-                                                        color: cs.onSurfaceVariant,
-                                                        fontWeight: FontWeight.w600,
+                                                      style: theme
+                                                          .textTheme.bodySmall
+                                                          ?.copyWith(
+                                                        color:
+                                                            cs.onSurfaceVariant,
+                                                        fontWeight:
+                                                            FontWeight.w600,
                                                       ),
                                                     ),
                                                     const SizedBox(height: 2),
                                                     Text(
                                                       signName,
-                                                      style: theme.textTheme.bodyMedium?.copyWith(
-                                                        fontWeight: FontWeight.w500,
+                                                      style: theme
+                                                          .textTheme.bodyMedium
+                                                          ?.copyWith(
+                                                        fontWeight:
+                                                            FontWeight.w500,
                                                         color: cs.onSurface,
                                                       ),
                                                     ),
@@ -635,20 +662,28 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                               const SizedBox(width: 12),
                                               Expanded(
                                                 child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
                                                   children: [
                                                     Text(
                                                       '서명 일시',
-                                                      style: theme.textTheme.bodySmall?.copyWith(
-                                                        color: cs.onSurfaceVariant,
-                                                        fontWeight: FontWeight.w600,
+                                                      style: theme
+                                                          .textTheme.bodySmall
+                                                          ?.copyWith(
+                                                        color:
+                                                            cs.onSurfaceVariant,
+                                                        fontWeight:
+                                                            FontWeight.w600,
                                                       ),
                                                     ),
                                                     const SizedBox(height: 2),
                                                     Text(
                                                       signTimeText,
-                                                      style: theme.textTheme.bodyMedium?.copyWith(
-                                                        fontWeight: FontWeight.w500,
+                                                      style: theme
+                                                          .textTheme.bodyMedium
+                                                          ?.copyWith(
+                                                        fontWeight:
+                                                            FontWeight.w500,
                                                         color: cs.onSurface,
                                                       ),
                                                     ),
@@ -662,52 +697,63 @@ class _BackupFormPageState extends State<BackupFormPage> {
                                             height: 140,
                                             width: double.infinity,
                                             decoration: BoxDecoration(
-                                              borderRadius: BorderRadius.circular(12),
-                                              border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              border: Border.all(
+                                                  color: cs.outlineVariant
+                                                      .withOpacity(0.85)),
                                               color: cs.surfaceContainerLow,
                                             ),
                                             child: _signaturePngBytes == null
                                                 ? Center(
-                                              child: Text(
-                                                '서명 이미지가 없습니다. (전자서명 완료 후 제출할 수 있습니다.)',
-                                                style: theme.textTheme.bodySmall?.copyWith(
-                                                  color: cs.onSurfaceVariant,
-                                                ),
-                                                textAlign: TextAlign.center,
-                                              ),
-                                            )
+                                                    child: Text(
+                                                      '서명 이미지가 없습니다. (전자서명 완료 후 제출할 수 있습니다.)',
+                                                      style: theme
+                                                          .textTheme.bodySmall
+                                                          ?.copyWith(
+                                                        color:
+                                                            cs.onSurfaceVariant,
+                                                      ),
+                                                      textAlign:
+                                                          TextAlign.center,
+                                                    ),
+                                                  )
                                                 : Padding(
-                                              padding: const EdgeInsets.all(8),
-                                              child: Image.memory(
-                                                _signaturePngBytes!,
-                                                fit: BoxFit.contain,
-                                              ),
-                                            ),
+                                                    padding:
+                                                        const EdgeInsets.all(8),
+                                                    child: Image.memory(
+                                                      _signaturePngBytes!,
+                                                      fit: BoxFit.contain,
+                                                    ),
+                                                  ),
                                           ),
                                         ],
                                       ),
                                     ),
-
                                     const SizedBox(height: 12),
-
-                                    // 안내
                                     Container(
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
-                                        color: cs.primaryContainer.withOpacity(0.45),
+                                        color: cs.primaryContainer
+                                            .withOpacity(0.45),
                                         borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+                                        border: Border.all(
+                                            color: cs.outlineVariant
+                                                .withOpacity(0.6)),
                                       ),
                                       child: Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          Icon(Icons.info_outline, size: 18, color: cs.primary),
+                                          Icon(Icons.info_outline,
+                                              size: 18, color: cs.primary),
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Text(
                                               '하단의 "텍스트 복사" 버튼을 누르면 이 미리보기 내용을 '
-                                                  '텍스트 형태로 복사하여 메신저 등에 붙여넣을 수 있습니다.',
-                                              style: theme.textTheme.bodySmall?.copyWith(
+                                              '텍스트 형태로 복사하여 메신저 등에 붙여넣을 수 있습니다.',
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
                                                 height: 1.4,
                                                 color: cs.onSurface,
                                               ),
@@ -721,28 +767,25 @@ class _BackupFormPageState extends State<BackupFormPage> {
                               ),
                             ),
                           ),
-
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                             decoration: BoxDecoration(
                               color: cs.surfaceContainerLow,
                               border: Border(
-                                top: BorderSide(color: cs.outlineVariant.withOpacity(0.75)),
+                                top: BorderSide(
+                                    color: cs.outlineVariant.withOpacity(0.75)),
                               ),
                             ),
                             child: Row(
                               children: [
                                 TextButton.icon(
                                   onPressed: () async {
-                                    HapticFeedback.selectionClick();
-                                    await Clipboard.setData(ClipboardData(text: text));
-                                    if (!mounted) return;
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('텍스트가 클립보드에 복사되었습니다.')),
-                                    );
+                                    await Clipboard.setData(
+                                        ClipboardData(text: text));
                                   },
-                                  icon: const Icon(Icons.copy_rounded, size: 18),
+                                  icon:
+                                      const Icon(Icons.copy_rounded, size: 18),
                                   label: const Text('텍스트 복사'),
                                 ),
                                 const SizedBox(width: 4),
@@ -766,59 +809,72 @@ class _BackupFormPageState extends State<BackupFormPage> {
     );
   }
 
+  Future<void> _showSubmitSuccessDialogAndClose() async {
+    if (!mounted) return;
+
+    await StatusDialog.showSuccess(
+      context,
+      title: StatusDialog.leaveApplicationSubmitSuccess,
+      closeCurrentPageAfter: true,
+    );
+  }
+
+  Future<void> _showSubmitFailureDialog() async {
+    if (!mounted) return;
+
+    await StatusDialog.showFailure(
+      context,
+      title: StatusDialog.leaveApplicationSubmitFailed,
+    );
+  }
+
   Future<void> _submit() async {
-    // 1) 폼 필드 검증
     if (!_formKey.currentState!.validate()) return;
 
-    // 2) 계약 형태 필수 선택
     if (_contractType == null) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('계약 형태(계약직/프리랜서)를 선택해 주세요.')),
-      );
       _pageController.animateToPage(
         0,
         duration: const Duration(milliseconds: 250),
         curve: Curves.easeOut,
       );
+      await _showSubmitFailureDialog();
       return;
     }
 
-    HapticFeedback.lightImpact();
     setState(() => _sending = true);
 
     try {
       final cfg = await EmailConfig.load();
       if (!EmailConfig.isValidToList(cfg.to)) {
+        await _showSubmitFailureDialog();
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('수신자(To)가 비어있거나 형식이 올바르지 않습니다. 설정에서 수신자를 저장해 주세요.'),
-          ),
-        );
         return;
       }
 
-      final toCsv = cfg.to.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).join(', ');
+      final toCsv = cfg.to
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .join(', ');
       final subject = _mailSubjectCtrl.text.trim();
 
-      // 제출 시점 기준으로 본문 시간 강제 갱신
       _updateMailBody(force: true);
       final body = _mailBodyCtrl.text.trim();
 
       if (subject.isEmpty) {
+        await _showSubmitFailureDialog();
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('메일 제목이 자동 생성되지 않았습니다.')),
-        );
         return;
       }
 
       final pdfBytes = await _buildPdfBytes();
 
       final now = DateTime.now();
-      final nameForFile = _nameCtrl.text.trim().isEmpty ? '무기명' : _nameCtrl.text.trim();
-      final filename = _safeFileName('연차결근지원신청서_${nameForFile}_${_dateTag(now)}');
+      final nameForFile =
+          _nameCtrl.text.trim().isEmpty ? '무기명' : _nameCtrl.text.trim();
+      final filename =
+          _safeFileName('연차결근지원신청서_${nameForFile}_${_dateTag(now)}');
 
       await _sendEmailViaGmail(
         pdfBytes: pdfBytes,
@@ -829,9 +885,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('메일 전송 완료')),
-      );
+      await _showSubmitSuccessDialogAndClose();
     } catch (e) {
       await _logApiError(
         tag: 'BackupFormPage._submit',
@@ -840,17 +894,14 @@ class _BackupFormPageState extends State<BackupFormPage> {
         extra: <String, dynamic>{
           'contractType': _contractTypeText(_contractType),
           'hasSignature': _signaturePngBytes != null,
-          'pdfBytes': null, // 민감정보 방지
+          'pdfBytes': null,
           'subjectLen': _mailSubjectCtrl.text.trim().length,
           'bodyLen': _mailBodyCtrl.text.trim().length,
         },
         tags: const <String>[_tBackupForm, _tBackup, _tBackupEmail, _tGmail],
       );
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('메일 전송 실패: $e')),
-      );
+      await _showSubmitFailureDialog();
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -861,22 +912,20 @@ class _BackupFormPageState extends State<BackupFormPage> {
     return s.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // ✅ PDF 생성: 실패 시 DebugApiLogger 기록
-  // ─────────────────────────────────────────────────────────────
-
   Future<Uint8List> _buildPdfBytes() async {
     try {
       pw.Font? regular;
       pw.Font? bold;
 
       try {
-        final regData = await rootBundle.load('assets/fonts/NotoSansKR/NotoSansKR-Regular.ttf');
+        final regData = await rootBundle
+            .load('assets/fonts/NotoSansKR/NotoSansKR-Regular.ttf');
         regular = pw.Font.ttf(regData);
       } catch (_) {}
 
       try {
-        final boldData = await rootBundle.load('assets/fonts/NotoSansKR/NotoSansKR-Bold.ttf');
+        final boldData = await rootBundle
+            .load('assets/fonts/NotoSansKR/NotoSansKR-Bold.ttf');
         bold = pw.Font.ttf(boldData);
       } catch (_) {
         bold = regular;
@@ -884,11 +933,11 @@ class _BackupFormPageState extends State<BackupFormPage> {
 
       final theme = (regular != null)
           ? pw.ThemeData.withFont(
-        base: regular,
-        bold: bold ?? regular,
-        italic: regular,
-        boldItalic: bold ?? regular,
-      )
+              base: regular,
+              bold: bold ?? regular,
+              italic: regular,
+              boldItalic: bold ?? regular,
+            )
           : pw.ThemeData.base();
 
       final doc = pw.Document();
@@ -896,7 +945,8 @@ class _BackupFormPageState extends State<BackupFormPage> {
       final contractText = _contractTypeText(_contractType);
       final name = _nameCtrl.text.trim().isEmpty ? '-' : _nameCtrl.text.trim();
       final rrn = _rrnCtrl.text.trim().isEmpty ? '-' : _rrnCtrl.text.trim();
-      final position = _positionCtrl.text.trim().isEmpty ? '-' : _positionCtrl.text.trim();
+      final position =
+          _positionCtrl.text.trim().isEmpty ? '-' : _positionCtrl.text.trim();
       final dept = _deptCtrl.text.trim().isEmpty ? '-' : _deptCtrl.text.trim();
       final bodySentence = _buildBodySentence();
 
@@ -909,59 +959,62 @@ class _BackupFormPageState extends State<BackupFormPage> {
       ];
 
       pw.Widget buildFieldTable() => pw.Table(
-        border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
-        columnWidths: const {
-          0: pw.FlexColumnWidth(3),
-          1: pw.FlexColumnWidth(7),
-        },
-        children: [
-          for (final kv in fields)
-            pw.TableRow(
-              children: [
-                pw.Container(
-                  padding: const pw.EdgeInsets.all(6),
-                  color: PdfColors.grey200,
-                  child: pw.Text(kv.key, style: const pw.TextStyle(fontSize: 11)),
+            border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+            columnWidths: const {
+              0: pw.FlexColumnWidth(3),
+              1: pw.FlexColumnWidth(7),
+            },
+            children: [
+              for (final kv in fields)
+                pw.TableRow(
+                  children: [
+                    pw.Container(
+                      padding: const pw.EdgeInsets.all(6),
+                      color: PdfColors.grey200,
+                      child: pw.Text(kv.key,
+                          style: const pw.TextStyle(fontSize: 11)),
+                    ),
+                    pw.Container(
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Text(kv.value,
+                          style: const pw.TextStyle(fontSize: 11)),
+                    ),
+                  ],
                 ),
-                pw.Container(
-                  padding: const pw.EdgeInsets.all(6),
-                  child: pw.Text(kv.value, style: const pw.TextStyle(fontSize: 11)),
-                ),
-              ],
-            ),
-        ],
-      );
+            ],
+          );
 
       pw.Widget buildSection(String title, String body) => pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: [
-          pw.SizedBox(height: 8),
-          pw.Text(
-            title,
-            style: pw.TextStyle(
-              fontSize: 13,
-              fontWeight: pw.FontWeight.bold,
-            ),
-          ),
-          pw.SizedBox(height: 4),
-          pw.Container(
-            width: double.infinity,
-            padding: const pw.EdgeInsets.all(8),
-            decoration: pw.BoxDecoration(
-              border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
-              borderRadius: pw.BorderRadius.circular(4),
-            ),
-            child: pw.Text(
-              body.isEmpty ? '-' : body,
-              style: const pw.TextStyle(fontSize: 11),
-            ),
-          ),
-        ],
-      );
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.SizedBox(height: 8),
+              pw.Text(
+                title,
+                style: pw.TextStyle(
+                  fontSize: 13,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Container(
+                width: double.infinity,
+                padding: const pw.EdgeInsets.all(8),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
+                  borderRadius: pw.BorderRadius.circular(4),
+                ),
+                child: pw.Text(
+                  body.isEmpty ? '-' : body,
+                  style: const pw.TextStyle(fontSize: 11),
+                ),
+              ),
+            ],
+          );
 
       pw.Widget buildSignature() {
         final name = _signerName.isEmpty ? '이름 미입력' : _signerName;
-        final timeText = _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
+        final timeText =
+            _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
 
         return pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -978,10 +1031,12 @@ class _BackupFormPageState extends State<BackupFormPage> {
             pw.Row(
               children: [
                 pw.Expanded(
-                  child: pw.Text('서명자: $name', style: const pw.TextStyle(fontSize: 11)),
+                  child: pw.Text('서명자: $name',
+                      style: const pw.TextStyle(fontSize: 11)),
                 ),
                 pw.SizedBox(width: 8),
-                pw.Text('서명 일시: $timeText', style: const pw.TextStyle(fontSize: 11)),
+                pw.Text('서명 일시: $timeText',
+                    style: const pw.TextStyle(fontSize: 11)),
               ],
             ),
             pw.SizedBox(height: 4),
@@ -994,18 +1049,19 @@ class _BackupFormPageState extends State<BackupFormPage> {
               ),
               child: _signaturePngBytes == null
                   ? pw.Center(
-                child: pw.Text(
-                  '서명 이미지 없음',
-                  style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey),
-                ),
-              )
+                      child: pw.Text(
+                        '서명 이미지 없음',
+                        style: const pw.TextStyle(
+                            fontSize: 10, color: PdfColors.grey),
+                      ),
+                    )
                   : pw.Padding(
-                padding: const pw.EdgeInsets.all(6),
-                child: pw.Image(
-                  pw.MemoryImage(_signaturePngBytes!),
-                  fit: pw.BoxFit.contain,
-                ),
-              ),
+                      padding: const pw.EdgeInsets.all(6),
+                      child: pw.Image(
+                        pw.MemoryImage(_signaturePngBytes!),
+                        fit: pw.BoxFit.contain,
+                      ),
+                    ),
             ),
           ],
         );
@@ -1055,17 +1111,13 @@ class _BackupFormPageState extends State<BackupFormPage> {
           'contractType': _contractTypeText(_contractType),
           'hasSignature': _signaturePngBytes != null,
           'nameLen': _nameCtrl.text.trim().length,
-          'rrnLen': _rrnCtrl.text.trim().length, // 원문은 기록하지 않음
+          'rrnLen': _rrnCtrl.text.trim().length,
         },
         tags: const <String>[_tBackupPdf, _tBackup, _tBackupForm],
       );
       rethrow;
     }
   }
-
-  // ─────────────────────────────────────────────────────────────
-  // ✅ Gmail MIME 생성 유틸
-  // ─────────────────────────────────────────────────────────────
 
   String _wrapBase64Lines(String b64, {int lineLength = _mimeB64LineLength}) {
     if (b64.isEmpty) return '';
@@ -1094,7 +1146,8 @@ class _BackupFormPageState extends State<BackupFormPage> {
     try {
       final api = gmail.GmailApi(client);
 
-      final boundary = 'dart-mail-boundary-${DateTime.now().millisecondsSinceEpoch}';
+      final boundary =
+          'dart-mail-boundary-${DateTime.now().millisecondsSinceEpoch}';
       const crlf = '\r\n';
 
       final pdfB64Wrapped = _wrapBase64Lines(base64.encode(pdfBytes));
@@ -1119,7 +1172,8 @@ class _BackupFormPageState extends State<BackupFormPage> {
         ..write(pdfB64Wrapped)
         ..write('--$boundary--$crlf');
 
-      final raw = base64UrlEncode(utf8.encode(mime.toString())).replaceAll('=', '');
+      final raw =
+          base64UrlEncode(utf8.encode(mime.toString())).replaceAll('=', '');
       final msg = gmail.Message()..raw = raw;
 
       await api.users.messages.send(msg, 'me');
@@ -1154,7 +1208,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
       labelText: labelText,
       hintText: hintText,
       filled: true,
-      // ✅ 다크모드에서 white 고정 금지 → container 계열 사용
       fillColor: cs.surfaceContainerLow,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -1202,9 +1255,9 @@ class _BackupFormPageState extends State<BackupFormPage> {
             Text(
               title,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: cs.onSurface,
-              ),
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                  ),
             ),
             const SizedBox(height: 10),
             child,
@@ -1217,7 +1270,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
   Widget _gap(double h) => SizedBox(height: h);
 
   Future<void> _openSignatureDialog() async {
-    HapticFeedback.selectionClick();
     try {
       final cs = Theme.of(context).colorScheme;
 
@@ -1225,7 +1277,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
         context: context,
         barrierLabel: '서명',
         barrierDismissible: false,
-        // ✅ 다크/라이트 일관된 scrim
         barrierColor: cs.scrim.withOpacity(0.55),
         pageBuilder: (ctx, animation, secondaryAnimation) {
           return SignatureFullScreenDialog(
@@ -1261,8 +1312,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
     }
   }
 
-  // ===== 섹션별 본문 위젯들 =====
-
   Widget _buildContractTypeBody() {
     final cs = Theme.of(context).colorScheme;
 
@@ -1272,7 +1321,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
       if (selected) {
         return ElevatedButton(
           onPressed: () {
-            HapticFeedback.selectionClick();
             setState(() {
               _contractType = type;
               _updateMailSubject();
@@ -1289,7 +1337,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
 
       return OutlinedButton(
         onPressed: () {
-          HapticFeedback.selectionClick();
           setState(() {
             _contractType = type;
             _updateMailSubject();
@@ -1309,8 +1356,11 @@ class _BackupFormPageState extends State<BackupFormPage> {
       children: [
         Text(
           '지원 신청자의 계약 형태를 선택해 주세요.\n'
-              '계약직 또는 프리랜서 중 하나를 선택합니다.',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4, color: cs.onSurface),
+          '계약직 또는 프리랜서 중 하나를 선택합니다.',
+          style: Theme.of(context)
+              .textTheme
+              .bodyMedium
+              ?.copyWith(height: 1.4, color: cs.onSurface),
         ),
         const SizedBox(height: 12),
         Row(
@@ -1323,7 +1373,10 @@ class _BackupFormPageState extends State<BackupFormPage> {
         const SizedBox(height: 6),
         Text(
           '※ 선택 결과는 메일 제목에 자동으로 반영되며, 다음 항목으로 자동 이동합니다.',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          style: Theme.of(context)
+              .textTheme
+              .bodySmall
+              ?.copyWith(color: cs.onSurfaceVariant),
         ),
       ],
     );
@@ -1338,8 +1391,9 @@ class _BackupFormPageState extends State<BackupFormPage> {
       children: [
         Text(
           '성명, 주민등록번호, 직위, 부서명을 입력해 주세요.\n'
-              '입력한 정보는 PDF 신청서 및 메일 본문에 함께 포함됩니다.',
-          style: theme.textTheme.bodyMedium?.copyWith(height: 1.4, color: cs.onSurface),
+          '입력한 정보는 PDF 신청서 및 메일 본문에 함께 포함됩니다.',
+          style: theme.textTheme.bodyMedium
+              ?.copyWith(height: 1.4, color: cs.onSurface),
         ),
         const SizedBox(height: 12),
         TextFormField(
@@ -1404,7 +1458,8 @@ class _BackupFormPageState extends State<BackupFormPage> {
         const SizedBox(height: 6),
         Text(
           '※ 위 정보는 인사/관리 부서에서 근태 및 지원 내역 확인 시 참고됩니다.',
-          style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          style:
+              theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
         ),
       ],
     );
@@ -1420,8 +1475,9 @@ class _BackupFormPageState extends State<BackupFormPage> {
       children: [
         Text(
           '다음 고정 문장을 기준으로 괄호 안의 내용만 입력해 주세요.\n'
-              '문장 구조(조사, 어미 등)는 수정할 수 없고, 괄호 안 텍스트만 변경 가능합니다.',
-          style: theme.textTheme.bodyMedium?.copyWith(height: 1.4, color: cs.onSurface),
+          '문장 구조(조사, 어미 등)는 수정할 수 없고, 괄호 안 텍스트만 변경 가능합니다.',
+          style: theme.textTheme.bodyMedium
+              ?.copyWith(height: 1.4, color: cs.onSurface),
         ),
         const SizedBox(height: 12),
         Container(
@@ -1434,7 +1490,7 @@ class _BackupFormPageState extends State<BackupFormPage> {
           ),
           child: Text(
             '(①   )으로 인해 (②    )의 (③   ) 시간 대의 업무에 공백이 발생했습니다. '
-                '본 문서를 통해 해당 공백에 대한 인적 지원을 받고자 하오며 향후 이에 대해서는 (④    )로 처리됨을 인지합니다.',
+            '본 문서를 통해 해당 공백에 대한 인적 지원을 받고자 하오며 향후 이에 대해서는 (④    )로 처리됨을 인지합니다.',
             style: theme.textTheme.bodySmall?.copyWith(
               color: cs.onSurfaceVariant,
               height: 1.4,
@@ -1449,7 +1505,8 @@ class _BackupFormPageState extends State<BackupFormPage> {
             hintText: '예: 개인 사정, 병원 진료, 고객사 교육 등',
           ),
           onChanged: (_) => setState(() {}),
-          validator: (v) => (v == null || v.trim().isEmpty) ? '첫 번째 괄호의 내용을 입력해 주세요.' : null,
+          validator: (v) =>
+              (v == null || v.trim().isEmpty) ? '첫 번째 괄호의 내용을 입력해 주세요.' : null,
         ),
         const SizedBox(height: 8),
         TextFormField(
@@ -1459,7 +1516,8 @@ class _BackupFormPageState extends State<BackupFormPage> {
             hintText: '예: 2025년 11월 26일, 11월 3주차, 주간 야간근무 등',
           ),
           onChanged: (_) => setState(() {}),
-          validator: (v) => (v == null || v.trim().isEmpty) ? '두 번째 괄호의 내용을 입력해 주세요.' : null,
+          validator: (v) =>
+              (v == null || v.trim().isEmpty) ? '두 번째 괄호의 내용을 입력해 주세요.' : null,
         ),
         const SizedBox(height: 8),
         TextFormField(
@@ -1469,7 +1527,8 @@ class _BackupFormPageState extends State<BackupFormPage> {
             hintText: '예: 09:00~18:00, 야간, 오전, 오후 등',
           ),
           onChanged: (_) => setState(() {}),
-          validator: (v) => (v == null || v.trim().isEmpty) ? '세 번째 괄호의 내용을 입력해 주세요.' : null,
+          validator: (v) =>
+              (v == null || v.trim().isEmpty) ? '세 번째 괄호의 내용을 입력해 주세요.' : null,
         ),
         const SizedBox(height: 8),
         TextFormField(
@@ -1479,7 +1538,8 @@ class _BackupFormPageState extends State<BackupFormPage> {
             hintText: '예: 연차, 결근, 반차 등',
           ),
           onChanged: (_) => setState(() {}),
-          validator: (v) => (v == null || v.trim().isEmpty) ? '네 번째 괄호의 내용을 입력해 주세요.' : null,
+          validator: (v) =>
+              (v == null || v.trim().isEmpty) ? '네 번째 괄호의 내용을 입력해 주세요.' : null,
         ),
         const SizedBox(height: 12),
         Text(
@@ -1500,13 +1560,15 @@ class _BackupFormPageState extends State<BackupFormPage> {
           ),
           child: Text(
             sentencePreview,
-            style: theme.textTheme.bodyMedium?.copyWith(height: 1.4, color: cs.onSurface),
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(height: 1.4, color: cs.onSurface),
           ),
         ),
         const SizedBox(height: 6),
         Text(
           '※ 이 미리보기 문장은 위 4개 필드의 값으로만 구성되며, 문장 구조는 수정되지 않습니다.',
-          style: theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+          style:
+              theme.textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
         ),
       ],
     );
@@ -1523,7 +1585,8 @@ class _BackupFormPageState extends State<BackupFormPage> {
             labelText: '메일 제목(자동 생성)',
             hintText: '예: 콜센터 연차(결근) 지원 신청서 – 11월 25일자 - 계약직',
           ),
-          validator: (v) => (v == null || v.trim().isEmpty) ? '메일 제목이 자동 생성되지 않았습니다.' : null,
+          validator: (v) =>
+              (v == null || v.trim().isEmpty) ? '메일 제목이 자동 생성되지 않았습니다.' : null,
         ),
         const SizedBox(height: 8),
         TextFormField(
@@ -1562,11 +1625,13 @@ class _BackupFormPageState extends State<BackupFormPage> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.person_outline, size: 18, color: cs.onSurfaceVariant),
+                  Icon(Icons.person_outline,
+                      size: 18, color: cs.onSurfaceVariant),
                   const SizedBox(width: 6),
                   Text(
                     '서명자: ${_signerName.isEmpty ? "이름 미입력" : _signerName}',
-                    style: TextStyle(fontWeight: FontWeight.w500, color: cs.onSurface),
+                    style: TextStyle(
+                        fontWeight: FontWeight.w500, color: cs.onSurface),
                   ),
                 ],
               ),
@@ -1590,7 +1655,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
               if (_signaturePngBytes != null)
                 OutlinedButton.icon(
                   onPressed: () {
-                    HapticFeedback.selectionClick();
                     setState(() {
                       _signaturePngBytes = null;
                       _signDateTime = null;
@@ -1650,22 +1714,21 @@ class _BackupFormPageState extends State<BackupFormPage> {
                   '연차(결근) 지원 신청서',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 4,
-                    color: cs.onSurface,
-                  ),
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 4,
+                        color: cs.onSurface,
+                      ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   'LEAVE / ABSENCE APPLICATION',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: cs.onSurfaceVariant,
-                    letterSpacing: 3,
-                  ),
+                        color: cs.onSurfaceVariant,
+                        letterSpacing: 3,
+                      ),
                 ),
                 const SizedBox(height: 16),
-
                 Container(
                   decoration: BoxDecoration(
                     color: cs.surface,
@@ -1692,61 +1755,67 @@ class _BackupFormPageState extends State<BackupFormPage> {
                               '연차(결근) 지원 신청서 양식',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: cs.onSurface,
-                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: cs.onSurface,
+                                  ),
                             ),
                           ),
                           const SizedBox(width: 8),
                           Text(
                             '작성일 ${_fmtCompact(DateTime.now())}',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: cs.onSurfaceVariant,
-                            ),
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: cs.onSurfaceVariant,
+                                    ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 8),
-                      Divider(height: 24, color: cs.outlineVariant.withOpacity(0.9)),
+                      Divider(
+                          height: 24,
+                          color: cs.outlineVariant.withOpacity(0.9)),
                       const SizedBox(height: 4),
-
                       Container(
                         decoration: BoxDecoration(
                           color: cs.primaryContainer.withOpacity(0.25),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+                          border: Border.all(
+                              color: cs.outlineVariant.withOpacity(0.6)),
                         ),
                         padding: const EdgeInsets.all(12),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.info_outline, size: 18, color: cs.primary),
+                            Icon(Icons.info_outline,
+                                size: 18, color: cs.primary),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
                                 '계약 형태, 신청자 정보, 업무 공백 사유 및 전자서명 정보를 사실에 근거하여 간결하게 작성해 주세요.\n'
-                                    '문제 발생 시 상단의 “버그” 버튼에서 API 디버그 로그를 확인할 수 있습니다.',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  height: 1.4,
-                                  color: cs.onSurface,
-                                ),
+                                '문제 발생 시 담당자에게 상황을 전달해 주세요.',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      height: 1.4,
+                                      color: cs.onSurface,
+                                    ),
                               ),
                             ),
                           ],
                         ),
                       ),
-
                       _gap(20),
-
                       _sectionCard(
                         title: sectionTitle,
                         margin: const EdgeInsets.only(bottom: 0),
                         child: sectionBody,
                       ),
-
                       _gap(12),
-
                       Row(
                         children: [
                           Expanded(
@@ -1771,7 +1840,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 24),
               ],
             ),
@@ -1787,7 +1855,6 @@ class _BackupFormPageState extends State<BackupFormPage> {
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      // ✅ 하드코딩 배경 제거 → scheme 기반
       backgroundColor: cs.background,
       appBar: AppBar(
         title: const Text('연차(결근) 지원 신청서 작성'),
@@ -1797,14 +1864,10 @@ class _BackupFormPageState extends State<BackupFormPage> {
         elevation: 0,
         surfaceTintColor: Colors.transparent,
         shape: Border(
-          bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.9), width: 1),
+          bottom:
+              BorderSide(color: cs.outlineVariant.withOpacity(0.9), width: 1),
         ),
         actions: [
-          IconButton(
-            tooltip: 'API 디버그',
-            onPressed: _openDebugBottomSheet,
-            icon: const Icon(Icons.bug_report_outlined),
-          ),
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: ElevatedButton.icon(
@@ -1818,45 +1881,49 @@ class _BackupFormPageState extends State<BackupFormPage> {
       ),
       bottomNavigationBar: _currentPageIndex == 4
           ? SafeArea(
-        top: false,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
-          padding: EdgeInsets.only(
-            left: 16,
-            right: 16,
-            top: 10,
-            bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
-          ),
-          decoration: BoxDecoration(
-            color: cs.surface,
-            border: Border(
-              top: BorderSide(color: cs.outlineVariant.withOpacity(0.9), width: 1),
-            ),
-          ),
-          child: SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: (!_sending && _signaturePngBytes != null) ? _submit : null,
-              icon: _sending
-                  ? SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(cs.onPrimary),
+              top: false,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                curve: Curves.easeOut,
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 10,
+                  bottom: 16 + MediaQuery.of(context).viewInsets.bottom,
                 ),
-              )
-                  : const Icon(Icons.send_outlined),
-              label: Text(
-                _sending ? '전송 중…' : '제출',
-                style: const TextStyle(fontWeight: FontWeight.bold),
+                decoration: BoxDecoration(
+                  color: cs.surface,
+                  border: Border(
+                    top: BorderSide(
+                        color: cs.outlineVariant.withOpacity(0.9), width: 1),
+                  ),
+                ),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: (!_sending && _signaturePngBytes != null)
+                        ? _submit
+                        : null,
+                    icon: _sending
+                        ? SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation<Color>(cs.onPrimary),
+                            ),
+                          )
+                        : const Icon(Icons.send_outlined),
+                    label: Text(
+                      _sending ? '전송 중…' : '제출',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    style: BackupButtonStyles.primary(context),
+                  ),
+                ),
               ),
-              style: BackupButtonStyles.primary(context),
-            ),
-          ),
-        ),
-      )
+            )
           : null,
       body: SafeArea(
         child: Form(

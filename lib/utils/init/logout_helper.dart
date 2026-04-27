@@ -1,28 +1,21 @@
-// lib/utils/logout_helper.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../block_dialogs/blocking_dialog.dart';
+import '../../app/di/routes.dart';
+import '../../features/account/applications/user_state.dart';
+import '../../widgets/dialog/block_dialog_package/blocking_dialog.dart';
 import '../snackbar_helper.dart';
-import '../../states/user/user_state.dart';
-import '../../routes.dart';
-
+import '../../services/firebase_google_auth_bridge.dart';
 
 class LogoutHelper {
-  /// 공통 로그아웃 처리:
-  /// - 포그라운드 서비스 중단
-  /// - 사용자 상태/로컬 저장소 정리
-  /// - 로그인 모드(prefs: 'mode') 초기화
-  /// - 허브 선택(Selector) 화면으로 스택 제거 이동
   static Future<void> logoutAndGoToLogin(
-      BuildContext context, {
-        String? route,
-        bool checkWorking = false,
-        Duration delay = const Duration(milliseconds: 500),
-      }) async {
-    // 기본 목적지는 허브 선택 페이지
+    BuildContext context, {
+    String? route,
+    bool checkWorking = false,
+    Duration delay = const Duration(milliseconds: 500),
+  }) async {
     final target = route ?? AppRoutes.selector;
 
     try {
@@ -39,10 +32,17 @@ class LogoutHelper {
           }
           await Future.delayed(delay);
           await userState.clearUserToPhone();
+          debugPrint(
+              '[LOGOUT][${DateTime.now().toIso8601String()}] userState.clearUserToPhone complete');
 
-          // 로그인 모드(서비스/태블릿) 고정값 제거 → 허브에서 두 카드 모두 선택 가능
+          await FirebaseGoogleAuthBridge.instance.signOutAll();
+          debugPrint(
+              '[LOGOUT][${DateTime.now().toIso8601String()}] FirebaseGoogleAuthBridge.signOutAll complete');
+
           final prefs = await SharedPreferences.getInstance();
           await prefs.remove('mode');
+          debugPrint(
+              '[LOGOUT][${DateTime.now().toIso8601String()}] prefs.remove(mode) complete');
         },
       );
 

@@ -1,13 +1,13 @@
-// lib/screens/simple_package/simple_inside_package/sections/user_statement_styles.dart
+
 
 import 'package:flutter/material.dart';
 
-/// 경위서 화면에서 공통으로 사용하는 버튼 스타일 모음
-/// ✅ 고정 팔레트(UserStatementColors) 제거 → ColorScheme 기반으로 전역 브랜드/다크모드 자동 반영
+
+
 class UserStatementButtonStyles {
   static const double _radius = 8.0;
 
-  /// 메인 액션 버튼 (제출 / 미리보기 등)
+  
   static ButtonStyle primary(
       BuildContext context, {
         double minHeight = 55,
@@ -34,7 +34,7 @@ class UserStatementButtonStyles {
     );
   }
 
-  /// 서브/보조 액션 버튼 (Outlined)
+  
   static ButtonStyle outlined(
       BuildContext context, {
         double minHeight = 55,

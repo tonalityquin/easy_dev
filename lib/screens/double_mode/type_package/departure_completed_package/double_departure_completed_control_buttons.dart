@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../enums/plate_type.dart';
-import '../../../../states/plate/double_plate_state.dart';
-import '../../../../states/user/user_state.dart';
-import '../../../../states/area/area_state.dart';
+import '../../../../features/account/applications/user_state.dart';
+import '../../../../features/dev/application/area_state.dart';
+import '../../../../features/plate/application/double/double_plate_state.dart';
+import '../../../../features/plate/domain/enums/plate_type.dart';
 import 'departure_completed_plate_search_bottom_sheet/double_departure_completed_search_bottom_sheet.dart';
 import 'widgets/double_departure_completed_status_bottom_sheet.dart';
 
@@ -24,9 +24,7 @@ class DoubleDepartureCompletedControlButtons extends StatelessWidget {
     final area = context.read<AreaState>().currentArea.trim();
 
     if (area.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('현재 지역(area)이 설정되지 않아 검색을 열 수 없습니다.')),
-      );
+      debugPrint('현재 지역(area)이 설정되지 않아 검색을 열 수 없습니다.');
       return;
     }
 
@@ -55,7 +53,6 @@ class DoubleDepartureCompletedControlButtons extends StatelessWidget {
     );
     final isPlateSelected = selectedPlate != null && selectedPlate.isSelected;
 
-    // 상태 수정 / 검색 버튼 공통 스타일
     final baseStyle = TextButton.styleFrom(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       foregroundColor: cs.onSurface,
@@ -96,7 +93,6 @@ class DoubleDepartureCompletedControlButtons extends StatelessWidget {
               },
               icon: Icon(
                 isSearchMode ? Icons.cancel : Icons.search,
-                // ✅ 검색 초기화는 "주의" 톤(tertiary), 검색은 기본 톤(onSurface)
                 color: isSearchMode ? cs.tertiary : cs.onSurface,
               ),
               label: Text(

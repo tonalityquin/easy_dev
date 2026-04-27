@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../../../states/user/user_state.dart';
+import '../../../../../../features/account/applications/user_state.dart';
 
 class TripleHomeUserInfoCard extends StatelessWidget {
   const TripleHomeUserInfoCard({super.key});
@@ -15,9 +15,9 @@ class TripleHomeUserInfoCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       onTap: () => debugPrint('📄 사용자 상세 정보 보기'),
       child: Card(
-        elevation: 0, // ✅ 브랜드 통일(모드별 그림자 차이 제거)
+        elevation: 0, 
         color: cs.surface,
-        surfaceTintColor: Colors.transparent, // ✅ M3 tint 방지(디자인 흔들림 방지)
+        surfaceTintColor: Colors.transparent, 
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(12),
           side: BorderSide(color: cs.outlineVariant.withOpacity(.85)),
@@ -28,7 +28,7 @@ class TripleHomeUserInfoCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 헤더 라벨
+              
               Row(
                 children: [
                   Icon(Icons.badge, size: 14, color: cs.onSurfaceVariant),
@@ -46,13 +46,13 @@ class TripleHomeUserInfoCard extends StatelessWidget {
               ),
               const SizedBox(height: 8),
 
-              // 프로필 영역
+              
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   CircleAvatar(
                     radius: 24,
-                    backgroundColor: cs.primary, // ✅ 브랜드 Primary
+                    backgroundColor: cs.primary, 
                     child: Icon(Icons.person, color: cs.onPrimary),
                   ),
                   const SizedBox(width: 12),

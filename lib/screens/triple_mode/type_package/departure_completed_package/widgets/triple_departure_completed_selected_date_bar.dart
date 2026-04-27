@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../../states/calendar/field_calendar_state.dart';
+import '../../../../../features/dev/application/field_calendar_state.dart';
 
 class TripleDepartureCompletedSelectedDateBar extends StatelessWidget {
   const TripleDepartureCompletedSelectedDateBar({

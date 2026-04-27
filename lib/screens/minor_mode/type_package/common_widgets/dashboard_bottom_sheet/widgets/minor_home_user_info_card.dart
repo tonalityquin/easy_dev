@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../../../states/user/user_state.dart';
-
+import '../../../../../../features/account/applications/user_state.dart';
 class MinorHomeUserInfoCard extends StatelessWidget {
   const MinorHomeUserInfoCard({super.key});
 

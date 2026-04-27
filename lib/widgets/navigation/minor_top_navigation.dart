@@ -1,10 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:provider/provider.dart';import '../../features/dev/application/area_state.dart';
 
-import '../../states/area/area_state.dart';
-import '../../states/plate/minor_plate_state.dart';
-import '../dialog/minor_area_picker_bottom_sheet.dart';
+
+import '../../features/plate/application/minor/minor_plate_state.dart';
+import '../bottom_sheet/picker_bottom_sheet/minor_area_picker_bottom_sheet.dart';
 
 class MinorTopNavigation extends StatelessWidget {
   final bool isAreaSelectable;

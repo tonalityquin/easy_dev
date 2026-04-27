@@ -1,0 +1,21 @@
+import 'package:flutter/material.dart';
+
+import '../../../account/domain/models/user/user_model.dart';
+
+class CalendarSelectionState extends ChangeNotifier {
+  String? _selectedArea;
+  UserModel? _selectedUser;
+
+  String? get selectedArea => _selectedArea;
+  UserModel? get selectedUser => _selectedUser;
+
+  void setArea(String? area) {
+    _selectedArea = area;
+    notifyListeners();
+  }
+
+  void setUser(UserModel? user) {
+    _selectedUser = user;
+    notifyListeners();
+  }
+}

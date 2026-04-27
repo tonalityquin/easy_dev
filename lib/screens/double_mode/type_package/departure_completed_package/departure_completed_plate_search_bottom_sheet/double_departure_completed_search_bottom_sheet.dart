@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../../models/plate_model.dart';
+import '../../../../../features/plate/data/repositories/firestore_plate_repository.dart';
+import '../../../../../features/plate/domain/models/plate_model.dart';
 import '../widgets/double_departure_completed_status_bottom_sheet.dart';
 import 'keypad/animated_keypad.dart';
 import 'widgets/double_departure_completed_plate_number_display.dart';
 import 'widgets/double_departure_completed_plate_search_header.dart';
 import 'widgets/double_departure_completed_plate_search_results.dart';
 import 'widgets/double_departure_completed_search_button.dart';
-import '../../../../../../repositories/plate_repo_services/firestore_plate_repository.dart';
 
 class DoubleDepartureCompletedSearchBottomSheet extends StatefulWidget {
   final void Function(String) onSearch;
@@ -42,13 +42,16 @@ class _DoubleDepartureCompletedSearchBottomSheetState
   @override
   void initState() {
     super.initState();
-    _keypadController =
-        AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
+    _keypadController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.2),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _keypadController, curve: Curves.easeOut));
-    _fadeAnimation = CurvedAnimation(parent: _keypadController, curve: Curves.easeIn);
+    _fadeAnimation =
+        CurvedAnimation(parent: _keypadController, curve: Curves.easeIn);
     _keypadController.forward();
   }
 
@@ -82,11 +85,9 @@ class _DoubleDepartureCompletedSearchBottomSheetState
         _isLoading = false;
       });
     } catch (e) {
+      debugPrint('검색 중 오류가 발생했습니다: $e');
       if (!mounted) return;
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('검색 중 오류가 발생했습니다: $e')),
-      );
     }
   }
 
@@ -108,11 +109,13 @@ class _DoubleDepartureCompletedSearchBottomSheetState
               return Container(
                 decoration: BoxDecoration(
                   color: cs.surface,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
                   border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
                 ),
                 child: ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
                   child: Column(
                     children: [
                       const SizedBox(height: 10),
@@ -127,13 +130,13 @@ class _DoubleDepartureCompletedSearchBottomSheetState
                         ),
                       ),
                       const SizedBox(height: 12),
-
-                      // 상단 헤더(닫기 버튼 포함)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Row(
                           children: [
-                            const Expanded(child: DoubleDepartureCompletedPlateSearchHeader()),
+                            const Expanded(
+                              child: DoubleDepartureCompletedPlateSearchHeader(),
+                            ),
                             IconButton(
                               tooltip: '닫기',
                               onPressed: () => Navigator.pop(context),
@@ -142,15 +145,12 @@ class _DoubleDepartureCompletedSearchBottomSheetState
                           ],
                         ),
                       ),
-
                       const SizedBox(height: 8),
-
                       Expanded(
                         child: ListView(
                           controller: scrollController,
                           padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                           children: [
-                            // 입력 카드
                             _CardSection(
                               title: '번호 4자리 입력',
                               subtitle: '예: 1234',
@@ -159,23 +159,20 @@ class _DoubleDepartureCompletedSearchBottomSheetState
                                 isValidPlate: isValidPlate,
                               ),
                             ),
-
                             const SizedBox(height: 12),
-
-                            // 결과 영역
                             AnimatedSwitcher(
                               duration: const Duration(milliseconds: 220),
                               switchInCurve: Curves.easeOut,
                               switchOutCurve: Curves.easeIn,
-                              child: _buildResultSection(rootContext, scrollController),
+                              child: _buildResultSection(
+                                rootContext,
+                                scrollController,
+                              ),
                             ),
-
                             const SizedBox(height: 12),
                           ],
                         ),
                       ),
-
-                      // 하단 CTA (검색 버튼)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
                         child: ValueListenableBuilder<TextEditingValue>(
@@ -202,8 +199,6 @@ class _DoubleDepartureCompletedSearchBottomSheetState
             },
           ),
         ),
-
-        // 키패드(검색 전만 노출)
         bottomNavigationBar: _hasSearched
             ? const SizedBox.shrink()
             : AnimatedKeypad(
@@ -223,7 +218,10 @@ class _DoubleDepartureCompletedSearchBottomSheetState
     );
   }
 
-  Widget _buildResultSection(BuildContext rootContext, ScrollController scrollController) {
+  Widget _buildResultSection(
+      BuildContext rootContext,
+      ScrollController scrollController,
+      ) {
     final cs = Theme.of(context).colorScheme;
 
     final text = _controller.text;
@@ -318,7 +316,10 @@ class _CardSection extends StatelessWidget {
               Container(
                 width: 8,
                 height: 8,
-                decoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                  color: cs.primary,
+                  shape: BoxShape.circle,
+                ),
               ),
               const SizedBox(width: 8),
               Text(
@@ -363,7 +364,8 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    final Color fg = (tone == _EmptyTone.danger) ? cs.error : cs.onSurfaceVariant;
+    final Color fg =
+    (tone == _EmptyTone.danger) ? cs.error : cs.onSurfaceVariant;
     final Color bg = (tone == _EmptyTone.danger)
         ? cs.errorContainer.withOpacity(0.6)
         : cs.surfaceContainerLow;
@@ -385,7 +387,10 @@ class _EmptyState extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: TextStyle(color: cs.onSurface, fontWeight: FontWeight.w900),
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(

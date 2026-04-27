@@ -1,76 +1,87 @@
-// lib/main.dart
-import 'dart:async'; // ⬅️ 권한 초기화 중복 방지용 Completer / unawaited
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:flutter_overlay_window/flutter_overlay_window.dart'; // ✅ 오버레이 플러그인
+import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 
-import 'routes.dart';
-import 'providers/providers.dart';
+import 'app/di/providers.dart';
+import 'app/di/routes.dart';
+import 'app/theme/theme_prefs_controller.dart';
+import 'features/dev/page/sheets/dev_quick_actions.dart';
+import 'features/headquarter/application/hub_quick_actions.dart';
+import 'features/headquarter/page/sheets/head_memo.dart';
 
-// import 'screens/dev_package/dev_memo.dart'; // ⬅️ DevMemo 더 이상 사용 안 함
-import 'screens/hubs_mode/head_package/head_memo.dart';
+import 'utils/init/app_navigator.dart';
 
-import 'utils/tts/foreground_task_handler.dart';
-import 'utils/app_navigator.dart';
+import 'utils/auth/google_auth_session.dart';
+import 'services/firebase_google_auth_bridge.dart';
+import 'screens/common_package/memo_package/chat_bot.dart';
 
-// 🔔 로컬 알림/타임존
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/data/latest_all.dart' as tzdata; // ← prefix 정리
-import 'package:timezone/timezone.dart' as tz;
-
-// 🔔 endTime 리마인더 서비스 + prefs
-import 'services/endtime_reminder_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-
-// ⬇️ 플랫폼 분기(웹/안드/IOS)에서 사용
-import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
-
-// ✅ (신규) OAuth를 앱 최초 1회만 수행하여 전역 재사용
-import 'utils/google_auth_session.dart';
-
-// ✅ (신규) 본사 허브 퀵 액션 오버레이 전역 초기화/부착
-import 'screens/hubs_mode/head_package/hub_quick_actions.dart';
-
-// ✅ (신규) DashMemo 전역 오버레이 부착을 위해 추가
-import 'screens/common_package/memo_package/dash_memo.dart';
-
-// ✅ (신규) 개발 허브 퀵 액션(DevQuickActions) 사용
-import 'screens/hubs_mode/dev_package/dev_quick_actions.dart';
-
-// ✅ (신규) 오버레이 UI(App) 위젯
 import 'utils/quick_overlay_main.dart';
 
-// ✅ (신규) 장기 근무기록 저장/분석용 트래커
-import 'time_record/app_usage_tracker.dart';
+import 'utils/config/overlay_edge_side_config.dart';
 
-// ✅ 명시적 앱 종료 플래그
-import 'utils/app_exit_flag.dart';
+import 'utils/init/app_exit_flag.dart';
 
-// ✅ (신규) 오버레이 모드 설정 (버블 / 상단 포그라운드)
-import 'utils/overlay_mode_config.dart';
+import 'utils/config/overlay_mode_config.dart';
 
-// ✅ 전역 테마 컨트롤러
-import 'theme_prefs_controller.dart';
+import 'utils/tts/plate_tts_event_hub.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
 
-const kIsWorkingPrefsKey = 'isWorking';
-
-/// ✅ GSI v7 “웹 애플리케이션” 클라이언트 ID (Android에선 serverClientId로 사용)
-const String kWebClientId = '470236709494-kgk29jdhi8ba25f7ujnqhpn8f22fhf25.apps.googleusercontent.com';
-
-/// 🔐 개발자 모드 잠금 해제 비밀번호(원하는 값으로 교체하세요)
+import 'core/config/external_ids.dart';
 const String kDevUnlockPassword = 'DEV-MODE-2025!';
 
-/// 🔲 오버레이 윈도우 실제 크기(px 단위)
-const int kOverlayWindowWidthPx = 550;
-const int kOverlayWindowHeightPx = 200;
-
-/// 상단 포그라운드 모드에서 사용할 "논리 높이(dp)".
 const double kTopOverlayLogicalHeight = 520.0;
 
-/// OverlayMode → 오버레이로 전송할 문자열 키
+final _devUnlockRouteTracker = _DevUnlockRouteTracker();
+
+class _DevUnlockRouteTracker extends NavigatorObserver {
+  final ValueNotifier<int> stackDepth = ValueNotifier<int>(0);
+  final List<Route<dynamic>> _routes = <Route<dynamic>>[];
+
+  void _publish() {
+    stackDepth.value = _routes.length;
+  }
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _routes.remove(route);
+    _routes.add(route);
+    _publish();
+    super.didPush(route, previousRoute);
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _routes.remove(route);
+    _publish();
+    super.didPop(route, previousRoute);
+  }
+
+  @override
+  void didRemove(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    _routes.remove(route);
+    _publish();
+    super.didRemove(route, previousRoute);
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    if (oldRoute != null) {
+      _routes.remove(oldRoute);
+    }
+    if (newRoute != null) {
+      _routes.remove(newRoute);
+      _routes.add(newRoute);
+    }
+    _publish();
+    super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
+  }
+}
+
 String _overlayModeToWire(OverlayMode mode) {
   switch (mode) {
     case OverlayMode.topHalf:
@@ -81,21 +92,6 @@ String _overlayModeToWire(OverlayMode mode) {
 }
 
 String _ts() => DateTime.now().toIso8601String();
-
-// ───────────────────────────────────────────────────────────────
-// flutter_local_notifications 플러그인 인스턴스 & 백그라운드 탭 핸들러
-final FlutterLocalNotificationsPlugin flnp = FlutterLocalNotificationsPlugin();
-
-@pragma('vm:entry-point')
-void myForegroundCallback() {
-  debugPrint('[MAIN][${_ts()}] myForegroundCallback → setTaskHandler(MyTaskHandler)');
-  FlutterForegroundTask.setTaskHandler(MyTaskHandler());
-}
-
-@pragma('vm:entry-point')
-void notificationTapBackground(NotificationResponse resp) {
-  // TODO
-}
 
 @pragma('vm:entry-point')
 void overlayMain() {
@@ -122,7 +118,7 @@ class _OverlayWindowConfig {
   });
 }
 
-_OverlayWindowConfig _buildOverlayWindowConfig(OverlayMode mode) {
+Future<_OverlayWindowConfig> _buildOverlayWindowConfig(OverlayMode mode) async {
   final view = WidgetsBinding.instance.platformDispatcher.views.first;
   final physicalHeight = view.physicalSize.height;
   final physicalWidth = view.physicalSize.width;
@@ -130,13 +126,10 @@ _OverlayWindowConfig _buildOverlayWindowConfig(OverlayMode mode) {
 
   final media = MediaQueryData.fromView(view);
   final statusBarLogical = media.padding.top;
-  final statusBarPhysical = statusBarLogical * devicePixelRatio;
 
   if (mode == OverlayMode.topHalf) {
     final desiredPhysicalHeight = kTopOverlayLogicalHeight * devicePixelRatio;
-    final availablePhysicalHeight = (physicalHeight - statusBarPhysical).clamp(0.0, physicalHeight);
-
-    final h = desiredPhysicalHeight.clamp(0.0, availablePhysicalHeight).round();
+    final h = desiredPhysicalHeight.clamp(0.0, physicalHeight).round();
     final w = physicalWidth.round();
 
     return _OverlayWindowConfig(
@@ -148,13 +141,20 @@ _OverlayWindowConfig _buildOverlayWindowConfig(OverlayMode mode) {
       startPosition: OverlayPosition(0.0, statusBarLogical),
     );
   } else {
-    return const _OverlayWindowConfig(
-      height: kOverlayWindowHeightPx,
-      width: kOverlayWindowWidthPx,
-      enableDrag: true,
-      alignment: OverlayAlignment.centerRight,
-      positionGravity: PositionGravity.auto,
-      startPosition: null,
+    final side = await OverlayEdgeSideConfig.getSide();
+
+    final stripPhysicalW = (kEdgeStripWidth * devicePixelRatio).round();
+    final stripPhysicalH = physicalHeight.round();
+
+    final alignment = (side == OverlayEdgeSide.left)
+        ? OverlayAlignment.topLeft
+        : OverlayAlignment.topRight;
+    return _OverlayWindowConfig(
+      height: stripPhysicalH,
+      width: stripPhysicalW,
+      enableDrag: false,
+      alignment: alignment,
+      positionGravity: PositionGravity.none,
     );
   }
 }
@@ -162,17 +162,8 @@ _OverlayWindowConfig _buildOverlayWindowConfig(OverlayMode mode) {
 Future<bool> ensureOverlayPermission(BuildContext context) async {
   final isGranted = await FlutterOverlayWindow.isPermissionGranted();
   if (isGranted) return true;
-
-  final granted = await FlutterOverlayWindow.requestPermission();
-  final result = granted ?? false;
-
-  if (!result && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('다른 앱 위에 표시 권한이 필요합니다.')),
-    );
-  }
-
-  return result;
+  if (!context.mounted) return false;
+  return false;
 }
 
 Future<void> openQuickOverlay(BuildContext context) async {
@@ -187,11 +178,11 @@ Future<void> openQuickOverlay(BuildContext context) async {
     return;
   }
 
-  final config = _buildOverlayWindowConfig(mode);
+  final config = await _buildOverlayWindowConfig(mode);
 
   await FlutterOverlayWindow.showOverlay(
     enableDrag: config.enableDrag,
-    overlayTitle: 'Easy Valet 오버레이',
+    overlayTitle: 'ParkinWorkin 오버레이',
     overlayContent: '퀵 패널 실행 중',
     flag: OverlayFlag.defaultFlag,
     alignment: config.alignment,
@@ -211,18 +202,27 @@ Future<void> closeQuickOverlay() async {
   }
 }
 
-class _Once {
-  static bool notificationsReady = false;
-  static Completer<void>? notificationsInFlight;
-}
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('ko_KR', null);
+
+  final deviceLocale = WidgetsBinding.instance.platformDispatcher.locale;
+  final deviceLocaleTag =
+      (deviceLocale.countryCode != null && deviceLocale.countryCode!.isNotEmpty)
+          ? '${deviceLocale.languageCode}_${deviceLocale.countryCode}'
+          : deviceLocale.languageCode;
+
+  Intl.defaultLocale = deviceLocaleTag;
+  if (deviceLocaleTag != 'ko_KR') {
+    try {
+      await initializeDateFormatting(deviceLocaleTag, null);
+    } catch (_) {}
+  }
 
   debugPrint('[MAIN][${_ts()}] initCommunicationPort');
   FlutterForegroundTask.initCommunicationPort();
+  PlateTtsEventHub.ensureStarted();
 
-  // ✅ 전역 테마 컨트롤러를 최상단에 주입 (commute 포함 모든 화면에 적용)
   debugPrint('[MAIN][${_ts()}] runApp(AppBootstrapper + ThemePrefsController)');
   runApp(
     ChangeNotifierProvider(
@@ -230,93 +230,6 @@ void main() async {
       child: const AppBootstrapper(),
     ),
   );
-
-  unawaited(_postBootstrap());
-}
-
-Future<void> _postBootstrap() async {
-  try {
-    await _initLocalNotifications();
-  } catch (e, st) {
-    debugPrint('[MAIN][${_ts()}] _initLocalNotifications error: $e');
-    debugPrint(st.toString());
-  }
-
-  EndTimeReminderService.instance.attachPlugin(flnp);
-
-  try {
-    final prefs = await SharedPreferences.getInstance();
-    final savedEnd = prefs.getString('endTime');
-    final isWorking = prefs.getBool(kIsWorkingPrefsKey) ?? false;
-
-    if (isWorking && savedEnd != null && savedEnd.isNotEmpty) {
-      await EndTimeReminderService.instance.scheduleDailyOneHourBefore(savedEnd);
-    } else {
-      await EndTimeReminderService.instance.cancel();
-    }
-  } catch (e, st) {
-    debugPrint('[MAIN][${_ts()}] EndtimeReminderService init error: $e');
-    debugPrint(st.toString());
-  }
-}
-
-Future<void> _initLocalNotifications() async {
-  if (_Once.notificationsReady) return;
-
-  if (_Once.notificationsInFlight != null) {
-    return _Once.notificationsInFlight!.future;
-  }
-
-  final c = Completer<void>();
-  _Once.notificationsInFlight = c;
-
-  try {
-    tzdata.initializeTimeZones();
-    tz.setLocalLocation(tz.getLocation('Asia/Seoul'));
-
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const iosInit = DarwinInitializationSettings();
-    await flnp.initialize(
-      const InitializationSettings(android: androidInit, iOS: iosInit),
-      onDidReceiveNotificationResponse: (resp) {},
-      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
-    );
-
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      final androidImpl = flnp.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
-
-      final enabled = await androidImpl?.areNotificationsEnabled();
-      if (enabled == false) {
-        await androidImpl?.requestNotificationsPermission();
-      }
-
-      const channel = AndroidNotificationChannel(
-        'easydev_reminders',
-        '근무 리마인더',
-        description: '퇴근 1시간 전 알림 채널',
-        importance: Importance.high,
-      );
-      await androidImpl?.createNotificationChannel(channel);
-    } else if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
-      final iosImpl = flnp.resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>();
-      await iosImpl?.requestPermissions(
-        alert: true,
-        badge: true,
-        sound: true,
-      );
-    }
-
-    _Once.notificationsReady = true;
-    c.complete();
-  } catch (e, st) {
-    if (!c.isCompleted) {
-      c.completeError(e, st);
-    }
-    debugPrint('[MAIN][${_ts()}] _initLocalNotifications exception: $e');
-    debugPrint(st.toString());
-  } finally {
-    _Once.notificationsInFlight = null;
-  }
 }
 
 class AppBootstrapper extends StatefulWidget {
@@ -343,7 +256,6 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
           return const MyApp();
         }
 
-        // ✅ 로딩 화면도 전역 테마를 따르도록 Consumer 적용
         return Consumer<ThemePrefsController>(
           builder: (context, themeCtrl, _) {
             return MaterialApp(
@@ -364,37 +276,44 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
     debugPrint('[MAIN][${_ts()}] Firebase.initializeApp');
     await Firebase.initializeApp();
 
+    debugPrint('[MAIN][${_ts()}] FirebaseGoogleAuthBridge.configureRuntime');
+    try {
+      await FirebaseGoogleAuthBridge.instance.configureRuntime();
+      debugPrint(
+          '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.configureRuntime done uid=${FirebaseAuth.instance.currentUser?.uid} email=${FirebaseAuth.instance.currentUser?.email} anonymous=${FirebaseAuth.instance.currentUser?.isAnonymous}');
+    } catch (e, st) {
+      debugPrint(
+          '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.configureRuntime failed: $e\n$st');
+    }
+
     debugPrint('[MAIN][${_ts()}] GoogleAuthSession.init (one-time OAuth)');
     try {
       await GoogleAuthSession.instance.init(serverClientId: kWebClientId);
       debugPrint('[MAIN][${_ts()}] GoogleAuthSession.init done');
-    } catch (e) {
-      debugPrint('[MAIN][${_ts()}] GoogleAuthSession.init failed: $e');
+    } catch (e, st) {
+      debugPrint('[MAIN][${_ts()}] GoogleAuthSession.init failed: $e\n$st');
     }
 
-    debugPrint('[MAIN][${_ts()}] request permissions');
-    var status = await Permission.locationWhenInUse.status;
-    if (!status.isGranted) {
-      status = await Permission.locationWhenInUse.request();
-      debugPrint('[MAIN][${_ts()}] Permission.locationWhenInUse → $status');
+    debugPrint(
+        '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.bootstrapWithExistingGoogleUser');
+    try {
+      final existingGoogleUser = GoogleAuthSession.instance.currentUser;
+      debugPrint(
+          '[MAIN][${_ts()}] existing Google user email=${existingGoogleUser?.email}');
+      final ok = await FirebaseGoogleAuthBridge.instance
+          .bootstrapWithExistingGoogleUser(existingGoogleUser);
+      debugPrint(
+          '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.bootstrapWithExistingGoogleUser done ok=$ok uid=${FirebaseAuth.instance.currentUser?.uid} email=${FirebaseAuth.instance.currentUser?.email} anonymous=${FirebaseAuth.instance.currentUser?.isAnonymous}');
+    } catch (e, st) {
+      debugPrint(
+          '[MAIN][${_ts()}] FirebaseGoogleAuthBridge.bootstrapWithExistingGoogleUser failed: $e\n$st');
     }
-
-    final batteryOpt = await Permission.ignoreBatteryOptimizations.request();
-    debugPrint('[MAIN][${_ts()}] Permission.ignoreBatteryOptimizations → $batteryOpt');
-
-    debugPrint('[MAIN][${_ts()}] startService(callback: myForegroundCallback)');
-    await FlutterForegroundTask.startService(
-      notificationTitle: '이 서비스 알림 탭은 main에서 메시지 발신 중',
-      notificationText: '포그라운드에서 대기 중',
-      callback: myForegroundCallback,
-    );
-    debugPrint('[MAIN][${_ts()}] startService done');
 
     debugPrint('[MAIN][${_ts()}] HeadMemo.init');
     await HeadMemo.init();
 
     debugPrint('[MAIN][${_ts()}] DashMemo.init');
-    await DashMemo.init();
+    await ChatBot.init();
 
     debugPrint('[MAIN][${_ts()}] HeadHubActions.init');
     await HeadHubActions.init();
@@ -418,7 +337,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    AppUsageTracker.instance.onStateChange(AppLifecycleState.resumed);
   }
 
   @override
@@ -431,8 +349,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     debugPrint('[LIFECYCLE][${_ts()}] $state');
-
-    AppUsageTracker.instance.onStateChange(state);
 
     if (AppExitFlag.isExiting) {
       if (state == AppLifecycleState.detached) {
@@ -463,7 +379,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     try {
       final granted = await FlutterOverlayWindow.isPermissionGranted();
       if (!granted) {
-        debugPrint('[OVERLAY][${_ts()}] permission not granted → skip auto start');
+        debugPrint(
+            '[OVERLAY][${_ts()}] permission not granted → skip auto start');
         return;
       }
 
@@ -476,11 +393,11 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         return;
       }
 
-      final config = _buildOverlayWindowConfig(mode);
+      final config = await _buildOverlayWindowConfig(mode);
 
       await FlutterOverlayWindow.showOverlay(
         enableDrag: config.enableDrag,
-        overlayTitle: 'Easy Valet',
+        overlayTitle: 'ParkinWorkin',
         overlayContent: 'Simple 모드 플로팅',
         flag: OverlayFlag.defaultFlag,
         alignment: config.alignment,
@@ -493,7 +410,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       await FlutterOverlayWindow.shareData('__mode:${wire}__');
       await FlutterOverlayWindow.shareData('__collapse__');
 
-      debugPrint('[OVERLAY][${_ts()}] auto start overlay from lifecycle (mode=$wire)');
+      debugPrint(
+          '[OVERLAY][${_ts()}] auto start overlay from lifecycle (mode=$wire)');
     } catch (e, st) {
       debugPrint('[OVERLAY][${_ts()}] auto start error: $e');
       debugPrint(st.toString());
@@ -522,25 +440,22 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         builder: (context, themeCtrl, _) {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
-            title: 'Easy Valet(Beta)',
-
-            // ✅ 전역 테마 적용: commute 포함 전체 화면 반영
+            title: 'ParkinWorkin',
             theme: themeCtrl.buildLightTheme(),
             darkTheme: themeCtrl.buildDarkTheme(),
             themeMode: themeCtrl.themeMode,
-
-            initialRoute: AppRoutes.selector,
+            initialRoute: AppRoutes.startGate,
             routes: appRoutes,
-            onUnknownRoute: (_) => MaterialPageRoute(builder: (_) => const NotFoundPage()),
-
+            onUnknownRoute: (_) =>
+                MaterialPageRoute(builder: (_) => const NotFoundPage()),
             navigatorKey: AppNavigator.key,
-            scaffoldMessengerKey: AppNavigator.scaffoldMessengerKey,
-
+            navigatorObservers: [_devUnlockRouteTracker],
             builder: (context, child) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
-                debugPrint('[MAIN][${_ts()}] postFrameCallback → mountIfNeeded');
+                debugPrint(
+                    '[MAIN][${_ts()}] postFrameCallback → mountIfNeeded');
                 HeadHubActions.mountIfNeeded();
-                DashMemo.mountIfNeeded();
+                ChatBot.mountIfNeeded();
                 DevQuickActions.mountIfNeeded();
               });
 
@@ -585,80 +500,80 @@ class _DevUnlockHotspotState extends State<_DevUnlockHotspot> {
     if (_tapCount >= 3) {
       _tapCount = 0;
       _resetTimer?.cancel();
-      _askPassword(context);
+      _askPassword();
     }
   }
 
-  Future<void> _askPassword(BuildContext ctx) async {
+  Future<void> _askPassword() async {
+    final dialogContext = AppNavigator.context;
+    if (dialogContext == null) return;
+
     final controller = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: ctx,
-      barrierDismissible: true,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('개발자 모드 잠금 해제'),
-          content: TextField(
-            controller: controller,
-            autofocus: true,
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: '비밀번호',
-              hintText: '비밀번호를 입력하세요',
+    try {
+      final ok = await showDialog<bool>(
+        context: dialogContext,
+        barrierDismissible: true,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('개발자 모드 잠금 해제'),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: '비밀번호',
+                hintText: '비밀번호를 입력하세요',
+              ),
+              onSubmitted: (_) => Navigator.of(context).pop(true),
             ),
-            onSubmitted: (_) => Navigator.of(context).pop(true),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('취소'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('확인'),
-            ),
-          ],
-        );
-      },
-    );
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('취소'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('확인'),
+              ),
+            ],
+          );
+        },
+      );
 
-    if (ok == true) {
-      final input = controller.text;
-      if (input == kDevUnlockPassword) {
-        DevQuickActions.setEnabled(true);
-        DevQuickActions.mountIfNeeded();
-
-        AppNavigator.messenger?.showSnackBar(
-          const SnackBar(
-            content: Text('개발 허브 퀵 액션이 활성화되었습니다.'),
-            behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      } else {
-        AppNavigator.messenger?.showSnackBar(
-          const SnackBar(
-            content: Text('비밀번호가 올바르지 않습니다.'),
-            behavior: SnackBarBehavior.floating,
-            duration: Duration(seconds: 2),
-          ),
-        );
+      if (ok == true) {
+        final input = controller.text;
+        if (input == kDevUnlockPassword) {
+          DevQuickActions.setEnabled(true);
+          DevQuickActions.mountIfNeeded();
+        }
       }
+    } finally {
+      controller.dispose();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Positioned(
-      top: 12,
-      right: 8,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: _onTap,
-        child: const SizedBox(
-          width: 48,
-          height: 48,
-        ),
-      ),
+    return ValueListenableBuilder<int>(
+      valueListenable: _devUnlockRouteTracker.stackDepth,
+      builder: (context, stackDepth, _) {
+        if (stackDepth > 1) {
+          return const SizedBox.shrink();
+        }
+
+        return Positioned(
+          top: 12,
+          right: 8,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _onTap,
+            child: const SizedBox(
+              width: 48,
+              height: 48,
+            ),
+          ),
+        );
+      },
     );
   }
 }

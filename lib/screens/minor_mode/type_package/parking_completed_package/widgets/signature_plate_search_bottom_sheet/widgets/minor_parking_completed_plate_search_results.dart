@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../../../../enums/plate_type.dart';
-import '../../../../../../../models/plate_model.dart';
+import '../../../../../../../features/plate/domain/enums/plate_type.dart';
+import '../../../../../../../features/plate/domain/models/plate_model.dart';
 
 class MinorParkingCompletedPlateSearchResults extends StatelessWidget {
   final List<PlateModel> results;
   final void Function(PlateModel) onSelect;
 
-  /// ✅ 기존 시그니처 유지 + “미사용” 방지 위해 실제 UI에 반영
   final VoidCallback? onRefresh;
 
   const MinorParkingCompletedPlateSearchResults({
@@ -43,7 +42,6 @@ class MinorParkingCompletedPlateSearchResults extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
-
         ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -62,13 +60,13 @@ class MinorParkingCompletedPlateSearchResults extends StatelessWidget {
             final lockedAtSec = plate.lockedAtTimeInSeconds;
 
             final locationText =
-            plate.location.trim().isEmpty ? '-' : plate.location.trim();
+                plate.location.trim().isEmpty ? '-' : plate.location.trim();
 
             final bool isSelected = plate.isSelected == true;
 
             final bgColor = isSelected ? cs.tertiaryContainer : cs.surface;
             final borderColor =
-            isSelected ? cs.tertiary : cs.outlineVariant.withOpacity(0.70);
+                isSelected ? cs.tertiary : cs.outlineVariant.withOpacity(0.70);
 
             final (labelFg, labelBg) = _typeLabelColors(cs, typeEnum);
 
@@ -82,23 +80,23 @@ class MinorParkingCompletedPlateSearchResults extends StatelessWidget {
 
             final settledChip = isLocked
                 ? _buildChip(
-              cs: cs,
-              text: lockedFeeAmount != null
-                  ? '사전 정산 ₩${currency.format(lockedFeeAmount)}'
-                  : '사전 정산',
-              fg: cs.tertiary,
-              bg: cs.tertiaryContainer,
-              borderColor: cs.tertiary.withOpacity(0.55),
-              icon: Icons.lock,
-            )
+                    cs: cs,
+                    text: lockedFeeAmount != null
+                        ? '사전 정산 ₩${currency.format(lockedFeeAmount)}'
+                        : '사전 정산',
+                    fg: cs.tertiary,
+                    bg: cs.tertiaryContainer,
+                    borderColor: cs.tertiary.withOpacity(0.55),
+                    icon: Icons.lock,
+                  )
                 : _buildChip(
-              cs: cs,
-              text: '미정산',
-              fg: cs.onSurfaceVariant,
-              bg: cs.surfaceContainerHigh,
-              borderColor: cs.outlineVariant.withOpacity(0.75),
-              icon: Icons.lock_open,
-            );
+                    cs: cs,
+                    text: '미정산',
+                    fg: cs.onSurfaceVariant,
+                    bg: cs.surfaceContainerHigh,
+                    borderColor: cs.outlineVariant.withOpacity(0.75),
+                    icon: Icons.lock_open,
+                  );
 
             final showDetailSection = isSelected ||
                 (plate.selectedBy?.isNotEmpty ?? false) ||
@@ -108,9 +106,9 @@ class MinorParkingCompletedPlateSearchResults extends StatelessWidget {
 
             final lockedAtText = (lockedAtSec is int)
                 ? _formatTime(
-              DateTime.fromMillisecondsSinceEpoch(lockedAtSec * 1000)
-                  .toLocal(),
-            )
+                    DateTime.fromMillisecondsSinceEpoch(lockedAtSec * 1000)
+                        .toLocal(),
+                  )
                 : null;
 
             return Material(
@@ -135,7 +133,6 @@ class MinorParkingCompletedPlateSearchResults extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 상단: 아이콘 + 번호 + 칩
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -180,10 +177,7 @@ class MinorParkingCompletedPlateSearchResults extends StatelessWidget {
                           ),
                         ],
                       ),
-
                       const SizedBox(height: 12),
-
-                      // 요약 정보(요청시간 / 주차구역)
                       _InfoRow(
                         cs: cs,
                         icon: Icons.access_time,
@@ -195,7 +189,6 @@ class MinorParkingCompletedPlateSearchResults extends StatelessWidget {
                         icon: Icons.location_on,
                         text: '주차 구역: $locationText',
                       ),
-
                       if (showDetailSection) ...[
                         const SizedBox(height: 10),
                         Container(
@@ -220,8 +213,9 @@ class MinorParkingCompletedPlateSearchResults extends StatelessWidget {
                                     fontWeight: FontWeight.w900,
                                   ),
                                 ),
-
-                              if ((plate.selectedBy ?? '').trim().isNotEmpty) ...[
+                              if ((plate.selectedBy ?? '')
+                                  .trim()
+                                  .isNotEmpty) ...[
                                 const SizedBox(height: 6),
                                 _LabeledPill(
                                   cs: cs,
@@ -231,8 +225,9 @@ class MinorParkingCompletedPlateSearchResults extends StatelessWidget {
                                   toneColor: cs.onSurfaceVariant,
                                 ),
                               ],
-
-                              if ((plate.billingType ?? '').trim().isNotEmpty) ...[
+                              if ((plate.billingType ?? '')
+                                  .trim()
+                                  .isNotEmpty) ...[
                                 const SizedBox(height: 8),
                                 Text(
                                   '과금 유형: ${plate.billingType}',
@@ -242,8 +237,9 @@ class MinorParkingCompletedPlateSearchResults extends StatelessWidget {
                                   ),
                                 ),
                               ],
-
-                              if ((plate.customStatus ?? '').trim().isNotEmpty) ...[
+                              if ((plate.customStatus ?? '')
+                                  .trim()
+                                  .isNotEmpty) ...[
                                 const SizedBox(height: 4),
                                 Text(
                                   '커스텀 상태: ${plate.customStatus}',
@@ -253,7 +249,6 @@ class MinorParkingCompletedPlateSearchResults extends StatelessWidget {
                                   ),
                                 ),
                               ],
-
                               if (isLocked) ...[
                                 const SizedBox(height: 10),
                                 _InfoRow(
@@ -261,7 +256,7 @@ class MinorParkingCompletedPlateSearchResults extends StatelessWidget {
                                   icon: Icons.receipt_long,
                                   iconColor: cs.tertiary,
                                   text:
-                                  '정산 금액: ${lockedFeeAmount != null ? '₩${currency.format(lockedFeeAmount)}' : '-'}',
+                                      '정산 금액: ${lockedFeeAmount != null ? '₩${currency.format(lockedFeeAmount)}' : '-'}',
                                   strong: true,
                                 ),
                                 if (paymentMethod.isNotEmpty) ...[
@@ -299,14 +294,12 @@ class MinorParkingCompletedPlateSearchResults extends StatelessWidget {
     );
   }
 
-  // yyyy-MM-dd HH:mm:ss
   String _formatTime(DateTime time) {
     String two(int n) => n.toString().padLeft(2, '0');
     return '${time.year}-${two(time.month)}-${two(time.day)} '
         '${two(time.hour)}:${two(time.minute)}:${two(time.second)}';
   }
 
-  /// ✅ PlateType → ColorScheme 기반 칩 컬러 매핑
   (Color fg, Color bg) _typeLabelColors(ColorScheme cs, PlateType? type) {
     switch (type) {
       case PlateType.parkingRequests:

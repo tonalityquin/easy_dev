@@ -31,7 +31,7 @@ class MinorParkingCompletedPlateNumberDisplay extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 4자리 박스 표시
+            
             Row(
               children: List.generate(4, (i) {
                 final char = (i < text.length) ? text[i] : '';

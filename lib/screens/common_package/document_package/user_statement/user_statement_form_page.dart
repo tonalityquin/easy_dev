@@ -8,12 +8,12 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:googleapis/gmail/v1.dart' as gmail;
 
-import '../../../../../../utils/google_auth_v7.dart';
-import '../../../../../../utils/api/email_config.dart';
-import '../../../hubs_mode/dev_package/debug_package/debug_api_logger.dart';
-import '../../../hubs_mode/dev_package/debug_package/debug_bottom_sheet.dart';
+import '../../../../../../utils/auth/google_auth_v7.dart';
+import '../../../../../../utils/config/email_config.dart';
+import '../../../../features/dev/debug/debug_api_logger.dart';
 import 'user_statement_styles.dart';
 import 'user_statement_signature_dialog.dart';
+import '../../../../widgets/dialog/status_dialog_package/status_dialog.dart';
 
 class UserStatementFormPage extends StatefulWidget {
   const UserStatementFormPage({super.key});
@@ -47,9 +47,6 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
 
   bool _sending = false;
 
-  // ─────────────────────────────────────────────────────────────
-  // ✅ API 디버그 로직: 표준 태그 / 로깅 헬퍼
-  // ─────────────────────────────────────────────────────────────
   static const String _tStatement = 'statement';
   static const String _tStatementForm = 'statement/form';
   static const String _tStatementPdf = 'statement/pdf';
@@ -76,20 +73,7 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
         level: 'error',
         tags: tags,
       );
-    } catch (_) {
-      // 로깅 실패는 UX에 영향 없도록 무시
-    }
-  }
-
-  Future<void> _openDebugBottomSheet() async {
-    HapticFeedback.selectionClick();
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const DebugBottomSheet(),
-    );
+    } catch (_) {}
   }
 
   @override
@@ -142,7 +126,6 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
   }
 
   Future<void> _pickDateTime() async {
-    HapticFeedback.selectionClick();
     try {
       final now = DateTime.now();
       final date = await showDatePicker(
@@ -184,7 +167,6 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
   }
 
   void _reset() {
-    HapticFeedback.lightImpact();
     _formKey.currentState?.reset();
     _deptCtrl.clear();
     _nameCtrl.clear();
@@ -224,7 +206,6 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
   }
 
   Future<void> _showPreview() async {
-    HapticFeedback.lightImpact();
     final text = _buildPreviewText(context);
 
     final createdAtText = _fmtDT(context, DateTime.now());
@@ -232,12 +213,15 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
 
     final dept = _deptCtrl.text.trim().isEmpty ? '미입력' : _deptCtrl.text.trim();
     final name = _nameCtrl.text.trim().isEmpty ? '미입력' : _nameCtrl.text.trim();
-    final position = _positionCtrl.text.trim().isEmpty ? '미입력' : _positionCtrl.text.trim();
+    final position =
+    _positionCtrl.text.trim().isEmpty ? '미입력' : _positionCtrl.text.trim();
 
     final signName = _signerName.isEmpty ? '이름 미입력' : _signerName;
-    final signTimeText = _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
+    final signTimeText =
+    _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
 
-    Widget _infoPill(ColorScheme cs, IconData icon, String label, String value) {
+    Widget _infoPill(
+        ColorScheme cs, IconData icon, String label, String value) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
@@ -283,7 +267,8 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
 
         return Dialog(
           backgroundColor: Colors.transparent,
-          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          insetPadding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
           child: LayoutBuilder(
             builder: (ctx, constraints) {
               final maxHeight = MediaQuery.of(ctx).size.height * 0.8;
@@ -306,15 +291,18 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                             decoration: BoxDecoration(color: cs.primary),
                             child: Row(
                               children: [
-                                Icon(Icons.visibility_outlined, color: cs.onPrimary),
+                                Icon(Icons.visibility_outlined,
+                                    color: cs.onPrimary),
                                 const SizedBox(width: 8),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         '경위서 미리보기',
-                                        style: theme.textTheme.titleMedium?.copyWith(
+                                        style: theme.textTheme.titleMedium
+                                            ?.copyWith(
                                           color: cs.onPrimary,
                                           fontWeight: FontWeight.w600,
                                         ),
@@ -322,7 +310,8 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                       const SizedBox(height: 2),
                                       Text(
                                         '전송 전 경위서 내용을 한 번 더 확인해 주세요.',
-                                        style: theme.textTheme.bodySmall?.copyWith(
+                                        style:
+                                        theme.textTheme.bodySmall?.copyWith(
                                           color: cs.onPrimary.withOpacity(0.82),
                                         ),
                                       ),
@@ -340,39 +329,51 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                           Flexible(
                             child: Scrollbar(
                               child: SingleChildScrollView(
-                                padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+                                padding:
+                                const EdgeInsets.fromLTRB(20, 16, 20, 12),
                                 child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  crossAxisAlignment:
+                                  CrossAxisAlignment.stretch,
                                   children: [
                                     Wrap(
                                       spacing: 8,
                                       runSpacing: 8,
                                       children: [
-                                        _infoPill(cs, Icons.calendar_today_outlined, '작성일', createdAtText),
-                                        _infoPill(cs, Icons.schedule_outlined, '사건 일시', eventAtText),
-                                        _infoPill(cs, Icons.badge_outlined, '작성자', '$dept / $position / $name'),
+                                        _infoPill(
+                                            cs,
+                                            Icons.calendar_today_outlined,
+                                            '작성일',
+                                            createdAtText),
+                                        _infoPill(cs, Icons.schedule_outlined,
+                                            '사건 일시', eventAtText),
+                                        _infoPill(cs, Icons.badge_outlined,
+                                            '작성자', '$dept / $position / $name'),
                                       ],
                                     ),
                                     const SizedBox(height: 16),
-
-                                    // 메일 전송 정보
                                     Container(
                                       decoration: BoxDecoration(
                                         color: cs.surfaceContainerLow,
                                         borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
+                                        border: Border.all(
+                                            color: cs.outlineVariant
+                                                .withOpacity(0.75)),
                                       ),
                                       padding: const EdgeInsets.all(12),
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                         children: [
                                           Row(
                                             children: [
-                                              Icon(Icons.email_outlined, size: 18, color: cs.primary),
+                                              Icon(Icons.email_outlined,
+                                                  size: 18, color: cs.primary),
                                               const SizedBox(width: 6),
                                               Text(
                                                 '메일 전송 정보',
-                                                style: theme.textTheme.bodyMedium?.copyWith(
+                                                style: theme
+                                                    .textTheme.bodyMedium
+                                                    ?.copyWith(
                                                   fontWeight: FontWeight.w600,
                                                   color: cs.onSurface,
                                                 ),
@@ -380,11 +381,15 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                             ],
                                           ),
                                           const SizedBox(height: 8),
-                                          Divider(height: 20, color: cs.outlineVariant.withOpacity(0.9)),
+                                          Divider(
+                                              height: 20,
+                                              color: cs.outlineVariant
+                                                  .withOpacity(0.9)),
                                           const SizedBox(height: 2),
                                           Text(
                                             '제목',
-                                            style: theme.textTheme.bodySmall?.copyWith(
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
                                               color: cs.onSurfaceVariant,
                                               fontWeight: FontWeight.w600,
                                             ),
@@ -392,7 +397,8 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                           const SizedBox(height: 2),
                                           Text(
                                             _mailSubjectCtrl.text,
-                                            style: theme.textTheme.bodyMedium?.copyWith(
+                                            style: theme.textTheme.bodyMedium
+                                                ?.copyWith(
                                               fontWeight: FontWeight.w500,
                                               color: cs.onSurface,
                                             ),
@@ -400,7 +406,8 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                           const SizedBox(height: 10),
                                           Text(
                                             '본문',
-                                            style: theme.textTheme.bodySmall?.copyWith(
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
                                               color: cs.onSurfaceVariant,
                                               fontWeight: FontWeight.w600,
                                             ),
@@ -411,40 +418,48 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                             padding: const EdgeInsets.all(10),
                                             decoration: BoxDecoration(
                                               color: cs.surface,
-                                              borderRadius: BorderRadius.circular(10),
-                                              border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
+                                              borderRadius:
+                                              BorderRadius.circular(10),
+                                              border: Border.all(
+                                                  color: cs.outlineVariant
+                                                      .withOpacity(0.75)),
                                             ),
                                             child: Text(
                                               _mailBodyCtrl.text.trim().isEmpty
                                                   ? '입력된 메일 본문이 없습니다.'
                                                   : _mailBodyCtrl.text,
-                                              style: theme.textTheme.bodyMedium?.copyWith(color: cs.onSurface),
+                                              style: theme.textTheme.bodyMedium
+                                                  ?.copyWith(
+                                                  color: cs.onSurface),
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
-
                                     const SizedBox(height: 16),
-
-                                    // 경위 내용
                                     Container(
                                       decoration: BoxDecoration(
                                         color: cs.surface,
                                         borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
+                                        border: Border.all(
+                                            color: cs.outlineVariant
+                                                .withOpacity(0.75)),
                                       ),
                                       padding: const EdgeInsets.all(12),
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                         children: [
                                           Row(
                                             children: [
-                                              Icon(Icons.description_outlined, size: 18, color: cs.primary),
+                                              Icon(Icons.description_outlined,
+                                                  size: 18, color: cs.primary),
                                               const SizedBox(width: 6),
                                               Text(
                                                 '경위 내용 (육하원칙 기반)',
-                                                style: theme.textTheme.bodyMedium?.copyWith(
+                                                style: theme
+                                                    .textTheme.bodyMedium
+                                                    ?.copyWith(
                                                   fontWeight: FontWeight.w600,
                                                   color: cs.onSurface,
                                                 ),
@@ -452,11 +467,15 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                             ],
                                           ),
                                           const SizedBox(height: 8),
-                                          Divider(height: 20, color: cs.outlineVariant.withOpacity(0.9)),
+                                          Divider(
+                                              height: 20,
+                                              color: cs.outlineVariant
+                                                  .withOpacity(0.9)),
                                           const SizedBox(height: 2),
                                           Text(
                                             '기본 정보',
-                                            style: theme.textTheme.bodySmall?.copyWith(
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
                                               color: cs.onSurfaceVariant,
                                               fontWeight: FontWeight.w600,
                                             ),
@@ -467,12 +486,16 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                             padding: const EdgeInsets.all(10),
                                             decoration: BoxDecoration(
                                               color: cs.surfaceContainerLow,
-                                              borderRadius: BorderRadius.circular(10),
-                                              border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
+                                              borderRadius:
+                                              BorderRadius.circular(10),
+                                              border: Border.all(
+                                                  color: cs.outlineVariant
+                                                      .withOpacity(0.75)),
                                             ),
                                             child: Text(
                                               '소속: $dept\n성명: $name\n직책: $position\n일시: $eventAtText',
-                                              style: theme.textTheme.bodySmall?.copyWith(
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
                                                 height: 1.4,
                                                 color: cs.onSurface,
                                               ),
@@ -481,7 +504,8 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                           const SizedBox(height: 10),
                                           Text(
                                             '상세 경위',
-                                            style: theme.textTheme.bodySmall?.copyWith(
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
                                               color: cs.onSurfaceVariant,
                                               fontWeight: FontWeight.w600,
                                             ),
@@ -492,16 +516,22 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                             padding: const EdgeInsets.all(10),
                                             decoration: BoxDecoration(
                                               color: cs.surfaceContainerLow,
-                                              borderRadius: BorderRadius.circular(10),
-                                              border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
+                                              borderRadius:
+                                              BorderRadius.circular(10),
+                                              border: Border.all(
+                                                  color: cs.outlineVariant
+                                                      .withOpacity(0.75)),
                                             ),
                                             child: Text(
                                               _contentCtrl.text.trim().isEmpty
                                                   ? '입력된 경위 내용이 없습니다.'
                                                   : _contentCtrl.text,
-                                              style: theme.textTheme.bodyMedium?.copyWith(
+                                              style: theme.textTheme.bodyMedium
+                                                  ?.copyWith(
                                                 height: 1.4,
-                                                color: _contentCtrl.text.trim().isEmpty
+                                                color: _contentCtrl.text
+                                                    .trim()
+                                                    .isEmpty
                                                     ? cs.onSurfaceVariant
                                                     : cs.onSurface,
                                               ),
@@ -510,27 +540,30 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                         ],
                                       ),
                                     ),
-
                                     const SizedBox(height: 16),
-
-                                    // 전자서명
                                     Container(
                                       decoration: BoxDecoration(
                                         color: cs.surface,
                                         borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
+                                        border: Border.all(
+                                            color: cs.outlineVariant
+                                                .withOpacity(0.75)),
                                       ),
                                       padding: const EdgeInsets.all(12),
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                         children: [
                                           Row(
                                             children: [
-                                              Icon(Icons.edit_outlined, size: 18, color: cs.primary),
+                                              Icon(Icons.edit_outlined,
+                                                  size: 18, color: cs.primary),
                                               const SizedBox(width: 6),
                                               Text(
                                                 '전자서명 정보',
-                                                style: theme.textTheme.bodyMedium?.copyWith(
+                                                style: theme
+                                                    .textTheme.bodyMedium
+                                                    ?.copyWith(
                                                   fontWeight: FontWeight.w600,
                                                   color: cs.onSurface,
                                                 ),
@@ -538,26 +571,37 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                             ],
                                           ),
                                           const SizedBox(height: 8),
-                                          Divider(height: 20, color: cs.outlineVariant.withOpacity(0.9)),
+                                          Divider(
+                                              height: 20,
+                                              color: cs.outlineVariant
+                                                  .withOpacity(0.9)),
                                           const SizedBox(height: 2),
                                           Row(
                                             children: [
                                               Expanded(
                                                 child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                                   children: [
                                                     Text(
                                                       '서명자',
-                                                      style: theme.textTheme.bodySmall?.copyWith(
-                                                        color: cs.onSurfaceVariant,
-                                                        fontWeight: FontWeight.w600,
+                                                      style: theme
+                                                          .textTheme.bodySmall
+                                                          ?.copyWith(
+                                                        color:
+                                                        cs.onSurfaceVariant,
+                                                        fontWeight:
+                                                        FontWeight.w600,
                                                       ),
                                                     ),
                                                     const SizedBox(height: 2),
                                                     Text(
                                                       signName,
-                                                      style: theme.textTheme.bodyMedium?.copyWith(
-                                                        fontWeight: FontWeight.w500,
+                                                      style: theme
+                                                          .textTheme.bodyMedium
+                                                          ?.copyWith(
+                                                        fontWeight:
+                                                        FontWeight.w500,
                                                         color: cs.onSurface,
                                                       ),
                                                     ),
@@ -567,20 +611,28 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                               const SizedBox(width: 12),
                                               Expanded(
                                                 child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
                                                   children: [
                                                     Text(
                                                       '서명 일시',
-                                                      style: theme.textTheme.bodySmall?.copyWith(
-                                                        color: cs.onSurfaceVariant,
-                                                        fontWeight: FontWeight.w600,
+                                                      style: theme
+                                                          .textTheme.bodySmall
+                                                          ?.copyWith(
+                                                        color:
+                                                        cs.onSurfaceVariant,
+                                                        fontWeight:
+                                                        FontWeight.w600,
                                                       ),
                                                     ),
                                                     const SizedBox(height: 2),
                                                     Text(
                                                       signTimeText,
-                                                      style: theme.textTheme.bodyMedium?.copyWith(
-                                                        fontWeight: FontWeight.w500,
+                                                      style: theme
+                                                          .textTheme.bodyMedium
+                                                          ?.copyWith(
+                                                        fontWeight:
+                                                        FontWeight.w500,
                                                         color: cs.onSurface,
                                                       ),
                                                     ),
@@ -594,22 +646,30 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                             height: 140,
                                             width: double.infinity,
                                             decoration: BoxDecoration(
-                                              borderRadius: BorderRadius.circular(12),
-                                              border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+                                              borderRadius:
+                                              BorderRadius.circular(12),
+                                              border: Border.all(
+                                                  color: cs.outlineVariant
+                                                      .withOpacity(0.85)),
                                               color: cs.surfaceContainerLow,
                                             ),
                                             child: _signaturePngBytes == null
                                                 ? Center(
                                               child: Text(
                                                 '서명 이미지가 없습니다. (전자서명 완료 후 제출할 수 있습니다.)',
-                                                style: theme.textTheme.bodySmall?.copyWith(
-                                                  color: cs.onSurfaceVariant,
+                                                style: theme
+                                                    .textTheme.bodySmall
+                                                    ?.copyWith(
+                                                  color:
+                                                  cs.onSurfaceVariant,
                                                 ),
-                                                textAlign: TextAlign.center,
+                                                textAlign:
+                                                TextAlign.center,
                                               ),
                                             )
                                                 : Padding(
-                                              padding: const EdgeInsets.all(8),
+                                              padding:
+                                              const EdgeInsets.all(8),
                                               child: Image.memory(
                                                 _signaturePngBytes!,
                                                 fit: BoxFit.contain,
@@ -619,26 +679,29 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                         ],
                                       ),
                                     ),
-
                                     const SizedBox(height: 12),
-
-                                    // 안내
                                     Container(
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(
-                                        color: cs.primaryContainer.withOpacity(0.45),
+                                        color: cs.primaryContainer
+                                            .withOpacity(0.45),
                                         borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+                                        border: Border.all(
+                                            color: cs.outlineVariant
+                                                .withOpacity(0.6)),
                                       ),
                                       child: Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                         children: [
-                                          Icon(Icons.info_outline, size: 18, color: cs.primary),
+                                          Icon(Icons.info_outline,
+                                              size: 18, color: cs.primary),
                                           const SizedBox(width: 8),
                                           Expanded(
                                             child: Text(
                                               '하단의 "텍스트 복사" 버튼을 누르면 이 미리보기 내용을 텍스트 형태로 복사하여 메신저 등에 붙여넣을 수 있습니다.',
-                                              style: theme.textTheme.bodySmall?.copyWith(
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
                                                 height: 1.4,
                                                 color: cs.onSurface,
                                               ),
@@ -652,28 +715,25 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                               ),
                             ),
                           ),
-
                           Container(
                             width: double.infinity,
                             padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                             decoration: BoxDecoration(
                               color: cs.surfaceContainerLow,
                               border: Border(
-                                top: BorderSide(color: cs.outlineVariant.withOpacity(0.75)),
+                                top: BorderSide(
+                                    color: cs.outlineVariant.withOpacity(0.75)),
                               ),
                             ),
                             child: Row(
                               children: [
                                 TextButton.icon(
                                   onPressed: () async {
-                                    HapticFeedback.selectionClick();
-                                    await Clipboard.setData(ClipboardData(text: text));
-                                    if (!mounted) return;
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text('텍스트가 클립보드에 복사되었습니다.')),
-                                    );
+                                    await Clipboard.setData(
+                                        ClipboardData(text: text));
                                   },
-                                  icon: const Icon(Icons.copy_rounded, size: 18),
+                                  icon:
+                                  const Icon(Icons.copy_rounded, size: 18),
                                   label: const Text('텍스트 복사'),
                                 ),
                                 const SizedBox(width: 4),
@@ -697,10 +757,28 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
     );
   }
 
+  Future<void> _showSubmitSuccessDialogAndClose() async {
+    if (!mounted) return;
+
+    await StatusDialog.showSuccess(
+      context,
+      title: StatusDialog.userStatementSubmitSuccess,
+      closeCurrentPageAfter: true,
+    );
+  }
+
+  Future<void> _showSubmitFailureDialog() async {
+    if (!mounted) return;
+
+    await StatusDialog.showFailure(
+      context,
+      title: StatusDialog.userStatementSubmitFailed,
+    );
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    HapticFeedback.lightImpact();
     setState(() => _sending = true);
 
     try {
@@ -713,36 +791,33 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
           extra: <String, dynamic>{'toRaw': cfg.to},
           tags: const <String>[_tStatementEmail, _tStatement],
         );
-
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('수신자(To)가 비어있거나 형식이 올바르지 않습니다. 설정에서 수신자를 저장해 주세요.'),
-          ),
-        );
+        await _showSubmitFailureDialog();
         return;
       }
 
-      final toCsv = cfg.to.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).join(', ');
+      final toCsv = cfg.to
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .join(', ');
 
       final subject = _mailSubjectCtrl.text.trim();
       final body = _mailBodyCtrl.text.trim();
 
       if (subject.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('메일 제목을 입력해 주세요.')));
+        await _showSubmitFailureDialog();
         return;
       }
 
       if (_eventDateTime == null) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('일시를 선택해 주세요.')));
+        await _showSubmitFailureDialog();
         return;
       }
 
       final pdfBytes = await _buildPdfBytes();
       final now = DateTime.now();
-      final nameForFile = _nameCtrl.text.trim().isEmpty ? '무기명' : _nameCtrl.text.trim();
+      final nameForFile =
+      _nameCtrl.text.trim().isEmpty ? '무기명' : _nameCtrl.text.trim();
       final filename = _safeFileName('경위서_${nameForFile}_${_dateTag(now)}');
 
       await _sendEmailViaGmail(
@@ -754,7 +829,7 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('메일 전송 완료')));
+      await _showSubmitSuccessDialogAndClose();
     } catch (e) {
       await _logApiError(
         tag: 'UserStatementFormPage._submit',
@@ -770,13 +845,15 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
           'hasEventTime': _eventDateTime != null,
           'hasSignature': _signaturePngBytes != null,
         },
-        tags: const <String>[_tStatementForm, _tStatementEmail, _tStatement, _tGmailSend],
+        tags: const <String>[
+          _tStatementForm,
+          _tStatementEmail,
+          _tStatement,
+          _tGmailSend
+        ],
       );
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('메일 전송 실패: $e')),
-      );
+      await _showSubmitFailureDialog();
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -787,21 +864,20 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
     return s.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // ✅ PDF 생성: 실패 시 DebugApiLogger 기록
-  // ─────────────────────────────────────────────────────────────
   Future<Uint8List> _buildPdfBytes() async {
     try {
       pw.Font? regular;
       pw.Font? bold;
 
       try {
-        final regData = await rootBundle.load('assets/fonts/NotoSansKR/NotoSansKR-Regular.ttf');
+        final regData = await rootBundle
+            .load('assets/fonts/NotoSansKR/NotoSansKR-Regular.ttf');
         regular = pw.Font.ttf(regData);
       } catch (_) {}
 
       try {
-        final boldData = await rootBundle.load('assets/fonts/NotoSansKR/NotoSansKR-Bold.ttf');
+        final boldData = await rootBundle
+            .load('assets/fonts/NotoSansKR/NotoSansKR-Bold.ttf');
         bold = pw.Font.ttf(boldData);
       } catch (_) {
         bold = regular;
@@ -822,9 +898,15 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
       final eventText = (dt == null) ? '-' : _fmtCompact(dt);
 
       final fields = <MapEntry<String, String>>[
-        MapEntry('소속', _deptCtrl.text.trim().isEmpty ? '-' : _deptCtrl.text.trim()),
-        MapEntry('성명', _nameCtrl.text.trim().isEmpty ? '-' : _nameCtrl.text.trim()),
-        MapEntry('직책', _positionCtrl.text.trim().isEmpty ? '-' : _positionCtrl.text.trim()),
+        MapEntry(
+            '소속', _deptCtrl.text.trim().isEmpty ? '-' : _deptCtrl.text.trim()),
+        MapEntry(
+            '성명', _nameCtrl.text.trim().isEmpty ? '-' : _nameCtrl.text.trim()),
+        MapEntry(
+            '직책',
+            _positionCtrl.text.trim().isEmpty
+                ? '-'
+                : _positionCtrl.text.trim()),
         MapEntry('일시', eventText),
       ];
 
@@ -841,11 +923,13 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                 pw.Container(
                   padding: const pw.EdgeInsets.all(6),
                   color: PdfColors.grey200,
-                  child: pw.Text(kv.key, style: const pw.TextStyle(fontSize: 11)),
+                  child: pw.Text(kv.key,
+                      style: const pw.TextStyle(fontSize: 11)),
                 ),
                 pw.Container(
                   padding: const pw.EdgeInsets.all(6),
-                  child: pw.Text(kv.value, style: const pw.TextStyle(fontSize: 11)),
+                  child: pw.Text(kv.value,
+                      style: const pw.TextStyle(fontSize: 11)),
                 ),
               ],
             ),
@@ -856,7 +940,9 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.SizedBox(height: 8),
-          pw.Text(title, style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+          pw.Text(title,
+              style: pw.TextStyle(
+                  fontSize: 13, fontWeight: pw.FontWeight.bold)),
           pw.SizedBox(height: 4),
           pw.Container(
             width: double.infinity,
@@ -875,19 +961,25 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
 
       pw.Widget buildSignature() {
         final name = _signerName.isEmpty ? '이름 미입력' : _signerName;
-        final timeText = _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
+        final timeText =
+        _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
 
         return pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.SizedBox(height: 8),
-            pw.Text('전자서명', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+            pw.Text('전자서명',
+                style:
+                pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 4),
             pw.Row(
               children: [
-                pw.Expanded(child: pw.Text('서명자: $name', style: const pw.TextStyle(fontSize: 11))),
+                pw.Expanded(
+                    child: pw.Text('서명자: $name',
+                        style: const pw.TextStyle(fontSize: 11))),
                 pw.SizedBox(width: 8),
-                pw.Text('서명 일시: $timeText', style: const pw.TextStyle(fontSize: 11)),
+                pw.Text('서명 일시: $timeText',
+                    style: const pw.TextStyle(fontSize: 11)),
               ],
             ),
             pw.SizedBox(height: 4),
@@ -902,7 +994,8 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                   ? pw.Center(
                 child: pw.Text(
                   '서명 이미지 없음',
-                  style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey),
+                  style: const pw.TextStyle(
+                      fontSize: 10, color: PdfColors.grey),
                 ),
               )
                   : pw.Padding(
@@ -926,7 +1019,8 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
             pw.Center(
               child: pw.Text(
                 '경위서',
-                style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+                style:
+                pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
               ),
             ),
             pw.SizedBox(height: 12),
@@ -964,9 +1058,6 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // ✅ Gmail MIME helpers (CRLF + base64 wrap + RFC2047 Subject)
-  // ─────────────────────────────────────────────────────────────
   String _wrapBase64Lines(String b64, {int lineLength = _mimeB64LineLength}) {
     if (b64.isEmpty) return '';
     final sb = StringBuffer();
@@ -994,7 +1085,8 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
     try {
       final api = gmail.GmailApi(client);
 
-      final boundary = 'dart-mail-boundary-${DateTime.now().millisecondsSinceEpoch}';
+      final boundary =
+          'dart-mail-boundary-${DateTime.now().millisecondsSinceEpoch}';
       const crlf = '\r\n';
 
       final pdfB64Wrapped = _wrapBase64Lines(base64.encode(pdfBytes));
@@ -1019,7 +1111,8 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
         ..write(pdfB64Wrapped)
         ..write('--$boundary--$crlf');
 
-      final raw = base64UrlEncode(utf8.encode(mime.toString())).replaceAll('=', '');
+      final raw =
+      base64UrlEncode(utf8.encode(mime.toString())).replaceAll('=', '');
       final msg = gmail.Message()..raw = raw;
       await api.users.messages.send(msg, 'me');
     } catch (e) {
@@ -1054,7 +1147,6 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
       labelText: labelText,
       hintText: hintText,
       filled: true,
-      // ✅ 다크모드에서 white 고정 금지
       fillColor: cs.surfaceContainerLow,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
@@ -1117,7 +1209,6 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
   Widget _gap(double h) => SizedBox(height: h);
 
   Future<void> _openSignatureDialog() async {
-    HapticFeedback.selectionClick();
     try {
       final cs = Theme.of(context).colorScheme;
 
@@ -1174,13 +1265,10 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
         foregroundColor: cs.onSurface,
         elevation: 0,
         surfaceTintColor: Colors.transparent,
-        shape: Border(bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.9), width: 1)),
+        shape: Border(
+            bottom: BorderSide(
+                color: cs.outlineVariant.withOpacity(0.9), width: 1)),
         actions: [
-          IconButton(
-            tooltip: 'API 디버그',
-            onPressed: _openDebugBottomSheet,
-            icon: const Icon(Icons.bug_report_outlined),
-          ),
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: ElevatedButton.icon(
@@ -1205,7 +1293,9 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
           ),
           decoration: BoxDecoration(
             color: cs.surface,
-            border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(0.9), width: 1)),
+            border: Border(
+                top: BorderSide(
+                    color: cs.outlineVariant.withOpacity(0.9), width: 1)),
           ),
           child: SizedBox(
             width: double.infinity,
@@ -1249,7 +1339,10 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                           Text(
                             '경위서',
                             textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineSmall
+                                ?.copyWith(
                               fontWeight: FontWeight.w700,
                               letterSpacing: 4,
                               color: cs.onSurface,
@@ -1259,13 +1352,15 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                           Text(
                             'STATEMENT FORM',
                             textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelMedium
+                                ?.copyWith(
                               color: cs.onSurfaceVariant,
                               letterSpacing: 3,
                             ),
                           ),
                           const SizedBox(height: 16),
-
                           Container(
                             decoration: BoxDecoration(
                               color: cs.surface,
@@ -1281,11 +1376,15 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                               children: [
                                 Row(
                                   children: [
-                                    Icon(Icons.description_outlined, size: 22, color: cs.primary),
+                                    Icon(Icons.description_outlined,
+                                        size: 22, color: cs.primary),
                                     const SizedBox(width: 8),
                                     Text(
                                       '경위서 양식',
-                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleMedium
+                                          ?.copyWith(
                                         fontWeight: FontWeight.w600,
                                         color: cs.onSurface,
                                       ),
@@ -1293,34 +1392,46 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                     const Spacer(),
                                     Text(
                                       '작성일 ${_fmtCompact(DateTime.now())}',
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
                                         color: cs.onSurfaceVariant,
                                       ),
                                     ),
                                   ],
                                 ),
                                 const SizedBox(height: 8),
-                                Divider(height: 24, color: cs.outlineVariant.withOpacity(0.9)),
+                                Divider(
+                                    height: 24,
+                                    color: cs.outlineVariant.withOpacity(0.9)),
                                 const SizedBox(height: 4),
-
                                 Container(
                                   decoration: BoxDecoration(
-                                    color: cs.primaryContainer.withOpacity(0.25),
+                                    color:
+                                    cs.primaryContainer.withOpacity(0.25),
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+                                    border: Border.all(
+                                        color:
+                                        cs.outlineVariant.withOpacity(0.6)),
                                   ),
                                   padding: const EdgeInsets.all(12),
                                   child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.start,
                                     children: [
-                                      Icon(Icons.info_outline, size: 18, color: cs.primary),
+                                      Icon(Icons.info_outline,
+                                          size: 18, color: cs.primary),
                                       const SizedBox(width: 8),
                                       Expanded(
                                         child: Text(
                                           '사실에 근거해 간결하고 명확하게 작성해 주세요.\n'
                                               '육하원칙(누가, 언제, 어디서, 무엇을, 왜, 어떻게)에 따라 경위와 당시 상황을 구체적으로 작성하면 검토에 도움이 됩니다.\n'
-                                              '문제 발생 시 상단 “API 디버그”에서 에러 로그를 확인할 수 있습니다.',
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                              '문제 발생 시 담당자에게 상황을 전달해 주세요.',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
                                             height: 1.4,
                                             color: cs.onSurface,
                                           ),
@@ -1329,9 +1440,7 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                     ],
                                   ),
                                 ),
-
                                 _gap(20),
-
                                 _sectionCard(
                                   title: '1. 기본 정보',
                                   margin: const EdgeInsets.only(bottom: 16),
@@ -1347,9 +1456,14 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                                 labelText: '소속 (필수)',
                                                 hintText: '예: 본사 IT본부',
                                               ),
-                                              textInputAction: TextInputAction.next,
-                                              onFieldSubmitted: (_) => _nameNode.requestFocus(),
-                                              validator: (v) => (v == null || v.trim().isEmpty) ? '소속을 입력하세요.' : null,
+                                              textInputAction:
+                                              TextInputAction.next,
+                                              onFieldSubmitted: (_) =>
+                                                  _nameNode.requestFocus(),
+                                              validator: (v) => (v == null ||
+                                                  v.trim().isEmpty)
+                                                  ? '소속을 입력하세요.'
+                                                  : null,
                                             ),
                                           ),
                                           const SizedBox(width: 12),
@@ -1361,9 +1475,14 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                                 labelText: '성명 (필수)',
                                                 hintText: '예: 홍길동',
                                               ),
-                                              textInputAction: TextInputAction.next,
-                                              onFieldSubmitted: (_) => _positionNode.requestFocus(),
-                                              validator: (v) => (v == null || v.trim().isEmpty) ? '성명을 입력하세요.' : null,
+                                              textInputAction:
+                                              TextInputAction.next,
+                                              onFieldSubmitted: (_) =>
+                                                  _positionNode.requestFocus(),
+                                              validator: (v) => (v == null ||
+                                                  v.trim().isEmpty)
+                                                  ? '성명을 입력하세요.'
+                                                  : null,
                                             ),
                                           ),
                                         ],
@@ -1377,24 +1496,32 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                           hintText: '예: 매니저 / 대리 / 주임 등',
                                         ),
                                         textInputAction: TextInputAction.next,
-                                        onFieldSubmitted: (_) => FocusScope.of(context).unfocus(),
-                                        validator: (v) => (v == null || v.trim().isEmpty) ? '직책을 입력하세요.' : null,
+                                        onFieldSubmitted: (_) =>
+                                            FocusScope.of(context).unfocus(),
+                                        validator: (v) =>
+                                        (v == null || v.trim().isEmpty)
+                                            ? '직책을 입력하세요.'
+                                            : null,
                                       ),
                                       _gap(12),
-
                                       InkWell(
                                         onTap: _pickDateTime,
                                         borderRadius: BorderRadius.circular(12),
                                         child: Container(
                                           decoration: BoxDecoration(
                                             color: cs.surfaceContainerLow,
-                                            borderRadius: BorderRadius.circular(12),
-                                            border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+                                            borderRadius:
+                                            BorderRadius.circular(12),
+                                            border: Border.all(
+                                                color: cs.outlineVariant
+                                                    .withOpacity(0.85)),
                                           ),
-                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12, vertical: 12),
                                           child: Row(
                                             children: [
-                                              Icon(Icons.event_outlined, color: cs.onSurfaceVariant),
+                                              Icon(Icons.event_outlined,
+                                                  color: cs.onSurfaceVariant),
                                               const SizedBox(width: 10),
                                               Text(
                                                 '일시 (필수)',
@@ -1406,7 +1533,8 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                               const Spacer(),
                                               Text(
                                                 _fmtDT(context, _eventDateTime),
-                                                style: TextStyle(color: cs.onSurfaceVariant),
+                                                style: TextStyle(
+                                                    color: cs.onSurfaceVariant),
                                               ),
                                             ],
                                           ),
@@ -1415,7 +1543,6 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                     ],
                                   ),
                                 ),
-
                                 _sectionCard(
                                   title: '2. 사실 관계 (육하원칙 기반, 필수)',
                                   margin: const EdgeInsets.only(bottom: 16),
@@ -1424,15 +1551,18 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                     focusNode: _contentNode,
                                     decoration: _inputDec(
                                       labelText: '내용',
-                                      hintText: '누가/언제/어디서/무엇을/왜/어떻게 순으로 구체적으로 작성해 주세요.',
+                                      hintText:
+                                      '누가/언제/어디서/무엇을/왜/어떻게 순으로 구체적으로 작성해 주세요.',
                                     ),
                                     keyboardType: TextInputType.multiline,
                                     minLines: 8,
                                     maxLines: 16,
-                                    validator: (v) => (v == null || v.trim().isEmpty) ? '내용을 입력하세요.' : null,
+                                    validator: (v) =>
+                                    (v == null || v.trim().isEmpty)
+                                        ? '내용을 입력하세요.'
+                                        : null,
                                   ),
                                 ),
-
                                 _sectionCard(
                                   title: '3. 메일 전송 내용',
                                   margin: const EdgeInsets.only(bottom: 16),
@@ -1442,10 +1572,14 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                         controller: _mailSubjectCtrl,
                                         decoration: _inputDec(
                                           labelText: '메일 제목(필수)',
-                                          hintText: '예: 경위서 – ${DateTime.now().month}월 ${DateTime.now().day}일 건',
+                                          hintText:
+                                          '예: 경위서 – ${DateTime.now().month}월 ${DateTime.now().day}일 건',
                                         ),
                                         textInputAction: TextInputAction.next,
-                                        validator: (v) => (v == null || v.trim().isEmpty) ? '메일 제목을 입력하세요.' : null,
+                                        validator: (v) =>
+                                        (v == null || v.trim().isEmpty)
+                                            ? '메일 제목을 입력하세요.'
+                                            : null,
                                       ),
                                       const SizedBox(height: 8),
                                       TextFormField(
@@ -1460,29 +1594,36 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                     ],
                                   ),
                                 ),
-
                                 _sectionCard(
                                   title: '4. 전자서명',
                                   margin: const EdgeInsets.only(bottom: 8),
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.start,
                                     children: [
                                       Container(
-                                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 8, horizontal: 12),
                                         decoration: BoxDecoration(
                                           color: cs.surface,
-                                          border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
-                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(
+                                              color: cs.outlineVariant
+                                                  .withOpacity(0.85)),
+                                          borderRadius:
+                                          BorderRadius.circular(12),
                                         ),
                                         child: Wrap(
                                           spacing: 16,
                                           runSpacing: 8,
-                                          crossAxisAlignment: WrapCrossAlignment.center,
+                                          crossAxisAlignment:
+                                          WrapCrossAlignment.center,
                                           children: [
                                             Row(
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
-                                                Icon(Icons.person_outline, size: 18, color: cs.onSurfaceVariant),
+                                                Icon(Icons.person_outline,
+                                                    size: 18,
+                                                    color: cs.onSurfaceVariant),
                                                 const SizedBox(width: 6),
                                                 Text(
                                                   '서명자: ${_signerName.isEmpty ? "이름 미입력" : _signerName}',
@@ -1496,32 +1637,38 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                             Row(
                                               mainAxisSize: MainAxisSize.min,
                                               children: [
-                                                Icon(Icons.access_time, size: 18, color: cs.onSurfaceVariant),
+                                                Icon(Icons.access_time,
+                                                    size: 18,
+                                                    color: cs.onSurfaceVariant),
                                                 const SizedBox(width: 6),
                                                 Text(
                                                   '서명 일시: ${_signDateTime == null ? "저장 시 자동" : _fmtCompact(_signDateTime!)}',
-                                                  style: TextStyle(color: cs.onSurface),
+                                                  style: TextStyle(
+                                                      color: cs.onSurface),
                                                 ),
                                               ],
                                             ),
                                             ElevatedButton.icon(
                                               onPressed: _openSignatureDialog,
-                                              icon: const Icon(Icons.border_color),
+                                              icon: const Icon(
+                                                  Icons.border_color),
                                               label: const Text('서명하기'),
-                                              style: UserStatementButtonStyles.smallPrimary(context),
+                                              style: UserStatementButtonStyles
+                                                  .smallPrimary(context),
                                             ),
                                             if (_signaturePngBytes != null)
                                               OutlinedButton.icon(
                                                 onPressed: () {
-                                                  HapticFeedback.selectionClick();
                                                   setState(() {
                                                     _signaturePngBytes = null;
                                                     _signDateTime = null;
                                                   });
                                                 },
-                                                icon: const Icon(Icons.delete_outline),
+                                                icon: const Icon(
+                                                    Icons.delete_outline),
                                                 label: const Text('서명 삭제'),
-                                                style: UserStatementButtonStyles.smallOutlined(context),
+                                                style: UserStatementButtonStyles
+                                                    .smallOutlined(context),
                                               ),
                                           ],
                                         ),
@@ -1530,8 +1677,11 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                       if (_signaturePngBytes != null)
                                         Container(
                                           decoration: BoxDecoration(
-                                            border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
-                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(
+                                                color: cs.outlineVariant
+                                                    .withOpacity(0.85)),
+                                            borderRadius:
+                                            BorderRadius.circular(12),
                                             color: cs.surfaceContainerLow,
                                           ),
                                           padding: const EdgeInsets.all(8),
@@ -1550,26 +1700,31 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                                     ],
                                   ),
                                 ),
-
                                 _gap(12),
-
                                 Row(
                                   children: [
                                     Expanded(
                                       child: OutlinedButton.icon(
                                         onPressed: _sending ? null : _reset,
-                                        icon: const Icon(Icons.refresh_outlined),
+                                        icon:
+                                        const Icon(Icons.refresh_outlined),
                                         label: const Text('초기화'),
-                                        style: UserStatementButtonStyles.outlined(context),
+                                        style:
+                                        UserStatementButtonStyles.outlined(
+                                            context),
                                       ),
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: ElevatedButton.icon(
-                                        onPressed: _sending ? null : _showPreview,
-                                        icon: const Icon(Icons.visibility_outlined),
+                                        onPressed:
+                                        _sending ? null : _showPreview,
+                                        icon: const Icon(
+                                            Icons.visibility_outlined),
                                         label: const Text('미리보기'),
-                                        style: UserStatementButtonStyles.primary(context),
+                                        style:
+                                        UserStatementButtonStyles.primary(
+                                            context),
                                       ),
                                     ),
                                   ],
@@ -1577,7 +1732,6 @@ class _UserStatementFormPageState extends State<UserStatementFormPage> {
                               ],
                             ),
                           ),
-
                           const SizedBox(height: 24),
                         ],
                       ),

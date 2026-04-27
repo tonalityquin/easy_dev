@@ -1,0 +1,200 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+class UserInputSection extends StatelessWidget {
+  final TextEditingController nameController;
+  final TextEditingController phoneController;
+  final TextEditingController emailController;
+
+  final FocusNode nameFocus;
+  final FocusNode phoneFocus;
+  final FocusNode emailFocus;
+
+  
+  final String? errorMessage;
+
+  
+  final VoidCallback? onEdited;
+
+  
+  final bool Function(String input)? emailLocalPartValidator;
+
+  
+  final bool lockNameAndPhone;
+
+  const UserInputSection({
+    super.key,
+    required this.nameController,
+    required this.phoneController,
+    required this.emailController,
+    required this.nameFocus,
+    required this.phoneFocus,
+    required this.emailFocus,
+    required this.errorMessage,
+    this.onEdited,
+    this.emailLocalPartValidator,
+    this.lockNameAndPhone = false,
+  });
+
+  bool _isNameOk(String v) => v.trim().isNotEmpty;
+  bool _isPhoneOk(String v) => RegExp(r'^\d{9,}$').hasMatch(v.trim());
+
+  bool _isEmailOk(String v) {
+    final t = v.trim();
+    if (t.isEmpty) return false;
+    final fn = emailLocalPartValidator;
+    return fn == null ? true : fn(t);
+  }
+
+  InputDecoration _decoration(
+      BuildContext context, {
+        required ColorScheme cs,
+        required String label,
+        required String helperText,
+        String? errorText,
+        String? suffixText,
+        bool showDoneIcon = false,
+        bool done = false,
+        bool locked = false,
+      }) {
+    final fill = locked ? cs.surfaceVariant.withOpacity(.30) : cs.surfaceVariant.withOpacity(.45);
+
+    return InputDecoration(
+      labelText: label,
+      helperText: helperText,
+      floatingLabelStyle: TextStyle(
+        color: cs.primary,
+        fontWeight: FontWeight.w700,
+      ),
+      suffixText: suffixText,
+      suffixStyle: TextStyle(
+        color: cs.onSurfaceVariant.withOpacity(.85),
+        fontWeight: FontWeight.w600,
+      ),
+      suffixIcon: locked
+          ? Icon(Icons.lock, color: cs.onSurfaceVariant)
+          : (showDoneIcon
+          ? Icon(
+        done ? Icons.check_circle : Icons.radio_button_unchecked,
+        color: done ? cs.primary : cs.onSurfaceVariant.withOpacity(.55),
+      )
+          : null),
+      isDense: true,
+      filled: true,
+      fillColor: fill,
+      contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: cs.outlineVariant.withOpacity(.75)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: cs.primary, width: 1.3),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: cs.error.withOpacity(.60)),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(10),
+        borderSide: BorderSide(color: cs.error, width: 1.3),
+      ),
+      errorText: errorText,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    
+    final nameError = errorMessage == '이름을 다시 입력하세요' ? errorMessage : null;
+    final phoneError = errorMessage == '전화번호를 다시 입력하세요' ? errorMessage : null;
+    final emailError =
+    (errorMessage == '이메일을 입력하세요' || errorMessage == '이메일을 다시 확인하세요') ? errorMessage : null;
+
+    const lockedHelper = '수정 모드에서는 변경할 수 없습니다.';
+
+    return Column(
+      children: [
+        
+        TextField(
+          controller: nameController,
+          focusNode: nameFocus,
+          readOnly: lockNameAndPhone,
+          enableInteractiveSelection: true,
+          onChanged: lockNameAndPhone ? null : (_) => onEdited?.call(),
+          textInputAction: TextInputAction.next,
+          onSubmitted: (_) => FocusScope.of(context).nextFocus(),
+          textCapitalization: TextCapitalization.words,
+          autofillHints: const [AutofillHints.name],
+          style: TextStyle(color: cs.onSurface),
+          decoration: _decoration(
+            context,
+            cs: cs,
+            label: '이름',
+            helperText: lockNameAndPhone ? lockedHelper : '예: 홍길동',
+            errorText: nameError,
+            showDoneIcon: !lockNameAndPhone,
+            done: _isNameOk(nameController.text),
+            locked: lockNameAndPhone,
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        
+        TextField(
+          controller: phoneController,
+          focusNode: phoneFocus,
+          readOnly: lockNameAndPhone,
+          enableInteractiveSelection: true,
+          onChanged: lockNameAndPhone ? null : (_) => onEdited?.call(),
+          textInputAction: TextInputAction.next,
+          onSubmitted: (_) => FocusScope.of(context).nextFocus(),
+          keyboardType: TextInputType.phone,
+          autofillHints: const [AutofillHints.telephoneNumber],
+          inputFormatters: lockNameAndPhone
+              ? null
+              : [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(11),
+          ],
+          style: TextStyle(color: cs.onSurface),
+          decoration: _decoration(
+            context,
+            cs: cs,
+            label: '전화번호',
+            helperText: lockNameAndPhone ? lockedHelper : '숫자만 입력 (최소 9자리)',
+            errorText: phoneError,
+            showDoneIcon: !lockNameAndPhone,
+            done: _isPhoneOk(phoneController.text),
+            locked: lockNameAndPhone,
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        
+        TextField(
+          controller: emailController,
+          focusNode: emailFocus,
+          onChanged: (_) => onEdited?.call(),
+          textInputAction: TextInputAction.done,
+          keyboardType: TextInputType.emailAddress,
+          autofillHints: const [AutofillHints.username],
+          style: TextStyle(color: cs.onSurface),
+          decoration: _decoration(
+            context,
+            cs: cs,
+            label: '이메일(구글)',
+            helperText: '영문/숫자/._- 만 입력 가능',
+            suffixText: '@gmail.com',
+            errorText: emailError,
+            showDoneIcon: true,
+            done: _isEmailOk(emailController.text),
+            locked: false,
+          ),
+        ),
+      ],
+    );
+  }
+}

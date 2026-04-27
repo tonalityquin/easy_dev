@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 
-import '../../../modify_package/utils/double_modify_plate_service.dart';
+import '../../../../../shared/page/modify/application/modify_plate_service.dart';
 
 class DoubleDepartureCompletedPlateImageDialog extends StatelessWidget {
   final String plateNumber;
@@ -30,7 +30,7 @@ class DoubleDepartureCompletedPlateImageDialog extends StatelessWidget {
         ),
       ),
       body: FutureBuilder<List<String>>(
-        future: DoubleModifyPlateService.listPlateImages(
+        future: ModifyPlateService.listPlateImages(
           context: context,
           plateNumber: plateNumber,
         ),
@@ -149,7 +149,7 @@ void modifyshowFullScreenImageViewer(
           child: Stack(
             children: [
               Container(
-                color: cs2.scrim, // ✅ 완전 암막(테마 scrim)
+                color: cs2.scrim, 
                 child: PageView.builder(
                   controller: PageController(initialPage: initialIndex),
                   itemCount: images.length,
@@ -260,7 +260,7 @@ String _parseMetadataFromFileName(String fileName) {
     final name = fileName.replaceAll('.jpg', '');
     final parts = name.split('_');
     if (parts.length < 4) return '';
-    final date = parts[0]; // YYYY-MM-DD
+    final date = parts[0]; 
     final millis = int.tryParse(parts[1]) ?? 0;
     final plate = parts[2];
     final user = parts.sublist(3).join('_');

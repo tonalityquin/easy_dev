@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../../models/plate_model.dart';
+import '../../../../../features/plate/data/repositories/firestore_plate_repository.dart';
+import '../../../../../features/plate/domain/models/plate_model.dart';
 import '../widgets/triple_departure_completed_status_bottom_sheet.dart';
 import 'keypad/animated_keypad.dart';
 import 'widgets/triple_departure_completed_plate_number_display.dart';
 import 'widgets/triple_departure_completed_plate_search_header.dart';
 import 'widgets/triple_departure_completed_plate_search_results.dart';
 import 'widgets/triple_departure_completed_search_button.dart';
-import '../../../../../../repositories/plate_repo_services/firestore_plate_repository.dart';
 
 class _Brand {
   static Color border(ColorScheme cs) => cs.outlineVariant.withOpacity(0.85);
@@ -86,9 +86,7 @@ class _TripleDepartureCompletedSearchBottomSheetState extends State<TripleDepart
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('검색 중 오류가 발생했습니다: $e')),
-      );
+      debugPrint('검색 중 오류가 발생했습니다: $e');
     }
   }
 
@@ -129,8 +127,6 @@ class _TripleDepartureCompletedSearchBottomSheetState extends State<TripleDepart
                         ),
                       ),
                       const SizedBox(height: 12),
-
-                      // 상단 헤더(닫기 버튼 포함)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Row(
@@ -144,9 +140,7 @@ class _TripleDepartureCompletedSearchBottomSheetState extends State<TripleDepart
                           ],
                         ),
                       ),
-
                       const SizedBox(height: 8),
-
                       Expanded(
                         child: ListView(
                           controller: scrollController,
@@ -161,20 +155,16 @@ class _TripleDepartureCompletedSearchBottomSheetState extends State<TripleDepart
                               ),
                             ),
                             const SizedBox(height: 12),
-
                             AnimatedSwitcher(
                               duration: const Duration(milliseconds: 220),
                               switchInCurve: Curves.easeOut,
                               switchOutCurve: Curves.easeIn,
                               child: _buildResultSection(rootContext),
                             ),
-
                             const SizedBox(height: 12),
                           ],
                         ),
                       ),
-
-                      // 하단 CTA (검색 버튼)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
                         child: ValueListenableBuilder<TextEditingValue>(
@@ -201,8 +191,6 @@ class _TripleDepartureCompletedSearchBottomSheetState extends State<TripleDepart
             },
           ),
         ),
-
-        // 키패드(검색 전만 노출)
         bottomNavigationBar: _hasSearched
             ? const SizedBox.shrink()
             : AnimatedKeypad(
@@ -216,7 +204,7 @@ class _TripleDepartureCompletedSearchBottomSheetState extends State<TripleDepart
             _controller.clear();
             _hasSearched = false;
             _results.clear();
-            _navigating = false; // ✅ 재진입 안전
+            _navigating = false;
           }),
         ),
       ),

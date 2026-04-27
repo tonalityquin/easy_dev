@@ -1,6 +1,5 @@
 import 'dart:async';
-
-import '../../../../../../states/user/user_state.dart';
+import '../../../features/account/applications/user_state.dart';
 import 'document_item.dart';
 
 class FielderDocumentInventoryRepository {
@@ -17,7 +16,7 @@ class FielderDocumentInventoryRepository {
 
     return <DocumentItem>[
 
-      // 2) 경위서 기본 양식
+      
       DocumentItem(
         id: 'template-statement',
         title: '경위서 양식',
@@ -26,10 +25,10 @@ class FielderDocumentInventoryRepository {
         type: DocumentType.statementForm,
       ),
 
-      // 3) 출퇴근 기록 제출
-      //
-      // - Simple 모드와 동일하게 id 를 'template-commute-record' 로 통일
-      // - type 은 statementForm 으로 두고, id 로 세부 종류를 구분
+      
+      
+      
+      
       DocumentItem(
         id: 'template-commute-record',
         title: '출퇴근 기록 제출',
@@ -38,10 +37,10 @@ class FielderDocumentInventoryRepository {
         type: DocumentType.statementForm,
       ),
 
-      // 4) 휴게시간 기록 제출
-      //
-      // - Simple 모드와 동일하게 id 를 'template-resttime-record' 로 통일
-      // - type 은 statementForm 으로 두고, id 로 세부 종류를 구분
+      
+      
+      
+      
       DocumentItem(
         id: 'template-resttime-record',
         title: '휴게시간 기록 제출',
@@ -50,7 +49,7 @@ class FielderDocumentInventoryRepository {
         type: DocumentType.statementForm,
       ),
 
-      // 5) 연차(결근) 지원 신청서
+      
       DocumentItem(
         id: 'template-annual-leave-application',
         title: '연차(결근) 지원 신청서',

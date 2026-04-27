@@ -1,18 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../../../models/plate_model.dart';
-import '../../../../../../enums/plate_type.dart';
-import '../../../../../../repositories/plate_repo_services/plate_repository.dart';
-
-import '../../../../../../states/plate/delete_plate.dart';
-import '../../../../../../states/plate/movement_plate.dart';
-import '../../../../../../utils/snackbar_helper.dart';
+import '../../../../../../features/account/applications/user_state.dart';
+import '../../../../../../features/plate/application/common/delete_plate.dart';
+import '../../../../../../features/plate/application/common/movement_plate.dart';
+import '../../../../../../features/plate/domain/enums/plate_type.dart';
+import '../../../../../../features/plate/domain/models/plate_model.dart';
+import '../../../../../../features/plate/domain/repositories/plate_repository.dart';
 import '../../../../../../widgets/dialog/plate_remove_dialog.dart';
-
-// ✅ 기존 상태 바텀시트 (새 바텀시트 X)
 import '../triple_parking_completed_status_bottom_sheet.dart';
-
 import 'keypad/animated_keypad.dart';
 import 'widgets/triple_parking_completed_plate_number_display.dart';
 import 'widgets/triple_parking_completed_plate_search_header.dart';
@@ -52,13 +48,16 @@ class _TripleParkingCompletedSearchBottomSheetState
   @override
   void initState() {
     super.initState();
-    _keypadController =
-        AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
+    _keypadController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
     _slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.2),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _keypadController, curve: Curves.easeOut));
-    _fadeAnimation = CurvedAnimation(parent: _keypadController, curve: Curves.easeIn);
+    _fadeAnimation =
+        CurvedAnimation(parent: _keypadController, curve: Curves.easeIn);
     _keypadController.forward();
   }
 
@@ -69,28 +68,52 @@ class _TripleParkingCompletedSearchBottomSheetState
     super.dispose();
   }
 
-  bool isValidPlate(String value) => RegExp(r'^\d{4}$').hasMatch(value);
+  bool isValidPlate(String value) => RegExp(r'^\d{4}$').hasMatch(value.trim());
+
+  void _resetSearch() {
+    if (!mounted) return;
+    setState(() {
+      _controller.clear();
+      _hasSearched = false;
+      _results.clear();
+      _navigating = false;
+      _isLoading = false;
+    });
+  }
 
   Future<void> _refreshSearchResults() async {
     if (!mounted) return;
+    if (_isLoading) return;
+
+    final q = _controller.text.trim();
+    final area = widget.area.trim();
+
+    if (!isValidPlate(q)) {
+      return;
+    }
+
+    if (area.isEmpty) {
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
       final repository = context.read<PlateRepository>();
 
       final results = await repository.fourDigitCommonQuery(
-        plateFourDigit: _controller.text.trim(),
-        area: widget.area.trim(),
+        plateFourDigit: q,
+        area: area,
       );
 
-      // ✅ Triple 모드 요구 범위만: 입차요청 / 입차완료 / 출차요청
       final allowedTypes = <String>{
         PlateType.parkingRequests.firestoreValue,
         PlateType.parkingCompleted.firestoreValue,
         PlateType.departureRequests.firestoreValue,
       };
 
-      final filtered = results.where((p) => allowedTypes.contains(p.type)).toList();
+      final filtered =
+      results.where((p) => allowedTypes.contains(p.type)).toList();
 
       if (!mounted) return;
       setState(() {
@@ -101,61 +124,88 @@ class _TripleParkingCompletedSearchBottomSheetState
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-
-      // ✅ 브랜드 공통 snackbar helper 우선 사용
-      try {
-        showFailedSnackbar(context, '검색 중 오류가 발생했습니다: $e');
-      } catch (_) {
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          SnackBar(content: Text('검색 중 오류가 발생했습니다: $e')),
-        );
-      }
     }
   }
 
-  void _openStatusBottomSheet(BuildContext rootContext, PlateModel selected) {
+  Future<bool> _showDeleteDialog(
+      BuildContext rootContext,
+      PlateModel selected,
+      ) async {
+    final deleter = rootContext.read<DeletePlate>();
+    final performedBy = rootContext.read<UserState>().name;
+
+    final confirmed = await showDialog<bool>(
+      context: rootContext,
+      useRootNavigator: true,
+      builder: (dialogContext) => PlateRemoveDialog(
+        onConfirm: () {
+          Navigator.of(dialogContext).pop(true);
+        },
+      ),
+    ) ??
+        false;
+
+    if (!confirmed) return false;
+
+    try {
+      final t = selected.typeEnum;
+
+      if (t == PlateType.parkingRequests) {
+        await deleter.deleteFromParkingRequest(
+          selected.plateNumber,
+          selected.area,
+          performedBy: performedBy,
+        );
+      } else if (t == PlateType.parkingCompleted) {
+        await deleter.deleteFromParkingCompleted(
+          selected.plateNumber,
+          selected.area,
+          performedBy: performedBy,
+        );
+      } else if (t == PlateType.departureRequests) {
+        await deleter.deleteFromDepartureRequest(
+          selected.plateNumber,
+          selected.area,
+          performedBy: performedBy,
+        );
+      } else {
+        return false;
+      }
+
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Future<void> _openStatusBottomSheet(
+      BuildContext rootContext,
+      PlateModel selected,
+      ) async {
     Future<void> onRequestEntry() async {
-      if (selected.typeEnum != PlateType.parkingCompleted) return;
+      if (selected.typeEnum != PlateType.parkingCompleted) {
+        return;
+      }
 
       await rootContext.read<MovementPlate>().goBackToParkingRequest(
         fromType: PlateType.parkingCompleted,
         plateNumber: selected.plateNumber,
         area: selected.area,
-        newLocation: "미지정",
+        newLocation: '미지정',
       );
+
+      await _refreshSearchResults();
     }
 
-    void onDelete() {
-      showDialog(
-        context: rootContext,
-        builder: (_) => PlateRemoveDialog(
-          onConfirm: () {
-            final deleter = rootContext.read<DeletePlate>();
-            final t = selected.typeEnum;
-
-            Future<void> f;
-            if (t == PlateType.parkingRequests) {
-              f = deleter.deleteFromParkingRequest(selected.plateNumber, selected.area);
-            } else if (t == PlateType.parkingCompleted) {
-              f = deleter.deleteFromParkingCompleted(selected.plateNumber, selected.area);
-            } else if (t == PlateType.departureRequests) {
-              f = deleter.deleteFromDepartureRequest(selected.plateNumber, selected.area);
-            } else {
-              showFailedSnackbar(rootContext, '이 상태에서는 삭제할 수 없습니다.');
-              return;
-            }
-
-            f.then((_) {
-              showSuccessSnackbar(rootContext, "삭제 완료: ${selected.plateNumber}");
-            }).catchError((e) {
-              showFailedSnackbar(rootContext, "삭제 실패: $e");
-            });
-          },
-        ),
-      );
+    Future<bool> onDelete() async {
+      final deleted = await _showDeleteDialog(rootContext, selected);
+      if (deleted) {
+        await _refreshSearchResults();
+      }
+      return deleted;
     }
 
-    showTripleParkingCompletedStatusBottomSheet(
+    await showTripleParkingCompletedStatusBottomSheet(
       context: rootContext,
       plate: selected,
       onRequestEntry: onRequestEntry,
@@ -181,11 +231,13 @@ class _TripleParkingCompletedSearchBottomSheetState
               return Container(
                 decoration: BoxDecoration(
                   color: cs.surface,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
                   border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
                 ),
                 child: ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
                   child: Column(
                     children: [
                       const SizedBox(height: 10),
@@ -200,13 +252,25 @@ class _TripleParkingCompletedSearchBottomSheetState
                         ),
                       ),
                       const SizedBox(height: 12),
-
-                      // 상단 헤더(닫기 버튼 포함)
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Row(
                           children: [
-                            const Expanded(child: TripleParkingCompletedPlateSearchHeader()),
+                            const Expanded(
+                              child: TripleParkingCompletedPlateSearchHeader(),
+                            ),
+                            if (_hasSearched)
+                              TextButton.icon(
+                                onPressed: _isLoading ? null : _resetSearch,
+                                icon: Icon(Icons.refresh, color: cs.primary),
+                                label: Text(
+                                  '다시 검색',
+                                  style: TextStyle(
+                                    color: cs.primary,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
                             IconButton(
                               tooltip: '닫기',
                               onPressed: () => Navigator.pop(context),
@@ -215,9 +279,7 @@ class _TripleParkingCompletedSearchBottomSheetState
                           ],
                         ),
                       ),
-
                       const SizedBox(height: 8),
-
                       Expanded(
                         child: ListView(
                           controller: scrollController,
@@ -226,25 +288,25 @@ class _TripleParkingCompletedSearchBottomSheetState
                             _CardSection(
                               title: '번호 4자리 입력',
                               subtitle: '예: 1234',
-                              accent: cs.primary,
                               child: TripleParkingCompletedPlateNumberDisplay(
                                 controller: _controller,
                                 isValidPlate: isValidPlate,
                               ),
                             ),
                             const SizedBox(height: 12),
-
                             AnimatedSwitcher(
                               duration: const Duration(milliseconds: 220),
                               switchInCurve: Curves.easeOut,
                               switchOutCurve: Curves.easeIn,
-                              child: _buildResultSection(rootContext, scrollController),
+                              child: _buildResultSection(
+                                rootContext,
+                                scrollController,
+                              ),
                             ),
                             const SizedBox(height: 12),
                           ],
                         ),
                       ),
-
                       Padding(
                         padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
                         child: ValueListenableBuilder<TextEditingValue>(
@@ -257,7 +319,7 @@ class _TripleParkingCompletedSearchBottomSheetState
                               onPressed: valid
                                   ? () async {
                                 await _refreshSearchResults();
-                                widget.onSearch(value.text);
+                                widget.onSearch(value.text.trim());
                               }
                                   : null,
                             );
@@ -271,7 +333,6 @@ class _TripleParkingCompletedSearchBottomSheetState
             },
           ),
         ),
-
         bottomNavigationBar: _hasSearched
             ? const SizedBox.shrink()
             : AnimatedKeypad(
@@ -281,27 +342,30 @@ class _TripleParkingCompletedSearchBottomSheetState
           maxLength: 4,
           enableDigitModeSwitch: false,
           onComplete: () => setState(() {}),
-          onReset: () => setState(() {
-            _controller.clear();
-            _hasSearched = false;
-            _results.clear();
-            _navigating = false; // ✅ 재진입 안전
-          }),
+          onReset: _resetSearch,
         ),
       ),
     );
   }
 
-  Widget _buildResultSection(BuildContext rootContext, ScrollController scrollController) {
-    final text = _controller.text;
+  Widget _buildResultSection(
+      BuildContext rootContext,
+      ScrollController scrollController,
+      ) {
+    final cs = Theme.of(context).colorScheme;
+    final text = _controller.text.trim();
     final valid = isValidPlate(text);
 
     if (!_hasSearched) return const SizedBox.shrink();
 
     if (_isLoading) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 26),
-        child: Center(child: CircularProgressIndicator()),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 26),
+        child: Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+          ),
+        ),
       );
     }
 
@@ -325,15 +389,16 @@ class _TripleParkingCompletedSearchBottomSheetState
 
     return TripleParkingCompletedPlateSearchResults(
       results: _results,
-      onSelect: (selected) {
+      onSelect: (selected) async {
         if (_navigating) return;
-        _navigating = true;
+        setState(() => _navigating = true);
 
-        Navigator.pop(context);
-
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _openStatusBottomSheet(rootContext, selected);
-        });
+        try {
+          await _openStatusBottomSheet(rootContext, selected);
+        } finally {
+          if (!mounted) return;
+          setState(() => _navigating = false);
+        }
       },
     );
   }
@@ -343,13 +408,11 @@ class _CardSection extends StatelessWidget {
   final String title;
   final String subtitle;
   final Widget child;
-  final Color accent;
 
   const _CardSection({
     required this.title,
     required this.subtitle,
     required this.child,
-    required this.accent,
   });
 
   @override
@@ -364,7 +427,7 @@ class _CardSection extends StatelessWidget {
         border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: cs.shadow.withOpacity(0.06),
             blurRadius: 12,
             offset: const Offset(0, 8),
           ),
@@ -378,14 +441,29 @@ class _CardSection extends StatelessWidget {
               Container(
                 width: 8,
                 height: 8,
-                decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+                decoration:
+                BoxDecoration(color: cs.primary, shape: BoxShape.circle),
               ),
               const SizedBox(width: 8),
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15)),
+              Text(
+                title,
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15,
+                  color: cs.onSurface,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 4),
-          Text(subtitle, style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
+          Text(
+            subtitle,
+            style: TextStyle(
+              color: cs.onSurfaceVariant,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 12),
           child,
         ],
@@ -413,9 +491,10 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
 
-    final Color fg = (tone == _EmptyTone.danger) ? cs.error : cs.onSurfaceVariant;
+    final Color fg =
+    (tone == _EmptyTone.danger) ? cs.error : cs.onSurfaceVariant;
     final Color bg = (tone == _EmptyTone.danger)
-        ? cs.errorContainer.withOpacity(0.35)
+        ? cs.errorContainer.withOpacity(0.6)
         : cs.surfaceContainerLow;
 
     return Container(
@@ -433,11 +512,20 @@ class _EmptyState extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: TextStyle(color: fg, fontWeight: FontWeight.w900)),
+                Text(
+                  title,
+                  style: TextStyle(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
                 const SizedBox(height: 4),
                 Text(
                   message,
-                  style: TextStyle(color: fg.withOpacity(0.90), fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    color: fg.withOpacity(0.9),
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),

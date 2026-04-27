@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 
-import '../../../../enums/plate_type.dart';
-import '../../../../models/plate_model.dart';
-import '../../../../states/area/area_state.dart';
-import '../../../../states/calendar/field_calendar_state.dart';
-import '../../../../states/plate/double_plate_state.dart';
-import '../../../../utils/snackbar_helper.dart';
+import '../../../../features/dev/application/area_state.dart';
+import '../../../../features/dev/application/field_calendar_state.dart';
+import '../../../../features/plate/application/double/double_plate_state.dart';
+import '../../../../features/plate/domain/enums/plate_type.dart';
+import '../../../../features/plate/domain/models/plate_model.dart';
 
 class DoubleDepartureCompletedFieldCalendarInline extends StatefulWidget {
   const DoubleDepartureCompletedFieldCalendarInline({super.key});
@@ -85,8 +84,6 @@ class _DoubleDepartureCompletedFieldCalendarInlineState
         calendar.selectDate(d);
         context.read<FieldSelectedDateState>().setSelectedDate(d);
         setState(() => _focusedDay = focusedDay);
-
-        showSelectedSnackbar(context, '선택된 날짜: ${calendar.formatDate(d)}');
       },
       onPageChanged: (focusedDay) => setState(() => _focusedDay = focusedDay),
       eventLoader: (day) {
@@ -94,21 +91,16 @@ class _DoubleDepartureCompletedFieldCalendarInlineState
         final count = unsettledMap[key] ?? 0;
         return count > 0 ? const ['UNSETTLED'] : const [];
       },
-
-      // ✅ 하드코딩 제거: ColorScheme 기반
       calendarStyle: CalendarStyle(
         todayDecoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
         selectedDecoration: BoxDecoration(color: cs.primary, shape: BoxShape.circle),
         markerDecoration: BoxDecoration(color: cs.error, shape: BoxShape.circle),
         markersAlignment: Alignment.bottomCenter,
-
-        // 기본 텍스트/주말/오늘 외 텍스트 톤도 테마 기반으로 정리(필수는 아니지만 일관성↑)
         defaultTextStyle: TextStyle(color: cs.onSurface),
         weekendTextStyle: TextStyle(color: cs.onSurfaceVariant),
         outsideTextStyle: TextStyle(color: cs.onSurfaceVariant.withOpacity(0.6)),
         disabledTextStyle: TextStyle(color: cs.onSurfaceVariant.withOpacity(0.5)),
       ),
-
       headerStyle: HeaderStyle(
         titleTextStyle: TextStyle(
           color: cs.onSurface,
@@ -118,7 +110,6 @@ class _DoubleDepartureCompletedFieldCalendarInlineState
         leftChevronIcon: Icon(Icons.chevron_left, color: cs.onSurfaceVariant),
         rightChevronIcon: Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
       ),
-
       availableGestures: AvailableGestures.horizontalSwipe,
     );
   }

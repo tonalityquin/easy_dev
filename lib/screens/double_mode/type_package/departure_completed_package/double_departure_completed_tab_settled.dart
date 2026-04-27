@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
-
-import '../../../../models/plate_log_model.dart';
-import '../../../../models/plate_model.dart';
-import '../../../../repositories/plate_repo_services/firestore_plate_repository.dart';
-
+import '../../../../features/plate/data/repositories/firestore_plate_repository.dart';
+import '../../../../features/plate/domain/models/plate_log_model.dart';
+import '../../../../features/plate/domain/models/plate_model.dart';
 import '../departure_completed_package/widgets/double_departure_completed_page_merge_log.dart';
 import '../departure_completed_package/widgets/double_departure_completed_page_today_log.dart';
-import '../../../../utils/snackbar_helper.dart';
 
 class DoubleDepartureCompletedSettledTab extends StatefulWidget {
   const DoubleDepartureCompletedSettledTab({
@@ -27,7 +24,6 @@ class DoubleDepartureCompletedSettledTab extends StatefulWidget {
 }
 
 class _DoubleDepartureCompletedSettledTabState extends State<DoubleDepartureCompletedSettledTab> {
-  // ===== 아코디언 상태: 최대 1개만 열림 =====
   bool _openToday = true;
   bool _openMerged = false;
 
@@ -55,7 +51,6 @@ class _DoubleDepartureCompletedSettledTabState extends State<DoubleDepartureComp
     });
   }
 
-  // ===== Firestore 검색 상태 (오늘 로그용) =====
   final TextEditingController _fourDigitCtrl = TextEditingController();
   bool _isLoading = false;
   bool _hasSearched = false;
@@ -132,7 +127,7 @@ class _DoubleDepartureCompletedSettledTabState extends State<DoubleDepartureComp
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      showFailedSnackbar(context, '검색 중 오류가 발생했습니다: $e');
+      debugPrint('검색 중 오류가 발생했습니다: $e');
     }
   }
 
@@ -154,7 +149,6 @@ class _DoubleDepartureCompletedSettledTabState extends State<DoubleDepartureComp
     super.dispose();
   }
 
-  // ===== 섹션 본문 위젯 빌더들 =====
   Widget _buildTodaySectionBody() {
     final cs = Theme.of(context).colorScheme;
 
@@ -316,14 +310,11 @@ class _DoubleDepartureCompletedSettledTabState extends State<DoubleDepartureComp
             onTap: _toggleToday,
           ),
           const SizedBox(height: 6),
-
           if (_openToday)
             Expanded(
               child: _buildTodaySectionBody(),
             ),
-
           const SizedBox(height: 6),
-
           _SectionHeader(
             key: const ValueKey('merged-header'),
             icon: Icons.merge_type,
@@ -332,14 +323,11 @@ class _DoubleDepartureCompletedSettledTabState extends State<DoubleDepartureComp
             onTap: _toggleMerged,
           ),
           const SizedBox(height: 6),
-
           if (_openMerged)
             Expanded(
               child: _buildMergedSectionBody(),
             ),
-
           const SizedBox(height: 8),
-
           searchBar,
         ],
       ),
@@ -350,7 +338,6 @@ class _DoubleDepartureCompletedSettledTabState extends State<DoubleDepartureComp
 class _SectionHeader extends StatelessWidget {
   final IconData icon;
   final String title;
-
   final bool? isOpen;
   final VoidCallback? onTap;
 

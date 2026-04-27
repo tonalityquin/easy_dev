@@ -2,13 +2,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../enums/plate_type.dart';
-import '../../../models/plate_model.dart';
-import '../../../states/calendar/field_calendar_state.dart';
-import '../../../states/area/area_state.dart';
-import '../../../states/plate/minor_plate_state.dart';
-import '../../../states/user/user_state.dart';
-
+import '../../../features/account/applications/user_state.dart';
+import '../../../features/dev/application/area_state.dart';
+import '../../../features/dev/application/field_calendar_state.dart';
+import '../../../features/plate/application/minor/minor_plate_state.dart';
+import '../../../features/plate/domain/enums/plate_type.dart';
+import '../../../features/plate/domain/models/plate_model.dart';
 import 'departure_completed_package/minor_departure_completed_tab_settled.dart';
 import 'departure_completed_package/minor_departure_completed_tab_unsettled.dart';
 import 'departure_completed_package/widgets/minor_departure_completed_selected_date_bar.dart';
@@ -23,25 +22,22 @@ class MinorDepartureCompletedBottomSheet extends StatefulWidget {
 
 class _MinorDepartureCompletedBottomSheetState
     extends State<MinorDepartureCompletedBottomSheet> {
-  // 화면 식별 태그(FAQ/에러 리포트 연계용)
   static const String screenTag = 'departure completed';
 
-  // 기존 정책 유지(최신순 고정)
   final bool _isSorted = true;
 
   bool _areaEquals(String a, String b) =>
       a.trim().toLowerCase() == b.trim().toLowerCase();
 
-  // 좌측 상단(11시) 태그 위젯
   Widget _buildScreenTag(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final base = Theme.of(context).textTheme.labelSmall;
 
     final style = (base ??
-        const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ))
+            const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ))
         .copyWith(
       color: cs.onSurfaceVariant,
       fontWeight: FontWeight.w600,
@@ -49,7 +45,6 @@ class _MinorDepartureCompletedBottomSheetState
     );
 
     return IgnorePointer(
-      // 시트 제스처와의 간섭 방지
       child: Align(
         alignment: Alignment.topLeft,
         child: Padding(
@@ -89,14 +84,14 @@ class _MinorDepartureCompletedBottomSheetState
 
     final List<PlateModel> firestorePlates = baseList.where((p) {
       final sameArea = _areaEquals(p.area, area);
-      return !p.isLockedFee && sameArea; // 미정산 + 같은 area만
+      return !p.isLockedFee && sameArea;
     }).toList()
       ..sort((a, b) => _isSorted
           ? b.requestTime.compareTo(a.requestTime)
           : a.requestTime.compareTo(b.requestTime));
 
-    final selectedPlate =
-    plateState.minorGetSelectedPlate(PlateType.departureCompleted, userName);
+    final selectedPlate = plateState.minorGetSelectedPlate(
+        PlateType.departureCompleted, userName);
     final plateNumber = selectedPlate?.plateNumber ?? '';
 
     return WillPopScope(
@@ -136,8 +131,6 @@ class _MinorDepartureCompletedBottomSheetState
                       body: Column(
                         children: [
                           const SizedBox(height: 12),
-
-                          // 상단 드래그 핸들
                           Center(
                             child: Container(
                               width: 60,
@@ -148,15 +141,11 @@ class _MinorDepartureCompletedBottomSheetState
                               ),
                             ),
                           ),
-
-                          // 좌측 상단(11시) 화면 태그
                           _buildScreenTag(context),
-
                           const SizedBox(height: 8),
-
                           Padding(
                             padding:
-                            const EdgeInsets.symmetric(horizontal: 8.0),
+                                const EdgeInsets.symmetric(horizontal: 8.0),
                             child: TabBar(
                               labelColor: cs.onSurface,
                               unselectedLabelColor: cs.onSurfaceVariant,
@@ -168,15 +157,11 @@ class _MinorDepartureCompletedBottomSheetState
                               ],
                             ),
                           ),
-
                           const SizedBox(height: 8),
-
                           MinorDepartureCompletedSelectedDateBar(
                             visible: !isSettled,
                           ),
-
                           const SizedBox(height: 8),
-
                           Expanded(
                             child: TabBarView(
                               children: [

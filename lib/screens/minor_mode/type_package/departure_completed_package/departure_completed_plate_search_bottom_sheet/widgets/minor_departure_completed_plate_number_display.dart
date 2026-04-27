@@ -22,7 +22,7 @@ class MinorDepartureCompletedPlateNumberDisplay extends StatelessWidget {
         final text = raw.trim();
         final valid = isValidPlate(text);
 
-        // ✅ Theme(ColorScheme) 기반 톤/보더 통일
+        
         final Color tone = text.isEmpty
             ? cs.onSurfaceVariant
             : (valid ? cs.tertiary : cs.error);
@@ -33,7 +33,7 @@ class MinorDepartureCompletedPlateNumberDisplay extends StatelessWidget {
 
         Color boxBg(bool filled) {
           if (filled) return cs.surface;
-          // 비어있는 칸은 톤을 살짝 죽여서 구분
+          
           return cs.surfaceVariant.withOpacity(0.35);
         }
 
@@ -59,7 +59,7 @@ class MinorDepartureCompletedPlateNumberDisplay extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ✅ 4자리 박스 표시
+            
             Row(
               children: List.generate(4, (i) {
                 final char = (i < text.length) ? text[i] : '';
@@ -122,7 +122,7 @@ class MinorDepartureCompletedPlateNumberDisplay extends StatelessWidget {
               ),
             ),
 
-            // ✅ 입력 가이드(빈 상태에서만)
+            
             if (text.isEmpty) ...[
               const SizedBox(height: 8),
               Row(

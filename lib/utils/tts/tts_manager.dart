@@ -1,14 +1,14 @@
-// lib/utils/tts_manager.dart
+
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:url_launcher/url_launcher.dart' as launcher;
 
-/// 공용 TTS 매니저(싱글톤).
-/// - 엔진/언어/속도/피치/볼륨 기본 세팅
-/// - 발화 큐(동시 1건 보장)
-/// - Android에서 Google TTS 우선 선택(선택적 Play 스토어 유도)
+
+
+
+
 class TtsManager {
   TtsManager._();
 
@@ -26,12 +26,12 @@ class TtsManager {
     _initializing = true;
 
     try {
-      // ── 엔진 선택(안드로이드 전용) ───────────────────────────────────────
+      
       if (preferGoogleOnAndroid && Platform.isAndroid) {
         List<String> engines = const [];
         try {
-          // getEngines: List<dynamic>? 반환 가능 → 런타임 캐스팅
-          final raw = await _tts.getEngines; // <-- 여기서만 await
+          
+          final raw = await _tts.getEngines; 
           if (raw is List) {
             engines = raw.map((e) => e.toString()).toList(growable: false);
           }
@@ -59,14 +59,14 @@ class TtsManager {
         }
       }
 
-      // ── 발화 완료 대기 설정(플랫폼 지원 시) ───────────────────────────────
+      
       try {
         await _tts.awaitSpeakCompletion(true);
       } catch (_) {}
 
-      // ── 큐 소비 시작(한 번만) ────────────────────────────────────────────
+      
       _queue.stream.asyncMap((_Utterance u) async {
-        // 호출 시점마다 말하기 설정 적용
+        
         await _tts.setLanguage(u.language);
         await _tts.setSpeechRate(u.rate);
         await _tts.setVolume(u.volume);
@@ -83,7 +83,7 @@ class TtsManager {
     }
   }
 
-  /// 한 문장을 말합니다. 호출 시 설정을 함께 지정할 수 있습니다.
+  
   static Future<void> speak(
     String text, {
     String language = 'ko-KR',

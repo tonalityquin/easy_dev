@@ -28,10 +28,7 @@ class PlateRemoveDialog extends StatelessWidget {
           actionsAlignment: MainAxisAlignment.center,
           actions: [
             FilledButton(
-              onPressed: () {
-                onConfirm();
-                Navigator.of(context).pop();
-              },
+              onPressed: onConfirm,
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.redAccent,
                 padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),

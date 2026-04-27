@@ -1,17 +1,13 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
-import '../../../../../../utils/app_exit_flag.dart';
-import '../../../../../../utils/block_dialogs/work_end_duration_blocking_dialog.dart';
-import '../../../../../single_mode/utils/att_brk_repository.dart';
+import '../../../../../../features/commute/domain/repositories/commute_true_false_repository.dart';
+import '../../../../../../features/mode_single/application/att_brk_repository.dart';
+import '../../../../../../utils/init/app_exit_service.dart';
+import '../../../../../../widgets/dialog/block_dialog_package/work_end_duration_blocking_dialog.dart';
 import 'double_dashboard_punch_card_feedback.dart';
-
-import '../../../../../../repositories/commute_repo_services/commute_true_false_repository.dart';
-import '../../../../../../utils/commute_true_false_mode_config.dart';
+import '../../../../../../utils/config/commute_true_false_mode_config.dart';
 
 class DoubleDashboardInsidePunchRecorderSection extends StatefulWidget {
   const DoubleDashboardInsidePunchRecorderSection({
@@ -88,12 +84,6 @@ class _DoubleDashboardInsidePunchRecorderSectionState
     await _loadForDate(picked);
   }
 
-  void _showGuardSnack(String message) {
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    messenger?.hideCurrentSnackBar();
-    messenger?.showSnackBar(SnackBar(content: Text(message)));
-  }
-
   Future<void> _recordClockInAtToCommuteTrueFalse(DateTime clockInAt) async {
     final enabled = await CommuteTrueFalseModeConfig.isEnabled();
     if (!enabled) {
@@ -122,49 +112,7 @@ class _DoubleDashboardInsidePunchRecorderSectionState
   }
 
   Future<void> _exitAppAfterClockOut(BuildContext context) async {
-    AppExitFlag.beginExit();
-
-    try {
-      if (Platform.isAndroid) {
-        bool running = false;
-
-        try {
-          running = await FlutterForegroundTask.isRunningService;
-        } catch (_) {
-          running = false;
-        }
-
-        if (running) {
-          try {
-            final stopped = await FlutterForegroundTask.stopService();
-            if (stopped != true && context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('포그라운드 서비스 중지 실패(플러그인 반환값 false)'),
-                ),
-              );
-            }
-          } catch (e) {
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('포그라운드 서비스 중지 실패: $e')),
-              );
-            }
-          }
-
-          await Future.delayed(const Duration(milliseconds: 150));
-        }
-      }
-
-      await SystemNavigator.pop();
-    } catch (e) {
-      AppExitFlag.reset();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('앱 종료 실패: $e')),
-        );
-      }
-    }
+    await AppExitService.exitApp(context);
   }
 
   Color _accentForType(ColorScheme cs, AttBrkModeType type) {
@@ -182,17 +130,14 @@ class _DoubleDashboardInsidePunchRecorderSectionState
     if (_loading) return;
 
     if (type == AttBrkModeType.workIn && _disableWorkInPunch) {
-      _showGuardSnack('출근은 서비스 로그인에서 처리됩니다. 이 화면에서는 변경할 수 없습니다.');
       return;
     }
 
     if (type == AttBrkModeType.breakTime && !_hasWorkIn) {
-      _showGuardSnack('먼저 출근을 펀칭한 뒤 휴게시간을 펀칭할 수 있습니다.');
       return;
     }
 
     if (type == AttBrkModeType.workOut && (!_hasWorkIn || !_hasBreak)) {
-      _showGuardSnack('출근과 휴게시간을 모두 펀칭한 뒤 퇴근을 펀칭할 수 있습니다.');
       return;
     }
 

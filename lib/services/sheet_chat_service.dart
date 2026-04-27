@@ -7,41 +7,27 @@ import 'package:flutter/widgets.dart';
 import 'package:googleapis/sheets/v4.dart' as sheets;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../screens/hubs_mode/dev_package/debug_package/debug_api_logger.dart';
-import '../utils/google_auth_session.dart';
-import '../utils/debug_tags.dart';
+import '../features/dev/debug/debug_api_logger.dart';
+import '../utils/auth/google_auth_session.dart';
 import 'chat_local_notification_service.dart';
 
-/// ✅ Header에서 저장한 "스프레드시트 ID" SharedPreferences 키와 동일해야 함.
 const String kSharedSpreadsheetIdKey = 'notice_spreadsheet_id_v1';
 
-/// ✅ (중요) 채팅 시트명 고정: chat
 const String kChatSheetName = 'chat';
 
-/// ✅ 표준 스키마(v2):
-/// A = timestamp(UTC ISO8601)
-/// B = message(text)
-/// C = messageId(안정적인 델타/중복/정렬 대응용)
-///
-/// 읽기는 하위호환 위해 A:C 유지
 const String kChatReadRange = '$kChatSheetName!A:C';
 
-/// 전송/append는 표준 스키마대로 A:C
 const String kChatAppendRange = '$kChatSheetName!A:C';
 
-/// ✅ 채팅 시트의 헤더 감지용(1행 확인)
 const String kChatHeaderProbeRange = '$kChatSheetName!A1:C1';
 
-/// ✅ (추가) "마지막으로 본 메시지" 저장 키 prefix
 const String kChatLastSeenSigPrefix = 'chat_last_seen_sig_v3';
 
-/// ✅ 새 메시지 알림 모드
 enum ChatNotifyMode {
   summaryOne,
   individualUpToN,
 }
 
-/// ✅ 시트 기반 채팅 메시지(익명)
 class SheetChatMessage {
   final DateTime? time;
   final String text;
@@ -52,7 +38,6 @@ class SheetChatMessage {
   });
 }
 
-/// ✅ 전역 상태(버튼/패널 공용)
 class SheetChatState {
   final bool loading;
   final String? error;
@@ -78,14 +63,14 @@ class SheetChatState {
     );
   }
 
-  static const empty = SheetChatState(loading: false, error: null, messages: []);
+  static const empty =
+      SheetChatState(loading: false, error: null, messages: []);
 }
 
-/// ✅ 내부용: signature 포함(새 메시지 델타 판정용)
 class _ParsedRow {
   final SheetChatMessage msg;
-  final String signature; // v2: id:<messageId>  / legacy: ts|msg|rowN
-  final int rowNumber; // sheet row number (1-based)
+  final String signature;
+  final int rowNumber;
   final String? messageId;
 
   const _ParsedRow({
@@ -96,7 +81,6 @@ class _ParsedRow {
   });
 }
 
-/// ✅ lastSeen 구조(v3 저장)
 class _LastSeen {
   final String signature;
   final int rowNumber;
@@ -104,7 +88,6 @@ class _LastSeen {
   const _LastSeen({required this.signature, required this.rowNumber});
 }
 
-/// ✅ header 기반 컬럼 매핑
 class _ChatColumnMapping {
   final int timeIdx;
   final int messageIdx;
@@ -116,37 +99,27 @@ class _ChatColumnMapping {
     required this.idIdx,
   });
 
-  static const defaultV2 = _ChatColumnMapping(timeIdx: 0, messageIdx: 1, idIdx: 2);
+  static const defaultV2 =
+      _ChatColumnMapping(timeIdx: 0, messageIdx: 1, idIdx: 2);
 }
 
-/// ✅ Google Sheets 기반 공개(익명) 채팅 서비스
 class SheetChatService with WidgetsBindingObserver {
   SheetChatService._();
 
   static final SheetChatService instance = SheetChatService._();
 
-  /// UI는 이 상태만 구독하면 됨
   final ValueNotifier<SheetChatState> state =
-  ValueNotifier<SheetChatState>(SheetChatState.empty);
+      ValueNotifier<SheetChatState>(SheetChatState.empty);
 
-  // scopeKey(현재 구역)
   String _scopeKey = '';
 
-  // 현재 spreadsheetId
   String _spreadsheetId = '';
 
-  // fetching guard
   bool _isFetching = false;
 
-  // 간단 직렬화 락(동시 send/clear/fetch 충돌 완화)
   Future<void> _opChain = Future.value();
 
-  /// 한 번에 표시할 최대 메시지 수(뷰 성능)
   static const int maxMessagesInUi = 80;
-
-  // ─────────────────────────────────────────────────────────────
-  // ✅ ref-count: 구독자 0이면 폴링 완전 중단
-  // ─────────────────────────────────────────────────────────────
 
   int _refCount = 0;
 
@@ -178,10 +151,6 @@ class SheetChatService with WidgetsBindingObserver {
       _detachLifecycleObserverIfPossible();
     }
   }
-
-  // ─────────────────────────────────────────────────────────────
-  // ✅ 알림 UX 플래그/정책
-  // ─────────────────────────────────────────────────────────────
 
   bool _chatUiVisible = false;
   bool _suppressWhenChatVisible = true;
@@ -224,12 +193,8 @@ class SheetChatService with WidgetsBindingObserver {
     }
   }
 
-  bool get shouldSuppressNotifications => _suppressWhenChatVisible && _chatUiVisible;
-
-  // ─────────────────────────────────────────────────────────────
-  // ✅ API 디버그 로직 (DebugApiLogger)
-  //   - 폴링 로그 폭주 방지: throttle
-  // ─────────────────────────────────────────────────────────────
+  bool get shouldSuppressNotifications =>
+      _suppressWhenChatVisible && _chatUiVisible;
 
   static const Duration _logThrottleInterval = Duration(seconds: 30);
   final Map<String, int> _lastLoggedAtMsByKey = <String, int>{};
@@ -336,12 +301,6 @@ class SheetChatService with WidgetsBindingObserver {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // ✅ lastSeen(v3) 저장/로드
-  //   - v3 포맷: "v3|sig=<base64url>|row=<n>"
-  //   - legacy 포맷: "<ts>|<msg>|row<n>" (기존 호환)
-  // ─────────────────────────────────────────────────────────────
-
   bool _lastSeenLoaded = false;
   _LastSeen? _lastSeen;
   String _lastSeenCacheKey = '';
@@ -365,7 +324,8 @@ class SheetChatService with WidgetsBindingObserver {
   }
 
   String _encodeLastSeenV3(_LastSeen seen) {
-    final sigB64 = base64Url.encode(utf8.encode(seen.signature)).replaceAll('=', '');
+    final sigB64 =
+        base64Url.encode(utf8.encode(seen.signature)).replaceAll('=', '');
     return 'v3|sig=$sigB64|row=${seen.rowNumber}';
   }
 
@@ -379,13 +339,14 @@ class SheetChatService with WidgetsBindingObserver {
       int? row;
       for (final p in parts) {
         if (p.startsWith('sig=')) sigB64 = p.substring('sig='.length);
-        if (p.startsWith('row=')) row = int.tryParse(p.substring('row='.length));
+        if (p.startsWith('row='))
+          row = int.tryParse(p.substring('row='.length));
       }
       if (sigB64 == null || row == null || row <= 0) return null;
 
       try {
         final padded = _padBase64(sigB64);
-        // ✅ FIX: base64UrlDecode()는 없음 → base64Url.decode()
+
         final sigBytes = base64Url.decode(padded);
         final sig = utf8.decode(sigBytes);
         return _LastSeen(signature: sig, rowNumber: row);
@@ -394,7 +355,6 @@ class SheetChatService with WidgetsBindingObserver {
       }
     }
 
-    // legacy: "...|row123"
     final m = RegExp(r'\|row(\d+)$').firstMatch(t);
     final row = (m != null) ? int.tryParse(m.group(1) ?? '') : null;
     if (row != null && row > 0) {
@@ -426,7 +386,6 @@ class SheetChatService with WidgetsBindingObserver {
     final key = _makeLastSeenPrefsKey(sid, _scopeKey);
     final prefs = await SharedPreferences.getInstance();
 
-    // ✅ row=0/empty signature는 “클리어”로 저장(빈 문자열)
     if (seen.signature.trim().isEmpty || seen.rowNumber <= 0) {
       await prefs.setString(key, '');
       _lastSeenCacheKey = key;
@@ -450,10 +409,6 @@ class SheetChatService with WidgetsBindingObserver {
     _hasHeaderCached = false;
     _colMap = _ChatColumnMapping.defaultV2;
   }
-
-  // ─────────────────────────────────────────────────────────────
-  // ✅ 폴링: 라이프사이클 연동 + 백오프 + 저빈도화
-  // ─────────────────────────────────────────────────────────────
 
   static const Duration _activePollInterval = Duration(seconds: 3);
   static const Duration _idlePollInterval = Duration(seconds: 12);
@@ -562,10 +517,6 @@ class SheetChatService with WidgetsBindingObserver {
     _scheduleNextPoll(reason: reason ?? 'reschedule');
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // ✅ Public helpers: scope 변경/강제 새로고침
-  // ─────────────────────────────────────────────────────────────
-
   Future<void> updateScope(String scopeKey, {bool forceFetch = true}) async {
     final key = scopeKey.trim();
     final sameScope = _scopeKey == key;
@@ -576,7 +527,8 @@ class SheetChatService with WidgetsBindingObserver {
 
     if (_refCount <= 0 || !_desiredRunning || _appInBackground) return;
 
-    await _fetchLatest(force: forceFetch || !sameScope || state.value.messages.isEmpty);
+    await _fetchLatest(
+        force: forceFetch || !sameScope || state.value.messages.isEmpty);
     _reschedulePolling(reason: 'updateScope');
   }
 
@@ -590,10 +542,6 @@ class SheetChatService with WidgetsBindingObserver {
     await _fetchLatest(force: true);
     _reschedulePolling(reason: 'manual_refresh');
   }
-
-  // ─────────────────────────────────────────────────────────────
-  // ✅ Sheets / locking
-  // ─────────────────────────────────────────────────────────────
 
   Future<sheets.SheetsApi> _sheetsApi() async {
     final client = await GoogleAuthSession.instance.safeClient();
@@ -618,13 +566,10 @@ class SheetChatService with WidgetsBindingObserver {
     }
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // ✅ 헤더 감지 + 컬럼 매핑
-  // ─────────────────────────────────────────────────────────────
-
   Future<bool> _hasHeaderRow(sheets.SheetsApi api, String sid) async {
     try {
-      final headResp = await api.spreadsheets.values.get(sid, kChatHeaderProbeRange);
+      final headResp =
+          await api.spreadsheets.values.get(sid, kChatHeaderProbeRange);
       final headRow = (headResp.values != null && headResp.values!.isNotEmpty)
           ? headResp.values!.first
           : null;
@@ -632,8 +577,10 @@ class SheetChatService with WidgetsBindingObserver {
       if (headRow == null || headRow.isEmpty) return false;
 
       final a = (headRow[0] ?? '').toString().trim();
-      final b = (headRow.length > 1 ? (headRow[1] ?? '') : '').toString().trim();
-      final c = (headRow.length > 2 ? (headRow[2] ?? '') : '').toString().trim();
+      final b =
+          (headRow.length > 1 ? (headRow[1] ?? '') : '').toString().trim();
+      final c =
+          (headRow.length > 2 ? (headRow[2] ?? '') : '').toString().trim();
 
       final dt = DateTime.tryParse(a);
       if (dt != null) return false;
@@ -661,7 +608,6 @@ class SheetChatService with WidgetsBindingObserver {
           'sid': sid,
           'range': kChatHeaderProbeRange,
         },
-        tags: DebugTags.setForSheetsChat(DebugTags.sheetsChatHeader),
       );
       return false;
     }
@@ -689,7 +635,8 @@ class SheetChatService with WidgetsBindingObserver {
     );
   }
 
-  Future<void> _ensureHeaderAndMappingCached(sheets.SheetsApi api, String sid) async {
+  Future<void> _ensureHeaderAndMappingCached(
+      sheets.SheetsApi api, String sid) async {
     if (_headerChecked) return;
 
     _hasHeaderCached = await _hasHeaderRow(api, sid);
@@ -697,7 +644,8 @@ class SheetChatService with WidgetsBindingObserver {
 
     if (_hasHeaderCached) {
       try {
-        final headResp = await api.spreadsheets.values.get(sid, kChatHeaderProbeRange);
+        final headResp =
+            await api.spreadsheets.values.get(sid, kChatHeaderProbeRange);
         final headRow = (headResp.values != null && headResp.values!.isNotEmpty)
             ? headResp.values!.first
             : null;
@@ -713,10 +661,6 @@ class SheetChatService with WidgetsBindingObserver {
       _colMap = _ChatColumnMapping.defaultV2;
     }
   }
-
-  // ─────────────────────────────────────────────────────────────
-  // ✅ 전송(append): 표준 스키마 A/B/C
-  // ─────────────────────────────────────────────────────────────
 
   String _makeMessageId() {
     final ms = DateTime.now().millisecondsSinceEpoch.toRadixString(36);
@@ -743,7 +687,6 @@ class SheetChatService with WidgetsBindingObserver {
           message: '스프레드시트 ID 미설정으로 전송 불가',
           error: Exception('spreadsheetId is empty'),
           extra: <String, dynamic>{'messageLength': msg.length},
-          tags: DebugTags.setForSheetsChat(DebugTags.sheetsChatSend),
         );
         return;
       }
@@ -782,7 +725,6 @@ class SheetChatService with WidgetsBindingObserver {
             'appendRange': kChatAppendRange,
             'messageLength': msg.length,
           },
-          logTags: DebugTags.setForSheetsChat(DebugTags.sheetsChatSend),
         );
 
         _notePollSuccess();
@@ -794,7 +736,6 @@ class SheetChatService with WidgetsBindingObserver {
 
   Future<void> clearAllMessages({String? spreadsheetIdOverride}) async {
     await _runLocked(() async {
-      // ✅ FIX: 불필요한 ! 제거 (promotion-friendly)
       final override = spreadsheetIdOverride?.trim();
       final sid = (override != null && override.isNotEmpty)
           ? override
@@ -812,7 +753,6 @@ class SheetChatService with WidgetsBindingObserver {
           tag: 'SheetChatService.clearAllMessages',
           message: '스프레드시트 ID 미설정으로 삭제 불가',
           error: Exception('spreadsheetId is empty'),
-          tags: DebugTags.setForSheetsChat(DebugTags.sheetsChatClear),
         );
         return;
       }
@@ -823,7 +763,8 @@ class SheetChatService with WidgetsBindingObserver {
         final api = await _sheetsApi();
         await _ensureHeaderAndMappingCached(api, sid);
 
-        final rangeToClear = _hasHeaderCached ? '$kChatSheetName!A2:C' : kChatReadRange;
+        final rangeToClear =
+            _hasHeaderCached ? '$kChatSheetName!A2:C' : kChatReadRange;
 
         await api.spreadsheets.values.clear(
           sheets.ClearValuesRequest(),
@@ -831,9 +772,9 @@ class SheetChatService with WidgetsBindingObserver {
           rangeToClear,
         );
 
-        state.value = const SheetChatState(loading: false, error: null, messages: []);
+        state.value =
+            const SheetChatState(loading: false, error: null, messages: []);
 
-        // ✅ clear 시 lastSeen도 초기화(빈 문자열로 저장)
         await _saveLastSeen(sid, const _LastSeen(signature: '', rowNumber: 0));
       }
 
@@ -845,9 +786,9 @@ class SheetChatService with WidgetsBindingObserver {
           userErrorWhenFailed: '채팅 삭제 실패',
           extra: <String, dynamic>{
             'sid': sid,
-            'clearRange': _hasHeaderCached ? '$kChatSheetName!A2:C' : kChatReadRange,
+            'clearRange':
+                _hasHeaderCached ? '$kChatSheetName!A2:C' : kChatReadRange,
           },
-          logTags: DebugTags.setForSheetsChat(DebugTags.sheetsChatClear),
         );
 
         _notePollSuccess();
@@ -857,10 +798,6 @@ class SheetChatService with WidgetsBindingObserver {
       }
     });
   }
-
-  // ─────────────────────────────────────────────────────────────
-  // ✅ 최신 로드 + 델타 판정 + 알림
-  // ─────────────────────────────────────────────────────────────
 
   static const int _incrementalRowBackscanWindow = 20;
 
@@ -885,7 +822,6 @@ class SheetChatService with WidgetsBindingObserver {
           message: '스프레드시트 ID 미설정으로 fetch 불가',
           error: Exception('spreadsheetId is empty'),
           extra: <String, dynamic>{'force': force},
-          tags: DebugTags.setForSheetsChat(DebugTags.sheetsChatPoll),
         );
         return;
       }
@@ -906,7 +842,6 @@ class SheetChatService with WidgetsBindingObserver {
       final api = await _sheetsApi();
       await _ensureHeaderAndMappingCached(api, sid);
 
-      // ✅ FIX: canIncremental bool로 promotion 막지 않고, 직접 if 블록에서 null 체크
       final prev = _lastSeen;
       if (!force &&
           !spreadsheetChanged &&
@@ -914,7 +849,8 @@ class SheetChatService with WidgetsBindingObserver {
           prev.signature.isNotEmpty &&
           prev.rowNumber > 0 &&
           state.value.messages.isNotEmpty) {
-        final startRow = math.max(1, prev.rowNumber - _incrementalRowBackscanWindow);
+        final startRow =
+            math.max(1, prev.rowNumber - _incrementalRowBackscanWindow);
         final ok = await _fetchIncremental(
           api: api,
           sid: sid,
@@ -938,18 +874,12 @@ class SheetChatService with WidgetsBindingObserver {
         userErrorWhenInvalidToken: '구글 계정 연결이 만료되었습니다. 다시 로그인 후 시도하세요.',
         userErrorWhenFailed: '채팅 불러오기 실패',
         extra: <String, dynamic>{'force': force},
-        logTags: DebugTags.setForSheetsChat(DebugTags.sheetsChatPoll),
       );
     } catch (_) {
-      // 내부 처리됨
     } finally {
       _isFetching = false;
     }
   }
-
-  // ─────────────────────────────────────────────────────────────
-  // ✅ Row parsing (A/B/C 변동 표준화 + legacy 호환)
-  // ─────────────────────────────────────────────────────────────
 
   _ParsedRow? _parseRow({
     required List<Object?> row,
@@ -987,7 +917,8 @@ class SheetChatService with WidgetsBindingObserver {
     DateTime? t;
     if (tsRaw.isNotEmpty) t = DateTime.tryParse(tsRaw);
 
-    final signature = (idRaw.isNotEmpty) ? 'id:$idRaw' : '${tsRaw}|${msgRaw}|row$rowNumber';
+    final signature =
+        (idRaw.isNotEmpty) ? 'id:$idRaw' : '${tsRaw}|${msgRaw}|row$rowNumber';
 
     return _ParsedRow(
       msg: SheetChatMessage(time: t, text: msgRaw),
@@ -996,10 +927,6 @@ class SheetChatService with WidgetsBindingObserver {
       messageId: idRaw.isNotEmpty ? idRaw : null,
     );
   }
-
-  // ─────────────────────────────────────────────────────────────
-  // ✅ Incremental fetch
-  // ─────────────────────────────────────────────────────────────
 
   Future<bool> _fetchIncremental({
     required sheets.SheetsApi api,
@@ -1013,7 +940,8 @@ class SheetChatService with WidgetsBindingObserver {
 
     if (rows.isEmpty) {
       if (state.value.messages.isNotEmpty) {
-        state.value = const SheetChatState(loading: false, error: null, messages: []);
+        state.value =
+            const SheetChatState(loading: false, error: null, messages: []);
         await _saveLastSeen(sid, const _LastSeen(signature: '', rowNumber: 0));
       }
       return true;
@@ -1041,22 +969,25 @@ class SheetChatService with WidgetsBindingObserver {
           'prevSig': prevSig,
           'parsedCount': parsed.length,
         },
-        tags: DebugTags.setForSheetsChat(DebugTags.sheetsChatDelta),
       );
       return false;
     }
 
     final latest = parsed.last;
-    final newRows = (idx + 1 <= parsed.length - 1) ? parsed.sublist(idx + 1) : <_ParsedRow>[];
+    final newRows = (idx + 1 <= parsed.length - 1)
+        ? parsed.sublist(idx + 1)
+        : <_ParsedRow>[];
 
     if (latest.signature.isNotEmpty && latest.rowNumber > 0) {
-      await _saveLastSeen(sid, _LastSeen(signature: latest.signature, rowNumber: latest.rowNumber));
+      await _saveLastSeen(sid,
+          _LastSeen(signature: latest.signature, rowNumber: latest.rowNumber));
     }
 
     if (newRows.isNotEmpty && !shouldSuppressNotifications) {
       final nonSelf = <_ParsedRow>[];
       for (final r in newRows) {
-        if (!ChatLocalNotificationService.instance.isLikelySelfSent(r.msg.text)) {
+        if (!ChatLocalNotificationService.instance
+            .isLikelySelfSent(r.msg.text)) {
           nonSelf.add(r);
         }
       }
@@ -1071,7 +1002,9 @@ class SheetChatService with WidgetsBindingObserver {
           );
         } else {
           final n = _maxIndividualNotifications.clamp(1, 20);
-          final slice = (nonSelf.length <= n) ? nonSelf : nonSelf.sublist(nonSelf.length - n);
+          final slice = (nonSelf.length <= n)
+              ? nonSelf
+              : nonSelf.sublist(nonSelf.length - n);
           for (final r in slice) {
             await ChatLocalNotificationService.instance.showChatMessage(
               scopeKey: _scopeKey,
@@ -1090,13 +1023,10 @@ class SheetChatService with WidgetsBindingObserver {
         ? appended
         : appended.sublist(appended.length - maxMessagesInUi);
 
-    state.value = SheetChatState(loading: false, error: null, messages: uiMessages);
+    state.value =
+        SheetChatState(loading: false, error: null, messages: uiMessages);
     return true;
   }
-
-  // ─────────────────────────────────────────────────────────────
-  // ✅ Full fetch
-  // ─────────────────────────────────────────────────────────────
 
   Future<void> _fetchFull({
     required sheets.SheetsApi api,
@@ -1117,7 +1047,10 @@ class SheetChatService with WidgetsBindingObserver {
 
     final uiMessages = parsed.length <= maxMessagesInUi
         ? parsed.map((e) => e.msg).toList()
-        : parsed.sublist(parsed.length - maxMessagesInUi).map((e) => e.msg).toList();
+        : parsed
+            .sublist(parsed.length - maxMessagesInUi)
+            .map((e) => e.msg)
+            .toList();
 
     final latest = parsed.isEmpty ? null : parsed.last;
     final prev = _lastSeen;
@@ -1126,7 +1059,10 @@ class SheetChatService with WidgetsBindingObserver {
 
     if (prev == null || prev.signature.isEmpty || prev.rowNumber <= 0) {
       if (latest != null && latest.signature.isNotEmpty) {
-        await _saveLastSeen(sid, _LastSeen(signature: latest.signature, rowNumber: latest.rowNumber));
+        await _saveLastSeen(
+            sid,
+            _LastSeen(
+                signature: latest.signature, rowNumber: latest.rowNumber));
       } else {
         await _saveLastSeen(sid, const _LastSeen(signature: '', rowNumber: 0));
       }
@@ -1136,14 +1072,23 @@ class SheetChatService with WidgetsBindingObserver {
         if (idx + 1 <= parsed.length - 1) {
           newRows = parsed.sublist(idx + 1);
         }
-        if (latest != null && latest.signature.isNotEmpty && latest.signature != prev.signature) {
-          await _saveLastSeen(sid, _LastSeen(signature: latest.signature, rowNumber: latest.rowNumber));
+        if (latest != null &&
+            latest.signature.isNotEmpty &&
+            latest.signature != prev.signature) {
+          await _saveLastSeen(
+              sid,
+              _LastSeen(
+                  signature: latest.signature, rowNumber: latest.rowNumber));
         }
       } else {
         if (latest != null) {
-          await _saveLastSeen(sid, _LastSeen(signature: latest.signature, rowNumber: latest.rowNumber));
+          await _saveLastSeen(
+              sid,
+              _LastSeen(
+                  signature: latest.signature, rowNumber: latest.rowNumber));
         } else {
-          await _saveLastSeen(sid, const _LastSeen(signature: '', rowNumber: 0));
+          await _saveLastSeen(
+              sid, const _LastSeen(signature: '', rowNumber: 0));
         }
 
         await _logApiError(
@@ -1158,7 +1103,6 @@ class SheetChatService with WidgetsBindingObserver {
             'hasHeaderCached': _hasHeaderCached,
             'force': force,
           },
-          tags: DebugTags.setForSheetsChat(DebugTags.sheetsChatDelta),
         );
       }
     }
@@ -1166,7 +1110,8 @@ class SheetChatService with WidgetsBindingObserver {
     if (newRows.isNotEmpty && !shouldSuppressNotifications) {
       final nonSelf = <_ParsedRow>[];
       for (final r in newRows) {
-        if (!ChatLocalNotificationService.instance.isLikelySelfSent(r.msg.text)) {
+        if (!ChatLocalNotificationService.instance
+            .isLikelySelfSent(r.msg.text)) {
           nonSelf.add(r);
         }
       }
@@ -1181,7 +1126,9 @@ class SheetChatService with WidgetsBindingObserver {
           );
         } else {
           final n = _maxIndividualNotifications.clamp(1, 20);
-          final slice = (nonSelf.length <= n) ? nonSelf : nonSelf.sublist(nonSelf.length - n);
+          final slice = (nonSelf.length <= n)
+              ? nonSelf
+              : nonSelf.sublist(nonSelf.length - n);
           for (final r in slice) {
             await ChatLocalNotificationService.instance.showChatMessage(
               scopeKey: _scopeKey,
@@ -1192,6 +1139,7 @@ class SheetChatService with WidgetsBindingObserver {
       }
     }
 
-    state.value = SheetChatState(loading: false, error: null, messages: uiMessages);
+    state.value =
+        SheetChatState(loading: false, error: null, messages: uiMessages);
   }
 }

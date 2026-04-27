@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../../hubs_mode/dev_package/debug_package/debug_action_recorder.dart';
-import '../../../../../single_mode/utils/att_brk_repository.dart';
+import '../../../../../../features/dev/debug/debug_action_recorder.dart';
+import '../../../../../../features/mode_single/application/att_brk_repository.dart';
 
 void _traceTriplePunch(BuildContext context, AttBrkModeType type, DateTime dateTime) {
   final String name;
@@ -94,7 +94,7 @@ IconData _iconForType(AttBrkModeType type) {
   }
 }
 
-/// ✅ 강조색은 타입별 유지
+
 Color _accentColorForType(AttBrkModeType type) {
   switch (type) {
     case AttBrkModeType.workIn:

@@ -1,33 +1,130 @@
 import 'dart:async';
+import 'dart:convert';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
-// ✅ Sheets API
-import 'package:googleapis/sheets/v4.dart' as sheets;
 import 'package:shared_preferences/shared_preferences.dart';
 
-// ✅ Header와 동일한 인증 세션(프로젝트 경로에 맞게 유지/조정)
-import '../../../../utils/google_auth_session.dart';
+import '../../../../features/dev/application/area_state.dart';
+import '../../../../features/dev/debug/debug_api_logger.dart';
+import '../../../../features/location/applications/location_state.dart';
+import '../../../../features/location/domain/models/location_model.dart';
+import '../../../../features/plate/application/common/view_doc_rows_store.dart';
+import '../../../../features/plate/domain/repositories/plate_repository.dart';
+import '../../../common_package/preview_package/parking_grid_3d_preview.dart';
 
-import '../../../../states/location/location_state.dart';
-import '../../../../states/area/area_state.dart';
-
-import '../../../common_package/memo_package/dash_memo.dart';
-import '../../../hubs_mode/dev_package/debug_package/debug_api_logger.dart';
-
-// ─────────────────────────────────────────────────────────────
-// ✅ API 디버그 로직: 표준 태그 / 로깅 헬퍼 (file-scope)
-// ─────────────────────────────────────────────────────────────
 const String _tParking = 'parking';
 const String _tParkingStatus = 'parking/status';
-const String _tParkingNotice = 'parking/notice';
 const String _tFirestore = 'firestore';
-const String _tFirestoreAgg = 'firestore/aggregate';
-const String _tSheets = 'sheets';
 const String _tPrefs = 'prefs';
 const String _tUi = 'ui';
+
+String _trimOrEmpty(Object? v) => (v ?? '').toString().trim();
+
+String _normalizeName(String raw) => raw.trim().replaceAll(RegExp(r'\s+'), ' ');
+String _nameKey(String raw) => _normalizeName(raw).toLowerCase();
+
+int _statusPriority(ParkingSlotStatus s) {
+  switch (s) {
+    case ParkingSlotStatus.departureRequest:
+      return 3;
+    case ParkingSlotStatus.parkingRequest:
+      return 2;
+    case ParkingSlotStatus.parked:
+      return 1;
+    case ParkingSlotStatus.empty:
+      return 0;
+  }
+}
+
+ParkingSlotStatus _mergeStatus(ParkingSlotStatus a, ParkingSlotStatus b) {
+  return _statusPriority(b) > _statusPriority(a) ? b : a;
+}
+
+int? _parseFirstInt(String raw) {
+  final m = RegExp(r'(\d+)').firstMatch(raw);
+  if (m == null) return null;
+  return int.tryParse(m.group(1) ?? '');
+}
+
+List<String> _splitLocationSegments(String raw) {
+  final v = raw.trim();
+  if (v.isEmpty) return const <String>[];
+  return v
+      .split(' - ')
+      .map((e) => e.trim())
+      .where((e) => e.isNotEmpty)
+      .toList(growable: false);
+}
+
+class _ViewRow {
+  final String plateId;
+  final String plateNumber;
+  final String location;
+  final DateTime? createdAt;
+
+  const _ViewRow({
+    required this.plateId,
+    required this.plateNumber,
+    required this.location,
+    required this.createdAt,
+  });
+}
+
+List<_ViewRow> _rowsFromViewRows(List<ViewRowData> rows) {
+  return rows
+      .map(
+        (e) => _ViewRow(
+          plateId: e.plateId,
+          plateNumber: e.plateNumber,
+          location: e.location,
+          createdAt: e.createdAt,
+        ),
+      )
+      .toList(growable: false);
+}
+
+ParkingGridOverlay _buildGridOverlayFromParkingCompleted({
+  required List<_ViewRow> parkingCompleted,
+}) {
+  final slotStatusByKey = <String, ParkingSlotStatus>{};
+  final groupStatusByKey = <String, ParkingSlotStatus>{};
+
+  void applyRows(List<_ViewRow> rows, ParkingSlotStatus status) {
+    for (final r in rows) {
+      final seg = _splitLocationSegments(r.location);
+      if (seg.length < 2) continue;
+
+      final parentKey = _nameKey(seg[0]);
+      final childKey = parkingOverlayCanonicalChildKey(seg[1]);
+      if (parentKey.isEmpty || childKey.isEmpty) continue;
+
+      final groupKey = '$parentKey|$childKey';
+
+      int? no;
+      if (seg.length >= 3) {
+        no = _parseFirstInt(seg[2]);
+      }
+
+      if (no != null) {
+        final slotKey = '$groupKey|$no';
+        final prev = slotStatusByKey[slotKey] ?? ParkingSlotStatus.empty;
+        slotStatusByKey[slotKey] = _mergeStatus(prev, status);
+      } else {
+        final prev = groupStatusByKey[groupKey] ?? ParkingSlotStatus.empty;
+        groupStatusByKey[groupKey] = _mergeStatus(prev, status);
+      }
+    }
+  }
+
+  applyRows(parkingCompleted, ParkingSlotStatus.parked);
+
+  return ParkingGridOverlay(
+    slotStatusByKey: slotStatusByKey,
+    groupStatusByKey: groupStatusByKey,
+  );
+}
 
 Future<void> _logApiError({
   required String tag,
@@ -50,6 +147,18 @@ Future<void> _logApiError({
   } catch (_) {}
 }
 
+List<Map<String, dynamic>> _decodeCachedLocationsJsonToMaps(String raw) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) return <Map<String, dynamic>>[];
+  final decoded = jsonDecode(trimmed);
+  if (decoded is! List) throw const FormatException('cached_locations is not a List');
+  final out = <Map<String, dynamic>>[];
+  for (final item in decoded) {
+    if (item is Map) out.add(Map<String, dynamic>.from(item));
+  }
+  return out;
+}
+
 class DoubleParkingStatusPage extends StatefulWidget {
   const DoubleParkingStatusPage({super.key});
 
@@ -58,795 +167,414 @@ class DoubleParkingStatusPage extends StatefulWidget {
 }
 
 class _DoubleParkingStatusPageState extends State<DoubleParkingStatusPage> {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  static const String _kCachedLocationsPrefix = 'cached_locations_';
+
+  StreamSubscription<List<ViewRowData>>? _pcSub;
+  Timer? _pcDebounce;
+  int _pcListenSeq = 0;
+
+  List<LocationModel> _cachedLocations = <LocationModel>[];
+  List<_ViewRow> _latestParkingCompleted = <_ViewRow>[];
+  bool _isLocationsLoading = true;
+  bool _hadLocationsError = false;
+  String? _lastLocationsArea;
 
   int _occupiedCount = 0;
+  ParkingGridOverlay _gridOverlay = const ParkingGridOverlay.empty();
+
   bool _isCountLoading = true;
-
-  bool _didCountRun = false;
-  String? _lastArea;
   bool _hadError = false;
+  String? _lastArea;
 
-  String _noticeMessage = '';
-  bool _isNoticeLoading = true;
-  bool _didNoticeRun = false;
-  String? _lastNoticeArea;
+  int _locationsReqSeq = 0;
+  int _countReqSeq = 0;
+
+  bool _syncScheduled = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _maybeRunCount();
-      _maybeRunNotice();
+      if (!mounted) return;
+      _syncForCurrentArea(refreshLocationsSource: false);
     });
+  }
+
+  @override
+  void dispose() {
+    _pcDebounce?.cancel();
+    _pcSub?.cancel();
+    super.dispose();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _maybeRunCount();
-      _maybeRunNotice();
+
+    final currentArea = context.read<AreaState>().currentArea.trim();
+    final bool areaChanged =
+        (_lastLocationsArea != null && _lastLocationsArea != currentArea) ||
+            (_lastArea != null && _lastArea != currentArea);
+
+    if (!areaChanged) return;
+    if (_syncScheduled) return;
+
+    _syncScheduled = true;
+    Future.microtask(() {
+      _syncScheduled = false;
+      if (!mounted) return;
+      _syncForCurrentArea(refreshLocationsSource: false);
     });
   }
 
-  void _maybeRunCount() {
-    if (_didCountRun) return;
-    final route = ModalRoute.of(context);
-    final isVisible = route == null ? true : (route.isCurrent || route.isActive);
-    if (!isVisible) return;
-    _didCountRun = true;
-    _runAggregateCount();
+  Future<void> _syncForCurrentArea({
+    required bool refreshLocationsSource,
+  }) async {
+    final area = context.read<AreaState>().currentArea.trim();
+    _lastLocationsArea = area;
+    _lastArea = area;
+
+    await Future.wait(<Future<void>>[
+      _runLoadLocationsFromPrefs(forceRefresh: refreshLocationsSource),
+      _runAggregateCount(forceRefresh: false),
+    ]);
   }
 
-  void _maybeRunNotice() {
-    if (_didNoticeRun) return;
-    final route = ModalRoute.of(context);
-    final isVisible = route == null ? true : (route.isCurrent || route.isActive);
-    if (!isVisible) return;
-    _didNoticeRun = true;
-    _runNoticeFetch(forceRefresh: false);
-  }
-
-  Future<void> _runAggregateCount() async {
+  Future<void> _runLoadLocationsFromPrefs({required bool forceRefresh}) async {
     if (!mounted) return;
+
+    final int seq = ++_locationsReqSeq;
 
     final area = context.read<AreaState>().currentArea.trim();
     final division = context.read<AreaState>().currentDivision.trim();
-    _lastArea = area;
+
+    final requestedArea = area;
+    _lastLocationsArea = requestedArea;
+
+    setState(() {
+      _isLocationsLoading = true;
+      _hadLocationsError = false;
+    });
+
+    if (forceRefresh) {
+      try {
+        final locState = context.read<LocationState>();
+        await locState.manualLocationRefresh();
+      } catch (e) {
+        await _logApiError(
+          tag: 'DoubleParkingStatusPage._runLoadLocationsFromPrefs',
+          message: 'forceRefresh: LocationState.manualLocationRefresh 실패 → prefs 로드로 fallback',
+          error: e,
+          extra: <String, dynamic>{
+            'division': division,
+            'area': requestedArea,
+            'forceRefresh': forceRefresh,
+          },
+          tags: const <String>[_tParking, _tParkingStatus, _tUi],
+        );
+      }
+    }
+
+    bool shouldDropResult() {
+      if (!mounted) return true;
+      if (seq != _locationsReqSeq) return true;
+      final nowArea = context.read<AreaState>().currentArea.trim();
+      if (nowArea != requestedArea) return true;
+      return false;
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = '$_kCachedLocationsPrefix$requestedArea';
+      final raw = (prefs.getString(key) ?? '').trim();
+
+      if (raw.isEmpty) {
+        if (shouldDropResult()) return;
+        setState(() {
+          _cachedLocations = <LocationModel>[];
+          _isLocationsLoading = false;
+          _hadLocationsError = false;
+        });
+        return;
+      }
+
+      final List<Map<String, dynamic>> maps =
+          await compute(_decodeCachedLocationsJsonToMaps, raw);
+
+      if (shouldDropResult()) return;
+
+      final next = <LocationModel>[];
+      for (final m in maps) {
+        next.add(LocationModel.fromCacheMap(m));
+      }
+
+      setState(() {
+        _cachedLocations = next;
+        _isLocationsLoading = false;
+        _hadLocationsError = false;
+      });
+    } catch (e) {
+      await _logApiError(
+        tag: 'DoubleParkingStatusPage._runLoadLocationsFromPrefs',
+        message: 'SharedPreferences에서 cached_locations 로드/파싱 실패',
+        error: e,
+        extra: <String, dynamic>{
+          'division': division,
+          'area': requestedArea,
+          'cacheKey': '$_kCachedLocationsPrefix$requestedArea',
+          'forceRefresh': forceRefresh,
+        },
+        tags: const <String>[_tParking, _tParkingStatus, _tPrefs],
+      );
+
+      if (shouldDropResult()) return;
+      setState(() {
+        _cachedLocations = <LocationModel>[];
+        _isLocationsLoading = false;
+        _hadLocationsError = true;
+      });
+    }
+  }
+
+  Future<void> _runAggregateCount({required bool forceRefresh}) async {
+    if (!mounted) return;
+
+    final int seq = ++_countReqSeq;
+
+    final area = context.read<AreaState>().currentArea.trim();
+    final division = context.read<AreaState>().currentDivision.trim();
+    final repo = context.read<PlateRepository>();
+
+    final requestedArea = area;
+    _lastArea = requestedArea;
 
     setState(() {
       _isCountLoading = true;
       _hadError = false;
     });
 
-    try {
-      final aggQuery = _firestore
-          .collection('plates')
-          .where('area', isEqualTo: area)
-          .where('type', isEqualTo: 'parking_completed')
-          .count();
+    bool shouldDropResult() {
+      if (!mounted) return true;
+      if (seq != _countReqSeq) return true;
+      final nowArea = context.read<AreaState>().currentArea.trim();
+      if (nowArea != requestedArea) return true;
+      return false;
+    }
 
-      final snap = await aggQuery.get();
-      final cnt = (snap.count ?? 0);
+    await _pcSub?.cancel();
+    _pcSub = null;
+    _pcDebounce?.cancel();
+    _pcDebounce = null;
+    _latestParkingCompleted = <_ViewRow>[];
 
+    final int myListenSeq = ++_pcListenSeq;
+    if (requestedArea.isEmpty) {
+      debugPrint('[DoubleParkingStatusPage] empty area, skip subscribe');
       if (!mounted) return;
       setState(() {
-        _occupiedCount = cnt;
+        _latestParkingCompleted = <_ViewRow>[];
+        _occupiedCount = 0;
+        _gridOverlay = const ParkingGridOverlay.empty();
         _isCountLoading = false;
         _hadError = false;
       });
-    } catch (e) {
-      await _logApiError(
-        tag: 'DoubleParkingStatusPage._runAggregateCount',
-        message: 'Firestore aggregate count 실패(parking_completed)',
-        error: e,
-        extra: <String, dynamic>{
-          'division': division,
-          'area': area,
-          'collection': 'plates',
-          'type': 'parking_completed',
-        },
-        tags: const <String>[
-          _tParking,
-          _tParkingStatus,
-          _tFirestore,
-          _tFirestoreAgg,
-        ],
-      );
-
-      if (!mounted) return;
-      setState(() {
-        _occupiedCount = 0;
-        _isCountLoading = false;
-        _hadError = true;
-      });
+      return;
     }
-  }
 
-  Future<void> _runNoticeFetch({required bool forceRefresh}) async {
-    if (!mounted) return;
+    debugPrint(
+      '[DoubleParkingStatusPage] subscribe parking_completed_view/$requestedArea (seq=$myListenSeq, forceRefresh=$forceRefresh)',
+    );
 
-    final area = context.read<AreaState>().currentArea.trim();
-    final division = context.read<AreaState>().currentDivision.trim();
-    _lastNoticeArea = area;
+    _pcSub = repo
+        .watchViewRows(
+          collection: 'parking_completed_view',
+          area: requestedArea,
+          primaryAtField: 'parkingCompletedAt',
+        )
+        .listen(
+          (rowData) {
+            if (shouldDropResult()) return;
+            if (myListenSeq != _pcListenSeq) return;
 
-    setState(() {
-      _isNoticeLoading = true;
-    });
+            final rows = _rowsFromViewRows(rowData);
+            try {
+              context.read<ViewDocRowsStore>().setRows(
+                    collection: 'parking_completed_view',
+                    area: requestedArea,
+                    rows: rowData,
+                    source: 'DoubleParkingStatusPage',
+                  );
+            } catch (e) {
+              debugPrint('[DoubleParkingStatusPage] store setRows failed: $e');
+            }
 
-    try {
-      final result = await DoubleParkingNoticeService.fetchNoticeMessage(
-        area: area,
-        forceRefresh: forceRefresh,
-      );
+            debugPrint(
+              '[DoubleParkingStatusPage] watch parking_completed_view/$requestedArea items=${rows.length}',
+            );
 
-      if (!mounted) return;
-      setState(() {
-        _noticeMessage = result;
-        _isNoticeLoading = false;
-      });
-    } catch (e) {
-      await _logApiError(
-        tag: 'DoubleParkingStatusPage._runNoticeFetch',
-        message: '공지 로드(fetchNoticeMessage) 실패',
-        error: e,
-        extra: <String, dynamic>{
-          'division': division,
-          'area': area,
-          'forceRefresh': forceRefresh,
-        },
-        tags: const <String>[
-          _tParking,
-          _tParkingNotice,
-          _tSheets,
-          _tUi,
-        ],
-      );
-
-      if (!mounted) return;
-      setState(() {
-        _noticeMessage = '';
-        _isNoticeLoading = false;
-      });
-    }
+            _pcDebounce?.cancel();
+            _pcDebounce = Timer(const Duration(milliseconds: 120), () {
+              if (shouldDropResult()) return;
+              if (myListenSeq != _pcListenSeq) return;
+              final overlay =
+                  _buildGridOverlayFromParkingCompleted(parkingCompleted: rows);
+              setState(() {
+                _latestParkingCompleted = rows;
+                _occupiedCount = rows.length;
+                _gridOverlay = overlay;
+                _isCountLoading = false;
+                _hadError = false;
+              });
+            });
+          },
+          onError: (e) async {
+            debugPrint(
+              '[DoubleParkingStatusPage] watch error parking_completed_view/$requestedArea: $e',
+            );
+            await _logApiError(
+              tag: 'DoubleParkingStatusPage._runAggregateCount',
+              message: 'parking_completed_view watchViewRows 실패',
+              error: e,
+              extra: <String, dynamic>{
+                'division': division,
+                'area': requestedArea,
+                'forceRefresh': forceRefresh,
+              },
+              tags: const <String>[_tParking, _tParkingStatus, _tFirestore, _tUi],
+            );
+            if (shouldDropResult()) return;
+            if (myListenSeq != _pcListenSeq) return;
+            setState(() {
+              _latestParkingCompleted = <_ViewRow>[];
+              _occupiedCount = 0;
+              _gridOverlay = const ParkingGridOverlay.empty();
+              _isCountLoading = false;
+              _hadError = true;
+            });
+          },
+        );
   }
 
   @override
   Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _maybeRunCount();
-      _maybeRunNotice();
-    });
+    final currentArea = context.select<AreaState, String>((s) => s.currentArea.trim());
+    final cs = Theme.of(context).colorScheme;
 
-    final currentArea =
-    context.select<AreaState, String>((s) => s.currentArea.trim());
-
-    if (_lastArea != null && _lastArea != currentArea) {
-      _didCountRun = false;
-      _lastArea = currentArea;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRunCount());
+    if (_isLocationsLoading || _isCountLoading) {
+      return Scaffold(body: Center(child: CircularProgressIndicator(color: cs.primary)));
     }
 
-    if (_lastNoticeArea != null && _lastNoticeArea != currentArea) {
-      _didNoticeRun = false;
-      _lastNoticeArea = currentArea;
-      WidgetsBinding.instance.addPostFrameCallback((_) => _maybeRunNotice());
+    int totalCapacity = 0;
+    for (final l in _cachedLocations) {
+      final type = _trimOrEmpty(l.type);
+      if (type == 'composite_parent') continue;
+      totalCapacity += l.capacity;
+    }
+
+    final occupiedCount = _occupiedCount;
+    final textMetricsByLocation = buildTextParkingPreviewMetricsByLocations(
+      locations: _cachedLocations,
+      parkingCompletedLocations: _latestParkingCompleted.map((e) => e.location),
+    );
+    final double usageRatio = totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
+    final String usagePercent = (usageRatio * 100).toStringAsFixed(1);
+
+    if (_hadLocationsError) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.warning_amber, size: 40, color: cs.error),
+                const SizedBox(height: 12),
+                Text(
+                  '주차 구역(레이아웃) 캐시 로드 중 오류가 발생했습니다.',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: cs.onSurface),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text('영역: $currentArea', style: TextStyle(color: cs.onSurfaceVariant)),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () => _runLoadLocationsFromPrefs(forceRefresh: true),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('원본 갱신 후 캐시 다시 로드'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    if (_hadError) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.warning_amber, size: 40, color: cs.error),
+                const SizedBox(height: 12),
+                Text(
+                  '현황(view) 데이터 로드 중 오류가 발생했습니다.',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: cs.onSurface),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text('영역: $currentArea', style: TextStyle(color: cs.onSurfaceVariant)),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () => _runAggregateCount(forceRefresh: true),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('다시 갱신'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
     }
 
     return Scaffold(
-      // ✅ 전역 ThemeData(scaffoldBackgroundColor) 사용: backgroundColor 강제하지 않음
-      body: Consumer<LocationState>(
-        builder: (context, locationState, _) {
-          final cs = Theme.of(context).colorScheme;
-
-          if (locationState.isLoading || _isCountLoading) {
-            return Center(
-              child: CircularProgressIndicator(color: cs.primary),
-            );
-          }
-
-          final totalCapacity =
-          locationState.locations.fold<int>(0, (sum, l) => sum + l.capacity);
-          final occupiedCount = _occupiedCount;
-
-          final double usageRatio =
-          totalCapacity == 0 ? 0 : occupiedCount / totalCapacity;
-          final String usagePercent = (usageRatio * 100).toStringAsFixed(1);
-
-          if (_hadError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.warning_amber, size: 40, color: cs.error),
-                    const SizedBox(height: 12),
-                    Text(
-                      '현황 집계 중 오류가 발생했습니다.',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: cs.onSurface,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '영역: $currentArea',
-                      style: TextStyle(color: cs.onSurfaceVariant),
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        _didCountRun = false;
-                        _runAggregateCount();
-                      },
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('다시 집계'),
-                      // ✅ 버튼 테마는 전역 ThemeData에 맡기되, 필요 시 최소 토큰만 사용
-                      style: ElevatedButton.styleFrom(
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }
-
-          // ------ 상단 영역: "디자인/텍스트 수정 금지" 요청 반영 ------
-          // ✅ 문구/레이아웃 유지. 색상만 ColorScheme 기반.
-          return ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              _DoubleParkingNoticeBar(
-                isLoading: _isNoticeLoading,
-                message: _noticeMessage,
-                onRefresh: () {
-                  _didNoticeRun = false;
-                  _runNoticeFetch(forceRefresh: true);
-                },
-              ),
-              if (_noticeMessage.trim().isNotEmpty || _isNoticeLoading)
-                const SizedBox(height: 12),
-
-              // ✅ (변경) const 제거 + color 명시
-              Text(
-                '📊 현재 주차 현황',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: cs.onSurface,
-                ),
-                textAlign: TextAlign.center,
-              ),
-
-              const SizedBox(height: 12),
-
-              // ✅ (변경) color 명시 (DefaultTextStyle/TextTheme 불일치 방지)
-              Text(
-                '총 $totalCapacity대 중 $occupiedCount대 주차됨',
-                style: TextStyle(fontSize: 16, color: cs.onSurface),
-                textAlign: TextAlign.center,
-              ),
-
-              const SizedBox(height: 8),
-              LinearProgressIndicator(
-                value: usageRatio,
-                backgroundColor: cs.outlineVariant.withOpacity(0.6),
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  usageRatio >= 0.8 ? cs.error : cs.primary,
-                ),
-                minHeight: 8,
-              ),
-              const SizedBox(height: 12),
-
-              // ✅ (변경) color 명시
-              Text(
-                '$usagePercent% 사용 중',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: cs.onSurface,
-                ),
-                textAlign: TextAlign.center,
-              ),
-
-              // ------ 상단 영역 끝 ------
-              const SizedBox(height: 24),
-              const _AutoCyclingMemoCards(),
-              const SizedBox(height: 12),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-/// ✅ 상단 알림바(관리자 공지) — ColorScheme 기반
-class _DoubleParkingNoticeBar extends StatelessWidget {
-  final bool isLoading;
-  final String message;
-  final VoidCallback onRefresh;
-
-  const _DoubleParkingNoticeBar({
-    required this.isLoading,
-    required this.message,
-    required this.onRefresh,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    final text = message.trim();
-    if (!isLoading && text.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        decoration: BoxDecoration(
-          color: cs.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.info_outline, size: 18, color: cs.onSurfaceVariant),
-            const SizedBox(width: 10),
-            Expanded(
-              child: isLoading
-                  ? Text(
-                '공지 불러오는 중...',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: cs.onSurface,
-                ),
-              )
-                  : Text(
-                text,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: cs.onSurface,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            InkWell(
-              onTap: onRefresh,
-              child: Padding(
-                padding: const EdgeInsets.all(4),
-                child: Icon(Icons.refresh, size: 18, color: cs.onSurfaceVariant),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// ✅ Google Sheets API 기반 공지 서비스 (Double)
-class DoubleParkingNoticeService {
-  DoubleParkingNoticeService._();
-
-  static const String kNoticeSpreadsheetIdKey = 'notice_spreadsheet_id_v1';
-  static const String kNoticeSheetName = 'noti';
-  static const String kNoticeRange = '$kNoticeSheetName!A1:A50';
-
-  static const Duration cacheTtl = Duration(minutes: 10);
-
-  static Future<sheets.SheetsApi> _sheetsApi() async {
-    try {
-      final client = await GoogleAuthSession.instance.safeClient();
-      return sheets.SheetsApi(client);
-    } catch (e) {
-      await _logApiError(
-        tag: 'DoubleParkingNoticeService._sheetsApi',
-        message: 'GoogleAuthSession.safeClient 또는 SheetsApi 생성 실패',
-        error: e,
-        tags: const <String>[_tParking, _tParkingNotice, _tSheets],
-      );
-      rethrow;
-    }
-  }
-
-  static Future<String> _loadSpreadsheetId() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      return (prefs.getString(kNoticeSpreadsheetIdKey) ?? '').trim();
-    } catch (e) {
-      await _logApiError(
-        tag: 'DoubleParkingNoticeService._loadSpreadsheetId',
-        message: 'SharedPreferences에서 SpreadsheetId 로드 실패',
-        error: e,
-        tags: const <String>[_tParking, _tParkingNotice, _tPrefs],
-      );
-      return '';
-    }
-  }
-
-  static Future<String> fetchNoticeMessage({
-    required String area,
-    required bool forceRefresh,
-  }) async {
-    final trimmedArea = area.trim();
-    final prefs = await SharedPreferences.getInstance();
-
-    final cacheKey =
-        'double_parking_notice_cache_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
-    final cacheAtKey =
-        'double_parking_notice_cache_at_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
-    final cacheSidKey =
-        'double_parking_notice_cache_sid_v2_${trimmedArea.isEmpty ? 'empty' : trimmedArea}';
-
-    final nowMs = DateTime.now().millisecondsSinceEpoch;
-
-    final spreadsheetId = await _loadSpreadsheetId();
-
-    if (spreadsheetId.isEmpty) {
-      final fallback = (prefs.getString(cacheKey) ?? '').trim();
-
-      if (fallback.isEmpty) {
-        await _logApiError(
-          tag: 'DoubleParkingNoticeService.fetchNoticeMessage',
-          message: 'SpreadsheetId 미설정(공지 불가) — 캐시도 없음',
-          error: StateError('spreadsheet_id_empty'),
-          extra: <String, dynamic>{'area': trimmedArea},
-          tags: const <String>[_tParking, _tParkingNotice, _tPrefs],
-        );
-      }
-
-      return fallback;
-    }
-
-    if (!forceRefresh) {
-      final cached = (prefs.getString(cacheKey) ?? '').trim();
-      final cachedAt = prefs.getInt(cacheAtKey) ?? 0;
-      final cachedSid = (prefs.getString(cacheSidKey) ?? '').trim();
-
-      final isFresh =
-          cachedAt > 0 && (nowMs - cachedAt) <= cacheTtl.inMilliseconds;
-      final isSameSid = cachedSid == spreadsheetId;
-
-      if (cached.isNotEmpty && isFresh && isSameSid) {
-        return cached;
-      }
-    }
-
-    try {
-      final api = await _sheetsApi();
-
-      final resp = await api.spreadsheets.values
-          .get(spreadsheetId, kNoticeRange)
-          .timeout(const Duration(seconds: 6));
-
-      final values = resp.values ?? const <List<Object?>>[];
-
-      final lines = <String>[];
-      for (final row in values) {
-        final rowStrings = row.map((c) => (c ?? '').toString().trim()).toList();
-        final joined = rowStrings.where((s) => s.isNotEmpty).join(' ');
-        if (joined.isNotEmpty) lines.add(joined);
-      }
-
-      final msg = lines.join('\n').trim();
-
-      if (msg.isNotEmpty) {
-        await prefs.setString(cacheKey, msg);
-        await prefs.setInt(cacheAtKey, nowMs);
-        await prefs.setString(cacheSidKey, spreadsheetId);
-        return msg;
-      }
-
-      final fallback = (prefs.getString(cacheKey) ?? '').trim();
-      if (fallback.isNotEmpty) return fallback;
-
-      await _logApiError(
-        tag: 'DoubleParkingNoticeService.fetchNoticeMessage',
-        message: '공지 시트가 비어있고 캐시도 없음',
-        error: StateError('notice_empty'),
-        extra: <String, dynamic>{
-          'area': trimmedArea,
-          'spreadsheetIdLen': spreadsheetId.length,
-          'range': kNoticeRange,
-        },
-        tags: const <String>[_tParking, _tParkingNotice, _tSheets],
-      );
-
-      return '';
-    } catch (e) {
-      await _logApiError(
-        tag: 'DoubleParkingNoticeService.fetchNoticeMessage',
-        message: 'Sheets 공지 로드 실패 → 캐시 fallback',
-        error: e,
-        extra: <String, dynamic>{
-          'area': trimmedArea,
-          'spreadsheetIdLen': spreadsheetId.length,
-          'range': kNoticeRange,
-          'forceRefresh': forceRefresh,
-        },
-        tags: const <String>[_tParking, _tParkingNotice, _tSheets],
-      );
-
-      final fallback = (prefs.getString(cacheKey) ?? '').trim();
-      return fallback;
-    }
-  }
-}
-
-class _AutoCyclingMemoCards extends StatefulWidget {
-  const _AutoCyclingMemoCards();
-
-  @override
-  State<_AutoCyclingMemoCards> createState() => _AutoCyclingMemoCardsState();
-}
-
-class _AutoCyclingMemoCardsState extends State<_AutoCyclingMemoCards> {
-  static const Duration cycleInterval = Duration(milliseconds: 1500);
-  static const Duration animDuration = Duration(milliseconds: 300);
-  static const Curve animCurve = Curves.easeInOut;
-
-  final PageController _pageController = PageController();
-  Timer? _timer;
-  int _currentIndex = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _startAutoCycle();
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    _pageController.dispose();
-    super.dispose();
-  }
-
-  void _startAutoCycle() {
-    _timer?.cancel();
-    _timer = Timer.periodic(cycleInterval, (_) {
-      if (!mounted) return;
-      final list = DashMemo.notes.value;
-      if (list.length <= 1) return;
-      final next = (_currentIndex + 1) % list.length;
-      _animateToPage(next);
-    });
-  }
-
-  void _animateToPage(int index) {
-    _currentIndex = index;
-    if (!mounted) return;
-
-    final total = DashMemo.notes.value.length;
-    if (total == 0) return;
-    if (_currentIndex >= total) _currentIndex = 0;
-
-    try {
-      _pageController.animateToPage(
-        _currentIndex,
-        duration: animDuration,
-        curve: animCurve,
-      );
-      setState(() {});
-    } catch (e) {
-      _logApiError(
-        tag: '_AutoCyclingMemoCards._animateToPage',
-        message: '메모 카드 페이지 전환 실패',
-        error: e,
-        extra: <String, dynamic>{'index': _currentIndex, 'total': total},
-        tags: const <String>[_tParking, _tUi],
-      );
-    }
-  }
-
-  (String, String) _parseLine(String line) {
-    final split = line.indexOf('|');
-    if (split < 0) return ('', line.trim());
-    final time = line.substring(0, split).trim();
-    final text = line.substring(split + 1).trim();
-    return (time, text);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return SizedBox(
-      height: 170,
-      child: ValueListenableBuilder<List<String>>(
-        valueListenable: DashMemo.notes,
-        builder: (context, list, _) {
-          if (list.isNotEmpty && _currentIndex >= list.length) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (!mounted) return;
-              _currentIndex = 0;
-              _pageController.jumpToPage(0);
-              setState(() {});
-            });
-          }
-
-          final itemCount = list.isEmpty ? 1 : list.length;
-
-          return Stack(
-            alignment: Alignment.center,
-            children: [
-              Align(
-                alignment: Alignment.center,
-                child: FractionallySizedBox(
-                  widthFactor: 0.98,
-                  child: PageView.builder(
-                    controller: _pageController,
-                    physics: const NeverScrollableScrollPhysics(),
-                    onPageChanged: (i) => _currentIndex = i,
-                    itemCount: itemCount,
-                    itemBuilder: (context, index) {
-                      if (list.isEmpty) {
-                        return Center(
-                          child: Card(
-                            color: cs.surface,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              side: BorderSide(
-                                color: cs.outlineVariant.withOpacity(0.85),
-                              ),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 16,
-                                horizontal: 16,
-                              ),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.notes_rounded,
-                                        size: 18,
-                                        color: cs.primary,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        '메모',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w800,
-                                          color: cs.onSurface,
-                                        ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    '저장된 메모가 없습니다.',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      color: cs.onSurfaceVariant,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        );
-                      }
-
-                      final (time, text) = _parseLine(list[index]);
-                      return Center(
-                        child: Card(
-                          color: cs.surface,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(
-                              color: cs.outlineVariant.withOpacity(0.85),
-                            ),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              vertical: 16,
-                              horizontal: 16,
-                            ),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.notes_rounded,
-                                      size: 18,
-                                      color: cs.primary,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      '메모',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w800,
-                                        color: cs.onSurface,
-                                      ),
-                                      textAlign: TextAlign.center,
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                if (text.isNotEmpty)
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 6),
-                                    child: Text(
-                                      text,
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: cs.onSurface,
-                                      ),
-                                      maxLines: 3,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ),
-                                if (time.isNotEmpty)
-                                  Text(
-                                    time,
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: cs.onSurfaceVariant,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ),
-              Positioned(
-                bottom: 6,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: List.generate(list.isEmpty ? 1 : list.length, (i) {
-                    final active = i == _currentIndex && list.isNotEmpty;
-                    return AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      margin: const EdgeInsets.symmetric(horizontal: 3),
-                      width: active ? 10 : 6,
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: active
-                            ? cs.onSurface
-                            : cs.onSurfaceVariant.withOpacity(0.5),
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                    );
-                  }),
-                ),
-              ),
-            ],
-          );
-        },
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Text(
+            '📊 현재 총 주차 현황',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: cs.onSurface),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '총 $totalCapacity대 중 $occupiedCount대 주차됨',
+            style: TextStyle(fontSize: 16, color: cs.onSurface),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 8),
+          LinearProgressIndicator(
+            value: usageRatio,
+            backgroundColor: cs.outlineVariant.withOpacity(0.6),
+            valueColor: AlwaysStoppedAnimation<Color>(usageRatio >= 0.8 ? cs.error : cs.primary),
+            minHeight: 8,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            '$usagePercent% 사용 중',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: cs.onSurface),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 18),
+          ParkingGrid3DPreviewCard(
+            locations: _cachedLocations,
+            overlay: _gridOverlay,
+            textMetricsByLocation: textMetricsByLocation,
+          ),
+          const SizedBox(height: 12),
+        ],
       ),
     );
   }

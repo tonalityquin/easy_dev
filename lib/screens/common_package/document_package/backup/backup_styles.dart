@@ -1,13 +1,13 @@
-// lib/screens/simple_package/simple_inside_package/sections/simple_inside_report_styles.dart
+
 
 import 'package:flutter/material.dart';
 
-/// 경위서/보고서/서명 화면에서 공통으로 사용하는 버튼 스타일 모음
-/// ✅ 고정 팔레트(브라운) 제거 → ColorScheme 기반으로 전역 브랜드/다크모드 자동 반영
+
+
 class BackupButtonStyles {
   static const double _radius = 8.0;
 
-  /// 메인 액션 버튼 (Primary)
+  
   static ButtonStyle primary(
       BuildContext context, {
         double minHeight = 55,
@@ -34,7 +34,7 @@ class BackupButtonStyles {
     );
   }
 
-  /// 서브/보조 액션 버튼 (Outlined)
+  
   static ButtonStyle outlined(
       BuildContext context, {
         double minHeight = 55,

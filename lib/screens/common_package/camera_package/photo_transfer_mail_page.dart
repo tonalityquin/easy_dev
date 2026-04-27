@@ -8,9 +8,10 @@ import 'package:flutter/services.dart';
 import 'package:googleapis/gmail/v1.dart' as gmail;
 import 'package:mime/mime.dart';
 
-import '../../../utils/api/email_config.dart';
-import '../../../utils/google_auth_v7.dart';
-import '../../hubs_mode/dev_package/debug_package/debug_api_logger.dart';
+import '../../../features/dev/debug/debug_api_logger.dart';
+import '../../../utils/config/email_config.dart';
+import '../../../utils/auth/google_auth_v7.dart';
+import '../../../widgets/dialog/status_dialog_package/status_dialog.dart';
 import 'photo_transfer_styles.dart';
 
 class PhotoTransferMailPage extends StatefulWidget {
@@ -30,10 +31,8 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
 
   final List<_PickedAttachment> _attachments = [];
 
-  // Gmail 첨부 제한(일반적으로 25MB, base64 오버헤드 고려하여 raw 18MB 정도로 보수 적용)
   static const int _maxTotalRawBytes = 18 * 1024 * 1024;
 
-  // RFC 2045 base64 line length
   static const int _mimeB64LineLength = 76;
 
   @override
@@ -131,8 +130,8 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
             Text(
               title,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+                    fontWeight: FontWeight.w700,
+                  ),
             ),
             const SizedBox(height: 10),
             child,
@@ -142,15 +141,16 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
     );
   }
 
-  int get _totalRawBytes => _attachments.fold<int>(0, (sum, a) => sum + a.bytes.length);
+  int get _totalRawBytes =>
+      _attachments.fold<int>(0, (sum, a) => sum + a.bytes.length);
 
   Future<void> _pickPhotos({bool append = true}) async {
     HapticFeedback.selectionClick();
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.image,
-        allowMultiple: true, // ✅ 여러 장 선택
-        withData: true, // 가능한 환경에서 bytes 제공
+        allowMultiple: true,
+        withData: true,
       );
 
       if (result == null || result.files.isEmpty) return;
@@ -167,9 +167,12 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
           bytes = await File(path).readAsBytes();
         }
 
-        final name = (f.name.trim().isEmpty) ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg' : f.name.trim();
+        final name = (f.name.trim().isEmpty)
+            ? 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg'
+            : f.name.trim();
 
-        final mime = lookupMimeType(name, headerBytes: bytes) ?? 'application/octet-stream';
+        final mime = lookupMimeType(name, headerBytes: bytes) ??
+            'application/octet-stream';
 
         picked.add(
           _PickedAttachment(
@@ -180,16 +183,11 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
         );
       }
 
-      final int nextTotal = (append ? _totalRawBytes : 0) + picked.fold<int>(0, (s, a) => s + a.bytes.length);
+      final int nextTotal = (append ? _totalRawBytes : 0) +
+          picked.fold<int>(0, (s, a) => s + a.bytes.length);
       if (nextTotal > _maxTotalRawBytes) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '첨부 용량이 너무 큽니다. (총 ${_fmtBytes(nextTotal)} / 제한 ${_fmtBytes(_maxTotalRawBytes)})\n'
-                  '사진 수를 줄이거나 용량이 작은 사진으로 선택해 주세요.',
-            ),
-          ),
+        debugPrint(
+          '첨부 용량 초과: 총 ${_fmtBytes(nextTotal)} / 제한 ${_fmtBytes(_maxTotalRawBytes)}',
         );
         return;
       }
@@ -198,15 +196,13 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
         if (!append) _attachments.clear();
 
         for (final a in picked) {
-          // 동일 파일명+크기 중복 방지(원치 않으면 제거 가능)
           final exists = _attachments.any(
-                (e) => e.filename == a.filename && e.bytes.length == a.bytes.length,
+            (e) => e.filename == a.filename && e.bytes.length == a.bytes.length,
           );
           if (!exists) _attachments.add(a);
         }
       });
     } catch (e) {
-      // ✅ API 디버그 로직: 예외를 통합 에러 로그(api_log.txt)에 기록
       await _logApiError(
         tag: 'PhotoTransferMailPage._pickPhotos',
         message: '사진 선택 실패',
@@ -218,10 +214,7 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
         tags: const <String>['photo_transfer', 'file_picker'],
       );
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('사진 선택 실패: $e')),
-      );
+      debugPrint('사진 선택 실패: $e');
     }
   }
 
@@ -236,9 +229,6 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
     setState(() => _attachments.clear());
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // ✅ API 디버그 로직(통합): 에러 로깅 헬퍼
-  // ─────────────────────────────────────────────────────────────
   Future<void> _logApiError({
     required String tag,
     required String message,
@@ -257,14 +247,9 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
         level: 'error',
         tags: tags,
       );
-    } catch (_) {
-      // 로깅 실패는 사용자 UX에 영향 주지 않도록 무시
-    }
+    } catch (_) {}
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // ✅ API 디버그 로직(UI): 에러 로그 BottomSheet 오픈
-  // ─────────────────────────────────────────────────────────────
   Future<void> _openApiDebugSheet() async {
     await showModalBottomSheet<void>(
       context: context,
@@ -281,33 +266,54 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
             required List<_PickedAttachment> attachments,
           }) =>
               _sendEmailViaGmail(
-                to: to,
-                subject: subject,
-                body: body,
-                attachments: attachments,
-              ),
+            to: to,
+            subject: subject,
+            body: body,
+            attachments: attachments,
+          ),
         );
       },
     );
   }
 
+  Future<void> _showSendSuccessDialogAndClose() async {
+    if (!mounted) return;
+
+    await StatusDialog.showSuccess(
+      context,
+      title: StatusDialog.photoTransferSendSuccess,
+      closeCurrentPageAfter: true,
+    );
+  }
+
   Future<void> _send() async {
     if (_attachments.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('전송할 사진을 먼저 선택해 주세요.')),
+      debugPrint('전송할 사진이 없습니다.');
+      if (!mounted) return;
+      await StatusDialog.showFailure(
+        context,
+        title: StatusDialog.photoTransferSendFailed,
       );
       return;
     }
 
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      if (!mounted) return;
+      await StatusDialog.showFailure(
+        context,
+        title: StatusDialog.photoTransferSendFailed,
+      );
+      return;
+    }
 
     if (_totalRawBytes > _maxTotalRawBytes) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            '첨부 용량이 너무 큽니다. (총 ${_fmtBytes(_totalRawBytes)} / 제한 ${_fmtBytes(_maxTotalRawBytes)})',
-          ),
-        ),
+      debugPrint(
+        '첨부 용량 초과: 총 ${_fmtBytes(_totalRawBytes)} / 제한 ${_fmtBytes(_maxTotalRawBytes)}',
+      );
+      if (!mounted) return;
+      await StatusDialog.showFailure(
+        context,
+        title: StatusDialog.photoTransferSendFailed,
       );
       return;
     }
@@ -316,16 +322,20 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
     try {
       final cfg = await EmailConfig.load();
       if (!EmailConfig.isValidToList(cfg.to)) {
+        debugPrint('수신자(To)가 비어있거나 형식이 올바르지 않습니다.');
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('수신자(To)가 비어있거나 형식이 올바르지 않습니다. 설정에서 수신자를 저장해 주세요.'),
-          ),
+        await StatusDialog.showFailure(
+          context,
+          title: StatusDialog.photoTransferSendFailed,
         );
         return;
       }
 
-      final toCsv = cfg.to.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).join(', ');
+      final toCsv = cfg.to
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .join(', ');
 
       final subject = _subjectCtrl.text.trim();
       final body = _bodyCtrl.text.trim();
@@ -338,12 +348,8 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
       );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('메일 전송 완료')),
-      );
-      Navigator.of(context).pop();
+      await _showSendSuccessDialogAndClose();
     } catch (e) {
-      // ✅ API 디버그 로직: 전송 실패를 통합 에러 로그로 남김
       await _logApiError(
         tag: 'PhotoTransferMailPage._send',
         message: '메일 전송 실패',
@@ -351,25 +357,23 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
         extra: <String, dynamic>{
           'attachmentsCount': _attachments.length,
           'totalRawBytes': _totalRawBytes,
-          // 개인정보/민감정보 가능성이 있어 subject/body 원문은 기본 로깅에서 제외(필요 시 마스킹 후 추가 권장)
           'subjectLength': _subjectCtrl.text.trim().length,
           'bodyLength': _bodyCtrl.text.trim().length,
         },
         tags: const <String>['photo_transfer', 'gmail', 'send'],
       );
 
+      debugPrint('메일 전송 실패: $e');
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('메일 전송 실패: $e')),
+      await StatusDialog.showFailure(
+        context,
+        title: StatusDialog.photoTransferSendFailed,
       );
     } finally {
       if (mounted) setState(() => _sending = false);
     }
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // MIME helpers (CRLF + Subject RFC2047)
-  // ─────────────────────────────────────────────────────────────
   String _wrapBase64Lines(String b64, {int lineLength = _mimeB64LineLength}) {
     if (b64.isEmpty) return '';
     final sb = StringBuffer();
@@ -382,7 +386,6 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
   }
 
   String _encodeSubjectRfc2047(String subject) {
-    // UTF-8 base64 형태로 RFC 2047 인코딩 (한글/비ASCII 안전)
     final b64 = base64.encode(utf8.encode(subject));
     return '=?utf-8?B?$b64?=';
   }
@@ -399,7 +402,8 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
     required List<_PickedAttachment> attachments,
   }) {
     const crlf = '\r\n';
-    final boundary = 'dart-mail-boundary-${DateTime.now().millisecondsSinceEpoch}';
+    final boundary =
+        'dart-mail-boundary-${DateTime.now().millisecondsSinceEpoch}';
     final subjectEncoded = _encodeSubjectRfc2047(subject);
 
     final sb = StringBuffer()
@@ -419,7 +423,8 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
       sb
         ..write('--$boundary$crlf')
         ..write('Content-Type: ${a.mimeType}; name="${a.filename}"$crlf')
-        ..write('Content-Disposition: attachment; filename="${a.filename}"$crlf')
+        ..write(
+            'Content-Disposition: attachment; filename="${a.filename}"$crlf')
         ..write('Content-Transfer-Encoding: base64$crlf')
         ..write(crlf)
         ..write(_base64Lines(a.bytes))
@@ -431,14 +436,10 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
   }
 
   Future<void> _sendRawViaGmail(String mime) async {
-    // GoogleAuthV7이 내부적으로 Gmail send에 필요한 scope를 세팅하는 구조라면 empty scopes 유지 가능.
-    // 필요 시 Gmail scope를 명시하세요.
-    // 예: const scopes = <String>['https://www.googleapis.com/auth/gmail.send'];
     final client = await GoogleAuthV7.authedClient(const <String>[]);
     try {
       final api = gmail.GmailApi(client);
 
-      // Gmail API raw는 base64url 인코딩 + padding 제거가 일반적으로 호환성이 좋습니다.
       final raw = base64UrlEncode(utf8.encode(mime)).replaceAll('=', '');
 
       final msg = gmail.Message()..raw = raw;
@@ -450,7 +451,6 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
     }
   }
 
-  /// ✅ 여러 첨부파일 지원: attachment 파트를 반복 추가
   Future<void> _sendEmailViaGmail({
     required String to,
     required String subject,
@@ -466,7 +466,6 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
       );
       await _sendRawViaGmail(mime);
     } catch (e) {
-      // ✅ API 디버그 로직: Gmail 전송 계층에서의 실패도 별도 로깅
       await _logApiError(
         tag: 'PhotoTransferMailPage._sendEmailViaGmail',
         message: 'Gmail API 전송 실패',
@@ -474,7 +473,8 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
         extra: <String, dynamic>{
           'to': to,
           'attachmentsCount': attachments.length,
-          'totalRawBytes': attachments.fold<int>(0, (s, a) => s + a.bytes.length),
+          'totalRawBytes':
+              attachments.fold<int>(0, (s, a) => s + a.bytes.length),
         },
         tags: const <String>['photo_transfer', 'gmail', 'api'],
       );
@@ -529,13 +529,13 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
               onPressed: _sending ? null : _send,
               icon: _sending
                   ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                ),
-              )
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                      ),
+                    )
                   : const Icon(Icons.send_outlined),
               label: Text(
                 _sending ? '전송 중…' : '전송',
@@ -563,19 +563,21 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                       Text(
                         '사진 전송',
                         textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 4,
-                        ),
+                        style:
+                            Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 4,
+                                ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         'PHOTO TRANSFER',
                         textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: Colors.black54,
-                          letterSpacing: 3,
-                        ),
+                        style:
+                            Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: Colors.black54,
+                                  letterSpacing: 3,
+                                ),
                       ),
                       const SizedBox(height: 16),
                       Container(
@@ -601,17 +603,23 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                                 const SizedBox(width: 8),
                                 Text(
                                   '메일로 사진 첨부 전송',
-                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                    color: PhotoTransferColors.dark,
-                                  ),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                        color: PhotoTransferColors.dark,
+                                      ),
                                 ),
                                 const Spacer(),
                                 Text(
                                   '작성일 $createdAt',
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Colors.black54,
-                                  ),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: Colors.black54,
+                                      ),
                                 ),
                               ],
                             ),
@@ -620,10 +628,12 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                             const SizedBox(height: 4),
                             Container(
                               decoration: BoxDecoration(
-                                color: PhotoTransferColors.light.withOpacity(0.12),
+                                color:
+                                    PhotoTransferColors.light.withOpacity(0.12),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: PhotoTransferColors.light.withOpacity(0.8),
+                                  color: PhotoTransferColors.light
+                                      .withOpacity(0.8),
                                 ),
                               ),
                               padding: const EdgeInsets.all(12),
@@ -639,8 +649,11 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                                   Expanded(
                                     child: Text(
                                       '휴대폰 갤러리/파일 선택기에서 사진을 여러 장 선택한 뒤, 제목과 본문을 입력하여 Gmail로 전송합니다.\n'
-                                          '우측 상단 “벌레” 아이콘에서 전송 오류(API 에러 로그)를 확인/복사/삭제/메일 전송할 수 있습니다.',
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.4),
+                                      '우측 상단 “벌레” 아이콘에서 전송 오류(API 에러 로그)를 확인/복사/삭제/메일 전송할 수 있습니다.',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(height: 1.4),
                                     ),
                                   ),
                                 ],
@@ -656,18 +669,27 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                                     children: [
                                       Expanded(
                                         child: ElevatedButton.icon(
-                                          onPressed: _sending ? null : () => _pickPhotos(append: true),
-                                          icon: const Icon(Icons.photo_library_outlined),
+                                          onPressed: _sending
+                                              ? null
+                                              : () => _pickPhotos(append: true),
+                                          icon: const Icon(
+                                              Icons.photo_library_outlined),
                                           label: const Text('사진 선택/추가'),
-                                          style: PhotoTransferButtonStyles.primary(),
+                                          style: PhotoTransferButtonStyles
+                                              .primary(),
                                         ),
                                       ),
                                       const SizedBox(width: 10),
                                       OutlinedButton.icon(
-                                        onPressed: (_sending || _attachments.isEmpty) ? null : _clearAllAttachments,
+                                        onPressed:
+                                            (_sending || _attachments.isEmpty)
+                                                ? null
+                                                : _clearAllAttachments,
                                         icon: const Icon(Icons.delete_outline),
                                         label: const Text('전체 삭제'),
-                                        style: PhotoTransferButtonStyles.outlined(minHeight: 55),
+                                        style:
+                                            PhotoTransferButtonStyles.outlined(
+                                                minHeight: 55),
                                       ),
                                     ],
                                   ),
@@ -679,10 +701,13 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                                           _attachments.isEmpty
                                               ? '선택된 사진이 없습니다.'
                                               : '선택: ${_attachments.length}장 · 총 ${_fmtBytes(_totalRawBytes)}',
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                            color: Colors.black54,
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.copyWith(
+                                                color: Colors.black54,
+                                                fontWeight: FontWeight.w600,
+                                              ),
                                         ),
                                       ),
                                     ],
@@ -691,22 +716,27 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                                     const SizedBox(height: 10),
                                     ListView.separated(
                                       shrinkWrap: true,
-                                      physics: const NeverScrollableScrollPhysics(),
+                                      physics:
+                                          const NeverScrollableScrollPhysics(),
                                       itemCount: _attachments.length,
-                                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                                      separatorBuilder: (_, __) =>
+                                          const SizedBox(height: 10),
                                       itemBuilder: (ctx, i) {
                                         final a = _attachments[i];
                                         return Container(
                                           decoration: BoxDecoration(
                                             color: const Color(0xFFFAFAFA),
-                                            borderRadius: BorderRadius.circular(12),
-                                            border: Border.all(color: Colors.black12),
+                                            borderRadius:
+                                                BorderRadius.circular(12),
+                                            border: Border.all(
+                                                color: Colors.black12),
                                           ),
                                           padding: const EdgeInsets.all(10),
                                           child: Row(
                                             children: [
                                               ClipRRect(
-                                                borderRadius: BorderRadius.circular(10),
+                                                borderRadius:
+                                                    BorderRadius.circular(10),
                                                 child: Image.memory(
                                                   a.bytes,
                                                   width: 64,
@@ -717,26 +747,37 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                                               const SizedBox(width: 10),
                                               Expanded(
                                                 child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
                                                   children: [
                                                     Text(
                                                       a.filename,
                                                       maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
-                                                      style: const TextStyle(fontWeight: FontWeight.w700),
+                                                      overflow:
+                                                          TextOverflow.ellipsis,
+                                                      style: const TextStyle(
+                                                          fontWeight:
+                                                              FontWeight.w700),
                                                     ),
                                                     const SizedBox(height: 4),
                                                     Text(
                                                       '${a.mimeType} · ${_fmtBytes(a.bytes.length)}',
-                                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                        color: Colors.black54,
-                                                      ),
+                                                      style: Theme.of(context)
+                                                          .textTheme
+                                                          .bodySmall
+                                                          ?.copyWith(
+                                                            color:
+                                                                Colors.black54,
+                                                          ),
                                                     ),
                                                   ],
                                                 ),
                                               ),
                                               IconButton(
-                                                onPressed: _sending ? null : () => _removeAttachmentAt(i),
+                                                onPressed: _sending
+                                                    ? null
+                                                    : () =>
+                                                        _removeAttachmentAt(i),
                                                 icon: const Icon(Icons.close),
                                                 tooltip: '삭제',
                                               ),
@@ -757,7 +798,10 @@ class _PhotoTransferMailPageState extends State<PhotoTransferMailPage> {
                                   labelText: '제목',
                                   hintText: '예) 현장 사진 전달드립니다.',
                                 ),
-                                validator: (v) => (v == null || v.trim().isEmpty) ? '메일 제목을 입력해 주세요.' : null,
+                                validator: (v) =>
+                                    (v == null || v.trim().isEmpty)
+                                        ? '메일 제목을 입력해 주세요.'
+                                        : null,
                               ),
                             ),
                             _sectionCard(
@@ -802,10 +846,6 @@ class _PickedAttachment {
   final String mimeType;
 }
 
-/// ─────────────────────────────────────────────────────────────
-/// ✅ API 디버그 UI (API 에러 로그 조회/검색/태그/복사/삭제/메일전송)
-/// ─────────────────────────────────────────────────────────────
-
 enum _ApiDebugMenuAction {
   toggleMasking,
   showConfigInfo,
@@ -820,10 +860,10 @@ class _ApiDebugBottomSheet extends StatefulWidget {
   final String Function(DateTime dt) fmtYmdHms;
 
   final Future<void> Function({
-  required String to,
-  required String subject,
-  required String body,
-  required List<_PickedAttachment> attachments,
+    required String to,
+    required String subject,
+    required String body,
+    required List<_PickedAttachment> attachments,
   }) onSendEmail;
 
   @override
@@ -831,7 +871,6 @@ class _ApiDebugBottomSheet extends StatefulWidget {
 }
 
 class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
-  // Tags
   static const String _tagAll = '__ALL__';
   static const String _tagUntagged = '__UNTAGGED__';
 
@@ -876,14 +915,12 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
         if (e != null) entries.add(e);
       }
 
-      // 최신순 정렬
       entries.sort((a, b) {
         final at = a.ts?.millisecondsSinceEpoch ?? 0;
         final bt = b.ts?.millisecondsSinceEpoch ?? 0;
         return bt.compareTo(at);
       });
 
-      // tags 집계
       final tagSet = <String>{};
       var hasUntagged = false;
       for (final e in entries) {
@@ -917,8 +954,7 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
         _selectedTag = _tagAll;
         _loading = false;
       });
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('로그 로딩 실패: $e')));
+      debugPrint('로그 로딩 실패: $e');
     }
   }
 
@@ -926,11 +962,12 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
     final t = line.trim();
     if (t.isEmpty) return null;
 
-    // JSON 라인 우선
     try {
       final decoded = jsonDecode(t);
       if (decoded is Map<String, dynamic>) {
-        final ts = (decoded['ts'] is String) ? DateTime.tryParse(decoded['ts'] as String) : null;
+        final ts = (decoded['ts'] is String)
+            ? DateTime.tryParse(decoded['ts'] as String)
+            : null;
         final level = (decoded['level'] as String?)?.toLowerCase();
         final msg = (decoded['message'] as String?) ?? '';
 
@@ -951,11 +988,8 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
           tags: tags,
         );
       }
-    } catch (_) {
-      // ignore
-    }
+    } catch (_) {}
 
-    // fallback (혹시라도)
     DateTime? ts;
     String msg = t;
     final idx = t.indexOf(': ');
@@ -995,7 +1029,8 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
   void _applyFilter() {
     final keyLower = _searchCtrl.text.trim().toLowerCase();
     _filtered = _all
-        .where((e) => _isError(e) && _tagMatches(e) && _searchMatches(e, keyLower))
+        .where(
+            (e) => _isError(e) && _tagMatches(e) && _searchMatches(e, keyLower))
         .toList(growable: false);
   }
 
@@ -1006,15 +1041,13 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
 
   Future<void> _copyFiltered() async {
     if (_filtered.isEmpty) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('복사할 로그가 없습니다.')));
+      debugPrint('복사할 로그가 없습니다.');
       return;
     }
 
-    final text = _filtered.reversed.map((e) => e.original ?? e.message ?? '').join('\n');
+    final text =
+        _filtered.reversed.map((e) => e.original ?? e.message ?? '').join('\n');
     await Clipboard.setData(ClipboardData(text: text));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('클립보드에 복사되었습니다.')));
   }
 
   Future<void> _clearAll() async {
@@ -1025,11 +1058,8 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
       await logger.clearLog();
       _searchCtrl.clear();
       await _load();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('API 로그가 삭제되었습니다.')));
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('삭제 실패: $e')));
+      debugPrint('삭제 실패: $e');
       setState(() => _loading = false);
     }
   }
@@ -1037,60 +1067,56 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
   String _sanitizeForEmail(String input) {
     var out = input;
 
-    // 1) Bearer 토큰
     out = out.replaceAllMapped(
       RegExp(r'(Bearer\s+)[A-Za-z0-9\-\._~\+\/]+=*', caseSensitive: false),
-          (m) => '${m[1]}***REDACTED***',
+      (m) => '${m[1]}***REDACTED***',
     );
 
-    // 2) JSON 형태 토큰 값
     out = out.replaceAllMapped(
       RegExp(r'("access_token"\s*:\s*")[^"]+(")', caseSensitive: false),
-          (m) => '${m[1]}***REDACTED***${m[2]}',
+      (m) => '${m[1]}***REDACTED***${m[2]}',
     );
     out = out.replaceAllMapped(
       RegExp(r'("refresh_token"\s*:\s*")[^"]+(")', caseSensitive: false),
-          (m) => '${m[1]}***REDACTED***${m[2]}',
+      (m) => '${m[1]}***REDACTED***${m[2]}',
     );
     out = out.replaceAllMapped(
       RegExp(r'("id_token"\s*:\s*")[^"]+(")', caseSensitive: false),
-          (m) => '${m[1]}***REDACTED***${m[2]}',
+      (m) => '${m[1]}***REDACTED***${m[2]}',
     );
     out = out.replaceAllMapped(
       RegExp(r'("authorization"\s*:\s*")[^"]+(")', caseSensitive: false),
-          (m) => '${m[1]}***REDACTED***${m[2]}',
+      (m) => '${m[1]}***REDACTED***${m[2]}',
     );
     out = out.replaceAllMapped(
       RegExp(r'("x-api-key"\s*:\s*")[^"]+(")', caseSensitive: false),
-          (m) => '${m[1]}***REDACTED***${m[2]}',
+      (m) => '${m[1]}***REDACTED***${m[2]}',
     );
 
-    // 3) 쿼리스트링/키=값 형태 토큰
     out = out.replaceAllMapped(
-      RegExp(r'((?:access_token|refresh_token|id_token)=)[^&\s]+', caseSensitive: false),
-          (m) => '${m[1]}***REDACTED***',
+      RegExp(r'((?:access_token|refresh_token|id_token)=)[^&\s]+',
+          caseSensitive: false),
+      (m) => '${m[1]}***REDACTED***',
     );
     out = out.replaceAllMapped(
       RegExp(r'((?:x-api-key|api_key|apikey)=)[^&\s]+', caseSensitive: false),
-          (m) => '${m[1]}***REDACTED***',
+      (m) => '${m[1]}***REDACTED***',
     );
 
-    // 4) 이메일 주소
     out = out.replaceAllMapped(
-      RegExp(r'\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b', caseSensitive: false),
-          (_) => '***@***',
+      RegExp(r'\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b',
+          caseSensitive: false),
+      (_) => '***@***',
     );
 
-    // 5) 한국 휴대폰 번호(단순 패턴)
     out = out.replaceAllMapped(
       RegExp(r'\b01[016789]-?\d{3,4}-?\d{4}\b'),
-          (_) => '***-****-****',
+      (_) => '***-****-****',
     );
 
-    // 6) 주민등록번호(단순 패턴)
     out = out.replaceAllMapped(
       RegExp(r'\b\d{6}-?\d{7}\b'),
-          (_) => '******-*******',
+      (_) => '******-*******',
     );
 
     return out;
@@ -1103,17 +1129,17 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
     try {
       final cfg = await EmailConfig.load();
       if (!EmailConfig.isValidToList(cfg.to)) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('수신자(To)가 비어있거나 형식이 올바르지 않습니다. 설정에서 수신자를 저장해 주세요.')),
-        );
+        debugPrint('수신자(To)가 비어있거나 형식이 올바르지 않습니다.');
         return;
       }
 
-      final toCsv = cfg.to.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).join(', ');
+      final toCsv = cfg.to
+          .split(',')
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .join(', ');
       if (toCsv.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('수신자(To)가 비어 있습니다.')));
+        debugPrint('수신자(To)가 비어 있습니다.');
         return;
       }
 
@@ -1121,19 +1147,22 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
       final subjectTag = (_selectedTag == _tagAll)
           ? 'ALL'
           : (_selectedTag == _tagUntagged)
-          ? 'UNTAGGED'
-          : _selectedTag;
+              ? 'UNTAGGED'
+              : _selectedTag;
 
-      final subject = 'PhotoTransfer API Debug Logs($subjectTag) (${widget.fmtYmdHms(now)})';
-      final filename = 'photo_transfer_api_logs_${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}.md';
+      final subject =
+          'PhotoTransfer API Debug Logs($subjectTag) (${widget.fmtYmdHms(now)})';
+      final filename =
+          'photo_transfer_api_logs_${now.year.toString().padLeft(4, '0')}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}_${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}.md';
 
-      // 필터 적용된 “에러” 로그를 보냄
       final keyLower = _searchCtrl.text.trim().toLowerCase();
-      final toSend = _all.where((e) => _isError(e) && _tagMatches(e) && _searchMatches(e, keyLower)).toList();
+      final toSend = _all
+          .where((e) =>
+              _isError(e) && _tagMatches(e) && _searchMatches(e, keyLower))
+          .toList();
 
       if (toSend.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('보낼 에러 로그가 없습니다.')));
+        debugPrint('보낼 에러 로그가 없습니다.');
         return;
       }
 
@@ -1142,7 +1171,8 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
         ..writeln()
         ..writeln('- 생성 시각: ${widget.fmtYmdHms(now)}')
         ..writeln('- 필터(tag): $subjectTag')
-        ..writeln('- 검색어: ${_searchCtrl.text.trim().isEmpty ? '-' : _searchCtrl.text.trim()}')
+        ..writeln(
+            '- 검색어: ${_searchCtrl.text.trim().isEmpty ? '-' : _searchCtrl.text.trim()}')
         ..writeln('- 총 에러 로그 수: ${toSend.length}')
         ..writeln('- 민감정보 마스킹: ${_maskSensitiveInEmail ? "ON" : "OFF"}')
         ..writeln()
@@ -1168,12 +1198,8 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
           ),
         ],
       );
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('디버그 로그를 이메일로 전송했습니다.')));
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('로그 전송 실패: $e')));
+      debugPrint('로그 전송 실패: $e');
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -1197,7 +1223,8 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
               heightFactor: 0.74,
               widthFactor: 1,
               child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(18)),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(18)),
                 child: Material(
                   color: Theme.of(context).colorScheme.surface,
                   child: Column(
@@ -1207,7 +1234,10 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
                         width: 44,
                         height: 5,
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.12),
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withOpacity(0.12),
                           borderRadius: BorderRadius.circular(999),
                         ),
                       ),
@@ -1216,20 +1246,23 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Row(
                           children: [
-                            Icon(Icons.analytics_outlined, color: Theme.of(context).colorScheme.primary),
+                            Icon(Icons.analytics_outlined,
+                                color: Theme.of(context).colorScheme.primary),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
                                 '로그 상세',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(fontWeight: FontWeight.w900),
                               ),
                             ),
                             IconButton(
                               tooltip: '원문 복사',
                               onPressed: () async {
-                                await Clipboard.setData(ClipboardData(text: raw));
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('원문이 복사되었습니다.')));
+                                await Clipboard.setData(
+                                    ClipboardData(text: raw));
                               },
                               icon: const Icon(Icons.copy_rounded),
                             ),
@@ -1242,7 +1275,12 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      Divider(height: 1, color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.6)),
+                      Divider(
+                          height: 1,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .outlineVariant
+                              .withOpacity(0.6)),
                       Expanded(
                         child: ListView(
                           padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
@@ -1254,16 +1292,25 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
                                 children: [
                                   Text(
                                     insight.headline,
-                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.w900),
                                   ),
                                   const SizedBox(height: 8),
                                   Wrap(
                                     spacing: 8,
                                     runSpacing: 8,
                                     children: [
-                                      _Chip(text: entry.ts == null ? '-' : widget.fmtYmdHms(entry.ts!)),
+                                      _Chip(
+                                          text: entry.ts == null
+                                              ? '-'
+                                              : widget.fmtYmdHms(entry.ts!)),
                                       _Chip(text: insight.categoryLabel),
-                                      _Chip(text: entry.tags.isEmpty ? 'untagged' : entry.tags.join(', ')),
+                                      _Chip(
+                                          text: entry.tags.isEmpty
+                                              ? 'untagged'
+                                              : entry.tags.join(', ')),
                                     ],
                                   ),
                                   if (insight.primaryMessage.isNotEmpty) ...[
@@ -1283,9 +1330,15 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
                                     Padding(
                                       padding: const EdgeInsets.only(bottom: 8),
                                       child: Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          Text('• ', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontWeight: FontWeight.w900)),
+                                          Text('• ',
+                                              style: TextStyle(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                                  fontWeight: FontWeight.w900)),
                                           Expanded(child: Text(a)),
                                         ],
                                       ),
@@ -1331,7 +1384,9 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
     final hay = '${e.tags.join(' ')}\n$msg\n$raw'.toLowerCase();
 
     _ApiIssueCategory cat;
-    if (hay.contains('timeoutexception') || hay.contains('timed out') || hay.contains('timeout')) {
+    if (hay.contains('timeoutexception') ||
+        hay.contains('timed out') ||
+        hay.contains('timeout')) {
       cat = _ApiIssueCategory.timeout;
     } else if (hay.contains('socketexception') ||
         hay.contains('failed host lookup') ||
@@ -1346,10 +1401,14 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
     } else if (hay.contains('401') ||
         hay.contains('unauthorized') ||
         hay.contains('invalid_grant') ||
-        (hay.contains('token') && (hay.contains('expired') || hay.contains('invalid'))) ||
+        (hay.contains('token') &&
+            (hay.contains('expired') || hay.contains('invalid'))) ||
         hay.contains('authentication')) {
       cat = _ApiIssueCategory.auth;
-    } else if (hay.contains('403') || hay.contains('permission') || hay.contains('forbidden') || hay.contains('denied')) {
+    } else if (hay.contains('403') ||
+        hay.contains('permission') ||
+        hay.contains('forbidden') ||
+        hay.contains('denied')) {
       cat = _ApiIssueCategory.permission;
     } else if (hay.contains('formatexception') ||
         (hay.contains('json') && hay.contains('decode')) ||
@@ -1443,7 +1502,11 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
   }
 
   String _oneLine(String s, {int max = 180}) {
-    final t = s.replaceAll('\r', ' ').replaceAll('\n', ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+    final t = s
+        .replaceAll('\r', ' ')
+        .replaceAll('\n', ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
     if (t.length <= max) return t;
     return '${t.substring(0, max)}…';
   }
@@ -1493,14 +1556,20 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
                                 'API 디버그 로그',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleLarge
+                                    ?.copyWith(fontWeight: FontWeight.w800),
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 '에러 로그(tag/검색) · 복사 · 삭제 · 메일 전송',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(color: cs.onSurfaceVariant),
                               ),
                             ],
                           ),
@@ -1510,28 +1579,24 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
                           onSelected: (action) async {
                             switch (action) {
                               case _ApiDebugMenuAction.toggleMasking:
-                                setState(() => _maskSensitiveInEmail = !_maskSensitiveInEmail);
-                                if (!mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text(_maskSensitiveInEmail ? '이메일 마스킹: ON' : '이메일 마스킹: OFF')),
-                                );
+                                setState(() => _maskSensitiveInEmail =
+                                    !_maskSensitiveInEmail);
                                 break;
 
                               case _ApiDebugMenuAction.showConfigInfo:
                                 try {
                                   final cfg = await EmailConfig.load();
-                                  if (!mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(content: Text('현재 To 설정: ${cfg.to.isEmpty ? '(비어있음)' : cfg.to}')),
+                                  debugPrint(
+                                    '현재 To 설정: ${cfg.to.isEmpty ? '(비어있음)' : cfg.to}',
                                   );
                                 } catch (_) {
-                                  if (!mounted) return;
-                                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('설정 정보를 불러오지 못했습니다.')));
+                                  debugPrint('설정 정보를 불러오지 못했습니다.');
                                 }
                                 break;
                             }
                           },
-                          itemBuilder: (ctx) => <PopupMenuEntry<_ApiDebugMenuAction>>[
+                          itemBuilder: (ctx) =>
+                              <PopupMenuEntry<_ApiDebugMenuAction>>[
                             CheckedPopupMenuItem<_ApiDebugMenuAction>(
                               value: _ApiDebugMenuAction.toggleMasking,
                               checked: _maskSensitiveInEmail,
@@ -1568,7 +1633,8 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
                                   decoration: InputDecoration(
                                     isDense: true,
                                     filled: true,
-                                    fillColor: cs.surfaceContainerHighest.withOpacity(0.55),
+                                    fillColor: cs.surfaceContainerHighest
+                                        .withOpacity(0.55),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
                                       borderSide: BorderSide.none,
@@ -1577,21 +1643,24 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
                                     labelText: 'tag 선택',
                                   ),
                                   items: _availableTags.map((t) {
-                                    final label = (t == _tagAll) ? '전체' : (t == _tagUntagged ? '(미지정)' : t);
+                                    final label = (t == _tagAll)
+                                        ? '전체'
+                                        : (t == _tagUntagged ? '(미지정)' : t);
                                     return DropdownMenuItem<String>(
                                       value: t,
-                                      child: Text(label, overflow: TextOverflow.ellipsis),
+                                      child: Text(label,
+                                          overflow: TextOverflow.ellipsis),
                                     );
                                   }).toList(growable: false),
                                   onChanged: _loading
                                       ? null
                                       : (v) {
-                                    if (v == null) return;
-                                    setState(() {
-                                      _selectedTag = v;
-                                      _applyFilter();
-                                    });
-                                  },
+                                          if (v == null) return;
+                                          setState(() {
+                                            _selectedTag = v;
+                                            _applyFilter();
+                                          });
+                                        },
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -1612,18 +1681,23 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
                                   controller: _searchCtrl,
                                   textInputAction: TextInputAction.search,
                                   decoration: InputDecoration(
-                                    hintText: '검색 (메시지 또는 시간: yyyy-MM-dd HH:mm:ss)',
+                                    hintText:
+                                        '검색 (메시지 또는 시간: yyyy-MM-dd HH:mm:ss)',
                                     isDense: true,
                                     filled: true,
-                                    fillColor: cs.surfaceContainerHighest.withOpacity(0.55),
-                                    prefixIcon: const Icon(Icons.search_rounded),
+                                    fillColor: cs.surfaceContainerHighest
+                                        .withOpacity(0.55),
+                                    prefixIcon:
+                                        const Icon(Icons.search_rounded),
                                     suffixIcon: _searchCtrl.text.isEmpty
                                         ? null
                                         : IconButton(
-                                      tooltip: '검색어 지우기',
-                                      onPressed: () => _searchCtrl.clear(),
-                                      icon: const Icon(Icons.clear_rounded),
-                                    ),
+                                            tooltip: '검색어 지우기',
+                                            onPressed: () =>
+                                                _searchCtrl.clear(),
+                                            icon:
+                                                const Icon(Icons.clear_rounded),
+                                          ),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(12),
                                       borderSide: BorderSide.none,
@@ -1634,7 +1708,9 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
                               const SizedBox(width: 8),
                               IconButton.filledTonal(
                                 tooltip: '복사',
-                                onPressed: (_loading || totalCount == 0) ? null : _copyFiltered,
+                                onPressed: (_loading || totalCount == 0)
+                                    ? null
+                                    : _copyFiltered,
                                 icon: const Icon(Icons.copy_rounded),
                               ),
                             ],
@@ -1649,50 +1725,58 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
                               _Chip(text: '최신 $newestLabel'),
                               const Spacer(),
                               IconButton(
-                                tooltip: _sending ? '전송 중...' : '이메일로 전송(필터 적용)',
-                                onPressed: (_loading || _sending) ? null : _sendLogsByEmail,
+                                tooltip:
+                                    _sending ? '전송 중...' : '이메일로 전송(필터 적용)',
+                                onPressed: (_loading || _sending)
+                                    ? null
+                                    : _sendLogsByEmail,
                                 icon: _sending
                                     ? const SizedBox(
-                                  width: 18,
-                                  height: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
-                                )
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2),
+                                      )
                                     : const Icon(Icons.send_rounded),
                               ),
                               IconButton(
                                 tooltip: '전체 삭제',
                                 onPressed: _loading ? null : _clearAll,
-                                icon: Icon(Icons.delete_forever_rounded, color: cs.error),
+                                icon: Icon(Icons.delete_forever_rounded,
+                                    color: cs.error),
                               ),
                             ],
                           ),
                         ),
-                        Divider(height: 1, color: cs.outlineVariant.withOpacity(0.6)),
+                        Divider(
+                            height: 1,
+                            color: cs.outlineVariant.withOpacity(0.6)),
                         Expanded(
                           child: _loading
                               ? const Center(child: CircularProgressIndicator())
                               : _filtered.isEmpty
-                              ? _EmptyList()
-                              : RefreshIndicator(
-                            onRefresh: _load,
-                            child: Scrollbar(
-                              controller: _listCtrl,
-                              thumbVisibility: true,
-                              child: ListView.builder(
-                                controller: _listCtrl,
-                                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                                itemCount: _filtered.length,
-                                itemBuilder: (ctx, i) {
-                                  final e = _filtered[i];
-                                  return _LogCard(
-                                    entry: e,
-                                    fmt: widget.fmtYmdHms,
-                                    onTap: () => _openDetail(e),
-                                  );
-                                },
-                              ),
-                            ),
-                          ),
+                                  ? _EmptyList()
+                                  : RefreshIndicator(
+                                      onRefresh: _load,
+                                      child: Scrollbar(
+                                        controller: _listCtrl,
+                                        thumbVisibility: true,
+                                        child: ListView.builder(
+                                          controller: _listCtrl,
+                                          padding: const EdgeInsets.fromLTRB(
+                                              16, 12, 16, 16),
+                                          itemCount: _filtered.length,
+                                          itemBuilder: (ctx, i) {
+                                            final e = _filtered[i];
+                                            return _LogCard(
+                                              entry: e,
+                                              fmt: widget.fmtYmdHms,
+                                              onTap: () => _openDetail(e),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ),
                         ),
                       ],
                     ),
@@ -1707,7 +1791,15 @@ class _ApiDebugBottomSheetState extends State<_ApiDebugBottomSheet> {
   }
 }
 
-enum _ApiIssueCategory { timeout, network, auth, permission, parsing, appLogic, unknown }
+enum _ApiIssueCategory {
+  timeout,
+  network,
+  auth,
+  permission,
+  parsing,
+  appLogic,
+  unknown
+}
 
 class _ApiInsight {
   final _ApiIssueCategory category;
@@ -1863,17 +1955,24 @@ class _EmptyList extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.inbox_rounded, size: 44, color: cs.onSurfaceVariant.withOpacity(0.7)),
+            Icon(Icons.inbox_rounded,
+                size: 44, color: cs.onSurfaceVariant.withOpacity(0.7)),
             const SizedBox(height: 10),
             Text(
               '표시할 에러 로그가 없습니다.',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(context)
+                  .textTheme
+                  .titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w700),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 6),
             Text(
               '전송 실패 후 다시 열어보거나, 태그/검색 조건을 확인하세요.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+              style: Theme.of(context)
+                  .textTheme
+                  .bodyMedium
+                  ?.copyWith(color: cs.onSurfaceVariant),
               textAlign: TextAlign.center,
             ),
           ],
@@ -1885,6 +1984,7 @@ class _EmptyList extends StatelessWidget {
 
 class _Chip extends StatelessWidget {
   const _Chip({required this.text});
+
   final String text;
 
   @override
@@ -1910,6 +2010,7 @@ class _Chip extends StatelessWidget {
 
 class _DetailCard extends StatelessWidget {
   const _DetailCard({required this.title, required this.child});
+
   final String title;
   final Widget child;
 
@@ -1926,7 +2027,9 @@ class _DetailCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: TextStyle(fontWeight: FontWeight.w900, color: cs.onSurface)),
+          Text(title,
+              style:
+                  TextStyle(fontWeight: FontWeight.w900, color: cs.onSurface)),
           const SizedBox(height: 10),
           child,
         ],
@@ -1937,6 +2040,7 @@ class _DetailCard extends StatelessWidget {
 
 class _MonoBox extends StatelessWidget {
   const _MonoBox({required this.text});
+
   final String text;
 
   @override
@@ -1952,7 +2056,8 @@ class _MonoBox extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: TextStyle(fontFamily: 'monospace', color: cs.onSurface, height: 1.25),
+        style: TextStyle(
+            fontFamily: 'monospace', color: cs.onSurface, height: 1.25),
       ),
     );
   }
@@ -1960,6 +2065,7 @@ class _MonoBox extends StatelessWidget {
 
 class _MonoSelectableBox extends StatelessWidget {
   const _MonoSelectableBox({required this.text});
+
   final String text;
 
   @override
@@ -1975,7 +2081,11 @@ class _MonoSelectableBox extends StatelessWidget {
       ),
       child: SelectableText(
         text,
-        style: TextStyle(fontFamily: 'monospace', color: cs.onSurface, height: 1.25, fontSize: 12.5),
+        style: TextStyle(
+            fontFamily: 'monospace',
+            color: cs.onSurface,
+            height: 1.25,
+            fontSize: 12.5),
       ),
     );
   }

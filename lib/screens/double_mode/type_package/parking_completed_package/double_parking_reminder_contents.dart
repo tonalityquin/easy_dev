@@ -1,8 +1,8 @@
-/// 주차 현황 페이지 하단에 노출되는
-/// 중앙 정렬 업무 리마인더 카드 콘텐츠 정의 파일.
-///
-/// - UI 위젯 코드와 분리하여 텍스트만 별도 관리
-/// - [parkingRemindersForArea] 를 통해 지역별 콘텐츠 제공
+
+
+
+
+
 class DoubleParkingReminderContents {
   final String title;
   final List<String> lines;
@@ -161,7 +161,7 @@ final Map<String, List<DoubleParkingReminderContents>> kParkingReminderContentsB
   ],
 };
 
-/// 주어진 area 문자열에 대해 사용할 리마인더 목록을 반환
+
 List<DoubleParkingReminderContents> parkingRemindersForArea(String area) {
   final key = area.trim();
   final list = kParkingReminderContentsByArea[key];
@@ -172,6 +172,6 @@ List<DoubleParkingReminderContents> parkingRemindersForArea(String area) {
   return kDefaultParkingReminderContents;
 }
 
-/// (선택) 이전 코드와의 호환성을 위해 남겨둔 상수.
-/// 현재는 "기본(공통) 리마인더" 를 가리킵니다.
+
+
 const List<DoubleParkingReminderContents> kParkingReminderContents = kDefaultParkingReminderContents;

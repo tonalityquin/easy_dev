@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
-/// 5초 동안 유지되는 취소 가능 blocking dialog
-/// - [duration] 동안 카운트다운 후 자동으로 true 반환
-/// - '취소' 버튼 누르면 false 반환
+
+
+
 Future<bool> showDashboardDurationBlockingDialog(
     BuildContext context, {
       required String message,
@@ -52,7 +52,7 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
       if (_remainingSeconds <= 0) {
         t.cancel();
         if (mounted) {
-          Navigator.of(context).pop<bool>(true); // 자동 진행
+          Navigator.of(context).pop<bool>(true); 
         }
       }
     });
@@ -66,7 +66,7 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
 
   void _handleCancel() {
     _timer?.cancel();
-    Navigator.of(context).pop<bool>(false); // 취소
+    Navigator.of(context).pop<bool>(false); 
   }
 
   @override
@@ -95,7 +95,7 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // 상단 아이콘 + 로딩 링 (전역 테마 primary 기반)
+              
               Stack(
                 alignment: Alignment.center,
                 children: [
@@ -123,7 +123,7 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
               ),
               const SizedBox(height: 16),
 
-              // 메시지
+              
               Text(
                 widget.message,
                 textAlign: TextAlign.center,
@@ -134,7 +134,7 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
               ),
               const SizedBox(height: 12),
 
-              // 남은 시간 표시 (pill)
+              
               Container(
                 padding: const EdgeInsets.symmetric(
                   vertical: 6,
@@ -159,7 +159,7 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
 
               const SizedBox(height: 16),
 
-              // 액션 버튼
+              
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [

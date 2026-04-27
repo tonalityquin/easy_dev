@@ -1,0 +1,850 @@
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'
+    show Clipboard, ClipboardData, HapticFeedback;
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../../../utils/auth/google_auth_session.dart';
+import '../../../../utils/config/email_config.dart';
+import 'package:googleapis/gmail/v1.dart' as gmail;
+
+import '../../../../utils/init/app_navigator.dart';
+import '../../../dev/debug/debug_api_logger.dart';
+
+class HeadMemo {
+  HeadMemo._();
+
+  static GlobalKey<NavigatorState> get navigatorKey => AppNavigator.key;
+
+  static final enabled = ValueNotifier<bool>(false);
+
+  static final notes = ValueListenableNotifier<List<String>>(<String>[]);
+
+  static const _kEnabledKey = 'head_memo_enabled_v1';
+  static const _kNotesKey = 'head_memo_notes_v1';
+
+  static SharedPreferences? _prefs;
+  static bool _inited = false;
+
+  static bool _isPanelOpen = false;
+  static Future<void>? _panelFuture;
+
+  static const String _tMemo = 'head_memo';
+  static const String _tMemoUi = 'head_memo/ui';
+  static const String _tMemoPrefs = 'head_memo/prefs';
+  static const String _tMemoEmail = 'head_memo/email';
+  static const String _tEmailConfig = 'email_config';
+  static const String _tGmailSend = 'gmail/send';
+
+  static Future<void> _logApiError({
+    required String tag,
+    required String message,
+    required Object error,
+    Map<String, dynamic>? extra,
+    List<String>? tags,
+  }) async {
+    try {
+      await DebugApiLogger().log(
+        <String, dynamic>{
+          'tag': tag,
+          'message': message,
+          'error': error.toString(),
+          if (extra != null) 'extra': extra,
+        },
+        level: 'error',
+        tags: tags,
+      );
+    } catch (_) {}
+  }
+
+  static Future<void> _ensureInited() async {
+    if (_inited) return;
+    await init();
+  }
+
+  static Future<void> init() async {
+    if (_inited) return;
+
+    try {
+      _prefs ??= await SharedPreferences.getInstance();
+      enabled.value = _prefs!.getBool(_kEnabledKey) ?? false;
+      notes.value = _prefs!.getStringList(_kNotesKey) ?? const <String>[];
+
+      enabled.addListener(() {
+        try {
+          _prefs?.setBool(_kEnabledKey, enabled.value);
+        } catch (e) {
+          _logApiError(
+            tag: 'HeadMemo.enabled.listener',
+            message: 'enabled 토글 저장 실패(SharedPreferences)',
+            error: e,
+            extra: <String, dynamic>{'enabled': enabled.value},
+            tags: const <String>[_tMemo, _tMemoPrefs],
+          );
+        }
+      });
+
+      _inited = true;
+    } catch (e) {
+      await _logApiError(
+        tag: 'HeadMemo.init',
+        message: 'HeadMemo init 실패(SharedPreferences)',
+        error: e,
+        tags: const <String>[_tMemo, _tMemoPrefs],
+      );
+      rethrow;
+    }
+  }
+
+  static BuildContext? _bestContext() {
+    final state = navigatorKey.currentState;
+    final overlayCtx = state?.overlay?.context;
+    return overlayCtx ?? state?.context;
+  }
+
+  static Future<void> openPanel() => togglePanel();
+
+  static Future<void> togglePanel() async {
+    await _ensureInited();
+
+    final ctx = _bestContext();
+    if (ctx == null) {
+      await _logApiError(
+        tag: 'HeadMemo.togglePanel',
+        message: 'Navigator context를 가져오지 못해 panel 토글을 지연',
+        error: Exception('no_context'),
+        tags: const <String>[_tMemo, _tMemoUi],
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) => togglePanel());
+      return;
+    }
+
+    if (_isPanelOpen) {
+      Navigator.of(ctx).maybePop();
+      return;
+    }
+
+    if (_panelFuture != null) return;
+
+    _isPanelOpen = true;
+    _panelFuture = showModalBottomSheet(
+      context: ctx,
+      useSafeArea: true,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _HeadMemoSheet(),
+    ).whenComplete(() {
+      _isPanelOpen = false;
+      _panelFuture = null;
+    });
+
+    await _panelFuture;
+  }
+
+  static Future<void> add(String text) async {
+    await _ensureInited();
+
+    final now = DateTime.now();
+    final stamp =
+        "${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')} "
+        "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+    final line = "$stamp | $text";
+
+    final list = List<String>.from(notes.value)..insert(0, line);
+    notes.value = list;
+
+    try {
+      await _prefs?.setStringList(_kNotesKey, list);
+    } catch (e) {
+      await _logApiError(
+        tag: 'HeadMemo.add',
+        message: '메모 저장 실패(SharedPreferences)',
+        error: e,
+        extra: <String, dynamic>{
+          'len': text.trim().length,
+          'count': list.length
+        },
+        tags: const <String>[_tMemo, _tMemoPrefs],
+      );
+    }
+  }
+
+  static Future<void> removeAt(int index) async {
+    await _ensureInited();
+
+    final list = List<String>.from(notes.value);
+    if (index < 0 || index >= list.length) return;
+    list.removeAt(index);
+
+    notes.value = list;
+
+    try {
+      await _prefs?.setStringList(_kNotesKey, list);
+    } catch (e) {
+      await _logApiError(
+        tag: 'HeadMemo.removeAt',
+        message: '메모 삭제 반영 실패(SharedPreferences)',
+        error: e,
+        extra: <String, dynamic>{'index': index, 'count': list.length},
+        tags: const <String>[_tMemo, _tMemoPrefs],
+      );
+    }
+  }
+
+  static Future<void> removeLine(String line) async {
+    await _ensureInited();
+
+    final list = List<String>.from(notes.value)..remove(line);
+    notes.value = list;
+
+    try {
+      await _prefs?.setStringList(_kNotesKey, list);
+    } catch (e) {
+      await _logApiError(
+        tag: 'HeadMemo.removeLine',
+        message: '메모 삭제 반영 실패(SharedPreferences)',
+        error: e,
+        extra: <String, dynamic>{'count': list.length},
+        tags: const <String>[_tMemo, _tMemoPrefs],
+      );
+    }
+  }
+}
+
+class _HeadMemoSheet extends StatefulWidget {
+  const _HeadMemoSheet();
+
+  @override
+  State<_HeadMemoSheet> createState() => _HeadMemoSheetState();
+}
+
+class _HeadMemoSheetState extends State<_HeadMemoSheet> {
+  final TextEditingController _inputCtrl = TextEditingController();
+  final TextEditingController _searchCtrl = TextEditingController();
+
+  final TextEditingController _mailToCtrl = TextEditingController();
+  bool _mailToValid = true;
+  bool _mailToLoading = true;
+
+  bool _sending = false;
+
+  String _query = '';
+
+  static const int _mimeB64LineLength = 76;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchCtrl.addListener(() {
+      if (!mounted) return;
+      setState(() => _query = _searchCtrl.text.trim());
+    });
+
+    () async {
+      try {
+        final cfg = await EmailConfig.load();
+        final to = cfg.to;
+        if (!mounted) return;
+
+        setState(() {
+          _mailToCtrl.text = to;
+          _mailToValid = to.isEmpty || EmailConfig.isValidToList(to);
+          _mailToLoading = false;
+        });
+
+        _mailToCtrl.addListener(() {
+          final t = _mailToCtrl.text.trim();
+          final valid = t.isEmpty || EmailConfig.isValidToList(t);
+          if (!mounted) return;
+          if (valid != _mailToValid) setState(() => _mailToValid = valid);
+        });
+      } catch (e) {
+        await HeadMemo._logApiError(
+          tag: '_HeadMemoSheet.initState',
+          message: 'EmailConfig.load 실패',
+          error: e,
+          tags: const <String>[HeadMemo._tMemo, HeadMemo._tEmailConfig],
+        );
+        if (!mounted) return;
+        setState(() {
+          _mailToCtrl.text = '';
+          _mailToValid = true;
+          _mailToLoading = false;
+        });
+      }
+    }();
+  }
+
+  @override
+  void dispose() {
+    _inputCtrl.dispose();
+    _searchCtrl.dispose();
+    _mailToCtrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+
+    return FractionallySizedBox(
+      heightFactor: 0.9,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        child: Material(
+          color: Colors.white,
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: EdgeInsets.only(bottom: bottomInset),
+              child: Column(
+                children: [
+                  const SizedBox(height: 10),
+                  const _DragHandle(),
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      children: [
+                        Icon(Icons.sticky_note_2_rounded, color: cs.primary),
+                        const SizedBox(width: 8),
+                        Text('메모',
+                            style: textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.w800)),
+                        const Spacer(),
+                        ValueListenableBuilder<bool>(
+                          valueListenable: HeadMemo.enabled,
+                          builder: (_, on, __) => Row(
+                            children: [
+                              Text(on ? 'On' : 'Off',
+                                  style: textTheme.labelMedium
+                                      ?.copyWith(color: cs.outline)),
+                              const SizedBox(width: 6),
+                              Switch(
+                                  value: on,
+                                  onChanged: (v) => HeadMemo.enabled.value = v),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          tooltip: _sending ? '전송 중...' : '이메일로 보내기',
+                          onPressed: _sending ? null : _sendNotesByEmail,
+                          icon: _sending
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.email_outlined),
+                        ),
+                        IconButton(
+                          tooltip: '수신자(To) 편집',
+                          onPressed:
+                              _mailToLoading ? null : _openRecipientDialog,
+                          icon: const Icon(Icons.alternate_email_rounded),
+                        ),
+                        IconButton(
+                          tooltip: '닫기',
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () => Navigator.of(context).maybePop(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                    child: TextField(
+                      controller: _searchCtrl,
+                      textInputAction: TextInputAction.search,
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search_rounded),
+                        hintText: '메모 검색',
+                        filled: true,
+                        fillColor: cs.surfaceVariant.withOpacity(.5),
+                        border: _inputBorder(),
+                        enabledBorder: _inputBorder(),
+                        focusedBorder: _inputBorder(focused: true, cs: cs),
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _inputCtrl,
+                            textInputAction: TextInputAction.done,
+                            minLines: 1,
+                            maxLines: 3,
+                            decoration: InputDecoration(
+                              hintText: '메모를 입력하세요',
+                              prefixIcon: const Icon(Icons.edit_note_rounded),
+                              filled: true,
+                              fillColor: cs.surfaceVariant.withOpacity(.5),
+                              border: _inputBorder(),
+                              enabledBorder: _inputBorder(),
+                              focusedBorder:
+                                  _inputBorder(focused: true, cs: cs),
+                              isDense: true,
+                            ),
+                            onSubmitted: _submitNote,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton.icon(
+                          onPressed: () => _submitNote(_inputCtrl.text),
+                          icon: const Icon(Icons.send_rounded),
+                          label: const Text('추가'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: ValueListenableBuilder<List<String>>(
+                      valueListenable: HeadMemo.notes,
+                      builder: (_, list, __) {
+                        final filtered = _filtered(list, _query);
+                        if (filtered.isEmpty) return _EmptyState(query: _query);
+
+                        return ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+                          itemCount: filtered.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (context, i) {
+                            final line = filtered[i];
+                            final (time, text) = _parse(line);
+
+                            return Dismissible(
+                              key: ValueKey(line),
+                              direction: DismissDirection.endToStart,
+                              background: _SwipeDeleteBackground(
+                                color: cs.errorContainer,
+                                iconColor: cs.onErrorContainer,
+                              ),
+                              onDismissed: (_) {
+                                HeadMemo.removeLine(line);
+                                HapticFeedback.selectionClick();
+                              },
+                              child: ListTile(
+                                dense: false,
+                                leading: CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor: cs.primaryContainer,
+                                  child: Icon(Icons.notes_rounded,
+                                      color: cs.onPrimaryContainer, size: 18),
+                                ),
+                                title: Text(text,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis),
+                                subtitle: time.isNotEmpty
+                                    ? Text(time,
+                                        style: textTheme.bodySmall
+                                            ?.copyWith(color: cs.outline))
+                                    : null,
+                                trailing: Wrap(
+                                  spacing: 4,
+                                  children: [
+                                    IconButton(
+                                      tooltip: '복사',
+                                      icon: const Icon(Icons.copy_rounded),
+                                      onPressed: () {
+                                        Clipboard.setData(
+                                            ClipboardData(text: text));
+                                      },
+                                    ),
+                                    IconButton(
+                                      tooltip: '삭제',
+                                      icon: const Icon(
+                                          Icons.delete_outline_rounded),
+                                      onPressed: () =>
+                                          HeadMemo.removeLine(line),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _sendNotesByEmail() async {
+    final notes = HeadMemo.notes.value;
+    if (notes.isEmpty) {
+      return;
+    }
+
+    if (GoogleAuthSession.instance.isSessionBlocked) {
+      await HeadMemo._logApiError(
+        tag: '_HeadMemoSheet._sendNotesByEmail',
+        message: '구글 세션 차단(ON) 상태로 이메일 전송 차단됨',
+        error: StateError('google_session_blocked'),
+        tags: const <String>[HeadMemo._tMemo, HeadMemo._tMemoEmail],
+      );
+      return;
+    }
+
+    EmailConfig cfg;
+    try {
+      cfg = await EmailConfig.load();
+    } catch (e) {
+      await HeadMemo._logApiError(
+        tag: '_HeadMemoSheet._sendNotesByEmail',
+        message: 'EmailConfig.load 실패',
+        error: e,
+        tags: const <String>[HeadMemo._tMemo, HeadMemo._tEmailConfig],
+      );
+      return;
+    }
+
+    final toCsv = cfg.to.trim();
+    if (!EmailConfig.isValidToList(toCsv)) {
+      await HeadMemo._logApiError(
+        tag: '_HeadMemoSheet._sendNotesByEmail',
+        message: '수신자(To) 설정이 비어있거나 형식이 올바르지 않음',
+        error: StateError('invalid_to'),
+        extra: <String, dynamic>{'toLen': toCsv.length},
+        tags: const <String>[
+          HeadMemo._tMemo,
+          HeadMemo._tMemoEmail,
+          HeadMemo._tEmailConfig
+        ],
+      );
+      return;
+    }
+
+    setState(() => _sending = true);
+
+    try {
+      final now = DateTime.now();
+      final subject = 'HeadMemo export (${_fmtYMD(now)})';
+      final filename = 'head_memo_${_fmtCompact(now)}.txt';
+      final fileText = notes.join('\n');
+
+      final boundary = 'headmemo_${now.millisecondsSinceEpoch}';
+      const bodyText = '첨부된 텍스트 파일에 메모가 포함되어 있습니다.';
+
+      final attachmentB64 = base64.encode(utf8.encode(fileText));
+      final attachmentWrapped = _wrapBase64Lines(attachmentB64);
+
+      const crlf = '\r\n';
+      final mime = StringBuffer()
+        ..write('MIME-Version: 1.0$crlf')
+        ..write('To: $toCsv$crlf')
+        ..write('Subject: ${_encodeSubjectRfc2047(subject)}$crlf')
+        ..write('Content-Type: multipart/mixed; boundary="$boundary"$crlf')
+        ..write(crlf)
+        ..write('--$boundary$crlf')
+        ..write('Content-Type: text/plain; charset="utf-8"$crlf')
+        ..write('Content-Transfer-Encoding: 7bit$crlf')
+        ..write(crlf)
+        ..write(bodyText)
+        ..write(crlf)
+        ..write('--$boundary$crlf')
+        ..write(
+            'Content-Type: text/plain; charset="utf-8"; name="$filename"$crlf')
+        ..write('Content-Disposition: attachment; filename="$filename"$crlf')
+        ..write('Content-Transfer-Encoding: base64$crlf')
+        ..write(crlf)
+        ..write(attachmentWrapped)
+        ..write('--$boundary--$crlf');
+
+      final raw =
+          base64UrlEncode(utf8.encode(mime.toString())).replaceAll('=', '');
+      final client = await GoogleAuthSession.instance.safeClient();
+      final api = gmail.GmailApi(client);
+      final message = gmail.Message()..raw = raw;
+
+      await api.users.messages.send(message, 'me');
+    } catch (e) {
+      await HeadMemo._logApiError(
+        tag: '_HeadMemoSheet._sendNotesByEmail',
+        message: 'Gmail 메모 전송 실패',
+        error: e,
+        extra: <String, dynamic>{
+          'notesCount': notes.length,
+          'notesBytes': utf8.encode(notes.join('\n')).length,
+        },
+        tags: const <String>[
+          HeadMemo._tMemo,
+          HeadMemo._tMemoEmail,
+          HeadMemo._tGmailSend
+        ],
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  Future<void> _openRecipientDialog() async {
+    final cs = Theme.of(context).colorScheme;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('수신자(To) 설정'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: _mailToCtrl,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _saveMailTo(fromDialog: true),
+                decoration: InputDecoration(
+                  labelText: '수신자(To)',
+                  hintText: 'a@x.com, b@y.com',
+                  helperText: '쉼표(,)로 여러 명 입력',
+                  isDense: true,
+                  border: _emailBorder(),
+                  enabledBorder: _emailBorder(valid: _mailToValid, cs: cs),
+                  focusedBorder:
+                      _emailBorder(valid: _mailToValid, cs: cs, focused: true),
+                  errorText: _mailToValid ? null : '이메일 형식을 확인해 주세요',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton.icon(
+              icon: const Icon(Icons.restart_alt_rounded),
+              label: const Text('초기화'),
+              onPressed: () async {
+                await _clearMailTo();
+                (ctx as Element).markNeedsBuild();
+              },
+            ),
+            TextButton(
+              child: const Text('취소'),
+              onPressed: () => Navigator.of(ctx).pop(),
+            ),
+            FilledButton.icon(
+              icon: const Icon(Icons.save_alt_rounded),
+              label: const Text('저장'),
+              onPressed: () async {
+                final ok = await _saveMailTo(fromDialog: true);
+                if (ok && context.mounted) Navigator.of(ctx).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  OutlineInputBorder _inputBorder({bool focused = false, ColorScheme? cs}) {
+    final scheme = cs ?? Theme.of(context).colorScheme;
+    final color = focused
+        ? scheme.primary
+        : Theme.of(context).dividerColor.withOpacity(.2);
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide(color: color, width: focused ? 1.4 : 1),
+    );
+  }
+
+  OutlineInputBorder _emailBorder(
+      {bool focused = false, bool valid = true, ColorScheme? cs}) {
+    final scheme = cs ?? Theme.of(context).colorScheme;
+    final Color color = valid
+        ? (focused ? scheme.primary : scheme.outlineVariant)
+        : scheme.error;
+    return OutlineInputBorder(
+      borderRadius: BorderRadius.circular(10),
+      borderSide: BorderSide(color: color, width: focused ? 1.4 : 1),
+    );
+  }
+
+  (String, String) _parse(String line) {
+    final split = line.indexOf('|');
+    if (split < 0) return ('', line.trim());
+    final time = line.substring(0, split).trim();
+    final text = line.substring(split + 1).trim();
+    return (time, text);
+  }
+
+  List<String> _filtered(List<String> src, String q) {
+    if (q.isEmpty) return src;
+    final query = q.toLowerCase();
+    return src.where((e) => e.toLowerCase().contains(query)).toList();
+  }
+
+  void _submitNote(String raw) {
+    final t = raw.trim();
+    if (t.isEmpty) return;
+    HeadMemo.add(t);
+    _inputCtrl.clear();
+    FocusScope.of(context).unfocus();
+    HapticFeedback.lightImpact();
+  }
+
+  Future<bool> _saveMailTo({bool fromDialog = false}) async {
+    final to = _mailToCtrl.text.trim();
+    if (to.isNotEmpty && !EmailConfig.isValidToList(to)) {
+      if (mounted) setState(() => _mailToValid = false);
+      return false;
+    }
+
+    try {
+      await EmailConfig.save(EmailConfig(to: to));
+    } catch (e) {
+      await HeadMemo._logApiError(
+        tag: '_HeadMemoSheet._saveMailTo',
+        message: 'EmailConfig.save 실패',
+        error: e,
+        extra: <String, dynamic>{'toLen': to.length},
+        tags: const <String>[HeadMemo._tMemo, HeadMemo._tEmailConfig],
+      );
+      return false;
+    }
+
+    if (mounted) setState(() => _mailToValid = true);
+    return true;
+  }
+
+  Future<void> _clearMailTo() async {
+    try {
+      await EmailConfig.clear();
+      if (!mounted) return;
+      setState(() {
+        _mailToCtrl.text = '';
+        _mailToValid = true;
+      });
+    } catch (e) {
+      await HeadMemo._logApiError(
+        tag: '_HeadMemoSheet._clearMailTo',
+        message: 'EmailConfig.clear 실패',
+        error: e,
+        tags: const <String>[HeadMemo._tMemo, HeadMemo._tEmailConfig],
+      );
+    }
+  }
+
+  String _fmt2(int n) => n.toString().padLeft(2, '0');
+
+  String _fmtYMD(DateTime d) => '${d.year}-${_fmt2(d.month)}-${_fmt2(d.day)}';
+
+  String _fmtCompact(DateTime d) =>
+      '${d.year}${_fmt2(d.month)}${_fmt2(d.day)}_${_fmt2(d.hour)}${_fmt2(d.minute)}${_fmt2(d.second)}';
+
+  String _wrapBase64Lines(String b64, {int lineLength = _mimeB64LineLength}) {
+    if (b64.isEmpty) return '';
+    final sb = StringBuffer();
+    for (int i = 0; i < b64.length; i += lineLength) {
+      final end = (i + lineLength < b64.length) ? i + lineLength : b64.length;
+      sb.write(b64.substring(i, end));
+      sb.write('\r\n');
+    }
+    return sb.toString();
+  }
+
+  String _encodeSubjectRfc2047(String subject) {
+    final hasNonAscii = subject.codeUnits.any((c) => c > 127);
+    if (!hasNonAscii) return subject;
+    final subjectB64 = base64.encode(utf8.encode(subject));
+    return '=?utf-8?B?$subjectB64?=';
+  }
+}
+
+class _DragHandle extends StatelessWidget {
+  const _DragHandle();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 42,
+      height: 5,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.outlineVariant,
+        borderRadius: BorderRadius.circular(3),
+      ),
+    );
+  }
+}
+
+class _SwipeDeleteBackground extends StatelessWidget {
+  final Color color;
+  final Color iconColor;
+
+  const _SwipeDeleteBackground({required this.color, required this.iconColor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      alignment: Alignment.centerRight,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      color: color,
+      child: Icon(Icons.delete_outline_rounded, color: iconColor),
+    );
+  }
+}
+
+class ValueListenableNotifier<T> extends ValueNotifier<T> {
+  ValueListenableNotifier(super.value);
+
+  @override
+  set value(T newValue) {
+    super.value = newValue;
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  final String query;
+
+  const _EmptyState({required this.query});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final hasQuery = query.trim().isNotEmpty;
+
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              hasQuery ? Icons.search_off_rounded : Icons.event_note,
+              color: cs.outline,
+              size: 40,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              hasQuery ? '검색 결과가 없어요' : '아직 메모가 없습니다.',
+              style: textTheme.bodyMedium?.copyWith(color: cs.outline),
+              textAlign: TextAlign.center,
+            ),
+            if (hasQuery) ...[
+              const SizedBox(height: 4),
+              Text(
+                '"$query"',
+                style: textTheme.bodySmall?.copyWith(color: cs.outline),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}

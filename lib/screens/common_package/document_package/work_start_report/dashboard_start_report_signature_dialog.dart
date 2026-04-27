@@ -1,11 +1,8 @@
-// lib/screens/simple_package/simple_inside_package/sections/simple_inside_report_signature_dialog.dart
-
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 
 import 'dashboard_start_report_signature_painter.dart';
 import 'dashboard_start_report_styles.dart';
@@ -47,12 +44,10 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
   bool get _hasAny => _points.any((p) => p != null);
 
   void _clear() {
-    HapticFeedback.selectionClick();
     setState(() => _points.clear());
   }
 
   void _undo() {
-    HapticFeedback.selectionClick();
     if (_points.isEmpty) return;
 
     int i = _points.length - 1;
@@ -72,7 +67,6 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
 
   Future<void> _save() async {
     try {
-      HapticFeedback.lightImpact();
       setState(() {
         _signDateTime = DateTime.now();
       });
@@ -80,18 +74,12 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
 
       final boundary = _boundaryKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
       if (boundary == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('캡처 영역을 찾을 수 없습니다.')),
-        );
         return;
       }
 
       final ui.Image image = await boundary.toImage(pixelRatio: 3.0);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('PNG 변환에 실패했습니다.')),
-        );
         return;
       }
 
@@ -102,11 +90,7 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
           signDateTime: _signDateTime!,
         ),
       );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('서명 저장 오류: $e')),
-      );
-    }
+    } catch (_) {}
   }
 
   @override
@@ -117,7 +101,6 @@ class _SignatureFullScreenDialogState extends State<SignatureFullScreenDialog> {
     final name = widget.name.isEmpty ? '이름 미입력' : widget.name;
     final timeText = _signDateTime == null ? '서명 전' : _fmtCompact(_signDateTime!);
 
-    // ✅ 테마 기반 서명 패드 색상
     final penColor = cs.onSurface;
     final padBg = cs.surface;
 

@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
-
-import '../../../../models/plate_log_model.dart';
-import '../../../../models/plate_model.dart';
-import '../../../../repositories/plate_repo_services/firestore_plate_repository.dart';
-
-// ⛔️ GCS 직접 로드는 MergedLogSection 내부에서 처리
+import '../../../../features/plate/data/repositories/firestore_plate_repository.dart';
+import '../../../../features/plate/domain/models/plate_log_model.dart';
+import '../../../../features/plate/domain/models/plate_model.dart';
 import '../departure_completed_package/widgets/minor_departure_completed_page_merge_log.dart';
 import '../departure_completed_package/widgets/minor_departure_completed_page_today_log.dart';
-import '../../../../utils/snackbar_helper.dart';
 
 class MinorDepartureCompletedSettledTab extends StatefulWidget {
   const MinorDepartureCompletedSettledTab({
@@ -30,7 +26,6 @@ class MinorDepartureCompletedSettledTab extends StatefulWidget {
 
 class _MinorDepartureCompletedSettledTabState
     extends State<MinorDepartureCompletedSettledTab> {
-  // ===== 아코디언 상태: 최대 1개만 열림 =====
   bool _openToday = true;
   bool _openMerged = false;
 
@@ -58,7 +53,6 @@ class _MinorDepartureCompletedSettledTabState
     });
   }
 
-  // ===== Firestore 검색 상태 (오늘 로그용) =====
   final TextEditingController _fourDigitCtrl = TextEditingController();
   bool _isLoading = false;
   bool _hasSearched = false;
@@ -135,7 +129,7 @@ class _MinorDepartureCompletedSettledTabState
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
-      showFailedSnackbar(context, '검색 중 오류가 발생했습니다: $e');
+      debugPrint('검색 중 오류가 발생했습니다: $e');
     }
   }
 
@@ -157,7 +151,6 @@ class _MinorDepartureCompletedSettledTabState
     super.dispose();
   }
 
-  // ===== 섹션 본문 위젯 빌더들 =====
   Widget _buildTodaySectionBody() {
     if (!_hasSearched) {
       return Center(
@@ -222,7 +215,7 @@ class _MinorDepartureCompletedSettledTabState
 
   Widget _buildMergedSectionBody() {
     return MinorMergedLogSection(
-      mergedLogs: const <Map<String, dynamic>>[], // 시그니처 호환용, 내부 미사용
+      mergedLogs: const <Map<String, dynamic>>[],
       division: widget.division,
       area: widget.area,
     );
@@ -284,11 +277,8 @@ class _MinorDepartureCompletedSettledTabState
             onTap: _toggleToday,
           ),
           const SizedBox(height: 6),
-
           if (_openToday) Expanded(child: _buildTodaySectionBody()),
-
           const SizedBox(height: 6),
-
           _SectionHeader(
             key: const ValueKey('merged-header'),
             icon: Icons.merge_type,
@@ -297,11 +287,8 @@ class _MinorDepartureCompletedSettledTabState
             onTap: _toggleMerged,
           ),
           const SizedBox(height: 6),
-
           if (_openMerged) Expanded(child: _buildMergedSectionBody()),
-
           const SizedBox(height: 8),
-
           searchBar,
         ],
       ),
@@ -312,7 +299,6 @@ class _MinorDepartureCompletedSettledTabState
 class _SectionHeader extends StatelessWidget {
   final IconData icon;
   final String title;
-
   final bool? isOpen;
   final VoidCallback? onTap;
 

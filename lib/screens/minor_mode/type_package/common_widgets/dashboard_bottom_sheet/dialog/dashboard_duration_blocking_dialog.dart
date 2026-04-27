@@ -1,20 +1,20 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
-/// 5초 동안 유지되는 취소 가능 blocking dialog
-/// - [duration] 동안 카운트다운 후 자동으로 true 반환
-/// - '취소' 버튼 누르면 false 반환
-///
-/// ✅ 리팩터링 포인트
-/// - 하드코딩 팔레트 제거 → Theme(ColorScheme) 기반
-/// - pop 중복 방지(타이머/버튼 동시 호출 방어)
-/// - duration이 0 이하인 경우 즉시 true 반환(안전)
+
+
+
+
+
+
+
+
 Future<bool> showDashboardDurationBlockingDialog(
     BuildContext context, {
       required String message,
       Duration duration = const Duration(seconds: 5),
     }) async {
-  // ✅ duration 방어: 0초 이하이면 즉시 자동 진행
+  
   if (duration.inSeconds <= 0) return true;
 
   final result = await showDialog<bool>(
@@ -48,7 +48,7 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
   Timer? _timer;
   late int _remainingSeconds;
 
-  bool _popped = false; // ✅ pop 중복 방지
+  bool _popped = false; 
 
   @override
   void initState() {
@@ -56,7 +56,7 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
 
     _remainingSeconds = widget.duration.inSeconds;
     if (_remainingSeconds <= 0) {
-      // (이론상 showDashboardDurationBlockingDialog에서 걸러지지만 안전망)
+      
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _safePop(true);
       });
@@ -72,7 +72,7 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
 
       if (_remainingSeconds <= 0) {
         t.cancel();
-        _safePop(true); // 자동 진행
+        _safePop(true); 
       }
     });
   }
@@ -103,7 +103,7 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
     final cs = theme.colorScheme;
     final textTheme = theme.textTheme;
 
-    // ✅ 브랜드(Theme) 기반 토큰
+    
     final Color accent = cs.primary;
     final Color border = cs.outlineVariant.withOpacity(0.6);
 
@@ -114,7 +114,7 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
     return Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
       backgroundColor: cs.surface,
-      surfaceTintColor: Colors.transparent, // ✅ M3 tint 방지
+      surfaceTintColor: Colors.transparent, 
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(18),
         side: BorderSide(color: border),
@@ -128,7 +128,7 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // 상단 아이콘 + 로딩 링 (Theme primary)
+              
               Stack(
                 alignment: Alignment.center,
                 children: [
@@ -153,7 +153,7 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
               ),
               const SizedBox(height: 16),
 
-              // 메시지
+              
               Text(
                 widget.message,
                 textAlign: TextAlign.center,
@@ -164,7 +164,7 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
               ),
               const SizedBox(height: 12),
 
-              // 남은 시간 표시(칩)
+              
               Container(
                 padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
                 decoration: BoxDecoration(
@@ -184,7 +184,7 @@ class _CancelableBlockingDialogState extends State<_CancelableBlockingDialog> {
 
               const SizedBox(height: 16),
 
-              // 취소 버튼
+              
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [

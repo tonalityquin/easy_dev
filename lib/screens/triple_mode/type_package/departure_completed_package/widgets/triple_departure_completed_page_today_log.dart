@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import 'triple_departure_completed_plate_image_dialog.dart';
@@ -20,22 +19,26 @@ class TripleTodayLogSection extends StatefulWidget {
 class _TripleTodayLogSectionState extends State<TripleTodayLogSection> {
   bool _expanded = false;
 
-  // ===== 공통 로직: 로그 정규화 =====
+  
   List<Map<String, dynamic>> _normalizeLogs(List<dynamic> raw) {
     return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
   }
 
-  // ===== 공통 로직: 타임스탬프 파싱 =====
+  
   DateTime? _parseTs(dynamic ts) {
     if (ts == null) return null;
 
-    if (ts is Timestamp) return ts.toDate().toLocal();
+    try {
+      final dynamic maybeDate = (ts as dynamic).toDate();
+      if (maybeDate is DateTime) return maybeDate.toLocal();
+    } catch (_) {}
+
     if (ts is DateTime) return ts.toLocal();
 
     if (ts is int) {
-      // 밀리초로 보이는 큰 값 처리
-      if (ts > 100000000000) return DateTime.fromMillisecondsSinceEpoch(ts).toLocal();
-      // 초 단위로 가정
+      if (ts > 100000000000) {
+        return DateTime.fromMillisecondsSinceEpoch(ts).toLocal();
+      }
       return DateTime.fromMillisecondsSinceEpoch(ts * 1000).toLocal();
     }
 
@@ -47,7 +50,7 @@ class _TripleTodayLogSectionState extends State<TripleTodayLogSection> {
     return null;
   }
 
-  // ===== 공통 로직: 타임스탬프 포맷(로컬) =====
+  
   String _formatTs(dynamic ts) {
     final dt = _parseTs(ts);
     if (dt == null) return '--';
@@ -55,7 +58,7 @@ class _TripleTodayLogSectionState extends State<TripleTodayLogSection> {
     return '${dt.year}-${two(dt.month)}-${two(dt.day)} ${two(dt.hour)}:${two(dt.minute)}:${two(dt.second)}';
   }
 
-  // ===== 원화 포맷 (intl 없이 콤마만) =====
+  
   int? _asInt(dynamic v) {
     if (v == null) return null;
     if (v is num) return v.toInt();
@@ -78,7 +81,7 @@ class _TripleTodayLogSectionState extends State<TripleTodayLogSection> {
     return '₩${_formatIntWithComma(n)}';
   }
 
-  // ===== 액션 아이콘 매핑 =====
+  
   IconData _actionIcon(String action) {
     if (action.contains('사전 정산')) return Icons.receipt_long;
     if (action.contains('입차 완료')) return Icons.local_parking;
@@ -88,9 +91,9 @@ class _TripleTodayLogSectionState extends State<TripleTodayLogSection> {
     return Icons.history;
   }
 
-  // ===== 브랜드(ColorScheme) 기반 액션 색상 매핑 =====
-  // - 기존의 teal/orange/red/indigo 하드코딩을 제거하고,
-  //   ColorScheme(primary/secondary/tertiary/error/onSurfaceVariant)로 통일
+  
+  
+  
   Color _actionColor(BuildContext context, String action) {
     final cs = Theme.of(context).colorScheme;
 
@@ -124,7 +127,7 @@ class _TripleTodayLogSectionState extends State<TripleTodayLogSection> {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    // 정규화 + "오래된순(오름차순)" 정렬
+    
     final logs = _normalizeLogs(widget.logsRaw)
       ..sort((a, b) {
         final aT = _parseTs(a['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
@@ -155,12 +158,12 @@ class _TripleTodayLogSectionState extends State<TripleTodayLogSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // 헤더: 번호판 영역(탭→펼치기/접기) + 사진 버튼
+        
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
           child: Row(
             children: [
-              // 번호판 영역 전체를 탭 가능하게
+              
               Expanded(
                 child: Material(
                   color: Colors.transparent,
@@ -193,7 +196,7 @@ class _TripleTodayLogSectionState extends State<TripleTodayLogSection> {
               ),
               const SizedBox(width: 8),
 
-              // ✅ 브랜드 톤 버튼(하드코딩 grey/black 제거)
+              
               OutlinedButton.icon(
                 onPressed: () => _openPhotoDialog(context),
                 icon: Icon(Icons.photo, color: cs.onSurface),
@@ -226,7 +229,7 @@ class _TripleTodayLogSectionState extends State<TripleTodayLogSection> {
         ),
         Divider(height: 1, color: cs.outlineVariant.withOpacity(0.85)),
 
-        // 본문 리스트: 번호판 영역을 눌러야 펼쳐짐
+        
         Expanded(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
@@ -268,7 +271,7 @@ class _TripleTodayLogSectionState extends State<TripleTodayLogSection> {
                   final performedBy = (e['performedBy'] ?? '').toString();
                   final tsText = _formatTs(e['timestamp']);
 
-                  // 확정요금/결제수단/사유
+                  
                   final String? feeText =
                   (e.containsKey('lockedFee') || e.containsKey('lockedFeeAmount'))
                       ? _formatWon(e['lockedFee'] ?? e['lockedFeeAmount'])

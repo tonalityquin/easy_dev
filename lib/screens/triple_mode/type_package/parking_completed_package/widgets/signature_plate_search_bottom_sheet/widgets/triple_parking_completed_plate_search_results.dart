@@ -2,9 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../../../../enums/plate_type.dart';
-import '../../../../../../../models/plate_model.dart';
-
+import '../../../../../../../features/plate/domain/enums/plate_type.dart';
+import '../../../../../../../features/plate/domain/models/plate_model.dart';
 class TripleParkingCompletedPlateSearchResults extends StatelessWidget {
   final List<PlateModel> results;
   final void Function(PlateModel) onSelect;
@@ -117,7 +116,7 @@ class TripleParkingCompletedPlateSearchResults extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 상단: 번호 + 칩
+                      
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
