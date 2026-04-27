@@ -2,7 +2,7 @@ name: easydev
 description: "backend+frontend prototype project"
 publish_to: 'none'
 
-version: 1.1.1+158
+version: 1.1.1+161
 
 environment:
   sdk: ">=3.5.4 <4.0.0"
@@ -33,7 +33,7 @@ dependencies:
   # 로컬 데이터 및 알림 관련
   shared_preferences: ^2.5.3
   flutter_local_notifications: ^19.3.0
-  record: ^5.2.1
+  record: ^6.2.0
   audioplayers: ^6.4.0
 
   # ✅ GCS 업로드 관련 추가

@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     package="com.quintus.dev">
 
@@ -44,7 +43,20 @@
     <!-- ✅ 카메라 하드웨어 기능 선언(필수 단말만 설치 가능하게 할 경우 required=true) -->
     <uses-feature
         android:name="android.hardware.camera.any"
-        android:required="true" />
+        android:required="false"
+        tools:replace="android:required" />
+    <uses-feature
+        android:name="android.hardware.camera"
+        android:required="false"
+        tools:replace="android:required" />
+    <uses-feature
+        android:name="android.hardware.camera.autofocus"
+        android:required="false"
+        tools:replace="android:required" />
+    <uses-feature
+        android:name="android.hardware.camera.flash"
+        android:required="false"
+        tools:replace="android:required" />
 
     <!-- ✅ 오버레이(다른 앱 위에 표시) 권한 -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
