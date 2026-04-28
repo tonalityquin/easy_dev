@@ -20,14 +20,14 @@ import '../../features/mode_single/page/single_inside_screen.dart';
 import '../../features/selector/page/selector_hubs_page.dart';
 import '../../features/tablet/pages/tablet_page.dart';
 import '../../features/voice/page/voice/voice_page.dart';
-import '../../screens/space_mode/practice_space_lab_screen.dart';
-import '../../screens/space_mode/tutorial/app_start_finish_screen.dart';
-import '../../screens/space_mode/tutorial/app_start_next_tutorial_full_screen.dart';
-import '../../screens/space_mode/tutorial/app_start_next_tutorial_quick_screen.dart';
-import '../../screens/space_mode/tutorial/start_gate_screen.dart';
 import '../../shared/page/pages/double/double_type_page.dart';
 import '../../shared/page/pages/minor/minor_type_page.dart';
 import '../../shared/page/pages/triple/triple_type_page.dart';
+import '../space/practice_space_lab_screen.dart';
+import '../tutorial/tutorial/app_start_finish_screen.dart';
+import '../tutorial/tutorial/app_start_next_tutorial_full_screen.dart';
+import '../tutorial/tutorial/app_start_next_tutorial_quick_screen.dart';
+import '../tutorial/tutorial/start_gate_screen.dart';
 
 class AppRoutes {
   static const startGate = '/';

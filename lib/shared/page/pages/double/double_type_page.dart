@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import '../../../../screens/common_package/type_page/type_page.dart';
-import '../../../../screens/double_mode/type_package/common_widgets/dashboard_bottom_sheet/double_home_dash_board_bottom_sheet.dart';
-import '../../../../screens/double_mode/type_package/double_parking_completed_page.dart';
-import '../../../../screens/double_mode/type_package/parking_completed_package/double_parking_completed_control_buttons.dart';
+import '../../../../features/dashboard/sheets/double/double_home_dash_board_bottom_sheet.dart';
+import '../../../../features/mode_double/double_parking_completed_page.dart';
+import '../../../../features/mode_double/parking_completed_package/double_parking_completed_control_buttons.dart';
 import '../../../plate/application/double/double_plate_state.dart';
 import '../../application/double/double_page_state.dart';
 import '../../input/pages/input_plate_screen.dart';
+import '../common/type_page.dart';
 
 class DoubleRealtimeViewsRefreshService {
   static final TypePageRealtimeViewsRefreshService _service =

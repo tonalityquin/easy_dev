@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../features/dashboard/pages/minor/widgets/minor_dash_board.dart';
-import '../../../../screens/minor_mode/type_package/minor_parking_completed_page.dart';
+import '../../../../features/mode_minor/minor_parking_completed_page.dart';
 import '../../../plate/domain/enums/plate_type.dart';
 
 class MinorPageInfo {

@@ -1,0 +1,410 @@
+import 'package:provider/provider.dart';
+import 'package:flutter/material.dart';
+import '../../../../../features/payment/widgets/billing_bottom_sheet.dart';
+import '../../../../../shared/plate/domain/models/plate_log_model.dart';
+import '../../../../../shared/plate/domain/models/plate_model.dart';
+import '../../../../../shared/plate/domain/repositories/plate_repository.dart';
+import '../../../../../shared/plate/widgets/log_viewer_bottom_sheet.dart';
+
+Future<PlateModel?> showMinorDepartureCompletedStatusBottomSheet({
+  required BuildContext context,
+  required PlateModel plate,
+  String? performedBy,
+}) async {
+  final String who =
+      (performedBy ?? '').trim().isEmpty ? '-' : performedBy!.trim();
+  final BuildContext hostContext = context;
+
+  return showModalBottomSheet<PlateModel?>(
+    context: context,
+    isScrollControlled: true,
+    useSafeArea: true,
+    backgroundColor: Colors.transparent,
+    builder: (_) => FractionallySizedBox(
+      heightFactor: 1,
+      child: _MinorDepartureCompletedFullHeightSheet(
+        hostContext: hostContext,
+        plate: plate,
+        performedBy: who,
+      ),
+    ),
+  );
+}
+
+class _MinorDepartureCompletedFullHeightSheet extends StatelessWidget {
+  const _MinorDepartureCompletedFullHeightSheet({
+    required this.hostContext,
+    required this.plate,
+    required this.performedBy,
+  });
+
+  final BuildContext hostContext;
+  final PlateModel plate;
+  final String performedBy;
+
+  bool get _isLocked => plate.isLockedFee == true;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: ListView(
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: cs.outlineVariant.withOpacity(0.9),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+            Row(
+              children: [
+                Icon(Icons.settings, color: cs.primary),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    '출차 완료 상태 처리',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                  ),
+                ),
+                IconButton(
+                  tooltip: '닫기',
+                  onPressed: () => Navigator.pop(context),
+                  icon: Icon(Icons.close, color: cs.onSurface),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            _SummaryCard(plate: plate),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.receipt_long),
+              label: Text(_isLocked ? '정산 완료됨' : '정산(사전 정산)'),
+              onPressed: _isLocked
+                  ? null
+                  : () async {
+                      final updated = await _settlePlate(
+                        context: context,
+                        plate: plate,
+                        performedBy: performedBy,
+                      );
+                      if (!context.mounted) return;
+                      if (updated != null) Navigator.pop(context, updated);
+                    },
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 52),
+                backgroundColor:
+                    _isLocked ? cs.surfaceContainerLow : cs.primary,
+                foregroundColor: _isLocked ? cs.onSurfaceVariant : cs.onPrimary,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.lock_open),
+              label: const Text('정산 취소'),
+              onPressed: !_isLocked
+                  ? null
+                  : () async {
+                      final bool ok = await _confirmCancelSettlement(context);
+                      if (!ok) return;
+
+                      final updated = await _cancelSettlement(
+                        context: context,
+                        plate: plate,
+                        performedBy: performedBy,
+                      );
+
+                      if (!context.mounted) return;
+                      if (updated != null) Navigator.pop(context, updated);
+                    },
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 52),
+                backgroundColor:
+                    _isLocked ? cs.secondary : cs.surfaceContainerLow,
+                foregroundColor:
+                    _isLocked ? cs.onSecondary : cs.onSurfaceVariant,
+                elevation: 0,
+                side: _isLocked
+                    ? null
+                    : BorderSide(color: cs.outlineVariant.withOpacity(0.8)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.history),
+              label: const Text('로그 확인'),
+              onPressed: () async {
+                await LogViewerBottomSheet.show(
+                  hostContext,
+                  division: '-',
+                  area: plate.area,
+                  requestTime: plate.requestTime,
+                  initialPlateNumber: plate.plateNumber,
+                  plateId: plate.id,
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 52),
+                backgroundColor: cs.surfaceContainerLow,
+                foregroundColor: cs.onSurface,
+                elevation: 0,
+                side: BorderSide(color: cs.outlineVariant.withOpacity(0.8)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.edit),
+              label: const Text('정보 수정'),
+              onPressed: null,
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 52),
+                backgroundColor: cs.surfaceContainerLow,
+                foregroundColor: cs.onSurfaceVariant.withOpacity(0.6),
+                elevation: 0,
+                side: BorderSide(color: cs.outlineVariant.withOpacity(0.8)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              icon: Icon(Icons.close, color: cs.onSurfaceVariant),
+              label: Text('닫기', style: TextStyle(color: cs.onSurfaceVariant)),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({required this.plate});
+
+  final PlateModel plate;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    final bool isLocked = plate.isLockedFee == true;
+
+    final String area = plate.area.trim();
+    final String location =
+        plate.location.trim().isEmpty ? '미지정' : plate.location.trim();
+    final String billingType = (plate.billingType ?? '').trim().isEmpty
+        ? '미지정'
+        : (plate.billingType ?? '').trim();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            plate.plateNumber,
+            style: TextStyle(
+                fontSize: 18, fontWeight: FontWeight.w900, color: cs.onSurface),
+          ),
+          const SizedBox(height: 6),
+          Text('지역: $area',
+              style:
+                  TextStyle(fontWeight: FontWeight.w700, color: cs.onSurface)),
+          const SizedBox(height: 2),
+          Text('위치: $location',
+              style:
+                  TextStyle(fontWeight: FontWeight.w700, color: cs.onSurface)),
+          const SizedBox(height: 2),
+          Text('정산 타입: $billingType',
+              style:
+                  TextStyle(fontWeight: FontWeight.w700, color: cs.onSurface)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(
+                isLocked ? Icons.check_circle : Icons.error_outline,
+                size: 16,
+                color: isLocked ? Colors.green.shade700 : cs.error,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                isLocked ? '정산 완료' : '미정산',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  color: isLocked ? Colors.green.shade700 : cs.error,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+Future<bool> _confirmCancelSettlement(BuildContext context) async {
+  final result = await showDialog<bool>(
+    context: context,
+    barrierDismissible: true,
+    builder: (_) => AlertDialog(
+      title: const Text('정산 취소'),
+      content: const Text('정산 정보를 취소(해제)하시겠습니까?\n이 작업은 로그에 기록됩니다.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('아니오'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('예'),
+        ),
+      ],
+    ),
+  );
+  return result == true;
+}
+
+Future<PlateModel?> _settlePlate({
+  required BuildContext context,
+  required PlateModel plate,
+  required String performedBy,
+}) async {
+  if (plate.isLockedFee == true) {
+    debugPrint('이미 정산 완료된 데이터입니다.');
+    return null;
+  }
+
+  final bt = (plate.billingType ?? '').trim();
+  if (bt.isEmpty) {
+    debugPrint('정산 타입(billingType)이 지정되지 않아 정산할 수 없습니다.');
+    return null;
+  }
+
+  final now = DateTime.now();
+  final int currentTime = now.toUtc().millisecondsSinceEpoch ~/ 1000;
+  final int entryTime =
+      plate.requestTime.toUtc().millisecondsSinceEpoch ~/ 1000;
+
+  final result = await showOnTapBillingBottomSheet(
+    context: context,
+    entryTimeInSeconds: entryTime,
+    currentTimeInSeconds: currentTime,
+    basicStandard: plate.basicStandard ?? 0,
+    basicAmount: plate.basicAmount ?? 0,
+    addStandard: plate.addStandard ?? 0,
+    addAmount: plate.addAmount ?? 0,
+    billingType: plate.billingType ?? '변동',
+    regularAmount: plate.regularAmount,
+    regularDurationHours: plate.regularDurationHours,
+  );
+
+  if (result == null) return null;
+
+  final updatedPlate = plate.copyWith(
+    isLockedFee: true,
+    lockedAtTimeInSeconds: currentTime,
+    lockedFeeAmount: result.lockedFee,
+    paymentMethod: result.paymentMethod,
+  );
+
+  try {
+    final repo = context.read<PlateRepository>();
+
+    await repo.settlePlateBilling(
+      documentId: plate.id,
+      lockedAtTimeInSeconds: currentTime,
+      lockedFeeAmount: result.lockedFee,
+      paymentMethod: result.paymentMethod,
+      log: PlateLogModel(
+        action: '사전 정산',
+        area: plate.area,
+        billingType: plate.billingType,
+        from: plate.type,
+        performedBy: performedBy,
+        plateNumber: plate.plateNumber,
+        timestamp: now,
+        to: plate.type,
+        type: plate.type,
+        lockedFee: result.lockedFee,
+        paymentMethod: result.paymentMethod,
+        reason: result.reason,
+      ),
+    );
+
+    if (!context.mounted) return null;
+    debugPrint('정산 완료: ₩${result.lockedFee} (${result.paymentMethod})');
+
+    return await repo.getPlate(plate.id) ?? updatedPlate;
+  } catch (e) {
+    if (!context.mounted) return null;
+    debugPrint('정산 중 오류가 발생했습니다: $e');
+    return null;
+  }
+}
+
+Future<PlateModel?> _cancelSettlement({
+  required BuildContext context,
+  required PlateModel plate,
+  required String performedBy,
+}) async {
+  if (plate.isLockedFee != true) {
+    debugPrint('정산 완료된 데이터만 취소할 수 있습니다.');
+    return null;
+  }
+
+  final now = DateTime.now();
+
+  try {
+    final repo = context.read<PlateRepository>();
+
+    await repo.cancelPlateBilling(
+      documentId: plate.id,
+      log: PlateLogModel(
+        action: '정산 취소',
+        area: plate.area,
+        billingType: plate.billingType,
+        from: plate.type,
+        performedBy: performedBy,
+        plateNumber: plate.plateNumber,
+        timestamp: now,
+        to: plate.type,
+        type: plate.type,
+      ),
+    );
+
+    if (!context.mounted) return null;
+    debugPrint('정산이 취소되었습니다.');
+
+    return await repo.getPlate(plate.id) ?? plate.copyWith(isLockedFee: false);
+  } catch (e) {
+    if (!context.mounted) return null;
+    debugPrint('정산 취소 중 오류가 발생했습니다: $e');
+    return null;
+  }
+}

@@ -4,8 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
-
-import '../../screens/common_package/memo_package/chat_bot_tools.dart';
+import '../../features/dashboard/widgets/utils/chat_bot_tools.dart';
 import 'app_exit_flag.dart';
 
 class AppExitService {

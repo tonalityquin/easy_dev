@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import '../../../../screens/common_package/type_page/type_page.dart';
-import '../../../../screens/minor_mode/type_package/common_widgets/dashboard_bottom_sheet/minor_home_dash_board_bottom_sheet.dart';
-import '../../../../screens/minor_mode/type_package/minor_parking_completed_page.dart';
-import '../../../../screens/minor_mode/type_package/parking_completed_package/minor_parking_completed_control_buttons.dart';
+import '../../../../features/dashboard/sheets/minor/minor_home_dash_board_bottom_sheet.dart';
+import '../../../../features/mode_minor/minor_parking_completed_page.dart';
+import '../../../../features/mode_minor/parking_completed_package/minor_parking_completed_control_buttons.dart';
 import '../../../plate/application/common/driving_recovery_gate.dart';
 import '../../../plate/application/minor/minor_plate_state.dart';
 import '../../application/minor/minor_page_state.dart';
 import '../../input/pages/input_plate_screen.dart';
+import '../common/type_page.dart';
 
 class MinorRealtimeViewsRefreshService {
   static final TypePageRealtimeViewsRefreshService _service =
