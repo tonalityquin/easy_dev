@@ -37,12 +37,18 @@ class _TripleParkingCompletedPageState
     final currentArea = context.read<AreaState>().currentArea;
     _log('open search dialog');
 
-    showDialog(
+    showModalBottomSheet<void>(
       context: context,
-      builder: (context) {
-        return TripleParkingCompletedSearchBottomSheet(
-          onSearch: (_) {},
-          area: currentArea,
+      isScrollControlled: true,
+      useSafeArea: false,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return SizedBox(
+          height: MediaQuery.of(sheetContext).size.height,
+          child: TripleParkingCompletedSearchBottomSheet(
+            onSearch: (_) {},
+            area: currentArea,
+          ),
         );
       },
     );

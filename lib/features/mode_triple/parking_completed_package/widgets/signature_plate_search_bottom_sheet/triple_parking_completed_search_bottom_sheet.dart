@@ -217,133 +217,131 @@ class _TripleParkingCompletedSearchBottomSheetState
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final rootContext = Navigator.of(context, rootNavigator: true).context;
+    final topInset = MediaQuery.of(context).padding.top;
 
-    return SafeArea(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: Material(
-          color: Colors.transparent,
-          child: DraggableScrollableSheet(
-            initialChildSize: 0.7,
-            minChildSize: 0.4,
-            maxChildSize: 0.95,
-            builder: (context, scrollController) {
-              return Container(
-                decoration: BoxDecoration(
-                  color: cs.surface,
-                  borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(20)),
-                  border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
-                ),
-                child: ClipRRect(
-                  borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(20)),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 10),
-                      Center(
-                        child: Container(
-                          width: 44,
-                          height: 4,
-                          decoration: BoxDecoration(
-                            color: cs.outlineVariant.withOpacity(0.85),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: Material(
+        color: Colors.transparent,
+        child: DraggableScrollableSheet(
+          initialChildSize: 1.0,
+          minChildSize: 1.0,
+          maxChildSize: 1.0,
+          expand: true,
+          builder: (context, scrollController) {
+            return Container(
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: BorderRadius.zero,
+                border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.zero,
+                child: Column(
+                  children: [
+                    SizedBox(height: topInset + 10),
+                    Center(
+                      child: Container(
+                        width: 44,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: cs.outlineVariant.withOpacity(0.85),
+                          borderRadius: BorderRadius.circular(999),
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Row(
-                          children: [
-                            const Expanded(
-                              child: TripleParkingCompletedPlateSearchHeader(),
-                            ),
-                            if (_hasSearched)
-                              TextButton.icon(
-                                onPressed: _isLoading ? null : _resetSearch,
-                                icon: Icon(Icons.refresh, color: cs.primary),
-                                label: Text(
-                                  '다시 검색',
-                                  style: TextStyle(
-                                    color: cs.primary,
-                                    fontWeight: FontWeight.w800,
-                                  ),
+                    ),
+                    const SizedBox(height: 12),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      child: Row(
+                        children: [
+                          const Expanded(
+                            child: TripleParkingCompletedPlateSearchHeader(),
+                          ),
+                          if (_hasSearched)
+                            TextButton.icon(
+                              onPressed: _isLoading ? null : _resetSearch,
+                              icon: Icon(Icons.refresh, color: cs.primary),
+                              label: Text(
+                                '다시 검색',
+                                style: TextStyle(
+                                  color: cs.primary,
+                                  fontWeight: FontWeight.w800,
                                 ),
                               ),
-                            IconButton(
-                              tooltip: '닫기',
-                              onPressed: () => Navigator.pop(context),
-                              icon: Icon(Icons.close, color: cs.onSurface),
                             ),
-                          ],
-                        ),
+                          IconButton(
+                            tooltip: '닫기',
+                            onPressed: () => Navigator.pop(context),
+                            icon: Icon(Icons.close, color: cs.onSurface),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 8),
-                      Expanded(
-                        child: ListView(
-                          controller: scrollController,
-                          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-                          children: [
-                            _CardSection(
-                              title: '번호 4자리 입력',
-                              subtitle: '예: 1234',
-                              child: TripleParkingCompletedPlateNumberDisplay(
-                                controller: _controller,
-                                isValidPlate: isValidPlate,
-                              ),
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: ListView(
+                        controller: scrollController,
+                        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                        children: [
+                          _CardSection(
+                            title: '번호 4자리 입력',
+                            subtitle: '예: 1234',
+                            child: TripleParkingCompletedPlateNumberDisplay(
+                              controller: _controller,
+                              isValidPlate: isValidPlate,
                             ),
-                            const SizedBox(height: 12),
-                            AnimatedSwitcher(
-                              duration: const Duration(milliseconds: 220),
-                              switchInCurve: Curves.easeOut,
-                              switchOutCurve: Curves.easeIn,
-                              child: _buildResultSection(
-                                rootContext,
-                                scrollController,
-                              ),
+                          ),
+                          const SizedBox(height: 12),
+                          AnimatedSwitcher(
+                            duration: const Duration(milliseconds: 220),
+                            switchInCurve: Curves.easeOut,
+                            switchOutCurve: Curves.easeIn,
+                            child: _buildResultSection(
+                              rootContext,
+                              scrollController,
                             ),
-                            const SizedBox(height: 12),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
                       ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
-                        child: ValueListenableBuilder<TextEditingValue>(
-                          valueListenable: _controller,
-                          builder: (context, value, child) {
-                            final valid = isValidPlate(value.text);
-                            return TripleParkingCompletedSearchButton(
-                              isValid: valid,
-                              isLoading: _isLoading,
-                              onPressed: valid
-                                  ? () async {
-                                await _refreshSearchResults();
-                                widget.onSearch(value.text.trim());
-                              }
-                                  : null,
-                            );
-                          },
-                        ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 14),
+                      child: ValueListenableBuilder<TextEditingValue>(
+                        valueListenable: _controller,
+                        builder: (context, value, child) {
+                          final valid = isValidPlate(value.text);
+                          return TripleParkingCompletedSearchButton(
+                            isValid: valid,
+                            isLoading: _isLoading,
+                            onPressed: valid
+                                ? () async {
+                              await _refreshSearchResults();
+                              widget.onSearch(value.text.trim());
+                            }
+                                : null,
+                          );
+                        },
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              );
-            },
-          ),
+              ),
+            );
+          },
         ),
-        bottomNavigationBar: _hasSearched
-            ? const SizedBox.shrink()
-            : AnimatedKeypad(
-          slideAnimation: _slideAnimation,
-          fadeAnimation: _fadeAnimation,
-          controller: _controller,
-          maxLength: 4,
-          enableDigitModeSwitch: false,
-          onComplete: () => setState(() {}),
-          onReset: _resetSearch,
-        ),
+      ),
+      bottomNavigationBar: _hasSearched
+          ? const SizedBox.shrink()
+          : AnimatedKeypad(
+        slideAnimation: _slideAnimation,
+        fadeAnimation: _fadeAnimation,
+        controller: _controller,
+        maxLength: 4,
+        enableDigitModeSwitch: false,
+        onComplete: () => setState(() {}),
+        onReset: _resetSearch,
       ),
     );
   }

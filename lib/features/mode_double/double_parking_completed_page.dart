@@ -38,12 +38,18 @@ class _DoubleParkingCompletedPageState
     final currentArea = context.read<AreaState>().currentArea;
     _log('open search dialog');
 
-    showDialog(
+    showModalBottomSheet<void>(
       context: context,
-      builder: (context) {
-        return DoubleParkingCompletedSearchBottomSheet(
-          onSearch: (_) {},
-          area: currentArea,
+      isScrollControlled: true,
+      useSafeArea: false,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return SizedBox(
+          height: MediaQuery.of(sheetContext).size.height,
+          child: DoubleParkingCompletedSearchBottomSheet(
+            onSearch: (_) {},
+            area: currentArea,
+          ),
         );
       },
     );

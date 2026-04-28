@@ -36,12 +36,18 @@ class _MinorParkingCompletedPageState extends State<MinorParkingCompletedPage> {
     final currentArea = context.read<AreaState>().currentArea;
     _log('open search dialog');
 
-    showDialog(
+    showModalBottomSheet<void>(
       context: context,
-      builder: (_) {
-        return MinorParkingCompletedSearchBottomSheet(
-          onSearch: (_) {},
-          area: currentArea,
+      isScrollControlled: true,
+      useSafeArea: false,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        return SizedBox(
+          height: MediaQuery.of(sheetContext).size.height,
+          child: MinorParkingCompletedSearchBottomSheet(
+            onSearch: (_) {},
+            area: currentArea,
+          ),
         );
       },
     );
