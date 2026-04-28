@@ -4,10 +4,10 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../../app/init/app_exit_service.dart';
+import '../../../../../app/init/logout_helper.dart';
 import '../../../../../app/theme/brand_theme.dart';
 import '../../../../../app/theme/theme_prefs_controller.dart';
-import '../../../../../utils/init/app_exit_service.dart';
-import '../../../../../utils/init/logout_helper.dart';
 import '../../../../dev/application/area_state.dart';
 import '../../../../location/applications/location_state.dart';
 import '../../../../payment/applications/bill_state.dart';

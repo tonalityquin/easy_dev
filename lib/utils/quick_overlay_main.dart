@@ -6,7 +6,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'config/overlay_edge_side_config.dart';
+import '../app/config/overlay_edge_side_config.dart';
 
 const Color kCiSoftLinenBg = Color(0xFFF2EDE3);
 const Color kCiSoftLinenAccent = Color(0xFF2F6F6D);

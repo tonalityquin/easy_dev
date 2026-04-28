@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../../../app/config/commute_true_false_mode_config.dart';
+import '../../../../../../app/init/app_exit_service.dart';
 import '../../../../../../features/commute/domain/repositories/commute_true_false_repository.dart';
 import '../../../../../../features/mode_single/application/att_brk_repository.dart';
-import '../../../../../../utils/init/app_exit_service.dart';
 import '../../../../../../widgets/dialog/block_dialog_package/work_end_duration_blocking_dialog.dart';
 import 'minor_dashboard_punch_card_feedback.dart';
-import '../../../../../../utils/config/commute_true_false_mode_config.dart';
 
 class MinorDashboardPunchRecorderSection extends StatefulWidget {
   const MinorDashboardPunchRecorderSection({

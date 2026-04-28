@@ -6,12 +6,12 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../app/config/commute_true_false_mode_config.dart';
+import '../../../app/config/email_config.dart';
+import '../../../app/config/overlay_edge_side_config.dart';
+import '../../../app/config/overlay_mode_config.dart';
 import '../../../app/theme/brand_theme.dart';
 import '../../../app/theme/theme_prefs_controller.dart';
-import '../../../utils/config/commute_true_false_mode_config.dart';
-import '../../../utils/config/email_config.dart';
-import '../../../utils/config/overlay_edge_side_config.dart';
-import '../../../utils/config/overlay_mode_config.dart';
 import '../application/dev_auth.dart';
 
 const String kParkingRequestsWriteEnabledKey =

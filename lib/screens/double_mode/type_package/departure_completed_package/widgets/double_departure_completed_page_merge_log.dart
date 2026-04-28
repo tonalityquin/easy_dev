@@ -6,12 +6,14 @@ import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 import 'package:googleapis/storage/v1.dart' as gcs;
 import 'package:http/http.dart' as http;
 
+import '../../../../../app/config/auth_config.dart';
 import '../../../../../features/dev/debug/debug_api_logger.dart';
 import '../../../../../utils/auth/google_auth_v7.dart';
 import '../../../../../widgets/dialog/status_dialog_package/status_dialog.dart';
 import 'double_departure_completed_plate_image_dialog.dart';
 
-import '../../../../../core/config/external_ids.dart';
+const String kBucketName = AuthConfig.gcsBucketName;
+
 const double _kRowHeight = 56.0;
 const double _kTimeColWidth = 84.0;
 const double _kFeeColWidth = 108.0;

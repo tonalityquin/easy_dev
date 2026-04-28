@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../../utils/config/email_config.dart';
+import '../../../../app/config/email_config.dart';
 
 class MailRecipientSettings extends StatefulWidget {
   const MailRecipientSettings({super.key, this.asBottomSheet = false});

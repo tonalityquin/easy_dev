@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../../utils/init/app_navigator.dart';
+
+import '../../../app/init/app_navigator.dart';
 
 Future<T> runWithBlockingDialog<T>({
   required BuildContext context,

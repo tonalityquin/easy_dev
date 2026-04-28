@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../app/init/logout_helper.dart';
 import '../../../services/endtime_reminder_service.dart';
 import '../../../utils/db_connection_status_section.dart';
-import '../../../utils/init/logout_helper.dart';
 import '../../account/applications/user_state.dart';
 import '../../community/page/community_stub_page.dart';
 import '../../dev/debug/debug_api_logger.dart';

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../utils/init/logout_helper.dart';
+import '../../../app/init/logout_helper.dart';
 
 class TabletPageController extends StatelessWidget {
   const TabletPageController({super.key});

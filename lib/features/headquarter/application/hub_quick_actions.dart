@@ -4,8 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:shared_preferences/shared_preferences.dart';
-
-import '../../../utils/init/app_navigator.dart';
+import '../../../app/init/app_navigator.dart';
 import '../page/sheets/company_calendar_page.dart';
 import '../page/sheets/head_memo.dart';
 import '../page/sheets/head_tutorials.dart';

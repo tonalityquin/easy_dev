@@ -15,7 +15,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../../../utils/auth/gcs_uploader.dart';
 import '../../../../../../../utils/auth/google_auth_v7.dart';
-import '../../../../../../../utils/config/email_config.dart';
+import '../../../../app/config/email_config.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dashboard/data/repositories/end_work_report_firestore_repository.dart';
 import '../../../../features/dev/application/area_state.dart';

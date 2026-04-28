@@ -4,14 +4,11 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:shared_preferences/shared_preferences.dart';
-
-import '../../../../utils/init/app_exit_service.dart';
-import '../../../../utils/init/app_navigator.dart';
+import '../../../../app/init/app_exit_service.dart';
+import '../../../../app/init/app_navigator.dart';
 import 'dev_memo.dart';
-
 import 'dev_calendar_page.dart';
 import 'google_docs_bottom_sheet.dart';
-
 import 'local_prefs_bottom_sheet.dart';
 import 'sqlite_explorer_bottom_sheet.dart';
 

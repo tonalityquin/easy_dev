@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../../utils/config/commute_true_false_mode_config.dart';
-import '../../../../../utils/init/app_exit_service.dart';
+import '../../../../../app/config/commute_true_false_mode_config.dart';
+import '../../../../../app/init/app_exit_service.dart';
 import '../../../../../widgets/dialog/block_dialog_package/work_end_duration_blocking_dialog.dart';
 import '../../../../../widgets/dialog/block_dialog_package/work_start_duration_blocking_dialog.dart';
 import '../../../../commute/domain/repositories/commute_true_false_repository.dart';

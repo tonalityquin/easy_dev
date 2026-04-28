@@ -3,8 +3,7 @@ import 'dart:typed_data';
 
 import 'package:excel/excel.dart';
 import 'package:googleapis/gmail/v1.dart' as gmail;
-
-import '../../../../../utils/config/email_config.dart';
+import '../../../../../app/config/email_config.dart';
 import '../../../../../utils/auth/google_auth_session.dart';
 import '../../../../dev/debug/debug_api_logger.dart';
 

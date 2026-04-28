@@ -9,8 +9,7 @@ import 'package:googleapis/gmail/v1.dart' as gmail;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../../../utils/auth/google_auth_v7.dart';
-import '../../../../../../../utils/config/email_config.dart';
-
+import '../../../../app/config/email_config.dart';
 import '../../../../features/dev/debug/debug_api_logger.dart';
 import 'dashboard_start_report_styles.dart';
 import '../../../../widgets/dialog/status_dialog_package/status_dialog.dart';

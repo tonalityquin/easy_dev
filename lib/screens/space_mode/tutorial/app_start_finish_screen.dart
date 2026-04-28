@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/di/routes.dart';
-import '../../../utils/init/app_start_flow_prefs.dart';
-import '../../../utils/init/startup_tasks.dart';
-
+import '../../../app/init/app_start_flow_prefs.dart';
+import '../../../app/init/startup_tasks.dart';
 class AppStartFinishScreen extends StatefulWidget {
   const AppStartFinishScreen({super.key});
 

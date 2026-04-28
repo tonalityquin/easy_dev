@@ -4,12 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
     show Clipboard, ClipboardData, HapticFeedback;
 import 'package:shared_preferences/shared_preferences.dart';
-
+import '../../../../app/config/email_config.dart';
+import '../../../../app/init/app_navigator.dart';
 import '../../../../utils/auth/google_auth_session.dart';
-import '../../../../utils/config/email_config.dart';
 import 'package:googleapis/gmail/v1.dart' as gmail;
-
-import '../../../../utils/init/app_navigator.dart';
 import '../../../dev/debug/debug_api_logger.dart';
 
 class HeadMemo {

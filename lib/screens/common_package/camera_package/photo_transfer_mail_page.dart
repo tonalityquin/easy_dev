@@ -8,8 +8,8 @@ import 'package:flutter/services.dart';
 import 'package:googleapis/gmail/v1.dart' as gmail;
 import 'package:mime/mime.dart';
 
+import '../../../app/config/email_config.dart';
 import '../../../features/dev/debug/debug_api_logger.dart';
-import '../../../utils/config/email_config.dart';
 import '../../../utils/auth/google_auth_v7.dart';
 import '../../../widgets/dialog/status_dialog_package/status_dialog.dart';
 import 'photo_transfer_styles.dart';

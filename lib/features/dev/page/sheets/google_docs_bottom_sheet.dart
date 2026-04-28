@@ -4,8 +4,8 @@ import 'package:flutter/services.dart' show Clipboard, HapticFeedback;
 import 'package:googleapis/docs/v1.dart' as gdocs;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../app/init/app_navigator.dart';
 import '../../../../utils/auth/google_auth_session.dart';
-import '../../../../utils/init/app_navigator.dart';
 
 class GoogleDocsDocPanel {
   GoogleDocsDocPanel._();

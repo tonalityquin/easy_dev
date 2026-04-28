@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../../utils/init/work_schedule_prefs.dart';
+import '../../../../../app/init/work_schedule_prefs.dart';
 
 Future<void> showMyInfoDialog({required BuildContext context}) {
   return showDialog<void>(

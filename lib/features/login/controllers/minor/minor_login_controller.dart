@@ -3,9 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 
+import '../../../../app/init/work_schedule_prefs.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/account/domain/repositories/user_repository.dart';
-import '../../../../utils/init/work_schedule_prefs.dart';
 import '../../../../utils/tts/tts_ownership.dart';
 import '../../../../utils/tts/tts_user_filters.dart';
 import '../../../dev/application/area_state.dart';

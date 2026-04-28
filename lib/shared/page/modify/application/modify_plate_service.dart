@@ -6,6 +6,7 @@ import 'package:camera/camera.dart';
 
 import 'package:googleapis/storage/v1.dart' as gcs;
 
+import '../../../../app/config/auth_config.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/dev/debug/debug_api_logger.dart';
@@ -16,7 +17,6 @@ import '../../../../features/plate/domain/repositories/plate_repository.dart';
 import '../../../../utils/auth/gcs_image_uploader.dart';
 import '../../../../utils/auth/google_auth_session.dart';
 
-import '../../../../core/config/external_ids.dart';
 class ModifyPlateService {
   final BuildContext context;
   final List<XFile> capturedImages;
@@ -456,7 +456,7 @@ class ModifyPlateService {
     required String plateNumber,
     String? yearMonth,
   }) async {
-    final bucketName = kBucketName;
+    const bucketName = AuthConfig.gcsBucketName;
     final area = context.read<AreaState>().currentArea;
     final division = context.read<AreaState>().currentDivision;
 

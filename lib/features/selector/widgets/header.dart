@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 
+import '../../../app/init/app_exit_service.dart';
 import '../../../utils/db_connection_status_section.dart';
-import '../../../utils/init/app_exit_service.dart';
 import '../sheets/service_bottom_sheet.dart';
 
 const String _kPrivacyUrl =

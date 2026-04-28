@@ -4,15 +4,15 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:googleapis/storage/v1.dart' as gcs;
 
+import '../../app/config/auth_config.dart';
 import '../../features/dev/debug/debug_api_logger.dart';
 import 'google_auth_session.dart';
 
-import '../../core/config/external_ids.dart';
 class GcsImageUploader {
   final String bucketName;
 
   GcsImageUploader({String? bucketName})
-      : bucketName = bucketName ?? kBucketName;
+      : bucketName = bucketName ?? AuthConfig.gcsBucketName;
 
   Future<String?> _uploadForImage(
     File file,

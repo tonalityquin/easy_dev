@@ -7,8 +7,7 @@ import 'package:flutter/services.dart'
     HapticFeedback,
     FilteringTextInputFormatter,
     LengthLimitingTextInputFormatter;
-
-import '../../../utils/init/app_navigator.dart';
+import '../../../app/init/app_navigator.dart';
 import 'chat_bot_engine.dart';
 import 'chat_bot_tools.dart';
 

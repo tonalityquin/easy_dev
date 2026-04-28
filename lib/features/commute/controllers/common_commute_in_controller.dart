@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../app/config/commute_true_false_mode_config.dart';
+import '../../../app/init/work_schedule_prefs.dart';
 import '../../../features/account/applications/user_state.dart';
-import '../../../utils/init/work_schedule_prefs.dart';
-import '../../../utils/config/commute_true_false_mode_config.dart';
 import '../../dev/application/area_state.dart';
 import '../../dev/domain/repositories/area_repo_package/area_repository.dart';
 import '../domain/repositories/commute_true_false_repository.dart';

@@ -6,32 +6,26 @@ import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 
+import 'app/config/auth_config.dart';
+import 'app/config/overlay_edge_side_config.dart';
+import 'app/config/overlay_mode_config.dart';
 import 'app/di/providers.dart';
 import 'app/di/routes.dart';
+import 'app/init/app_exit_flag.dart';
+import 'app/init/app_navigator.dart';
 import 'app/theme/theme_prefs_controller.dart';
 import 'features/dev/page/sheets/dev_quick_actions.dart';
 import 'features/headquarter/application/hub_quick_actions.dart';
 import 'features/headquarter/page/sheets/head_memo.dart';
-
-import 'utils/init/app_navigator.dart';
-
 import 'utils/auth/google_auth_session.dart';
 import 'services/firebase_google_auth_bridge.dart';
 import 'screens/common_package/memo_package/chat_bot.dart';
-
 import 'utils/quick_overlay_main.dart';
-
-import 'utils/config/overlay_edge_side_config.dart';
-
-import 'utils/init/app_exit_flag.dart';
-
-import 'utils/config/overlay_mode_config.dart';
-
 import 'utils/tts/plate_tts_event_hub.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 
-import 'core/config/external_ids.dart';
+
 const String kDevUnlockPassword = 'DEV-MODE-2025!';
 
 const double kTopOverlayLogicalHeight = 520.0;
@@ -273,6 +267,8 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
   }
 
   Future<void> _initializeApp() async {
+    AuthConfig.validate();
+
     debugPrint('[MAIN][${_ts()}] Firebase.initializeApp');
     await Firebase.initializeApp();
 
@@ -288,7 +284,9 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
 
     debugPrint('[MAIN][${_ts()}] GoogleAuthSession.init (one-time OAuth)');
     try {
-      await GoogleAuthSession.instance.init(serverClientId: kWebClientId);
+      await GoogleAuthSession.instance.init(
+        serverClientId: AuthConfig.webClientId,
+      );
       debugPrint('[MAIN][${_ts()}] GoogleAuthSession.init done');
     } catch (e, st) {
       debugPrint('[MAIN][${_ts()}] GoogleAuthSession.init failed: $e\n$st');

@@ -11,9 +11,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:googleapis/gmail/v1.dart' as gmail;
 import 'package:googleapis/drive/v3.dart' as drive;
 
+import '../../../../app/config/email_config.dart';
+import '../../../../app/init/app_navigator.dart';
 import '../../../../utils/auth/google_auth_session.dart';
-import '../../../../utils/config/email_config.dart';
-import '../../../../utils/init/app_navigator.dart';
 
 class DevMemo {
   DevMemo._();

@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
 
+import '../../../../app/config/email_config.dart';
 import '../../../../features/account/domain/models/user/user_model.dart';
 import '../../../../features/account/domain/repositories/user_repository.dart';
 import '../../../../features/commute/domain/repositories/commute_log_repository.dart';
-import '../../../../utils/config/email_config.dart';
 import '../../../../utils/auth/google_auth_session.dart';
 import '../../../dashboard/applications/common/calendar_selection_state.dart';
 import 'utils/calendar_excel_mailer.dart';

@@ -12,7 +12,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:googleapis/gmail/v1.dart' as gmail;
 
 import '../../../../../utils/auth/google_auth_v7.dart';
-import '../../../../../utils/config/email_config.dart';
+import '../../../../app/config/email_config.dart';
 
 class StatisticsChartPage extends StatefulWidget {
   final Map<DateTime, Map<String, int>> reportDataMap;

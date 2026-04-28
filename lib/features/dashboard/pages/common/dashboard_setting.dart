@@ -7,7 +7,7 @@ import '../../../../../features/payment/applications/bill_state.dart';
 import '../../../../../features/plate/domain/repositories/plate_repository.dart';
 import '../../../../../utils/tts/tts_user_filters.dart';
 import '../../../../../utils/tts/tts_sync_helper.dart';
-import '../../../../../utils/init/logout_helper.dart';
+import '../../../../app/init/logout_helper.dart';
 import '../../../dev/application/area_state.dart';
 
 class DashboardSetting extends StatefulWidget {
