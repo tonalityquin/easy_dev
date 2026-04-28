@@ -1,10 +1,9 @@
 import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
-
-import '../../../../../features/plate/domain/models/plate_log_model.dart';
-import '../../../../../features/plate/domain/models/plate_model.dart';
-import '../../../../../features/plate/domain/repositories/plate_repository.dart';
-import '../../../../../widgets/bottom_sheet/billing_bottom_sheet/billing_bottom_sheet.dart';
+import '../../../../../features/payment/widgets/billing_bottom_sheet.dart';
+import '../../../../../shared/plate/domain/models/plate_log_model.dart';
+import '../../../../../shared/plate/domain/models/plate_model.dart';
+import '../../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../../common_package/log_package/log_viewer_bottom_sheet.dart';
 
 Future<PlateModel?> showTripleDepartureCompletedStatusBottomSheet({

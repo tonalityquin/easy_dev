@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-
 import '../../../../features/dashboard/pages/double/widgets/double_dash_board.dart';
-import '../../../../features/plate/domain/enums/plate_type.dart';
 import '../../../../screens/double_mode/type_package/double_parking_completed_page.dart';
+import '../../../plate/domain/enums/plate_type.dart';
 
 class DoublePageInfo {
   final String title;

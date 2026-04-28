@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-
-import '../../../../../utils/snackbar_helper.dart';
+import '../../../../../app/utils/snackbar_helper.dart';
 import '../../../widgets/game/minesweeper.dart';
 import '../../../widgets/game/tetris.dart';
 

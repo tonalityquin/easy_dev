@@ -1,16 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
-
+import '../../../../app/utils/snackbar_helper.dart';
+import '../../../../app/utils/status_dialog.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/payment/applications/bill_state.dart';
-import '../../../../features/plate/domain/repositories/ocr_learning_repository.dart';
-import '../../../../features/plate/domain/repositories/plate_repository.dart';
-import '../../../../utils/snackbar_helper.dart';
-import '../../../../widgets/dialog/status_dialog_package/action_trace_dialog.dart';
-import '../../../../widgets/dialog/status_dialog_package/status_dialog.dart';
+import '../../../plate/domain/repositories/plate_repository.dart';
+import '../../../plate/widgets/action_trace_dialog.dart';
 import '../application/input_plate_service.dart';
+import '../domain/repositories/ocr_learning_repository.dart';
 
 class InputPlateController {
   final bool isMinorMode;

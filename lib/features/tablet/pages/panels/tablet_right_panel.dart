@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../../shared/plate/application/common/movement_plate.dart';
+import '../../../../shared/plate/data/repositories/firestore_plate_repository.dart';
+import '../../../../shared/plate/domain/enums/plate_type.dart';
+import '../../../../shared/plate/domain/models/plate_model.dart';
 import '../../../location/applications/location_state.dart';
 import '../../../location/domain/models/location_model.dart';
-import '../../../plate/application/common/movement_plate.dart';
-import '../../../plate/data/repositories/firestore_plate_repository.dart';
-import '../../../plate/domain/enums/plate_type.dart';
-import '../../../plate/domain/models/plate_model.dart';
 import '../../applications/tablet_pad_mode_state.dart';
 import '../../domain/models/two_d/tablet_grid_2d_preview.dart'
     show

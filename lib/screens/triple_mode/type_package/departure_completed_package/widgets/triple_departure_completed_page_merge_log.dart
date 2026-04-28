@@ -6,10 +6,10 @@ import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 import 'package:googleapis/storage/v1.dart' as gcs;
 import 'package:http/http.dart' as http;
 
+import '../../../../../app/auth/google_auth_v7.dart';
 import '../../../../../app/config/auth_config.dart';
+import '../../../../../app/utils/status_dialog.dart';
 import '../../../../../features/dev/debug/debug_api_logger.dart';
-import '../../../../../utils/auth/google_auth_v7.dart';
-import '../../../../../widgets/dialog/status_dialog_package/status_dialog.dart';
 import 'triple_departure_completed_plate_image_dialog.dart';
 
 const String kBucketName = AuthConfig.gcsBucketName;

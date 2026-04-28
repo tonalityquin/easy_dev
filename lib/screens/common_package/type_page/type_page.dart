@@ -7,14 +7,14 @@ import '../../../app/models/capability.dart';
 import '../../../features/account/applications/user_state.dart';
 import '../../../features/dev/application/area_state.dart';
 import '../../../features/dev/debug/debug_action_recorder.dart';
-import '../../../features/plate/domain/enums/plate_type.dart';
-import '../../../features/plate/domain/repositories/plate_repository.dart';
 import '../../../features/voice/application/voice_appbar_ui_state.dart';
 import '../../../features/voice/controllers/voice_runtime_controller.dart';
-import '../../../services/driving_recovery/driving_recovery_gate.dart';
 import '../../../shared/page/application/common/type_view_mode_state.dart';
-import '../../../utils/tts/plate_tts_event_hub.dart';
-import '../../../utils/view_refresh/tts_view_refresh_service.dart';
+import '../../../shared/plate/application/common/driving_recovery_gate.dart';
+import '../../../shared/plate/domain/enums/plate_type.dart';
+import '../../../shared/plate/domain/repositories/plate_repository.dart';
+import '../../../shared/tts/application/plate_tts_event_hub.dart';
+import '../../../shared/tts/services/page/tts_view_refresh_service.dart';
 import 'type_page_bottom_bars.dart';
 
 typedef TypePageCurrentPageBuilder<PgState extends ChangeNotifier> = Widget

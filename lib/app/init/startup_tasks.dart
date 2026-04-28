@@ -1,9 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
+import '../../features/dashboard/applications/common/endtime_reminder_service.dart';
 import '../../screens/common_package/memo_package/chat_bot_tools.dart';
-import '../../services/endtime_reminder_service.dart';
 import 'foreground_entrypoints.dart';
 import 'local_notifications.dart';
 import 'work_schedule_prefs.dart';

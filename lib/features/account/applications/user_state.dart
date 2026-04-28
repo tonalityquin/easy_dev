@@ -1,18 +1,16 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
-
 import '../../../app/init/work_schedule_prefs.dart';
-import '../../../services/firebase_google_auth_bridge.dart';
-import '../../../utils/tts/plate_tts_listener_service.dart';
-import '../../../utils/tts/tts_ownership.dart';
-import '../../../utils/tts/tts_user_filters.dart';
+import '../../../shared/tts/application/tts_ownership.dart';
+import '../../../shared/tts/application/tts_user_filters.dart';
+import '../../../shared/tts/services/plate/plate_tts_listener_service.dart';
 import '../../commute/domain/repositories/commute_log_repository.dart';
+import '../../dashboard/applications/common/firebase_google_auth_bridge.dart';
 import '../../dev/application/area_state.dart';
 import '../domain/models/session_account.dart';
 import '../domain/models/tablet/tablet_model.dart';

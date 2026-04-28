@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../features/location/applications/location_state.dart';
 import '../../../features/location/domain/models/location_model.dart';
-import '../../../features/plate/application/common/view_doc_rows_store.dart';
+import '../../../shared/plate/application/common/view_doc_rows_store.dart';
 import 'parking_grid_3d_preview.dart';
 
 @immutable

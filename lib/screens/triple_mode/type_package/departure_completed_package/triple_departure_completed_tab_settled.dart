@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-
-import '../../../../features/plate/data/repositories/firestore_plate_repository.dart';
-import '../../../../features/plate/domain/models/plate_log_model.dart';
-import '../../../../features/plate/domain/models/plate_model.dart';
+import '../../../../shared/plate/data/repositories/firestore_plate_repository.dart';
+import '../../../../shared/plate/domain/models/plate_log_model.dart';
+import '../../../../shared/plate/domain/models/plate_model.dart';
 import '../departure_completed_package/widgets/triple_departure_completed_page_merge_log.dart';
 import '../departure_completed_package/widgets/triple_departure_completed_page_today_log.dart';
 

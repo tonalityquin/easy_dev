@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:provider/provider.dart';
-
+import '../../../../app/utils/snackbar_helper.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/payment/applications/bill_state.dart';
 import '../../../../features/payment/domain/models/bill_model.dart';
 import '../../../../features/payment/domain/models/regular_bill_model.dart';
-import '../../../../features/plate/application/double/double_plate_state.dart';
-import '../../../../features/plate/data/repositories/firestore_plate_repository.dart';
-import '../../../../features/plate/domain/enums/plate_type.dart';
-import '../../../../features/plate/domain/models/plate_model.dart';
-import '../../../../utils/snackbar_helper.dart';
-import '../../../../widgets/dialog/status_dialog_package/action_trace_dialog.dart';
+import '../../../plate/application/double/double_plate_state.dart';
+import '../../../plate/data/repositories/firestore_plate_repository.dart';
+import '../../../plate/domain/enums/plate_type.dart';
+import '../../../plate/domain/models/plate_model.dart';
+import '../../../plate/widgets/action_trace_dialog.dart';
 import '../application/modify_plate_service.dart';
 
 class ModifyPlateController {

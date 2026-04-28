@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../features/account/applications/user_state.dart';
-import '../../../../../features/plate/application/common/delete_plate.dart';
-import '../../../../../features/plate/application/common/movement_plate.dart';
-import '../../../../../features/plate/domain/enums/plate_type.dart';
-import '../../../../../features/plate/domain/models/plate_model.dart';
-import '../../../../../features/plate/domain/repositories/plate_repository.dart';
-import '../../../../../widgets/dialog/plate_remove_dialog.dart';
+import '../../../../../shared/plate/application/common/delete_plate.dart';
+import '../../../../../shared/plate/application/common/movement_plate.dart';
+import '../../../../../shared/plate/domain/enums/plate_type.dart';
+import '../../../../../shared/plate/domain/models/plate_model.dart';
+import '../../../../../shared/plate/domain/repositories/plate_repository.dart';
+import '../../../../../shared/plate/widgets/plate_remove_dialog.dart';
 
 Future<bool> showParkingCompletedDeleteDialog(
   BuildContext context,

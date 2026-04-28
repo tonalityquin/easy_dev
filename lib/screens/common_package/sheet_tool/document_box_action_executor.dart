@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-
-import '../../../widgets/dialog/block_dialog_package/break_duration_blocking_dialog.dart';
-import '../../../widgets/dialog/block_dialog_package/work_end_duration_blocking_dialog.dart';
+import '../../../app/utils/block_dialog/break_duration_blocking_dialog.dart';
+import '../../../app/utils/block_dialog/work_end_duration_blocking_dialog.dart';
 import '../document_package/backup/backup_form_page.dart';
 import '../document_package/user_statement/user_statement_form_page.dart';
 import '../document_package/work_end_report/dashboard_end_report_form_page.dart';

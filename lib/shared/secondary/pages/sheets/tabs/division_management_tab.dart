@@ -1,9 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-
-import '../../../../../utils/snackbar_helper.dart';
-
-import '../../../../../utils/usage/usage_reporter.dart';
+import '../../../../../app/usage/usage_reporter.dart';
+import '../../../../../app/utils/snackbar_helper.dart';
 
 class DivisionManagementTab extends StatefulWidget {
   final List<String> divisionList;
@@ -25,7 +23,7 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
   final TextEditingController _controller = TextEditingController();
 
   bool _adding = false;
-  String? _deletingDivisionName; 
+  String? _deletingDivisionName;
 
   @override
   void dispose() {
@@ -41,7 +39,7 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
       showSelectedSnackbar(context, '회사 이름을 입력해주세요.');
       return;
     }
-    
+
     if (input.contains('/')) {
       showSelectedSnackbar(context, '회사 이름에 "/" 문자는 사용할 수 없습니다.');
       return;
@@ -49,10 +47,8 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
 
     setState(() => _adding = true);
     try {
-      
       await widget.onDivisionAdded(input);
 
-      
       try {
         await UsageReporter.instance.report(
           area: input,
@@ -62,18 +58,15 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
         );
       } catch (_) {}
 
-      
       final areaId = '$input-$input';
       await FirebaseFirestore.instance.collection('areas').doc(areaId).set({
         'name': input,
         'division': input,
         'isHeadquarter': true,
-        
         'modes': const ['service', 'lite'],
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      
       try {
         await UsageReporter.instance.report(
           area: input,
@@ -92,7 +85,6 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
       if (!mounted) return;
       showFailedSnackbar(context, '회사 추가 실패: $e');
     } finally {
-      
       if (mounted) {
         setState(() => _adding = false);
       }
@@ -106,31 +98,31 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
       return;
     }
 
-    
     final ok = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('회사 삭제'),
-        content: Text('"$division" 회사와 소속 지역을 모두 삭제하시겠습니까?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('삭제')),
-        ],
-      ),
-    ) ??
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('회사 삭제'),
+            content: Text('"$division" 회사와 소속 지역을 모두 삭제하시겠습니까?'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('취소')),
+              TextButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('삭제')),
+            ],
+          ),
+        ) ??
         false;
 
     if (!ok) return;
 
-    
     if (!mounted) return;
     setState(() => _deletingDivisionName = division);
 
     try {
-      
       await widget.onDivisionDeleted(division);
 
-      
       try {
         await UsageReporter.instance.report(
           area: division,
@@ -139,14 +131,11 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
           source: 'DivisionManagementTab.deleteDivision.cascade.callback',
         );
       } catch (_) {}
-
-      
     } catch (e) {
       if (mounted) {
         showFailedSnackbar(context, '삭제 실패: $e');
       }
     } finally {
-      
       if (mounted) {
         setState(() => _deletingDivisionName = null);
       }
@@ -169,16 +158,19 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
           ElevatedButton.icon(
             icon: _adding
                 ? const SizedBox(
-              height: 16,
-              width: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Icon(Icons.add_business),
             label: Text(_adding ? '추가 중...' : '회사 추가'),
-            onPressed: _adding || _deletingDivisionName != null ? null : _handleAddDivision,
+            onPressed: _adding || _deletingDivisionName != null
+                ? null
+                : _handleAddDivision,
           ),
           const SizedBox(height: 20),
-          const Text('등록된 회사 목록', style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text('등록된 회사 목록',
+              style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 10),
           Expanded(
             child: Stack(
@@ -193,16 +185,18 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
                       title: Text(division),
                       trailing: deleting
                           ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
                           : IconButton(
-                        icon: const Icon(Icons.delete, color: Colors.redAccent),
-                        onPressed: (_deletingDivisionName != null || _adding)
-                            ? null
-                            : () => _handleDeleteDivision(division),
-                      ),
+                              icon: const Icon(Icons.delete,
+                                  color: Colors.redAccent),
+                              onPressed:
+                                  (_deletingDivisionName != null || _adding)
+                                      ? null
+                                      : () => _handleDeleteDivision(division),
+                            ),
                     );
                   },
                 ),
@@ -213,7 +207,8 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
                     right: 0,
                     child: Center(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 8),
                         decoration: BoxDecoration(
                           color: Colors.black.withOpacity(0.6),
                           borderRadius: BorderRadius.circular(8),

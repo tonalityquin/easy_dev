@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../app/init/db_connection_status_section.dart';
 import '../../../../../screens/triple_mode/type_package/common_widgets/dashboard_bottom_sheet/triple_hq_dash_board_page.dart';
-import '../../../../../utils/db_connection_status_section.dart';
-import '../../../../../widgets/navigation/triple_top_navigation.dart';
+import '../../../../../shared/page/widget/navigation/triple_top_navigation.dart';
 
 double _contrastRatio(Color a, Color b) {
   final la = a.computeLuminance();

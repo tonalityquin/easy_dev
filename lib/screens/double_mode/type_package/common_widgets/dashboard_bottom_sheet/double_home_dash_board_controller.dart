@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../../../../../features/account/applications/user_state.dart';
-import '../../../../../services/endtime_reminder_service.dart';
+import '../../../../../features/dashboard/applications/common/endtime_reminder_service.dart';
+import '../../../../../features/dashboard/applications/common/sheet_upload_result.dart';
 import 'utils/double_clock_out_save.dart';
 import 'utils/double_break_save.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import '../../../../../../utils/auth/sheet_upload_result.dart';
 
 const kIsWorkingPrefsKey = 'isWorking';
 

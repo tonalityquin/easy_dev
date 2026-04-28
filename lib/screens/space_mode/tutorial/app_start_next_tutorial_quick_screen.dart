@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../app/di/routes.dart';
-import '../../../widgets/tutorial/tutorial_image_split_page.dart';
+import '../../../app/tutorial/tutorial_image_split_page.dart';
 
 class AppStartNextTutorialQuickScreen extends StatefulWidget {
   const AppStartNextTutorialQuickScreen({super.key});

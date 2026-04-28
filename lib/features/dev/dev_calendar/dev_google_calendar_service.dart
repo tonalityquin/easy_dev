@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 import 'package:googleapis_auth/googleapis_auth.dart' as auth;
 
-import '../../../../utils/auth/google_auth_session.dart';
+import '../../../app/auth/google_auth_session.dart';
 
 class DevGoogleCalendarService {
   auth.AuthClient? _client;

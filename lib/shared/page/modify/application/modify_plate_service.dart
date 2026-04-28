@@ -6,16 +6,16 @@ import 'package:camera/camera.dart';
 
 import 'package:googleapis/storage/v1.dart' as gcs;
 
+import '../../../../app/auth/gcs_image_uploader.dart';
+import '../../../../app/auth/google_auth_session.dart';
 import '../../../../app/config/auth_config.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/dev/debug/debug_api_logger.dart';
-import '../../../../features/plate/domain/enums/plate_type.dart';
-import '../../../../features/plate/domain/models/plate_log_model.dart';
-import '../../../../features/plate/domain/models/plate_model.dart';
-import '../../../../features/plate/domain/repositories/plate_repository.dart';
-import '../../../../utils/auth/gcs_image_uploader.dart';
-import '../../../../utils/auth/google_auth_session.dart';
+import '../../../plate/domain/enums/plate_type.dart';
+import '../../../plate/domain/models/plate_log_model.dart';
+import '../../../plate/domain/models/plate_model.dart';
+import '../../../plate/domain/repositories/plate_repository.dart';
 
 class ModifyPlateService {
   final BuildContext context;

@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../../app/utils/block_dialog/break_duration_blocking_dialog.dart';
+import '../../../../../app/utils/block_dialog/work_end_duration_blocking_dialog.dart';
 import '../../../../../screens/common_package/document_package/backup/backup_form_page.dart';
 import '../../../../../screens/common_package/document_package/user_statement/user_statement_form_page.dart';
-import '../../../../../widgets/dialog/block_dialog_package/break_duration_blocking_dialog.dart';
-import '../../../../../widgets/dialog/block_dialog_package/work_end_duration_blocking_dialog.dart';
 import '../../../../account/applications/user_state.dart';
 import '../../../../commute/domain/repositories/commute_log_repository.dart';
 import '../../../../dev/application/area_state.dart';

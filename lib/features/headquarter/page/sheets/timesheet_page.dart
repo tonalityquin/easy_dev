@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:googleapis/sheets/v4.dart' as sheets;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../utils/auth/google_auth_session.dart';
+import '../../../../app/auth/google_auth_session.dart';
+
 enum TimesheetTab { attendance, breakTime }
 
 Future<sheets.SheetsApi> _sheetsApi() async {

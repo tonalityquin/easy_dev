@@ -1,9 +1,9 @@
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../../../../features/plate/domain/enums/plate_type.dart';
-import '../../../../../../../features/plate/domain/models/plate_model.dart';
+import '../../../../../../../shared/plate/domain/enums/plate_type.dart';
+import '../../../../../../../shared/plate/domain/models/plate_model.dart';
+
 class TripleParkingCompletedPlateSearchResults extends StatelessWidget {
   final List<PlateModel> results;
   final void Function(PlateModel) onSelect;
@@ -48,10 +48,15 @@ class TripleParkingCompletedPlateSearchResults extends StatelessWidget {
             final paymentMethod = plate.paymentMethod;
             final lockedAtSec = plate.lockedAtTimeInSeconds;
 
-            final locationText = plate.location.trim().isEmpty ? '-' : plate.location.trim();
+            final locationText =
+                plate.location.trim().isEmpty ? '-' : plate.location.trim();
 
-            final backgroundColor = plate.isSelected ? cs.primaryContainer.withOpacity(0.35) : cs.surface;
-            final borderColor = plate.isSelected ? cs.primary : cs.outlineVariant.withOpacity(0.85);
+            final backgroundColor = plate.isSelected
+                ? cs.primaryContainer.withOpacity(0.35)
+                : cs.surface;
+            final borderColor = plate.isSelected
+                ? cs.primary
+                : cs.outlineVariant.withOpacity(0.85);
 
             final labelColor = _getLabelColor(cs, plate.typeEnum);
             final labelBgColor = _getLabelBackground(cs, plate.typeEnum);
@@ -66,23 +71,23 @@ class TripleParkingCompletedPlateSearchResults extends StatelessWidget {
 
             final settledChip = isLocked
                 ? _buildChip(
-              cs: cs,
-              text: lockedFeeAmount != null
-                  ? '사전 정산 ₩${currency.format(lockedFeeAmount)}'
-                  : '사전 정산',
-              fg: cs.tertiary,
-              bg: cs.tertiaryContainer.withOpacity(0.35),
-              borderColor: cs.tertiary.withOpacity(0.45),
-              icon: Icons.lock,
-            )
+                    cs: cs,
+                    text: lockedFeeAmount != null
+                        ? '사전 정산 ₩${currency.format(lockedFeeAmount)}'
+                        : '사전 정산',
+                    fg: cs.tertiary,
+                    bg: cs.tertiaryContainer.withOpacity(0.35),
+                    borderColor: cs.tertiary.withOpacity(0.45),
+                    icon: Icons.lock,
+                  )
                 : _buildChip(
-              cs: cs,
-              text: '미정산',
-              fg: cs.onSurfaceVariant,
-              bg: cs.surfaceContainerLow,
-              borderColor: cs.outlineVariant.withOpacity(0.85),
-              icon: Icons.lock_open,
-            );
+                    cs: cs,
+                    text: '미정산',
+                    fg: cs.onSurfaceVariant,
+                    bg: cs.surfaceContainerLow,
+                    borderColor: cs.outlineVariant.withOpacity(0.85),
+                    icon: Icons.lock_open,
+                  );
 
             final showDetailSection = plate.isSelected ||
                 (plate.selectedBy?.isNotEmpty ?? false) ||
@@ -91,7 +96,9 @@ class TripleParkingCompletedPlateSearchResults extends StatelessWidget {
                 isLocked;
 
             final lockedAtText = (lockedAtSec is int)
-                ? _formatTime(DateTime.fromMillisecondsSinceEpoch(lockedAtSec * 1000).toLocal())
+                ? _formatTime(
+                    DateTime.fromMillisecondsSinceEpoch(lockedAtSec * 1000)
+                        .toLocal())
                 : null;
 
             return Material(
@@ -116,7 +123,6 @@ class TripleParkingCompletedPlateSearchResults extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
@@ -126,9 +132,11 @@ class TripleParkingCompletedPlateSearchResults extends StatelessWidget {
                             decoration: BoxDecoration(
                               color: cs.primary.withOpacity(0.10),
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+                              border: Border.all(
+                                  color: cs.outlineVariant.withOpacity(0.85)),
                             ),
-                            child: Icon(Icons.directions_car, size: 18, color: cs.primary),
+                            child: Icon(Icons.directions_car,
+                                size: 18, color: cs.primary),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -155,9 +163,7 @@ class TripleParkingCompletedPlateSearchResults extends StatelessWidget {
                           ),
                         ],
                       ),
-
                       const SizedBox(height: 12),
-
                       _InfoRow(
                         icon: Icons.access_time,
                         text: '요청 시간: $formattedTime',
@@ -167,7 +173,6 @@ class TripleParkingCompletedPlateSearchResults extends StatelessWidget {
                         icon: Icons.location_on,
                         text: '주차 구역: $locationText',
                       ),
-
                       if (showDetailSection) ...[
                         const SizedBox(height: 10),
                         Container(
@@ -176,7 +181,8 @@ class TripleParkingCompletedPlateSearchResults extends StatelessWidget {
                           decoration: BoxDecoration(
                             color: cs.surfaceContainerLow,
                             borderRadius: BorderRadius.circular(14),
-                            border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+                            border: Border.all(
+                                color: cs.outlineVariant.withOpacity(0.85)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -190,29 +196,35 @@ class TripleParkingCompletedPlateSearchResults extends StatelessWidget {
                                     fontWeight: FontWeight.w800,
                                   ),
                                 ),
-                              if (plate.selectedBy != null && plate.selectedBy!.isNotEmpty) ...[
+                              if (plate.selectedBy != null &&
+                                  plate.selectedBy!.isNotEmpty) ...[
                                 const SizedBox(height: 6),
                                 _LabeledPill(
                                   icon: Icons.person,
                                   label: '선택자',
                                   value: plate.selectedBy!,
                                   toneColor: cs.onSurface,
-                                  borderColor: cs.outlineVariant.withOpacity(0.85),
+                                  borderColor:
+                                      cs.outlineVariant.withOpacity(0.85),
                                   bgColor: cs.surface,
                                 ),
                               ],
-                              if (plate.billingType != null && plate.billingType!.isNotEmpty) ...[
+                              if (plate.billingType != null &&
+                                  plate.billingType!.isNotEmpty) ...[
                                 const SizedBox(height: 8),
                                 Text(
                                   '과금 유형: ${plate.billingType}',
-                                  style: TextStyle(fontSize: 13, color: cs.onSurface),
+                                  style: TextStyle(
+                                      fontSize: 13, color: cs.onSurface),
                                 ),
                               ],
-                              if (plate.customStatus != null && plate.customStatus!.isNotEmpty) ...[
+                              if (plate.customStatus != null &&
+                                  plate.customStatus!.isNotEmpty) ...[
                                 const SizedBox(height: 4),
                                 Text(
                                   '커스텀 상태: ${plate.customStatus}',
-                                  style: TextStyle(fontSize: 13, color: cs.onSurface),
+                                  style: TextStyle(
+                                      fontSize: 13, color: cs.onSurface),
                                 ),
                               ],
                               if (isLocked) ...[
@@ -221,10 +233,11 @@ class TripleParkingCompletedPlateSearchResults extends StatelessWidget {
                                   icon: Icons.receipt_long,
                                   iconColor: cs.tertiary,
                                   text:
-                                  '정산 금액: ${lockedFeeAmount != null ? '₩${currency.format(lockedFeeAmount)}' : '-'}',
+                                      '정산 금액: ${lockedFeeAmount != null ? '₩${currency.format(lockedFeeAmount)}' : '-'}',
                                   strong: true,
                                 ),
-                                if (paymentMethod != null && paymentMethod.isNotEmpty) ...[
+                                if (paymentMethod != null &&
+                                    paymentMethod.isNotEmpty) ...[
                                   const SizedBox(height: 4),
                                   _InfoRow(
                                     icon: Icons.payment,
@@ -400,12 +413,14 @@ class _LabeledPill extends StatelessWidget {
           const SizedBox(width: 8),
           Text(
             '$label: ',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: cs.onSurface),
+            style: TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w900, color: cs.onSurface),
           ),
           Expanded(
             child: Text(
               value,
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: toneColor),
+              style: TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w800, color: toneColor),
               overflow: TextOverflow.ellipsis,
             ),
           ),

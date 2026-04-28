@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/di/routes.dart';
-import '../../../widgets/tutorial/tutorial_image_split_page.dart';
+import '../../../app/tutorial/tutorial_image_split_page.dart';
 import 'tutorial_start_pages.dart';
 
 class AppStartNextTutorialFullScreen extends StatefulWidget {

@@ -5,9 +5,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../app/di/routes.dart';
 import '../../features/account/applications/user_state.dart';
-import '../../utils/snackbar_helper.dart';
-import '../../widgets/dialog/block_dialog_package/blocking_dialog.dart';
-import '../../services/firebase_google_auth_bridge.dart';
+import '../../features/dashboard/applications/common/firebase_google_auth_bridge.dart';
+import '../utils/block_dialog/blocking_dialog.dart';
+import '../utils/snackbar_helper.dart';
 
 class LogoutHelper {
   static Future<void> logoutAndGoToLogin(

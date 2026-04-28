@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-
-import '../../../../../features/plate/data/repositories/firestore_plate_repository.dart';
-import '../../../../../features/plate/domain/models/plate_model.dart';
+import '../../../../../shared/plate/data/repositories/firestore_plate_repository.dart';
+import '../../../../../shared/plate/domain/models/plate_model.dart';
 import '../widgets/triple_departure_completed_status_bottom_sheet.dart';
 import 'keypad/animated_keypad.dart';
 import 'widgets/triple_departure_completed_plate_number_display.dart';

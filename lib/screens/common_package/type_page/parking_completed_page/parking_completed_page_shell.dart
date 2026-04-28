@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../app/init/db_connection_status_section.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/voice/application/voice_appbar_ui_state.dart';
 import '../../../../features/voice/page/voice/widgets/voice_parking_completed_appbar_panel.dart';
-import '../../../../utils/db_connection_status_section.dart';
 import '../../real_time_table/view_doc_rows_firestore_sync.dart';
 
 double parkingCompletedContrastRatio(Color a, Color b) {

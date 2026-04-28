@@ -1,20 +1,18 @@
 import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-
 import '../../../../../features/account/applications/user_state.dart';
 import '../../../../../features/dev/application/area_state.dart';
-import '../../../../../features/plate/application/common/movement_plate.dart';
-import '../../../../../features/plate/application/minor/minor_plate_state.dart';
-import '../../../../../features/plate/domain/enums/plate_type.dart';
-import '../../../../../features/plate/domain/models/plate_log_model.dart';
-import '../../../../../features/plate/domain/models/plate_model.dart';
-import '../../../../../features/plate/domain/repositories/plate_repository.dart';
+import '../../../../../features/payment/widgets/billing_bottom_sheet.dart';
+import '../../../../../features/payment/widgets/confirm_cancel_fee_dialog.dart';
 import '../../../../../shared/page/modify/pages/modify_plate_screen.dart';
-import '../../../../../widgets/bottom_sheet/billing_bottom_sheet/billing_bottom_sheet.dart';
-import '../../../../../widgets/dialog/confirm_cancel_fee_dialog.dart';
+import '../../../../../shared/plate/application/common/movement_plate.dart';
+import '../../../../../shared/plate/application/minor/minor_plate_state.dart';
+import '../../../../../shared/plate/domain/enums/plate_type.dart';
+import '../../../../../shared/plate/domain/models/plate_log_model.dart';
+import '../../../../../shared/plate/domain/models/plate_model.dart';
+import '../../../../../shared/plate/domain/repositories/plate_repository.dart';
 import 'input_location_bottom_sheet.dart';
 import '../../../../common_package/log_package/log_viewer_bottom_sheet.dart';
 import '../../../../common_package/type_page/parking_completed_page/parking_completed_bottom_sheet/parking_completed_status_helpers.dart';

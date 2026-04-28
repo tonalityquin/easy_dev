@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-
 import '../../../../features/dashboard/pages/triple/widgets/triple_dash_board.dart';
-import '../../../../features/plate/domain/enums/plate_type.dart';
 import '../../../../screens/triple_mode/type_package/triple_parking_completed_page.dart';
+import '../../../plate/domain/enums/plate_type.dart';
 
 class TriplePageInfo {
   final String title;

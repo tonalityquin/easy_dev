@@ -7,8 +7,8 @@ import '../../../../app/init/logout_helper.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/location/applications/location_state.dart';
 import '../../../../features/payment/applications/bill_state.dart';
-import '../../../../utils/tts/tts_user_filters.dart';
-import '../../../../utils/tts/tts_sync_helper.dart';
+import '../../../tts/application/tts_sync_helper.dart';
+import '../../../tts/application/tts_user_filters.dart';
 
 class DashboardSetting extends StatefulWidget {
   const DashboardSetting({super.key});

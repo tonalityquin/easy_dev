@@ -4,9 +4,9 @@ import 'package:provider/provider.dart';
 
 import '../../../../app/di/routes.dart';
 import '../../../../shared/page/application/double/double_page_info.dart';
+import '../../../../shared/plate/application/double/double_plate_state.dart';
 import '../../../../shared/secondary/pages/secondary_page.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
-import '../../../plate/application/double/double_plate_state.dart';
 import '../../../selector/application/dev_auth.dart';
 import '../../applications/double/double_hq_state.dart';
 

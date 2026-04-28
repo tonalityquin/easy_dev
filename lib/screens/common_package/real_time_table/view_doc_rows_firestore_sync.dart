@@ -6,8 +6,8 @@ import 'package:provider/provider.dart';
 
 import '../../../features/account/applications/user_state.dart';
 import '../../../features/dev/application/area_state.dart';
-import '../../../features/plate/application/common/view_doc_rows_store.dart';
-import '../../../features/plate/domain/repositories/plate_repository.dart';
+import '../../../shared/plate/application/common/view_doc_rows_store.dart';
+import '../../../shared/plate/domain/repositories/plate_repository.dart';
 
 @immutable
 class ViewDocSyncSpec {

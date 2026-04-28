@@ -3,11 +3,11 @@ import 'package:provider/provider.dart';
 
 import '../../../../../features/account/applications/user_state.dart';
 import '../../../../../features/dev/application/area_state.dart';
-import '../../../../../features/plate/application/double/double_plate_state.dart';
-import '../../../../../features/plate/domain/enums/plate_type.dart';
-import '../../../../../features/plate/domain/models/plate_model.dart';
-import '../../../../../features/plate/domain/repositories/plate_repository.dart';
-import '../../../../../widgets/bottom_sheet/billing_bottom_sheet/billing_bottom_sheet.dart';
+import '../../../../../features/payment/widgets/billing_bottom_sheet.dart';
+import '../../../../../shared/plate/application/double/double_plate_state.dart';
+import '../../../../../shared/plate/domain/enums/plate_type.dart';
+import '../../../../../shared/plate/domain/models/plate_model.dart';
+import '../../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../../common_package/log_package/log_viewer_bottom_sheet.dart';
 
 Future<PlateModel?> showDoubleDepartureCompletedStatusBottomSheet({

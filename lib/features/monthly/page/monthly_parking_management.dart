@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../features/account/applications/user_state.dart';
-import '../../plate/domain/repositories/plate_repository.dart';
-import '../../plate/domain/services/plate_status_record.dart';
+import '../../../shared/plate/domain/repositories/plate_repository.dart';
+import '../../../shared/plate/domain/services/plate_status_record.dart';
 import 'sheets/monthly_plate_bottom_sheet.dart';
 
 enum _ListFilter { all, expiringSoon, expired, hasMemo }

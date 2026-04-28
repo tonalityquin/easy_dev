@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-
-import '../../../../../features/plate/domain/repositories/plate_repository.dart';
-import '../../../../../features/plate/domain/services/plate_status_record.dart';
-import '../../../../../utils/usage/usage_reporter.dart';
+import '../../../../../app/usage/usage_reporter.dart';
+import '../../../../plate/domain/repositories/plate_repository.dart';
+import '../../../../plate/domain/services/plate_status_record.dart';
 
 String _formatDate(DateTime? value, String? raw) {
   if (value != null) {

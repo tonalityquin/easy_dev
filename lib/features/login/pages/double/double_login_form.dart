@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../../../widgets/dialog/status_dialog_package/status_dialog.dart';
 import '../../../../app/di/routes.dart';
+import '../../../../app/utils/status_dialog.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
 import '../../controllers/double/double_login_controller.dart';
 

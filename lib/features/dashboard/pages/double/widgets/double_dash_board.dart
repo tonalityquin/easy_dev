@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../app/init/db_connection_status_section.dart';
 import '../../../../../screens/double_mode/type_package/common_widgets/dashboard_bottom_sheet/double_hq_dash_board_page.dart';
-import '../../../../../utils/db_connection_status_section.dart';
-import '../../../../../widgets/navigation/double_top_navigation.dart';
+import '../../../../../shared/page/widget/navigation/double_top_navigation.dart';
 
 double _contrastRatio(Color a, Color b) {
   final la = a.computeLuminance();
@@ -115,7 +115,7 @@ class DoubleDashBoard extends StatelessWidget {
                     alignment: Alignment.topRight,
                     child: Padding(
                       padding:
-                      const EdgeInsets.only(right: 12, top: 8, bottom: 8),
+                          const EdgeInsets.only(right: 12, top: 8, bottom: 8),
                       child: SizedBox(
                         height: kToolbarHeight - 8,
                         child: ConstrainedBox(

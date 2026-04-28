@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../widgets/dialog/block_dialog_package/work_start_duration_blocking_dialog.dart';
-import '../../../../widgets/dialog/status_dialog_package/status_dialog.dart';
+import '../../../../app/utils/block_dialog/work_start_duration_blocking_dialog.dart';
+import '../../../../app/utils/status_dialog.dart';
 import '../../../account/applications/user_state.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
 import '../../controllers/common_commute_in_controller.dart';

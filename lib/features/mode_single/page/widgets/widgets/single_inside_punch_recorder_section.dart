@@ -4,8 +4,8 @@ import 'package:intl/intl.dart';
 
 import '../../../../../app/config/commute_true_false_mode_config.dart';
 import '../../../../../app/init/app_exit_service.dart';
-import '../../../../../widgets/dialog/block_dialog_package/work_end_duration_blocking_dialog.dart';
-import '../../../../../widgets/dialog/block_dialog_package/work_start_duration_blocking_dialog.dart';
+import '../../../../../app/utils/block_dialog/work_end_duration_blocking_dialog.dart';
+import '../../../../../app/utils/block_dialog/work_start_duration_blocking_dialog.dart';
 import '../../../../commute/domain/repositories/commute_true_false_repository.dart';
 import '../../../application/att_brk_repository.dart';
 import 'single_punch_card_feedback.dart';

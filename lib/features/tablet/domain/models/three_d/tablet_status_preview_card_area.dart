@@ -5,10 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../../shared/plate/application/common/view_doc_rows_store.dart';
+import '../../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../../location/applications/location_state.dart';
 import '../../../../location/domain/models/location_model.dart';
-import '../../../../plate/application/common/view_doc_rows_store.dart';
-import '../../../../plate/domain/repositories/plate_repository.dart';
 import 'tablet_grid_3d_preview.dart';
 
 @immutable

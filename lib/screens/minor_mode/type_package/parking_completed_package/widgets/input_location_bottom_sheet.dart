@@ -8,7 +8,7 @@ import '../../../../../features/location/applications/location_state.dart';
 import '../../../../../features/location/domain/models/grid_rect.dart';
 import '../../../../../features/location/domain/models/location_model.dart';
 import '../../../../../features/location/domain/models/parking_grid_model.dart';
-import '../../../../../features/plate/domain/repositories/plate_repository.dart';
+import '../../../../../shared/plate/domain/repositories/plate_repository.dart';
 
 enum _BlockedSlotKind { parked, departureRequest }
 

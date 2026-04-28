@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../shared/plate/application/common/view_doc_rows_store.dart';
+import '../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../dev/application/area_state.dart';
-import '../../../plate/application/common/view_doc_rows_store.dart';
-import '../../../plate/domain/repositories/plate_repository.dart';
 
 class LeftPaneDeparturePlates extends StatelessWidget {
   const LeftPaneDeparturePlates({

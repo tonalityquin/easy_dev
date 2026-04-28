@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
-import '../application/hub_quick_actions.dart';
+import '../application/fab/hub_quick_actions.dart';
 import '../widgets/hr/attendance_calendar.dart' as hr_att;
 import '../widgets/hr/break_calendar.dart' as hr_break;
 import '../widgets/mgmt/field.dart' as mgmt;

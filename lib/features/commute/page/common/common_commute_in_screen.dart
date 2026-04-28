@@ -1,13 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import '../../../../app/di/routes.dart';
+import '../../../../app/init/db_connection_status_section.dart';
 import '../../../../app/init/logout_helper.dart';
-import '../../../../services/endtime_reminder_service.dart';
-import '../../../../utils/db_connection_status_section.dart';
-import '../../../../widgets/dialog/status_dialog_package/status_dialog.dart';
+import '../../../../app/utils/status_dialog.dart';
 import '../../../account/applications/user_state.dart';
+import '../../../dashboard/applications/common/endtime_reminder_service.dart';
 import '../../controllers/common_commute_in_controller.dart';
 import '../../utils/common_brand_tinted_logo.dart';
 import '../../utils/commute_mode_spec.dart';

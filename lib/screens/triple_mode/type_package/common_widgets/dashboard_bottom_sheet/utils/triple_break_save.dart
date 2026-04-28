@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../../features/account/applications/user_state.dart';
+import '../../../../../../features/dashboard/applications/common/sheet_upload_result.dart';
 import '../../../../../../features/dev/application/area_state.dart';
 import '../../../../../../features/mode_single/application/att_brk_repository.dart';
-import '../../../../../../utils/auth/sheet_upload_result.dart';
 
 class TripleBreakSave {
   static Future<SheetUploadResult> uploadBreakJson({

@@ -6,16 +6,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../app/di/routes.dart';
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/logout_helper.dart';
+import '../../../../app/utils/block_dialog/work_end_duration_blocking_dialog.dart';
 import '../../../../screens/common_package/sheet_tool/document_box_action_executor.dart';
 import '../../../../screens/common_package/sheet_tool/leader_document_box_sheet.dart';
-import '../../../../utils/area_master_cache.dart';
-import '../../../../widgets/dialog/block_dialog_package/work_end_duration_blocking_dialog.dart';
+import '../../../../shared/plate/domain/enums/plate_type.dart';
+import '../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../account/applications/user_state.dart';
 import '../../../dev/debug/debug_action_recorder.dart';
 import '../../../dev/domain/repositories/area_repo_package/area_repository.dart';
+import '../../../headquarter/application/area/area_master_cache.dart';
 import '../../../mode_single/application/att_brk_repository.dart';
-import '../../../plate/domain/enums/plate_type.dart';
-import '../../../plate/domain/repositories/plate_repository.dart';
 import '../../../selector/sheets/service_bottom_sheet.dart';
 
 enum HqDashBoardStylePreset {

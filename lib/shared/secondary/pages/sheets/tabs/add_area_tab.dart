@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
-import '../../../../../utils/snackbar_helper.dart';
-
-import '../../../../../utils/usage/usage_reporter.dart';
+import '../../../../../app/usage/usage_reporter.dart';
+import '../../../../../app/utils/snackbar_helper.dart';
 
 class AddAreaTab extends StatefulWidget {
   final String? selectedDivision;
@@ -25,15 +23,11 @@ class _AddAreaTabState extends State<AddAreaTab> {
   final TextEditingController _areaController = TextEditingController();
   final TextEditingController _englishAreaController = TextEditingController();
 
-  bool _adding = false; 
-  String? _deletingAreaName; 
+  bool _adding = false;
+  String? _deletingAreaName;
 
-  Future<List<String>>? _areasFuture; 
+  Future<List<String>>? _areasFuture;
 
-  
-  
-  
-  
   String _selectedModeKey = 'service';
 
   static const List<_ModeItem> _modeItems = <_ModeItem>[
@@ -45,13 +39,13 @@ class _AddAreaTabState extends State<AddAreaTab> {
   @override
   void initState() {
     super.initState();
-    _areasFuture = _loadAreas(); 
+    _areasFuture = _loadAreas();
   }
 
   @override
   void didUpdateWidget(covariant AddAreaTab oldWidget) {
     super.didUpdateWidget(oldWidget);
-    
+
     if (oldWidget.selectedDivision != widget.selectedDivision) {
       _areasFuture = _loadAreas();
     }
@@ -64,8 +58,8 @@ class _AddAreaTabState extends State<AddAreaTab> {
     super.dispose();
   }
 
-  
-  String _norm(String s) => s.trim().replaceAll('/', '-').replaceAll(RegExp(r'\s+'), ' ');
+  String _norm(String s) =>
+      s.trim().replaceAll('/', '-').replaceAll(RegExp(r'\s+'), ' ');
 
   List<String> _toModes(String key) {
     switch (key) {
@@ -108,10 +102,9 @@ class _AddAreaTabState extends State<AddAreaTab> {
       int reads = 0;
       int writes = 0;
 
-      
       await fs.runTransaction((tx) async {
         final snap = await tx.get(ref);
-        reads += 1; 
+        reads += 1;
 
         if (snap.exists) {
           throw Exception('이미 존재하는 지역입니다.');
@@ -120,15 +113,12 @@ class _AddAreaTabState extends State<AddAreaTab> {
           'name': areaName,
           'englishName': englishAreaName,
           'division': division,
-          
-          
           'modes': modes,
           'createdAt': FieldValue.serverTimestamp(),
         });
-        writes += 1; 
+        writes += 1;
       });
 
-      
       try {
         if (reads > 0) {
           await UsageReporter.instance.report(
@@ -155,7 +145,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
       FocusScope.of(context).unfocus();
 
       setState(() {
-        _areasFuture = _loadAreas(); 
+        _areasFuture = _loadAreas();
       });
 
       showSuccessSnackbar(context, '✅ "$areaName" 지역이 추가되었습니다');
@@ -163,7 +153,6 @@ class _AddAreaTabState extends State<AddAreaTab> {
       if (!mounted) return;
       showFailedSnackbar(context, '❌ 지역 추가 실패: $e');
     } finally {
-      
       if (mounted) {
         setState(() => _adding = false);
       }
@@ -178,7 +167,6 @@ class _AddAreaTabState extends State<AddAreaTab> {
         .where('division', isEqualTo: division)
         .get(const GetOptions(source: Source.serverAndCache));
 
-    
     final readN = snapshot.docs.isEmpty ? 1 : snapshot.docs.length;
     try {
       await UsageReporter.instance.report(
@@ -193,7 +181,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
         .map((e) => (e['name'] as String?)?.trim())
         .whereType<String>()
         .toList()
-      ..sort((a, b) => a.compareTo(b)); 
+      ..sort((a, b) => a.compareTo(b));
     return list;
   }
 
@@ -212,15 +200,18 @@ class _AddAreaTabState extends State<AddAreaTab> {
         title: const Text('지역 삭제'),
         content: Text('"$areaName" 지역을 삭제하시겠습니까?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('삭제')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('취소')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('삭제')),
         ],
       ),
     );
 
     if (confirm != true) return;
 
-    
     if (!mounted) return;
 
     setState(() => _deletingAreaName = areaName);
@@ -229,7 +220,6 @@ class _AddAreaTabState extends State<AddAreaTab> {
       final areaId = '$division-$areaName';
       await FirebaseFirestore.instance.collection('areas').doc(areaId).delete();
 
-      
       try {
         await UsageReporter.instance.report(
           area: division,
@@ -241,7 +231,7 @@ class _AddAreaTabState extends State<AddAreaTab> {
 
       if (!mounted) return;
       setState(() {
-        _areasFuture = _loadAreas(); 
+        _areasFuture = _loadAreas();
       });
 
       showSuccessSnackbar(context, '🗑️ "$areaName" 지역이 삭제되었습니다');
@@ -249,7 +239,6 @@ class _AddAreaTabState extends State<AddAreaTab> {
       if (!mounted) return;
       showFailedSnackbar(context, '❌ 삭제 실패: $e');
     } finally {
-      
       if (mounted) {
         setState(() => _deletingAreaName = null);
       }
@@ -272,30 +261,28 @@ class _AddAreaTabState extends State<AddAreaTab> {
             onChanged: busy
                 ? null
                 : (val) {
-              
-              widget.onDivisionChanged(val);
-              setState(() {
-                _areasFuture = _loadAreas();
-              });
-            },
+                    widget.onDivisionChanged(val);
+                    setState(() {
+                      _areasFuture = _loadAreas();
+                    });
+                  },
             decoration: const InputDecoration(labelText: '회사 선택'),
           ),
           const SizedBox(height: 12),
-
-          
           DropdownButtonFormField<String>(
             value: _selectedModeKey,
             items: _modeItems
                 .map((m) => DropdownMenuItem<String>(
-              value: m.key,
-              child: Text(m.label),
-            ))
+                      value: m.key,
+                      child: Text(m.label),
+                    ))
                 .toList(),
-            onChanged: busy ? null : (v) => setState(() => _selectedModeKey = v ?? 'service'),
+            onChanged: busy
+                ? null
+                : (v) => setState(() => _selectedModeKey = v ?? 'service'),
             decoration: const InputDecoration(labelText: '추가할 지역의 모드'),
           ),
           const SizedBox(height: 12),
-
           TextField(
             controller: _areaController,
             textInputAction: TextInputAction.done,
@@ -314,53 +301,60 @@ class _AddAreaTabState extends State<AddAreaTab> {
           const SizedBox(height: 12),
           ElevatedButton.icon(
             icon: _adding
-                ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
                 : const Icon(Icons.add),
             label: Text(_adding ? '추가 중...' : '지역 추가'),
             onPressed: busy ? null : _addArea,
           ),
           const SizedBox(height: 20),
-          const Text('해당 회사의 지역 목록', style: TextStyle(fontWeight: FontWeight.bold)),
+          const Text('해당 회사의 지역 목록',
+              style: TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Expanded(
             child: widget.selectedDivision == null
                 ? const Center(child: Text('📌 회사를 먼저 선택하세요.'))
                 : FutureBuilder<List<String>>(
-              future: _areasFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+                    future: _areasFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
 
-                final areas = snapshot.data ?? const <String>[];
-                if (areas.isEmpty) {
-                  return const Center(child: Text('등록된 지역이 없습니다.'));
-                }
+                      final areas = snapshot.data ?? const <String>[];
+                      if (areas.isEmpty) {
+                        return const Center(child: Text('등록된 지역이 없습니다.'));
+                      }
 
-                return ListView.builder(
-                  itemCount: areas.length,
-                  itemBuilder: (context, index) {
-                    final areaName = areas[index];
-                    final deleting = _deletingAreaName == areaName;
-                    return ListTile(
-                      key: ValueKey(areaName), 
-                      title: Text(areaName),
-                      trailing: deleting
-                          ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                          : IconButton(
-                        tooltip: '지역 삭제',
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed: busy ? null : () => _deleteArea(areaName),
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
+                      return ListView.builder(
+                        itemCount: areas.length,
+                        itemBuilder: (context, index) {
+                          final areaName = areas[index];
+                          final deleting = _deletingAreaName == areaName;
+                          return ListTile(
+                            key: ValueKey(areaName),
+                            title: Text(areaName),
+                            trailing: deleting
+                                ? const SizedBox(
+                                    height: 20,
+                                    width: 20,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2),
+                                  )
+                                : IconButton(
+                                    tooltip: '지역 삭제',
+                                    icon: const Icon(Icons.delete_outline),
+                                    onPressed: busy
+                                        ? null
+                                        : () => _deleteArea(areaName),
+                                  ),
+                          );
+                        },
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -371,5 +365,6 @@ class _AddAreaTabState extends State<AddAreaTab> {
 class _ModeItem {
   final String key;
   final String label;
+
   const _ModeItem({required this.key, required this.label});
 }

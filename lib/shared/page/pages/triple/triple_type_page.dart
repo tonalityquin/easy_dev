@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-
-import '../../../../features/plate/application/triple/triple_plate_state.dart';
 import '../../../../screens/common_package/type_page/type_page.dart';
 import '../../../../screens/triple_mode/type_package/common_widgets/dashboard_bottom_sheet/triple_home_dash_board_bottom_sheet.dart';
 import '../../../../screens/triple_mode/type_package/parking_completed_package/triple_parking_completed_control_buttons.dart';
 import '../../../../screens/triple_mode/type_package/triple_parking_completed_page.dart';
-import '../../../../services/driving_recovery/driving_recovery_gate.dart';
+import '../../../plate/application/common/driving_recovery_gate.dart';
+import '../../../plate/application/triple/triple_plate_state.dart';
 import '../../application/triple/triple_page_state.dart';
 import '../../input/pages/input_plate_screen.dart';
 

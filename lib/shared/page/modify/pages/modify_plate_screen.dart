@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
-
-import '../../../../features/plate/domain/enums/plate_type.dart';
-import '../../../../features/plate/domain/models/plate_model.dart';
-import '../../../../utils/snackbar_helper.dart';
-import '../../../../widgets/dialog/status_dialog_package/action_trace_dialog.dart';
+import '../../../../app/utils/snackbar_helper.dart';
+import '../../../plate/domain/enums/plate_type.dart';
+import '../../../plate/domain/models/plate_model.dart';
+import '../../../plate/widgets/action_trace_dialog.dart';
 import '../../input/pages/sheets/input_location_bottom_sheet.dart';
 import '../application/modify_camera_helper.dart';
 import '../controllers/modify_plate_controller.dart';

@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
-import '../../../../features/plate/application/minor/minor_plate_state.dart';
-import '../../../../features/plate/domain/enums/plate_type.dart';
+import '../../../../shared/plate/application/minor/minor_plate_state.dart';
+import '../../../../shared/plate/domain/enums/plate_type.dart';
 import 'departure_completed_plate_search_bottom_sheet/minor_departure_completed_search_bottom_sheet.dart';
 import 'widgets/minor_departure_completed_status_bottom_sheet.dart';
 

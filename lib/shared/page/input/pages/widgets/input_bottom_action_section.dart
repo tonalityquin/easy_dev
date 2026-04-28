@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-
-import '../../../../../widgets/dialog/status_dialog_package/action_trace_dialog.dart';
+import '../../../../plate/widgets/action_trace_dialog.dart';
 import '../../application/input_camera_helper.dart';
 import '../../controllers/input_plate_controller.dart';
 import '../sheets/input_camera_preview_dialog.dart';

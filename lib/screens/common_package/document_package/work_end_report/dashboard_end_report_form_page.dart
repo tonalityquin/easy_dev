@@ -13,15 +13,15 @@ import 'package:googleapis/gmail/v1.dart' as gmail;
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../../../../utils/auth/gcs_uploader.dart';
-import '../../../../../../../utils/auth/google_auth_v7.dart';
+import '../../../../app/auth/gcs_uploader.dart';
+import '../../../../app/auth/google_auth_v7.dart';
 import '../../../../app/config/email_config.dart';
+import '../../../../app/utils/status_dialog.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dashboard/data/repositories/end_work_report_firestore_repository.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/dev/debug/debug_api_logger.dart';
-import '../../../../features/plate/domain/services/plate_count_service.dart';
-import '../../../../widgets/dialog/status_dialog_package/status_dialog.dart';
+import '../../../../shared/plate/domain/services/plate_count_service.dart';
 
 class EndReportButtonStyles {
   EndReportButtonStyles._();

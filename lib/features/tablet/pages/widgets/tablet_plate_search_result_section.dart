@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../../plate/domain/enums/plate_type.dart';
-import '../../../plate/domain/models/plate_model.dart';
+
+import '../../../../shared/plate/domain/enums/plate_type.dart';
+import '../../../../shared/plate/domain/models/plate_model.dart';
 
 class TabletPlateSearchResultSection extends StatelessWidget {
   final List<PlateModel> results;

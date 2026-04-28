@@ -3,8 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'package:googleapis/calendar/v3.dart' as gcal;
 import 'package:shared_preferences/shared_preferences.dart';
-
-import '../../../../utils/snackbar_helper.dart';
+import '../../../../app/utils/snackbar_helper.dart';
 import '../../dev_calendar/dev_board_kanban_view.dart';
 import '../../dev_calendar/dev_calendar_model.dart';
 import '../../dev_calendar/dev_completed_events_sheet.dart';

@@ -4,8 +4,7 @@ import 'package:googleapis/calendar/v3.dart' as gcal;
 import 'package:googleapis/sheets/v4.dart' as sheets;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
-import '../../../../utils/auth/google_auth_session.dart';
+import '../../../../app/auth/google_auth_session.dart';
 import '../../../dev/debug/debug_api_logger.dart';
 
 const String _kSheetIdKey = 'gsheet_spreadsheet_id';

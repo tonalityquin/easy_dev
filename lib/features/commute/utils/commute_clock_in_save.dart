@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../../../features/account/applications/user_state.dart';
-import '../../../utils/auth/sheet_upload_result.dart';
+import '../../dashboard/applications/common/sheet_upload_result.dart';
 import '../../dev/application/area_state.dart';
 import '../../mode_single/application/att_brk_repository.dart';
 

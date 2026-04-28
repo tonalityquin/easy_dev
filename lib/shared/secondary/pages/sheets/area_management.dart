@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-
-import '../../../../utils/snackbar_helper.dart';
-import '../../../../utils/usage/usage_reporter.dart';
+import '../../../../app/usage/usage_reporter.dart';
+import '../../../../app/utils/snackbar_helper.dart';
 import 'tabs/add_area_tab.dart';
 import 'tabs/division_management_tab.dart';
 import 'tabs/user_account_tab.dart';

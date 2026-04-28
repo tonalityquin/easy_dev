@@ -3,10 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:googleapis/calendar/v3.dart' as gcal;
 import 'package:googleapis_auth/googleapis_auth.dart' as auth;
-
-import '../../../../utils/auth/google_auth_session.dart';
-import '../../../../utils/snackbar_helper.dart';
-
+import '../../../app/auth/google_auth_session.dart';
+import '../../../app/utils/snackbar_helper.dart';
 
 int _extractProgress(String? description) {
   if (description == null) return 0;
@@ -14,40 +12,32 @@ int _extractProgress(String? description) {
       .firstMatch(description);
   if (m == null) return 0;
   final v = int.tryParse(m.group(1) ?? '0') ?? 0;
-  return v == 100 ? 100 : 0; 
+  return v == 100 ? 100 : 0;
 }
-
 
 Future<gcal.CalendarApi> _calendarApi() async {
   final auth.AuthClient client = await GoogleAuthSession.instance.safeClient();
   return gcal.CalendarApi(client);
 }
 
-
-
-
-
 Future<void> openCompletedEventsSheet({
   required BuildContext context,
   required List<gcal.Event> allEvents,
   void Function(BuildContext, gcal.Event)? onEdit,
 }) async {
-  
   final completed =
-  allEvents.where((e) => _extractProgress(e.description) == 100).toList();
+      allEvents.where((e) => _extractProgress(e.description) == 100).toList();
 
   DateTime _startLocal(gcal.Event e) =>
       (e.start?.dateTime?.toLocal()) ??
-          (e.start?.date ?? DateTime.fromMillisecondsSinceEpoch(0));
+      (e.start?.date ?? DateTime.fromMillisecondsSinceEpoch(0));
 
   completed.sort((a, b) => _startLocal(a).compareTo(_startLocal(b)));
 
-  
   final fmtDate = DateFormat('yyyy-MM-dd (EEE)');
   final fmtDateTime = DateFormat('yyyy-MM-dd (EEE) HH:mm');
   final fmtTime = DateFormat('HH:mm');
 
-  
   await showModalBottomSheet<void>(
     context: context,
     useSafeArea: true,
@@ -65,7 +55,6 @@ Future<void> openCompletedEventsSheet({
         builder: (context, scrollController) {
           return Column(
             children: [
-              
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                 child: Row(
@@ -87,85 +76,80 @@ Future<void> openCompletedEventsSheet({
                       onPressed: completed.isEmpty
                           ? null
                           : () async {
-                        
-                        await _deleteCompletedEventsFromGoogleCalendar(
-                          context: context,
-                          events: completed,
-                          calendarId: 'primary',
-                        );
-                        if (!context.mounted) return;
-                        Navigator.of(context).maybePop();
-                      },
+                              await _deleteCompletedEventsFromGoogleCalendar(
+                                context: context,
+                                events: completed,
+                                calendarId: 'primary',
+                              );
+                              if (!context.mounted) return;
+                              Navigator.of(context).maybePop();
+                            },
                       icon: const Icon(Icons.delete_forever),
                       label: const Text('모두 삭제'),
                     ),
                   ],
                 ),
               ),
-
               const Divider(height: 1),
-
-              
               Expanded(
                 child: completed.isEmpty
                     ? const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Text('완료된 이벤트가 없습니다.'),
-                  ),
-                )
-                    : ListView.separated(
-                  controller: scrollController,
-                  itemCount: completed.length,
-                  separatorBuilder: (_, __) =>
-                  const Divider(height: 1, thickness: 0.5),
-                  itemBuilder: (_, i) {
-                    final e = completed[i];
-
-                    
-                    final startLocal = _startLocal(e);
-                    final endLocal = e.end?.dateTime?.toLocal();
-                    final isAllDay =
-                        e.start?.date != null && e.end?.date != null;
-
-                    String when;
-                    if (isAllDay) {
-                      when = fmtDate.format(startLocal);
-                    } else if (endLocal != null) {
-                      when =
-                      '${fmtDateTime.format(startLocal)} ~ ${fmtTime.format(endLocal)}';
-                    } else {
-                      when = fmtDateTime.format(startLocal);
-                    }
-
-                    return ListTile(
-                      leading: const Icon(Icons.done, color: Colors.red),
-                      title: Text(
-                        e.summary ?? '(제목 없음)',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Text('완료된 이벤트가 없습니다.'),
                         ),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(when),
-                          if ((e.location ?? '').isNotEmpty)
-                            Text('장소: ${e.location}'),
-                          if ((e.description ?? '').isNotEmpty)
-                            Text(
-                              e.description!,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
+                      )
+                    : ListView.separated(
+                        controller: scrollController,
+                        itemCount: completed.length,
+                        separatorBuilder: (_, __) =>
+                            const Divider(height: 1, thickness: 0.5),
+                        itemBuilder: (_, i) {
+                          final e = completed[i];
+
+                          final startLocal = _startLocal(e);
+                          final endLocal = e.end?.dateTime?.toLocal();
+                          final isAllDay =
+                              e.start?.date != null && e.end?.date != null;
+
+                          String when;
+                          if (isAllDay) {
+                            when = fmtDate.format(startLocal);
+                          } else if (endLocal != null) {
+                            when =
+                                '${fmtDateTime.format(startLocal)} ~ ${fmtTime.format(endLocal)}';
+                          } else {
+                            when = fmtDateTime.format(startLocal);
+                          }
+
+                          return ListTile(
+                            leading: const Icon(Icons.done, color: Colors.red),
+                            title: Text(
+                              e.summary ?? '(제목 없음)',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                        ],
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(when),
+                                if ((e.location ?? '').isNotEmpty)
+                                  Text('장소: ${e.location}'),
+                                if ((e.description ?? '').isNotEmpty)
+                                  Text(
+                                    e.description!,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                              ],
+                            ),
+                            onTap: onEdit == null
+                                ? null
+                                : () => onEdit(context, e),
+                          );
+                        },
                       ),
-                      onTap: onEdit == null
-                          ? null
-                          : () => onEdit(context, e),
-                    );
-                  },
-                ),
               ),
             ],
           );
@@ -174,7 +158,6 @@ Future<void> openCompletedEventsSheet({
     },
   );
 }
-
 
 Future<void> _deleteCompletedEventsFromGoogleCalendar({
   required BuildContext context,

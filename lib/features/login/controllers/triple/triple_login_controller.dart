@@ -6,11 +6,11 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import '../../../../app/init/work_schedule_prefs.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/account/domain/repositories/user_repository.dart';
+import '../../../../shared/tts/application/tts_ownership.dart';
+import '../../../../shared/tts/application/tts_user_filters.dart';
 import '../../../dev/application/area_state.dart';
 import '../../applications/triple/triple_login_network_service.dart';
 import '../../applications/triple/triple_login_validate.dart';
-import '../../../../utils/tts/tts_ownership.dart';
-import '../../../../utils/tts/tts_user_filters.dart';
 
 String _ts() => DateTime.now().toIso8601String();
 

@@ -3,16 +3,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:camera/camera.dart';
-
 import 'package:googleapis/storage/v1.dart' as gcs;
-
+import '../../../../app/auth/gcs_image_uploader.dart';
+import '../../../../app/auth/google_auth_session.dart';
 import '../../../../app/config/auth_config.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/dev/debug/debug_api_logger.dart';
-import '../../../../features/plate/application/common/input_plate.dart';
-import '../../../../utils/auth/google_auth_session.dart';
-import '../../../../utils/auth/gcs_image_uploader.dart';
+import '../../../plate/application/common/input_plate.dart';
 
 class PhotoUploadResult {
   final List<String> uploadedUrls;

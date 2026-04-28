@@ -10,8 +10,8 @@ import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/dev/debug/debug_api_logger.dart';
 import '../../../../features/location/applications/location_state.dart';
 import '../../../../features/location/domain/models/location_model.dart';
-import '../../../../features/plate/application/common/view_doc_rows_store.dart';
-import '../../../../features/plate/domain/repositories/plate_repository.dart';
+import '../../../../shared/plate/application/common/view_doc_rows_store.dart';
+import '../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../common_package/preview_package/parking_grid_3d_preview.dart';
 
 const String _tParking = 'parking';

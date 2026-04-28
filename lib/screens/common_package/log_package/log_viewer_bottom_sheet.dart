@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../features/plate/domain/models/plate_log_model.dart';
-import '../../../features/plate/domain/repositories/plate_repository.dart';
+import '../../../shared/plate/domain/models/plate_log_model.dart';
+import '../../../shared/plate/domain/repositories/plate_repository.dart';
 
 class LogViewerBottomSheet extends StatefulWidget {
   final String? initialPlateNumber;

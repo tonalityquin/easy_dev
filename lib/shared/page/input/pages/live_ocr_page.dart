@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' show Rect;
-
 import 'package:camera/camera.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -9,7 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import '../../../../features/plate/domain/repositories/ocr_learning_repository.dart';
+import '../domain/repositories/ocr_learning_repository.dart';
 
 class _KoreanPlatePolicy {
   static const List<String> allowedNewMids = [

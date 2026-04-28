@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-
-import '../../../features/plate/domain/models/plate_model.dart';
+import '../../../shared/plate/domain/models/plate_model.dart';
 import 'real_time_table_no_strategy.dart';
 
 class RealTimeTabSpec {

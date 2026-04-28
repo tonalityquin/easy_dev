@@ -1,12 +1,10 @@
 import 'dart:async';
 import 'dart:io';
-
 import 'package:audioplayers/audioplayers.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
-
 import '../../../../../features/account/domain/models/session_account.dart';
-import '../../../../../services/firebase_google_auth_bridge.dart';
+import '../../dashboard/applications/common/firebase_google_auth_bridge.dart';
 import '../data/repositories/firestore_voice_channel_repository.dart';
 import '../data/repositories/firestore_voice_message_repository.dart';
 import '../data/services/voice_audio_playback_service.dart';

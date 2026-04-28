@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../utils/tts/plate_tts_event_hub.dart';
+import '../../../shared/plate/domain/enums/plate_type.dart';
+import '../../../shared/tts/application/plate_tts_event_hub.dart';
 import '../../dev/application/area_state.dart';
-import '../../plate/domain/enums/plate_type.dart';
 import '../applications/tablet_pad_mode_state.dart';
 import '../applications/tablet_work_session_state.dart';
 import 'panels/tablet_left_panel.dart';

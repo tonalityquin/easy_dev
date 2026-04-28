@@ -1,17 +1,14 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
-
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:googleapis/gmail/v1.dart' as gmail;
-
-import '../../../../../utils/auth/google_auth_v7.dart';
+import '../../../../app/auth/google_auth_v7.dart';
 import '../../../../app/config/email_config.dart';
 
 class StatisticsChartPage extends StatefulWidget {

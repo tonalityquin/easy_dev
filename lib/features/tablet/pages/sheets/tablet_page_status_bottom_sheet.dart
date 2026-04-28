@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../plate/application/common/movement_plate.dart';
-import '../../../plate/domain/models/plate_model.dart';
+import '../../../../shared/plate/application/common/movement_plate.dart';
+import '../../../../shared/plate/domain/models/plate_model.dart';
 
 Future<bool?> showTabletPageStatusBottomSheet({
   required BuildContext context,

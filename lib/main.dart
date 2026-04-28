@@ -5,7 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
-
+import 'app/auth/google_auth_session.dart';
 import 'app/config/auth_config.dart';
 import 'app/config/overlay_edge_side_config.dart';
 import 'app/config/overlay_mode_config.dart';
@@ -13,18 +13,16 @@ import 'app/di/providers.dart';
 import 'app/di/routes.dart';
 import 'app/init/app_exit_flag.dart';
 import 'app/init/app_navigator.dart';
+import 'app/init/quick_overlay_main.dart';
 import 'app/theme/theme_prefs_controller.dart';
+import 'features/dashboard/applications/common/firebase_google_auth_bridge.dart';
 import 'features/dev/page/sheets/dev_quick_actions.dart';
-import 'features/headquarter/application/hub_quick_actions.dart';
+import 'features/headquarter/application/fab/hub_quick_actions.dart';
 import 'features/headquarter/page/sheets/head_memo.dart';
-import 'utils/auth/google_auth_session.dart';
-import 'services/firebase_google_auth_bridge.dart';
 import 'screens/common_package/memo_package/chat_bot.dart';
-import 'utils/quick_overlay_main.dart';
-import 'utils/tts/plate_tts_event_hub.dart';
+import 'shared/tts/application/plate_tts_event_hub.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
-
 
 const String kDevUnlockPassword = 'DEV-MODE-2025!';
 

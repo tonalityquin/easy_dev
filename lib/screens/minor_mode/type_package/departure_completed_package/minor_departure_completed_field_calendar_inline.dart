@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:table_calendar/table_calendar.dart';
-
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/dev/application/field_calendar_state.dart';
-import '../../../../features/plate/application/minor/minor_plate_state.dart';
-import '../../../../features/plate/domain/enums/plate_type.dart';
-import '../../../../features/plate/domain/models/plate_model.dart';
+import '../../../../shared/plate/application/minor/minor_plate_state.dart';
+import '../../../../shared/plate/domain/enums/plate_type.dart';
+import '../../../../shared/plate/domain/models/plate_model.dart';
 
 class MinorDepartureCompletedFieldCalendarInline extends StatefulWidget {
   const MinorDepartureCompletedFieldCalendarInline({super.key});

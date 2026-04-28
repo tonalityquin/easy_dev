@@ -8,9 +8,9 @@ import 'package:provider/provider.dart';
 
 import '../../../features/account/applications/user_state.dart';
 import '../../../features/dev/application/area_state.dart';
-import '../../../features/plate/application/common/view_doc_rows_store.dart';
 import '../../../shared/page/application/common/type_view_mode_state.dart';
 
+import '../../../shared/plate/application/common/view_doc_rows_store.dart';
 import 'real_time_tab_controller.dart';
 import 'real_time_table_body.dart';
 import 'real_time_table_components.dart';

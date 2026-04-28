@@ -4,10 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../../features/location/applications/location_state.dart';
 import '../../../../../features/payment/applications/bill_state.dart';
-import '../../../../../features/plate/domain/repositories/plate_repository.dart';
-import '../../../../../utils/tts/tts_user_filters.dart';
-import '../../../../../utils/tts/tts_sync_helper.dart';
 import '../../../../app/init/logout_helper.dart';
+import '../../../../shared/plate/domain/repositories/plate_repository.dart';
+import '../../../../shared/tts/application/tts_sync_helper.dart';
+import '../../../../shared/tts/application/tts_user_filters.dart';
 import '../../../dev/application/area_state.dart';
 
 class DashboardSetting extends StatefulWidget {

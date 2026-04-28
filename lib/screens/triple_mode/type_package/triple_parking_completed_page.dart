@@ -1,13 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../../../features/account/applications/user_state.dart';
 import '../../../features/dev/application/area_state.dart';
-import '../../../features/plate/application/triple/triple_plate_state.dart';
-import '../../../features/plate/domain/enums/plate_type.dart';
 import '../../../shared/page/application/common/type_view_mode_state.dart';
-import '../../../widgets/navigation/triple_top_navigation.dart';
+import '../../../shared/page/widget/navigation/triple_top_navigation.dart';
+import '../../../shared/plate/application/triple/triple_plate_state.dart';
+import '../../../shared/plate/domain/enums/plate_type.dart';
 import '../../common_package/real_time_table/view_doc_rows_firestore_sync.dart';
 import '../../common_package/type_page/parking_completed_page/parking_completed_page_shell.dart';
 import 'parking_completed_package/triple_parking_completed_real_time_table.dart';

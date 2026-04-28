@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../../../widgets/dialog/status_dialog_package/status_dialog.dart';
+import '../../../../../app/utils/status_dialog.dart';
 import '../../../application/discord/discord_config.dart';
 
 class DiscordBottomSheet extends StatefulWidget {

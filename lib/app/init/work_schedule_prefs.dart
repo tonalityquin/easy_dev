@@ -1,10 +1,8 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import '../../features/account/domain/models/user/user_model.dart';
-import '../../services/endtime_reminder_service.dart';
+import '../../features/dashboard/applications/common/endtime_reminder_service.dart';
 
 class WorkSchedulePrefs {
   static const String startMapKey = 'startTimeByWeekday';

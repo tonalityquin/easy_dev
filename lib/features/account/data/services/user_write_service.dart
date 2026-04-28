@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-
-import '../../../../utils/usage/usage_reporter.dart';
+import '../../../../app/usage/usage_reporter.dart';
 import '../../domain/models/tablet/tablet_model.dart';
 import '../../domain/models/user/user_model.dart';
 class UserWriteService {
