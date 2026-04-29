@@ -10,7 +10,7 @@ import '../../../shared/plate/application/triple/triple_plate_state.dart';
 import '../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../shared/real_time_table/view_doc_rows_firestore_sync.dart';
 import 'parking_completed_package/triple_parking_completed_real_time_table.dart';
-import 'parking_completed_package/widgets/signature_plate_search_bottom_sheet/triple_parking_completed_search_bottom_sheet.dart';
+import '../../../shared/plate/widgets/parking_completed_plate_search_sheet.dart';
 
 class TripleParkingCompletedPage extends StatefulWidget {
   const TripleParkingCompletedPage({super.key});
@@ -45,9 +45,10 @@ class _TripleParkingCompletedPageState
       builder: (sheetContext) {
         return SizedBox(
           height: MediaQuery.of(sheetContext).size.height,
-          child: TripleParkingCompletedSearchBottomSheet(
-            onSearch: (_) {},
+          child: ParkingCompletedPlateSearchSheet(
             area: currentArea,
+            variant: ParkingCompletedSearchVariant.triple,
+            onSearch: (_) {},
           ),
         );
       },

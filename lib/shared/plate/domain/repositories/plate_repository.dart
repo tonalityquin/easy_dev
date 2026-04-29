@@ -2,7 +2,7 @@ import '../../application/common/view_doc_rows_store.dart';
 import '../enums/plate_type.dart';
 import '../models/plate_log_model.dart';
 import '../models/plate_model.dart';
-import '../models/plate_status_search_result.dart';
+import '../models/plate_out_log_search_result.dart';
 import '../services/plate_status_record.dart';
 
 class PlateLogReadException implements Exception {
@@ -31,7 +31,7 @@ abstract class PlateRepository {
     required String area,
   });
 
-  Future<List<PlateStatusSearchResult>> searchPlateStatusesByFourDigit({
+  Future<List<PlateOutLogSearchResult>> searchPlateOutLogsByFourDigit({
     required String plateFourDigit,
     required String area,
   });

@@ -6,7 +6,7 @@ import '../../application/common/view_doc_rows_store.dart';
 import '../../domain/enums/plate_type.dart';
 import '../../domain/models/plate_log_model.dart';
 import '../../domain/models/plate_model.dart';
-import '../../domain/models/plate_status_search_result.dart';
+import '../../domain/models/plate_out_log_search_result.dart';
 import '../../domain/repositories/plate_repository.dart';
 import '../../domain/services/plate_creation_service.dart';
 import '../../domain/services/plate_query_service.dart';
@@ -959,7 +959,7 @@ class FirestorePlateRepository implements PlateRepository {
   }
 
   @override
-  Future<List<PlateStatusSearchResult>> searchPlateStatusesByFourDigit({
+  Future<List<PlateOutLogSearchResult>> searchPlateOutLogsByFourDigit({
     required String plateFourDigit,
     required String area,
   }) async {
@@ -967,25 +967,25 @@ class FirestorePlateRepository implements PlateRepository {
     final fourDigit = plateFourDigit.trim();
 
     if (!RegExp(r'^\d{4}$').hasMatch(fourDigit)) {
-      return const <PlateStatusSearchResult>[];
+      return const <PlateOutLogSearchResult>[];
     }
 
     final snapshot = await _firestore
         .collectionGroup('plates')
-        .where('statusScope', isEqualTo: 'plate_status')
+        .where('logScope', isEqualTo: 'plate_out_log')
         .where('area', isEqualTo: safeArea)
         .where('plate_four_digit', isEqualTo: fourDigit)
         .get();
 
     final items = snapshot.docs
-        .map((doc) => PlateStatusSearchResult(
+        .map((doc) => PlateOutLogSearchResult(
               docId: doc.id,
               path: doc.reference.path,
               data: Map<String, dynamic>.from(doc.data()),
             ))
         .toList(growable: false);
 
-    final sorted = List<PlateStatusSearchResult>.from(items)
+    final sorted = List<PlateOutLogSearchResult>.from(items)
       ..sort((a, b) {
         final month = (b.stringValue('monthKey') ?? '')
             .compareTo(a.stringValue('monthKey') ?? '');

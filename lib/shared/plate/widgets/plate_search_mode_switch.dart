@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 
-enum PlateSearchMode { plates, plateStatus }
+enum PlateSearchMode { plates, plateOutLog }
 
 extension PlateSearchModeText on PlateSearchMode {
   String get label {
     switch (this) {
       case PlateSearchMode.plates:
         return '현재 차량';
-      case PlateSearchMode.plateStatus:
-        return '상태 메모';
+      case PlateSearchMode.plateOutLog:
+        return '출차 로그';
     }
   }
 
@@ -16,8 +16,8 @@ extension PlateSearchModeText on PlateSearchMode {
     switch (this) {
       case PlateSearchMode.plates:
         return 'plates';
-      case PlateSearchMode.plateStatus:
-        return 'plate_status';
+      case PlateSearchMode.plateOutLog:
+        return 'plate_out_log';
     }
   }
 }
@@ -57,11 +57,11 @@ class PlateSearchModeSwitch extends StatelessWidget {
           const SizedBox(width: 4),
           Expanded(
             child: _ModeSegment(
-              selected: value == PlateSearchMode.plateStatus,
-              label: PlateSearchMode.plateStatus.label,
-              collectionLabel: PlateSearchMode.plateStatus.collectionLabel,
+              selected: value == PlateSearchMode.plateOutLog,
+              label: PlateSearchMode.plateOutLog.label,
+              collectionLabel: PlateSearchMode.plateOutLog.collectionLabel,
               icon: Icons.assignment_outlined,
-              onTap: () => onChanged(PlateSearchMode.plateStatus),
+              onTap: () => onChanged(PlateSearchMode.plateOutLog),
             ),
           ),
         ],

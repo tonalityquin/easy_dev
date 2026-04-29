@@ -11,7 +11,7 @@ import '../../../shared/plate/application/double/double_plate_state.dart';
 import '../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../shared/real_time_table/view_doc_rows_firestore_sync.dart';
 import 'parking_completed_package/double_parking_completed_real_time_table.dart';
-import 'parking_completed_package/widgets/signature_plate_search_bottom_sheet/double_parking_completed_search_bottom_sheet.dart';
+import '../../../shared/plate/widgets/parking_completed_plate_search_sheet.dart';
 
 class DoubleParkingCompletedPage extends StatefulWidget {
   const DoubleParkingCompletedPage({super.key});
@@ -46,9 +46,10 @@ class _DoubleParkingCompletedPageState
       builder: (sheetContext) {
         return SizedBox(
           height: MediaQuery.of(sheetContext).size.height,
-          child: DoubleParkingCompletedSearchBottomSheet(
-            onSearch: (_) {},
+          child: ParkingCompletedPlateSearchSheet(
             area: currentArea,
+            variant: ParkingCompletedSearchVariant.double,
+            onSearch: (_) {},
           ),
         );
       },

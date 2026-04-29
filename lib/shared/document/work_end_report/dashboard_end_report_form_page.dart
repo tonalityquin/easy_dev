@@ -107,6 +107,7 @@ class SimpleEndWorkReportResult {
 
   final bool cleanupOk;
   final bool firestoreSaveOk;
+  final bool plateOutLogOk;
 
   final bool gcsLogsUploadOk;
 
@@ -121,6 +122,7 @@ class SimpleEndWorkReportResult {
     required this.snapshotTotalLockedFee,
     required this.cleanupOk,
     required this.firestoreSaveOk,
+    required this.plateOutLogOk,
     required this.gcsLogsUploadOk,
     required this.logsUrl,
   });
@@ -138,6 +140,7 @@ class SimpleEndWorkReportService {
   static const String _tEndGcsLogs = 'end_report/gcs/logs';
   static const String _tEndCleanup = 'end_report/cleanup';
   static const String _tEndPlates = 'end_report/plates';
+  static const String _tEndPlateOutLog = 'end_report/plate_out_log';
 
   Future<void> _logApiError({
     required String tag,
@@ -369,19 +372,18 @@ class SimpleEndWorkReportService {
       );
     }
 
-    bool cleanupOk = true;
+    bool plateOutLogOk = true;
     try {
-      dev.log('[END] cleanup plates & plate_counters...',
-          name: 'SimpleEndWorkReportService');
+      dev.log('[END] append plate_out_log...', name: 'SimpleEndWorkReportService');
 
-      await _repo.cleanupLockedDepartureCompletedPlates(
+      await _repo.appendPlateOutLogs(
         area: area,
-        plateDocIds: plates.map((e) => e.docId).toList(),
+        plates: plates,
       );
     } catch (e, st) {
-      cleanupOk = false;
+      plateOutLogOk = false;
       dev.log(
-        '[END] cleanup failed',
+        '[END] plate_out_log append failed',
         name: 'SimpleEndWorkReportService',
         error: e,
         stackTrace: st,
@@ -389,17 +391,51 @@ class SimpleEndWorkReportService {
 
       await _logApiError(
         tag: 'SimpleEndWorkReportService.submitEndReport',
-        message: 'cleanup(plates/plate_counters) 실패',
+        message: 'plate_out_log 저장 실패',
         error: e,
         extra: <String, dynamic>{
           'division': division,
           'area': area,
           'plateDocCount': plates.length,
         },
-        tags: const <String>[_tEndService, _tEndCleanup, _tEnd],
+        tags: const <String>[_tEndService, _tEndPlateOutLog, _tEnd],
       );
     }
 
+    bool cleanupOk = true;
+    if (plateOutLogOk) {
+      try {
+        dev.log('[END] cleanup plates & plate_counters...',
+            name: 'SimpleEndWorkReportService');
+
+        await _repo.cleanupLockedDepartureCompletedPlates(
+          area: area,
+          plateDocIds: plates.map((e) => e.docId).toList(),
+        );
+      } catch (e, st) {
+        cleanupOk = false;
+        dev.log(
+          '[END] cleanup failed',
+          name: 'SimpleEndWorkReportService',
+          error: e,
+          stackTrace: st,
+        );
+
+        await _logApiError(
+          tag: 'SimpleEndWorkReportService.submitEndReport',
+          message: 'cleanup(plates/plate_counters) 실패',
+          error: e,
+          extra: <String, dynamic>{
+            'division': division,
+            'area': area,
+            'plateDocCount': plates.length,
+          },
+          tags: const <String>[_tEndService, _tEndCleanup, _tEnd],
+        );
+      }
+    } else {
+      cleanupOk = false;
+    }
     dev.log('[END] submitEndReport done', name: 'SimpleEndWorkReportService');
 
     return SimpleEndWorkReportResult(
@@ -411,6 +447,7 @@ class SimpleEndWorkReportService {
       snapshotTotalLockedFee: snapshotTotalLockedFee,
       cleanupOk: cleanupOk,
       firestoreSaveOk: firestoreSaveOk,
+      plateOutLogOk: plateOutLogOk,
       gcsLogsUploadOk: gcsLogsUploadOk,
       logsUrl: logsUrl,
     );
@@ -1248,10 +1285,10 @@ class _DashboardEndReportFormPageState
       if (!mounted) return;
 
       final r = result;
-      if (!r.cleanupOk || !r.firestoreSaveOk || !r.gcsLogsUploadOk) {
+      if (!r.cleanupOk || !r.firestoreSaveOk || !r.plateOutLogOk || !r.gcsLogsUploadOk) {
         dev.log(
           '[END][Dashboard] first submit partial failure '
-              '(cleanupOk=${r.cleanupOk}, firestoreSaveOk=${r.firestoreSaveOk}, gcsLogsUploadOk=${r.gcsLogsUploadOk}, logsUrl=${r.logsUrl})',
+              '(cleanupOk=${r.cleanupOk}, firestoreSaveOk=${r.firestoreSaveOk}, plateOutLogOk=${r.plateOutLogOk}, gcsLogsUploadOk=${r.gcsLogsUploadOk}, logsUrl=${r.logsUrl})',
           name: 'DashboardEndReportFormPage',
         );
       }
