@@ -18,6 +18,12 @@ class PlateStatusService {
   String _normalizedPlateKey(String plateNumber) =>
       plateNumber.replaceAll('-', '').replaceAll(' ', '').trim();
 
+  String _plateFourDigit(String plateNumber) {
+    final key = _normalizedPlateKey(plateNumber);
+    if (key.length <= 4) return key;
+    return key.substring(key.length - 4);
+  }
+
   DateTime _nextMonthStartUtc(DateTime dt) =>
       DateTime.utc(dt.year, dt.month + 1, 1);
 
@@ -128,6 +134,7 @@ class PlateStatusService {
 
       final plateDocId = _plateDocId(plateNumber, safeArea);
       final normalizedKey = _normalizedPlateKey(plateNumber);
+      final fourDigit = _plateFourDigit(plateNumber);
       final monthKey = _monthKey(dt);
 
       final data = <String, dynamic>{
@@ -135,6 +142,8 @@ class PlateStatusService {
         'plateNumber': plateNumber,
         'plateDocId': plateDocId,
         'plateKey': normalizedKey,
+        'plate_four_digit': fourDigit,
+        'statusScope': _plateStatusRoot,
         'monthKey': monthKey,
         'customStatus': customStatus.trim(),
         'statusList': statusList,

@@ -4,6 +4,9 @@ import '../../../../../../shared/plate/application/common/delete_plate.dart';
 import '../../../../../../shared/plate/application/common/movement_plate.dart';
 import '../../../../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../../../../shared/plate/domain/models/plate_model.dart';
+import '../../../../../../shared/plate/domain/models/plate_status_search_result.dart';
+import '../../../../../../shared/plate/widgets/plate_search_mode_switch.dart';
+import '../../../../../../shared/plate/widgets/plate_status_search_results.dart';
 import '../../../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../../../../shared/plate/widgets/plate_remove_dialog.dart';
 import '../minor_parking_completed_status_bottom_sheet.dart';
@@ -36,8 +39,10 @@ class _MinorParkingCompletedSearchBottomSheetState
   bool _isLoading = false;
   bool _hasSearched = false;
   bool _navigating = false;
+  PlateSearchMode _searchMode = PlateSearchMode.plates;
 
   List<PlateModel> _results = [];
+  List<PlateStatusSearchResult> _statusResults = [];
 
   late AnimationController _keypadController;
   late Animation<Offset> _slideAnimation;
@@ -76,17 +81,30 @@ class _MinorParkingCompletedSearchBottomSheetState
       _controller.clear();
       _hasSearched = false;
       _results.clear();
+      _statusResults.clear();
       _navigating = false;
       _isLoading = false;
     });
   }
 
+
+  void _setSearchMode(PlateSearchMode mode) {
+    if (!mounted || _searchMode == mode || _isLoading) return;
+    setState(() {
+      _searchMode = mode;
+      _hasSearched = false;
+      _results.clear();
+      _statusResults.clear();
+      _navigating = false;
+    });
+  }
   Future<void> _refreshSearchResults() async {
     if (!mounted) return;
     if (_isLoading) return;
 
     final q = _controller.text.trim();
     final area = widget.area.trim();
+    final mode = _searchMode;
 
     if (!isValidPlate(q)) {
       return;
@@ -100,6 +118,22 @@ class _MinorParkingCompletedSearchBottomSheetState
 
     try {
       final repository = context.read<PlateRepository>();
+
+      if (mode == PlateSearchMode.plateStatus) {
+        final results = await repository.searchPlateStatusesByFourDigit(
+          plateFourDigit: q,
+          area: area,
+        );
+
+        if (!mounted || _searchMode != mode) return;
+        setState(() {
+          _statusResults = results;
+          _results.clear();
+          _hasSearched = true;
+          _isLoading = false;
+        });
+        return;
+      }
 
       final results = await repository.fourDigitCommonQuery(
         plateFourDigit: q,
@@ -115,9 +149,10 @@ class _MinorParkingCompletedSearchBottomSheetState
       final filtered =
           results.where((p) => allowedTypes.contains(p.type)).toList();
 
-      if (!mounted) return;
+      if (!mounted || _searchMode != mode) return;
       setState(() {
         _results = filtered;
+        _statusResults.clear();
         _hasSearched = true;
         _isLoading = false;
       });
@@ -276,6 +311,11 @@ class _MinorParkingCompletedSearchBottomSheetState
                         controller: scrollController,
                         padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
                         children: [
+                          PlateSearchModeSwitch(
+                            value: _searchMode,
+                            onChanged: _setSearchMode,
+                          ),
+                          const SizedBox(height: 12),
                           _CardSection(
                             title: '번호 4자리 입력',
                             subtitle: '예: 1234',
@@ -360,6 +400,19 @@ class _MinorParkingCompletedSearchBottomSheetState
         message: '숫자 4자리를 입력해주세요.',
         tone: _EmptyTone.danger,
       );
+    }
+
+    if (_searchMode == PlateSearchMode.plateStatus) {
+      if (_statusResults.isEmpty) {
+        return const _EmptyState(
+          icon: Icons.search_off,
+          title: '검색 결과 없음',
+          message: '저장된 상태 문서를 찾지 못했습니다.',
+          tone: _EmptyTone.neutral,
+        );
+      }
+
+      return PlateStatusSearchResults(results: _statusResults);
     }
 
     if (_results.isEmpty) {
