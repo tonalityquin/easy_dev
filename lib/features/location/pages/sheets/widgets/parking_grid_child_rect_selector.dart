@@ -8,6 +8,10 @@ class ParkingGridChildRectSelector extends StatefulWidget {
   final ParkingGridModel grid;
   final GridRect? value;
   final ValueChanged<GridRect?> onChanged;
+  final Set<String> selectedParkingAreaIds;
+  final Set<String> disabledParkingAreaIds;
+  final ValueChanged<Set<String>>? onChangedSelectedParkingAreaIds;
+  final bool parkingAreaPickMode;
 
   final bool squareLock;
   final bool showHint;
@@ -29,6 +33,10 @@ class ParkingGridChildRectSelector extends StatefulWidget {
     required this.grid,
     required this.value,
     required this.onChanged,
+    this.selectedParkingAreaIds = const <String>{},
+    this.disabledParkingAreaIds = const <String>{},
+    this.onChangedSelectedParkingAreaIds,
+    this.parkingAreaPickMode = false,
     required this.squareLock,
     this.showHint = true,
     this.showParkingAreas = true,
@@ -61,6 +69,32 @@ class _ParkingGridChildRectSelectorState extends State<ParkingGridChildRectSelec
       }
     }
     return null;
+  }
+
+  ParkingArea? _parkingAreaAtCell(int r, int c) {
+    for (final a in widget.grid.parkingAreas) {
+      final top = a.r0;
+      final left = a.c0;
+      final bottom = a.r0 + a.kind.h - 1;
+      final right = a.c0 + a.kind.w - 1;
+      if (r >= top && r <= bottom && c >= left && c <= right) {
+        return a;
+      }
+    }
+    return null;
+  }
+
+  void _toggleParkingArea(ParkingArea area) {
+    final id = area.id.trim();
+    if (id.isEmpty) return;
+    if (widget.disabledParkingAreaIds.contains(id)) return;
+    final current = Set<String>.from(widget.selectedParkingAreaIds);
+    if (current.contains(id)) {
+      current.remove(id);
+    } else {
+      current.add(id);
+    }
+    widget.onChangedSelectedParkingAreaIds?.call(current);
   }
 
   (int r, int c)? _hitTestCell(Offset local, double cellSize) {
@@ -203,6 +237,14 @@ class _ParkingGridChildRectSelectorState extends State<ParkingGridChildRectSelec
 
             _clearAnchor();
 
+            if (widget.parkingAreaPickMode && !widget.towerSelectMode) {
+              final area = _parkingAreaAtCell(hit.$1, hit.$2);
+              if (area != null) {
+                _toggleParkingArea(area);
+              }
+              return;
+            }
+
             if (widget.towerSelectMode) {
               final tr = _towerRectAtCell(hit.$1, hit.$2);
               if (tr == null) return;
@@ -217,6 +259,10 @@ class _ParkingGridChildRectSelectorState extends State<ParkingGridChildRectSelec
           onPanStart: (d) {
             final hit = _hitTestCell(d.localPosition, cellSize);
             if (hit == null) return;
+
+            if (widget.parkingAreaPickMode && !widget.towerSelectMode) {
+              return;
+            }
 
             if (widget.towerSelectMode) {
               _clearAnchor();
@@ -256,6 +302,9 @@ class _ParkingGridChildRectSelectorState extends State<ParkingGridChildRectSelec
               showAxisIndex: widget.showAxisIndex,
               axisIndexStep: widget.axisIndexStep,
               towerRects: widget.towerRects,
+              selectedParkingAreaIds: widget.selectedParkingAreaIds,
+              disabledParkingAreaIds: widget.disabledParkingAreaIds,
+              parkingAreaPickMode: widget.parkingAreaPickMode,
             ),
             child: const SizedBox.expand(),
           ),
@@ -330,6 +379,9 @@ class _ParkingGridChildRectPainter extends CustomPainter {
 
   
   final List<GridRect> towerRects;
+  final Set<String> selectedParkingAreaIds;
+  final Set<String> disabledParkingAreaIds;
+  final bool parkingAreaPickMode;
 
   _ParkingGridChildRectPainter({
     required this.grid,
@@ -339,6 +391,9 @@ class _ParkingGridChildRectPainter extends CustomPainter {
     required this.showAxisIndex,
     required this.axisIndexStep,
     required this.towerRects,
+    required this.selectedParkingAreaIds,
+    required this.disabledParkingAreaIds,
+    required this.parkingAreaPickMode,
   });
 
   static (int r, int c, int edge)? _parseEdgeKey(String key) {
@@ -385,15 +440,31 @@ class _ParkingGridChildRectPainter extends CustomPainter {
     ).deflate(max(1.0, cell * 0.10));
 
     final style = _parkingAreaStyle(a.kind, cs);
+    final isSelectedArea = selectedParkingAreaIds.contains(a.id);
+    final isDisabledArea = disabledParkingAreaIds.contains(a.id);
+    final fillColor = isDisabledArea
+        ? cs.surfaceVariant.withOpacity(0.28)
+        : isSelectedArea
+            ? style.fill
+            : parkingAreaPickMode
+                ? style.fill.withOpacity(0.18)
+                : style.fill;
+    final strokeColor = isDisabledArea
+        ? cs.outline.withOpacity(0.45)
+        : isSelectedArea
+            ? style.stroke
+            : parkingAreaPickMode
+                ? style.stroke.withOpacity(0.34)
+                : style.stroke;
 
     final fill = Paint()
       ..style = PaintingStyle.fill
-      ..color = style.fill;
+      ..color = fillColor;
 
     final stroke = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = max(1.2, cell * 0.07)
-      ..color = style.stroke;
+      ..strokeWidth = isSelectedArea ? max(1.8, cell * 0.10) : max(1.2, cell * 0.07)
+      ..color = strokeColor;
 
     final rr = RRect.fromRectAndRadius(rect, Radius.circular(max(4.0, cell * 0.18)));
     canvas.drawRRect(rr, fill);
@@ -760,6 +831,10 @@ class _ParkingGridChildRectPainter extends CustomPainter {
         oldDelegate.colorScheme != colorScheme ||
         oldDelegate.showParkingAreas != showParkingAreas ||
         oldDelegate.showAxisIndex != showAxisIndex ||
-        oldDelegate.axisIndexStep != axisIndexStep;
+        oldDelegate.axisIndexStep != axisIndexStep ||
+        oldDelegate.towerRects != towerRects ||
+        oldDelegate.selectedParkingAreaIds != selectedParkingAreaIds ||
+        oldDelegate.disabledParkingAreaIds != disabledParkingAreaIds ||
+        oldDelegate.parkingAreaPickMode != parkingAreaPickMode;
   }
 }

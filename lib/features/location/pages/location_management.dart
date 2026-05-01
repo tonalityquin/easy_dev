@@ -32,6 +32,27 @@ class _LocationManagementState extends State<LocationManagement> {
   static String _childCompositeKey(String parent, String child) =>
       '${_nameKey(parent)}|${_nameKey(child)}';
 
+  static List<String> _childAreaIds(LocationModel loc) {
+    final out = <String>[];
+    final seen = <String>{};
+
+    for (final id in loc.childSlotAreaIds) {
+      final v = id.trim();
+      if (v.isEmpty) continue;
+      if (seen.add(v)) out.add(v);
+    }
+
+    if (out.isNotEmpty) return out;
+
+    for (final slot in loc.childSlots) {
+      final v = slot.areaId.trim();
+      if (v.isEmpty) continue;
+      if (seen.add(v)) out.add(v);
+    }
+
+    return out;
+  }
+
   static const double _fabBottomGap = 48.0;
   static const double _fabSpacing = 10.0;
 
@@ -212,11 +233,19 @@ class _LocationManagementState extends State<LocationManagement> {
     }
 
     final Map<String, List<GridRect>> existingChildRectsByParentKey = {};
+    final Map<String, Set<String>> existingChildAreaIdsByParentKey = {};
     for (final c in allInArea.where(_isCompositeChild)) {
       final pName = (c.parent ?? '').trim();
       if (pName.isEmpty) continue;
 
       final pk = _nameKey(pName);
+      final areaIds = _childAreaIds(c);
+      if (areaIds.isNotEmpty) {
+        existingChildAreaIdsByParentKey
+            .putIfAbsent(pk, () => <String>{})
+            .addAll(areaIds);
+      }
+
       final cr = c.childRect;
       if (cr == null) continue;
 
@@ -242,6 +271,7 @@ class _LocationManagementState extends State<LocationManagement> {
             parentNamesInArea: parentNamesInArea,
             parentParkingGridsByParentKey: parentParkingGridsByParentKey,
             existingChildRectsByParentKey: existingChildRectsByParentKey,
+            existingChildAreaIdsByParentKey: existingChildAreaIdsByParentKey,
             onSave: (draft) async {
               final area = context.read<AreaState>().currentArea.trim();
 
@@ -263,6 +293,7 @@ class _LocationManagementState extends State<LocationManagement> {
                   capacity: draft.capacity,
                   area: area,
                   rect: draft.rect,
+                  childSlotAreaIds: draft.childSlotAreaIds,
                   isTower: draft.isTower,
                   onError: (_) {},
                 );
@@ -346,11 +377,19 @@ class _LocationManagementState extends State<LocationManagement> {
     }
 
     final Map<String, List<GridRect>> existingChildRectsByParentKey = {};
+    final Map<String, Set<String>> existingChildAreaIdsByParentKey = {};
     for (final c in allInArea.where(_isCompositeChild)) {
       final pName = (c.parent ?? '').trim();
       if (pName.isEmpty) continue;
 
       final pk = _nameKey(pName);
+      final areaIds = _childAreaIds(c);
+      if (areaIds.isNotEmpty) {
+        existingChildAreaIdsByParentKey
+            .putIfAbsent(pk, () => <String>{})
+            .addAll(areaIds);
+      }
+
       final cr = c.childRect;
       if (cr == null) continue;
 
@@ -376,6 +415,7 @@ class _LocationManagementState extends State<LocationManagement> {
             parentNamesInArea: parentNamesInArea,
             parentParkingGridsByParentKey: parentParkingGridsByParentKey,
             existingChildRectsByParentKey: existingChildRectsByParentKey,
+            existingChildAreaIdsByParentKey: existingChildAreaIdsByParentKey,
             editingParentName: selected!.locationName,
             editingParentParkingGrid: parentGrid,
             onSave: (draft) async {
@@ -399,6 +439,7 @@ class _LocationManagementState extends State<LocationManagement> {
                   capacity: draft.capacity,
                   area: area,
                   rect: draft.rect,
+                  childSlotAreaIds: draft.childSlotAreaIds,
                   isTower: draft.isTower,
                   onError: (_) {},
                 );
@@ -487,11 +528,19 @@ class _LocationManagementState extends State<LocationManagement> {
     }
 
     final Map<String, List<GridRect>> existingChildRectsByParentKey = {};
+    final Map<String, Set<String>> existingChildAreaIdsByParentKey = {};
     for (final c in allInArea.where(_isCompositeChild)) {
       final pName = (c.parent ?? '').trim();
       if (pName.isEmpty) continue;
 
       final pk = _nameKey(pName);
+      final areaIds = _childAreaIds(c);
+      if (areaIds.isNotEmpty) {
+        existingChildAreaIdsByParentKey
+            .putIfAbsent(pk, () => <String>{})
+            .addAll(areaIds);
+      }
+
       final cr = c.childRect;
       if (cr == null) continue;
 
@@ -517,12 +566,14 @@ class _LocationManagementState extends State<LocationManagement> {
             parentNamesInArea: parentNamesInArea,
             parentParkingGridsByParentKey: parentParkingGridsByParentKey,
             existingChildRectsByParentKey: existingChildRectsByParentKey,
+            existingChildAreaIdsByParentKey: existingChildAreaIdsByParentKey,
             editingChildId: selected!.id,
             editingChildParentName: parentName,
             editingChildName: selected.locationName,
             editingChildCapacity: selected.capacity,
             editingChildRect: rect,
             editingChildIsTower: selected.isTowerChild,
+            editingChildSlotAreaIds: _childAreaIds(selected),
             onSave: (draft) async {
               final area = context.read<AreaState>().currentArea.trim();
 
@@ -534,6 +585,7 @@ class _LocationManagementState extends State<LocationManagement> {
                   capacity: draft.capacity,
                   area: area,
                   rect: draft.rect,
+                  childSlotAreaIds: draft.childSlotAreaIds,
                   isTower: draft.isTower,
                   onError: (_) {},
                 );
@@ -548,6 +600,7 @@ class _LocationManagementState extends State<LocationManagement> {
                   capacity: draft.capacity,
                   area: area,
                   rect: draft.rect,
+                  childSlotAreaIds: draft.childSlotAreaIds,
                   isTower: draft.isTower,
                   onError: (_) {},
                 );
@@ -626,11 +679,19 @@ class _LocationManagementState extends State<LocationManagement> {
     }
 
     final Map<String, List<GridRect>> existingChildRectsByParentKey = {};
+    final Map<String, Set<String>> existingChildAreaIdsByParentKey = {};
     for (final c in allInArea.where(_isCompositeChild)) {
       final pName = (c.parent ?? '').trim();
       if (pName.isEmpty) continue;
 
       final pk = _nameKey(pName);
+      final areaIds = _childAreaIds(c);
+      if (areaIds.isNotEmpty) {
+        existingChildAreaIdsByParentKey
+            .putIfAbsent(pk, () => <String>{})
+            .addAll(areaIds);
+      }
+
       final cr = c.childRect;
       if (cr == null) continue;
 
@@ -656,6 +717,7 @@ class _LocationManagementState extends State<LocationManagement> {
             parentNamesInArea: parentNamesInArea,
             parentParkingGridsByParentKey: parentParkingGridsByParentKey,
             existingChildRectsByParentKey: existingChildRectsByParentKey,
+            existingChildAreaIdsByParentKey: existingChildAreaIdsByParentKey,
             editingPlainTextId: selected!.id,
             editingPlainTextName: selected.locationName,
             editingPlainTextCapacity: selected.capacity,

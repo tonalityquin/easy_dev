@@ -177,6 +177,7 @@ class LocationModel {
   final String? childKind;
 
   final List<ChildSlot> childSlots;
+  final List<String> childSlotAreaIds;
 
   LocationModel({
     required this.id,
@@ -191,6 +192,7 @@ class LocationModel {
     this.childRect,
     this.childKind,
     this.childSlots = const <ChildSlot>[],
+    this.childSlotAreaIds = const <String>[],
   }) : assert(id.isNotEmpty, 'ID cannot be empty');
 
   bool get isCompositeParent => (type ?? '') == 'composite_parent';
@@ -232,10 +234,43 @@ class LocationModel {
     return out;
   }
 
+  static List<String> _parseStringList(Object? raw) {
+    if (raw is! List) return const <String>[];
+    final out = <String>[];
+    final seen = <String>{};
+    for (final e in raw) {
+      final v = e.toString().trim();
+      if (v.isEmpty) continue;
+      if (seen.add(v)) out.add(v);
+    }
+    return List<String>.unmodifiable(out);
+  }
+
+  static List<String> _resolveChildSlotAreaIds({
+    required Object? rawIds,
+    required List<ChildSlot> slots,
+  }) {
+    final parsed = _parseStringList(rawIds);
+    if (parsed.isNotEmpty) return parsed;
+
+    final out = <String>[];
+    final seen = <String>{};
+    for (final slot in slots) {
+      final v = slot.areaId.trim();
+      if (v.isEmpty) continue;
+      if (seen.add(v)) out.add(v);
+    }
+    return List<String>.unmodifiable(out);
+  }
+
   factory LocationModel.fromMap(String id, Map<String, dynamic> data) {
     final parsedGrid = _parseParkingGrid(data['parkingGrid']);
     final parsedChildRect = _parseChildRect(data['childRect'] ?? data['rect']);
     final parsedChildSlots = _parseChildSlots(data['childSlots']);
+    final parsedChildSlotAreaIds = _resolveChildSlotAreaIds(
+      rawIds: data['childSlotAreaIds'],
+      slots: parsedChildSlots,
+    );
 
     return LocationModel(
       id: id,
@@ -250,6 +285,7 @@ class LocationModel {
       childRect: parsedChildRect,
       childKind: data['childKind']?.toString(),
       childSlots: parsedChildSlots,
+      childSlotAreaIds: parsedChildSlotAreaIds,
     );
   }
 
@@ -281,6 +317,9 @@ class LocationModel {
       if (k.isNotEmpty) {
         map['childKind'] = k;
       }
+      if (childSlotAreaIds.isNotEmpty) {
+        map['childSlotAreaIds'] = childSlotAreaIds;
+      }
       if (childSlots.isNotEmpty) {
         map['childSlots'] = childSlots.map((e) => e.toJson()).toList();
       }
@@ -302,6 +341,7 @@ class LocationModel {
       if (parkingGrid != null) 'parkingGrid': parkingGrid!.toJson(),
       if (childRect != null) 'childRect': childRect!.toJson(),
       if ((childKind ?? '').trim().isNotEmpty) 'childKind': childKind,
+      if (childSlotAreaIds.isNotEmpty) 'childSlotAreaIds': childSlotAreaIds,
       if (childSlots.isNotEmpty)
         'childSlots': childSlots.map((e) => e.toJson()).toList(),
     };
@@ -314,6 +354,10 @@ class LocationModel {
     final parsedGrid = _parseParkingGrid(data['parkingGrid']);
     final parsedChildRect = _parseChildRect(data['childRect'] ?? data['rect']);
     final parsedChildSlots = _parseChildSlots(data['childSlots']);
+    final parsedChildSlotAreaIds = _resolveChildSlotAreaIds(
+      rawIds: data['childSlotAreaIds'],
+      slots: parsedChildSlots,
+    );
 
     return LocationModel(
       id: safeId,
@@ -328,6 +372,7 @@ class LocationModel {
       childRect: parsedChildRect,
       childKind: data['childKind']?.toString(),
       childSlots: parsedChildSlots,
+      childSlotAreaIds: parsedChildSlotAreaIds,
     );
   }
 
@@ -344,6 +389,7 @@ class LocationModel {
     GridRect? childRect,
     String? childKind,
     List<ChildSlot>? childSlots,
+    List<String>? childSlotAreaIds,
   }) {
     return LocationModel(
       id: id ?? this.id,
@@ -358,6 +404,7 @@ class LocationModel {
       childRect: childRect ?? this.childRect,
       childKind: childKind ?? this.childKind,
       childSlots: childSlots ?? this.childSlots,
+      childSlotAreaIds: childSlotAreaIds ?? this.childSlotAreaIds,
     );
   }
 }

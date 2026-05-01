@@ -84,6 +84,9 @@ class LocationWriteService {
     data['type'] = 'composite_child';
     data['updatedAt'] = FieldValue.serverTimestamp();
     data.remove('parkingGrid');
+    if (child.childSlotAreaIds.isEmpty) {
+      data['childSlotAreaIds'] = FieldValue.delete();
+    }
     if (child.childSlots.isEmpty) {
       data['childSlots'] = FieldValue.delete();
     }
@@ -104,6 +107,7 @@ class LocationWriteService {
     data['parkingGrid'] = grid.toJson();
     data['childRect'] = FieldValue.delete();
     data['childKind'] = FieldValue.delete();
+    data['childSlotAreaIds'] = FieldValue.delete();
     data['childSlots'] = FieldValue.delete();
     return data;
   }
@@ -156,6 +160,7 @@ class LocationWriteService {
     data['parkingGrid'] = FieldValue.delete();
     data['childRect'] = FieldValue.delete();
     data['childKind'] = FieldValue.delete();
+    data['childSlotAreaIds'] = FieldValue.delete();
     data['childSlots'] = FieldValue.delete();
 
     if (kDebugMode) {

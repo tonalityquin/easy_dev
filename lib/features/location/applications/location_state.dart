@@ -740,14 +740,54 @@ class LocationState extends ChangeNotifier {
     return top >= rr.r0 && left >= rr.c0 && bottom <= rr.r1 && right <= rr.c1;
   }
 
-  List<ChildSlot> _buildChildSlotsForRect({
+  List<String> _areaIdsForLocation(LocationModel loc) {
+    final out = <String>[];
+    final seen = <String>{};
+
+    for (final id in loc.childSlotAreaIds) {
+      final v = id.trim();
+      if (v.isEmpty) continue;
+      if (seen.add(v)) out.add(v);
+    }
+
+    if (out.isNotEmpty) return out;
+
+    for (final slot in loc.childSlots) {
+      final v = slot.areaId.trim();
+      if (v.isEmpty) continue;
+      if (seen.add(v)) out.add(v);
+    }
+
+    return out;
+  }
+
+  List<String> _areaIdsContainedInRect({
     required ParkingGridModel parentGrid,
     required GridRect rect,
   }) {
     final rr = rect.normalized();
+    final out = <String>[];
+    final seen = <String>{};
+
+    for (final area in parentGrid.parkingAreas) {
+      final id = area.id.trim();
+      if (id.isEmpty) continue;
+      if (!_parkingAreaFullyContainedInRect(area, rr)) continue;
+      if (seen.add(id)) out.add(id);
+    }
+
+    return out;
+  }
+
+  List<ChildSlot> _buildChildSlotsForAreaIds({
+    required ParkingGridModel parentGrid,
+    required Iterable<String> areaIds,
+  }) {
+    final idSet = areaIds.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
+    if (idSet.isEmpty) return const <ChildSlot>[];
 
     final areas = parentGrid.parkingAreas
-        .where((a) => _parkingAreaFullyContainedInRect(a, rr))
+        .where((a) => idSet.contains(a.id.trim()))
         .toList()
       ..sort((a, b) {
         final ar0 = math.min(a.r0, a.r1);
@@ -768,13 +808,92 @@ class LocationState extends ChangeNotifier {
 
     final out = <ChildSlot>[];
     for (int i = 0; i < areas.length; i++) {
-      out.add(
-        ChildSlot.fromParkingArea(
-          no: i + 1,
-          area: areas[i],
-        ),
-      );
+      out.add(ChildSlot.fromParkingArea(no: i + 1, area: areas[i]));
     }
+    return out;
+  }
+
+  Set<String> _usedAreaIdsForParent({
+    required List<LocationModel> snapshot,
+    required String area,
+    required String parent,
+    String? excludeChildId,
+  }) {
+    final cleanArea = area.trim();
+    final parentKey = _nameKey(parent);
+    final used = <String>{};
+
+    for (final loc in snapshot) {
+      if (!_isCompositeChild(loc)) continue;
+      if (loc.area.trim() != cleanArea) continue;
+      if (excludeChildId != null && loc.id == excludeChildId) continue;
+
+      final p = (loc.parent ?? '').trim();
+      if (p.isEmpty || _nameKey(p) != parentKey) continue;
+
+      used.addAll(_areaIdsForLocation(loc));
+    }
+
+    return used;
+  }
+
+  List<String>? _resolveSelectedAreaIds({
+    required ParkingGridModel parentGrid,
+    required GridRect rect,
+    required Iterable<String> requestedAreaIds,
+    required List<LocationModel> snapshot,
+    required String area,
+    required String parent,
+    String? excludeChildId,
+    void Function(String)? onError,
+  }) {
+    final requested = requestedAreaIds.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
+    final ids = requested.isNotEmpty
+        ? requested
+        : _areaIdsContainedInRect(parentGrid: parentGrid, rect: rect).toSet();
+
+    if (ids.isEmpty) {
+      onError?.call('⚠️ 자식 구역에 포함할 주차면적을 1개 이상 선택하세요.');
+      return null;
+    }
+
+    final parentAreaIds = parentGrid.parkingAreas.map((a) => a.id.trim()).where((e) => e.isNotEmpty).toSet();
+    final missing = ids.where((id) => !parentAreaIds.contains(id)).toList();
+    if (missing.isNotEmpty) {
+      onError?.call('⚠️ 부모 도면에 존재하지 않는 주차면적이 포함되어 있습니다: ${missing.take(3).join(', ')}');
+      return null;
+    }
+
+    final byId = <String, ParkingArea>{};
+    for (final a in parentGrid.parkingAreas) {
+      byId[a.id.trim()] = a;
+    }
+
+    final outside = <String>[];
+    final rr = rect.normalized();
+    for (final id in ids) {
+      final areaObj = byId[id];
+      if (areaObj == null) continue;
+      if (!_parkingAreaFullyContainedInRect(areaObj, rr)) outside.add(id);
+    }
+    if (outside.isNotEmpty) {
+      onError?.call('⚠️ 선택한 주차면적 중 자식 사각형 범위를 벗어난 항목이 있습니다: ${outside.take(3).join(', ')}');
+      return null;
+    }
+
+    final used = _usedAreaIdsForParent(
+      snapshot: snapshot,
+      area: area,
+      parent: parent,
+      excludeChildId: excludeChildId,
+    );
+    final conflicts = ids.where(used.contains).toList();
+    if (conflicts.isNotEmpty) {
+      onError?.call('⚠️ 이미 다른 자식 구역에 배정된 주차면적이 포함되어 있습니다.');
+      return null;
+    }
+
+    final out = ids.toList()..sort();
     return out;
   }
 
@@ -801,6 +920,11 @@ class LocationState extends ChangeNotifier {
     final cleanParent = _normalizeName(parent);
     final parentKey = _nameKey(cleanParent);
 
+    final existingAreaIds = parentGrid.parkingAreas
+        .map((a) => a.id.trim())
+        .where((e) => e.isNotEmpty)
+        .toSet();
+
     final out = <LocationModel>[];
 
     for (final loc in snapshot) {
@@ -817,6 +941,7 @@ class LocationState extends ChangeNotifier {
             parent: cleanParent,
             area: cleanArea,
             type: 'composite_child',
+            childSlotAreaIds: const <String>[],
             childSlots: const <ChildSlot>[],
           ),
         );
@@ -839,9 +964,16 @@ class LocationState extends ChangeNotifier {
         return null;
       }
 
+      final previousIds = _areaIdsForLocation(loc);
+      final nextIds = isTower
+          ? const <String>[]
+          : previousIds.isNotEmpty
+              ? previousIds.where(existingAreaIds.contains).toList(growable: false)
+              : _areaIdsContainedInRect(parentGrid: parentGrid, rect: norm);
+
       final slots = isTower
           ? const <ChildSlot>[]
-          : _buildChildSlotsForRect(parentGrid: parentGrid, rect: norm);
+          : _buildChildSlotsForAreaIds(parentGrid: parentGrid, areaIds: nextIds);
 
       out.add(
         loc.copyWith(
@@ -850,6 +982,8 @@ class LocationState extends ChangeNotifier {
           type: 'composite_child',
           childRect: norm,
           childKind: isTower ? 'tower' : 'normal',
+          capacity: isTower ? loc.capacity : slots.length,
+          childSlotAreaIds: nextIds,
           childSlots: slots,
         ),
       );
@@ -916,6 +1050,7 @@ class LocationState extends ChangeNotifier {
     required int capacity,
     required String area,
     required GridRect rect,
+    List<String> childSlotAreaIds = const <String>[],
     bool isTower = false,
     void Function(String)? onError,
   }) async {
@@ -987,12 +1122,7 @@ class LocationState extends ChangeNotifier {
       }
 
       final norm = rect.normalized();
-
-      final outOfBounds = norm.r0 < 0 ||
-          norm.c0 < 0 ||
-          norm.r1 >= parentGrid.rows ||
-          norm.c1 >= parentGrid.cols;
-      if (outOfBounds) {
+      if (!_rectInGrid(norm, parentGrid)) {
         onError?.call(
           '⚠️ 선택 영역이 부모 그리드 범위를 벗어납니다. '
           '(rows=${parentGrid.rows}, cols=${parentGrid.cols}, rect=$norm)',
@@ -1001,11 +1131,7 @@ class LocationState extends ChangeNotifier {
       }
 
       if (isTower) {
-        final towers = parentGrid.towerRects
-            .map((e) => e.normalized())
-            .toList(growable: false);
-        final ok = towers.any((t) => t == norm);
-        if (!ok) {
+        if (!_isRegisteredTowerRect(norm, parentGrid)) {
           onError?.call(
             '⚠️ 주차 타워 자식 구역은 부모에서 지정된 “주차 타워 영역” 중 하나를 선택해야 합니다. '
             '(선택 rect=$norm)',
@@ -1014,26 +1140,19 @@ class LocationState extends ChangeNotifier {
         }
       }
 
-      final existingRects = <GridRect>[];
-      for (final loc in snapshot) {
-        if (!_isCompositeChild(loc)) continue;
+      final selectedIds = isTower
+          ? const <String>[]
+          : _resolveSelectedAreaIds(
+              parentGrid: parentGrid,
+              rect: norm,
+              requestedAreaIds: childSlotAreaIds,
+              snapshot: snapshot,
+              area: cleanArea,
+              parent: cleanParent,
+              onError: onError,
+            );
 
-        final p = (loc.parent ?? '').trim();
-        if (p.isEmpty) continue;
-        if (_nameKey(p) != parentKey) continue;
-
-        final cr = loc.childRect;
-        if (cr == null) continue;
-
-        existingRects.add(cr.normalized());
-      }
-
-      for (final r in existingRects) {
-        if (r.overlaps(norm)) {
-          onError?.call('⚠️ 선택 영역이 기존 자식 구역과 겹칩니다. 다른 영역을 선택하세요.');
-          return false;
-        }
-      }
+      if (selectedIds == null) return false;
 
       final childDocId = _childDocId(
         parent: cleanParent,
@@ -1043,7 +1162,13 @@ class LocationState extends ChangeNotifier {
 
       final childSlots = isTower
           ? const <ChildSlot>[]
-          : _buildChildSlotsForRect(parentGrid: parentGrid, rect: norm);
+          : _buildChildSlotsForAreaIds(parentGrid: parentGrid, areaIds: selectedIds);
+
+      final effectiveCapacity = isTower ? capacity : childSlots.length;
+      if (!isTower && effectiveCapacity <= 0) {
+        onError?.call('⚠️ 자식 구역에 포함할 주차면적을 1개 이상 선택하세요.');
+        return false;
+      }
 
       final childModel = LocationModel(
         id: childDocId,
@@ -1051,12 +1176,13 @@ class LocationState extends ChangeNotifier {
         area: cleanArea,
         parent: cleanParent,
         type: 'composite_child',
-        capacity: capacity,
+        capacity: effectiveCapacity,
         isSelected: false,
         plateCount: 0,
         parkingGrid: null,
         childRect: norm,
         childKind: isTower ? 'tower' : 'normal',
+        childSlotAreaIds: selectedIds,
         childSlots: childSlots,
       );
 
@@ -1076,6 +1202,7 @@ class LocationState extends ChangeNotifier {
     required int capacity,
     required String area,
     required GridRect rect,
+    List<String> childSlotAreaIds = const <String>[],
     bool isTower = false,
     void Function(String)? onError,
   }) async {
@@ -1179,11 +1306,7 @@ class LocationState extends ChangeNotifier {
       }
 
       final norm = rect.normalized();
-      final outOfBounds = norm.r0 < 0 ||
-          norm.c0 < 0 ||
-          norm.r1 >= parentGrid.rows ||
-          norm.c1 >= parentGrid.cols;
-      if (outOfBounds) {
+      if (!_rectInGrid(norm, parentGrid)) {
         onError?.call(
           '⚠️ 선택 영역이 부모 그리드 범위를 벗어납니다. '
           '(rows=${parentGrid.rows}, cols=${parentGrid.cols}, rect=$norm)',
@@ -1192,11 +1315,7 @@ class LocationState extends ChangeNotifier {
       }
 
       if (isTower) {
-        final towers = parentGrid.towerRects
-            .map((e) => e.normalized())
-            .toList(growable: false);
-        final ok = towers.any((t) => t == norm);
-        if (!ok) {
+        if (!_isRegisteredTowerRect(norm, parentGrid)) {
           onError?.call(
             '⚠️ 주차 타워 자식 구역은 부모에서 지정된 “주차 타워 영역” 중 하나를 선택해야 합니다. '
             '(선택 rect=$norm)',
@@ -1205,32 +1324,37 @@ class LocationState extends ChangeNotifier {
         }
       }
 
-      for (final loc in snapshot) {
-        if (!_isCompositeChild(loc)) continue;
-        if (loc.id == id) continue;
+      final selectedIds = isTower
+          ? const <String>[]
+          : _resolveSelectedAreaIds(
+              parentGrid: parentGrid,
+              rect: norm,
+              requestedAreaIds: childSlotAreaIds,
+              snapshot: snapshot,
+              area: cleanArea,
+              parent: cleanParent,
+              excludeChildId: id,
+              onError: onError,
+            );
 
-        final p = (loc.parent ?? '').trim();
-        if (p.isEmpty) continue;
-        if (_nameKey(p) != parentKey) continue;
-
-        final cr = loc.childRect;
-        if (cr == null) continue;
-
-        if (cr.normalized().overlaps(norm)) {
-          onError?.call('⚠️ 선택 영역이 기존 자식 구역과 겹칩니다. 다른 영역을 선택하세요.');
-          return false;
-        }
-      }
+      if (selectedIds == null) return false;
 
       final childSlots = isTower
           ? const <ChildSlot>[]
-          : _buildChildSlotsForRect(parentGrid: parentGrid, rect: norm);
+          : _buildChildSlotsForAreaIds(parentGrid: parentGrid, areaIds: selectedIds);
+
+      final effectiveCapacity = isTower ? capacity : childSlots.length;
+      if (!isTower && effectiveCapacity <= 0) {
+        onError?.call('⚠️ 자식 구역에 포함할 주차면적을 1개 이상 선택하세요.');
+        return false;
+      }
 
       final updated = targetChild.copyWith(
         locationName: cleanChild,
-        capacity: capacity,
+        capacity: effectiveCapacity,
         childRect: norm,
         childKind: isTower ? 'tower' : 'normal',
+        childSlotAreaIds: selectedIds,
         childSlots: childSlots,
         type: 'composite_child',
         parent: cleanParent,
