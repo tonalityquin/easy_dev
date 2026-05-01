@@ -12,9 +12,13 @@ enum GridEditTool {
   wall,
   wallEraser,
   wallSelect,
-  parking12,
-  parking21,
-  parking22,
+  parkingCompact12,
+  parkingCompact21,
+  parkingStandard12,
+  parkingStandard21,
+  parkingExtendedA12,
+  parkingExtendedA21,
+  parkingExtendedB22,
   parkingEraser,
   entranceRect,
   exitRect,
@@ -116,9 +120,13 @@ class _ParkingGrid2DEditorState extends State<ParkingGrid2DEditor> {
   bool _isEdgeTool(GridEditTool t) => _isWallTool(t);
 
   bool _isParkingTool(GridEditTool t) =>
-      t == GridEditTool.parking12 ||
-          t == GridEditTool.parking21 ||
-          t == GridEditTool.parking22 ||
+      t == GridEditTool.parkingCompact12 ||
+          t == GridEditTool.parkingCompact21 ||
+          t == GridEditTool.parkingStandard12 ||
+          t == GridEditTool.parkingStandard21 ||
+          t == GridEditTool.parkingExtendedA12 ||
+          t == GridEditTool.parkingExtendedA21 ||
+          t == GridEditTool.parkingExtendedB22 ||
           t == GridEditTool.parkingEraser;
 
   bool _isRectTool(GridEditTool t) =>
@@ -160,45 +168,33 @@ class _ParkingGrid2DEditorState extends State<ParkingGrid2DEditor> {
   }
 
   (int h, int w) _desiredSizeForTool(GridEditTool t) {
+    final kind = _kindForTool(t);
+    if (kind == null) return (0, 0);
+    return (kind.h, kind.w);
+  }
+
+  ParkingAreaKind? _kindForTool(GridEditTool t) {
     switch (t) {
-      case GridEditTool.parking12:
-        return (1, 2);
-      case GridEditTool.parking21:
-        return (2, 1);
-      case GridEditTool.parking22:
-        return (2, 2);
+      case GridEditTool.parkingCompact12:
+        return ParkingAreaKind.compact1x2;
+      case GridEditTool.parkingCompact21:
+        return ParkingAreaKind.compact2x1;
+      case GridEditTool.parkingStandard12:
+        return ParkingAreaKind.standard1x2;
+      case GridEditTool.parkingStandard21:
+        return ParkingAreaKind.standard2x1;
+      case GridEditTool.parkingExtendedA12:
+        return ParkingAreaKind.extendedA1x2;
+      case GridEditTool.parkingExtendedA21:
+        return ParkingAreaKind.extendedA2x1;
+      case GridEditTool.parkingExtendedB22:
+        return ParkingAreaKind.extendedB2x2;
       default:
-        return (0, 0);
+        return null;
     }
   }
 
-  ParkingAreaKind _kindForTool(GridEditTool t) {
-    final desired = _desiredSizeForTool(t);
-    final values = ParkingAreaKind.values;
-    if (values.isEmpty) {
-      throw StateError('ParkingAreaKind.values is empty');
-    }
-
-    final wantToken = '${desired.$1}${desired.$2}';
-    final byName = values.where((k) => k.name.toLowerCase().contains(wantToken)).toList();
-    if (byName.isNotEmpty) return byName.first;
-
-    if (t == GridEditTool.parking12) return values[0];
-    if (t == GridEditTool.parking21) return values.length > 1 ? values[1] : values[0];
-    if (t == GridEditTool.parking22) return values.length > 2 ? values[2] : values.last;
-    return values.first;
-  }
-
-  (int h, int w) _sizeForKind(ParkingAreaKind k) {
-    final name = k.name.toLowerCase();
-    if (name.contains('12')) return (1, 2);
-    if (name.contains('21')) return (2, 1);
-    if (name.contains('22')) return (2, 2);
-    final idx = ParkingAreaKind.values.indexOf(k);
-    if (idx == 0) return (1, 2);
-    if (idx == 1) return (2, 1);
-    return (2, 2);
-  }
+  (int h, int w) _sizeForKind(ParkingAreaKind k) => (k.h, k.w);
 
   String _nextParkingAreaId() => 'pa_${DateTime.now().microsecondsSinceEpoch}';
 
@@ -289,6 +285,8 @@ class _ParkingGrid2DEditorState extends State<ParkingGrid2DEditor> {
     }
 
     final kind = _kindForTool(widget.tool);
+    if (kind == null) return;
+
     final newArea = ParkingArea(
       id: _nextParkingAreaId(),
       r0: top,
@@ -964,31 +962,12 @@ class _ParkingGrid2DPainter extends CustomPainter {
     }
   }
 
-  (int h, int w) _sizeForKind(ParkingAreaKind k) {
-    final name = k.name.toLowerCase();
-    if (name.contains('12')) return (1, 2);
-    if (name.contains('21')) return (2, 1);
-    if (name.contains('22')) return (2, 2);
-    final idx = ParkingAreaKind.values.indexOf(k);
-    if (idx == 0) return (1, 2);
-    if (idx == 1) return (2, 1);
-    return (2, 2);
-  }
+  (int h, int w) _sizeForKind(ParkingAreaKind k) => (k.h, k.w);
 
   void _drawParkingAreas(Canvas canvas) {
     if (parkingAreas.isEmpty) return;
 
-    final cs = colorScheme;
     final cell = layout.cell;
-
-    final fill = Paint()
-      ..style = PaintingStyle.fill
-      ..color = cs.secondaryContainer.withOpacity(0.45);
-
-    final stroke = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = max(1.4, cell * 0.06)
-      ..color = cs.secondary.withOpacity(0.90);
 
     for (final a in parkingAreas) {
       final (h, w) = _sizeForKind(a.kind);
@@ -1006,9 +985,86 @@ class _ParkingGrid2DPainter extends CustomPainter {
       final rect = Rect.fromLTRB(tl.left, tl.top, br.right, br.bottom)
           .deflate(max(1.0, cell * 0.04));
 
+      final style = _parkingAreaStyle(a.kind);
+      final fill = Paint()
+        ..style = PaintingStyle.fill
+        ..color = style.fill;
+      final stroke = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = max(1.4, cell * 0.06)
+        ..color = style.stroke;
+
       final rr = RRect.fromRectAndRadius(rect, Radius.circular(max(6.0, cell * 0.18)));
       canvas.drawRRect(rr, fill);
       canvas.drawRRect(rr, stroke);
+
+      if (rect.width >= 34 && rect.height >= 18) {
+        final label = _parkingAreaHintLabel(a.kind);
+        final tp = TextPainter(
+          text: TextSpan(
+            text: label,
+            style: TextStyle(
+              fontSize: max(8.0, min(cell * 0.22, 12.0)),
+              fontWeight: FontWeight.w900,
+              color: style.text.withOpacity(0.95),
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+          maxLines: 2,
+          ellipsis: '…',
+        )..layout(maxWidth: max(0.0, rect.width - 6));
+
+        tp.paint(
+          canvas,
+          Offset(rect.center.dx - tp.width / 2, rect.center.dy - tp.height / 2),
+        );
+      }
+    }
+  }
+
+  ({Color fill, Color stroke, Color text}) _parkingAreaStyle(ParkingAreaKind kind) {
+    final cs = colorScheme;
+    switch (kind.categoryKey) {
+      case 'compact':
+        return (
+          fill: const Color(0xFF64B5F6).withOpacity(0.58),
+          stroke: const Color(0xFF1565C0).withOpacity(0.92),
+          text: const Color(0xFF0D47A1),
+        );
+      case 'standard':
+        return (
+          fill: cs.secondaryContainer.withOpacity(0.52),
+          stroke: cs.secondary.withOpacity(0.92),
+          text: cs.onSecondaryContainer,
+        );
+      case 'extendedA':
+      case 'extendedB':
+        return (
+          fill: const Color(0xFFFFD54F).withOpacity(0.62),
+          stroke: const Color(0xFFF9A825).withOpacity(0.92),
+          text: const Color(0xFF5D4037),
+        );
+      default:
+        return (
+          fill: cs.secondaryContainer.withOpacity(0.45),
+          stroke: cs.secondary.withOpacity(0.90),
+          text: cs.onSecondaryContainer,
+        );
+    }
+  }
+
+  String _parkingAreaHintLabel(ParkingAreaKind kind) {
+    switch (kind.categoryKey) {
+      case 'compact':
+        return '경 ${kind.footprintLabel}';
+      case 'standard':
+        return '일반 ${kind.footprintLabel}';
+      case 'extendedA':
+        return '확장 A ${kind.footprintLabel}';
+      case 'extendedB':
+        return '확장 B ${kind.footprintLabel}';
+      default:
+        return kind.label;
     }
   }
 

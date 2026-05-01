@@ -83,58 +83,171 @@ int edgeSortKey(EdgePlacement e) => (e.r * 100000) + (e.c * 10) + e.side.index;
 typedef WallGroupId = String;
 
 enum ParkingAreaKind {
-  h1x2,
-  v2x1,
-  b2x2,
+  compact1x2,
+  compact2x1,
+  standard1x2,
+  standard2x1,
+  extendedA1x2,
+  extendedA2x1,
+  extendedB2x2,
 }
 
 extension ParkingAreaKindX on ParkingAreaKind {
   int get w {
     switch (this) {
-      case ParkingAreaKind.h1x2:
+      case ParkingAreaKind.compact1x2:
+      case ParkingAreaKind.standard1x2:
+      case ParkingAreaKind.extendedA1x2:
+      case ParkingAreaKind.extendedB2x2:
         return 2;
-      case ParkingAreaKind.v2x1:
+      case ParkingAreaKind.compact2x1:
+      case ParkingAreaKind.standard2x1:
+      case ParkingAreaKind.extendedA2x1:
         return 1;
-      case ParkingAreaKind.b2x2:
-        return 2;
     }
   }
 
   int get h {
     switch (this) {
-      case ParkingAreaKind.h1x2:
+      case ParkingAreaKind.compact1x2:
+      case ParkingAreaKind.standard1x2:
+      case ParkingAreaKind.extendedA1x2:
         return 1;
-      case ParkingAreaKind.v2x1:
+      case ParkingAreaKind.compact2x1:
+      case ParkingAreaKind.standard2x1:
+      case ParkingAreaKind.extendedA2x1:
+      case ParkingAreaKind.extendedB2x2:
         return 2;
-      case ParkingAreaKind.b2x2:
-        return 2;
+    }
+  }
+
+  String get footprintLabel => '${h}×${w}';
+
+  String get categoryKey {
+    switch (this) {
+      case ParkingAreaKind.compact1x2:
+      case ParkingAreaKind.compact2x1:
+        return 'compact';
+      case ParkingAreaKind.standard1x2:
+      case ParkingAreaKind.standard2x1:
+        return 'standard';
+      case ParkingAreaKind.extendedA1x2:
+      case ParkingAreaKind.extendedA2x1:
+        return 'extendedA';
+      case ParkingAreaKind.extendedB2x2:
+        return 'extendedB';
+    }
+  }
+
+  String get categoryLabel {
+    switch (this) {
+      case ParkingAreaKind.compact1x2:
+      case ParkingAreaKind.compact2x1:
+        return '경형';
+      case ParkingAreaKind.standard1x2:
+      case ParkingAreaKind.standard2x1:
+        return '일반형';
+      case ParkingAreaKind.extendedA1x2:
+      case ParkingAreaKind.extendedA2x1:
+        return '확장형 A';
+      case ParkingAreaKind.extendedB2x2:
+        return '확장형 B';
+    }
+  }
+
+  double get minWidthMeters {
+    switch (this) {
+      case ParkingAreaKind.compact1x2:
+      case ParkingAreaKind.compact2x1:
+        return 2.0;
+      case ParkingAreaKind.standard1x2:
+      case ParkingAreaKind.standard2x1:
+        return 2.5;
+      case ParkingAreaKind.extendedA1x2:
+      case ParkingAreaKind.extendedA2x1:
+      case ParkingAreaKind.extendedB2x2:
+        return 2.6;
+    }
+  }
+
+  double get minLengthMeters {
+    switch (this) {
+      case ParkingAreaKind.compact1x2:
+      case ParkingAreaKind.compact2x1:
+        return 3.6;
+      case ParkingAreaKind.standard1x2:
+      case ParkingAreaKind.standard2x1:
+        return 5.0;
+      case ParkingAreaKind.extendedA1x2:
+      case ParkingAreaKind.extendedA2x1:
+      case ParkingAreaKind.extendedB2x2:
+        return 5.2;
     }
   }
 
   String get wireName {
     switch (this) {
-      case ParkingAreaKind.h1x2:
-        return 'h1x2';
-      case ParkingAreaKind.v2x1:
-        return 'v2x1';
-      case ParkingAreaKind.b2x2:
-        return 'b2x2';
+      case ParkingAreaKind.compact1x2:
+        return 'compact1x2';
+      case ParkingAreaKind.compact2x1:
+        return 'compact2x1';
+      case ParkingAreaKind.standard1x2:
+        return 'standard1x2';
+      case ParkingAreaKind.standard2x1:
+        return 'standard2x1';
+      case ParkingAreaKind.extendedA1x2:
+        return 'extendedA1x2';
+      case ParkingAreaKind.extendedA2x1:
+        return 'extendedA2x1';
+      case ParkingAreaKind.extendedB2x2:
+        return 'extendedB2x2';
     }
   }
 
+  String get label => '$categoryLabel $footprintLabel';
+
+  static String _normalizeToken(dynamic raw) {
+    if (raw == null) return '';
+    return raw
+        .toString()
+        .trim()
+        .toLowerCase()
+        .replaceAll('×', 'x')
+        .replaceAll(RegExp(r'[\s_\-()]'), '');
+  }
+
   static ParkingAreaKind? tryParse(dynamic raw) {
-    if (raw == null) return null;
-    final s = raw.toString().trim().toLowerCase();
+    final s = _normalizeToken(raw);
+    if (s.isEmpty) return null;
 
-    if (s == 'h1x2') return ParkingAreaKind.h1x2;
-    if (s == 'v2x1') return ParkingAreaKind.v2x1;
-    if (s == 'b2x2') return ParkingAreaKind.b2x2;
+    if (s == 'compact1x2' || s == 'light1x2' || s == 'small1x2' || s == '경형1x2') return ParkingAreaKind.compact1x2;
+    if (s == 'compact2x1' || s == 'light2x1' || s == 'small2x1' || s == '경형2x1') return ParkingAreaKind.compact2x1;
+    if (s == 'standard1x2' || s == 'normal1x2' || s == 'general1x2' || s == '일반형1x2' || s == '일반1x2') return ParkingAreaKind.standard1x2;
+    if (s == 'standard2x1' || s == 'normal2x1' || s == 'general2x1' || s == '일반형2x1' || s == '일반2x1') return ParkingAreaKind.standard2x1;
+    if (s == 'extendeda1x2' || s == 'expandeda1x2' || s == '확장형a1x2' || s == '확장a1x2') return ParkingAreaKind.extendedA1x2;
+    if (s == 'extendeda2x1' || s == 'expandeda2x1' || s == '확장형a2x1' || s == '확장a2x1') return ParkingAreaKind.extendedA2x1;
+    if (s == 'extendedb2x2' || s == 'extended2x2' || s == 'expandedb2x2' || s == '확장형b2x2' || s == '확장b2x2') return ParkingAreaKind.extendedB2x2;
 
-    if (s == '1x2' || s == '1×2') return ParkingAreaKind.h1x2;
-    if (s == '2x1' || s == '2×1') return ParkingAreaKind.v2x1;
-    if (s == '2x2' || s == '2×2') return ParkingAreaKind.b2x2;
+    if (s == 'h1x2' || s == '1x2') return ParkingAreaKind.standard1x2;
+    if (s == 'v2x1' || s == '2x1') return ParkingAreaKind.standard2x1;
+    if (s == 'b2x2' || s == '2x2') return ParkingAreaKind.extendedB2x2;
+
+    if (s.contains('경형') && s.contains('1x2')) return ParkingAreaKind.compact1x2;
+    if (s.contains('경형') && s.contains('2x1')) return ParkingAreaKind.compact2x1;
+    if ((s.contains('일반형') || s.contains('일반')) && s.contains('1x2')) return ParkingAreaKind.standard1x2;
+    if ((s.contains('일반형') || s.contains('일반')) && s.contains('2x1')) return ParkingAreaKind.standard2x1;
+    if ((s.contains('확장형a') || s.contains('확장a') || s.contains('extendeda') || s.contains('expandeda')) && s.contains('1x2')) return ParkingAreaKind.extendedA1x2;
+    if ((s.contains('확장형a') || s.contains('확장a') || s.contains('extendeda') || s.contains('expandeda')) && s.contains('2x1')) return ParkingAreaKind.extendedA2x1;
+    if ((s.contains('확장형b') || s.contains('확장b') || s.contains('extendedb') || s.contains('expandedb')) && s.contains('2x2')) return ParkingAreaKind.extendedB2x2;
 
     return null;
+  }
+
+  static ParkingAreaKind? tryParseParts({dynamic category, dynamic footprint}) {
+    final c = _normalizeToken(category);
+    final f = _normalizeToken(footprint);
+    if (c.isEmpty || f.isEmpty) return null;
+    return tryParse('$c$f');
   }
 }
 
@@ -158,6 +271,13 @@ class ParkingArea {
   int get r1 => r0 + h - 1;
   int get c1 => c0 + w - 1;
 
+  String get label => kind.label;
+  String get categoryKey => kind.categoryKey;
+  String get categoryLabel => kind.categoryLabel;
+  String get footprintLabel => kind.footprintLabel;
+  double get minWidthMeters => kind.minWidthMeters;
+  double get minLengthMeters => kind.minLengthMeters;
+
   bool containsCell(int r, int c) => (r >= r0 && r <= r1 && c >= c0 && c <= c1);
 
   Map<String, dynamic> toJson() => {
@@ -165,6 +285,12 @@ class ParkingArea {
     'r0': r0,
     'c0': c0,
     'kind': kind.wireName,
+    'label': kind.label,
+    'category': kind.categoryKey,
+    'categoryLabel': kind.categoryLabel,
+    'footprint': kind.footprintLabel,
+    'minWidthMeters': kind.minWidthMeters,
+    'minLengthMeters': kind.minLengthMeters,
   };
 
   static ParkingArea? tryFromJson(dynamic json) {
@@ -180,7 +306,11 @@ class ParkingArea {
     final id = (json['id'] ?? '').toString().trim();
     final r0 = readInt(json['r0'] ?? json['r'] ?? json['row']);
     final c0 = readInt(json['c0'] ?? json['c'] ?? json['col']);
-    final kind = ParkingAreaKindX.tryParse(json['kind'] ?? json['type'] ?? json['size']);
+    final kind = ParkingAreaKindX.tryParse(json['kind'] ?? json['type'] ?? json['size'] ?? json['label']) ??
+        ParkingAreaKindX.tryParseParts(
+          category: json['category'] ?? json['categoryLabel'] ?? json['regulation'] ?? json['slotCategory'],
+          footprint: json['footprint'] ?? json['footprintLabel'] ?? json['size'],
+        );
     if (id.isEmpty || r0 == null || c0 == null || kind == null) return null;
 
     return ParkingArea(id: id, r0: r0, c0: c0, kind: kind);

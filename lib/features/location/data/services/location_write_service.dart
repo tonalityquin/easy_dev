@@ -79,6 +79,35 @@ class LocationWriteService {
     }
   }
 
+  Map<String, dynamic> _compositeChildData(LocationModel child) {
+    final data = child.toFirestoreMap();
+    data['type'] = 'composite_child';
+    data['updatedAt'] = FieldValue.serverTimestamp();
+    data.remove('parkingGrid');
+    if (child.childSlots.isEmpty) {
+      data['childSlots'] = FieldValue.delete();
+    }
+    return data;
+  }
+
+  Map<String, dynamic> _compositeParentData(LocationModel parent) {
+    final grid = parent.parkingGrid;
+    if (grid == null) {
+      throw ArgumentError('composite_parent requires non-null parkingGrid');
+    }
+
+    _validateParkingGrid(grid);
+
+    final data = parent.toFirestoreMap();
+    data['type'] = 'composite_parent';
+    data['updatedAt'] = FieldValue.serverTimestamp();
+    data['parkingGrid'] = grid.toJson();
+    data['childRect'] = FieldValue.delete();
+    data['childKind'] = FieldValue.delete();
+    data['childSlots'] = FieldValue.delete();
+    return data;
+  }
+
   Future<void> addCompositeParent(LocationModel parent) async {
     if (!_isCompositeParent(parent)) {
       throw ArgumentError('addCompositeParent requires type=composite_parent');
@@ -94,14 +123,9 @@ class LocationWriteService {
       throw ArgumentError('composite_parent requires non-null parkingGrid');
     }
 
-    _validateParkingGrid(grid);
-
     final ref = _firestore.collection('locations').doc(parent.id);
 
-    final data = parent.toFirestoreMap();
-    data['type'] = 'composite_parent';
-    data['updatedAt'] = FieldValue.serverTimestamp();
-    data['parkingGrid'] = grid.toJson();
+    final data = _compositeParentData(parent);
 
     if (kDebugMode) {
       debugPrint(
@@ -166,10 +190,7 @@ class LocationWriteService {
 
     final ref = _firestore.collection('locations').doc(child.id);
 
-    final data = child.toFirestoreMap();
-    data['type'] = 'composite_child';
-    data['updatedAt'] = FieldValue.serverTimestamp();
-    data.remove('parkingGrid');
+    final data = _compositeChildData(child);
 
     if (kDebugMode) {
       debugPrint(
@@ -200,15 +221,8 @@ class LocationWriteService {
 
     _validateParkingGrid(parentGrid);
 
-    final childData = child.toFirestoreMap()
-      ..['type'] = 'composite_child'
-      ..['updatedAt'] = FieldValue.serverTimestamp();
-    childData.remove('parkingGrid');
-
-    final parentData = parent.toFirestoreMap()
-      ..['type'] = 'composite_parent'
-      ..['updatedAt'] = FieldValue.serverTimestamp()
-      ..['parkingGrid'] = parentGrid.toJson();
+    final childData = _compositeChildData(child);
+    final parentData = _compositeParentData(parent);
 
     final batch = _firestore.batch();
 
@@ -222,6 +236,56 @@ class LocationWriteService {
       debugPrint(
         '🧩 addCompositeChildWithParentGridUpdate: parent=${parent.id}, child=${child.id}, '
             'areas=${parentGrid.parkingAreas.length}',
+      );
+    }
+
+    await batch.commit();
+  }
+
+  Future<void> saveCompositeParentWithChildren({
+    required LocationModel parent,
+    required List<LocationModel> children,
+  }) async {
+    if (!_isCompositeParent(parent)) {
+      throw ArgumentError('parent must be type=composite_parent');
+    }
+
+    final parentGrid = parent.parkingGrid;
+    if (parentGrid == null) {
+      throw ArgumentError('parent parkingGrid cannot be null');
+    }
+
+    final parentName = parent.locationName.trim();
+    if (parentName.isEmpty) {
+      throw ArgumentError('parent locationName cannot be empty');
+    }
+
+    final batch = _firestore.batch();
+    final parentRef = _firestore.collection('locations').doc(parent.id);
+    batch.set(parentRef, _compositeParentData(parent), SetOptions(merge: true));
+
+    for (final child in children) {
+      if (!_isCompositeChild(child)) {
+        throw ArgumentError('child must be type=composite_child: ${child.id}');
+      }
+
+      final childParent = (child.parent ?? '').trim();
+      if (childParent.isEmpty) {
+        throw ArgumentError('child parent cannot be empty: ${child.id}');
+      }
+
+      final childRef = _firestore.collection('locations').doc(child.id);
+      batch.set(
+        childRef,
+        _compositeChildData(child),
+        SetOptions(merge: true),
+      );
+    }
+
+    if (kDebugMode) {
+      debugPrint(
+        '🧩 saveCompositeParentWithChildren: parent=${parent.id}, '
+        'children=${children.length}, areas=${parentGrid.parkingAreas.length}',
       );
     }
 

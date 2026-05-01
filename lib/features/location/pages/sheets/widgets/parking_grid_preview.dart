@@ -629,21 +629,10 @@ class _ParkingGridPainter extends CustomPainter {
     tp.paint(canvas, pos);
   }
 
-  (int h, int w) _parkingSizeForKind(ParkingAreaKind k) {
-    final n = k.name.toLowerCase();
-    if (n.contains('12')) return (1, 2);
-    if (n.contains('21')) return (2, 1);
-    if (n.contains('22')) return (2, 2);
-    final idx = ParkingAreaKind.values.indexOf(k);
-    if (idx == 0) return (1, 2);
-    if (idx == 1) return (2, 1);
-    return (2, 2);
-  }
+  (int h, int w) _parkingSizeForKind(ParkingAreaKind k) => (k.h, k.w);
 
   void _drawParkingArea(Canvas canvas, _GridLayout layout, ParkingArea a,
       {required bool drawLabel}) {
-    final cs = colorScheme;
-
     final (h, w) = _parkingSizeForKind(a.kind);
     final top = a.r0;
     final left = a.c0;
@@ -657,14 +646,16 @@ class _ParkingGridPainter extends CustomPainter {
         .rectForCellRange(r0: top, r1: bottom, c0: left, c1: right)
         .deflate(math.max(1.0, layout.cell * 0.10));
 
+    final style = _parkingAreaStyle(a.kind);
+
     final fill = Paint()
       ..style = PaintingStyle.fill
-      ..color = cs.secondaryContainer.withOpacity(0.42);
+      ..color = style.fill;
 
     final stroke = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = math.max(1.1, layout.cell * 0.07)
-      ..color = cs.secondary.withOpacity(0.90);
+      ..color = style.stroke;
 
     canvas.drawRRect(
         RRect.fromRectAndRadius(
@@ -674,25 +665,33 @@ class _ParkingGridPainter extends CustomPainter {
         RRect.fromRectAndRadius(
             rect, Radius.circular(math.max(4.0, layout.cell * 0.18))),
         stroke);
+  }
 
-    if (!drawLabel) return;
-    if (rect.width < 14 || rect.height < 14) return;
-
-    final tp = TextPainter(
-      text: TextSpan(
-        text: 'P',
-        style: TextStyle(
-          fontSize: math.max(10.0, math.min(layout.cell * 0.55, 18.0)),
-          fontWeight: FontWeight.w900,
-          color: cs.onSecondaryContainer.withOpacity(0.90),
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-      maxLines: 1,
-    )..layout();
-
-    tp.paint(canvas,
-        Offset(rect.center.dx - tp.width / 2, rect.center.dy - tp.height / 2));
+  ({Color fill, Color stroke}) _parkingAreaStyle(ParkingAreaKind kind) {
+    final cs = colorScheme;
+    switch (kind.categoryKey) {
+      case 'compact':
+        return (
+          fill: const Color(0xFF64B5F6).withOpacity(0.52),
+          stroke: const Color(0xFF1565C0).withOpacity(0.88),
+        );
+      case 'standard':
+        return (
+          fill: cs.secondaryContainer.withOpacity(0.48),
+          stroke: cs.secondary.withOpacity(0.88),
+        );
+      case 'extendedA':
+      case 'extendedB':
+        return (
+          fill: const Color(0xFFFFD54F).withOpacity(0.58),
+          stroke: const Color(0xFFF9A825).withOpacity(0.88),
+        );
+      default:
+        return (
+          fill: cs.secondaryContainer.withOpacity(0.42),
+          stroke: cs.secondary.withOpacity(0.90),
+        );
+    }
   }
 
   void _drawChildRegion(
@@ -775,18 +774,36 @@ class _ParkingGridPainter extends CustomPainter {
 
     final bg = Paint()
       ..style = PaintingStyle.fill
-      ..color = cs.surface.withOpacity(0.80);
+      ..color = cs.surface.withOpacity(0.86);
 
     final bd = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = math.max(1.0, layout.cell * 0.06)
       ..color = cs.primary.withOpacity(0.85);
 
-    final badgeSize = math.min(rect.width, rect.height) * 0.55;
+    final text = '${s.no}';
+
+    final fontSize = math.max(9.0, math.min(layout.cell * 0.27, 13.0));
+    final tp = TextPainter(
+      text: TextSpan(
+        text: text,
+        style: TextStyle(
+          fontSize: fontSize,
+          fontWeight: FontWeight.w900,
+          color: cs.primary.withOpacity(0.95),
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+      ellipsis: '…',
+    )..layout(maxWidth: math.max(12.0, rect.width - 4));
+
+    final badgeW = math.min(rect.width, math.max(18.0, tp.width + 8));
+    final badgeH = math.min(rect.height, math.max(14.0, tp.height + 5));
     final badge = Rect.fromCenter(
       center: rect.center,
-      width: badgeSize.clamp(12.0, 28.0),
-      height: badgeSize.clamp(12.0, 28.0),
+      width: badgeW,
+      height: badgeH,
     );
 
     canvas.drawRRect(
@@ -795,19 +812,6 @@ class _ParkingGridPainter extends CustomPainter {
     canvas.drawRRect(
         RRect.fromRectAndRadius(badge, Radius.circular(badge.height * 0.30)),
         bd);
-
-    final tp = TextPainter(
-      text: TextSpan(
-        text: '${s.no}',
-        style: TextStyle(
-          fontSize: math.max(10.0, badge.height * 0.55),
-          fontWeight: FontWeight.w900,
-          color: cs.primary.withOpacity(0.95),
-        ),
-      ),
-      textDirection: TextDirection.ltr,
-      maxLines: 1,
-    )..layout(maxWidth: badge.width);
 
     tp.paint(
         canvas,

@@ -187,6 +187,12 @@ int? _asInt(Object? v) {
   return int.tryParse(v.toString().trim());
 }
 
+double? _asDouble(Object? v) {
+  if (v == null) return null;
+  if (v is num) return v.toDouble();
+  return double.tryParse(v.toString().trim());
+}
+
 String _trimOrEmpty(Object? v) => (v ?? '').toString().trim();
 
 String _normalizeName(String raw) => raw.trim().replaceAll(RegExp(r'\s+'), ' ');
@@ -490,23 +496,61 @@ Map<String, Object?>? _toLooseMap(Object? it) {
   return (sr, sc);
 }
 
+String _slotToken(Object? value) {
+  return _trimOrEmpty(value)
+      .toLowerCase()
+      .replaceAll('×', 'x')
+      .replaceAll('*', 'x')
+      .replaceAll(RegExp(r'\s+'), '');
+}
+
 (int spanR, int spanC)? _spanFromKind(Object? kindLike) {
-  final s = _trimOrEmpty(kindLike).toLowerCase();
+  final s = _slotToken(kindLike);
   if (s.isEmpty) return null;
 
   final parsed = _parseSpanString(s);
   if (parsed != null) return parsed;
 
   if (s.contains('2x2')) return (2, 2);
-  if (s.contains('h') && s.contains('1x2')) return (1, 2);
-  if (s.contains('v') && (s.contains('2x1') || s.contains('1x2'))) {
-    return (2, 1);
-  }
-
-  if (s.contains('h1x2')) return (1, 2);
-  if (s.contains('v2x1')) return (2, 1);
+  if (s.contains('2x1')) return (2, 1);
+  if (s.contains('1x2')) return (1, 2);
+  if (s.contains('h1')) return (1, 2);
+  if (s.contains('v2')) return (2, 1);
 
   return null;
+}
+
+String _slotCategoryShort({
+  required String kind,
+  required String label,
+  required String category,
+  required String categoryLabel,
+}) {
+  final k = _slotToken(kind);
+  final l = _slotToken(label);
+  final c = _slotToken(category);
+  final cl = _slotToken(categoryLabel);
+
+  bool hasAny(String token) =>
+      k.contains(token) || l.contains(token) || c.contains(token) || cl.contains(token);
+
+  if (hasAny('extendedb') ||
+      hasAny('확장형b') ||
+      hasAny('확장b')) {
+    return '확B';
+  }
+  if (hasAny('extendeda') ||
+      hasAny('확장형a') ||
+      hasAny('확장a')) {
+    return '확A';
+  }
+  if (hasAny('compact') || hasAny('경형') || hasAny('경차')) {
+    return '경';
+  }
+  if (hasAny('standard') || hasAny('일반형') || hasAny('일반')) {
+    return '일';
+  }
+  return '';
 }
 
 class _Unset {
@@ -522,6 +566,12 @@ class _ChildSlot {
   final int r1;
   final int c1;
   final String kind;
+  final String label;
+  final String category;
+  final String categoryLabel;
+  final String footprint;
+  final double? minWidthMeters;
+  final double? minLengthMeters;
   final String? areaId;
   final int? no;
   final ParkingSlotStatus status;
@@ -534,6 +584,12 @@ class _ChildSlot {
     required this.r1,
     required this.c1,
     required this.kind,
+    this.label = '',
+    this.category = '',
+    this.categoryLabel = '',
+    this.footprint = '',
+    this.minWidthMeters,
+    this.minLengthMeters,
     this.areaId,
     this.no,
     this.status = ParkingSlotStatus.empty,
@@ -554,6 +610,12 @@ class _ChildSlot {
       r1: r1,
       c1: c1,
       kind: kind,
+      label: label,
+      category: category,
+      categoryLabel: categoryLabel,
+      footprint: footprint,
+      minWidthMeters: minWidthMeters,
+      minLengthMeters: minLengthMeters,
       areaId: areaId,
       no: nextNo,
       status: status ?? this.status,
@@ -578,16 +640,33 @@ class _ChildSlot {
   int get spanC => (cc1 - cc0 + 1).abs();
 
   String get kindNorm {
-    final k = kind.trim().toLowerCase();
-    if (k.contains('2x2')) return '2x2';
-    if (k.contains('h') && k.contains('1x2')) return 'h1x2';
-    if (k.contains('v') && (k.contains('2x1') || k.contains('1x2'))) {
-      return 'v2x1';
+    final span = _spanFromKind(kind) ??
+        _spanFromKind(label) ??
+        _spanFromKind(footprint) ??
+        _spanFromKind(categoryLabel);
+    if (span != null) {
+      if (span.$1 == 2 && span.$2 == 2) return '2x2';
+      if (span.$1 == 2 && span.$2 == 1) return 'v2x1';
+      if (span.$1 == 1 && span.$2 == 2) return 'h1x2';
     }
     if (spanR == 1 && spanC == 2) return 'h1x2';
     if (spanR == 2 && spanC == 1) return 'v2x1';
     if (spanR == 2 && spanC == 2) return '2x2';
     return 'unknown';
+  }
+
+  String get shortKindLabel {
+    return _slotCategoryShort(
+      kind: kind,
+      label: label,
+      category: category,
+      categoryLabel: categoryLabel,
+    );
+  }
+
+  String get badgeLabel {
+    final n = no != null && no! > 0 ? no.toString() : '';
+    return n;
   }
 
   (int sr, int sc) get normalizedSpan {
@@ -809,13 +888,24 @@ List<_ChildSlot> _readSlotsFromRaw(dynamic raw, {required String groupName}) {
       final fr1 = _asInt(m['r1'] ?? m['row1'] ?? m['bottom'] ?? m['maxR']);
       final fc1 = _asInt(m['c1'] ?? m['col1'] ?? m['right'] ?? m['maxC']);
 
-      final kindRaw = _trimOrEmpty(m['kind'] ?? m['type'] ?? m['shape']);
+      final kindRaw = _trimOrEmpty(m['kind'] ?? m['type'] ?? m['shape'] ?? m['size']);
       final kind = kindRaw.isEmpty ? 'unknown' : kindRaw;
+      final label = _trimOrEmpty(m['label'] ?? m['slotLabel'] ?? m['name']);
+      final category = _trimOrEmpty(
+          m['category'] ?? m['categoryKey'] ?? m['slotCategory'] ?? m['regulation']);
+      final categoryLabel = _trimOrEmpty(
+          m['categoryLabel'] ?? m['slotCategoryLabel'] ?? m['regulationLabel']);
+      final footprint =
+          _trimOrEmpty(m['footprint'] ?? m['footprintLabel'] ?? m['size'] ?? m['shape']);
 
       final areaIdRaw = _trimOrEmpty(m['areaId'] ?? m['id'] ?? m['area_id']);
       final areaId = areaIdRaw.isEmpty ? null : areaIdRaw;
 
       final no = _asInt(m['no'] ?? m['num'] ?? m['number']);
+      final minWidthMeters = _asDouble(
+          m['minWidthMeters'] ?? m['minWidth'] ?? m['widthMeters'] ?? m['width']);
+      final minLengthMeters = _asDouble(
+          m['minLengthMeters'] ?? m['minLength'] ?? m['lengthMeters'] ?? m['length']);
 
       if (fr0 != null && fr1 != null && fc0 != null && fc1 != null) {
         out.add(_ChildSlot(
@@ -825,6 +915,12 @@ List<_ChildSlot> _readSlotsFromRaw(dynamic raw, {required String groupName}) {
           r1: fr1,
           c1: fc1,
           kind: kind,
+          label: label,
+          category: category,
+          categoryLabel: categoryLabel,
+          footprint: footprint,
+          minWidthMeters: minWidthMeters,
+          minLengthMeters: minLengthMeters,
           areaId: areaId,
           no: no,
         ));
@@ -872,6 +968,12 @@ List<_ChildSlot> _readSlotsFromRaw(dynamic raw, {required String groupName}) {
         r1: r + (sr - 1),
         c1: c + (sc - 1),
         kind: kind,
+        label: label,
+        category: category,
+        categoryLabel: categoryLabel,
+        footprint: footprint,
+        minWidthMeters: minWidthMeters,
+        minLengthMeters: minLengthMeters,
         areaId: areaId,
         no: no,
       ));

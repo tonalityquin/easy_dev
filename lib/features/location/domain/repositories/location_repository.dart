@@ -15,6 +15,11 @@ abstract class LocationRepository {
     required LocationModel child,
   });
 
+  Future<void> saveCompositeParentWithChildren({
+    required LocationModel parent,
+    required List<LocationModel> children,
+  });
+
   Future<void> deleteLocations({
     required String area,
     required List<String> ids,

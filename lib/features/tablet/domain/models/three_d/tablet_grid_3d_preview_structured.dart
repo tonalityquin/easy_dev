@@ -1782,6 +1782,36 @@ class _ParkingGrid3DPainter extends CustomPainter {
       ));
     }
 
+
+    Color slotCategoryBaseColor(_ChildSlot slot) {
+      switch (slot.shortKindLabel) {
+        case '경':
+          return _ColorUtil.ensureContrast(
+            const Color(0xFF64B5F6),
+            palette.floorTop,
+            fallback: const Color(0xFF1565C0),
+            target: 1.5,
+          );
+        case '일':
+          return _ColorUtil.ensureContrast(
+            cs.secondary,
+            palette.floorTop,
+            fallback: cs.secondary,
+            target: 1.5,
+          );
+        case '확A':
+        case '확B':
+          return _ColorUtil.ensureContrast(
+            const Color(0xFFFFD54F),
+            palette.floorTop,
+            fallback: const Color(0xFFF9A825),
+            target: 1.5,
+          );
+        default:
+          return palette.parkingSlotTop;
+      }
+    }
+
     for (int i = 0; i < model.childSlots.length; i++) {
       final s = model.childSlots[i];
 
@@ -1831,7 +1861,7 @@ class _ParkingGrid3DPainter extends CustomPainter {
 
       final localJitter = ((i % 9) - 4) / 260.0;
       final slotFillBase = _ColorUtil.shiftLightness(
-        palette.parkingSlotTop,
+        slotCategoryBaseColor(s),
         (isLightTheme ? 1 : -1) * localJitter,
       );
 
@@ -2021,6 +2051,28 @@ class _ParkingGrid3DPainter extends CustomPainter {
           lowDetail: _useMinimalDetailMode,
         );
         faces.addAll(vehicleRes.faces);
+      }
+
+      final slotLabel = s.badgeLabel;
+      if (slotLabel.isNotEmpty) {
+        final cxLabel = (x0 + x1) * 0.5;
+        final czLabel = (z0 + z1) * 0.5;
+        final labelPos = _project(Vec3(cxLabel, yTop - 0.0022, czLabel));
+        labels.add(
+          _TextAnchor(
+            text: slotLabel,
+            pos: labelPos,
+            zKey: topZ + 0.0020,
+            textColor: _ColorUtil.ensureContrast(
+              cs.onSurface,
+              topColor,
+              fallback: cs.onSurface,
+              target: 2.0,
+            ),
+            bgColor: topColor.withOpacity(0.72),
+            borderColor: cs.outlineVariant.withOpacity(0.82),
+          ),
+        );
       }
 
       if (isDeparture) {

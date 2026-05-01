@@ -52,6 +52,17 @@ class FirestoreLocationRepository implements LocationRepository {
   }
 
   @override
+  Future<void> saveCompositeParentWithChildren({
+    required LocationModel parent,
+    required List<LocationModel> children,
+  }) {
+    return _writeService.saveCompositeParentWithChildren(
+      parent: parent,
+      children: children,
+    );
+  }
+
+  @override
   Future<void> deleteLocations({
     required String area,
     required List<String> ids,

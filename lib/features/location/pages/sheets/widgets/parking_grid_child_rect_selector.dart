@@ -370,10 +370,12 @@ class _ParkingGridChildRectPainter extends CustomPainter {
   }
 
   void _drawParkingArea(Canvas canvas, ParkingArea a, double cell, ColorScheme cs, {required bool drawLabel}) {
-    final top = min(a.r0, a.r1);
-    final bottom = max(a.r0, a.r1);
-    final left = min(a.c0, a.c1);
-    final right = max(a.c0, a.c1);
+    final h = a.kind.h;
+    final w = a.kind.w;
+    final top = a.r0;
+    final left = a.c0;
+    final bottom = a.r0 + h - 1;
+    final right = a.c0 + w - 1;
 
     final rect = Rect.fromLTWH(
       left * cell,
@@ -382,35 +384,85 @@ class _ParkingGridChildRectPainter extends CustomPainter {
       (bottom - top + 1) * cell,
     ).deflate(max(1.0, cell * 0.10));
 
+    final style = _parkingAreaStyle(a.kind, cs);
+
     final fill = Paint()
       ..style = PaintingStyle.fill
-      ..color = cs.secondaryContainer.withOpacity(0.45);
+      ..color = style.fill;
 
     final stroke = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = max(1.2, cell * 0.07)
-      ..color = cs.secondary.withOpacity(0.90);
+      ..color = style.stroke;
 
     final rr = RRect.fromRectAndRadius(rect, Radius.circular(max(4.0, cell * 0.18)));
     canvas.drawRRect(rr, fill);
     canvas.drawRRect(rr, stroke);
 
     if (!drawLabel) return;
-    if (rect.width < 14 || rect.height < 14) return;
+    if (rect.width < 18 || rect.height < 14) return;
 
+    final label = _parkingAreaHintLabel(a.kind);
     final tp = TextPainter(
       text: TextSpan(
-        text: 'P',
+        text: label,
         style: TextStyle(
-          fontSize: max(10.0, min(cell * 0.55, 18.0)),
+          fontSize: max(8.0, min(cell * 0.30, 12.0)),
           fontWeight: FontWeight.w900,
-          color: cs.onSecondaryContainer.withOpacity(0.90),
+          color: style.text.withOpacity(0.95),
         ),
       ),
       textDirection: TextDirection.ltr,
-    )..layout();
+      maxLines: 2,
+      ellipsis: '…',
+    )..layout(maxWidth: max(0.0, rect.width - 4));
 
     tp.paint(canvas, Offset(rect.center.dx - tp.width / 2, rect.center.dy - tp.height / 2));
+  }
+
+  ({Color fill, Color stroke, Color text}) _parkingAreaStyle(ParkingAreaKind kind, ColorScheme cs) {
+    switch (kind.categoryKey) {
+      case 'compact':
+        return (
+          fill: const Color(0xFF64B5F6).withOpacity(0.58),
+          stroke: const Color(0xFF1565C0).withOpacity(0.92),
+          text: const Color(0xFF0D47A1),
+        );
+      case 'standard':
+        return (
+          fill: cs.secondaryContainer.withOpacity(0.52),
+          stroke: cs.secondary.withOpacity(0.92),
+          text: cs.onSecondaryContainer,
+        );
+      case 'extendedA':
+      case 'extendedB':
+        return (
+          fill: const Color(0xFFFFD54F).withOpacity(0.62),
+          stroke: const Color(0xFFF9A825).withOpacity(0.92),
+          text: const Color(0xFF5D4037),
+        );
+      default:
+        return (
+          fill: cs.secondaryContainer.withOpacity(0.45),
+          stroke: cs.secondary.withOpacity(0.90),
+          text: cs.onSecondaryContainer,
+        );
+    }
+  }
+
+  String _parkingAreaHintLabel(ParkingAreaKind kind) {
+    switch (kind.categoryKey) {
+      case 'compact':
+        return '경 ${kind.footprintLabel}';
+      case 'standard':
+        return '일반 ${kind.footprintLabel}';
+      case 'extendedA':
+        return '확장 A ${kind.footprintLabel}';
+      case 'extendedB':
+        return '확장 B ${kind.footprintLabel}';
+      default:
+        return kind.label;
+    }
   }
 
   void _drawAxisIndex(Canvas canvas, Size size, double cell, ColorScheme cs, {required int rows, required int cols}) {

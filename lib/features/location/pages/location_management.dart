@@ -122,6 +122,65 @@ class _LocationManagementState extends State<LocationManagement> {
     return sum;
   }
 
+  String _slotLabelForSummary(ChildSlot s) {
+    final label = s.label.trim();
+    if (label.isNotEmpty) return label;
+
+    final category = s.categoryLabel.trim();
+    final footprint = s.footprint.trim();
+    if (category.isNotEmpty && footprint.isNotEmpty) {
+      return '$category $footprint';
+    }
+    if (category.isNotEmpty) return category;
+    if (footprint.isNotEmpty) return footprint;
+
+    final kind = s.kind.trim();
+    return kind.isEmpty ? '미지정' : kind;
+  }
+
+  String _slotSummaryText(Iterable<ChildSlot> slots) {
+    final counts = <String, int>{};
+    for (final s in slots) {
+      final label = _slotLabelForSummary(s);
+      counts[label] = (counts[label] ?? 0) + 1;
+    }
+    if (counts.isEmpty) return '';
+    final entries = counts.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return entries.map((e) => '${e.key} ${e.value}').join(' · ');
+  }
+
+  String _parkingAreaKindSummary(ParkingGridModel grid) {
+    final counts = <String, int>{};
+    for (final a in grid.parkingAreas) {
+      final label = a.kind.label;
+      counts[label] = (counts[label] ?? 0) + 1;
+    }
+    if (counts.isEmpty) return '';
+    final entries = counts.entries.toList()
+      ..sort((a, b) => a.key.compareTo(b.key));
+    return entries.map((e) => '${e.key} ${e.value}').join(' · ');
+  }
+
+  Future<void> _handleRebuildChildSlots(BuildContext context) async {
+    final state = context.read<LocationState>();
+    String? errorMessage;
+
+    final ok = await state.refreshChildSlotsForCurrentArea(
+      onError: (msg) => errorMessage = msg,
+    );
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          ok ? '기존 자식 슬롯을 최신 주차면적으로 재계산했습니다.' : (errorMessage ?? '자식 슬롯 재계산에 실패했습니다.'),
+        ),
+      ),
+    );
+  }
+
   Future<void> _handleAdd(BuildContext context) async {
     final locationState = context.read<LocationState>();
     final currentArea = context.read<AreaState>().currentArea.trim();
@@ -748,6 +807,11 @@ class _LocationManagementState extends State<LocationManagement> {
         automaticallyImplyLeading: false,
         actions: [
           IconButton(
+            tooltip: '기존 자식 슬롯 재계산',
+            onPressed: () => _handleRebuildChildSlots(context),
+            icon: const Icon(Icons.sync_alt),
+          ),
+          IconButton(
             tooltip: '새로고침',
             onPressed: () => _handleRefresh(context),
             icon: const Icon(Icons.refresh),
@@ -1098,6 +1162,12 @@ class _LocationManagementState extends State<LocationManagement> {
               '${(parkingAreas ?? 0) > 0 ? ' · 주차면적 $parkingAreas' : ''}'
               '${(parkingAreaCells ?? 0) > 0 ? ' · 면적셀 $parkingAreaCells' : ''}';
 
+      final parkingKindSummary =
+          grid == null ? '' : _parkingAreaKindSummary(grid);
+      final selectedChildSlotSummary = selectedChildInThisGroup == null
+          ? ''
+          : _slotSummaryText(selectedChildInThisGroup.childSlots);
+
       final childrenForList = (_showOnlySelectedChild &&
               selectedChildInThisGroup != null)
           ? children.where((c) => c.id == selectedChildInThisGroup!.id).toList()
@@ -1165,6 +1235,28 @@ class _LocationManagementState extends State<LocationManagement> {
                           fontWeight: FontWeight.w900,
                         ),
                       ),
+                      if (parkingKindSummary.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          parkingKindSummary,
+                          style: TextStyle(
+                            color: cs.onSurfaceVariant,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                      if (selectedChildSlotSummary.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          '선택 자식 슬롯: $selectedChildSlotSummary',
+                          style: TextStyle(
+                            color: cs.primary,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 8),
                       ParkingGridPreview(
                         grid: grid,
@@ -1196,6 +1288,17 @@ class _LocationManagementState extends State<LocationManagement> {
               ],
               ...childrenForList.map((loc) {
                 final isSelected = state.selectedLocationId == loc.id;
+                final subtitleParts = <String>[];
+                if (loc.isTowerChild) {
+                  subtitleParts.add('타워');
+                }
+                if (loc.capacity > 0) {
+                  subtitleParts.add('공간 ${loc.capacity}대');
+                }
+                final slotSummary = _slotSummaryText(loc.childSlots);
+                if (!loc.isTowerChild && slotSummary.isNotEmpty) {
+                  subtitleParts.add(slotSummary);
+                }
 
                 return ListTile(
                   title: Text(
@@ -1203,9 +1306,9 @@ class _LocationManagementState extends State<LocationManagement> {
                     style: TextStyle(
                         fontWeight: FontWeight.w700, color: cs.onSurface),
                   ),
-                  subtitle: (loc.capacity > 0 || loc.isTowerChild)
+                  subtitle: subtitleParts.isNotEmpty
                       ? Text(
-                          '${loc.isTowerChild ? '타워 · ' : ''}${loc.capacity > 0 ? '공간 ${loc.capacity}대' : '타워'}',
+                          subtitleParts.join(' · '),
                           style: TextStyle(color: cs.onSurfaceVariant),
                         )
                       : null,

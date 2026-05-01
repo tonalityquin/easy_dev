@@ -1129,6 +1129,36 @@ class _ParkingGrid2DPainter extends CustomPainter {
       }
     }
 
+
+    Color slotCategoryBaseColor(_ChildSlot slot, double fallbackT) {
+      switch (slot.shortKindLabel) {
+        case '경':
+          return _ColorUtil.ensureContrast(
+            const Color(0xFF64B5F6),
+            bg,
+            fallback: const Color(0xFF1565C0),
+            target: 1.6,
+          );
+        case '일':
+          return _ColorUtil.ensureContrast(
+            cs.secondary,
+            bg,
+            fallback: cs.secondary,
+            target: 1.6,
+          );
+        case '확A':
+        case '확B':
+          return _ColorUtil.ensureContrast(
+            const Color(0xFFFFD54F),
+            bg,
+            fallback: const Color(0xFFF9A825),
+            target: 1.6,
+          );
+        default:
+          return _ColorUtil.mix(baseA, baseB, fallbackT);
+      }
+    }
+
     for (int i = 0; i < model.childSlots.length; i++) {
       final s = model.childSlots[i];
 
@@ -1163,7 +1193,7 @@ class _ParkingGrid2DPainter extends CustomPainter {
               fallback: cs.primary,
               target: 2.0,
             )
-          : _ColorUtil.mix(baseA, baseB, gT);
+          : slotCategoryBaseColor(s, gT);
 
       double typeDelta;
       if (srN == 1 && scN == 2) {
@@ -1343,6 +1373,26 @@ class _ParkingGrid2DPainter extends CustomPainter {
           y: yMark,
           fill: mark,
           zKey: topZ + 0.00055,
+        );
+      }
+
+      final slotLabel = s.badgeLabel;
+      if (slotLabel.isNotEmpty) {
+        final labelPos = _project(Vec3(cx, (yBase - h) - 0.0022, cz));
+        labels.add(
+          _TextAnchor(
+            text: slotLabel,
+            pos: labelPos,
+            zKey: topZ + 0.0020,
+            textColor: _ColorUtil.ensureContrast(
+              cs.onSurface,
+              topColor,
+              fallback: cs.onSurface,
+              target: 2.0,
+            ),
+            bgColor: topColor.withOpacity(0.72),
+            borderColor: cs.outlineVariant.withOpacity(0.82),
+          ),
         );
       }
     }

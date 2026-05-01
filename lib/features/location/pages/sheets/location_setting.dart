@@ -699,16 +699,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     return false;
   }
 
-  (int h, int w) _parkingSizeForKind(ParkingAreaKind k) {
-    final n = k.name.toLowerCase();
-    if (n.contains('12')) return (1, 2);
-    if (n.contains('21')) return (2, 1);
-    if (n.contains('22')) return (2, 2);
-    final idx = ParkingAreaKind.values.indexOf(k);
-    if (idx == 0) return (1, 2);
-    if (idx == 1) return (2, 1);
-    return (2, 2);
-  }
+  (int h, int w) _parkingSizeForKind(ParkingAreaKind k) => (k.h, k.w);
 
   (int top, int left, int bottom, int right) _boundsOfArea(ParkingArea a) {
     final (h, w) = _parkingSizeForKind(a.kind);
@@ -1440,11 +1431,15 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
           const SizedBox(height: 14),
           groupBlock(
             title: '주차면적',
-            subtitle: '빈칸 위에만 배치 가능 (1×2 / 2×1 / 2×2)',
+            subtitle: '평행주차 제외 직각·사선 기준. 경형 2.0×3.6m, 일반형 2.5×5.0m, 확장형 2.6×5.2m',
             children: [
-              _toolChip(cs, '1×2', GridEditTool.parking12, Icons.local_parking_rounded),
-              _toolChip(cs, '2×1', GridEditTool.parking21, Icons.local_parking_rounded),
-              _toolChip(cs, '2×2', GridEditTool.parking22, Icons.local_parking_rounded),
+              _toolChip(cs, '경형 1×2', GridEditTool.parkingCompact12, Icons.local_parking_rounded),
+              _toolChip(cs, '경형 2×1', GridEditTool.parkingCompact21, Icons.local_parking_rounded),
+              _toolChip(cs, '일반형 1×2', GridEditTool.parkingStandard12, Icons.local_parking_rounded),
+              _toolChip(cs, '일반형 2×1', GridEditTool.parkingStandard21, Icons.local_parking_rounded),
+              _toolChip(cs, '확장형 A 1×2', GridEditTool.parkingExtendedA12, Icons.local_parking_rounded),
+              _toolChip(cs, '확장형 A 2×1', GridEditTool.parkingExtendedA21, Icons.local_parking_rounded),
+              _toolChip(cs, '확장형 B 2×2', GridEditTool.parkingExtendedB22, Icons.local_parking_rounded),
               _toolChip(cs, '삭제', GridEditTool.parkingEraser, Icons.delete_outline_rounded),
             ],
           ),
@@ -1694,7 +1689,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
 
     final tips = _banner(
       cs,
-      text: '팁: 도로는 도로1/도로2로 구분할 수 있습니다. 주차면적은 빈칸 위에만 배치됩니다. 입구/출구/주차 타워는 같은 그리드에서 여러 개의 사각형 영역으로 지정합니다.',
+      text: '팁: 도로는 도로1/도로2로 구분할 수 있습니다. 주차면적은 빈칸 위에만 배치되며 경형·일반형·확장형 A는 1×2/2×1, 확장형 B는 2×2로 생성됩니다. 입구/출구/주차 타워는 같은 그리드에서 여러 개의 사각형 영역으로 지정합니다.',
       icon: Icons.lightbulb_outline_rounded,
     );
 

@@ -707,7 +707,20 @@ class LocationState extends ChangeNotifier {
         parkingGrid: parkingGrid,
       );
 
-      await _repository.addCompositeParent(parentModel);
+      final childrenToUpdate = _rebuildChildrenForParentGrid(
+        snapshot: snapshot,
+        area: cleanArea,
+        parent: cleanParent,
+        parentGrid: parkingGrid,
+        onError: onError,
+      );
+
+      if (childrenToUpdate == null) return false;
+
+      await _repository.saveCompositeParentWithChildren(
+        parent: parentModel,
+        children: childrenToUpdate,
+      );
       await _syncFromFirestoreAfterWrite(cleanArea);
       return true;
     } catch (e) {
@@ -755,26 +768,146 @@ class LocationState extends ChangeNotifier {
 
     final out = <ChildSlot>[];
     for (int i = 0; i < areas.length; i++) {
-      final a = areas[i];
-
-      final top = math.min(a.r0, a.r1);
-      final bottom = math.max(a.r0, a.r1);
-      final left = math.min(a.c0, a.c1);
-      final right = math.max(a.c0, a.c1);
-
       out.add(
-        ChildSlot(
+        ChildSlot.fromParkingArea(
           no: i + 1,
-          areaId: a.id,
-          r0: top,
-          c0: left,
-          r1: bottom,
-          c1: right,
-          kind: a.kind.wireName,
+          area: areas[i],
         ),
       );
     }
     return out;
+  }
+
+  bool _rectInGrid(GridRect rect, ParkingGridModel grid) {
+    final r = rect.normalized();
+    if (r.r0 < 0 || r.c0 < 0) return false;
+    if (r.r1 >= grid.rows || r.c1 >= grid.cols) return false;
+    return true;
+  }
+
+  bool _isRegisteredTowerRect(GridRect rect, ParkingGridModel grid) {
+    final r = rect.normalized();
+    return grid.towerRects.map((e) => e.normalized()).any((e) => e == r);
+  }
+
+  List<LocationModel>? _rebuildChildrenForParentGrid({
+    required List<LocationModel> snapshot,
+    required String area,
+    required String parent,
+    required ParkingGridModel parentGrid,
+    void Function(String)? onError,
+  }) {
+    final cleanArea = area.trim();
+    final cleanParent = _normalizeName(parent);
+    final parentKey = _nameKey(cleanParent);
+
+    final out = <LocationModel>[];
+
+    for (final loc in snapshot) {
+      if (!_isCompositeChild(loc)) continue;
+      if (loc.area.trim() != cleanArea) continue;
+
+      final rawParent = (loc.parent ?? '').trim();
+      if (rawParent.isEmpty || _nameKey(rawParent) != parentKey) continue;
+
+      final rect = loc.childRect;
+      if (rect == null) {
+        out.add(
+          loc.copyWith(
+            parent: cleanParent,
+            area: cleanArea,
+            type: 'composite_child',
+            childSlots: const <ChildSlot>[],
+          ),
+        );
+        continue;
+      }
+
+      final norm = rect.normalized();
+      if (!_rectInGrid(norm, parentGrid)) {
+        onError?.call(
+          '⚠️ "$cleanParent - ${loc.locationName}" 자식 구역이 새 부모 그리드 범위를 벗어납니다.',
+        );
+        return null;
+      }
+
+      final isTower = loc.isTowerChild;
+      if (isTower && !_isRegisteredTowerRect(norm, parentGrid)) {
+        onError?.call(
+          '⚠️ "$cleanParent - ${loc.locationName}" 주차 타워 자식 구역이 새 부모 타워 영역과 일치하지 않습니다.',
+        );
+        return null;
+      }
+
+      final slots = isTower
+          ? const <ChildSlot>[]
+          : _buildChildSlotsForRect(parentGrid: parentGrid, rect: norm);
+
+      out.add(
+        loc.copyWith(
+          parent: cleanParent,
+          area: cleanArea,
+          type: 'composite_child',
+          childRect: norm,
+          childKind: isTower ? 'tower' : 'normal',
+          childSlots: slots,
+        ),
+      );
+    }
+
+    return out;
+  }
+
+  Future<bool> refreshChildSlotsForCurrentArea({
+    void Function(String)? onError,
+  }) async {
+    final cleanArea = _areaState.currentArea.trim();
+    if (cleanArea.isEmpty) {
+      onError?.call('⚠️ 현재 지역(area)이 비어 있어 슬롯을 재계산할 수 없습니다.');
+      return false;
+    }
+
+    try {
+      final snapshot = await _fetchAreaSnapshot(cleanArea);
+
+      final parents = snapshot
+          .where((loc) =>
+              _isCompositeParent(loc) &&
+              loc.area.trim() == cleanArea &&
+              loc.parkingGrid != null)
+          .toList();
+
+      for (final parent in parents) {
+        final grid = parent.parkingGrid;
+        if (grid == null) continue;
+
+        final rebuilt = _rebuildChildrenForParentGrid(
+          snapshot: snapshot,
+          area: cleanArea,
+          parent: parent.locationName,
+          parentGrid: grid,
+          onError: onError,
+        );
+
+        if (rebuilt == null) return false;
+
+        await _repository.saveCompositeParentWithChildren(
+          parent: parent.copyWith(
+            area: cleanArea,
+            type: 'composite_parent',
+            parent: null,
+            parkingGrid: grid,
+          ),
+          children: rebuilt,
+        );
+      }
+
+      await _syncFromFirestoreAfterWrite(cleanArea);
+      return true;
+    } catch (e) {
+      onError?.call('🚨 자식 슬롯 재계산 실패: $e');
+      return false;
+    }
   }
 
   Future<bool> addCompositeChild({
