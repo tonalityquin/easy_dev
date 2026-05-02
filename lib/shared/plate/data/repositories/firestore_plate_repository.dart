@@ -282,6 +282,11 @@ class FirestorePlateRepository implements PlateRepository {
     String? paymentMethod,
     String? customStatus,
     required String selectedBillType,
+    String? manufacturerName,
+    String? modelName,
+    String? priority1SlotKey,
+    String? priority2SlotKey,
+    String? priority3SlotKey,
   }) {
     return _creationService.addPlate(
       plateNumber: plateNumber,
@@ -304,6 +309,11 @@ class FirestorePlateRepository implements PlateRepository {
       paymentMethod: paymentMethod,
       customStatus: customStatus,
       selectedBillType: selectedBillType,
+      manufacturerName: manufacturerName,
+      modelName: modelName,
+      priority1SlotKey: priority1SlotKey,
+      priority2SlotKey: priority2SlotKey,
+      priority3SlotKey: priority3SlotKey,
     );
   }
 

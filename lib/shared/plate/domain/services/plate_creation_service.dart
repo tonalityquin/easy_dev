@@ -220,6 +220,11 @@ class PlateCreationService {
     String? paymentMethod,
     String? customStatus,
     required String selectedBillType,
+    String? manufacturerName,
+    String? modelName,
+    String? priority1SlotKey,
+    String? priority2SlotKey,
+    String? priority3SlotKey,
   }) async {
     final String plateDocId = '${plateNumber}_$area';
 
@@ -303,6 +308,11 @@ class PlateCreationService {
       customStatus: customStatus,
       regularAmount: regularAmount,
       regularDurationHours: regularDurationHours,
+      manufacturerName: manufacturerName?.trim(),
+      modelName: modelName?.trim(),
+      parkingPriority1SlotKey: priority1SlotKey?.trim(),
+      parkingPriority2SlotKey: priority2SlotKey?.trim(),
+      parkingPriority3SlotKey: priority3SlotKey?.trim(),
     );
 
     PlateModel plateWithLog = base.addLog(
@@ -372,6 +382,16 @@ class PlateCreationService {
               if (imageUrls != null) PlateFields.imageUrls: imageUrls,
               if (paymentMethod != null)
                 PlateFields.paymentMethod: paymentMethod,
+              if ((manufacturerName ?? '').trim().isNotEmpty)
+                PlateFields.manufacturerName: manufacturerName!.trim(),
+              if ((modelName ?? '').trim().isNotEmpty)
+                PlateFields.modelName: modelName!.trim(),
+              if ((priority1SlotKey ?? '').trim().isNotEmpty)
+                PlateFields.parkingPriority1SlotKey: priority1SlotKey!.trim(),
+              if ((priority2SlotKey ?? '').trim().isNotEmpty)
+                PlateFields.parkingPriority2SlotKey: priority2SlotKey!.trim(),
+              if ((priority3SlotKey ?? '').trim().isNotEmpty)
+                PlateFields.parkingPriority3SlotKey: priority3SlotKey!.trim(),
               if (lockedAtTimeInSeconds != null)
                 PlateFields.lockedAtTimeInSeconds: lockedAtTimeInSeconds,
               if (lockedFeeAmount != null)

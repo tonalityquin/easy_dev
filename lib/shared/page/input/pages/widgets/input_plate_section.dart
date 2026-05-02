@@ -1,31 +1,79 @@
 import 'package:flutter/material.dart';
 
-import '../../application/input_plate_field.dart';
-import '../sheets/input_region_bottom_sheet.dart';
-
 class InputPlateSection extends StatelessWidget {
-  final String dropdownValue;
-  final List<String> regions;
-  final TextEditingController controllerFrontDigit;
-  final TextEditingController controllerMidDigit;
-  final TextEditingController controllerBackDigit;
-  final TextEditingController activeController;
-  final ValueChanged<TextEditingController> onKeypadStateChanged;
-  final ValueChanged<String> onRegionChanged;
-  final bool isThreeDigit;
+  final String? selectedManufacturerName;
+  final String? selectedModelName;
+  final VoidCallback onTapManufacturer;
+  final VoidCallback onTapModel;
 
   const InputPlateSection({
     super.key,
-    required this.dropdownValue,
-    required this.regions,
-    required this.controllerFrontDigit,
-    required this.controllerMidDigit,
-    required this.controllerBackDigit,
-    required this.activeController,
-    required this.onKeypadStateChanged,
-    required this.onRegionChanged,
-    required this.isThreeDigit,
+    required this.selectedManufacturerName,
+    required this.selectedModelName,
+    required this.onTapManufacturer,
+    required this.onTapModel,
   });
+
+  Widget _buildSelectBox({
+    required BuildContext context,
+    required String label,
+    required String value,
+    required VoidCallback onTap,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          height: 58,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerLow,
+            border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(Icons.expand_more, color: cs.onSurface),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,64 +83,30 @@ class InputPlateSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '번호 입력',
+          '차량 정보 입력',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w900,
-            color: cs.onSurface,
-          ),
+                fontWeight: FontWeight.w900,
+                color: cs.onSurface,
+              ),
         ),
         const SizedBox(height: 8),
         Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: () {
-                  inputRegionPickerBottomSheet(
-                    context: context,
-                    selectedRegion: dropdownValue,
-                    regions: regions,
-                    onConfirm: onRegionChanged,
-                  );
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerLow,
-                    border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        dropdownValue,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w900,
-                          color: cs.onSurface,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Icon(Icons.expand_more, color: cs.onSurfaceVariant),
-                    ],
-                  ),
-                ),
+            Expanded(
+              child: _buildSelectBox(
+                context: context,
+                label: '제조사 명',
+                value: selectedManufacturerName ?? '선택',
+                onTap: onTapManufacturer,
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             Expanded(
-              child: InputPlateField(
-                frontDigitCount: isThreeDigit ? 3 : 2,
-                hasMiddleChar: true,
-                backDigitCount: 4,
-                frontController: controllerFrontDigit,
-                middleController: controllerMidDigit,
-                backController: controllerBackDigit,
-                activeController: activeController,
-                onKeypadStateChanged: onKeypadStateChanged,
+              child: _buildSelectBox(
+                context: context,
+                label: '차종 명',
+                value: selectedModelName ?? '선택',
+                onTap: onTapModel,
               ),
             ),
           ],

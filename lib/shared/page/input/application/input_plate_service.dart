@@ -279,6 +279,11 @@ class InputPlateService {
     required String region,
     String? customStatus,
     required String selectedBillType,
+    String? manufacturerName,
+    String? modelName,
+    String? priority1SlotKey,
+    String? priority2SlotKey,
+    String? priority3SlotKey,
   }) async {
     final inputState = context.read<InputPlate>();
     final areaState = context.read<AreaState>();
@@ -314,6 +319,11 @@ class InputPlateService {
         imageUrls: imageUrls,
         customStatus: customStatus ?? '',
         selectedBillType: selectedBillType,
+        manufacturerName: manufacturerName,
+        modelName: modelName,
+        priority1SlotKey: priority1SlotKey,
+        priority2SlotKey: priority2SlotKey,
+        priority3SlotKey: priority3SlotKey,
       );
     } catch (e) {
       await _logApiError(
@@ -329,6 +339,11 @@ class InputPlateService {
           'statusCount': selectedStatuses.length,
           'regionLen': region.trim().length,
           'customStatusLen': (customStatus ?? '').trim().length,
+          'manufacturerNameLen': (manufacturerName ?? '').trim().length,
+          'modelNameLen': (modelName ?? '').trim().length,
+          'priority1SlotKey': priority1SlotKey,
+          'priority2SlotKey': priority2SlotKey,
+          'priority3SlotKey': priority3SlotKey,
           'area': areaState.currentArea,
           'division': areaState.currentDivision,
           'userNameLen': userState.name.trim().length,

@@ -46,6 +46,12 @@ class ModifyPlateController {
   String? selectedBillCountType;
   dynamic selectedBillModel;
 
+  String? selectedManufacturerName;
+  String? selectedModelName;
+  String? priority1SlotKey;
+  String? priority2SlotKey;
+  String? priority3SlotKey;
+
   bool isLocationSelected = false;
 
   String? fetchedCustomStatus;
@@ -80,6 +86,17 @@ class ModifyPlateController {
   ];
 
   List<String> get regions => _regions;
+
+  List<String> get selectedParkingPriorities {
+    return <String>[
+      if (priority1SlotKey != null && priority1SlotKey!.trim().isNotEmpty)
+        priority1SlotKey!.trim(),
+      if (priority2SlotKey != null && priority2SlotKey!.trim().isNotEmpty)
+        priority2SlotKey!.trim(),
+      if (priority3SlotKey != null && priority3SlotKey!.trim().isNotEmpty)
+        priority3SlotKey!.trim(),
+    ];
+  }
 
   ModifyPlateController({
     required this.context,
@@ -138,6 +155,12 @@ class ModifyPlateController {
     selectedBill = plate.billingType;
     selectedBillType = _determineBillType(plate.billingType);
     selectedBillCountType = plate.billingType;
+
+    selectedManufacturerName = plate.manufacturerName;
+    selectedModelName = plate.modelName;
+    priority1SlotKey = plate.parkingPriority1SlotKey;
+    priority2SlotKey = plate.parkingPriority2SlotKey;
+    priority3SlotKey = plate.parkingPriority3SlotKey;
 
     selectedBasicStandard = plate.basicStandard ?? 0;
     selectedBasicAmount = plate.basicAmount ?? 0;
@@ -257,6 +280,11 @@ class ModifyPlateController {
       dropdownValue: dropdownValue,
       selectedRegularAmount: selectedRegularAmount,
       selectedRegularDurationHours: selectedRegularDurationHours,
+      manufacturerName: selectedManufacturerName,
+      modelName: selectedModelName,
+      priority1SlotKey: priority1SlotKey,
+      priority2SlotKey: priority2SlotKey,
+      priority3SlotKey: priority3SlotKey,
     );
 
     final plateNumber = service.composePlateNumber();
@@ -300,21 +328,42 @@ class ModifyPlateController {
       );
       trace?.add('plate_status 저장 완료');
 
-      final updatedPlate = plate.copyWith(
-        billingType: newBillingType,
-        basicStandard: selectedBasicStandard,
-        basicAmount: selectedBasicAmount,
-        addStandard: selectedAddStandard,
+      final updatedPlate = PlateModel(
+        id: plate.id,
         addAmount: selectedAddAmount,
-        location: newLocation,
-        statusList: selectedStatuses,
-        region: dropdownValue,
-        imageUrls: mergedImageUrls,
+        addStandard: selectedAddStandard,
+        area: plate.area,
+        basicAmount: selectedBasicAmount,
+        basicStandard: selectedBasicStandard,
+        billingType: newBillingType,
         customStatus: updatedCustomStatus,
+        endTime: plate.endTime,
+        imageUrls: mergedImageUrls,
+        isLockedFee: plate.isLockedFee,
         isSelected: false,
-        selectedBy: null,
+        location: newLocation,
+        lockedAtTimeInSeconds: plate.lockedAtTimeInSeconds,
+        lockedFeeAmount: plate.lockedFeeAmount,
+        logs: plate.logs,
+        paymentMethod: plate.paymentMethod,
+        manufacturerName: selectedManufacturerName,
+        modelName: selectedModelName,
+        parkingPriority1SlotKey: priority1SlotKey,
+        parkingPriority2SlotKey: priority2SlotKey,
+        parkingPriority3SlotKey: priority3SlotKey,
+        plateFourDigit: plate.plateFourDigit,
+        plateNumber: plateNumber,
+        region: dropdownValue,
         regularAmount: selectedRegularAmount,
         regularDurationHours: selectedRegularDurationHours,
+        requestTime: plate.requestTime,
+        selectedBy: null,
+        statusList: selectedStatuses,
+        type: plate.type,
+        updatedAt: plate.updatedAt,
+        userAdjustment: plate.userAdjustment,
+        userName: plate.userName,
+        feeMode: plate.feeMode,
       );
 
       final plateState = context.read<DoublePlateState>();

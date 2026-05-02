@@ -104,6 +104,14 @@ class PlateFields {
   static const String billingType = 'billingType';
   static const String customStatus = 'customStatus';
   static const String endTime = 'end_time';
+  static const String manufacturerName = 'manufacturerName';
+  static const String modelName = 'modelName';
+  static const String parkingPriority1SlotKey = 'parkingPriority1SlotKey';
+  static const String parkingPriority2SlotKey = 'parkingPriority2SlotKey';
+  static const String parkingPriority3SlotKey = 'parkingPriority3SlotKey';
+  static const String legacyParkingPriority1Area = 'parkingPriority1Area';
+  static const String legacyParkingPriority2Area = 'parkingPriority2Area';
+  static const String legacyParkingPriority3Area = 'parkingPriority3Area';
 
   static const String imageUrls = 'imageUrls';
   static const String isLockedFee = 'isLockedFee';
@@ -149,6 +157,11 @@ class PlateModel {
   final int? lockedFeeAmount;
   final List<PlateLogModel>? logs;
   final String? paymentMethod;
+  final String? manufacturerName;
+  final String? modelName;
+  final String? parkingPriority1SlotKey;
+  final String? parkingPriority2SlotKey;
+  final String? parkingPriority3SlotKey;
   final String plateFourDigit;
   final String plateNumber;
   final String? region;
@@ -182,6 +195,11 @@ class PlateModel {
     this.lockedAtTimeInSeconds,
     this.logs,
     this.paymentMethod,
+    this.manufacturerName,
+    this.modelName,
+    this.parkingPriority1SlotKey,
+    this.parkingPriority2SlotKey,
+    this.parkingPriority3SlotKey,
     required this.plateFourDigit,
     required this.plateNumber,
     this.region,
@@ -223,6 +241,14 @@ class PlateModel {
           ?.map((e) => PlateLogModel.fromMap(Map<String, dynamic>.from(e)))
           .toList(),
       paymentMethod: data[PlateFields.paymentMethod],
+      manufacturerName: data[PlateFields.manufacturerName],
+      modelName: data[PlateFields.modelName],
+      parkingPriority1SlotKey: data[PlateFields.parkingPriority1SlotKey] ??
+          data[PlateFields.legacyParkingPriority1Area],
+      parkingPriority2SlotKey: data[PlateFields.parkingPriority2SlotKey] ??
+          data[PlateFields.legacyParkingPriority2Area],
+      parkingPriority3SlotKey: data[PlateFields.parkingPriority3SlotKey] ??
+          data[PlateFields.legacyParkingPriority3Area],
       plateFourDigit: data[PlateFields.plateFourDigit] ?? '',
       plateNumber: data[PlateFields.plateNumber] ?? '',
       region: data[PlateFields.region],
@@ -260,6 +286,19 @@ class PlateModel {
       if (lockedFeeAmount != null) PlateFields.lockedFeeAmount: lockedFeeAmount,
       if (logs != null) PlateFields.logs: logs!.map((e) => e.toMap()).toList(),
       if (paymentMethod != null) PlateFields.paymentMethod: paymentMethod,
+      if (manufacturerName != null && manufacturerName!.trim().isNotEmpty)
+        PlateFields.manufacturerName: manufacturerName,
+      if (modelName != null && modelName!.trim().isNotEmpty)
+        PlateFields.modelName: modelName,
+      if (parkingPriority1SlotKey != null &&
+          parkingPriority1SlotKey!.trim().isNotEmpty)
+        PlateFields.parkingPriority1SlotKey: parkingPriority1SlotKey,
+      if (parkingPriority2SlotKey != null &&
+          parkingPriority2SlotKey!.trim().isNotEmpty)
+        PlateFields.parkingPriority2SlotKey: parkingPriority2SlotKey,
+      if (parkingPriority3SlotKey != null &&
+          parkingPriority3SlotKey!.trim().isNotEmpty)
+        PlateFields.parkingPriority3SlotKey: parkingPriority3SlotKey,
       PlateFields.plateFourDigit: plateFourDigit,
       PlateFields.plateNumber: plateNumber,
       PlateFields.region: region,
@@ -305,6 +344,11 @@ class PlateModel {
     int? lockedFeeAmount,
     List<PlateLogModel>? logs,
     String? paymentMethod,
+    String? manufacturerName,
+    String? modelName,
+    String? parkingPriority1SlotKey,
+    String? parkingPriority2SlotKey,
+    String? parkingPriority3SlotKey,
     String? plateFourDigit,
     String? plateNumber,
     String? region,
@@ -338,6 +382,14 @@ class PlateModel {
       lockedFeeAmount: lockedFeeAmount ?? this.lockedFeeAmount,
       logs: logs ?? this.logs,
       paymentMethod: paymentMethod ?? this.paymentMethod,
+      manufacturerName: manufacturerName ?? this.manufacturerName,
+      modelName: modelName ?? this.modelName,
+      parkingPriority1SlotKey:
+          parkingPriority1SlotKey ?? this.parkingPriority1SlotKey,
+      parkingPriority2SlotKey:
+          parkingPriority2SlotKey ?? this.parkingPriority2SlotKey,
+      parkingPriority3SlotKey:
+          parkingPriority3SlotKey ?? this.parkingPriority3SlotKey,
       plateFourDigit: plateFourDigit ?? this.plateFourDigit,
       plateNumber: plateNumber ?? this.plateNumber,
       region: region ?? this.region,
@@ -420,6 +472,36 @@ class PlateModel {
       changes['paymentMethod'] = {
         'before': paymentMethod,
         'after': other.paymentMethod
+      };
+    }
+    if (manufacturerName != other.manufacturerName) {
+      changes['manufacturerName'] = {
+        'before': manufacturerName,
+        'after': other.manufacturerName
+      };
+    }
+    if (modelName != other.modelName) {
+      changes['modelName'] = {
+        'before': modelName,
+        'after': other.modelName
+      };
+    }
+    if (parkingPriority1SlotKey != other.parkingPriority1SlotKey) {
+      changes['parkingPriority1SlotKey'] = {
+        'before': parkingPriority1SlotKey,
+        'after': other.parkingPriority1SlotKey
+      };
+    }
+    if (parkingPriority2SlotKey != other.parkingPriority2SlotKey) {
+      changes['parkingPriority2SlotKey'] = {
+        'before': parkingPriority2SlotKey,
+        'after': other.parkingPriority2SlotKey
+      };
+    }
+    if (parkingPriority3SlotKey != other.parkingPriority3SlotKey) {
+      changes['parkingPriority3SlotKey'] = {
+        'before': parkingPriority3SlotKey,
+        'after': other.parkingPriority3SlotKey
       };
     }
     if (plateNumber != other.plateNumber) {

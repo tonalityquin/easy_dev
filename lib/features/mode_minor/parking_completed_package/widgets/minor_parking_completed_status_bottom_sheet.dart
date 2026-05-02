@@ -16,7 +16,7 @@ import '../../../../../shared/plate/domain/models/plate_model.dart';
 import '../../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../../../shared/plate/widgets/log_viewer_bottom_sheet.dart';
 import '../../../../../shared/plate/widgets/parking_completed_status_widgets.dart';
-import 'input_location_bottom_sheet.dart';
+import '../../../../shared/page/input/pages/sheets/input_location_bottom_sheet.dart';
 
 class _BrandTone {
   static Color border(ColorScheme cs) => cs.outlineVariant.withOpacity(0.85);
@@ -331,7 +331,8 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
       reportParkingCompletedDbSafe(
         area: _plate.area,
         action: 'write',
-        source: 'parkingCompletedStatus.freeAutoPrebill.repo.settlePlateBilling',
+        source:
+            'parkingCompletedStatus.freeAutoPrebill.repo.settlePlateBilling',
         n: 1,
       );
 
@@ -591,6 +592,23 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
     );
   }
 
+  List<String> _platePreferredParkingAreas() {
+    final out = <String>[];
+    final seen = <String>{};
+
+    void add(String? raw) {
+      final value = (raw ?? '').trim();
+      if (value.isEmpty) return;
+      if (seen.add(value)) out.add(value);
+    }
+
+    add(_plate.parkingPriority1SlotKey);
+    add(_plate.parkingPriority2SlotKey);
+    add(_plate.parkingPriority3SlotKey);
+
+    return out;
+  }
+
   Future<String?> _pickParkingLocationViaInputBottomSheet({
     required String plateNumber,
     required String area,
@@ -606,6 +624,7 @@ class _FullHeightSheetState extends State<_FullHeightSheet>
         rootContext,
         controller,
         (v) => picked = v,
+        preferredParkingAreas: _platePreferredParkingAreas(),
       );
     } catch (_) {
       return null;

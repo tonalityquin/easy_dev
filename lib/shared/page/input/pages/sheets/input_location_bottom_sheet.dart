@@ -145,21 +145,75 @@ class _ParkingViewMemCache {
   }
 }
 
+
+String _normalizeParkingAreaCategory(String value) {
+  final v = value.trim().toLowerCase();
+  if (v.isEmpty) return '';
+  if (v.startsWith('확장형') || v.startsWith('확장')) return '확장형';
+  if (v.startsWith('일반형') || v.startsWith('일반')) return '일반형';
+  if (v.startsWith('경형') || v.startsWith('경차')) return '경형';
+  if (v.contains('extended') || v.contains('expand')) return '확장형';
+  if (v.contains('standard') || v.contains('normal') || v.contains('general')) return '일반형';
+  if (v.contains('compact') || v.contains('light') || v.contains('small')) return '경형';
+  return value.trim();
+}
+
+String _slotCategoryOf(ChildSlot slot) {
+  final candidates = <String>[
+    slot.categoryLabel,
+    slot.label,
+    slot.category,
+    slot.kind,
+  ];
+
+  for (final value in candidates) {
+    final normalized = _normalizeParkingAreaCategory(value);
+    if (normalized == '확장형' ||
+        normalized == '일반형' ||
+        normalized == '경형') {
+      return normalized;
+    }
+  }
+
+  return '';
+}
+
+class _RecommendedParkingSlot {
+  final LocationModel child;
+  final ChildSlot slot;
+  final String matchedPriority;
+  final int priorityIndex;
+
+  const _RecommendedParkingSlot({
+    required this.child,
+    required this.slot,
+    required this.matchedPriority,
+    required this.priorityIndex,
+  });
+
+  String get priorityLabel => '${priorityIndex + 1}순위 $matchedPriority';
+  String get slotLabel => '$matchedPriority ${slot.no}번';
+}
+
+
 class InputLocationBottomSheet extends StatefulWidget {
   final TextEditingController locationController;
   final Function(String) onLocationSelected;
+  final List<String> preferredParkingAreas;
 
   const InputLocationBottomSheet({
     super.key,
     required this.locationController,
     required this.onLocationSelected,
+    this.preferredParkingAreas = const <String>[],
   });
 
   static Future<void> show(
     BuildContext context,
     TextEditingController controller,
-    Function(String) onSelected,
-  ) async {
+    Function(String) onSelected, {
+    List<String> preferredParkingAreas = const <String>[],
+  }) async {
     String area = '';
     try {
       area = context.read<AreaState>().currentArea.trim();
@@ -175,6 +229,7 @@ class InputLocationBottomSheet extends StatefulWidget {
       builder: (_) => InputLocationBottomSheet(
         locationController: controller,
         onLocationSelected: onSelected,
+        preferredParkingAreas: preferredParkingAreas,
       ),
     );
   }
@@ -313,6 +368,7 @@ class _InputLocationBottomSheetState extends State<InputLocationBottomSheet> {
                     parentName: parentName,
                     parentGrid: parentGrid,
                     childDocs: childDocs,
+                    preferredParkingAreas: widget.preferredParkingAreas,
                     onBackToParents: () =>
                         setState(() => _selectedParentName = null),
                     onPickFinal: (full) => _applyAndClose(full),
@@ -604,6 +660,7 @@ class _ParentChildViewportSlotFlow extends StatefulWidget {
   final String parentName;
   final ParkingGridModel parentGrid;
   final List<LocationModel> childDocs;
+  final List<String> preferredParkingAreas;
 
   final VoidCallback onBackToParents;
   final ValueChanged<String> onPickFinal;
@@ -612,6 +669,7 @@ class _ParentChildViewportSlotFlow extends StatefulWidget {
     required this.parentName,
     required this.parentGrid,
     required this.childDocs,
+    required this.preferredParkingAreas,
     required this.onBackToParents,
     required this.onPickFinal,
   });
@@ -922,14 +980,103 @@ class _ParentChildViewportSlotFlowState
     }
   }
 
+  List<String> _normalizedPreferredParkingAreas() {
+    return widget.preferredParkingAreas
+        .map(_normalizeParkingAreaCategory)
+        .where((e) => e.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  _RecommendedParkingSlot? _findRecommendedSlot({
+    required List<LocationModel> children,
+    required Map<String, Map<int, _BlockedSlotKind>> blockedSlotsByChildKey,
+  }) {
+    final priorities = _normalizedPreferredParkingAreas();
+    if (priorities.isEmpty) return null;
+
+    for (var priorityIndex = 0;
+        priorityIndex < priorities.length;
+        priorityIndex++) {
+      final priority = priorities[priorityIndex];
+      final candidates = <_RecommendedParkingSlot>[];
+
+      for (final child in children) {
+        if (_isTowerChildDoc(child)) continue;
+        final childKey = _nameKey(child.locationName);
+        final blocked =
+            blockedSlotsByChildKey[childKey] ?? const <int, _BlockedSlotKind>{};
+
+        final slots = child.childSlots
+            .where((slot) => _slotCategoryOf(slot) == priority)
+            .where((slot) => !blocked.containsKey(slot.no))
+            .toList()
+          ..sort((a, b) => a.no.compareTo(b.no));
+
+        if (slots.isEmpty) continue;
+
+        candidates.add(
+          _RecommendedParkingSlot(
+            child: child,
+            slot: slots.first,
+            matchedPriority: priority,
+            priorityIndex: priorityIndex,
+          ),
+        );
+      }
+
+      if (candidates.isEmpty) continue;
+
+      candidates.sort((a, b) {
+        final slotCompare = a.slot.no.compareTo(b.slot.no);
+        if (slotCompare != 0) return slotCompare;
+        return a.child.locationName.compareTo(b.child.locationName);
+      });
+
+      return candidates.first;
+    }
+
+    return null;
+  }
+
+  _RecommendedParkingSlot? _findRecommendedSlotForChild({
+    required LocationModel child,
+    required Map<int, _BlockedSlotKind> blockedSlotsByNo,
+  }) {
+    final priorities = _normalizedPreferredParkingAreas();
+    if (priorities.isEmpty) return null;
+    if (_isTowerChildDoc(child)) return null;
+
+    for (var priorityIndex = 0;
+        priorityIndex < priorities.length;
+        priorityIndex++) {
+      final priority = priorities[priorityIndex];
+      final slots = child.childSlots
+          .where((slot) => _slotCategoryOf(slot) == priority)
+          .where((slot) => !blockedSlotsByNo.containsKey(slot.no))
+          .toList()
+        ..sort((a, b) => a.no.compareTo(b.no));
+
+      if (slots.isEmpty) continue;
+
+      return _RecommendedParkingSlot(
+        child: child,
+        slot: slots.first,
+        matchedPriority: priority,
+        priorityIndex: priorityIndex,
+      );
+    }
+
+    return null;
+  }
+
   void _pickSlotAndClose(LocationModel child, ChildSlot slot) {
     final dynamic s = slot;
-    final label = _readSlotLabelAny(s);
+    final label = _readSlotLabelAny(s)?.trim() ?? '';
     final no = _readSlotNoAny(s);
 
-    final slotSeg = (label != null && label.trim().isNotEmpty)
-        ? label.trim()
-        : (no > 0 ? '슬롯 $no' : '슬롯');
+    final slotSeg = no > 0
+        ? '슬롯 $no${label.isNotEmpty ? ' · $label' : ''}'
+        : (label.isNotEmpty ? label : '슬롯');
 
     final full = '${widget.parentName} - ${child.locationName} - $slotSeg';
     widget.onPickFinal(full);
@@ -941,7 +1088,10 @@ class _ParentChildViewportSlotFlowState
     widget.onPickFinal(full);
   }
 
-  Widget _buildChildQuickChips(List<LocationModel> children) {
+  Widget _buildChildQuickChips(
+    List<LocationModel> children,
+    _RecommendedParkingSlot? recommendation,
+  ) {
     return LayoutBuilder(
       builder: (context, constraints) {
         return SingleChildScrollView(
@@ -956,10 +1106,16 @@ class _ParentChildViewportSlotFlowState
                 children: [
                   for (int i = 0; i < children.length; i++) ...[
                     _ChoiceChip(
-                      selected: false,
+                      selected: recommendation != null &&
+                          _nameKey(recommendation.child.locationName) ==
+                              _nameKey(children[i].locationName),
                       label: _isTowerChildDoc(children[i])
                           ? '${children[i].locationName} (타워)'
-                          : children[i].locationName,
+                          : (recommendation != null &&
+                                  _nameKey(recommendation.child.locationName) ==
+                                      _nameKey(children[i].locationName)
+                              ? '${children[i].locationName} · 추천'
+                              : children[i].locationName),
                       onTap: () => _selectChild(children[i].locationName),
                     ),
                     if (i != children.length - 1) const SizedBox(width: 8),
@@ -981,6 +1137,13 @@ class _ParentChildViewportSlotFlowState
     final children = [...widget.childDocs]
       ..sort((a, b) => a.locationName.compareTo(b.locationName));
     final selectedChild = _findChildByName(_selectedChildName);
+    final parentRecommendation =
+        (!_isParentOverlayLoading && _selectedChildName == null)
+            ? _findRecommendedSlot(
+                children: children,
+                blockedSlotsByChildKey: _blockedSlotsByChildKey,
+              )
+            : null;
 
     if (selectedChild == null) {
       final overlays = <ChildRegionOverlay>[
@@ -1093,6 +1256,10 @@ class _ParentChildViewportSlotFlowState
                       showChildSlotOverlay: true,
                       childSlotOverlays: _childSlotOverlaysForParent,
                       blockedSlotsByChildKey: _blockedSlotsByChildKey,
+                      recommendedChildKey: parentRecommendation == null
+                          ? null
+                          : _nameKey(parentRecommendation.child.locationName),
+                      recommendedSlotNo: parentRecommendation?.slot.no,
                       showChildSlotNumbers: false,
                       childSlotsToLabel: const <ChildSlot>[],
                       onTapChildRegion: (childLabel) =>
@@ -1116,7 +1283,7 @@ class _ParentChildViewportSlotFlowState
                       onTapChildSlot: null,
                       blockedSlotsByNo: const <int, _BlockedSlotKind>{},
                       legendBottom: (children.isNotEmpty)
-                          ? _buildChildQuickChips(children)
+                          ? _buildChildQuickChips(children, parentRecommendation)
                           : null,
                     ),
                   );
@@ -1176,6 +1343,13 @@ class _ParentChildViewportSlotFlowState
 
     final slotsToLabel = selectedChild.childSlots;
     final hasSlots = slotsToLabel.isNotEmpty;
+    final recommendedForChild =
+        (!_isBlockedSlotsLoading && hasSlots)
+            ? _findRecommendedSlotForChild(
+                child: selectedChild,
+                blockedSlotsByNo: _blockedSlotsByNo,
+              )
+            : null;
 
     return Column(
       children: [
@@ -1267,6 +1441,7 @@ class _ParentChildViewportSlotFlowState
                         ? (slot) => _pickSlotAndClose(selectedChild, slot)
                         : null,
                     blockedSlotsByNo: _blockedSlotsByNo,
+                    recommendedSlotNo: recommendedForChild?.slot.no,
                   ),
                 );
               },
@@ -1724,6 +1899,8 @@ class _InteractiveParkingGridPreview extends StatelessWidget {
   final bool showChildSlotOverlay;
   final List<_ChildSlotOverlay> childSlotOverlays;
   final Map<String, Map<int, _BlockedSlotKind>> blockedSlotsByChildKey;
+  final String? recommendedChildKey;
+  final int? recommendedSlotNo;
 
   final bool showChildSlotNumbers;
   final List<ChildSlot> childSlotsToLabel;
@@ -1753,6 +1930,8 @@ class _InteractiveParkingGridPreview extends StatelessWidget {
     this.showChildSlotOverlay = false,
     this.childSlotOverlays = const <_ChildSlotOverlay>[],
     this.blockedSlotsByChildKey = const <String, Map<int, _BlockedSlotKind>>{},
+    this.recommendedChildKey,
+    this.recommendedSlotNo,
     this.showChildSlotNumbers = true,
     this.childSlotsToLabel = const <ChildSlot>[],
     this.onTapChildRegion,
@@ -2062,6 +2241,8 @@ class _InteractiveParkingGridPreview extends StatelessWidget {
                         showChildSlotOverlay: showChildSlotOverlay,
                         childSlotOverlays: childSlotOverlays,
                         blockedSlotsByChildKey: blockedSlotsByChildKey,
+                        recommendedChildKey: recommendedChildKey,
+                        recommendedSlotNo: recommendedSlotNo,
                         showChildSlotNumbers: showChildSlotNumbers,
                         childSlotsToLabel: childSlotsToLabel,
                         blockedSlotsByNo: blockedSlotsByNo,
@@ -2134,6 +2315,7 @@ class _FixedCellPanGridPreview extends StatelessWidget {
 
   final ValueChanged<ChildSlot>? onTapChildSlot;
   final Map<int, _BlockedSlotKind> blockedSlotsByNo;
+  final int? recommendedSlotNo;
 
   const _FixedCellPanGridPreview({
     required this.grid,
@@ -2152,6 +2334,7 @@ class _FixedCellPanGridPreview extends StatelessWidget {
     this.childSlotsToLabel = const <ChildSlot>[],
     this.onTapChildSlot,
     this.blockedSlotsByNo = const <int, _BlockedSlotKind>{},
+    this.recommendedSlotNo,
   });
 
   double _resolveAdaptiveCellPx({
@@ -2394,9 +2577,11 @@ class _FixedCellPanGridPreview extends StatelessWidget {
                   childSlotOverlays: const <_ChildSlotOverlay>[],
                   blockedSlotsByChildKey: const <String,
                       Map<int, _BlockedSlotKind>>{},
+                  recommendedChildKey: null,
                   showChildSlotNumbers: showChildSlotNumbers,
                   childSlotsToLabel: childSlotsToLabel,
                   blockedSlotsByNo: blockedSlotsByNo,
+                  recommendedSlotNo: recommendedSlotNo,
                   paddingPx: paddingPx,
                   gapPx: gapPx,
                   fixedCellPx: adaptiveCellPx,
@@ -2566,10 +2751,12 @@ class _ParkingGridPainter extends CustomPainter {
   final bool showChildSlotOverlay;
   final List<_ChildSlotOverlay> childSlotOverlays;
   final Map<String, Map<int, _BlockedSlotKind>> blockedSlotsByChildKey;
+  final String? recommendedChildKey;
 
   final bool showChildSlotNumbers;
   final List<ChildSlot> childSlotsToLabel;
   final Map<int, _BlockedSlotKind> blockedSlotsByNo;
+  final int? recommendedSlotNo;
 
   final double paddingPx;
   final double gapPx;
@@ -2593,9 +2780,11 @@ class _ParkingGridPainter extends CustomPainter {
     required this.showChildSlotOverlay,
     required this.childSlotOverlays,
     required this.blockedSlotsByChildKey,
+    required this.recommendedChildKey,
     required this.showChildSlotNumbers,
     required this.childSlotsToLabel,
     required this.blockedSlotsByNo,
+    required this.recommendedSlotNo,
     required this.paddingPx,
     required this.gapPx,
     required this.fixedCellPx,
@@ -2988,6 +3177,100 @@ class _ParkingGridPainter extends CustomPainter {
         Offset(rect.center.dx - tp.width / 2, rect.center.dy - tp.height / 2));
   }
 
+  void _drawRecommendedChildSlot(
+      Canvas canvas, _GridLayout layout, ChildSlot s) {
+    final rectLocal =
+        _rectForGlobalRangeToLocal(layout, s.r0, s.r1, s.c0, s.c1);
+    if (rectLocal == null) return;
+
+    final rect = rectLocal.deflate(math.max(1.0, layout.cell * 0.12));
+    if (rect.width < 10 || rect.height < 10) return;
+
+    final rr = RRect.fromRectAndRadius(
+      rect,
+      Radius.circular(math.max(6.0, layout.cell * 0.22)),
+    );
+
+    final fill = Paint()
+      ..style = PaintingStyle.fill
+      ..color = cs.primary.withOpacity(0.20);
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(2.4, layout.cell * 0.12)
+      ..color = cs.primary.withOpacity(0.98);
+
+    canvas.drawRRect(rr, fill);
+    canvas.drawRRect(rr, stroke);
+
+    final badgeSize = math.min(rect.width, rect.height) * 0.42;
+    final badge = Rect.fromCenter(
+      center: rect.center,
+      width: badgeSize.clamp(16.0, 32.0),
+      height: badgeSize.clamp(16.0, 32.0),
+    );
+
+    final badgeFill = Paint()
+      ..style = PaintingStyle.fill
+      ..color = cs.primary.withOpacity(0.96);
+    final badgeStroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(1.0, layout.cell * 0.04)
+      ..color = cs.onPrimary.withOpacity(0.80);
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(badge, Radius.circular(badge.height * 0.50)),
+      badgeFill,
+    );
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(badge, Radius.circular(badge.height * 0.50)),
+      badgeStroke,
+    );
+
+    final tp = TextPainter(
+      text: TextSpan(
+        text: '${s.no}',
+        style: TextStyle(
+          fontSize: math.max(10.5, badge.height * 0.58),
+          fontWeight: FontWeight.w900,
+          color: cs.onPrimary.withOpacity(0.98),
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout(maxWidth: badge.width);
+
+    tp.paint(
+      canvas,
+      Offset(
+        badge.center.dx - tp.width / 2,
+        badge.center.dy - tp.height / 2,
+      ),
+    );
+
+    if (rect.width >= 34 && rect.height >= 24) {
+      final tag = TextPainter(
+        text: TextSpan(
+          text: '추천',
+          style: TextStyle(
+            fontSize: math.max(8.0, layout.cell * 0.22),
+            fontWeight: FontWeight.w900,
+            color: cs.primary.withOpacity(0.98),
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+        maxLines: 1,
+      )..layout(maxWidth: rect.width);
+
+      tag.paint(
+        canvas,
+        Offset(
+          rect.center.dx - tag.width / 2,
+          rect.bottom - tag.height - math.max(2.0, layout.cell * 0.08),
+        ),
+      );
+    }
+  }
+
   void _drawChildSlotNumber(Canvas canvas, _GridLayout layout, ChildSlot s) {
     final rectLocal =
         _rectForGlobalRangeToLocal(layout, s.r0, s.r1, s.c0, s.c1);
@@ -2996,9 +3279,30 @@ class _ParkingGridPainter extends CustomPainter {
     final rect = rectLocal.deflate(math.max(1.0, layout.cell * 0.18));
     if (rect.width < 12 || rect.height < 12) return;
 
+    final isRecommended =
+        recommendedSlotNo != null && recommendedSlotNo == s.no;
+
+    if (isRecommended) {
+      final rr = RRect.fromRectAndRadius(
+        rect,
+        Radius.circular(math.max(6.0, layout.cell * 0.22)),
+      );
+      final fill = Paint()
+        ..style = PaintingStyle.fill
+        ..color = cs.primary.withOpacity(0.18);
+      final stroke = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = math.max(2.0, layout.cell * 0.10)
+        ..color = cs.primary.withOpacity(0.95);
+      canvas.drawRRect(rr, fill);
+      canvas.drawRRect(rr, stroke);
+    }
+
     final bg = Paint()
       ..style = PaintingStyle.fill
-      ..color = cs.surface.withOpacity(0.80);
+      ..color = isRecommended
+          ? cs.primary.withOpacity(0.95)
+          : cs.surface.withOpacity(0.80);
 
     final bd = Paint()
       ..style = PaintingStyle.stroke
@@ -3027,7 +3331,9 @@ class _ParkingGridPainter extends CustomPainter {
         style: TextStyle(
           fontSize: math.max(10.5, badge.height * 0.55),
           fontWeight: FontWeight.w900,
-          color: cs.primary.withOpacity(0.95),
+          color: isRecommended
+              ? cs.onPrimary.withOpacity(0.98)
+              : cs.primary.withOpacity(0.95),
         ),
       ),
       textDirection: TextDirection.ltr,
@@ -3038,6 +3344,29 @@ class _ParkingGridPainter extends CustomPainter {
         canvas,
         Offset(
             badge.center.dx - tp.width / 2, badge.center.dy - tp.height / 2));
+
+    if (isRecommended && rect.width >= 34 && rect.height >= 24) {
+      final tag = TextPainter(
+        text: TextSpan(
+          text: '추천',
+          style: TextStyle(
+            fontSize: math.max(8.0, layout.cell * 0.22),
+            fontWeight: FontWeight.w900,
+            color: cs.primary.withOpacity(0.98),
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+        maxLines: 1,
+      )..layout(maxWidth: rect.width);
+
+      tag.paint(
+        canvas,
+        Offset(
+          rect.center.dx - tag.width / 2,
+          rect.bottom - tag.height - math.max(2.0, layout.cell * 0.08),
+        ),
+      );
+    }
   }
 
   void _drawBlockedChildSlot(
@@ -3364,6 +3693,19 @@ class _ParkingGridPainter extends CustomPainter {
 
       if (showChildSlotOverlay &&
           childSlotOverlays.isNotEmpty &&
+          recommendedChildKey != null &&
+          recommendedSlotNo != null) {
+        for (final ov in childSlotOverlays) {
+          if (ov.childKey != recommendedChildKey) continue;
+          if (ov.slot.no != recommendedSlotNo) continue;
+          if (_slotOverlapsGridRects(ov.slot, grid.towerRects)) continue;
+          _drawRecommendedChildSlot(canvas, layout, ov.slot);
+          break;
+        }
+      }
+
+      if (showChildSlotOverlay &&
+          childSlotOverlays.isNotEmpty &&
           blockedSlotsByChildKey.isNotEmpty) {
         for (final ov in childSlotOverlays) {
           if (_slotOverlapsGridRects(ov.slot, grid.towerRects)) continue;
@@ -3491,9 +3833,11 @@ class _ParkingGridPainter extends CustomPainter {
         oldDelegate.showChildSlotOverlay != showChildSlotOverlay ||
         oldDelegate.childSlotOverlays != childSlotOverlays ||
         oldDelegate.blockedSlotsByChildKey != blockedSlotsByChildKey ||
+        oldDelegate.recommendedChildKey != recommendedChildKey ||
         oldDelegate.showChildSlotNumbers != showChildSlotNumbers ||
         oldDelegate.childSlotsToLabel != childSlotsToLabel ||
         oldDelegate.blockedSlotsByNo != blockedSlotsByNo ||
+        oldDelegate.recommendedSlotNo != recommendedSlotNo ||
         oldDelegate.paddingPx != paddingPx ||
         oldDelegate.gapPx != gapPx ||
         oldDelegate.fixedCellPx != fixedCellPx;

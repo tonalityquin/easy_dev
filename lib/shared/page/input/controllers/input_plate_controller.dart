@@ -50,6 +50,26 @@ class InputPlateController {
 
   String? fetchedCustomStatus;
 
+  String? selectedManufacturerName;
+  String? selectedModelName;
+  String? priority1SlotKey;
+  String? priority2SlotKey;
+  String? priority3SlotKey;
+
+  List<String> get selectedParkingPriorities {
+    return <String>[
+      if (priority1SlotKey != null &&
+          priority1SlotKey!.trim().isNotEmpty)
+        priority1SlotKey!.trim(),
+      if (priority2SlotKey != null &&
+          priority2SlotKey!.trim().isNotEmpty)
+        priority2SlotKey!.trim(),
+      if (priority3SlotKey != null &&
+          priority3SlotKey!.trim().isNotEmpty)
+        priority3SlotKey!.trim(),
+    ];
+  }
+
   List<String> statuses = [];
   List<bool> isSelected = [];
   List<String> selectedStatuses = [];
@@ -184,6 +204,14 @@ class InputPlateController {
     isLocationSelected = false;
   }
 
+  void clearVehicleInfo() {
+    selectedManufacturerName = null;
+    selectedModelName = null;
+    priority1SlotKey = null;
+    priority2SlotKey = null;
+    priority3SlotKey = null;
+  }
+
   void resetForm() {
     clearInput();
     clearLocation();
@@ -203,6 +231,7 @@ class InputPlateController {
     isSelected = List.generate(statuses.length, (_) => false);
     isThreeDigit = true;
     selectedBillType = '변동';
+    clearVehicleInfo();
   }
 
   PlateRepository _readPlateRepository(BuildContext context) {
@@ -408,6 +437,11 @@ class InputPlateController {
             ? customStatusController.text
             : fetchedCustomStatus ?? '',
         selectedBillType: selectedBillType,
+        manufacturerName: selectedManufacturerName,
+        modelName: selectedModelName,
+        priority1SlotKey: priority1SlotKey,
+        priority2SlotKey: priority2SlotKey,
+        priority3SlotKey: priority3SlotKey,
       );
       trace?.add('입차 등록 결과=$wasSuccessful');
 

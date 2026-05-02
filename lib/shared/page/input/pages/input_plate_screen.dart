@@ -12,8 +12,10 @@ import '../../../../features/payment/applications/bill_state.dart';
 import '../../../plate/domain/repositories/plate_repository.dart';
 import '../../../plate/domain/services/plate_status_record.dart';
 import '../controllers/input_plate_controller.dart';
+import '../data/vehicle_parking_preference_repository.dart';
 import 'live_ocr_page.dart';
 import 'sheets/input_bottom_navigation.dart';
+import 'sheets/input_region_bottom_sheet.dart';
 import 'widgets/input_bill_section.dart';
 import 'widgets/input_bottom_action_section.dart';
 import 'widgets/input_custom_status_section.dart';
@@ -155,6 +157,13 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   bool _plateStatusDialogShowing = false;
 
   LiveOcrSessionResult? _lastOcrSessionResult;
+
+  final VehicleParkingPreferenceRepository _vehiclePrefRepo =
+      VehicleParkingPreferenceRepository.instance;
+  List<String> _manufacturerOptions = const [];
+  List<String> _modelOptions = const [];
+  String? _selectedManufacturerName;
+  String? _selectedModelName;
 
   String _safeArea(String area) {
     final a = area.trim();
@@ -402,6 +411,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     controller = InputPlateController(isMinorMode: widget.isMinorMode);
 
     _loadHasMonthlyParkingFlag();
+    Future.microtask(_loadVehicleManufacturers);
 
     if (controller.selectedBillType == '고정' ||
         controller.selectedBillType.trim().isEmpty) {
@@ -1087,6 +1097,196 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     );
   }
 
+  Future<void> _loadVehicleManufacturers() async {
+    try {
+      final manufacturers = await _vehiclePrefRepo.getManufacturers();
+      if (!mounted) return;
+      setState(() => _manufacturerOptions = manufacturers);
+    } catch (e) {
+      debugPrint('[VehicleParkingPreference] manufacturer load failed: $e');
+    }
+  }
+
+  Future<String?> _showCenteredOptionDialog({
+    required String title,
+    required List<String> options,
+    String? selectedValue,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return Dialog(
+          insetPadding:
+              const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          backgroundColor: cs.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              maxWidth: 420,
+              maxHeight: 520,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 16, 8, 10),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: '닫기',
+                        onPressed: () => Navigator.of(dialogContext).pop(),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                ),
+                Divider(height: 1, color: cs.outlineVariant.withOpacity(0.85)),
+                Flexible(
+                  child: options.isEmpty
+                      ? Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            '선택 가능한 항목이 없습니다.',
+                            style: TextStyle(color: cs.onSurfaceVariant),
+                          ),
+                        )
+                      : ListView.separated(
+                          shrinkWrap: true,
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          itemCount: options.length,
+                          separatorBuilder: (_, __) => Divider(
+                            height: 1,
+                            color: cs.outlineVariant.withOpacity(0.45),
+                          ),
+                          itemBuilder: (_, index) {
+                            final value = options[index];
+                            final selected = value == selectedValue;
+
+                            return ListTile(
+                              title: Text(
+                                value,
+                                style: TextStyle(
+                                  fontWeight: selected
+                                      ? FontWeight.w900
+                                      : FontWeight.w700,
+                                  color: cs.onSurface,
+                                ),
+                              ),
+                              trailing: selected
+                                  ? Icon(Icons.check_rounded,
+                                      color: cs.primary)
+                                  : null,
+                              onTap: () =>
+                                  Navigator.of(dialogContext).pop(value),
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _openManufacturerDialog() async {
+    if (_manufacturerOptions.isEmpty) {
+      await _loadVehicleManufacturers();
+    }
+    if (!mounted) return;
+
+    final selected = await _showCenteredOptionDialog(
+      title: '제조사 선택',
+      options: _manufacturerOptions,
+      selectedValue: _selectedManufacturerName,
+    );
+
+    if (!mounted || selected == null) return;
+
+    final models = await _vehiclePrefRepo.getModelsByManufacturer(selected);
+    if (!mounted) return;
+
+    setState(() {
+      _selectedManufacturerName = selected;
+      _selectedModelName = null;
+      _modelOptions = models;
+      controller.selectedManufacturerName = selected;
+      controller.selectedModelName = null;
+      controller.priority1SlotKey = null;
+      controller.priority2SlotKey = null;
+      controller.priority3SlotKey = null;
+    });
+  }
+
+  Future<void> _openModelDialog() async {
+    final manufacturer = _selectedManufacturerName;
+    if (manufacturer == null || manufacturer.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('제조사를 먼저 선택해주세요.')),
+      );
+      return;
+    }
+
+    if (_modelOptions.isEmpty) {
+      final models = await _vehiclePrefRepo.getModelsByManufacturer(manufacturer);
+      if (!mounted) return;
+      setState(() => _modelOptions = models);
+    }
+    if (!mounted) return;
+
+    final selected = await _showCenteredOptionDialog(
+      title: '차종 선택',
+      options: _modelOptions,
+      selectedValue: _selectedModelName,
+    );
+
+    if (!mounted || selected == null) return;
+
+    final pref = await _vehiclePrefRepo.findPreference(
+      manufacturerName: manufacturer,
+      modelName: selected,
+    );
+    if (!mounted) return;
+
+    setState(() {
+      _selectedModelName = selected;
+      controller.selectedManufacturerName = manufacturer;
+      controller.selectedModelName = selected;
+      controller.priority1SlotKey = pref?.priority1SlotKey;
+      controller.priority2SlotKey = pref?.priority2SlotKey;
+      controller.priority3SlotKey = pref?.priority3SlotKey;
+    });
+  }
+
+  void _openRegionPicker() {
+    inputRegionPickerBottomSheet(
+      context: context,
+      selectedRegion: controller.dropdownValue,
+      regions: controller.regions,
+      onConfirm: (region) {
+        setState(() {
+          controller.dropdownValue = region;
+        });
+      },
+    );
+  }
+
   Future<void> _openLiveScanner() async {
     final sessionId = const Uuid().v4();
     final result = await Navigator.of(context).push<LiveOcrSessionResult>(
@@ -1222,6 +1422,8 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   Widget _buildDock() {
     return _PlateDock(
       controller: controller,
+      selectedRegion: controller.dropdownValue,
+      onTapRegion: _openRegionPicker,
       onActivateFront: () => _beginDockEdit(_DockField.front),
       onActivateMid: () => _beginDockEdit(_DockField.mid),
       onActivateBack: () => _beginDockEdit(_DockField.back),
@@ -1545,29 +1747,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         InputPlateSection(
-                          dropdownValue: controller.dropdownValue,
-                          regions: controller.regions,
-                          controllerFrontDigit: controller.controllerFrontDigit,
-                          controllerMidDigit: controller.controllerMidDigit,
-                          controllerBackDigit: controller.controllerBackDigit,
-                          activeController: controller.activeController,
-                          onKeypadStateChanged: (_) {
-                            setState(() {
-                              controller.clearInput();
-                              controller.setActiveController(
-                                  controller.controllerFrontDigit);
-                              _dockEditing = null;
-                              _monthlyDocExists = false;
-                              _resolvedMonthlyDocId = null;
-                              _lastPlateStatusDialogKey = null;
-                            });
-                          },
-                          onRegionChanged: (region) {
-                            setState(() {
-                              controller.dropdownValue = region;
-                            });
-                          },
-                          isThreeDigit: controller.isThreeDigit,
+                          selectedManufacturerName: _selectedManufacturerName,
+                          selectedModelName: _selectedModelName,
+                          onTapManufacturer: _openManufacturerDialog,
+                          onTapModel: _openModelDialog,
                         ),
                         const SizedBox(height: 16),
                         InputLocationSection(
@@ -2094,23 +2277,30 @@ class _SheetHandle extends StatelessWidget {
 
 class _PlateDock extends StatelessWidget {
   final InputPlateController controller;
+  final String selectedRegion;
+  final VoidCallback onTapRegion;
   final VoidCallback onActivateFront;
   final VoidCallback onActivateMid;
   final VoidCallback onActivateBack;
 
   const _PlateDock({
     required this.controller,
+    required this.selectedRegion,
+    required this.onTapRegion,
     required this.onActivateFront,
     required this.onActivateMid,
     required this.onActivateBack,
   });
 
-  InputDecoration _dec(BuildContext context, bool active) {
+  InputDecoration _dec(BuildContext context, bool active, bool compact) {
     final cs = Theme.of(context).colorScheme;
 
     return InputDecoration(
       isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      contentPadding: EdgeInsets.symmetric(
+        horizontal: compact ? 4 : 6,
+        vertical: compact ? 8 : 10,
+      ),
       filled: true,
       fillColor: active ? cs.primary.withOpacity(0.08) : cs.surface,
       counterText: '',
@@ -2133,62 +2323,75 @@ class _PlateDock extends StatelessWidget {
     );
   }
 
+  Widget _buildRegionBox(BuildContext context, bool compact) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTapRegion,
+        child: Container(
+          height: compact ? 46 : 50,
+          padding: EdgeInsets.symmetric(horizontal: compact ? 4 : 6),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerLow,
+            border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Flexible(
+                child: Text(
+                  selectedRegion,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: compact ? 13 : 14,
+                    fontWeight: FontWeight.w900,
+                    color: cs.onSurface,
+                  ),
+                ),
+              ),
+              SizedBox(width: compact ? 1 : 2),
+              Icon(
+                Icons.expand_more,
+                size: compact ? 15 : 17,
+                color: cs.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildEditableField({
     required BuildContext context,
     required TextEditingController textController,
     required bool isActive,
     required VoidCallback onTap,
     required int maxLength,
+    required bool compact,
   }) {
     final cs = Theme.of(context).colorScheme;
-
-    final chipColor = isActive ? cs.primary : cs.onSurfaceVariant;
 
     return GestureDetector(
       onTap: onTap,
       child: AbsorbPointer(
-        child: Stack(
-          children: [
-            TextField(
-              controller: textController,
-              readOnly: true,
-              maxLength: maxLength,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w900,
-                color: cs.onSurface,
-              ),
-              decoration: _dec(context, isActive),
-            ),
-            Positioned(
-              right: 8,
-              top: 8,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: chipColor.withOpacity(isActive ? 0.14 : 0.10),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: chipColor.withOpacity(0.22)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.edit_outlined, size: 12, color: chipColor),
-                    const SizedBox(width: 2),
-                    Text(
-                      isActive ? '편집중' : '편집',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: chipColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
+        child: TextField(
+          controller: textController,
+          readOnly: true,
+          maxLength: maxLength,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: compact ? 18 : 20,
+            fontWeight: FontWeight.w900,
+            color: cs.onSurface,
+            height: 1.0,
+          ),
+          decoration: _dec(context, isActive, compact),
         ),
       ),
     );
@@ -2205,34 +2408,52 @@ class _PlateDock extends StatelessWidget {
     final isBackActive =
         controller.activeController == controller.controllerBackDigit;
 
-    final labelStyle = TextStyle(
-      fontSize: 11,
-      fontWeight: FontWeight.w700,
-      color: cs.onSurfaceVariant,
-    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 340;
+        final gap = compact ? 4.0 : 6.0;
+        final regionWidth = compact ? 54.0 : 62.0;
+        final labelStyle = TextStyle(
+          fontSize: compact ? 10 : 11,
+          fontWeight: FontWeight.w700,
+          color: cs.onSurfaceVariant,
+        );
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
-        boxShadow: [
-          BoxShadow(
-            color: cs.shadow.withOpacity(0.08),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
+        return Container(
+          margin: EdgeInsets.symmetric(horizontal: compact ? 8 : 12),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 8 : 10,
+            vertical: compact ? 8 : 10,
           ),
-        ],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
+            boxShadow: [
+              BoxShadow(
+                color: cs.shadow.withOpacity(0.08),
+                blurRadius: 8,
+                offset: const Offset(0, -2),
+              ),
+            ],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              SizedBox(
+                width: regionWidth,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('지역', style: labelStyle),
+                    const SizedBox(height: 4),
+                    _buildRegionBox(context, compact),
+                  ],
+                ),
+              ),
+              SizedBox(width: gap),
               Expanded(
-                flex: 28,
+                flex: 30,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -2244,13 +2465,14 @@ class _PlateDock extends StatelessWidget {
                       isActive: isFrontActive,
                       onTap: onActivateFront,
                       maxLength: controller.isThreeDigit ? 3 : 2,
+                      compact: compact,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: gap),
               Expanded(
-                flex: 18,
+                flex: 17,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -2262,13 +2484,14 @@ class _PlateDock extends StatelessWidget {
                       isActive: isMidActive,
                       onTap: onActivateMid,
                       maxLength: 1,
+                      compact: compact,
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              SizedBox(width: gap),
               Expanded(
-                flex: 36,
+                flex: 40,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -2280,31 +2503,15 @@ class _PlateDock extends StatelessWidget {
                       isActive: isBackActive,
                       onTap: onActivateBack,
                       maxLength: 4,
+                      compact: compact,
                     ),
                   ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.touch_app, size: 14, color: cs.onSurfaceVariant),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  '번호판 각 칸을 탭하면 해당 자리를 수정할 수 있습니다.',
-                  style: TextStyle(fontSize: 11, color: cs.onSurfaceVariant),
-                  textAlign: TextAlign.center,
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

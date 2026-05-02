@@ -233,6 +233,11 @@ abstract class PlateRepository {
     DateTime? endTime,
     String? paymentMethod,
     String? customStatus,
+    String? manufacturerName,
+    String? modelName,
+    String? priority1SlotKey,
+    String? priority2SlotKey,
+    String? priority3SlotKey,
   });
 
   Future<void> setPlateStatus({

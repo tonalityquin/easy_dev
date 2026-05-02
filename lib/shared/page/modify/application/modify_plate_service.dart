@@ -39,6 +39,11 @@ class ModifyPlateService {
 
   final String? selectedBill;
   final String dropdownValue;
+  final String? manufacturerName;
+  final String? modelName;
+  final String? priority1SlotKey;
+  final String? priority2SlotKey;
+  final String? priority3SlotKey;
 
   ModifyPlateService({
     required this.context,
@@ -59,6 +64,11 @@ class ModifyPlateService {
     required this.dropdownValue,
     required this.selectedRegularAmount,
     required this.selectedRegularDurationHours,
+    required this.manufacturerName,
+    required this.modelName,
+    required this.priority1SlotKey,
+    required this.priority2SlotKey,
+    required this.priority3SlotKey,
   });
 
   static const String _tPlate = 'plate';
@@ -339,20 +349,42 @@ class ModifyPlateService {
     final userState = context.read<UserState>();
     final repo = context.read<PlateRepository>();
 
-    final updatedPlate = originalPlate.copyWith(
-      plateNumber: plateNumber,
-      location: newLocation,
-      billingType: newBillingType,
-      statusList: updatedStatusList,
-      basicStandard: selectedBasicStandard,
-      basicAmount: selectedBasicAmount,
-      addStandard: selectedAddStandard,
+    final updatedPlate = PlateModel(
+      id: originalPlate.id,
       addAmount: selectedAddAmount,
-      region: dropdownValue,
-      imageUrls: imageUrls,
+      addStandard: selectedAddStandard,
+      area: originalPlate.area,
+      basicAmount: selectedBasicAmount,
+      basicStandard: selectedBasicStandard,
+      billingType: newBillingType,
       customStatus: updatedCustomStatus,
+      endTime: originalPlate.endTime,
+      imageUrls: imageUrls,
+      isLockedFee: originalPlate.isLockedFee,
+      isSelected: originalPlate.isSelected,
+      location: newLocation,
+      lockedAtTimeInSeconds: originalPlate.lockedAtTimeInSeconds,
+      lockedFeeAmount: originalPlate.lockedFeeAmount,
+      logs: originalPlate.logs,
+      paymentMethod: originalPlate.paymentMethod,
+      manufacturerName: manufacturerName,
+      modelName: modelName,
+      parkingPriority1SlotKey: priority1SlotKey,
+      parkingPriority2SlotKey: priority2SlotKey,
+      parkingPriority3SlotKey: priority3SlotKey,
+      plateFourDigit: originalPlate.plateFourDigit,
+      plateNumber: plateNumber,
+      region: dropdownValue,
       regularAmount: selectedRegularAmount,
       regularDurationHours: selectedRegularDurationHours,
+      requestTime: originalPlate.requestTime,
+      selectedBy: originalPlate.selectedBy,
+      statusList: updatedStatusList,
+      type: originalPlate.type,
+      updatedAt: originalPlate.updatedAt,
+      userAdjustment: originalPlate.userAdjustment,
+      userName: originalPlate.userName,
+      feeMode: originalPlate.feeMode,
     );
 
     final changes = originalPlate.diff(updatedPlate);
@@ -392,6 +424,11 @@ class ModifyPlateService {
           'addAmount': selectedAddAmount,
           'regularAmount': selectedRegularAmount,
           'regularDurationHours': selectedRegularDurationHours,
+          PlateFields.manufacturerName: manufacturerName,
+          PlateFields.modelName: modelName,
+          PlateFields.parkingPriority1SlotKey: priority1SlotKey,
+          PlateFields.parkingPriority2SlotKey: priority2SlotKey,
+          PlateFields.parkingPriority3SlotKey: priority3SlotKey,
           'isSelected': false,
           'selectedBy': null,
           'updatedAt': DateTime.now().toUtc(),

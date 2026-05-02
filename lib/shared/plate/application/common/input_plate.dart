@@ -32,6 +32,11 @@ class InputPlate with ChangeNotifier {
     int? lockedAtTimeInSeconds,
     int? lockedFeeAmount,
     String? customStatus,
+    String? manufacturerName,
+    String? modelName,
+    String? priority1SlotKey,
+    String? priority2SlotKey,
+    String? priority3SlotKey,
   }) async {
     final correctedLocation = location.isEmpty ? '미지정' : location;
     final plateType = isLocationSelected ? PlateType.parkingCompleted : PlateType.parkingRequests;
@@ -56,6 +61,11 @@ class InputPlate with ChangeNotifier {
         lockedFeeAmount: lockedFeeAmount,
         customStatus: customStatus,
         selectedBillType: selectedBillType,
+        manufacturerName: manufacturerName,
+        modelName: modelName,
+        priority1SlotKey: priority1SlotKey,
+        priority2SlotKey: priority2SlotKey,
+        priority3SlotKey: priority3SlotKey,
       );
 
       

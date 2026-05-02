@@ -63,6 +63,7 @@ class _InputBottomActionSectionState extends State<InputBottomActionSection> {
       context: context,
       builder: (_) => InputLocationBottomSheet(
         locationController: widget.controller.locationController,
+        preferredParkingAreas: widget.controller.selectedParkingPriorities,
         onLocationSelected: (location) {
           setState(() {
             final trimmed = location.trim();
