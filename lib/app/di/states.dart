@@ -32,7 +32,6 @@ import '../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../shared/plate/domain/services/plate_write_service.dart';
 import '../../shared/secondary/application/secondary_info.dart';
 import '../../shared/secondary/application/secondary_state.dart';
-import '../models/capability.dart';
 
 final List<SingleChildWidget> stateProviders = [
   ChangeNotifierProvider(
@@ -111,40 +110,13 @@ final List<SingleChildWidget> stateProviders = [
   ChangeNotifierProvider(
       create: (_) => DevCalendarModel(DevGoogleCalendarService())),
   ChangeNotifierProxyProvider2<UserState, AreaState, SecondaryState>(
-    create: (_) => SecondaryState(pages: const [tabLocalData, tabBackend]),
+    create: (_) => SecondaryState(),
     update: (ctx, userState, areaState, secondaryState) {
+      final state = secondaryState ?? SecondaryState();
       final role = RoleType.fromName(userState.role);
       final caps = areaState.capabilitiesOfCurrentArea;
 
-      List<SecondaryInfo> computePages(RoleType role, CapSet areaCaps) {
-        final allowedSections = kRolePolicy[role] ?? const <Section>{};
-        if (allowedSections.isEmpty) return const [tabLocalData, tabBackend];
-        final pages = <SecondaryInfo>[];
-        for (final section in allowedSections) {
-          final need = kSectionRequires[section] ?? const <Capability>{};
-          if (Cap.supports(areaCaps, need)) {
-            final info = kSectionTab[section];
-            if (info != null) pages.add(info);
-          }
-        }
-        return pages.isEmpty ? const [tabLocalData, tabBackend] : pages;
-      }
-
-      bool sameByTitle(List<SecondaryInfo> a, List<SecondaryInfo> b) {
-        if (identical(a, b)) return true;
-        if (a.length != b.length) return false;
-        for (int i = 0; i < a.length; i++) {
-          if (a[i].title != b[i].title) return false;
-        }
-        return true;
-      }
-
-      final state = secondaryState ??
-          SecondaryState(pages: const [tabLocalData, tabBackend]);
-      final newPages = computePages(role, caps);
-      if (!sameByTitle(state.pages, newPages)) {
-        state.updatePages(newPages, keepIndex: true);
-      }
+      state.updateAccess(role: role, areaCaps: caps);
       return state;
     },
   ),

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
+
 import '../../../../app/utils/snackbar_helper.dart';
 import '../../../../features/selector/application/dev_auth.dart';
 import '../../../../features/selector/sheets/service_bottom_sheet.dart';
-
-const String kDevModeEnabledKey = 'dev_mode_enabled_v1';
+import '../../application/secondary_state.dart';
 
 class BackEndController extends StatefulWidget {
   const BackEndController({super.key});
@@ -24,34 +24,13 @@ class _BackEndControllerState extends State<BackEndController> {
   }
 
   Future<void> _loadDevAuth() async {
-    try {
-      final restored = await DevAuth.restorePrefs();
-      final prefs = await SharedPreferences.getInstance();
-      final devModeEnabled = prefs.getBool(kDevModeEnabledKey) ?? false;
+    final devAuthorized = await DevAuth.isDeveloperLoggedIn();
 
-      if (!mounted) return;
-      setState(() {
-        _devAuthorized = restored.devAuthorized || devModeEnabled;
-        _checkingDevAuth = false;
-      });
-    } catch (_) {
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final devModeEnabled = prefs.getBool(kDevModeEnabledKey) ?? false;
-
-        if (!mounted) return;
-        setState(() {
-          _devAuthorized = devModeEnabled;
-          _checkingDevAuth = false;
-        });
-      } catch (_) {
-        if (!mounted) return;
-        setState(() {
-          _devAuthorized = false;
-          _checkingDevAuth = false;
-        });
-      }
-    }
+    if (!mounted) return;
+    setState(() {
+      _devAuthorized = devAuthorized;
+      _checkingDevAuth = false;
+    });
   }
 
   Future<void> _openServiceSettings() async {
@@ -65,22 +44,23 @@ class _BackEndControllerState extends State<BackEndController> {
     await _loadDevAuth();
     if (!mounted) return;
 
+    final state = context.read<SecondaryState>();
+    await state.refreshDeveloperLogin();
+    if (!mounted) return;
+
     if (!before && _devAuthorized) {
       showSuccessSnackbar(context, '개발자 모드가 활성화되었습니다.');
     }
   }
 
   Future<void> _resetDevAuthInline() async {
-    await DevAuth.resetDevAuth();
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(kDevModeEnabledKey, false);
+    await DevAuth.resetDeveloperLogin();
 
     if (!mounted) return;
-    await _loadDevAuth();
-    if (!mounted) return;
-
     showSelectedSnackbar(context, '개발자 모드가 비활성화되었습니다.');
+
+    final state = context.read<SecondaryState>();
+    await state.refreshDeveloperLogin();
   }
 
   @override

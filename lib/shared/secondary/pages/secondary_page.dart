@@ -1,4 +1,3 @@
-
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -7,12 +6,25 @@ import 'package:provider/provider.dart';
 import '../application/secondary_info.dart';
 import '../application/secondary_state.dart';
 
-class SecondaryPage extends StatelessWidget {
+class SecondaryPage extends StatefulWidget {
   const SecondaryPage({super.key});
 
   @override
+  State<SecondaryPage> createState() => _SecondaryPageState();
+}
+
+class _SecondaryPageState extends State<SecondaryPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<SecondaryState>().refreshDeveloperLogin();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    
     return const _SecondaryScaffold(key: ValueKey('secondary_scaffold'));
   }
 }
@@ -32,7 +44,6 @@ class _SecondaryScaffold extends StatelessWidget {
           );
         }
 
-        
         final int safeIndex = state.selectedIndex.clamp(0, state.pages.length - 1);
 
         return _ChunkedTabsRoot(
@@ -69,7 +80,7 @@ class _SecondaryScaffold extends StatelessWidget {
         preferredSize: const Size.fromHeight(1),
         child: Container(
           height: 1,
-          color: cs.outlineVariant.withOpacity(.75), 
+          color: cs.outlineVariant.withOpacity(.75),
         ),
       ),
     );
@@ -113,12 +124,10 @@ class _ChunkedTabsRootState extends State<_ChunkedTabsRoot> {
   void didUpdateWidget(covariant _ChunkedTabsRoot oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    
     final desiredChunk = _chunkOf(widget.selectedIndex);
     if (desiredChunk != _currentChunk && _chunkController.hasClients) {
       _currentChunk = desiredChunk;
 
-      
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted || !_chunkController.hasClients) return;
         _chunkController.animateToPage(
@@ -141,8 +150,8 @@ class _ChunkedTabsRootState extends State<_ChunkedTabsRoot> {
     final cs = Theme.of(context).colorScheme;
 
     final tabLabelStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
-      fontWeight: FontWeight.w800,
-    );
+          fontWeight: FontWeight.w800,
+        );
 
     return Scaffold(
       backgroundColor: cs.surface,
@@ -156,7 +165,6 @@ class _ChunkedTabsRootState extends State<_ChunkedTabsRoot> {
               _currentChunk = page;
               final firstIndexOfChunk = page * _chunkSize;
 
-              
               if (widget.selectedIndex < firstIndexOfChunk ||
                   widget.selectedIndex >= firstIndexOfChunk + _chunkSize) {
                 widget.onSelect(firstIndexOfChunk);
@@ -168,16 +176,15 @@ class _ChunkedTabsRootState extends State<_ChunkedTabsRoot> {
               final items = widget.pages.sublist(start, end);
 
               final localInitial =
-              (widget.selectedIndex >= start && widget.selectedIndex < end)
-                  ? widget.selectedIndex - start
-                  : 0;
+                  (widget.selectedIndex >= start && widget.selectedIndex < end)
+                      ? widget.selectedIndex - start
+                      : 0;
 
               return DefaultTabController(
                 length: items.length,
                 initialIndex: localInitial,
                 child: Column(
                   children: [
-                    
                     Material(
                       color: cs.surface,
                       elevation: 0,
@@ -207,14 +214,13 @@ class _ChunkedTabsRootState extends State<_ChunkedTabsRoot> {
                               width: 2.5,
                             ),
                           ),
-                          dividerColor: Colors.transparent, 
+                          dividerColor: Colors.transparent,
                           tabs: [
                             for (final p in items) Tab(text: p.title, icon: p.icon),
                           ],
                         ),
                       ),
                     ),
-                    
                     Expanded(
                       child: TabBarView(
                         physics: const NeverScrollableScrollPhysics(),
@@ -232,8 +238,6 @@ class _ChunkedTabsRootState extends State<_ChunkedTabsRoot> {
               );
             },
           ),
-
-          
           Positioned.fill(
             child: IgnorePointer(
               ignoring: !widget.isLoading,
