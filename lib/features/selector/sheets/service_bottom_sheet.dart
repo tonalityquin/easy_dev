@@ -1,12 +1,9 @@
-import 'dart:io' show Platform;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../app/config/commute_true_false_mode_config.dart';
 import '../../../app/config/email_config.dart';
 import '../../../app/config/overlay_edge_side_config.dart';
 import '../../../app/config/overlay_mode_config.dart';
@@ -142,7 +139,6 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
 
   OverlayEdgeSide _edgeSide = OverlayEdgeSide.left;
 
-  bool _commuteTrueFalseEnabled = false;
   final TextEditingController _mailToCtrl = TextEditingController();
 
   @override
@@ -182,8 +178,6 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
 
       _edgeSide = await OverlayEdgeSideConfig.getSide();
 
-      _commuteTrueFalseEnabled = await CommuteTrueFalseModeConfig.isEnabled();
-
       final emailCfg = await EmailConfig.load();
       _mailToCtrl.text = emailCfg.to;
     } catch (_) {
@@ -209,9 +203,9 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
 
     final effectivePreset = presetById(presetId);
     final accent =
-        (effectivePreset.id == 'system' || effectivePreset.accent == null)
-            ? base.colorScheme.primary
-            : effectivePreset.accent!;
+    (effectivePreset.id == 'system' || effectivePreset.accent == null)
+        ? base.colorScheme.primary
+        : effectivePreset.accent!;
 
     final scheme = buildConceptScheme(brightness: brightness, accent: accent);
 
@@ -503,8 +497,8 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
         children: [
           Text(
             '플로팅(오버레이) 버튼이 기본으로 붙을 위치를 선택합니다.\n'
-            '앱이 백그라운드로 이동해 오버레이가 실행될 때 적용됩니다.\n'
-            '이미 오버레이가 떠 있다면, 저장 시 자동으로 종료되어 다음 실행부터 반영됩니다.',
+                '앱이 백그라운드로 이동해 오버레이가 실행될 때 적용됩니다.\n'
+                '이미 오버레이가 떠 있다면, 저장 시 자동으로 종료되어 다음 실행부터 반영됩니다.',
             style: text.bodyMedium?.copyWith(fontSize: 13, color: t.pageFg),
           ),
           const SizedBox(height: 12),
@@ -567,8 +561,8 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
         children: [
           Text(
             '코드 입력으로 기능을 활성화합니다.\n'
-            '• 관리자 코드 → 앱 설정(앱관리) 섹션 ON\n'
-            '• 개발자 코드 → 개발자 모드 ON(재실행 후 유지)',
+                '• 관리자 코드 → 앱 설정(앱관리) 섹션 ON\n'
+                '• 개발자 코드 → 개발자 모드 ON(재실행 후 유지)',
             style: text.bodyMedium?.copyWith(fontSize: 13, color: t.pageFg),
           ),
           const SizedBox(height: 10),
@@ -630,72 +624,6 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
     );
   }
 
-  Widget _buildOverlayPermissionSection(BuildContext context) {
-    final t = HeaderTokens.of(context);
-    final text = Theme.of(context).textTheme;
-
-    return _sectionBox(
-      context: context,
-      icon: Icons.bubble_chart_outlined,
-      title: '플로팅 버블(QuickOverlay) 권한',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            '다른 앱 위에 플로팅 버블 또는 상단 포그라운드 패널(QuickOverlayHome)을 띄우기 위해서는 '
-            '안드로이드 “다른 앱 위에 표시” 권한이 필요합니다.',
-            style: text.bodyMedium?.copyWith(fontSize: 13, color: t.pageFg),
-          ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  icon: const Icon(Icons.info_outline),
-                  onPressed: () async {
-                    if (!Platform.isAndroid) {
-                      return;
-                    }
-                    try {
-                      await FlutterOverlayWindow.isPermissionGranted();
-                    } catch (_) {}
-                  },
-                  label: const Text('현재 상태 확인'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.open_in_new_rounded),
-                  onPressed: () async {
-                    if (!Platform.isAndroid) {
-                      return;
-                    }
-                    try {
-                      final already =
-                          await FlutterOverlayWindow.isPermissionGranted();
-                      if (already) {
-                        if (!mounted) return;
-                        return;
-                      }
-
-                      await FlutterOverlayWindow.requestPermission();
-                    } catch (_) {}
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: t.accent,
-                    foregroundColor: t.onAccent,
-                  ),
-                  label: const Text('권한 설정 열기'),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildOverlayModeSection(BuildContext context) {
     final t = HeaderTokens.of(context);
     final text = Theme.of(context).textTheme;
@@ -718,7 +646,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
         children: [
           Text(
             '앱이 백그라운드로 이동했을 때 사용할 오버레이 형태를 선택합니다.\n'
-            '하나만 선택되며, 선택된 모드만 실행/종료 조건을 공유합니다.',
+                '하나만 선택되며, 선택된 모드만 실행/종료 조건을 공유합니다.',
             style: text.bodyMedium?.copyWith(fontSize: 13, color: t.pageFg),
           ),
           const SizedBox(height: 12),
@@ -768,45 +696,6 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
           Text(
             '현재 선택: ${labelFor(_overlayMode)}',
             style: text.bodySmall?.copyWith(color: t.mutedFg),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCommuteTrueFalseToggleSection(BuildContext context) {
-    final t = HeaderTokens.of(context);
-    final text = Theme.of(context).textTheme;
-
-    return _sectionBox(
-      context: context,
-      icon: Icons.cloud_upload_outlined,
-      title: '출근 시각 DB에 기록',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            '이 설정은 “기기별(로컬)”로 저장됩니다.\n'
-            'ON이면 출근 버튼을 누를 때 DB에 출근 시각(Timestamp)을 기록합니다.\n'
-            'OFF이면 해당 DB 내 업데이트는 모두 건너뛰고, 로컬(SQLite) 기록만 수행합니다.',
-            style: text.bodyMedium?.copyWith(fontSize: 13, color: t.pageFg),
-          ),
-          const SizedBox(height: 10),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(_commuteTrueFalseEnabled ? 'ON (기록함)' : 'OFF (기록 안 함)'),
-            subtitle: Text(
-              _commuteTrueFalseEnabled
-                  ? '출근 시 최근 출근 날짜 업데이트가 실행됩니다.'
-                  : '출근 시 최근 출근 날짜 업데이트를 스킵합니다.',
-            ),
-            value: _commuteTrueFalseEnabled,
-            onChanged: (v) async {
-              setState(() => _commuteTrueFalseEnabled = v);
-              await CommuteTrueFalseModeConfig.setEnabled(v);
-
-              if (!mounted) return;
-            },
           ),
         ],
       ),
@@ -992,16 +881,14 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
                             if (_bootLoading)
                               Padding(
                                 padding:
-                                    const EdgeInsets.symmetric(vertical: 10),
+                                const EdgeInsets.symmetric(vertical: 10),
                                 child: Center(
                                   child: CircularProgressIndicator(
                                       color: t.accent),
                                 ),
                               ),
                             if (_adminUnlocked && !_bootLoading) ...[
-                              _buildOverlayPermissionSection(context),
                               _buildOverlayModeSection(context),
-                              _buildCommuteTrueFalseToggleSection(context),
                               _buildGmailSection(context),
                             ],
                           ],
@@ -1040,7 +927,7 @@ class _PresetPreviewDots extends StatelessWidget {
             shape: BoxShape.circle,
             border: Border.all(
               color:
-                  Theme.of(context).colorScheme.outlineVariant.withOpacity(0.6),
+              Theme.of(context).colorScheme.outlineVariant.withOpacity(0.6),
             ),
           ),
         );
@@ -1072,9 +959,9 @@ class _StatusPill extends StatelessWidget {
       child: Text(
         '$label: $value',
         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: isOn ? cs.onPrimaryContainer : cs.onSurface,
-            ),
+          fontWeight: FontWeight.w800,
+          color: isOn ? cs.onPrimaryContainer : cs.onSurface,
+        ),
       ),
     );
   }

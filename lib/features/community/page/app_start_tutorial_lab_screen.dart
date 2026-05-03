@@ -288,7 +288,7 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
           title: const Text('다른 앱 위 사용 허용 필요'),
           content: const Text(
             '이 권한은 일반 권한처럼 앱 안에서 바로 허용되지 않습니다.\n\n'
-            '시스템 설정 화면에서 “다른 앱 위에 표시”를 허용한 뒤 앱으로 돌아와 “설정 재확인” 버튼을 눌러주세요.',
+                '시스템 설정 화면에서 “다른 앱 위에 표시”를 허용한 뒤 앱으로 돌아와 “설정 재확인” 버튼을 눌러주세요.',
           ),
           actions: [
             TextButton(
@@ -317,9 +317,9 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
         return AlertDialog(
           title: const Text('지메일 수신자 입력 필요'),
           content: const Text(
-            '서비스 설정과 동일하게 수신자 주소는 SharedPreferences 키 mail.to 에 저장됩니다.\n\n'
-            '지메일 주소만 입력할 수 있으며, 여러 명은 쉼표로 구분해 저장해 주세요.\n'
-            '예) a@gmail.com, b@gmail.com',
+            '서비스 설정과 동일하게 수신자 주소는 mail.to 에 저장됩니다.\n\n'
+                '지메일 주소만 입력할 수 있습니다.\n'
+                '예) a@gmail.com, b@gmail.com',
           ),
           actions: [
             FilledButton(
@@ -523,7 +523,7 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
         if (!mounted) return;
         Navigator.of(context).pushNamedAndRemoveUntil(
           route ?? AppRoutes.selector,
-          (r) => false,
+              (r) => false,
         );
         return;
       }
@@ -537,11 +537,11 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
   }
 
   Widget _buildPageHeader(
-    BuildContext context,
-    IconData icon,
-    String title,
-    String desc,
-  ) {
+      BuildContext context,
+      IconData icon,
+      String title,
+      String desc,
+      ) {
     final cs = Theme.of(context).colorScheme;
     return Column(
       children: [
@@ -567,12 +567,12 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
   }
 
   Widget _buildPermissionCard(
-    BuildContext context, {
-    required String label,
-    required String status,
-    required Future<void> Function() onRequest,
-    Future<void> Function()? onOpenSettings,
-  }) {
+      BuildContext context, {
+        required String label,
+        required String status,
+        required Future<void> Function() onRequest,
+        Future<void> Function()? onOpenSettings,
+      }) {
     final cs = Theme.of(context).colorScheme;
 
     return Card(
@@ -596,7 +596,7 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
                 ),
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: cs.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(999),
@@ -621,12 +621,12 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
                     onPressed: _busy
                         ? null
                         : () async {
-                            if (onOpenSettings != null) {
-                              await onOpenSettings();
-                              return;
-                            }
-                            await _openSettingsHint();
-                          },
+                      if (onOpenSettings != null) {
+                        await onOpenSettings();
+                        return;
+                      }
+                      await _openSettingsHint();
+                    },
                     child: const Text('설정 열기'),
                   ),
                 ),
@@ -669,7 +669,7 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
                 ),
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: cs.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(999),
