@@ -19,6 +19,21 @@ enum GridEditTool {
   parkingExtendedA12,
   parkingExtendedA21,
   parkingExtendedB22,
+  parkingEvCompact12,
+  parkingEvCompact21,
+  parkingEvStandard12,
+  parkingEvStandard21,
+  parkingEvExtendedA12,
+  parkingEvExtendedA21,
+  parkingEvExtendedB22,
+  parkingPregnantExtendedA12,
+  parkingPregnantExtendedA21,
+  parkingPregnantExtendedB22,
+  parkingDisabledStandard12,
+  parkingDisabledStandard21,
+  parkingDisabledExtendedA12,
+  parkingDisabledExtendedA21,
+  parkingDisabledExtendedB22,
   parkingEraser,
   entranceRect,
   exitRect,
@@ -120,14 +135,7 @@ class _ParkingGrid2DEditorState extends State<ParkingGrid2DEditor> {
   bool _isEdgeTool(GridEditTool t) => _isWallTool(t);
 
   bool _isParkingTool(GridEditTool t) =>
-      t == GridEditTool.parkingCompact12 ||
-          t == GridEditTool.parkingCompact21 ||
-          t == GridEditTool.parkingStandard12 ||
-          t == GridEditTool.parkingStandard21 ||
-          t == GridEditTool.parkingExtendedA12 ||
-          t == GridEditTool.parkingExtendedA21 ||
-          t == GridEditTool.parkingExtendedB22 ||
-          t == GridEditTool.parkingEraser;
+      t == GridEditTool.parkingEraser || _kindForTool(t) != null;
 
   bool _isRectTool(GridEditTool t) =>
       t == GridEditTool.entranceRect ||
@@ -189,6 +197,36 @@ class _ParkingGrid2DEditorState extends State<ParkingGrid2DEditor> {
         return ParkingAreaKind.extendedA2x1;
       case GridEditTool.parkingExtendedB22:
         return ParkingAreaKind.extendedB2x2;
+      case GridEditTool.parkingEvCompact12:
+        return ParkingAreaKind.evCompact1x2;
+      case GridEditTool.parkingEvCompact21:
+        return ParkingAreaKind.evCompact2x1;
+      case GridEditTool.parkingEvStandard12:
+        return ParkingAreaKind.evStandard1x2;
+      case GridEditTool.parkingEvStandard21:
+        return ParkingAreaKind.evStandard2x1;
+      case GridEditTool.parkingEvExtendedA12:
+        return ParkingAreaKind.evExtendedA1x2;
+      case GridEditTool.parkingEvExtendedA21:
+        return ParkingAreaKind.evExtendedA2x1;
+      case GridEditTool.parkingEvExtendedB22:
+        return ParkingAreaKind.evExtendedB2x2;
+      case GridEditTool.parkingPregnantExtendedA12:
+        return ParkingAreaKind.pregnantExtendedA1x2;
+      case GridEditTool.parkingPregnantExtendedA21:
+        return ParkingAreaKind.pregnantExtendedA2x1;
+      case GridEditTool.parkingPregnantExtendedB22:
+        return ParkingAreaKind.pregnantExtendedB2x2;
+      case GridEditTool.parkingDisabledStandard12:
+        return ParkingAreaKind.disabledStandard1x2;
+      case GridEditTool.parkingDisabledStandard21:
+        return ParkingAreaKind.disabledStandard2x1;
+      case GridEditTool.parkingDisabledExtendedA12:
+        return ParkingAreaKind.disabledExtendedA1x2;
+      case GridEditTool.parkingDisabledExtendedA21:
+        return ParkingAreaKind.disabledExtendedA2x1;
+      case GridEditTool.parkingDisabledExtendedB22:
+        return ParkingAreaKind.disabledExtendedB2x2;
       default:
         return null;
     }
@@ -1044,6 +1082,30 @@ class _ParkingGrid2DPainter extends CustomPainter {
           stroke: const Color(0xFFF9A825).withOpacity(0.92),
           text: const Color(0xFF5D4037),
         );
+      case 'evCompact':
+      case 'evStandard':
+      case 'evExtendedA':
+      case 'evExtendedB':
+        return (
+          fill: const Color(0xFFA5D6A7).withOpacity(0.62),
+          stroke: const Color(0xFF2E7D32).withOpacity(0.92),
+          text: const Color(0xFF1B5E20),
+        );
+      case 'pregnantExtendedA':
+      case 'pregnantExtendedB':
+        return (
+          fill: const Color(0xFFF8BBD0).withOpacity(0.62),
+          stroke: const Color(0xFFC2185B).withOpacity(0.92),
+          text: const Color(0xFF880E4F),
+        );
+      case 'disabledStandard':
+      case 'disabledExtendedA':
+      case 'disabledExtendedB':
+        return (
+          fill: const Color(0xFFB39DDB).withOpacity(0.62),
+          stroke: const Color(0xFF512DA8).withOpacity(0.92),
+          text: const Color(0xFF311B92),
+        );
       default:
         return (
           fill: cs.secondaryContainer.withOpacity(0.45),
@@ -1053,20 +1115,7 @@ class _ParkingGrid2DPainter extends CustomPainter {
     }
   }
 
-  String _parkingAreaHintLabel(ParkingAreaKind kind) {
-    switch (kind.categoryKey) {
-      case 'compact':
-        return '경 ${kind.footprintLabel}';
-      case 'standard':
-        return '일반 ${kind.footprintLabel}';
-      case 'extendedA':
-        return '확장 A ${kind.footprintLabel}';
-      case 'extendedB':
-        return '확장 B ${kind.footprintLabel}';
-      default:
-        return kind.label;
-    }
-  }
+  String _parkingAreaHintLabel(ParkingAreaKind kind) => kind.shortLabel;
 
   ({Color fill, Color stroke, String label}) _styleForRectLayer(_RectLayer layer) {
     final cs = colorScheme;

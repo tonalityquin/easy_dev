@@ -53,6 +53,19 @@ class _LocationManagementState extends State<LocationManagement> {
     return out;
   }
 
+
+  static Map<String, int> _childSlotNumbersByAreaId(LocationModel loc) {
+    final out = <String, int>{};
+    for (final slot in loc.childSlots) {
+      final id = slot.areaId.trim();
+      if (id.isEmpty) continue;
+      final no = slot.no;
+      if (no <= 0) continue;
+      out[id] = no;
+    }
+    return out;
+  }
+
   static const double _fabBottomGap = 48.0;
   static const double _fabSpacing = 10.0;
 
@@ -294,6 +307,7 @@ class _LocationManagementState extends State<LocationManagement> {
                   area: area,
                   rect: draft.rect,
                   childSlotAreaIds: draft.childSlotAreaIds,
+                  childSlotNumbersByAreaId: draft.childSlotNumbersByAreaId,
                   isTower: draft.isTower,
                   onError: (_) {},
                 );
@@ -440,6 +454,7 @@ class _LocationManagementState extends State<LocationManagement> {
                   area: area,
                   rect: draft.rect,
                   childSlotAreaIds: draft.childSlotAreaIds,
+                  childSlotNumbersByAreaId: draft.childSlotNumbersByAreaId,
                   isTower: draft.isTower,
                   onError: (_) {},
                 );
@@ -574,6 +589,7 @@ class _LocationManagementState extends State<LocationManagement> {
             editingChildRect: rect,
             editingChildIsTower: selected.isTowerChild,
             editingChildSlotAreaIds: _childAreaIds(selected),
+            editingChildSlotNumbersByAreaId: _childSlotNumbersByAreaId(selected),
             onSave: (draft) async {
               final area = context.read<AreaState>().currentArea.trim();
 
@@ -586,6 +602,7 @@ class _LocationManagementState extends State<LocationManagement> {
                   area: area,
                   rect: draft.rect,
                   childSlotAreaIds: draft.childSlotAreaIds,
+                  childSlotNumbersByAreaId: draft.childSlotNumbersByAreaId,
                   isTower: draft.isTower,
                   onError: (_) {},
                 );
@@ -601,6 +618,7 @@ class _LocationManagementState extends State<LocationManagement> {
                   area: area,
                   rect: draft.rect,
                   childSlotAreaIds: draft.childSlotAreaIds,
+                  childSlotNumbersByAreaId: draft.childSlotNumbersByAreaId,
                   isTower: draft.isTower,
                   onError: (_) {},
                 );

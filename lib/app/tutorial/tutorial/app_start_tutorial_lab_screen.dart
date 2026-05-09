@@ -8,6 +8,7 @@ import '../../../app/config/email_config.dart';
 import '../../../app/di/routes.dart';
 import '../../../app/init/app_start_flow_prefs.dart';
 import '../../../app/init/startup_tasks.dart';
+import '../../../app/utils/status_dialog.dart';
 
 class AppStartTutorialLabScreen extends StatefulWidget {
   const AppStartTutorialLabScreen({super.key});
@@ -318,11 +319,7 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
       builder: (ctx) {
         return AlertDialog(
           title: const Text('지메일 수신자 입력 필요'),
-          content: const Text(
-            '서비스 설정과 동일하게 수신자 주소는 SharedPreferences 키 mail.to 에 저장됩니다.\n\n'
-                '지메일 주소만 입력할 수 있으며, 여러 명은 쉼표로 구분해 저장해 주세요.\n'
-                '예) a@gmail.com, b@gmail.com',
-          ),
+          content: const Text('수신자(To)를 입력하고 저장해 주세요.'),
           actions: [
             FilledButton(
               onPressed: () => Navigator.of(ctx).pop(),
@@ -468,8 +465,9 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
       await EmailConfig.save(EmailConfig(to: to));
       if (!mounted) return;
       setState(() => _savedMailTo = to);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('지메일 수신자가 저장되었습니다.')),
+      await StatusDialog.showSuccess(
+        context,
+        title: StatusDialog.gmailRecipientSaveSuccess,
       );
     } finally {
       if (!mounted) return;
@@ -692,20 +690,8 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
                 labelText: '수신자(To)',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.mail_outline_rounded),
-                helperText: '지메일만 가능, 여러 명은 쉼표로 구분 (예: a@gmail.com, b@gmail.com)',
               ),
               onSubmitted: (_) => _saveMailRecipient(),
-            ),
-            const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                '서비스 설정과 동일하게 SharedPreferences 키 mail.to 에 저장됩니다.',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: cs.onSurfaceVariant),
-              ),
             ),
             const SizedBox(height: 12),
             SizedBox(
@@ -716,22 +702,12 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
               ),
             ),
             const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _busy ? null : _loadSavedMailRecipient,
-                    child: const Text('저장값 다시 불러오기'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: _busy ? null : _showNeedMailRecipientDialog,
-                    child: const Text('입력 규칙 보기'),
-                  ),
-                ),
-              ],
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: _busy ? null : _loadSavedMailRecipient,
+                child: const Text('저장값 다시 불러오기'),
+              ),
             ),
           ],
         ),

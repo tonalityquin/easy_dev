@@ -4,6 +4,18 @@ class ParkingSlotPreferenceKey {
   static const String extended = 'extended';
   static const String extendedA = 'extendedA';
   static const String extendedB = 'extendedB';
+  static const String evCompact = 'evCompact';
+  static const String evStandard = 'evStandard';
+  static const String evExtended = 'evExtended';
+  static const String evExtendedA = 'evExtendedA';
+  static const String evExtendedB = 'evExtendedB';
+  static const String pregnantExtended = 'pregnantExtended';
+  static const String pregnantExtendedA = 'pregnantExtendedA';
+  static const String pregnantExtendedB = 'pregnantExtendedB';
+  static const String disabledStandard = 'disabledStandard';
+  static const String disabledExtended = 'disabledExtended';
+  static const String disabledExtendedA = 'disabledExtendedA';
+  static const String disabledExtendedB = 'disabledExtendedB';
 
   static const Set<String> values = <String>{
     compact,
@@ -11,10 +23,23 @@ class ParkingSlotPreferenceKey {
     extended,
     extendedA,
     extendedB,
+    evCompact,
+    evStandard,
+    evExtended,
+    evExtendedA,
+    evExtendedB,
+    pregnantExtended,
+    pregnantExtendedA,
+    pregnantExtendedB,
+    disabledStandard,
+    disabledExtended,
+    disabledExtendedA,
+    disabledExtendedB,
   };
 
   static String normalize(String raw) {
     final v = raw.trim();
+    final n = v.toLowerCase().replaceAll('×', 'x').replaceAll(RegExp(r'\s+'), '');
     switch (v) {
       case compact:
       case '경형':
@@ -39,7 +64,85 @@ class ParkingSlotPreferenceKey {
       case '확장 B':
       case '확B':
         return extendedB;
+      case evCompact:
+      case '전기차 경형':
+      case 'EV 경형':
+      case 'EV경':
+        return evCompact;
+      case evStandard:
+      case '전기차 일반형':
+      case 'EV 일반형':
+      case 'EV일반':
+      case 'EV일':
+        return evStandard;
+      case evExtended:
+      case '전기차 확장형':
+      case 'EV 확장형':
+      case 'EV확장':
+        return evExtended;
+      case evExtendedA:
+      case '전기차 확장형 A':
+      case 'EV 확장형 A':
+      case 'EV확A':
+        return evExtendedA;
+      case evExtendedB:
+      case '전기차 확장형 B':
+      case 'EV 확장형 B':
+      case 'EV확B':
+        return evExtendedB;
+      case pregnantExtended:
+      case '임산부 배려 확장형':
+      case '임산부 확장형':
+      case '임산부':
+        return pregnantExtended;
+      case pregnantExtendedA:
+      case '임산부 배려 확장형 A':
+      case '임산부 확장형 A':
+      case '임A':
+        return pregnantExtendedA;
+      case pregnantExtendedB:
+      case '임산부 배려 확장형 B':
+      case '임산부 확장형 B':
+      case '임B':
+        return pregnantExtendedB;
+      case disabledStandard:
+      case '장애인 일반형':
+      case '장애인 일반':
+      case '장일':
+        return disabledStandard;
+      case disabledExtended:
+      case '장애인 확장형':
+      case '장애인 확장':
+        return disabledExtended;
+      case disabledExtendedA:
+      case '장애인 확장형 A':
+      case '장애인 확장 A':
+      case '장확A':
+        return disabledExtendedA;
+      case disabledExtendedB:
+      case '장애인 확장형 B':
+      case '장애인 확장 B':
+      case '장확B':
+        return disabledExtendedB;
       default:
+        if (n.contains('전기차') || n.contains('전기') || n.contains('ev') || n.contains('electric')) {
+          if (n.contains('확장형b') || n.contains('확장b') || n.contains('extendedb')) return evExtendedB;
+          if (n.contains('확장형a') || n.contains('확장a') || n.contains('extendeda')) return evExtendedA;
+          if (n.contains('확장형') || n.contains('확장') || n.contains('extended') || n.contains('expand')) return evExtended;
+          if (n.contains('일반형') || n.contains('일반') || n.contains('standard') || n.contains('normal') || n.contains('general')) return evStandard;
+          if (n.contains('경형') || n.contains('경차') || n.contains('compact') || n.contains('light') || n.contains('small')) return evCompact;
+        }
+        if (n.contains('임산부') || n.contains('pregnant') || n.contains('maternity')) {
+          if (n.contains('확장형b') || n.contains('확장b') || n.contains('extendedb')) return pregnantExtendedB;
+          if (n.contains('확장형a') || n.contains('확장a') || n.contains('extendeda')) return pregnantExtendedA;
+          if (n.contains('확장형') || n.contains('확장') || n.contains('extended') || n.contains('expand')) return pregnantExtended;
+        }
+        if (n.contains('장애인') || n.contains('disabled') || n.contains('accessible') || n.contains('handicap')) {
+          if (n.contains('확장형b') || n.contains('확장b') || n.contains('extendedb')) return disabledExtendedB;
+          if (n.contains('확장형a') || n.contains('확장a') || n.contains('extendeda')) return disabledExtendedA;
+          if (n.contains('확장형') || n.contains('확장') || n.contains('extended') || n.contains('expand')) return disabledExtended;
+          if (n.contains('일반형') || n.contains('일반') || n.contains('standard') || n.contains('normal') || n.contains('general')) return disabledStandard;
+        }
         return v;
     }
   }
@@ -58,6 +161,30 @@ class ParkingSlotPreferenceKey {
         return '확장형 A';
       case extendedB:
         return '확장형 B';
+      case evCompact:
+        return '전기차 경형';
+      case evStandard:
+        return '전기차 일반형';
+      case evExtended:
+        return '전기차 확장형';
+      case evExtendedA:
+        return '전기차 확장형 A';
+      case evExtendedB:
+        return '전기차 확장형 B';
+      case pregnantExtended:
+        return '임산부 배려 확장형';
+      case pregnantExtendedA:
+        return '임산부 배려 확장형 A';
+      case pregnantExtendedB:
+        return '임산부 배려 확장형 B';
+      case disabledStandard:
+        return '장애인 일반형';
+      case disabledExtended:
+        return '장애인 확장형';
+      case disabledExtendedA:
+        return '장애인 확장형 A';
+      case disabledExtendedB:
+        return '장애인 확장형 B';
       default:
         return key.trim();
     }
@@ -71,6 +198,15 @@ class ParkingSlotPreferenceKey {
     final slot = normalize(slotCategory);
     if (pref == extended) {
       return slot == extendedA || slot == extendedB || slot == extended;
+    }
+    if (pref == evExtended) {
+      return slot == evExtendedA || slot == evExtendedB || slot == evExtended;
+    }
+    if (pref == pregnantExtended) {
+      return slot == pregnantExtendedA || slot == pregnantExtendedB || slot == pregnantExtended;
+    }
+    if (pref == disabledExtended) {
+      return slot == disabledExtendedA || slot == disabledExtendedB || slot == disabledExtended;
     }
     return pref == slot;
   }

@@ -27,6 +27,7 @@ class StatusDialog {
   static const String photoTransferSendFailed = '사진 전송 실패';
   static const String userAccountSaveSuccess = '계정 정보 저장 완료';
   static const String userAccountSaveFailed = '계정 정보 저장 실패';
+  static const String gmailRecipientSaveSuccess = '지메일 수신자가 저장되었습니다.';
   static const String savedInviteLinkResetSuccess = '저장된 링크를 초기화했어요';
   static const String inviteLinkCopySuccess = '초대 링크 복사 완료';
   static const String clipboardTextNotFound = '클립보드에 텍스트가 없어요';

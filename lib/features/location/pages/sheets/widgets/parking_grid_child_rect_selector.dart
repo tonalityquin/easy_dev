@@ -512,6 +512,30 @@ class _ParkingGridChildRectPainter extends CustomPainter {
           stroke: const Color(0xFFF9A825).withOpacity(0.92),
           text: const Color(0xFF5D4037),
         );
+      case 'evCompact':
+      case 'evStandard':
+      case 'evExtendedA':
+      case 'evExtendedB':
+        return (
+          fill: const Color(0xFFA5D6A7).withOpacity(0.62),
+          stroke: const Color(0xFF2E7D32).withOpacity(0.92),
+          text: const Color(0xFF1B5E20),
+        );
+      case 'pregnantExtendedA':
+      case 'pregnantExtendedB':
+        return (
+          fill: const Color(0xFFF8BBD0).withOpacity(0.62),
+          stroke: const Color(0xFFC2185B).withOpacity(0.92),
+          text: const Color(0xFF880E4F),
+        );
+      case 'disabledStandard':
+      case 'disabledExtendedA':
+      case 'disabledExtendedB':
+        return (
+          fill: const Color(0xFFB39DDB).withOpacity(0.62),
+          stroke: const Color(0xFF512DA8).withOpacity(0.92),
+          text: const Color(0xFF311B92),
+        );
       default:
         return (
           fill: cs.secondaryContainer.withOpacity(0.45),
@@ -521,20 +545,7 @@ class _ParkingGridChildRectPainter extends CustomPainter {
     }
   }
 
-  String _parkingAreaHintLabel(ParkingAreaKind kind) {
-    switch (kind.categoryKey) {
-      case 'compact':
-        return '경 ${kind.footprintLabel}';
-      case 'standard':
-        return '일반 ${kind.footprintLabel}';
-      case 'extendedA':
-        return '확장 A ${kind.footprintLabel}';
-      case 'extendedB':
-        return '확장 B ${kind.footprintLabel}';
-      default:
-        return kind.label;
-    }
-  }
+  String _parkingAreaHintLabel(ParkingAreaKind kind) => kind.shortLabel;
 
   void _drawAxisIndex(Canvas canvas, Size size, double cell, ColorScheme cs, {required int rows, required int cols}) {
     if (!showAxisIndex) return;

@@ -2,11 +2,39 @@ import 'package:flutter/material.dart';
 
 import '../../app/di/routes.dart';
 import '../tutorial/tutorial/app_start_tutorial_lab_screen.dart';
-import 'parking_visualization/parking_visualization_lab_screen.dart';
 import 'chat/practice_chat_lab_screen.dart';
+import 'image_ai_model_test/image_ai_model_test_lab_screen.dart';
+import 'parking_visualization/parking_visualization_lab_screen.dart';
 
 class PracticeSpaceLabScreen extends StatelessWidget {
   const PracticeSpaceLabScreen({super.key});
+
+  static const List<_PracticeExperimentItem> _experiments = [
+    _PracticeExperimentItem(
+      icon: Icons.local_parking_rounded,
+      title: '실험 1: 주차 구역 시각화 모형',
+      subtitle: '격자(Grid) 기반 주차면 상태(빈칸/점유/차단) 시각화 테스트',
+      page: ParkingVisualizationLabScreen(),
+    ),
+    _PracticeExperimentItem(
+      icon: Icons.chat_bubble_rounded,
+      title: '실험 2: 채팅 기능',
+      subtitle: '로컬 상태 기반 채팅 UI/입력/에코 응답 테스트',
+      page: PracticeChatLabScreen(),
+    ),
+    _PracticeExperimentItem(
+      icon: Icons.school_rounded,
+      title: '실험 3: 앱 시작 튜토리얼',
+      subtitle: 'PageView 기반 온보딩/튜토리얼 플로우 테스트',
+      page: AppStartTutorialLabScreen(),
+    ),
+    _PracticeExperimentItem(
+      icon: Icons.image_search_rounded,
+      title: '실험 4: 이미지 AI 모델 테스트',
+      subtitle: '번호판 이미지 인식, 결과 삽입, 성공/실패 로그 출력 테스트',
+      page: ImageAiModelTestLabScreen(),
+    ),
+  ];
 
   void _goBackToSelector(BuildContext context) {
     Navigator.of(context).pushNamedAndRemoveUntil(
@@ -60,56 +88,18 @@ class PracticeSpaceLabScreen extends StatelessWidget {
               ),
               const SizedBox(height: 20),
               Expanded(
-                child: ListView(
-                  children: [
-                    Card(
-                      elevation: 1,
-                      clipBehavior: Clip.antiAlias,
-                      child: ListTile(
-                        leading: Icon(Icons.local_parking_rounded,
-                            color: cs.primary),
-                        title: const Text('실험 1: 주차 구역 시각화 모형'),
-                        subtitle:
-                            const Text('격자(Grid) 기반 주차면 상태(빈칸/점유/차단) 시각화 테스트'),
-                        trailing: const Icon(Icons.chevron_right_rounded),
-                        onTap: () => _openExperiment(
-                          context,
-                          const ParkingVisualizationLabScreen(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Card(
-                      elevation: 1,
-                      clipBehavior: Clip.antiAlias,
-                      child: ListTile(
-                        leading:
-                            Icon(Icons.chat_bubble_rounded, color: cs.primary),
-                        title: const Text('실험 2: 채팅 기능'),
-                        subtitle: const Text('로컬 상태 기반 채팅 UI/입력/에코 응답 테스트'),
-                        trailing: const Icon(Icons.chevron_right_rounded),
-                        onTap: () => _openExperiment(
-                          context,
-                          const PracticeChatLabScreen(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Card(
-                      elevation: 1,
-                      clipBehavior: Clip.antiAlias,
-                      child: ListTile(
-                        leading: Icon(Icons.school_rounded, color: cs.primary),
-                        title: const Text('실험 3: 앱 시작 튜토리얼'),
-                        subtitle: const Text('PageView 기반 온보딩/튜토리얼 플로우 테스트'),
-                        trailing: const Icon(Icons.chevron_right_rounded),
-                        onTap: () => _openExperiment(
-                          context,
-                          const AppStartTutorialLabScreen(),
-                        ),
-                      ),
-                    ),
-                  ],
+                child: ListView.separated(
+                  itemCount: _experiments.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    final experiment = _experiments[index];
+
+                    return _PracticeExperimentCard(
+                      experiment: experiment,
+                      iconColor: cs.primary,
+                      onTap: () => _openExperiment(context, experiment.page),
+                    );
+                  },
                 ),
               ),
               const SizedBox(height: 12),
@@ -124,6 +114,47 @@ class PracticeSpaceLabScreen extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _PracticeExperimentItem {
+  const _PracticeExperimentItem({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.page,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Widget page;
+}
+
+class _PracticeExperimentCard extends StatelessWidget {
+  const _PracticeExperimentCard({
+    required this.experiment,
+    required this.iconColor,
+    required this.onTap,
+  });
+
+  final _PracticeExperimentItem experiment;
+  final Color iconColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 1,
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        leading: Icon(experiment.icon, color: iconColor),
+        title: Text(experiment.title),
+        subtitle: Text(experiment.subtitle),
+        trailing: const Icon(Icons.chevron_right_rounded),
+        onTap: onTap,
       ),
     );
   }

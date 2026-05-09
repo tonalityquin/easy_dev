@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-
-import '../../features/community/page/app_start_tutorial_lab_screen.dart';
 import '../../features/community/page/community_stub_page.dart';
 import '../../features/community/page/faq_page.dart';
 import '../../features/commute/page/double/double_commute_in_screen.dart';
@@ -27,6 +25,7 @@ import '../space/practice_space_lab_screen.dart';
 import '../tutorial/tutorial/app_start_finish_screen.dart';
 import '../tutorial/tutorial/app_start_next_tutorial_full_screen.dart';
 import '../tutorial/tutorial/app_start_next_tutorial_quick_screen.dart';
+import '../tutorial/tutorial/app_start_tutorial_lab_screen.dart';
 import '../tutorial/tutorial/start_gate_screen.dart';
 
 class AppRoutes {

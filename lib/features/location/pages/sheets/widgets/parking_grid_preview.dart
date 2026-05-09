@@ -686,6 +686,27 @@ class _ParkingGridPainter extends CustomPainter {
           fill: const Color(0xFFFFD54F).withOpacity(0.58),
           stroke: const Color(0xFFF9A825).withOpacity(0.88),
         );
+      case 'evCompact':
+      case 'evStandard':
+      case 'evExtendedA':
+      case 'evExtendedB':
+        return (
+          fill: const Color(0xFFA5D6A7).withOpacity(0.58),
+          stroke: const Color(0xFF2E7D32).withOpacity(0.88),
+        );
+      case 'pregnantExtendedA':
+      case 'pregnantExtendedB':
+        return (
+          fill: const Color(0xFFF8BBD0).withOpacity(0.58),
+          stroke: const Color(0xFFC2185B).withOpacity(0.88),
+        );
+      case 'disabledStandard':
+      case 'disabledExtendedA':
+      case 'disabledExtendedB':
+        return (
+          fill: const Color(0xFFB39DDB).withOpacity(0.58),
+          stroke: const Color(0xFF512DA8).withOpacity(0.88),
+        );
       default:
         return (
           fill: cs.secondaryContainer.withOpacity(0.42),

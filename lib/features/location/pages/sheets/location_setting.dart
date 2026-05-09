@@ -31,6 +31,7 @@ class LocationSettingBottomSheet extends StatefulWidget {
   final GridRect? editingChildRect;
   final bool? editingChildIsTower;
   final List<String> editingChildSlotAreaIds;
+  final Map<String, int> editingChildSlotNumbersByAreaId;
 
   final String? editingPlainTextId;
   final String? editingPlainTextName;
@@ -54,6 +55,7 @@ class LocationSettingBottomSheet extends StatefulWidget {
     this.editingChildRect,
     this.editingChildIsTower,
     this.editingChildSlotAreaIds = const <String>[],
+    this.editingChildSlotNumbersByAreaId = const <String, int>{},
     this.editingPlainTextId,
     this.editingPlainTextName,
     this.editingPlainTextCapacity,
@@ -114,6 +116,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
   ParkingGridModel? _selectedParentGrid;
   GridRect? _selectedChildRect;
   Set<String> _selectedChildParkingAreaIds = <String>{};
+  final Map<String, TextEditingController> _childSlotNoControllers = <String, TextEditingController>{};
   bool _childAreaPickMode = false;
 
   bool _childSquareLock = false;
@@ -134,6 +137,35 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
 
   String _childCompositeKey(String parent, String child) {
     return '${_nameKey(parent)}|${_nameKey(child)}';
+  }
+
+  void _syncChildSlotNoControllers({Map<String, int> initialNumbers = const <String, int>{}}) {
+    final ids = _selectedChildParkingAreaIds.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
+    final removeIds = _childSlotNoControllers.keys.where((id) => !ids.contains(id)).toList(growable: false);
+    for (final id in removeIds) {
+      _childSlotNoControllers.remove(id)?.dispose();
+    }
+    for (final id in ids) {
+      if (_childSlotNoControllers.containsKey(id)) continue;
+      final no = initialNumbers[id];
+      _childSlotNoControllers[id] = TextEditingController(text: no == null || no <= 0 ? '' : no.toString());
+    }
+  }
+
+  void _setSelectedChildParkingAreaIds(
+    Set<String> next, {
+    Map<String, int> initialNumbers = const <String, int>{},
+    bool updateCapacity = true,
+  }) {
+    _selectedChildParkingAreaIds = next.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
+    _syncChildSlotNoControllers(initialNumbers: initialNumbers);
+    if (updateCapacity) {
+      _capacityController.text = _selectedChildParkingAreaIds.length.toString();
+    }
+  }
+
+  void _clearSelectedChildParkingAreaIds({bool updateCapacity = true}) {
+    _setSelectedChildParkingAreaIds(<String>{}, updateCapacity: updateCapacity);
   }
 
   void _clearChildRectInputs() {
@@ -237,7 +269,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
       setState(() {
         _selectedParentGrid = null;
         _selectedChildRect = null;
-        _selectedChildParkingAreaIds = <String>{};
+        _clearSelectedChildParkingAreaIds();
         _childAreaPickMode = false;
       });
       _clearChildRectInputs();
@@ -251,7 +283,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
       _selectedParentGrid = g;
       if (resetChildSelection) {
         _selectedChildRect = null;
-        _selectedChildParkingAreaIds = <String>{};
+        _clearSelectedChildParkingAreaIds();
         _childAreaPickMode = false;
       }
     });
@@ -311,10 +343,13 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
       _childController.text = (widget.editingChildName ?? '').trim();
       _capacityController.text = (widget.editingChildCapacity ?? 0).toString();
       _selectedChildRect = widget.editingChildRect?.normalized();
-      _selectedChildParkingAreaIds = widget.editingChildSlotAreaIds
-          .map((e) => e.trim())
-          .where((e) => e.isNotEmpty)
-          .toSet();
+      _setSelectedChildParkingAreaIds(
+        widget.editingChildSlotAreaIds
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toSet(),
+        initialNumbers: widget.editingChildSlotNumbersByAreaId,
+      );
       _syncChildRectInputsFromRect(_selectedChildRect);
 
       _childIsTower = widget.editingChildIsTower == true;
@@ -333,8 +368,10 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
       final grid = _selectedParentGrid;
       final rect = _selectedChildRect;
       if (grid != null && rect != null) {
-        _selectedChildParkingAreaIds = _areaIdsInRect(grid, rect).toSet();
-        _capacityController.text = _selectedChildParkingAreaIds.length.toString();
+        _setSelectedChildParkingAreaIds(
+          _areaIdsInRect(grid, rect).toSet(),
+          initialNumbers: widget.editingChildSlotNumbersByAreaId,
+        );
       }
     }
   }
@@ -355,6 +392,9 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     _blCController.dispose();
     _brRController.dispose();
     _brCController.dispose();
+    for (final controller in _childSlotNoControllers.values) {
+      controller.dispose();
+    }
 
     super.dispose();
   }
@@ -877,8 +917,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     final parent = (_selectedParent ?? '').trim();
     final disabled = _disabledChildAreaIdsForParent(parent);
     final next = _areaIdsInRect(grid, rect).where((id) => !disabled.contains(id)).toSet();
-    _selectedChildParkingAreaIds = next;
-    _capacityController.text = next.length.toString();
+    _setSelectedChildParkingAreaIds(next);
   }
 
   int _selectedChildParkingAreaCount() => _selectedChildParkingAreaIds.length;
@@ -892,6 +931,63 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     }
     if (counts.isEmpty) return '선택된 주차면적 ${_selectedChildParkingAreaIds.length}개';
     return counts.entries.map((e) => '${e.key} ${e.value}').join(' · ');
+  }
+
+  List<ParkingArea> _selectedChildParkingAreasSorted(ParkingGridModel grid) {
+    final out = grid.parkingAreas
+        .where((area) => _selectedChildParkingAreaIds.contains(area.id.trim()))
+        .toList();
+    out.sort((a, b) {
+      final ar0 = min(a.r0, a.r1);
+      final br0 = min(b.r0, b.r1);
+      final dr = ar0.compareTo(br0);
+      if (dr != 0) return dr;
+
+      final ac0 = min(a.c0, a.c1);
+      final bc0 = min(b.c0, b.c1);
+      final dc = ac0.compareTo(bc0);
+      if (dc != 0) return dc;
+
+      final dk = a.kind.index.compareTo(b.kind.index);
+      if (dk != 0) return dk;
+
+      return a.id.compareTo(b.id);
+    });
+    return out;
+  }
+
+  String _parkingAreaPositionText(ParkingArea area) {
+    final r0 = min(area.r0, area.r1);
+    final r1 = max(area.r0, area.r1);
+    final c0 = min(area.c0, area.c1);
+    final c1 = max(area.c0, area.c1);
+    return 'r:$r0-$r1, c:$c0-$c1';
+  }
+
+  Map<String, int>? _validateChildSlotNumbers(List<String> ids) {
+    final out = <String, int>{};
+    final used = <int>{};
+    for (final rawId in ids) {
+      final id = rawId.trim();
+      if (id.isEmpty) continue;
+      final controller = _childSlotNoControllers[id];
+      final raw = controller?.text.trim() ?? '';
+      if (raw.isEmpty) {
+        _setError('선택된 모든 주차면적에 슬롯 번호를 입력하세요.');
+        return null;
+      }
+      final no = int.tryParse(raw);
+      if (no == null || no <= 0) {
+        _setError('슬롯 번호는 1 이상의 숫자여야 합니다.');
+        return null;
+      }
+      if (!used.add(no)) {
+        _setError('같은 자식 구역 안에서 슬롯 번호는 중복될 수 없습니다.');
+        return null;
+      }
+      out[id] = no;
+    }
+    return out;
   }
 
   void _deleteRect(GridRect r) {
@@ -1101,6 +1197,9 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
       return null;
     }
 
+    final slotNumbersByAreaId = _childIsTower ? const <String, int>{} : _validateChildSlotNumbers(ids);
+    if (slotNumbersByAreaId == null) return null;
+
     final cap = _childIsTower ? rawCap : ids.length;
     _capacityController.text = cap.toString();
 
@@ -1114,6 +1213,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
         capacity: cap,
         rect: rect,
         childSlotAreaIds: ids,
+        childSlotNumbersByAreaId: slotNumbersByAreaId,
         isTower: _childIsTower,
       );
     }
@@ -1124,6 +1224,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
       capacity: cap,
       rect: rect,
       childSlotAreaIds: ids,
+      childSlotNumbersByAreaId: slotNumbersByAreaId,
       isTower: _childIsTower,
     );
   }
@@ -1511,7 +1612,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
           const SizedBox(height: 14),
           groupBlock(
             title: '주차면적',
-            subtitle: '평행주차 제외 직각·사선 기준. 경형 2.0×3.6m, 일반형 2.5×5.0m, 확장형 2.6×5.2m',
+            subtitle: '평행주차 제외 직각·사선 기준. 경형·전기차 경형 2.0×3.6m, 일반형·전기차 일반형·장애인 일반형 2.5×5.0m, 확장형·전기차 확장형·임산부 배려 확장형·장애인 확장형 2.6×5.2m',
             children: [
               _toolChip(cs, '경형 1×2', GridEditTool.parkingCompact12, Icons.local_parking_rounded),
               _toolChip(cs, '경형 2×1', GridEditTool.parkingCompact21, Icons.local_parking_rounded),
@@ -1520,6 +1621,21 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
               _toolChip(cs, '확장형 A 1×2', GridEditTool.parkingExtendedA12, Icons.local_parking_rounded),
               _toolChip(cs, '확장형 A 2×1', GridEditTool.parkingExtendedA21, Icons.local_parking_rounded),
               _toolChip(cs, '확장형 B 2×2', GridEditTool.parkingExtendedB22, Icons.local_parking_rounded),
+              _toolChip(cs, '전기차 경형 1×2', GridEditTool.parkingEvCompact12, Icons.ev_station_rounded),
+              _toolChip(cs, '전기차 경형 2×1', GridEditTool.parkingEvCompact21, Icons.ev_station_rounded),
+              _toolChip(cs, '전기차 일반형 1×2', GridEditTool.parkingEvStandard12, Icons.ev_station_rounded),
+              _toolChip(cs, '전기차 일반형 2×1', GridEditTool.parkingEvStandard21, Icons.ev_station_rounded),
+              _toolChip(cs, '전기차 확장형 A 1×2', GridEditTool.parkingEvExtendedA12, Icons.ev_station_rounded),
+              _toolChip(cs, '전기차 확장형 A 2×1', GridEditTool.parkingEvExtendedA21, Icons.ev_station_rounded),
+              _toolChip(cs, '전기차 확장형 B 2×2', GridEditTool.parkingEvExtendedB22, Icons.ev_station_rounded),
+              _toolChip(cs, '임산부 배려 확장형 A 1×2', GridEditTool.parkingPregnantExtendedA12, Icons.pregnant_woman_rounded),
+              _toolChip(cs, '임산부 배려 확장형 A 2×1', GridEditTool.parkingPregnantExtendedA21, Icons.pregnant_woman_rounded),
+              _toolChip(cs, '임산부 배려 확장형 B 2×2', GridEditTool.parkingPregnantExtendedB22, Icons.pregnant_woman_rounded),
+              _toolChip(cs, '장애인 일반형 1×2', GridEditTool.parkingDisabledStandard12, Icons.accessible_rounded),
+              _toolChip(cs, '장애인 일반형 2×1', GridEditTool.parkingDisabledStandard21, Icons.accessible_rounded),
+              _toolChip(cs, '장애인 확장형 A 1×2', GridEditTool.parkingDisabledExtendedA12, Icons.accessible_rounded),
+              _toolChip(cs, '장애인 확장형 A 2×1', GridEditTool.parkingDisabledExtendedA21, Icons.accessible_rounded),
+              _toolChip(cs, '장애인 확장형 B 2×2', GridEditTool.parkingDisabledExtendedB22, Icons.accessible_rounded),
               _toolChip(cs, '삭제', GridEditTool.parkingEraser, Icons.delete_outline_rounded),
             ],
           ),
@@ -1769,7 +1885,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
 
     final tips = _banner(
       cs,
-      text: '팁: 도로는 도로1/도로2로 구분할 수 있습니다. 주차면적은 빈칸 위에만 배치되며 경형·일반형·확장형 A는 1×2/2×1, 확장형 B는 2×2로 생성됩니다. 입구/출구/주차 타워는 같은 그리드에서 여러 개의 사각형 영역으로 지정합니다.',
+      text: '팁: 도로는 도로1/도로2로 구분할 수 있습니다. 주차면적은 빈칸 위에만 배치되며 경형·일반형·확장형·전기차·임산부 배려·장애인 유형도 기존 방식과 동일하게 1×2/2×1 또는 B 2×2로 생성됩니다. 입구/출구/주차 타워는 같은 그리드에서 여러 개의 사각형 영역으로 지정합니다.',
       icon: Icons.lightbulb_outline_rounded,
     );
 
@@ -1891,6 +2007,112 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
     );
   }
 
+  Widget _buildChildSlotNumberInputs(ColorScheme cs, ParkingGridModel grid) {
+    if (_childIsTower || _selectedChildParkingAreaIds.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    _syncChildSlotNoControllers();
+    final areas = _selectedChildParkingAreasSorted(grid);
+
+    if (areas.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.format_list_numbered_rounded, color: cs.primary, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '슬롯 번호 지정',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: cs.onSurface),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '선택된 모든 주차면적에 1 이상의 고유 번호를 입력해야 저장할 수 있습니다.',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant.withOpacity(.9)),
+          ),
+          const SizedBox(height: 12),
+          for (int i = 0; i < areas.length; i++) ...[
+            _childSlotNumberRow(cs, areas[i]),
+            if (i != areas.length - 1) const SizedBox(height: 10),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _childSlotNumberRow(ColorScheme cs, ParkingArea area) {
+    final id = area.id.trim();
+    final controller = _childSlotNoControllers[id] ?? TextEditingController();
+    if (!_childSlotNoControllers.containsKey(id)) {
+      _childSlotNoControllers[id] = controller;
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  area.kind.label,
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: cs.onSurface),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  _parkingAreaPositionText(area),
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: cs.onSurfaceVariant.withOpacity(.85)),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        SizedBox(
+          width: 112,
+          child: TextField(
+            controller: controller,
+            keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(4),
+            ],
+            textInputAction: TextInputAction.next,
+            decoration: _inputDecoration(
+              '번호',
+              cs: cs,
+              hintText: '필수',
+              prefixIcon: const Icon(Icons.numbers_rounded),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildChildGridSelector(ColorScheme cs) {
     final parent = (_selectedParent ?? '').trim();
     final grid = _selectedParentGrid;
@@ -1946,8 +2168,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
             disabledParkingAreaIds: disabledAreaIds,
             onChangedSelectedParkingAreaIds: (ids) {
               setState(() {
-                _selectedChildParkingAreaIds = ids;
-                _capacityController.text = ids.length.toString();
+                _setSelectedChildParkingAreaIds(ids);
               });
             },
             parkingAreaPickMode: _childAreaPickMode,
@@ -1967,14 +2188,14 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                   _childIsTower = true;
                   _childSquareLock = false;
                   _childAreaPickMode = false;
-                  _selectedChildParkingAreaIds = <String>{};
+                  _clearSelectedChildParkingAreaIds(updateCapacity: false);
                 } else {
                   _childIsTower = false;
                   _childAreaPickMode = false;
                   if (nv != null) {
                     _syncSelectedChildParkingAreasFromRect(grid, nv);
                   } else {
-                    _selectedChildParkingAreaIds = <String>{};
+                    _clearSelectedChildParkingAreaIds(updateCapacity: false);
                     _capacityController.clear();
                   }
                 }
@@ -2022,7 +2243,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
 
                         final cur = _selectedChildRect?.normalized();
                         final ok = cur != null && towers.any((t) => t == cur);
-                        _selectedChildParkingAreaIds = <String>{};
+                        _clearSelectedChildParkingAreaIds(updateCapacity: false);
                         _childAreaPickMode = false;
                         if (!ok) {
                           _selectedChildRect = null;
@@ -2040,7 +2261,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                     : () {
                   setState(() {
                     _selectedChildRect = null;
-                    _selectedChildParkingAreaIds = <String>{};
+                    _clearSelectedChildParkingAreaIds();
                     _childAreaPickMode = false;
                   });
                   _clearChildRectInputs();
@@ -2102,7 +2323,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                       _clearError();
                       setState(() {
                         _selectedChildRect = towers[i];
-                        _selectedChildParkingAreaIds = <String>{};
+                        _clearSelectedChildParkingAreaIds(updateCapacity: false);
                         _childAreaPickMode = false;
                       });
                       _syncChildRectInputsFromRect(towers[i]);
@@ -2227,8 +2448,7 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
                 OutlinedButton(
                   onPressed: () {
                     setState(() {
-                      _selectedChildParkingAreaIds = <String>{};
-                      _capacityController.text = '0';
+                      _clearSelectedChildParkingAreaIds();
                     });
                   },
                   style: OutlinedButton.styleFrom(
@@ -2251,6 +2471,8 @@ class _LocationSettingBottomSheetState extends State<LocationSettingBottomSheet>
             ),
             const SizedBox(height: 8),
             _banner(cs, text: _selectedChildSlotSummary(grid), icon: Icons.local_parking_rounded),
+            const SizedBox(height: 8),
+            _buildChildSlotNumberInputs(cs, grid),
           ],
           const SizedBox(height: 12),
           _banner(cs, text: '현재 선택: $rectLabel', icon: Icons.crop_free_rounded),

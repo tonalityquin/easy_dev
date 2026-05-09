@@ -76,48 +76,63 @@ extension _ParkingGridStructuredPreviewPart on _TabletGrid2dPreviewState {
       regions: regionsRaw,
     );
 
-    final rawParkingAreas = _extractParkingAreasRawFromGrid(pg);
-    final parentSlotsRaw =
-        _readSlotsFromRaw(rawParkingAreas, groupName: 'parkingAreas');
+    final parentArea = (() {
+      try {
+        return _trimOrEmpty((loc as dynamic).area);
+      } catch (_) {
+        return '';
+      }
+    })();
 
-    final usedParentParkingAreas = parentSlotsRaw.isNotEmpty;
+    final collected = <_ChildSlot>[];
+    for (final l in widget.locations) {
+      if (!_isCompositeChildType(l.type)) continue;
+      if (!_matchesParentRef(loc, l)) continue;
 
-    List<_ChildSlot> baseSlots;
-    if (usedParentParkingAreas) {
-      baseSlots = parentSlotsRaw
-          .map((s) => s.copyWith(groupName: _pickGroupForSlot(s, regions)))
-          .toList(growable: false);
-    } else {
-      final parentArea = (() {
+      final childArea = (() {
         try {
-          return _trimOrEmpty((loc as dynamic).area);
+          return _trimOrEmpty((l as dynamic).area);
         } catch (_) {
           return '';
         }
       })();
 
-      final collected = <_ChildSlot>[];
-      for (final l in widget.locations) {
-        if (!_isCompositeChildType(l.type)) continue;
-        if (!_matchesParentRef(loc, l)) continue;
+      if (!_matchesAreaLoose(parentArea, childArea)) continue;
 
-        final childArea = (() {
-          try {
-            return _trimOrEmpty((l as dynamic).area);
-          } catch (_) {
-            return '';
-          }
-        })();
+      final childNameTrim = _trimOrEmpty(l.locationName);
+      final groupName = childNameTrim.isEmpty ? 'group' : childNameTrim;
 
-        if (!_matchesAreaLoose(parentArea, childArea)) continue;
+      final parsed = _readChildSlotsFromLocation(l, groupName: groupName);
+      if (parsed.isEmpty) continue;
+      collected.addAll(parsed);
+    }
 
-        final childNameTrim = _trimOrEmpty(l.locationName);
-        final groupName = childNameTrim.isEmpty ? 'group' : childNameTrim;
+    final childSlotByAreaId = <String, _ChildSlot>{};
+    for (final s in collected) {
+      final id = (s.areaId ?? '').trim();
+      if (id.isEmpty) continue;
+      if (s.no == null || s.no! <= 0) continue;
+      childSlotByAreaId[id] = s;
+    }
 
-        final parsed = _readChildSlotsFromLocation(l, groupName: groupName);
-        if (parsed.isEmpty) continue;
-        collected.addAll(parsed);
-      }
+    final rawParkingAreas = _extractParkingAreasRawFromGrid(pg);
+    final parentSlotsRaw =
+        _readSlotsFromRaw(rawParkingAreas, groupName: 'parkingAreas');
+
+    List<_ChildSlot> baseSlots;
+    if (parentSlotsRaw.isNotEmpty) {
+      baseSlots = parentSlotsRaw.map((s) {
+        final id = (s.areaId ?? '').trim();
+        final childSlot = id.isEmpty ? null : childSlotByAreaId[id];
+        if (childSlot == null) {
+          return s.copyWith(groupName: _pickGroupForSlot(s, regions));
+        }
+        return s.copyWith(
+          groupName: childSlot.groupName,
+          no: childSlot.no,
+        );
+      }).toList(growable: false);
+    } else {
       baseSlots = collected;
     }
 
@@ -1152,6 +1167,35 @@ class _ParkingGrid2DPainter extends CustomPainter {
             const Color(0xFFFFD54F),
             bg,
             fallback: const Color(0xFFF9A825),
+            target: 1.6,
+          );
+        case 'EV':
+        case 'EV경':
+        case 'EV일':
+        case 'EV확A':
+        case 'EV확B':
+          return _ColorUtil.ensureContrast(
+            const Color(0xFF66BB6A),
+            bg,
+            fallback: const Color(0xFF2E7D32),
+            target: 1.6,
+          );
+        case '임A':
+        case '임B':
+          return _ColorUtil.ensureContrast(
+            const Color(0xFFF48FB1),
+            bg,
+            fallback: const Color(0xFFC2185B),
+            target: 1.6,
+          );
+        case '장':
+        case '장일':
+        case '장확A':
+        case '장확B':
+          return _ColorUtil.ensureContrast(
+            const Color(0xFF9575CD),
+            bg,
+            fallback: const Color(0xFF512DA8),
             target: 1.6,
           );
         default:

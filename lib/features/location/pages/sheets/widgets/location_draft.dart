@@ -32,6 +32,7 @@ class CompositeChildDraft extends LocationDraft {
     required this.capacity,
     required this.rect,
     this.childSlotAreaIds = const <String>[],
+    this.childSlotNumbersByAreaId = const <String, int>{},
     this.isTower = false,
   });
 
@@ -40,6 +41,7 @@ class CompositeChildDraft extends LocationDraft {
   final int capacity;
   final GridRect rect;
   final List<String> childSlotAreaIds;
+  final Map<String, int> childSlotNumbersByAreaId;
   final bool isTower;
 }
 
@@ -51,6 +53,7 @@ class CompositeChildUpdateDraft extends LocationDraft {
     required this.capacity,
     required this.rect,
     this.childSlotAreaIds = const <String>[],
+    this.childSlotNumbersByAreaId = const <String, int>{},
     this.isTower = false,
   });
 
@@ -60,6 +63,7 @@ class CompositeChildUpdateDraft extends LocationDraft {
   final int capacity;
   final GridRect rect;
   final List<String> childSlotAreaIds;
+  final Map<String, int> childSlotNumbersByAreaId;
   final bool isTower;
 }
 

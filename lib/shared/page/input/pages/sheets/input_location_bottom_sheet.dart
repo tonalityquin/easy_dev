@@ -147,14 +147,38 @@ class _ParkingViewMemCache {
 
 
 String _normalizeParkingAreaCategory(String value) {
-  final v = value.trim().toLowerCase();
+  final v = value.trim().toLowerCase().replaceAll('×', 'x').replaceAll(RegExp(r'\s+'), '');
   if (v.isEmpty) return '';
-  if (v.startsWith('확장형') || v.startsWith('확장')) return '확장형';
-  if (v.startsWith('일반형') || v.startsWith('일반')) return '일반형';
-  if (v.startsWith('경형') || v.startsWith('경차')) return '경형';
-  if (v.contains('extended') || v.contains('expand')) return '확장형';
-  if (v.contains('standard') || v.contains('normal') || v.contains('general')) return '일반형';
-  if (v.contains('compact') || v.contains('light') || v.contains('small')) return '경형';
+  final isEv = v.contains('전기차') || v.contains('전기') || v.contains('ev') || v.contains('electric');
+  final isPregnant = v.contains('임산부') || v.contains('pregnant') || v.contains('maternity');
+  final isDisabled = v.contains('장애인') || v.contains('disabled') || v.contains('accessible') || v.contains('handicap');
+  final isExtendedB = v.contains('확장형b') || v.contains('확장b') || v.contains('extendedb') || v.contains('expandedb');
+  final isExtendedA = v.contains('확장형a') || v.contains('확장a') || v.contains('extendeda') || v.contains('expandeda');
+  final isExtended = isExtendedA || isExtendedB || v.contains('확장형') || v.contains('확장') || v.contains('extended') || v.contains('expand');
+  final isStandard = v.contains('일반형') || v.contains('일반') || v.contains('standard') || v.contains('normal') || v.contains('general');
+  final isCompact = v.contains('경형') || v.contains('경차') || v.contains('compact') || v.contains('light') || v.contains('small');
+  if (isEv) {
+    if (isExtendedB) return '전기차 확장형 B';
+    if (isExtendedA || isExtended) return '전기차 확장형 A';
+    if (isStandard) return '전기차 일반형';
+    if (isCompact) return '전기차 경형';
+    return '전기차';
+  }
+  if (isPregnant) {
+    if (isExtendedB) return '임산부 배려 확장형 B';
+    return '임산부 배려 확장형 A';
+  }
+  if (isDisabled) {
+    if (isExtendedB) return '장애인 확장형 B';
+    if (isExtendedA || isExtended) return '장애인 확장형 A';
+    if (isStandard) return '장애인 일반형';
+    return '장애인';
+  }
+  if (isExtendedB) return '확장형 B';
+  if (isExtendedA) return '확장형 A';
+  if (isExtended) return '확장형';
+  if (isStandard) return '일반형';
+  if (isCompact) return '경형';
   return value.trim();
 }
 
@@ -169,8 +193,21 @@ String _slotCategoryOf(ChildSlot slot) {
   for (final value in candidates) {
     final normalized = _normalizeParkingAreaCategory(value);
     if (normalized == '확장형' ||
+        normalized == '확장형 A' ||
+        normalized == '확장형 B' ||
         normalized == '일반형' ||
-        normalized == '경형') {
+        normalized == '경형' ||
+        normalized == '전기차' ||
+        normalized == '전기차 경형' ||
+        normalized == '전기차 일반형' ||
+        normalized == '전기차 확장형 A' ||
+        normalized == '전기차 확장형 B' ||
+        normalized == '임산부 배려 확장형 A' ||
+        normalized == '임산부 배려 확장형 B' ||
+        normalized == '장애인' ||
+        normalized == '장애인 일반형' ||
+        normalized == '장애인 확장형 A' ||
+        normalized == '장애인 확장형 B') {
       return normalized;
     }
   }
@@ -3068,6 +3105,60 @@ class _ParkingGridPainter extends CustomPainter {
     return layout.rectForCellRange(r0: top, r1: bottom, c0: left, c1: right);
   }
 
+  ({Color fill, Color stroke, Color text}) _parkingAreaStyle(ParkingAreaKind kind) {
+    switch (kind.categoryKey) {
+      case 'compact':
+        return (
+          fill: const Color(0xFF64B5F6).withOpacity(0.58),
+          stroke: const Color(0xFF1565C0).withOpacity(0.92),
+          text: const Color(0xFF0D47A1),
+        );
+      case 'standard':
+        return (
+          fill: cs.secondaryContainer.withOpacity(0.52),
+          stroke: cs.secondary.withOpacity(0.92),
+          text: cs.onSecondaryContainer,
+        );
+      case 'extendedA':
+      case 'extendedB':
+        return (
+          fill: const Color(0xFFFFD54F).withOpacity(0.62),
+          stroke: const Color(0xFFF9A825).withOpacity(0.92),
+          text: const Color(0xFF5D4037),
+        );
+      case 'evCompact':
+      case 'evStandard':
+      case 'evExtendedA':
+      case 'evExtendedB':
+        return (
+          fill: const Color(0xFFA5D6A7).withOpacity(0.62),
+          stroke: const Color(0xFF2E7D32).withOpacity(0.92),
+          text: const Color(0xFF1B5E20),
+        );
+      case 'pregnantExtendedA':
+      case 'pregnantExtendedB':
+        return (
+          fill: const Color(0xFFF8BBD0).withOpacity(0.62),
+          stroke: const Color(0xFFC2185B).withOpacity(0.92),
+          text: const Color(0xFF880E4F),
+        );
+      case 'disabledStandard':
+      case 'disabledExtendedA':
+      case 'disabledExtendedB':
+        return (
+          fill: const Color(0xFFB39DDB).withOpacity(0.62),
+          stroke: const Color(0xFF512DA8).withOpacity(0.92),
+          text: const Color(0xFF311B92),
+        );
+      default:
+        return (
+          fill: cs.secondaryContainer.withOpacity(0.42),
+          stroke: cs.secondary.withOpacity(0.90),
+          text: cs.onSecondaryContainer.withOpacity(0.90),
+        );
+    }
+  }
+
   void _drawParkingArea(Canvas canvas, _GridLayout layout, ParkingArea a,
       {required bool drawLabel}) {
     final rectLocal =
@@ -3075,15 +3166,16 @@ class _ParkingGridPainter extends CustomPainter {
     if (rectLocal == null) return;
 
     final rect = rectLocal.deflate(math.max(1.0, layout.cell * 0.10));
+    final style = _parkingAreaStyle(a.kind);
 
     final fill = Paint()
       ..style = PaintingStyle.fill
-      ..color = cs.secondaryContainer.withOpacity(0.42);
+      ..color = style.fill;
 
     final stroke = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = math.max(1.1, layout.cell * 0.07)
-      ..color = cs.secondary.withOpacity(0.90);
+      ..color = style.stroke;
 
     canvas.drawRRect(
       RRect.fromRectAndRadius(
@@ -3101,16 +3193,18 @@ class _ParkingGridPainter extends CustomPainter {
 
     final tp = TextPainter(
       text: TextSpan(
-        text: 'P',
+        text: a.kind.shortLabel,
         style: TextStyle(
-          fontSize: math.max(10.0, math.min(layout.cell * 0.55, 18.0)),
+          fontSize: math.max(7.0, math.min(layout.cell * 0.38, 13.0)),
           fontWeight: FontWeight.w900,
-          color: cs.onSecondaryContainer.withOpacity(0.90),
+          color: style.text,
         ),
       ),
       textDirection: TextDirection.ltr,
-      maxLines: 1,
-    )..layout();
+      maxLines: 2,
+      textAlign: TextAlign.center,
+      ellipsis: '…',
+    )..layout(maxWidth: math.max(0.0, rect.width - 4));
 
     tp.paint(canvas,
         Offset(rect.center.dx - tp.width / 2, rect.center.dy - tp.height / 2));

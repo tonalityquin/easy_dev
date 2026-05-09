@@ -534,22 +534,36 @@ String _slotCategoryShort({
   bool hasAny(String token) =>
       k.contains(token) || l.contains(token) || c.contains(token) || cl.contains(token);
 
-  if (hasAny('extendedb') ||
-      hasAny('확장형b') ||
-      hasAny('확장b')) {
-    return '확B';
+  final isEv = hasAny('ev') || hasAny('electric') || hasAny('전기차') || hasAny('전기');
+  final isPregnant = hasAny('pregnant') || hasAny('maternity') || hasAny('임산부');
+  final isDisabled = hasAny('disabled') || hasAny('accessible') || hasAny('handicap') || hasAny('장애인');
+  final isExtendedB = hasAny('extendedb') || hasAny('확장형b') || hasAny('확장b');
+  final isExtendedA = hasAny('extendeda') || hasAny('확장형a') || hasAny('확장a');
+  final isExtended = isExtendedA || isExtendedB || hasAny('extended') || hasAny('expand') || hasAny('확장형') || hasAny('확장');
+  final isCompact = hasAny('compact') || hasAny('light') || hasAny('small') || hasAny('경형') || hasAny('경차');
+  final isStandard = hasAny('standard') || hasAny('normal') || hasAny('general') || hasAny('일반형') || hasAny('일반');
+
+  if (isEv) {
+    if (isExtendedB) return 'EV확B';
+    if (isExtendedA || isExtended) return 'EV확A';
+    if (isCompact) return 'EV경';
+    if (isStandard) return 'EV일';
+    return 'EV';
   }
-  if (hasAny('extendeda') ||
-      hasAny('확장형a') ||
-      hasAny('확장a')) {
-    return '확A';
+  if (isPregnant) {
+    if (isExtendedB) return '임B';
+    return '임A';
   }
-  if (hasAny('compact') || hasAny('경형') || hasAny('경차')) {
-    return '경';
+  if (isDisabled) {
+    if (isExtendedB) return '장확B';
+    if (isExtendedA || isExtended) return '장확A';
+    if (isStandard) return '장일';
+    return '장';
   }
-  if (hasAny('standard') || hasAny('일반형') || hasAny('일반')) {
-    return '일';
-  }
+  if (isExtendedB) return '확B';
+  if (isExtendedA) return '확A';
+  if (isCompact) return '경';
+  if (isStandard) return '일';
   return '';
 }
 

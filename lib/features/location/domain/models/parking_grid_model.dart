@@ -90,6 +90,21 @@ enum ParkingAreaKind {
   extendedA1x2,
   extendedA2x1,
   extendedB2x2,
+  evCompact1x2,
+  evCompact2x1,
+  evStandard1x2,
+  evStandard2x1,
+  evExtendedA1x2,
+  evExtendedA2x1,
+  evExtendedB2x2,
+  pregnantExtendedA1x2,
+  pregnantExtendedA2x1,
+  pregnantExtendedB2x2,
+  disabledStandard1x2,
+  disabledStandard2x1,
+  disabledExtendedA1x2,
+  disabledExtendedA2x1,
+  disabledExtendedB2x2,
 }
 
 extension ParkingAreaKindX on ParkingAreaKind {
@@ -99,10 +114,25 @@ extension ParkingAreaKindX on ParkingAreaKind {
       case ParkingAreaKind.standard1x2:
       case ParkingAreaKind.extendedA1x2:
       case ParkingAreaKind.extendedB2x2:
+      case ParkingAreaKind.evCompact1x2:
+      case ParkingAreaKind.evStandard1x2:
+      case ParkingAreaKind.evExtendedA1x2:
+      case ParkingAreaKind.evExtendedB2x2:
+      case ParkingAreaKind.pregnantExtendedA1x2:
+      case ParkingAreaKind.pregnantExtendedB2x2:
+      case ParkingAreaKind.disabledStandard1x2:
+      case ParkingAreaKind.disabledExtendedA1x2:
+      case ParkingAreaKind.disabledExtendedB2x2:
         return 2;
       case ParkingAreaKind.compact2x1:
       case ParkingAreaKind.standard2x1:
       case ParkingAreaKind.extendedA2x1:
+      case ParkingAreaKind.evCompact2x1:
+      case ParkingAreaKind.evStandard2x1:
+      case ParkingAreaKind.evExtendedA2x1:
+      case ParkingAreaKind.pregnantExtendedA2x1:
+      case ParkingAreaKind.disabledStandard2x1:
+      case ParkingAreaKind.disabledExtendedA2x1:
         return 1;
     }
   }
@@ -112,11 +142,26 @@ extension ParkingAreaKindX on ParkingAreaKind {
       case ParkingAreaKind.compact1x2:
       case ParkingAreaKind.standard1x2:
       case ParkingAreaKind.extendedA1x2:
+      case ParkingAreaKind.evCompact1x2:
+      case ParkingAreaKind.evStandard1x2:
+      case ParkingAreaKind.evExtendedA1x2:
+      case ParkingAreaKind.pregnantExtendedA1x2:
+      case ParkingAreaKind.disabledStandard1x2:
+      case ParkingAreaKind.disabledExtendedA1x2:
         return 1;
       case ParkingAreaKind.compact2x1:
       case ParkingAreaKind.standard2x1:
       case ParkingAreaKind.extendedA2x1:
       case ParkingAreaKind.extendedB2x2:
+      case ParkingAreaKind.evCompact2x1:
+      case ParkingAreaKind.evStandard2x1:
+      case ParkingAreaKind.evExtendedA2x1:
+      case ParkingAreaKind.evExtendedB2x2:
+      case ParkingAreaKind.pregnantExtendedA2x1:
+      case ParkingAreaKind.pregnantExtendedB2x2:
+      case ParkingAreaKind.disabledStandard2x1:
+      case ParkingAreaKind.disabledExtendedA2x1:
+      case ParkingAreaKind.disabledExtendedB2x2:
         return 2;
     }
   }
@@ -136,6 +181,30 @@ extension ParkingAreaKindX on ParkingAreaKind {
         return 'extendedA';
       case ParkingAreaKind.extendedB2x2:
         return 'extendedB';
+      case ParkingAreaKind.evCompact1x2:
+      case ParkingAreaKind.evCompact2x1:
+        return 'evCompact';
+      case ParkingAreaKind.evStandard1x2:
+      case ParkingAreaKind.evStandard2x1:
+        return 'evStandard';
+      case ParkingAreaKind.evExtendedA1x2:
+      case ParkingAreaKind.evExtendedA2x1:
+        return 'evExtendedA';
+      case ParkingAreaKind.evExtendedB2x2:
+        return 'evExtendedB';
+      case ParkingAreaKind.pregnantExtendedA1x2:
+      case ParkingAreaKind.pregnantExtendedA2x1:
+        return 'pregnantExtendedA';
+      case ParkingAreaKind.pregnantExtendedB2x2:
+        return 'pregnantExtendedB';
+      case ParkingAreaKind.disabledStandard1x2:
+      case ParkingAreaKind.disabledStandard2x1:
+        return 'disabledStandard';
+      case ParkingAreaKind.disabledExtendedA1x2:
+      case ParkingAreaKind.disabledExtendedA2x1:
+        return 'disabledExtendedA';
+      case ParkingAreaKind.disabledExtendedB2x2:
+        return 'disabledExtendedB';
     }
   }
 
@@ -152,6 +221,30 @@ extension ParkingAreaKindX on ParkingAreaKind {
         return '확장형 A';
       case ParkingAreaKind.extendedB2x2:
         return '확장형 B';
+      case ParkingAreaKind.evCompact1x2:
+      case ParkingAreaKind.evCompact2x1:
+        return '전기차 경형';
+      case ParkingAreaKind.evStandard1x2:
+      case ParkingAreaKind.evStandard2x1:
+        return '전기차 일반형';
+      case ParkingAreaKind.evExtendedA1x2:
+      case ParkingAreaKind.evExtendedA2x1:
+        return '전기차 확장형 A';
+      case ParkingAreaKind.evExtendedB2x2:
+        return '전기차 확장형 B';
+      case ParkingAreaKind.pregnantExtendedA1x2:
+      case ParkingAreaKind.pregnantExtendedA2x1:
+        return '임산부 배려 확장형 A';
+      case ParkingAreaKind.pregnantExtendedB2x2:
+        return '임산부 배려 확장형 B';
+      case ParkingAreaKind.disabledStandard1x2:
+      case ParkingAreaKind.disabledStandard2x1:
+        return '장애인 일반형';
+      case ParkingAreaKind.disabledExtendedA1x2:
+      case ParkingAreaKind.disabledExtendedA2x1:
+        return '장애인 확장형 A';
+      case ParkingAreaKind.disabledExtendedB2x2:
+        return '장애인 확장형 B';
     }
   }
 
@@ -159,13 +252,28 @@ extension ParkingAreaKindX on ParkingAreaKind {
     switch (this) {
       case ParkingAreaKind.compact1x2:
       case ParkingAreaKind.compact2x1:
+      case ParkingAreaKind.evCompact1x2:
+      case ParkingAreaKind.evCompact2x1:
         return 2.0;
       case ParkingAreaKind.standard1x2:
       case ParkingAreaKind.standard2x1:
+      case ParkingAreaKind.evStandard1x2:
+      case ParkingAreaKind.evStandard2x1:
+      case ParkingAreaKind.disabledStandard1x2:
+      case ParkingAreaKind.disabledStandard2x1:
         return 2.5;
       case ParkingAreaKind.extendedA1x2:
       case ParkingAreaKind.extendedA2x1:
       case ParkingAreaKind.extendedB2x2:
+      case ParkingAreaKind.evExtendedA1x2:
+      case ParkingAreaKind.evExtendedA2x1:
+      case ParkingAreaKind.evExtendedB2x2:
+      case ParkingAreaKind.pregnantExtendedA1x2:
+      case ParkingAreaKind.pregnantExtendedA2x1:
+      case ParkingAreaKind.pregnantExtendedB2x2:
+      case ParkingAreaKind.disabledExtendedA1x2:
+      case ParkingAreaKind.disabledExtendedA2x1:
+      case ParkingAreaKind.disabledExtendedB2x2:
         return 2.6;
     }
   }
@@ -174,13 +282,28 @@ extension ParkingAreaKindX on ParkingAreaKind {
     switch (this) {
       case ParkingAreaKind.compact1x2:
       case ParkingAreaKind.compact2x1:
+      case ParkingAreaKind.evCompact1x2:
+      case ParkingAreaKind.evCompact2x1:
         return 3.6;
       case ParkingAreaKind.standard1x2:
       case ParkingAreaKind.standard2x1:
+      case ParkingAreaKind.evStandard1x2:
+      case ParkingAreaKind.evStandard2x1:
+      case ParkingAreaKind.disabledStandard1x2:
+      case ParkingAreaKind.disabledStandard2x1:
         return 5.0;
       case ParkingAreaKind.extendedA1x2:
       case ParkingAreaKind.extendedA2x1:
       case ParkingAreaKind.extendedB2x2:
+      case ParkingAreaKind.evExtendedA1x2:
+      case ParkingAreaKind.evExtendedA2x1:
+      case ParkingAreaKind.evExtendedB2x2:
+      case ParkingAreaKind.pregnantExtendedA1x2:
+      case ParkingAreaKind.pregnantExtendedA2x1:
+      case ParkingAreaKind.pregnantExtendedB2x2:
+      case ParkingAreaKind.disabledExtendedA1x2:
+      case ParkingAreaKind.disabledExtendedA2x1:
+      case ParkingAreaKind.disabledExtendedB2x2:
         return 5.2;
     }
   }
@@ -201,6 +324,69 @@ extension ParkingAreaKindX on ParkingAreaKind {
         return 'extendedA2x1';
       case ParkingAreaKind.extendedB2x2:
         return 'extendedB2x2';
+      case ParkingAreaKind.evCompact1x2:
+        return 'evCompact1x2';
+      case ParkingAreaKind.evCompact2x1:
+        return 'evCompact2x1';
+      case ParkingAreaKind.evStandard1x2:
+        return 'evStandard1x2';
+      case ParkingAreaKind.evStandard2x1:
+        return 'evStandard2x1';
+      case ParkingAreaKind.evExtendedA1x2:
+        return 'evExtendedA1x2';
+      case ParkingAreaKind.evExtendedA2x1:
+        return 'evExtendedA2x1';
+      case ParkingAreaKind.evExtendedB2x2:
+        return 'evExtendedB2x2';
+      case ParkingAreaKind.pregnantExtendedA1x2:
+        return 'pregnantExtendedA1x2';
+      case ParkingAreaKind.pregnantExtendedA2x1:
+        return 'pregnantExtendedA2x1';
+      case ParkingAreaKind.pregnantExtendedB2x2:
+        return 'pregnantExtendedB2x2';
+      case ParkingAreaKind.disabledStandard1x2:
+        return 'disabledStandard1x2';
+      case ParkingAreaKind.disabledStandard2x1:
+        return 'disabledStandard2x1';
+      case ParkingAreaKind.disabledExtendedA1x2:
+        return 'disabledExtendedA1x2';
+      case ParkingAreaKind.disabledExtendedA2x1:
+        return 'disabledExtendedA2x1';
+      case ParkingAreaKind.disabledExtendedB2x2:
+        return 'disabledExtendedB2x2';
+    }
+  }
+
+  String get shortLabel {
+    switch (categoryKey) {
+      case 'compact':
+        return '경 $footprintLabel';
+      case 'standard':
+        return '일반 $footprintLabel';
+      case 'extendedA':
+        return '확장 A $footprintLabel';
+      case 'extendedB':
+        return '확장 B $footprintLabel';
+      case 'evCompact':
+        return 'EV 경 $footprintLabel';
+      case 'evStandard':
+        return 'EV 일반 $footprintLabel';
+      case 'evExtendedA':
+        return 'EV 확장 A $footprintLabel';
+      case 'evExtendedB':
+        return 'EV 확장 B $footprintLabel';
+      case 'pregnantExtendedA':
+        return '임산부 A $footprintLabel';
+      case 'pregnantExtendedB':
+        return '임산부 B $footprintLabel';
+      case 'disabledStandard':
+        return '장애인 일반 $footprintLabel';
+      case 'disabledExtendedA':
+        return '장애인 확장 A $footprintLabel';
+      case 'disabledExtendedB':
+        return '장애인 확장 B $footprintLabel';
+      default:
+        return label;
     }
   }
 
@@ -220,17 +406,158 @@ extension ParkingAreaKindX on ParkingAreaKind {
     final s = _normalizeToken(raw);
     if (s.isEmpty) return null;
 
-    if (s == 'compact1x2' || s == 'light1x2' || s == 'small1x2' || s == '경형1x2') return ParkingAreaKind.compact1x2;
-    if (s == 'compact2x1' || s == 'light2x1' || s == 'small2x1' || s == '경형2x1') return ParkingAreaKind.compact2x1;
-    if (s == 'standard1x2' || s == 'normal1x2' || s == 'general1x2' || s == '일반형1x2' || s == '일반1x2') return ParkingAreaKind.standard1x2;
-    if (s == 'standard2x1' || s == 'normal2x1' || s == 'general2x1' || s == '일반형2x1' || s == '일반2x1') return ParkingAreaKind.standard2x1;
-    if (s == 'extendeda1x2' || s == 'expandeda1x2' || s == '확장형a1x2' || s == '확장a1x2') return ParkingAreaKind.extendedA1x2;
-    if (s == 'extendeda2x1' || s == 'expandeda2x1' || s == '확장형a2x1' || s == '확장a2x1') return ParkingAreaKind.extendedA2x1;
-    if (s == 'extendedb2x2' || s == 'extended2x2' || s == 'expandedb2x2' || s == '확장형b2x2' || s == '확장b2x2') return ParkingAreaKind.extendedB2x2;
+    final direct = <String, ParkingAreaKind>{
+      'compact1x2': ParkingAreaKind.compact1x2,
+      'light1x2': ParkingAreaKind.compact1x2,
+      'small1x2': ParkingAreaKind.compact1x2,
+      '경형1x2': ParkingAreaKind.compact1x2,
+      'compact2x1': ParkingAreaKind.compact2x1,
+      'light2x1': ParkingAreaKind.compact2x1,
+      'small2x1': ParkingAreaKind.compact2x1,
+      '경형2x1': ParkingAreaKind.compact2x1,
+      'standard1x2': ParkingAreaKind.standard1x2,
+      'normal1x2': ParkingAreaKind.standard1x2,
+      'general1x2': ParkingAreaKind.standard1x2,
+      '일반형1x2': ParkingAreaKind.standard1x2,
+      '일반1x2': ParkingAreaKind.standard1x2,
+      'standard2x1': ParkingAreaKind.standard2x1,
+      'normal2x1': ParkingAreaKind.standard2x1,
+      'general2x1': ParkingAreaKind.standard2x1,
+      '일반형2x1': ParkingAreaKind.standard2x1,
+      '일반2x1': ParkingAreaKind.standard2x1,
+      'extendeda1x2': ParkingAreaKind.extendedA1x2,
+      'expandeda1x2': ParkingAreaKind.extendedA1x2,
+      '확장형a1x2': ParkingAreaKind.extendedA1x2,
+      '확장a1x2': ParkingAreaKind.extendedA1x2,
+      'extendeda2x1': ParkingAreaKind.extendedA2x1,
+      'expandeda2x1': ParkingAreaKind.extendedA2x1,
+      '확장형a2x1': ParkingAreaKind.extendedA2x1,
+      '확장a2x1': ParkingAreaKind.extendedA2x1,
+      'extendedb2x2': ParkingAreaKind.extendedB2x2,
+      'extended2x2': ParkingAreaKind.extendedB2x2,
+      'expandedb2x2': ParkingAreaKind.extendedB2x2,
+      '확장형b2x2': ParkingAreaKind.extendedB2x2,
+      '확장b2x2': ParkingAreaKind.extendedB2x2,
+      'evcompact1x2': ParkingAreaKind.evCompact1x2,
+      'electriccompact1x2': ParkingAreaKind.evCompact1x2,
+      '전기차경형1x2': ParkingAreaKind.evCompact1x2,
+      'ev경형1x2': ParkingAreaKind.evCompact1x2,
+      'evcompact2x1': ParkingAreaKind.evCompact2x1,
+      'electriccompact2x1': ParkingAreaKind.evCompact2x1,
+      '전기차경형2x1': ParkingAreaKind.evCompact2x1,
+      'ev경형2x1': ParkingAreaKind.evCompact2x1,
+      'evstandard1x2': ParkingAreaKind.evStandard1x2,
+      'electricstandard1x2': ParkingAreaKind.evStandard1x2,
+      'evnormal1x2': ParkingAreaKind.evStandard1x2,
+      '전기차일반형1x2': ParkingAreaKind.evStandard1x2,
+      '전기차일반1x2': ParkingAreaKind.evStandard1x2,
+      'evstandard2x1': ParkingAreaKind.evStandard2x1,
+      'electricstandard2x1': ParkingAreaKind.evStandard2x1,
+      'evnormal2x1': ParkingAreaKind.evStandard2x1,
+      '전기차일반형2x1': ParkingAreaKind.evStandard2x1,
+      '전기차일반2x1': ParkingAreaKind.evStandard2x1,
+      'evextendeda1x2': ParkingAreaKind.evExtendedA1x2,
+      'evextended1x2': ParkingAreaKind.evExtendedA1x2,
+      'electricextendeda1x2': ParkingAreaKind.evExtendedA1x2,
+      '전기차확장형a1x2': ParkingAreaKind.evExtendedA1x2,
+      '전기차확장a1x2': ParkingAreaKind.evExtendedA1x2,
+      '전기차확장형1x2': ParkingAreaKind.evExtendedA1x2,
+      'evextendeda2x1': ParkingAreaKind.evExtendedA2x1,
+      'evextended2x1': ParkingAreaKind.evExtendedA2x1,
+      'electricextendeda2x1': ParkingAreaKind.evExtendedA2x1,
+      '전기차확장형a2x1': ParkingAreaKind.evExtendedA2x1,
+      '전기차확장a2x1': ParkingAreaKind.evExtendedA2x1,
+      '전기차확장형2x1': ParkingAreaKind.evExtendedA2x1,
+      'evextendedb2x2': ParkingAreaKind.evExtendedB2x2,
+      'evextended2x2': ParkingAreaKind.evExtendedB2x2,
+      'electricextendedb2x2': ParkingAreaKind.evExtendedB2x2,
+      '전기차확장형b2x2': ParkingAreaKind.evExtendedB2x2,
+      '전기차확장b2x2': ParkingAreaKind.evExtendedB2x2,
+      '전기차확장형2x2': ParkingAreaKind.evExtendedB2x2,
+      'pregnantextendeda1x2': ParkingAreaKind.pregnantExtendedA1x2,
+      'maternityextendeda1x2': ParkingAreaKind.pregnantExtendedA1x2,
+      '임산부배려확장형a1x2': ParkingAreaKind.pregnantExtendedA1x2,
+      '임산부확장형a1x2': ParkingAreaKind.pregnantExtendedA1x2,
+      '임산부배려확장형1x2': ParkingAreaKind.pregnantExtendedA1x2,
+      'pregnantextendeda2x1': ParkingAreaKind.pregnantExtendedA2x1,
+      'maternityextendeda2x1': ParkingAreaKind.pregnantExtendedA2x1,
+      '임산부배려확장형a2x1': ParkingAreaKind.pregnantExtendedA2x1,
+      '임산부확장형a2x1': ParkingAreaKind.pregnantExtendedA2x1,
+      '임산부배려확장형2x1': ParkingAreaKind.pregnantExtendedA2x1,
+      'pregnantextendedb2x2': ParkingAreaKind.pregnantExtendedB2x2,
+      'maternityextendedb2x2': ParkingAreaKind.pregnantExtendedB2x2,
+      '임산부배려확장형b2x2': ParkingAreaKind.pregnantExtendedB2x2,
+      '임산부확장형b2x2': ParkingAreaKind.pregnantExtendedB2x2,
+      '임산부배려확장형2x2': ParkingAreaKind.pregnantExtendedB2x2,
+      'disabledstandard1x2': ParkingAreaKind.disabledStandard1x2,
+      'accessiblegeneral1x2': ParkingAreaKind.disabledStandard1x2,
+      'accessiblebasic1x2': ParkingAreaKind.disabledStandard1x2,
+      '장애인일반형1x2': ParkingAreaKind.disabledStandard1x2,
+      '장애인일반1x2': ParkingAreaKind.disabledStandard1x2,
+      'disabledstandard2x1': ParkingAreaKind.disabledStandard2x1,
+      'accessiblegeneral2x1': ParkingAreaKind.disabledStandard2x1,
+      'accessiblebasic2x1': ParkingAreaKind.disabledStandard2x1,
+      '장애인일반형2x1': ParkingAreaKind.disabledStandard2x1,
+      '장애인일반2x1': ParkingAreaKind.disabledStandard2x1,
+      'disabledextendeda1x2': ParkingAreaKind.disabledExtendedA1x2,
+      'accessibleextendeda1x2': ParkingAreaKind.disabledExtendedA1x2,
+      '장애인확장형a1x2': ParkingAreaKind.disabledExtendedA1x2,
+      '장애인확장a1x2': ParkingAreaKind.disabledExtendedA1x2,
+      '장애인확장형1x2': ParkingAreaKind.disabledExtendedA1x2,
+      'disabledextendeda2x1': ParkingAreaKind.disabledExtendedA2x1,
+      'accessibleextendeda2x1': ParkingAreaKind.disabledExtendedA2x1,
+      '장애인확장형a2x1': ParkingAreaKind.disabledExtendedA2x1,
+      '장애인확장a2x1': ParkingAreaKind.disabledExtendedA2x1,
+      '장애인확장형2x1': ParkingAreaKind.disabledExtendedA2x1,
+      'disabledextendedb2x2': ParkingAreaKind.disabledExtendedB2x2,
+      'accessibleextendedb2x2': ParkingAreaKind.disabledExtendedB2x2,
+      '장애인확장형b2x2': ParkingAreaKind.disabledExtendedB2x2,
+      '장애인확장b2x2': ParkingAreaKind.disabledExtendedB2x2,
+      '장애인확장형2x2': ParkingAreaKind.disabledExtendedB2x2,
+      'h1x2': ParkingAreaKind.standard1x2,
+      '1x2': ParkingAreaKind.standard1x2,
+      'v2x1': ParkingAreaKind.standard2x1,
+      '2x1': ParkingAreaKind.standard2x1,
+      'b2x2': ParkingAreaKind.extendedB2x2,
+      '2x2': ParkingAreaKind.extendedB2x2,
+    };
 
-    if (s == 'h1x2' || s == '1x2') return ParkingAreaKind.standard1x2;
-    if (s == 'v2x1' || s == '2x1') return ParkingAreaKind.standard2x1;
-    if (s == 'b2x2' || s == '2x2') return ParkingAreaKind.extendedB2x2;
+    final found = direct[s];
+    if (found != null) return found;
+
+    ParkingAreaKind? byFootprint(ParkingAreaKind oneByTwo, ParkingAreaKind twoByOne, [ParkingAreaKind? twoByTwo]) {
+      if (s.contains('1x2')) return oneByTwo;
+      if (s.contains('2x1')) return twoByOne;
+      if (twoByTwo != null && s.contains('2x2')) return twoByTwo;
+      return null;
+    }
+
+    if (s.contains('전기차') || s.contains('ev') || s.contains('electric')) {
+      if (s.contains('경형') || s.contains('compact') || s.contains('light') || s.contains('small')) {
+        return byFootprint(ParkingAreaKind.evCompact1x2, ParkingAreaKind.evCompact2x1);
+      }
+      if (s.contains('일반형') || s.contains('일반') || s.contains('standard') || s.contains('normal') || s.contains('general')) {
+        return byFootprint(ParkingAreaKind.evStandard1x2, ParkingAreaKind.evStandard2x1);
+      }
+      if (s.contains('확장형') || s.contains('확장') || s.contains('extended') || s.contains('expanded')) {
+        return byFootprint(ParkingAreaKind.evExtendedA1x2, ParkingAreaKind.evExtendedA2x1, ParkingAreaKind.evExtendedB2x2);
+      }
+    }
+
+    if (s.contains('임산부') || s.contains('pregnant') || s.contains('maternity')) {
+      if (s.contains('확장형') || s.contains('확장') || s.contains('extended') || s.contains('expanded')) {
+        return byFootprint(ParkingAreaKind.pregnantExtendedA1x2, ParkingAreaKind.pregnantExtendedA2x1, ParkingAreaKind.pregnantExtendedB2x2);
+      }
+    }
+
+    if (s.contains('장애인') || s.contains('disabled') || s.contains('accessible')) {
+      if (s.contains('일반형') || s.contains('일반') || s.contains('standard') || s.contains('normal') || s.contains('general')) {
+        return byFootprint(ParkingAreaKind.disabledStandard1x2, ParkingAreaKind.disabledStandard2x1);
+      }
+      if (s.contains('확장형') || s.contains('확장') || s.contains('extended') || s.contains('expanded')) {
+        return byFootprint(ParkingAreaKind.disabledExtendedA1x2, ParkingAreaKind.disabledExtendedA2x1, ParkingAreaKind.disabledExtendedB2x2);
+      }
+    }
 
     if (s.contains('경형') && s.contains('1x2')) return ParkingAreaKind.compact1x2;
     if (s.contains('경형') && s.contains('2x1')) return ParkingAreaKind.compact2x1;

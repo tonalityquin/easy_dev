@@ -779,12 +779,47 @@ class LocationState extends ChangeNotifier {
     return out;
   }
 
-  List<ChildSlot> _buildChildSlotsForAreaIds({
+  Map<String, int> _slotNumbersForLocation(LocationModel loc) {
+    final out = <String, int>{};
+    for (final slot in loc.childSlots) {
+      final id = slot.areaId.trim();
+      if (id.isEmpty) continue;
+      final no = slot.no;
+      if (no <= 0) continue;
+      out[id] = no;
+    }
+    return out;
+  }
+
+  List<ChildSlot>? _buildChildSlotsForAreaIds({
     required ParkingGridModel parentGrid,
     required Iterable<String> areaIds,
+    required Map<String, int> slotNumbersByAreaId,
+    void Function(String)? onError,
   }) {
     final idSet = areaIds.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet();
     if (idSet.isEmpty) return const <ChildSlot>[];
+
+    final cleanNumbers = <String, int>{};
+    slotNumbersByAreaId.forEach((rawId, rawNo) {
+      final id = rawId.trim();
+      if (id.isEmpty) return;
+      if (rawNo <= 0) return;
+      cleanNumbers[id] = rawNo;
+    });
+
+    final usedNos = <int>{};
+    for (final id in idSet) {
+      final no = cleanNumbers[id];
+      if (no == null || no <= 0) {
+        onError?.call('⚠️ 선택된 모든 주차면적에 슬롯 번호를 입력해야 합니다.');
+        return null;
+      }
+      if (!usedNos.add(no)) {
+        onError?.call('⚠️ 같은 자식 구역 안에서 슬롯 번호는 중복될 수 없습니다.');
+        return null;
+      }
+    }
 
     final areas = parentGrid.parkingAreas
         .where((a) => idSet.contains(a.id.trim()))
@@ -807,8 +842,14 @@ class LocationState extends ChangeNotifier {
       });
 
     final out = <ChildSlot>[];
-    for (int i = 0; i < areas.length; i++) {
-      out.add(ChildSlot.fromParkingArea(no: i + 1, area: areas[i]));
+    for (final area in areas) {
+      final id = area.id.trim();
+      final no = cleanNumbers[id];
+      if (no == null || no <= 0) {
+        onError?.call('⚠️ 선택된 모든 주차면적에 슬롯 번호를 입력해야 합니다.');
+        return null;
+      }
+      out.add(ChildSlot.fromParkingArea(no: no, area: area));
     }
     return out;
   }
@@ -971,9 +1012,17 @@ class LocationState extends ChangeNotifier {
               ? previousIds.where(existingAreaIds.contains).toList(growable: false)
               : _areaIdsContainedInRect(parentGrid: parentGrid, rect: norm);
 
+      final slotNumbers = _slotNumbersForLocation(loc);
       final slots = isTower
           ? const <ChildSlot>[]
-          : _buildChildSlotsForAreaIds(parentGrid: parentGrid, areaIds: nextIds);
+          : _buildChildSlotsForAreaIds(
+              parentGrid: parentGrid,
+              areaIds: nextIds,
+              slotNumbersByAreaId: slotNumbers,
+              onError: onError,
+            );
+
+      if (slots == null) return null;
 
       out.add(
         loc.copyWith(
@@ -1051,6 +1100,7 @@ class LocationState extends ChangeNotifier {
     required String area,
     required GridRect rect,
     List<String> childSlotAreaIds = const <String>[],
+    Map<String, int> childSlotNumbersByAreaId = const <String, int>{},
     bool isTower = false,
     void Function(String)? onError,
   }) async {
@@ -1162,7 +1212,14 @@ class LocationState extends ChangeNotifier {
 
       final childSlots = isTower
           ? const <ChildSlot>[]
-          : _buildChildSlotsForAreaIds(parentGrid: parentGrid, areaIds: selectedIds);
+          : _buildChildSlotsForAreaIds(
+              parentGrid: parentGrid,
+              areaIds: selectedIds,
+              slotNumbersByAreaId: childSlotNumbersByAreaId,
+              onError: onError,
+            );
+
+      if (childSlots == null) return false;
 
       final effectiveCapacity = isTower ? capacity : childSlots.length;
       if (!isTower && effectiveCapacity <= 0) {
@@ -1203,6 +1260,7 @@ class LocationState extends ChangeNotifier {
     required String area,
     required GridRect rect,
     List<String> childSlotAreaIds = const <String>[],
+    Map<String, int> childSlotNumbersByAreaId = const <String, int>{},
     bool isTower = false,
     void Function(String)? onError,
   }) async {
@@ -1341,7 +1399,14 @@ class LocationState extends ChangeNotifier {
 
       final childSlots = isTower
           ? const <ChildSlot>[]
-          : _buildChildSlotsForAreaIds(parentGrid: parentGrid, areaIds: selectedIds);
+          : _buildChildSlotsForAreaIds(
+              parentGrid: parentGrid,
+              areaIds: selectedIds,
+              slotNumbersByAreaId: childSlotNumbersByAreaId,
+              onError: onError,
+            );
+
+      if (childSlots == null) return false;
 
       final effectiveCapacity = isTower ? capacity : childSlots.length;
       if (!isTower && effectiveCapacity <= 0) {
