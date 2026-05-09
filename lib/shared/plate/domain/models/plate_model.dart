@@ -258,7 +258,7 @@ class PlateModel {
           (timestamp is Timestamp) ? timestamp.toDate() : DateTime.now(),
       selectedBy: data[PlateFields.selectedBy],
       statusList: List<String>.from(data[PlateFields.statusList] ?? []),
-      type: data[PlateFields.type] ?? '',
+      type: normalizePlateTypeFirestoreValue(data[PlateFields.type]),
       updatedAt:
           (updatedTimestamp is Timestamp) ? updatedTimestamp.toDate() : null,
       userAdjustment: parseInt(data[PlateFields.userAdjustment]),
@@ -548,18 +548,5 @@ class PlateModel {
 }
 
 extension PlateModelTypeExtension on PlateModel {
-  PlateType? get typeEnum {
-    switch (type) {
-      case 'parking_requests':
-        return PlateType.parkingRequests;
-      case 'parking_completed':
-        return PlateType.parkingCompleted;
-      case 'departure_requests':
-        return PlateType.departureRequests;
-      case 'departure_completed':
-        return PlateType.departureCompleted;
-      default:
-        return null;
-    }
-  }
+  PlateType? get typeEnum => plateTypeFromFirestoreValue(type);
 }

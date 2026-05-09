@@ -157,6 +157,15 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
     return '₩${_formatIntWithComma(n)}';
   }
 
+  String _maskName(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return '';
+    final runes = trimmed.runes.toList();
+    if (runes.length <= 1) return trimmed;
+    final mask = List.filled(runes.length - 1, '*').join();
+    return '${String.fromCharCode(runes.first)}$mask';
+  }
+
   IconData _actionIcon(String action) {
     if (action.contains('사전 정산')) return Icons.receipt_long;
     if (action.contains('입차 완료')) return Icons.local_parking;
@@ -377,7 +386,7 @@ class _LogViewerBottomSheetState extends State<LogViewerBottomSheet> {
                                                 const SizedBox(height: 2),
                                               if (log.performedBy.isNotEmpty)
                                                 Text(
-                                                  '담당자: ${log.performedBy}',
+                                                  '담당자: ${_maskName(log.performedBy)}',
                                                   style: TextStyle(
                                                     fontSize: 12,
                                                     color: cs.onSurfaceVariant,

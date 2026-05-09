@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../../../../shared/plate/domain/enums/plate_type.dart';
 import '../../domain/models/location_model.dart';
 import '../../domain/models/parking_grid_model.dart';
 import '../../domain/repositories/location_repository.dart';
@@ -80,7 +81,7 @@ class FirestoreLocationRepository implements LocationRepository {
   Future<Map<String, int>> getPlateCountsForLocations({
     required List<String> locationNames,
     required String area,
-    String type = 'parking_completed',
+    String type = PlateTypeFirestoreValue.parkingCompleted,
   }) async {
     final requested = locationNames.toSet().toList();
     debugPrint('📌 plateCount 집계: count() 수행: ${requested.length}개 (area=$area, type=$type)');

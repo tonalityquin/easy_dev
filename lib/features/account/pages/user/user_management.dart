@@ -130,6 +130,45 @@ class _UserManagementState extends State<UserManagement> {
     return null;
   }
 
+  String _maskName(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return '';
+    final runes = trimmed.runes.toList();
+    if (runes.length <= 1) return trimmed;
+    final mask = List.filled(runes.length - 1, '*').join();
+    return '${String.fromCharCode(runes.first)}$mask';
+  }
+
+  String _maskPhone(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return '';
+
+    final digitMatches = RegExp(r'\d').allMatches(trimmed).toList();
+    if (digitMatches.isEmpty) return trimmed;
+
+    final maskIndexes = <int>{};
+    if (digitMatches.length >= 8) {
+      final start = ((digitMatches.length - 4) / 2).floor();
+      for (var i = start; i < start + 4 && i < digitMatches.length; i++) {
+        maskIndexes.add(digitMatches[i].start);
+      }
+    } else if (digitMatches.length <= 2) {
+      for (final match in digitMatches) {
+        maskIndexes.add(match.start);
+      }
+    } else {
+      for (var i = 1; i < digitMatches.length - 1; i++) {
+        maskIndexes.add(digitMatches[i].start);
+      }
+    }
+
+    final buffer = StringBuffer();
+    for (var i = 0; i < trimmed.length; i++) {
+      buffer.write(maskIndexes.contains(i) ? '*' : trimmed[i]);
+    }
+    return buffer.toString();
+  }
+
   void buildUserBottomSheet({
     required BuildContext context,
     required void Function(
@@ -462,7 +501,7 @@ class _UserManagementState extends State<UserManagement> {
           ),
           title: Row(
             children: [
-              Expanded(child: Text(user.name, style: titleStyle)),
+              Expanded(child: Text(_maskName(user.name), style: titleStyle)),
               if (isSelected) Icon(Icons.check_circle, color: cs.primary),
             ],
           ),
@@ -474,7 +513,7 @@ class _UserManagementState extends State<UserManagement> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text('이메일: ${user.email}'),
-                  Text('전화번호: ${user.phone}'),
+                  Text('전화번호: ${_maskPhone(user.phone)}'),
                   if (user.position?.isNotEmpty == true)
                     Text('직책: ${user.position!}'),
                   Text('허용 모드: $modesText'),

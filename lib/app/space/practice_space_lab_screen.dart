@@ -1,36 +1,22 @@
 import 'package:flutter/material.dart';
 
 import '../../app/di/routes.dart';
-import '../tutorial/tutorial/app_start_tutorial_lab_screen.dart';
 import 'chat/practice_chat_lab_screen.dart';
 import 'image_ai_model_test/image_ai_model_test_lab_screen.dart';
-import 'parking_visualization/parking_visualization_lab_screen.dart';
 
 class PracticeSpaceLabScreen extends StatelessWidget {
   const PracticeSpaceLabScreen({super.key});
 
   static const List<_PracticeExperimentItem> _experiments = [
     _PracticeExperimentItem(
-      icon: Icons.local_parking_rounded,
-      title: '실험 1: 주차 구역 시각화 모형',
-      subtitle: '격자(Grid) 기반 주차면 상태(빈칸/점유/차단) 시각화 테스트',
-      page: ParkingVisualizationLabScreen(),
-    ),
-    _PracticeExperimentItem(
       icon: Icons.chat_bubble_rounded,
-      title: '실험 2: 채팅 기능',
+      title: '실험 1: 채팅 기능',
       subtitle: '로컬 상태 기반 채팅 UI/입력/에코 응답 테스트',
       page: PracticeChatLabScreen(),
     ),
     _PracticeExperimentItem(
-      icon: Icons.school_rounded,
-      title: '실험 3: 앱 시작 튜토리얼',
-      subtitle: 'PageView 기반 온보딩/튜토리얼 플로우 테스트',
-      page: AppStartTutorialLabScreen(),
-    ),
-    _PracticeExperimentItem(
       icon: Icons.image_search_rounded,
-      title: '실험 4: 이미지 AI 모델 테스트',
+      title: '실험 2: 이미지 AI 모델 테스트',
       subtitle: '번호판 이미지 인식, 결과 삽입, 성공/실패 로그 출력 테스트',
       page: ImageAiModelTestLabScreen(),
     ),

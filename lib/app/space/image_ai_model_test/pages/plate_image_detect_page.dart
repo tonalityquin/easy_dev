@@ -109,6 +109,8 @@ enum LiveOcrExitType {
   autoLoose,
   autoForceInsert,
   candidateChipSelected,
+  imageAutoAccepted,
+  imageUserSelected,
   userAborted,
   permissionDenied,
   cameraInitFailed,
@@ -116,6 +118,8 @@ enum LiveOcrExitType {
 
 class LiveOcrSessionResult {
   final String sessionId;
+  final bool plateRecognitionEnabled;
+  final bool imageRecognitionEnabled;
   final String? plate;
   final LiveOcrExitType exitType;
   final List<String> logs;
@@ -154,6 +158,8 @@ class LiveOcrSessionResult {
 
   const LiveOcrSessionResult({
     required this.sessionId,
+    this.plateRecognitionEnabled = true,
+    this.imageRecognitionEnabled = true,
     required this.plate,
     required this.exitType,
     required this.logs,
@@ -199,7 +205,23 @@ class LiveOcrSessionResult {
 
   bool get rpsSuccess => rpsLabel != null && rpsLabel!.isNotEmpty;
 
-  bool get combinedSuccess => plateSuccess && rpsSuccess;
+  bool get enabledRecognitionSuccess {
+    final plateOk = !plateRecognitionEnabled || plateSuccess;
+    final imageOk = !imageRecognitionEnabled || rpsSuccess;
+    return plateOk && imageOk;
+  }
+
+  String get plateExecutionStatus {
+    if (!plateRecognitionEnabled) return '미실행';
+    return plateSuccess ? '성공' : '실패';
+  }
+
+  String get imageExecutionStatus {
+    if (!imageRecognitionEnabled) return '미실행';
+    return rpsSuccess ? '성공' : '실패';
+  }
+
+  bool get combinedSuccess => enabledRecognitionSuccess;
 }
 
 class _DisplayChip {
@@ -248,10 +270,14 @@ class _StructuredWeakCandidate {
 
 class PlateImageDetectPage extends StatefulWidget {
   final String sessionId;
+  final bool plateRecognitionEnabled;
+  final bool imageRecognitionEnabled;
 
   const PlateImageDetectPage({
     super.key,
     required this.sessionId,
+    this.plateRecognitionEnabled = true,
+    this.imageRecognitionEnabled = true,
   });
 
   @override
@@ -262,7 +288,7 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
   CameraController? _controller;
   CameraDescription? _cameraDescription;
   ResolutionPreset _activePreset = ResolutionPreset.high;
-  late final TextRecognizer _recognizer;
+  TextRecognizer? _recognizer;
 
   final OcrLearningRepository _learningRepo = OcrLearningRepository.instance;
   final RpsImageClassifier _rpsClassifier = RpsImageClassifier.instance;
@@ -387,13 +413,40 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
   @override
   void initState() {
     super.initState();
-    _recognizer = TextRecognizer(script: TextRecognitionScript.korean);
+    if (widget.plateRecognitionEnabled) {
+      _recognizer = TextRecognizer(script: TextRecognitionScript.korean);
+    }
     _bootstrap();
   }
 
   Future<void> _bootstrap() async {
-    await _loadLearningPolicy();
-    await _loadRpsModel();
+    if (!widget.plateRecognitionEnabled && !widget.imageRecognitionEnabled) {
+      _appendLog('인식 기능이 모두 OFF 상태입니다.');
+      if (!mounted) return;
+      await _finishAndPop(exitType: LiveOcrExitType.userAborted);
+      return;
+    }
+
+    if (widget.plateRecognitionEnabled) {
+      await _loadLearningPolicy();
+    } else {
+      _appendLog('번호판 인식 OFF: OCR 학습 정책 로드를 생략합니다.');
+      if (mounted) {
+        setState(() => _learningLoaded = true);
+      } else {
+        _learningLoaded = true;
+      }
+    }
+
+    if (widget.imageRecognitionEnabled) {
+      await _loadRpsModel();
+    } else {
+      _appendLog('이미지 인식 OFF: RPS 모델 로드를 생략합니다.');
+      if (mounted) {
+        setState(() => _rpsModelReady = false);
+      }
+    }
+
     await _initCamera();
   }
 
@@ -448,7 +501,7 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
     _autoRunning = false;
     _autoGen++;
     _controller?.dispose();
-    _recognizer.close();
+    _recognizer?.close();
     super.dispose();
   }
 
@@ -608,6 +661,8 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
     final gen = _autoGen;
     _appendLog(
       '인식 시작 gen=$gen intervalMs=$_autoIntervalMs '
+          'plate=${widget.plateRecognitionEnabled ? 'on' : 'off'} '
+          'image=${widget.imageRecognitionEnabled ? 'on' : 'off'} '
           'forceInsert=${_allowForceInsert ? 'on' : 'off'} torch=${_torch ? 'on' : 'off'}',
     );
     _autoLoop(gen);
@@ -645,26 +700,65 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
         capturedPath = captured.path;
         _captureErrorStreak = 0;
 
-        final rpsFuture = _rpsClassifier.classifyFile(captured.path);
-        final input = InputImage.fromFilePath(captured.path);
-        final result = await _recognizer.processImage(input);
-        final rpsResult = await rpsFuture;
-        _applyRpsResult(rpsResult);
-        final allText = result.text;
+        if (widget.imageRecognitionEnabled) {
+          final rpsResult = await _rpsClassifier.classifyFile(captured.path);
+          _applyRpsResult(rpsResult);
+        }
+
+        RecognizedText? ocrResult;
+        String allText = '';
+        if (widget.plateRecognitionEnabled) {
+          final recognizer = _recognizer;
+          if (recognizer != null) {
+            final input = InputImage.fromFilePath(captured.path);
+            ocrResult = await recognizer.processImage(input);
+            allText = ocrResult.text;
+          } else {
+            _appendLog('번호판 인식 ON이지만 OCR recognizer가 초기화되지 않았습니다.');
+          }
+        }
+
         _attempt++;
 
-        _lastText = allText.replaceAll('\n', ' ');
-        if ((_lastText ?? '').length > 180) {
-          _lastText = '${_lastText!.substring(0, 180)}…';
+        if (widget.plateRecognitionEnabled) {
+          _lastText = allText.replaceAll('\n', ' ');
+          if ((_lastText ?? '').length > 180) {
+            _lastText = '${_lastText!.substring(0, 180)}…';
+          }
+          _appendLog('attempt=$_attempt ocrText=${_lastText ?? ''}');
+        } else {
+          _lastText = '번호판 인식 OFF';
+          _appendLog('attempt=$_attempt plateRecognition=off imageRecognition=${widget.imageRecognitionEnabled ? 'on' : 'off'}');
         }
-        _appendLog('attempt=$_attempt ocrText=${_lastText ?? ''}');
+
+        if (!widget.plateRecognitionEnabled) {
+          if (widget.imageRecognitionEnabled && _hasRpsResultForEnabledSuccess) {
+            await _finishAndPop(
+              plate: null,
+              exitType: LiveOcrExitType.imageAutoAccepted,
+            );
+            return;
+          }
+          if (widget.imageRecognitionEnabled && _rpsProbabilityMode && _lastRpsProbabilities.isNotEmpty) {
+            _appendLog('이미지 인식 확률 후보 선택 대기 probabilities=${_formatRpsProbabilities(_lastRpsProbabilities)}');
+            _stopAuto();
+            if (mounted) {
+              setState(() {});
+            }
+            continue;
+          }
+          if (mounted) {
+            setState(() {});
+          }
+          continue;
+        }
 
         final direct = _extractStrictKoreanPlate(allText);
         if (direct != null) {
           _usedLearningMidLast = false;
           _usedLearningRankLast = false;
           _appendLog('직접 확정 $direct');
-          final completed = await _finishWhenCombinedRecognitionReady(
+          final completed = await _finishWhenEnabledRecognitionReady(
             plate: direct,
             exitType: LiveOcrExitType.autoDirect,
           );
@@ -678,7 +772,7 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
           _usedLearningMidLast = usedLearningMidThis;
           _usedLearningRankLast = false;
           _appendLog('완화 확정 $loose');
-          final completed = await _finishWhenCombinedRecognitionReady(
+          final completed = await _finishWhenEnabledRecognitionReady(
             plate: loose,
             exitType: LiveOcrExitType.autoLoose,
           );
@@ -692,7 +786,9 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
             }));
         rawSet.addAll(_extractLegacyRegionCandidates(allText));
         rawSet.addAll(_extractDigitsOnlyNoMidCandidates(allText));
-        rawSet.addAll(_extractByGeometryCandidates(result));
+        if (ocrResult != null) {
+          rawSet.addAll(_extractByGeometryCandidates(ocrResult));
+        }
         rawSet.addAll(
             _extractWeakRecoverableCandidates(allText, onUseLearningMid: () {
               usedLearningMidThis = true;
@@ -777,14 +873,13 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
             _appendLog('강제 삽입 $force');
             _usedLearningMidLast = usedLearningMidThis;
             _usedLearningRankLast = usedLearningRankThis;
-            final completed = await _finishWhenCombinedRecognitionReady(
+            final completed = await _finishWhenEnabledRecognitionReady(
               plate: force,
               exitType: LiveOcrExitType.autoForceInsert,
             );
             if (completed) return;
           }
         }
-
         if (kDebugMode && mounted) {
           setState(() => _debugText = 'attempt:$_attempt');
         }
@@ -992,11 +1087,11 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
     return 'rps_unstable_confidence';
   }
 
-  bool get _hasRpsResultForCombinedSuccess {
+  bool get _hasRpsResultForEnabledSuccess {
     return _selectedRpsLabel != null && _selectedRpsLabel!.isNotEmpty;
   }
 
-  Future<bool> _finishWhenCombinedRecognitionReady({
+  Future<bool> _finishWhenEnabledRecognitionReady({
     required String plate,
     required LiveOcrExitType exitType,
     String? selectedChipLabel,
@@ -1004,12 +1099,22 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
     final normalizedPlate = _normalizeCandidateKey(plate);
 
     if (!_isValidKoreanPlate(normalizedPlate)) {
-      _appendLog('통합 조건 미충족 invalidPlate=$normalizedPlate');
+      _appendLog('선택 기능 조건 미충족 invalidPlate=$normalizedPlate');
       return false;
     }
 
-    if (_hasRpsResultForCombinedSuccess) {
-      _appendLog('통합 조건 충족 plate=$normalizedPlate rps=${_selectedRpsDisplayLabel ?? _selectedRpsLabel}');
+    if (!widget.imageRecognitionEnabled) {
+      _appendLog('번호판 인식 조건 충족 plate=$normalizedPlate imageRecognition=off');
+      await _finishAndPop(
+        plate: normalizedPlate,
+        exitType: exitType,
+        selectedChipLabel: selectedChipLabel,
+      );
+      return true;
+    }
+
+    if (_hasRpsResultForEnabledSuccess) {
+      _appendLog('선택 기능 조건 충족 plate=$normalizedPlate rps=${_selectedRpsDisplayLabel ?? _selectedRpsLabel}');
       await _finishAndPop(
         plate: normalizedPlate,
         exitType: exitType,
@@ -1030,7 +1135,7 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
       return false;
     }
 
-    _appendLog('통합 조건 미충족 plate=$normalizedPlate rpsReady=false rpsFailure=${_lastRpsFailureReason ?? '-'}');
+    _appendLog('선택 기능 조건 미충족 plate=$normalizedPlate rpsReady=false rpsFailure=${_lastRpsFailureReason ?? '-'}');
     return false;
   }
 
@@ -1062,6 +1167,14 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
         exitType: pendingExitType,
         selectedChipLabel: selectedChipLabel,
       );
+      return;
+    }
+
+    if (!widget.plateRecognitionEnabled && widget.imageRecognitionEnabled) {
+      await _finishAndPop(
+        plate: null,
+        exitType: LiveOcrExitType.imageUserSelected,
+      );
     }
   }
 
@@ -1089,6 +1202,7 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
   }
 
   String _rpsStatusText() {
+    if (!widget.imageRecognitionEnabled) return 'RPS 미실행';
     if (_selectedRpsDisplayLabel != null) {
       final mode = _rpsUserSelected ? '사용자 선택' : '자동 판정';
       return '$mode ${_selectedRpsDisplayLabel!} ${_formatProbability(_selectedRpsConfidence)}';
@@ -2054,6 +2168,8 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
       context,
       LiveOcrSessionResult(
         sessionId: widget.sessionId,
+        plateRecognitionEnabled: widget.plateRecognitionEnabled,
+        imageRecognitionEnabled: widget.imageRecognitionEnabled,
         plate: normalizedPlate,
         exitType: exitType,
         logs: List<String>.from(_sessionLogs, growable: false),
@@ -2231,8 +2347,8 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
           surfaceTintColor: Colors.transparent,
           actions: [
             IconButton(
-              tooltip: _rpsProbabilityMode ? 'RPS 확률 표시 ON' : 'RPS 확률 표시 OFF',
-              onPressed: () {
+              tooltip: widget.imageRecognitionEnabled ? (_rpsProbabilityMode ? 'RPS 확률 표시 ON' : 'RPS 확률 표시 OFF') : 'RPS 확률 표시 OFF',
+              onPressed: widget.imageRecognitionEnabled ? () {
                 final nextMode = !_rpsProbabilityMode;
                 setState(() {
                   _rpsProbabilityMode = nextMode;
@@ -2252,7 +2368,7 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
                   }
                 }
                 _appendLog('RPS 확률 표시 ${_rpsProbabilityMode ? 'ON' : 'OFF'}');
-              },
+              } : null,
               icon: Icon(_rpsProbabilityMode ? Icons.percent : Icons.percent_outlined),
             ),
             IconButton(
@@ -2262,21 +2378,21 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
             ),
             IconButton(
               tooltip: hasLearning ? '학습 데이터 있음' : '학습 데이터 없음',
-              onPressed: _learningLoaded ? _showLearningDialog : null,
+              onPressed: widget.plateRecognitionEnabled && _learningLoaded ? _showLearningDialog : null,
               icon: Icon(hasLearning ? Icons.school : Icons.school_outlined),
             ),
             if (usedLearningNow)
               IconButton(
                 tooltip: '학습 보정 적용 중',
-                onPressed: _learningLoaded ? _showLearningDialog : null,
+                onPressed: widget.plateRecognitionEnabled && _learningLoaded ? _showLearningDialog : null,
                 icon: const Icon(Icons.auto_awesome),
               ),
             IconButton(
-              tooltip: _allowForceInsert ? '강제삽입 ON' : '강제삽입 OFF',
-              onPressed: () {
+              tooltip: widget.plateRecognitionEnabled ? (_allowForceInsert ? '강제삽입 ON' : '강제삽입 OFF') : '강제삽입 OFF',
+              onPressed: widget.plateRecognitionEnabled ? () {
                 setState(() => _allowForceInsert = !_allowForceInsert);
                 _appendLog('강제삽입 ${_allowForceInsert ? 'ON' : 'OFF'}');
-              },
+              } : null,
               icon: Icon(_allowForceInsert
                   ? Icons.fact_check
                   : Icons.fact_check_outlined),
@@ -2381,12 +2497,12 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
                             _infoPill(
                               cs: cs,
                               icon: _rpsProbabilityMode ? Icons.percent : Icons.auto_awesome,
-                              text: _rpsProbabilityMode ? 'RPS 확률ON' : 'RPS 자동',
+                              text: widget.imageRecognitionEnabled ? (_rpsProbabilityMode ? 'RPS 확률ON' : 'RPS 자동') : 'RPS OFF',
                             ),
                             _infoPill(
                               cs: cs,
                               icon: Icons.sports_mma,
-                              text: _rpsStatusText(),
+                              text: widget.imageRecognitionEnabled ? _rpsStatusText() : 'RPS 미실행',
                             ),
                             if (usedLearningNow)
                               _infoPill(
@@ -2413,9 +2529,10 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _buildRpsPanel(),
-                    const SizedBox(height: 8),
-                    _buildCandidates(),
+                    if (widget.imageRecognitionEnabled) _buildRpsPanel(),
+                    if (widget.imageRecognitionEnabled && widget.plateRecognitionEnabled)
+                      const SizedBox(height: 8),
+                    if (widget.plateRecognitionEnabled) _buildCandidates(),
                   ],
                 ),
               ),
@@ -2458,6 +2575,22 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
 
   Widget _buildRpsPanel() {
     final cs = Theme.of(context).colorScheme;
+    if (!widget.imageRecognitionEnabled) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: cs.surface.withOpacity(0.10),
+          border: Border.all(color: cs.surface.withOpacity(0.22)),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          '이미지 인식이 OFF라 RPS 모델을 실행하지 않습니다.',
+          style: TextStyle(color: cs.surface.withOpacity(0.78), fontWeight: FontWeight.w600),
+          textAlign: TextAlign.center,
+        ),
+      );
+    }
     final theme = Theme.of(context);
     final probabilities = _lastRpsProbabilities;
     final waitingUserChoice = _rpsProbabilityMode && probabilities.isNotEmpty && _selectedRpsLabel == null;
@@ -2563,6 +2696,19 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
 
   Widget _buildCandidates() {
     final cs = Theme.of(context).colorScheme;
+    if (!widget.plateRecognitionEnabled) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            '번호판 인식이 OFF라 OCR 후보를 생성하지 않습니다.',
+            style: TextStyle(color: cs.surface.withOpacity(0.70)),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: _chipBottomSpacer),
+        ],
+      );
+    }
 
     if (_displayChips.isEmpty) {
       return Column(
@@ -2618,7 +2764,7 @@ class _PlateImageDetectPageState extends State<PlateImageDetectPage> {
                   );
                   return;
                 }
-                await _finishWhenCombinedRecognitionReady(
+                await _finishWhenEnabledRecognitionReady(
                   plate: chip.value,
                   exitType: LiveOcrExitType.candidateChipSelected,
                   selectedChipLabel: chip.label,

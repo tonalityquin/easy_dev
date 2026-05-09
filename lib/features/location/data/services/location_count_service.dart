@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../../shared/plate/domain/enums/plate_type.dart';
+
 
 
 
@@ -52,11 +54,11 @@ class LocationCountService {
   Future<int> getPlateCount({
     required String locationName,
     required String area,
-    String type = 'parking_completed',
+    String type = PlateTypeFirestoreValue.parkingCompleted,
     LocationQueryField locationField = LocationQueryField.full,
   }) async {
     final _area = area.trim();
-    final _type = type.trim();
+    final _type = normalizePlateTypeFirestoreValue(type);
 
     
     final full = _normalizeFull(locationName);
@@ -102,13 +104,13 @@ class LocationCountService {
   Future<Map<String, int>> getPlateCountsForLocations({
     required List<String> locationNames, 
     required String area,
-    String type = 'parking_completed',
+    String type = PlateTypeFirestoreValue.parkingCompleted,
     LocationQueryField locationField = LocationQueryField.full,
   }) async {
     if (locationNames.isEmpty) return <String, int>{};
 
     final _area = area.trim();
-    final _type = type.trim();
+    final _type = normalizePlateTypeFirestoreValue(type);
 
     try {
       final uniq = locationNames.map((e) => e.trim()).where((e) => e.isNotEmpty).toSet().toList();

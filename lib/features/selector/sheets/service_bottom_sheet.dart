@@ -22,6 +22,13 @@ const String kDevModeEnabledKey = 'dev_mode_enabled_v1';
 
 const String _kPrivateAdminPassword = 'blsnc150119';
 
+const String _kKbPresetId = 'kb';
+const String _kDefaultIndependentPresetId = 'soft_linen';
+const Set<String> _kKbThemeAllowedAreas = <String>{
+  'KB라이프타워',
+  'KB라이프역삼',
+};
+
 @immutable
 class HeaderTokens {
   const HeaderTokens({
@@ -126,6 +133,8 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
   late String _presetId;
   late String _themeModeId;
 
+  String _selectedArea = '';
+
   bool _adminUnlocked = false;
   bool _devModeEnabled = false;
 
@@ -163,7 +172,10 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
     try {
       final prefs = await SharedPreferences.getInstance();
       _prefs = prefs;
+      _selectedArea = (prefs.getString('selectedArea') ?? '').trim();
       await _ensureRealtimeDefaults(prefs);
+      if (!mounted) return;
+      await _ensureBrandPresetAllowedForSelectedArea();
 
       _devModeEnabled = prefs.getBool(kDevModeEnabledKey) ?? false;
 
@@ -195,6 +207,43 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
     await prefs.setBool('parking_completed_realtime_tab_enabled_v1', true);
     await prefs.setBool('departure_requests_realtime_tab_enabled_v1', true);
     await prefs.setBool('parking_requests_realtime_tab_enabled_v1', true);
+  }
+
+  bool get _isKbThemeArea => _kKbThemeAllowedAreas.contains(_selectedArea.trim());
+
+  bool _isPresetAllowedForSelectedArea(BrandPresetSpec preset) {
+    if (preset.id != _kKbPresetId) return true;
+    return _isKbThemeArea;
+  }
+
+  List<BrandPresetSpec> _brandPresetsForSelectedArea(String themeModeId) {
+    return brandPresetsForThemeMode(themeModeId)
+        .where(_isPresetAllowedForSelectedArea)
+        .toList(growable: false);
+  }
+
+  String _fallbackPresetIdForThemeMode(String themeModeId) {
+    final candidates = _brandPresetsForSelectedArea(themeModeId);
+    if (candidates.isEmpty) return 'system';
+
+    if (themeModeId == 'independent') {
+      final preferred = candidates.where((p) => p.id == _kDefaultIndependentPresetId);
+      if (preferred.isNotEmpty) return preferred.first.id;
+    }
+
+    final systemPreset = candidates.where((p) => p.id == 'system');
+    if (systemPreset.isNotEmpty) return systemPreset.first.id;
+
+    return candidates.first.id;
+  }
+
+  Future<void> _ensureBrandPresetAllowedForSelectedArea() async {
+    final currentPreset = presetById(_presetId);
+    if (_isPresetAllowedForSelectedArea(currentPreset)) return;
+
+    final fallback = _fallbackPresetIdForThemeMode(_themeModeId);
+    _presetId = fallback;
+    await context.read<ThemePrefsController>().setPresetId(fallback);
   }
 
   ThemeData _buildConceptThemed(
@@ -238,6 +287,8 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
   }
 
   Future<void> _selectPreset(String id) async {
+    final preset = presetById(id);
+    if (!_isPresetAllowedForSelectedArea(preset)) return;
     if (_presetId == id) return;
     setState(() => _presetId = id);
 
@@ -250,21 +301,20 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
 
     await context.read<ThemePrefsController>().setThemeModeId(id);
 
+    final cur = presetById(_presetId);
+    final currentAllowed = _isPresetAllowedForSelectedArea(cur);
+
     if (id == 'independent') {
-      final cur = presetById(_presetId);
-      if (cur.independentTokens == null) {
-        final candidates = brandPresetsForThemeMode('independent');
-        if (candidates.isNotEmpty) {
-          final fallback = candidates.first.id;
-          setState(() => _presetId = fallback);
-          await context.read<ThemePrefsController>().setPresetId(fallback);
-        }
+      if (cur.independentTokens == null || !currentAllowed) {
+        final fallback = _fallbackPresetIdForThemeMode('independent');
+        setState(() => _presetId = fallback);
+        await context.read<ThemePrefsController>().setPresetId(fallback);
       }
     } else {
-      final cur = presetById(_presetId);
-      if (cur.independentTokens != null) {
-        setState(() => _presetId = 'system');
-        await context.read<ThemePrefsController>().setPresetId('system');
+      if (cur.independentTokens != null || !currentAllowed) {
+        final fallback = _fallbackPresetIdForThemeMode(id);
+        setState(() => _presetId = fallback);
+        await context.read<ThemePrefsController>().setPresetId(fallback);
       }
     }
   }
@@ -317,7 +367,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
     final t = HeaderTokens.of(context);
     final text = Theme.of(context).textTheme;
 
-    final presets = brandPresetsForThemeMode(_themeModeId);
+    final presets = _brandPresetsForSelectedArea(_themeModeId);
 
     final helperText = (_themeModeId == 'independent')
         ? '독립 모드는 프리셋마다 배경/글자색이 고정됩니다(프리셋이 밝기까지 결정).'

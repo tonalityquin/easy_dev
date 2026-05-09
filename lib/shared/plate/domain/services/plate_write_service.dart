@@ -813,9 +813,13 @@ class PlateWriteService {
 
         final data = snap.data() ?? {};
         final type = (data['type'] as String?) ?? '';
+        final typeEnum = plateTypeFromFirestoreValue(type);
 
-        const allowed = {'parking_requests', 'departure_requests'};
-        if (!allowed.contains(type)) {
+        final allowed = {
+          PlateType.parkingRequests,
+          PlateType.departureRequests,
+        };
+        if (!allowed.contains(typeEnum)) {
           throw FirebaseException(
             plugin: 'cloud_firestore',
             code: 'invalid-state',
@@ -853,7 +857,7 @@ class PlateWriteService {
 
         final docArea = ((data['area'] as String?) ?? area).trim();
 
-        if (type == 'departure_requests' && docArea.isNotEmpty) {
+        if (typeEnum == PlateType.departureRequests && docArea.isNotEmpty) {
           if (!canUpsertDepView) {
             return;
           }
@@ -903,7 +907,7 @@ class PlateWriteService {
           }
         }
 
-        if (type == 'parking_requests' && docArea.isNotEmpty) {
+        if (typeEnum == PlateType.parkingRequests && docArea.isNotEmpty) {
           if (!canUpsertReqView) {
             return;
           }

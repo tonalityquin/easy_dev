@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../../shared/plate/domain/enums/plate_type.dart';
+
 class LockedPlateRecord {
   final String docId;
   final Map<String, dynamic> data;
@@ -25,7 +27,7 @@ class EndWorkReportFirestoreRepository {
   }) async {
     final snap = await _firestore
         .collection('plates')
-        .where('type', isEqualTo: 'departure_completed')
+        .where('type', isEqualTo: PlateType.departureCompleted.firestoreValue)
         .where('area', isEqualTo: area)
         .where('isLockedFee', isEqualTo: true)
         .get();

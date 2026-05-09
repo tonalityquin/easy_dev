@@ -49,7 +49,6 @@ class PlateSearchModeSwitch extends StatelessWidget {
             child: _ModeSegment(
               selected: value == PlateSearchMode.plates,
               label: PlateSearchMode.plates.label,
-              collectionLabel: PlateSearchMode.plates.collectionLabel,
               icon: Icons.directions_car_filled_outlined,
               onTap: () => onChanged(PlateSearchMode.plates),
             ),
@@ -59,7 +58,6 @@ class PlateSearchModeSwitch extends StatelessWidget {
             child: _ModeSegment(
               selected: value == PlateSearchMode.plateOutLog,
               label: PlateSearchMode.plateOutLog.label,
-              collectionLabel: PlateSearchMode.plateOutLog.collectionLabel,
               icon: Icons.assignment_outlined,
               onTap: () => onChanged(PlateSearchMode.plateOutLog),
             ),
@@ -73,14 +71,12 @@ class PlateSearchModeSwitch extends StatelessWidget {
 class _ModeSegment extends StatelessWidget {
   final bool selected;
   final String label;
-  final String collectionLabel;
   final IconData icon;
   final VoidCallback onTap;
 
   const _ModeSegment({
     required this.selected,
     required this.label,
-    required this.collectionLabel,
     required this.icon,
     required this.onTap,
   });
@@ -98,39 +94,22 @@ class _ModeSegment extends StatelessWidget {
         borderRadius: BorderRadius.circular(13),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, size: 18, color: fg),
               const SizedBox(width: 7),
               Flexible(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: fg,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 13,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      collectionLabel,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: fg.withOpacity(0.82),
-                        fontWeight: FontWeight.w700,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: fg,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                  ),
                 ),
               ),
             ],

@@ -25,6 +25,8 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
   String _selectedModel = '번호판 OCR + RPS TFLite 통합 모델';
   bool _openingScanner = false;
   bool _autoStarted = false;
+  bool _plateRecognitionEnabled = true;
+  bool _imageRecognitionEnabled = true;
   bool _requiresMidCompletion = false;
   String? _rawPlateText;
   String? _statusText;
@@ -205,8 +207,37 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
     return 'space-ocr-${now.microsecondsSinceEpoch}';
   }
 
+  bool get _hasEnabledRecognizer => _plateRecognitionEnabled || _imageRecognitionEnabled;
+
+  String _recognitionConditionLabel({bool? plate, bool? image}) {
+    final plateOn = plate ?? _plateRecognitionEnabled;
+    final imageOn = image ?? _imageRecognitionEnabled;
+    if (plateOn && imageOn) return 'plate+rps';
+    if (plateOn) return 'plate';
+    if (imageOn) return 'rps';
+    return 'none';
+  }
+
+  String _enabledSuccessStatus(LiveOcrSessionResult result) {
+    if (result.plateRecognitionEnabled && result.imageRecognitionEnabled) {
+      return result.enabledRecognitionSuccess ? '통합 인식 성공' : '통합 조건 미충족';
+    }
+    if (result.plateRecognitionEnabled) {
+      return result.plateSuccess ? '번호판 인식 성공' : '번호판 인식 실패';
+    }
+    if (result.imageRecognitionEnabled) {
+      return result.rpsSuccess ? '이미지 인식 성공' : '이미지 인식 실패';
+    }
+    return '인식 기능 미선택';
+  }
+
   Future<void> _openPlateImageDetectPage() async {
     if (_openingScanner) {
+      return;
+    }
+    if (!_hasEnabledRecognizer) {
+      setState(() => _statusText = '인식 기능을 선택하세요');
+      _appendProcessLog('인식 실행 차단 condition=none');
       return;
     }
 
@@ -218,11 +249,15 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
       _statusText = '인식 진행 중';
     });
 
-    _appendProcessLog('PlateImageDetectPage 열기 sessionId=$sessionId model=$_selectedModel condition=plate+rps');
+    _appendProcessLog('PlateImageDetectPage 열기 sessionId=$sessionId model=$_selectedModel condition=${_recognitionConditionLabel()}');
 
     final result = await Navigator.of(context).push<LiveOcrSessionResult>(
       MaterialPageRoute(
-        builder: (_) => PlateImageDetectPage(sessionId: sessionId),
+        builder: (_) => PlateImageDetectPage(
+          sessionId: sessionId,
+          plateRecognitionEnabled: _plateRecognitionEnabled,
+          imageRecognitionEnabled: _imageRecognitionEnabled,
+        ),
       ),
     );
 
@@ -254,28 +289,34 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
       'margin=${_formatProbability(result.rpsConfidenceMargin)} '
       'failure=${result.rpsFailureReason ?? '-'} instability=${result.rpsInstabilityReason ?? '-'}',
     );
-    _appendProcessLog('통합 성공=${result.combinedSuccess} plateSuccess=${result.plateSuccess} rpsSuccess=${result.rpsSuccess}');
+    _appendProcessLog('선택 기능 성공=${result.enabledRecognitionSuccess} plateEnabled=${result.plateRecognitionEnabled} imageEnabled=${result.imageRecognitionEnabled} plateStatus=${result.plateExecutionStatus} imageStatus=${result.imageExecutionStatus}');
 
     _applyOcrResult(result);
   }
 
   void _applyOcrResult(LiveOcrSessionResult result) {
+    if (!result.plateRecognitionEnabled && result.imageRecognitionEnabled) {
+      setState(() {
+        _statusText = _enabledSuccessStatus(result);
+        _rawPlateText = null;
+        _requiresMidCompletion = false;
+      });
+      _appendProcessLog('번호판 인식 미실행 imageStatus=${result.imageExecutionStatus} rps=${result.rpsDisplayLabel ?? '-'}');
+      return;
+    }
+
     if (result.plate != null && result.plate!.isNotEmpty) {
       final applied = _applyPlateWithFallback(result.plate!, sessionId: result.sessionId);
-      final status = result.combinedSuccess
-          ? '통합 인식 성공'
-          : result.rpsSuccess
-              ? '번호판 표시 확인 필요'
-              : '번호판 성공, RPS 실패';
+      final status = _enabledSuccessStatus(result);
       setState(() {
-        _statusText = applied ? status : '번호판 원문 표시, 통합 조건 미충족';
+        _statusText = applied ? status : '번호판 원문 표시, 선택 기능 조건 미충족';
         _rawPlateText = result.plate;
       });
       _appendProcessLog(applied ? '번호판 데이터 삽입 완료 plate=${result.plate}' : '번호판 원문만 표시 plate=${result.plate}');
-      if (result.combinedSuccess) {
-        _appendProcessLog('통합 인식 성공 plate=${result.plate} rps=${result.rpsDisplayLabel}');
+      if (result.enabledRecognitionSuccess) {
+        _appendProcessLog('선택 기능 인식 성공 plate=${result.plate ?? '-'} rps=${result.rpsDisplayLabel ?? '-'} condition=${_recognitionConditionLabel(plate: result.plateRecognitionEnabled, image: result.imageRecognitionEnabled)}');
       } else {
-        _appendProcessLog('통합 조건 미충족 plateSuccess=${result.plateSuccess} rpsSuccess=${result.rpsSuccess} rpsFailure=${result.rpsFailureReason ?? '-'}');
+        _appendProcessLog('선택 기능 조건 미충족 plateStatus=${result.plateExecutionStatus} imageStatus=${result.imageExecutionStatus} rpsFailure=${result.rpsFailureReason ?? '-'}');
       }
       return;
     }
@@ -289,26 +330,22 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
         sessionId: result.sessionId,
       );
       setState(() {
-        _statusText = result.rpsSuccess ? '부분 번호판, RPS 성공' : '부분 인식, 통합 조건 미충족';
+        _statusText = result.imageRecognitionEnabled && result.rpsSuccess ? '부분 번호판, 이미지 성공' : '부분 번호판 인식';
         _rawPlateText = result.weakObservedValue;
       });
       _appendProcessLog('부분 번호판 삽입 완료 front=${result.weakFront} back=${result.weakBack} suggestions=${result.weakMidSuggestions.join(', ')}');
-      _appendProcessLog('통합 조건 미충족 plateSuccess=false rpsSuccess=${result.rpsSuccess}');
+      _appendProcessLog('선택 기능 조건 미충족 plateStatus=${result.plateExecutionStatus} imageStatus=${result.imageExecutionStatus}');
       return;
     }
 
     final failedByUser = result.exitType == LiveOcrExitType.userAborted;
     setState(() {
-      _statusText = failedByUser
-          ? '사용자 종료'
-          : result.rpsSuccess
-              ? 'RPS 성공, 번호판 실패'
-              : '인식 실패';
+      _statusText = failedByUser ? '사용자 종료' : _enabledSuccessStatus(result);
       _rawPlateText = null;
       _requiresMidCompletion = false;
     });
     _appendProcessLog('번호판 삽입 없음 reason=${result.lastFailureReason ?? _ocrExitTypeLabel(result.exitType)}');
-    _appendProcessLog('통합 조건 미충족 plateSuccess=${result.plateSuccess} rpsSuccess=${result.rpsSuccess}');
+    _appendProcessLog('선택 기능 조건 결과 plateStatus=${result.plateExecutionStatus} imageStatus=${result.imageExecutionStatus}');
   }
 
   String _normalize(String value) {
@@ -434,6 +471,10 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
         return '강제 삽입';
       case LiveOcrExitType.candidateChipSelected:
         return '후보 칩 선택';
+      case LiveOcrExitType.imageAutoAccepted:
+        return '이미지 자동 확정';
+      case LiveOcrExitType.imageUserSelected:
+        return '이미지 사용자 선택';
       case LiveOcrExitType.userAborted:
         return '사용자 중도 종료';
       case LiveOcrExitType.permissionDenied:
@@ -462,6 +503,9 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
       'status: ${_statusText ?? '-'}',
       'model: $_selectedModel',
       'sessionId: ${_lastSessionId ?? '-'}',
+      'plateRecognitionEnabled: $_plateRecognitionEnabled',
+      'imageRecognitionEnabled: $_imageRecognitionEnabled',
+      'condition: ${_recognitionConditionLabel()}',
       'front: ${_frontController.text.isEmpty ? '-' : _frontController.text}',
       'mid: ${_midController.text.isEmpty ? '-' : _midController.text}',
       'back: ${_backController.text.isEmpty ? '-' : _backController.text}',
@@ -473,6 +517,11 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
     if (result != null) {
       values.addAll([
         'exitType: ${_ocrExitTypeLabel(result.exitType)}',
+        'resultPlateRecognitionEnabled: ${result.plateRecognitionEnabled}',
+        'resultImageRecognitionEnabled: ${result.imageRecognitionEnabled}',
+        'plateExecutionStatus: ${result.plateExecutionStatus}',
+        'imageExecutionStatus: ${result.imageExecutionStatus}',
+        'enabledRecognitionSuccess: ${result.enabledRecognitionSuccess}',
         'selectedPlate: ${result.plate ?? '-'}',
         'selectedChipLabel: ${result.selectedChipLabel ?? '-'}',
         'attemptCount: ${result.attemptCount}',
@@ -589,14 +638,21 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
     final hasResult = result != null;
     final hasPlateData = _frontController.text.isNotEmpty || _midController.text.isNotEmpty || _backController.text.isNotEmpty;
     final statusText = _statusText ?? (_openingScanner ? '인식 진행 중' : '대기 중');
+    final hasEnabledRecognizer = _hasEnabledRecognizer;
     final statusIcon = switch (statusText) {
       '통합 인식 성공' => Icons.check_circle_rounded,
+      '번호판 인식 성공' => Icons.check_circle_rounded,
+      '이미지 인식 성공' => Icons.check_circle_rounded,
       '번호판 성공, RPS 실패' => Icons.warning_amber_rounded,
       '번호판 표시 확인 필요' => Icons.warning_amber_rounded,
       '부분 번호판, RPS 성공' => Icons.warning_amber_rounded,
       '부분 인식, 통합 조건 미충족' => Icons.warning_amber_rounded,
       'RPS 성공, 번호판 실패' => Icons.error_outline_rounded,
       '인식 실패' => Icons.error_outline_rounded,
+      '이미지 인식 실패' => Icons.error_outline_rounded,
+      '번호판 인식 실패' => Icons.error_outline_rounded,
+      '인식 기능을 선택하세요' => Icons.tune_rounded,
+      '인식 기능 미선택' => Icons.tune_rounded,
       '사용자 종료' => Icons.cancel_outlined,
       _ => Icons.hourglass_top_rounded,
     };
@@ -663,6 +719,38 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
                           },
                   ),
                   const SizedBox(height: 12),
+                  _RecognitionSwitchTile(
+                    title: '번호판 인식',
+                    subtitle: '한국 차량 번호판 OCR과 후보 보정을 실행합니다.',
+                    value: _plateRecognitionEnabled,
+                    enabled: !_openingScanner,
+                    onChanged: (value) {
+                      setState(() {
+                        _plateRecognitionEnabled = value;
+                        if (!_plateRecognitionEnabled && !_imageRecognitionEnabled) {
+                          _statusText = '인식 기능을 선택하세요';
+                        }
+                      });
+                      _appendProcessLog('번호판 인식 ${value ? 'ON' : 'OFF'} condition=${_recognitionConditionLabel()}');
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  _RecognitionSwitchTile(
+                    title: '이미지 인식',
+                    subtitle: '가위바위보 TFLite 이미지 모델을 실행합니다.',
+                    value: _imageRecognitionEnabled,
+                    enabled: !_openingScanner,
+                    onChanged: (value) {
+                      setState(() {
+                        _imageRecognitionEnabled = value;
+                        if (!_plateRecognitionEnabled && !_imageRecognitionEnabled) {
+                          _statusText = '인식 기능을 선택하세요';
+                        }
+                      });
+                      _appendProcessLog('이미지 인식 ${value ? 'ON' : 'OFF'} condition=${_recognitionConditionLabel()}');
+                    },
+                  ),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Icon(statusIcon, color: cs.primary),
@@ -689,8 +777,8 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
                                   child: CircularProgressIndicator(strokeWidth: 2),
                                 )
                               : const Icon(Icons.image_search_rounded),
-                          label: Text(_openingScanner ? '통합 인식 화면 실행 중' : '번호판 + RPS 인식 열기'),
-                          onPressed: _openingScanner ? null : _openPlateImageDetectPage,
+                          label: Text(_openingScanner ? '인식 화면 실행 중' : '선택 기능 인식 열기'),
+                          onPressed: _openingScanner || !hasEnabledRecognizer ? null : _openPlateImageDetectPage,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -716,6 +804,10 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (result != null && !result.plateRecognitionEnabled) ...[
+                    _WarningBox(text: '번호판 인식이 OFF라 실행하지 않았습니다.'),
+                    const SizedBox(height: 12),
+                  ],
                   Row(
                     children: [
                       Expanded(
@@ -812,6 +904,13 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
                         color: cs.onSurfaceVariant,
                       ),
                     )
+                  : !result.imageRecognitionEnabled
+                      ? Text(
+                          '이미지 인식이 OFF라 실행하지 않았습니다.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        )
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -889,6 +988,11 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _SummaryRow(label: '세션 ID', value: result.sessionId),
+                        _SummaryRow(label: '번호판 인식', value: result.plateRecognitionEnabled ? 'ON' : 'OFF'),
+                        _SummaryRow(label: '이미지 인식', value: result.imageRecognitionEnabled ? 'ON' : 'OFF'),
+                        _SummaryRow(label: '번호판 상태', value: result.plateExecutionStatus),
+                        _SummaryRow(label: '이미지 상태', value: result.imageExecutionStatus),
+                        _SummaryRow(label: '선택 기능 성공', value: '${result.enabledRecognitionSuccess}'),
                         _SummaryRow(label: '종료 유형', value: _ocrExitTypeLabel(result.exitType)),
                         _SummaryRow(label: '최종 번호판', value: result.plate ?? '-'),
                         _SummaryRow(label: '선택 칩', value: result.selectedChipLabel ?? '-'),
@@ -955,6 +1059,47 @@ class _ImageAiModelTestLabScreenState extends State<ImageAiModelTestLabScreen> {
       result == null || result.rpsLogText.isEmpty ? '로그가 없습니다.' : result.rpsLogText,
     ];
     return values.join('\n');
+  }
+}
+
+class _RecognitionSwitchTile extends StatelessWidget {
+  const _RecognitionSwitchTile({
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final String title;
+  final String subtitle;
+  final bool value;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: cs.outlineVariant),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: SwitchListTile(
+        value: value,
+        onChanged: enabled ? onChanged : null,
+        title: Text(
+          title,
+          style: theme.textTheme.titleSmall?.copyWith(
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        subtitle: Text(subtitle),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+      ),
+    );
   }
 }
 

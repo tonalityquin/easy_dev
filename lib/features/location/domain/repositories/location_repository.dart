@@ -1,3 +1,4 @@
+import '../../../../shared/plate/domain/enums/plate_type.dart';
 import '../models/location_model.dart';
 import '../models/parking_grid_model.dart';
 
@@ -30,6 +31,6 @@ abstract class LocationRepository {
   Future<Map<String, int>> getPlateCountsForLocations({
     required List<String> locationNames,
     required String area,
-    String type = 'parking_completed',
+    String type = PlateTypeFirestoreValue.parkingCompleted,
   });
 }
