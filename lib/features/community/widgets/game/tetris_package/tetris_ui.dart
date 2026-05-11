@@ -106,18 +106,27 @@ mixin TetrisUIDelegate<T extends StatefulWidget> on TetrisBase<T> {
                   ),
                   if (isPaused && !gameOver)
                     Positioned.fill(
-                      child: IgnorePointer(
-                        child: Container(
-                          alignment: Alignment.center,
-                          color: Colors.black.withOpacity(0.08),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.70),
-                              borderRadius: BorderRadius.circular(999),
+                      child: Container(
+                        alignment: Alignment.center,
+                        color: Colors.black.withOpacity(0.08),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.70),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: const Text('PAUSED', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
                             ),
-                            child: const Text('PAUSED', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800, letterSpacing: 1.0)),
-                          ),
+                            const SizedBox(height: 10),
+                            ElevatedButton.icon(
+                              onPressed: togglePause,
+                              icon: const Icon(Icons.play_arrow_rounded),
+                              label: const Text('재개'),
+                            ),
+                          ],
                         ),
                       ),
                     ),

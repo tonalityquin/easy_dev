@@ -15,12 +15,14 @@ import 'tetris_ui.dart';
 class Tetris extends StatefulWidget {
   final bool embedded;
   final VoidCallback? onClose;
+  final bool resumeOnOpen;
 
   const Tetris({super.key})
       : embedded = false,
-        onClose = null;
+        onClose = null,
+        resumeOnOpen = false;
 
-  const Tetris.embedded({super.key, this.onClose}) : embedded = true;
+  const Tetris.embedded({super.key, this.onClose, this.resumeOnOpen = true}) : embedded = true;
 
   @override
   State<Tetris> createState() => _TetrisState();
@@ -39,6 +41,10 @@ class TetrisGameSession {
 
   static void pauseSession() {
     _activeState?._pauseForExternalClose();
+  }
+
+  static void resumeSession() {
+    _activeState?._resumeForExternalOpen();
   }
 
   static void terminate() {
@@ -287,6 +293,13 @@ class _TetrisState extends TetrisBase<Tetris> with WidgetsBindingObserver, Tetri
     _cancelLock();
     _focusAfterFrame();
     _refresh();
+    if (widget.embedded && widget.resumeOnOpen && !gameOver && cur != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && TetrisGameSession._activeState == this && isPaused && !gameOver) {
+          _resumeForExternalOpen();
+        }
+      });
+    }
   }
 
   void _startGame() {
@@ -327,17 +340,24 @@ class _TetrisState extends TetrisBase<Tetris> with WidgetsBindingObserver, Tetri
   }
 
   void _pauseForExternalClose() {
-    if (gameOver) {
-      isPaused = true;
-    } else {
-      isPaused = true;
-    }
+    isPaused = true;
     _softDropping = false;
     cancelInputTimers();
     _gravityTimer?.cancel();
     _lockTimer?.cancel();
     _lockTimer = null;
     if (mounted) _refresh();
+  }
+
+  void _resumeForExternalOpen() {
+    if (gameOver || cur == null) return;
+    isPaused = false;
+    _softDropping = false;
+    cancelInputTimers();
+    _restartGravity();
+    if (_isTouchingGround()) _ensureLock();
+    if (mounted) _refresh();
+    _saveSnapshot();
   }
 
   void _terminateCompletely() {
