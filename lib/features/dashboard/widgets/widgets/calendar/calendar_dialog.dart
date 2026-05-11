@@ -3,8 +3,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../chat_bot.dart';
-import '../../utils/chat_bot_tools.dart';
+import '../../productivity_sheet.dart';
+import '../../utils/productivity_tools.dart';
 
 Future<void> showCalendarDialog({
   required BuildContext context,
@@ -226,7 +226,7 @@ class _CalendarPanelState extends State<CalendarPanel> {
   void _openCalendarComposer() {
     widget.onClose?.call();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(ChatBot.openPanel(tab: ChatBotSheetTab.calendar));
+      unawaited(ProductivitySheet.openPanel(tab: ProductivitySheetTab.calendar));
     });
   }
 

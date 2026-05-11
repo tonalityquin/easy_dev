@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../../features/dashboard/widgets/chat_bot.dart';
+import '../../dashboard/widgets/productivity_sheet.dart';
 import '../minor_departure_completed_bottom_sheet.dart';
 
 class MinorParkingCompletedControlButtons extends StatelessWidget {
@@ -10,7 +10,7 @@ class MinorParkingCompletedControlButtons extends StatelessWidget {
     required this.showSearchDialog,
   });
 
-  static const int idxChatbot = 0;
+  static const int idxProductivity = 0;
   static const int idxSmartSearch = 1;
   static const int idxDepartureCompleted = 2;
 
@@ -22,7 +22,7 @@ class MinorParkingCompletedControlButtons extends StatelessWidget {
     final Color selectedItemColor = cs.primary;
     final Color unselectedItemColor = cs.onSurfaceVariant.withOpacity(.65);
 
-    final Color chatbotColor = cs.secondary;
+    final Color productivityColor = cs.secondary;
     final Color searchColor = cs.error;
     final Color successColor = cs.tertiary;
 
@@ -37,8 +37,8 @@ class MinorParkingCompletedControlButtons extends StatelessWidget {
       unselectedItemColor: unselectedItemColor,
       items: [
         BottomNavigationBarItem(
-          icon: Icon(Icons.chat_bubble_rounded, color: chatbotColor),
-          label: '챗봇',
+          icon: Icon(Icons.dashboard_customize_rounded, color: productivityColor),
+          label: '도구',
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.manage_search_rounded, color: searchColor),
@@ -51,8 +51,8 @@ class MinorParkingCompletedControlButtons extends StatelessWidget {
       ],
       onTap: (index) async {
         switch (index) {
-          case idxChatbot:
-            await ChatBot.togglePanel();
+          case idxProductivity:
+            await ProductivitySheet.togglePanel();
             break;
           case idxSmartSearch:
             showSearchDialog();

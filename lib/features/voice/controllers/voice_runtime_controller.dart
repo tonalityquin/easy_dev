@@ -265,12 +265,18 @@ class VoiceRuntimeController extends ChangeNotifier {
     }
   }
 
-  Future<void> playPreviousComment() async {
+  Future<void> playLatestComment() async {
     if (_messages.isEmpty) {
       return;
     }
-    final target = _messages.length > 1 ? _messages[1] : _messages.first;
-    await togglePlayback(target);
+    await togglePlayback(_messages.first);
+  }
+
+  Future<void> playPreviousComment() async {
+    if (_messages.length < 2) {
+      return;
+    }
+    await togglePlayback(_messages[1]);
   }
 
   Future<void> deleteMessage(voice_message message) async {
@@ -322,11 +328,11 @@ class VoiceRuntimeController extends ChangeNotifier {
   }
 
   void _handleMessages(List<voice_message> nextMessages) {
+    final isInitialSnapshot = !_didReceiveInitialSnapshot;
+    _didReceiveInitialSnapshot = true;
     _messages = nextMessages;
     final latest = nextMessages.isNotEmpty ? nextMessages.first : null;
     if (latest != null) {
-      final isInitialSnapshot = !_didReceiveInitialSnapshot;
-      _didReceiveInitialSnapshot = true;
       final wasSeenBefore = _lastSeenMessageId == latest.id;
       _lastSeenMessageId = latest.id;
       final shouldAutoPlay = !isInitialSnapshot &&

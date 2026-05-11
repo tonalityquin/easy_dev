@@ -15,8 +15,9 @@ import 'app/init/app_exit_flag.dart';
 import 'app/init/app_navigator.dart';
 import 'app/init/quick_overlay_main.dart';
 import 'app/theme/theme_prefs_controller.dart';
+import 'features/community/application/game/game_quick_actions.dart';
 import 'features/dashboard/applications/common/firebase_google_auth_bridge.dart';
-import 'features/dashboard/widgets/chat_bot.dart';
+import 'features/dashboard/widgets/productivity_sheet.dart';
 import 'features/dev/page/sheets/dev_quick_actions.dart';
 import 'features/headquarter/application/fab/hub_quick_actions.dart';
 import 'features/headquarter/page/sheets/head_memo.dart';
@@ -309,10 +310,13 @@ class _AppBootstrapperState extends State<AppBootstrapper> {
     await HeadMemo.init();
 
     debugPrint('[MAIN][${_ts()}] DashMemo.init');
-    await ChatBot.init();
+    await ProductivitySheet.init();
 
     debugPrint('[MAIN][${_ts()}] HeadHubActions.init');
     await HeadHubActions.init();
+
+    debugPrint('[MAIN][${_ts()}] GameQuickActions.init');
+    await GameQuickActions.init();
 
     debugPrint('[MAIN][${_ts()}] DevQuickActions.init');
     await DevQuickActions.init();
@@ -348,6 +352,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
     if (AppExitFlag.isExiting) {
       if (state == AppLifecycleState.detached) {
+        unawaited(GameQuickActions.terminateSession());
         unawaited(closeQuickOverlay());
         AppExitFlag.reset();
       }
@@ -366,6 +371,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         break;
 
       case AppLifecycleState.detached:
+        unawaited(GameQuickActions.terminateSession());
         unawaited(closeQuickOverlay());
         break;
     }
@@ -451,7 +457,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 debugPrint(
                     '[MAIN][${_ts()}] postFrameCallback → mountIfNeeded');
                 HeadHubActions.mountIfNeeded();
-                ChatBot.mountIfNeeded();
+                GameQuickActions.mountIfNeeded();
+                ProductivitySheet.mountIfNeeded();
                 DevQuickActions.mountIfNeeded();
               });
 

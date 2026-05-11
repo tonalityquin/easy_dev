@@ -24,6 +24,9 @@ class HeadHubActions {
   static const _kEnabledKey = 'head_hub_actions_enabled_v1';
   static const _kBubbleXKey = 'head_hub_actions_bubble_x_v1';
   static const _kBubbleYKey = 'head_hub_actions_bubble_y_v1';
+  static const _kGameEnabledKey = 'game_quick_actions_enabled_v1';
+  static const _kGameBubbleXKey = 'game_quick_actions_bubble_x_v1';
+  static const _kGameBubbleYKey = 'game_quick_actions_bubble_y_v1';
 
   static SharedPreferences? _prefs;
   static OverlayEntry? _entry;
@@ -175,6 +178,9 @@ class _HubBubbleState extends State<_HubBubble>
   static const double _handleVisualWidth = 12;
   static const double _handleHeight = 56;
   static const double _dockRadius = 18;
+  static const double _gameTouchWidth = 34;
+  static const double _gameHeight = 64;
+  static const double _bubbleGap = 12;
 
   late Offset _pos;
   bool _clampedOnce = false;
@@ -459,10 +465,9 @@ class _HubBubbleState extends State<_HubBubble>
             },
             onPanEnd: (_) async {
               if (screen == Size.zero) return;
-              final right =
-                  (_pos.dx + _handleTouchWidth / 2) >= screen.width / 2;
-              final snapX = right ? (screen.width - _handleTouchWidth) : 0.0;
-              setState(() => _pos = Offset(snapX, _pos.dy));
+              setState(() {
+                _pos = _clampToScreen(_pos, screen, bottomInset + keyboardInset);
+              });
               await widget.onPosSave(_pos);
             },
             child: SizedBox(
@@ -490,10 +495,39 @@ class _HubBubbleState extends State<_HubBubble>
     final wantsRight = (raw.dx + _handleTouchWidth / 2) >= screen.width / 2;
     final snappedX = wantsRight ? (screen.width - _handleTouchWidth) : 0.0;
 
-    final maxY = (screen.height - _handleHeight - bottomInset)
-        .clamp(0.0, double.infinity);
-    final dy = raw.dy.clamp(0.0, maxY);
-    return Offset(snappedX, dy);
+    final maxY = (screen.height - _handleHeight - bottomInset).clamp(0.0, double.infinity).toDouble();
+    final dy = raw.dy.clamp(0.0, maxY).toDouble();
+    return _avoidGameOverlap(Offset(snappedX, dy), screen, bottomInset);
+  }
+
+  Rect? _gameBubbleRect(Size screen, double bottomInset) {
+    final prefs = HeadHubActions._prefs;
+    if (prefs?.getBool(HeadHubActions._kGameEnabledKey) != true) return null;
+    final rawDx = prefs?.getDouble(HeadHubActions._kGameBubbleXKey) ?? 100000.0;
+    final rawDy = prefs?.getDouble(HeadHubActions._kGameBubbleYKey) ?? 272.0;
+    final right = (rawDx + _gameTouchWidth / 2) >= screen.width / 2;
+    final x = right ? screen.width - _gameTouchWidth : 0.0;
+    final maxY = (screen.height - _gameHeight - bottomInset).clamp(0.0, double.infinity).toDouble();
+    final y = rawDy.clamp(0.0, maxY).toDouble();
+    return Rect.fromLTWH(x, y, _gameTouchWidth, _gameHeight);
+  }
+
+  Offset _avoidGameOverlap(Offset pos, Size screen, double bottomInset) {
+    final game = _gameBubbleRect(screen, bottomInset);
+    if (game == null) return pos;
+    final mine = Rect.fromLTWH(pos.dx, pos.dy, _handleTouchWidth, _handleHeight);
+    if (!mine.overlaps(game)) return pos;
+
+    final maxY = (screen.height - _handleHeight - bottomInset).clamp(0.0, double.infinity).toDouble();
+    final above = (game.top - _bubbleGap - _handleHeight).clamp(0.0, maxY).toDouble();
+    final aboveRect = Rect.fromLTWH(pos.dx, above, _handleTouchWidth, _handleHeight);
+    if (!aboveRect.overlaps(game)) return Offset(pos.dx, above);
+
+    final below = (game.bottom + _bubbleGap).clamp(0.0, maxY).toDouble();
+    final belowRect = Rect.fromLTWH(pos.dx, below, _handleTouchWidth, _handleHeight);
+    if (!belowRect.overlaps(game)) return Offset(pos.dx, below);
+
+    return Offset(pos.dx, 0.0);
   }
 }
 

@@ -3,8 +3,8 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
-import '../../chat_bot.dart';
-import '../../utils/chat_bot_tools.dart';
+import '../../productivity_sheet.dart';
+import '../../utils/productivity_tools.dart';
 
 Future<void> showTodoDialog({
   required BuildContext context,
@@ -226,7 +226,7 @@ class _TodoPanelState extends State<TodoPanel> {
   void _openTodoComposer() {
     widget.onClose?.call();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(ChatBot.openPanel(tab: ChatBotSheetTab.todo));
+      unawaited(ProductivitySheet.openPanel(tab: ProductivitySheetTab.todo));
     });
   }
 

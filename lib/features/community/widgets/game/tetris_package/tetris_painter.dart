@@ -1,19 +1,24 @@
+import 'dart:math';
 
-part of '../tetris.dart';
+import 'package:flutter/material.dart';
 
-class _BoardPainter extends CustomPainter {
+import 'tetris_models.dart';
+
+class TetrisBoardPainter extends CustomPainter {
   final int rows;
   final int cols;
   final List<List<Color?>> board;
-  final _Piece? current;
+  final TetrisPiece? current;
   final List<Point<int>> ghostCells;
+  final int boardVersion;
 
-  _BoardPainter({
+  const TetrisBoardPainter({
     required this.rows,
     required this.cols,
     required this.board,
     required this.current,
     required this.ghostCells,
+    required this.boardVersion,
   });
 
   @override
@@ -35,7 +40,6 @@ class _BoardPainter extends CustomPainter {
     final bg = Paint()..color = Colors.white;
     canvas.drawRect(Offset.zero & size, bg);
 
-    
     final totalRows = board.length;
     for (int r = totalRows - rows; r < totalRows; r++) {
       final vr = r - (totalRows - rows);
@@ -47,7 +51,6 @@ class _BoardPainter extends CustomPainter {
       }
     }
 
-    
     for (final p in ghostCells) {
       final r = p.x - (board.length - rows);
       final c = p.y;
@@ -56,7 +59,6 @@ class _BoardPainter extends CustomPainter {
       }
     }
 
-    
     if (current != null) {
       for (final p in current!.cells) {
         final r = current!.pos.x + p.x - (board.length - rows);
@@ -67,7 +69,6 @@ class _BoardPainter extends CustomPainter {
       }
     }
 
-    
     for (int r = 0; r <= rows; r++) {
       final y = r * cell;
       canvas.drawLine(Offset(0, y), Offset(cols * cell, y), gridPaint);
@@ -77,7 +78,6 @@ class _BoardPainter extends CustomPainter {
       canvas.drawLine(Offset(x, 0), Offset(x, rows * cell), gridPaint);
     }
 
-    
     canvas.drawRect(Rect.fromLTWH(0, 0, cols * cell, rows * cell), borderPaint);
   }
 
@@ -90,6 +90,7 @@ class _BoardPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _BoardPainter old) =>
-      old.board != board || old.current != current || old.ghostCells != ghostCells;
+  bool shouldRepaint(covariant TetrisBoardPainter old) {
+    return old.boardVersion != boardVersion || old.current != current || old.ghostCells != ghostCells;
+  }
 }

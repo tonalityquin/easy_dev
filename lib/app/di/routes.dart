@@ -17,7 +17,6 @@ import '../../features/login/pages/common/login_screen.dart';
 import '../../features/mode_single/page/single_inside_screen.dart';
 import '../../features/selector/page/selector_hubs_page.dart';
 import '../../features/tablet/pages/tablet_page.dart';
-import '../../features/voice/page/voice/voice_page.dart';
 import '../../shared/page/pages/double/double_type_page.dart';
 import '../../shared/page/pages/minor/minor_type_page.dart';
 import '../../shared/page/pages/triple/triple_type_page.dart';
@@ -65,7 +64,6 @@ class AppRoutes {
   static const faq = '/faq';
 
   static const communityStub = '/community_stub';
-  static const communityWorkintalkin = '/community_workintalkin';
   static const headStub = '/head_stub';
   static const devStub = '/dev_stub';
 
@@ -111,7 +109,6 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.faq: (context) => const FaqPage(),
 
   AppRoutes.communityStub: (context) => const CommunityStubPage(),
-  AppRoutes.communityWorkintalkin: (context) => const VoicePage(),
   AppRoutes.headStub: (context) => const HeadStubPage(),
   AppRoutes.devStub: (context) => const DevStubPage(),
 

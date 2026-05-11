@@ -3,10 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../app/di/routes.dart';
 import '../application/discord/discord_config.dart';
+import '../application/game/game_quick_actions.dart';
 import 'sheets/discord/discord_bottom_sheet.dart';
-import 'sheets/game/game_arcade_bottom_sheet.dart';
 
 double _contrastRatio(Color a, Color b) {
   final la = a.computeLuminance();
@@ -154,12 +153,7 @@ class CommunityStubPage extends StatelessWidget {
   }
 
   Future<void> _openArcadeSheet(BuildContext context) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => GameArcadeBottomSheet(rootContext: context),
-    );
+    await GameQuickActions.openTetrisSheet(context);
   }
 
   @override
@@ -234,15 +228,6 @@ class CommunityStubPage extends StatelessWidget {
                     final childAspectRatio = tileWidth / tileHeight;
 
                     final cards = <Widget>[
-                      _ActionCard(
-                        icon: Icons.record_voice_over_rounded,
-                        title: '무전기',
-                        subtitle: '근무지 음성 채널',
-                        accent: cs.primary,
-                        onAccent: cs.onPrimary,
-                        onTap: () => Navigator.of(context)
-                            .pushNamed(AppRoutes.communityWorkintalkin),
-                      ),
                       _ActionCard(
                         icon: Icons.mic_rounded,
                         title: '사내 업무 커뮤니티',
@@ -326,6 +311,7 @@ class CommunityStubPage extends StatelessWidget {
   }
 }
 
+
 class _HeaderBanner extends StatelessWidget {
   const _HeaderBanner();
 
@@ -363,17 +349,74 @@ class _HeaderBanner extends StatelessWidget {
               border: Border.all(color: base.withOpacity(0.22)),
             ),
             alignment: Alignment.center,
-            child: Icon(Icons.groups_rounded, color: base),
+            child: Icon(Icons.videogame_asset_rounded, color: base),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              '커뮤니티 허브 입니다.',
-              style: text.bodyMedium?.copyWith(
-                color: onContainer,
-                fontWeight: FontWeight.w700,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '커뮤니티 허브 입니다.',
+                  style: text.bodyMedium?.copyWith(
+                    color: onContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '게임 퀵버블을 켜면 다른 화면에서도 테트리스를 열 수 있습니다.',
+                  style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ],
             ),
+          ),
+          const SizedBox(width: 12),
+          ValueListenableBuilder<bool>(
+            valueListenable: GameQuickActions.enabled,
+            builder: (context, on, _) {
+              final pillBg = on ? base.withOpacity(0.12) : cs.surfaceVariant;
+              final pillBorder = on ? base.withOpacity(0.30) : cs.outlineVariant;
+              final pillFg = on ? base : cs.onSurfaceVariant;
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: pillBg,
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: pillBorder),
+                    ),
+                    child: Text(
+                      on ? 'Game ON' : 'Game OFF',
+                      style: text.labelMedium?.copyWith(
+                        color: pillFg,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: .2,
+                      ),
+                    ),
+                  ),
+                  Switch.adaptive(
+                    value: on,
+                    onChanged: (v) async {
+                      GameQuickActions.setEnabled(v);
+                      if (v) await GameQuickActions.mountIfNeeded();
+                      HapticFeedback.selectionClick();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(v ? '게임 퀵버블이 켜졌습니다.' : '게임 퀵버블이 꺼졌습니다.'),
+                            behavior: SnackBarBehavior.floating,
+                            duration: const Duration(milliseconds: 900),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),

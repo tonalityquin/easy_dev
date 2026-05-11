@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
-import '../../features/dashboard/widgets/utils/chat_bot_tools.dart';
+import '../../features/dashboard/widgets/utils/productivity_tools.dart';
+import '../../features/community/application/game/game_quick_actions.dart';
 import 'app_exit_flag.dart';
 
 class AppExitService {
@@ -14,6 +15,10 @@ class AppExitService {
     AppExitFlag.beginExit();
 
     try {
+      try {
+        await GameQuickActions.terminateSession();
+      } catch (_) {}
+
       if (Platform.isAndroid) {
         try {
           if (await FlutterOverlayWindow.isActive()) {

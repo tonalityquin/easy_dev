@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'
     show
@@ -8,13 +6,12 @@ import 'package:flutter/services.dart'
     FilteringTextInputFormatter,
     LengthLimitingTextInputFormatter;
 import '../../../app/init/app_navigator.dart';
-import 'utils/chat_bot_engine.dart';
-import 'utils/chat_bot_tools.dart';
+import 'utils/productivity_tools.dart';
 
-enum ChatBotSheetTab { chat, focus, todo, calendar, memo }
+enum ProductivitySheetTab { focus, todo, calendar, memo }
 
-class ChatBot {
-  ChatBot._();
+class ProductivitySheet {
+  ProductivitySheet._();
 
   static GlobalKey<NavigatorState> get navigatorKey => AppNavigator.key;
 
@@ -45,7 +42,7 @@ class ChatBot {
     if (!_inited) await init();
     final ctx = _bestContext();
     if (ctx == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => togglePanel());
+      WidgetsBinding.instance.addPostFrameCallback((_) => ProductivitySheet.togglePanel());
       return;
     }
 
@@ -58,12 +55,12 @@ class ChatBot {
   }
 
   static Future<void> openPanel({
-    ChatBotSheetTab tab = ChatBotSheetTab.chat,
+    ProductivitySheetTab tab = ProductivitySheetTab.focus,
   }) async {
     if (!_inited) await init();
     final ctx = _bestContext();
     if (ctx == null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => openPanel(tab: tab));
+      WidgetsBinding.instance.addPostFrameCallback((_) => ProductivitySheet.openPanel(tab: tab));
       return;
     }
     if (_isPanelOpen || _panelFuture != null) return;
@@ -74,7 +71,7 @@ class ChatBot {
       useSafeArea: true,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _ChillSheet(initialTabIndex: tab.index),
+      builder: (_) => _ProductivitySheetBody(initialTabIndex: tab.index),
     ).whenComplete(() {
       _isPanelOpen = false;
       _panelFuture = null;
@@ -84,16 +81,16 @@ class ChatBot {
   }
 }
 
-class _ChillSheet extends StatefulWidget {
+class _ProductivitySheetBody extends StatefulWidget {
   final int initialTabIndex;
 
-  const _ChillSheet({required this.initialTabIndex});
+  const _ProductivitySheetBody({required this.initialTabIndex});
 
   @override
-  State<_ChillSheet> createState() => _ChillSheetState();
+  State<_ProductivitySheetBody> createState() => _ProductivitySheetBodyState();
 }
 
-class _ChillSheetState extends State<_ChillSheet>
+class _ProductivitySheetBodyState extends State<_ProductivitySheetBody>
     with SingleTickerProviderStateMixin {
   late final TabController _tab;
 
@@ -101,7 +98,7 @@ class _ChillSheetState extends State<_ChillSheet>
   void initState() {
     super.initState();
     _tab = TabController(
-      length: 5,
+      length: 4,
       vsync: this,
       initialIndex: widget.initialTabIndex,
     );
@@ -131,7 +128,7 @@ class _ChillSheetState extends State<_ChillSheet>
                 const SizedBox(height: 10),
                 const _DragHandle(),
                 const SizedBox(height: 10),
-                const _Header(),
+                const _ProductivityHeader(),
                 const SizedBox(height: 8),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -141,7 +138,6 @@ class _ChillSheetState extends State<_ChillSheet>
                     unselectedLabelColor: cs.outline,
                     indicatorColor: cs.primary,
                     tabs: const [
-                      Tab(icon: Icon(Icons.chat_bubble_rounded), text: '채팅'),
                       Tab(icon: Icon(Icons.timer_rounded), text: '집중'),
                       Tab(icon: Icon(Icons.checklist_rounded), text: '할 일'),
                       Tab(icon: Icon(Icons.calendar_month_rounded), text: '일정'),
@@ -154,7 +150,6 @@ class _ChillSheetState extends State<_ChillSheet>
                   child: TabBarView(
                     controller: _tab,
                     children: const [
-                      _ChatTab(),
                       _FocusTab(),
                       _TodoTab(),
                       _CalendarTab(),
@@ -171,47 +166,8 @@ class _ChillSheetState extends State<_ChillSheet>
   }
 }
 
-class _Header extends StatelessWidget {
-  const _Header();
-
-  Future<void> _rename(BuildContext context) async {
-    HapticFeedback.selectionClick();
-    final ctrl =
-    TextEditingController(text: ChillStore.instance.profile.value.name);
-    final cs = Theme.of(context).colorScheme;
-    final res = await showDialog<String>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('이름 변경'),
-        content: TextField(
-          controller: ctrl,
-          decoration: const InputDecoration(hintText: '이름'),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('취소'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: cs.primary,
-              foregroundColor: cs.onPrimary,
-            ),
-            onPressed: () => Navigator.of(context).pop(ctrl.text),
-            child: const Text('저장'),
-          ),
-        ],
-      ),
-    );
-    if (res == null) return;
-    await ChillStore.instance.renameCompanion(res);
-  }
-
-  Future<void> _reroll(BuildContext context) async {
-    HapticFeedback.selectionClick();
-    await ChillStore.instance.rerollCompanionSeed();
-  }
+class _ProductivityHeader extends StatelessWidget {
+  const _ProductivityHeader();
 
   @override
   Widget build(BuildContext context) {
@@ -221,270 +177,45 @@ class _Header extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ValueListenableBuilder<ChillCompanionProfile>(
-            valueListenable: ChillStore.instance.profile,
-            builder: (_, p, __) {
-              return _PixelAvatar(seed: p.seed, size: 56);
-            },
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: cs.primaryContainer,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Icon(
+              Icons.dashboard_customize_rounded,
+              color: cs.onPrimaryContainer,
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: ValueListenableBuilder<ChillCompanionProfile>(
-                        valueListenable: ChillStore.instance.profile,
-                        builder: (_, p, __) => Text(
-                          p.name,
-                          style: tt.titleLarge
-                              ?.copyWith(fontWeight: FontWeight.w900),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: '이름',
-                      onPressed: () => _rename(context),
-                      icon: const Icon(Icons.edit_rounded),
-                    ),
-                    IconButton(
-                      tooltip: '외형 변경',
-                      onPressed: () => _reroll(context),
-                      icon: const Icon(Icons.casino_rounded),
-                    ),
-                    IconButton(
-                      tooltip: '닫기',
-                      onPressed: () => Navigator.of(context).maybePop(),
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-                  ],
+                Text(
+                  '생산성 도구',
+                  style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                  overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 2),
-                ValueListenableBuilder<String>(
-                  valueListenable: ChillStore.instance.headline,
-                  builder: (_, s, __) => Text(
-                    s,
-                    style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                Text(
+                  '집중, 할 일, 일정, 메모',
+                  style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
+          ),
+          IconButton(
+            tooltip: '닫기',
+            onPressed: () => Navigator.of(context).maybePop(),
+            icon: const Icon(Icons.close_rounded),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ChatTab extends StatefulWidget {
-  const _ChatTab();
-
-  @override
-  State<_ChatTab> createState() => _ChatTabState();
-}
-
-class _ChatTabState extends State<_ChatTab> {
-  final TextEditingController _ctrl = TextEditingController();
-  final ScrollController _sc = ScrollController();
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    _sc.dispose();
-    super.dispose();
-  }
-
-  void _scrollBottom({bool animated = true}) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      if (!_sc.hasClients) return;
-      final pos = _sc.position.maxScrollExtent;
-      if (!animated) {
-        _sc.jumpTo(pos);
-        return;
-      }
-      _sc.animateTo(
-        pos,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
-      );
-    });
-  }
-
-  Future<void> _send() async {
-    final text = _ctrl.text.trim();
-    if (text.isEmpty) return;
-    _ctrl.clear();
-    HapticFeedback.selectionClick();
-    await ChillStore.instance.sendChatUser(text);
-    _scrollBottom();
-  }
-
-  Future<void> _clear() async {
-    HapticFeedback.selectionClick();
-    await ChillStore.instance.clearChat();
-    _scrollBottom(animated: false);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-          child: Row(
-            children: [
-              Text(
-                '대화',
-                style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-              ),
-              const Spacer(),
-              IconButton(
-                tooltip: '초기화',
-                onPressed: _clear,
-                icon: const Icon(Icons.delete_outline_rounded),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: ValueListenableBuilder<List<ChillChatMessage>>(
-            valueListenable: ChillStore.instance.chatMessages,
-            builder: (_, msgs, __) {
-              WidgetsBinding.instance
-                  .addPostFrameCallback((_) => _scrollBottom(animated: false));
-              if (msgs.isEmpty) {
-                return Center(
-                  child: Text(
-                    '메시지 없음',
-                    style: tt.bodyMedium?.copyWith(color: cs.outline),
-                  ),
-                );
-              }
-              return ListView.builder(
-                controller: _sc,
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-                itemCount: msgs.length,
-                itemBuilder: (_, i) => _ChatBubble(msg: msgs[i]),
-              );
-            },
-          ),
-        ),
-        SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _ctrl,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => _send(),
-                    decoration: InputDecoration(
-                      hintText: '입력',
-                      filled: true,
-                      fillColor: cs.surfaceVariant.withOpacity(0.55),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(18),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 12,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                FilledButton(
-                  onPressed: _send,
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 14,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                  ),
-                  child: const Icon(Icons.send_rounded, size: 18),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ChatBubble extends StatelessWidget {
-  final ChillChatMessage msg;
-
-  const _ChatBubble({required this.msg});
-
-  String _hhmm(DateTime dt) {
-    final h = dt.hour.toString().padLeft(2, '0');
-    final m = dt.minute.toString().padLeft(2, '0');
-    return '$h:$m';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-    final isUser = msg.role == ChatRole.user;
-
-    final bg = isUser ? cs.primary : cs.surfaceVariant;
-    final fg = isUser ? cs.onPrimary : cs.onSurfaceVariant;
-    final align = isUser ? Alignment.centerRight : Alignment.centerLeft;
-    final radius = BorderRadius.only(
-      topLeft: const Radius.circular(16),
-      topRight: const Radius.circular(16),
-      bottomLeft: Radius.circular(isUser ? 16 : 4),
-      bottomRight: Radius.circular(isUser ? 4 : 16),
-    );
-
-    return Align(
-      alignment: align,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Column(
-          crossAxisAlignment:
-          isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-          children: [
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 290),
-              child: Container(
-                decoration: BoxDecoration(color: bg, borderRadius: radius),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                child: Text(
-                  msg.text,
-                  style: tt.bodyMedium?.copyWith(color: fg, height: 1.35),
-                ),
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              _hhmm(msg.at),
-              style: tt.labelSmall?.copyWith(color: cs.outline),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -1730,88 +1461,4 @@ Future<DateTime?> _pickDateTime(BuildContext context) async {
   );
   if (t == null) return null;
   return DateTime(d.year, d.month, d.day, t.hour, t.minute);
-}
-
-class _PixelAvatar extends StatelessWidget {
-  final int seed;
-  final double size;
-
-  const _PixelAvatar({required this.seed, required this.size});
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: CustomPaint(
-        size: Size.square(size),
-        painter: _PixelAvatarPainter(
-          seed: seed,
-          surface: cs.surfaceVariant,
-          accent: cs.primary,
-        ),
-      ),
-    );
-  }
-}
-
-class _PixelAvatarPainter extends CustomPainter {
-  _PixelAvatarPainter({
-    required this.seed,
-    required this.surface,
-    required this.accent,
-  });
-
-  final int seed;
-  final Color surface;
-  final Color accent;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rng = math.Random(seed);
-    final cell = size.width / 16.0;
-    final bg = Paint()..color = surface.withOpacity(0.9);
-    canvas.drawRect(Offset.zero & size, bg);
-
-    final base =
-        Color.lerp(accent, Colors.black, 0.25 + (rng.nextDouble() * 0.25)) ??
-            accent;
-    final alt =
-        Color.lerp(accent, Colors.white, 0.20 + (rng.nextDouble() * 0.25)) ??
-            accent;
-    final pBase = Paint()..color = base.withOpacity(0.95);
-    final pAlt = Paint()..color = alt.withOpacity(0.95);
-
-    for (int y = 2; y < 15; y++) {
-      for (int x = 0; x < 8; x++) {
-        final v = rng.nextInt(100);
-        if (v < 22) continue;
-        final useAlt = v > 78;
-        final px = x;
-        final mx = 15 - x;
-        final rect1 = Rect.fromLTWH(px * cell, y * cell, cell, cell);
-        final rect2 = Rect.fromLTWH(mx * cell, y * cell, cell, cell);
-        canvas.drawRect(rect1, useAlt ? pAlt : pBase);
-        canvas.drawRect(rect2, useAlt ? pAlt : pBase);
-      }
-    }
-
-    final eye = Paint()..color = Colors.black.withOpacity(0.85);
-    final eyeY = 6.5 * cell;
-    canvas.drawRect(Rect.fromLTWH(5.5 * cell, eyeY, cell, cell), eye);
-    canvas.drawRect(Rect.fromLTWH(9.5 * cell, eyeY, cell, cell), eye);
-
-    final mouth = Paint()..color = Colors.black.withOpacity(0.60);
-    canvas.drawRect(
-      Rect.fromLTWH(7.5 * cell, 10.5 * cell, 2 * cell, cell),
-      mouth,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _PixelAvatarPainter oldDelegate) {
-    return oldDelegate.seed != seed ||
-        oldDelegate.surface != surface ||
-        oldDelegate.accent != accent;
-  }
 }

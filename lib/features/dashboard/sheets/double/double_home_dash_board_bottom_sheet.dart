@@ -10,7 +10,7 @@ import '../../../../shared/sheet_tool/document_box_action_executor.dart';
 import '../../../../shared/sheet_tool/fielder_document_box_sheet.dart';
 import '../../../../shared/sheet_tool/leader_document_box_sheet.dart';
 import '../../../camera/photo_transfer_mail_page.dart';
-import '../../widgets/chat_bot.dart';
+import '../../widgets/productivity_sheet.dart';
 import 'widgets/double_dashboard_punch_recorder_section.dart';
 
 class DoubleHomeDashBoardBottomSheet extends StatefulWidget {
@@ -89,11 +89,11 @@ class _DoubleHomeDashBoardBottomSheetState
     });
   }
 
-  Future<void> _toggleMemoPanel(BuildContext context) async {
+  Future<void> _openMemoSheet(BuildContext context) async {
     await _closeCurrentSheetAndRun(context, (rootContext) async {
-      await ChatBot.init();
-      ChatBot.mountIfNeeded();
-      await ChatBot.togglePanel();
+      await ProductivitySheet.init();
+      ProductivitySheet.mountIfNeeded();
+      await ProductivitySheet.openPanel(tab: ProductivitySheetTab.memo);
     });
   }
 
@@ -226,7 +226,7 @@ class _DoubleHomeDashBoardBottomSheetState
                     icon: const Icon(Icons.sticky_note_2_rounded),
                     label: const Text('메모'),
                     style: _outlinedSurfaceBtnStyle(context, height: 55),
-                    onPressed: () => _toggleMemoPanel(context),
+                    onPressed: () => _openMemoSheet(context),
                   ),
                 ),
                 const SizedBox(height: 16),

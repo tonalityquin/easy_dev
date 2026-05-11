@@ -1,6 +1,4 @@
-import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -12,8 +10,6 @@ import 'package:sqflite/sqflite.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
-import 'chat_bot_engine.dart';
-
 enum ChillTodoMode {
   a,
   b,
@@ -24,12 +20,9 @@ class ChillStore {
 
   static final ChillStore instance = ChillStore._();
 
-  static const _kProfileSeed = 'chill_profile_seed_v1';
-  static const _kProfileName = 'chill_profile_name_v1';
   static const _kFocusActive = 'chill_focus_active_v1';
   static const _kFocusPlannedEndMs = 'chill_focus_planned_end_ms_v1';
   static const _kFocusMinutes = 'chill_focus_minutes_v1';
-  static const _kChatMessages = 'chill_chat_messages_v1';
   static const _kTodoPhrases = 'chill_todo_phrases_v1';
 
   static const int _kNotifFocus = 5000000;
@@ -55,18 +48,6 @@ class ChillStore {
   int? _eventsRangeStartMs;
   int? _eventsRangeEndMs;
 
-  final ValueNotifier<ChillCompanionProfile> profile =
-  ValueNotifier<ChillCompanionProfile>(
-    const ChillCompanionProfile(seed: 1, name: '챗봇'),
-  );
-
-  final ValueNotifier<ChillMood> mood =
-  ValueNotifier<ChillMood>(ChillMood.calm);
-  final ValueNotifier<String> headline = ValueNotifier<String>('');
-
-  final ValueNotifier<List<ChillChatMessage>> chatMessages =
-  ValueNotifier<List<ChillChatMessage>>(<ChillChatMessage>[]);
-
   final ValueNotifier<List<ChillTodo>> todos =
   ValueNotifier<List<ChillTodo>>(<ChillTodo>[]);
   final ValueNotifier<List<ChillNote>> notes =
@@ -89,7 +70,6 @@ class ChillStore {
   Database? _db;
   FlutterLocalNotificationsPlugin? _noti;
 
-  ChillCompanionEngine? _engine;
   bool _inited = false;
   Future<void>? _initFuture;
 
@@ -102,8 +82,6 @@ class ChillStore {
     if (_inited) return;
 
     _prefs ??= await SharedPreferences.getInstance();
-    _loadProfileFromPrefs();
-    _loadChatFromPrefs();
     _loadTodoPhrasesFromPrefs();
 
     tz.initializeTimeZones();
@@ -119,10 +97,6 @@ class ChillStore {
     await _syncTodoNotifications(todos.value);
     await _syncEventNotifications(events.value);
     await _restoreFocusIfAny();
-
-    _engine = ChillCompanionEngine(seed: profile.value.seed);
-    headline.value = _engine!.greeting(name: profile.value.name);
-    _bootstrapChatIfEmpty();
 
     _inited = true;
   }
@@ -153,17 +127,6 @@ class ChillStore {
 
     if (todoId != null) openTodoId.value = todoId;
     if (eventId != null) openEventId.value = eventId;
-  }
-
-  void _loadProfileFromPrefs() {
-    final prefs = _prefs;
-    if (prefs == null) return;
-    final seed = prefs.getInt(_kProfileSeed);
-    final name = (prefs.getString(_kProfileName) ?? '').trim();
-
-    final resolvedSeed = seed ?? _stableSeedFromDeviceTime();
-    final resolvedName = name.isEmpty ? '챗봇' : name;
-    profile.value = ChillCompanionProfile(seed: resolvedSeed, name: resolvedName);
   }
 
   void _loadTodoPhrasesFromPrefs() {
@@ -229,129 +192,6 @@ class ChillStore {
     try {
       await prefs.setString(_kTodoPhrases, jsonEncode(list));
     } catch (_) {}
-  }
-
-  int _stableSeedFromDeviceTime() {
-    final ms = DateTime.now().millisecondsSinceEpoch;
-    final mixed = (ms ^ (ms << 13) ^ (ms >> 7)) & 0x7fffffff;
-    _prefs?.setInt(_kProfileSeed, mixed);
-    return mixed;
-  }
-
-  Future<void> renameCompanion(String name) async {
-    await init();
-    final n = name.trim();
-    if (n.isEmpty) return;
-    await _prefs?.setString(_kProfileName, n);
-    profile.value = profile.value.copyWith(name: n);
-    _engine = ChillCompanionEngine(seed: profile.value.seed);
-    headline.value = _engine!.greeting(name: n);
-  }
-
-  Future<void> rerollCompanionSeed() async {
-    await init();
-    final next = math.Random().nextInt(0x7fffffff);
-    await _prefs?.setInt(_kProfileSeed, next);
-    profile.value = profile.value.copyWith(seed: next);
-    _engine = ChillCompanionEngine(seed: next);
-    headline.value = _engine!.idleHint(name: profile.value.name);
-  }
-
-  void _loadChatFromPrefs() {
-    final prefs = _prefs;
-    if (prefs == null) return;
-    final raw = prefs.getString(_kChatMessages);
-    if (raw == null || raw.trim().isEmpty) {
-      chatMessages.value = <ChillChatMessage>[];
-      return;
-    }
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) {
-        chatMessages.value = <ChillChatMessage>[];
-        return;
-      }
-      final list = <ChillChatMessage>[];
-      for (final it in decoded) {
-        if (it is Map) {
-          final m = <String, Object?>{};
-          it.forEach((k, v) {
-            m[k.toString()] = v;
-          });
-          final msg = ChillChatMessage.fromJson(m);
-          if (msg.text.trim().isNotEmpty) list.add(msg);
-        }
-      }
-      chatMessages.value = list;
-    } catch (_) {
-      chatMessages.value = <ChillChatMessage>[];
-    }
-  }
-
-  void _bootstrapChatIfEmpty() {
-    if (chatMessages.value.isNotEmpty) return;
-    final eng = _engine;
-    if (eng == null) return;
-    final greet = eng.greeting(name: profile.value.name);
-    final now = DateTime.now();
-    final next = <ChillChatMessage>[
-      ChillChatMessage(role: ChatRole.assistant, text: greet, at: now),
-    ];
-    chatMessages.value = next;
-    unawaited(_persistChat());
-  }
-
-  Future<void> _persistChat() async {
-    final prefs = _prefs;
-    if (prefs == null) return;
-    final msgs = chatMessages.value;
-    final trimmed = msgs.length > 200 ? msgs.sublist(msgs.length - 200) : msgs;
-    final raw = jsonEncode(trimmed.map((e) => e.toJson()).toList(growable: false));
-    try {
-      await prefs.setString(_kChatMessages, raw);
-    } catch (_) {}
-  }
-
-  Future<void> sendChatUser(String text) async {
-    await init();
-    final t = text.trim();
-    if (t.isEmpty) return;
-
-    final now = DateTime.now();
-    final next = <ChillChatMessage>[
-      ...chatMessages.value,
-      ChillChatMessage(role: ChatRole.user, text: t, at: now),
-    ];
-    chatMessages.value = next;
-    await _persistChat();
-
-    final eng = _engine;
-    if (eng == null) return;
-
-    final focusState = focus.value;
-    final reply = eng.replyToUser(
-      name: profile.value.name,
-      input: t,
-      mood: mood.value,
-      focusRunning: focusState.isRunning,
-      focusRemainLabel: focusState.remainLabel(),
-    );
-
-    await Future<void>.delayed(const Duration(milliseconds: 260));
-    final next2 = <ChillChatMessage>[
-      ...chatMessages.value,
-      ChillChatMessage(role: ChatRole.assistant, text: reply, at: DateTime.now()),
-    ];
-    chatMessages.value = next2;
-    headline.value = reply;
-    await _persistChat();
-  }
-
-  Future<void> clearChat() async {
-    await init();
-    chatMessages.value = <ChillChatMessage>[];
-    await _persistChat();
-    _bootstrapChatIfEmpty();
   }
 
   Future<void> _initNotifications() async {
@@ -888,15 +728,11 @@ class ChillStore {
     final endAt = DateTime.fromMillisecondsSinceEpoch(endMs);
     if (endAt.isBefore(DateTime.now())) {
       focus.value = ChillFocusState.done(plannedEndAt: endAt, minutes: mins);
-      mood.value = ChillMood.proud;
-      _engine ??= ChillCompanionEngine(seed: profile.value.seed);
-      headline.value = _engine!.onFocusDone(name: profile.value.name);
       await _clearFocusPrefs();
       return;
     }
 
     focus.value = ChillFocusState.running(plannedEndAt: endAt, minutes: mins);
-    mood.value = ChillMood.focus;
   }
 
   Future<void> startFocus({required int minutes}) async {
@@ -907,14 +743,10 @@ class ChillStore {
 
     final endAt = DateTime.now().add(Duration(minutes: m));
     focus.value = ChillFocusState.running(plannedEndAt: endAt, minutes: m);
-    mood.value = ChillMood.focus;
 
     await _prefs?.setBool(_kFocusActive, true);
     await _prefs?.setInt(_kFocusPlannedEndMs, endAt.millisecondsSinceEpoch);
     await _prefs?.setInt(_kFocusMinutes, m);
-
-    _engine ??= ChillCompanionEngine(seed: profile.value.seed);
-    headline.value = _engine!.onFocusStart(name: profile.value.name, minutes: m);
 
     await _scheduleOneShot(
       id: _kNotifFocus,
@@ -930,13 +762,8 @@ class ChillStore {
     final st = focus.value;
     if (!st.isRunning) return;
     focus.value = ChillFocusState.none();
-    mood.value = ChillMood.calm;
     await _clearFocusPrefs();
     await _cancelNotification(_kNotifFocus);
-    if (!silent) {
-      _engine ??= ChillCompanionEngine(seed: profile.value.seed);
-      headline.value = _engine!.onFocusStop(name: profile.value.name);
-    }
   }
 
   Future<void> markFocusDoneFromUi() async {
@@ -947,11 +774,8 @@ class ChillStore {
       plannedEndAt: st.plannedEndAt!,
       minutes: st.minutes,
     );
-    mood.value = ChillMood.proud;
     await _clearFocusPrefs();
     await _cancelNotification(_kNotifFocus);
-    _engine ??= ChillCompanionEngine(seed: profile.value.seed);
-    headline.value = _engine!.onFocusDone(name: profile.value.name);
   }
 
   Future<void> _clearFocusPrefs() async {
@@ -1049,9 +873,6 @@ class ChillStore {
 
     await _refreshAllNoInit();
     await _syncTodoNotifications(todos.value.where((e) => e.id == id).toList());
-
-    _engine ??= ChillCompanionEngine(seed: profile.value.seed);
-    headline.value = _engine!.onTodoAdded(title: t);
   }
 
   Future<void> addTodoB({
@@ -1085,9 +906,6 @@ class ChillStore {
 
     await _refreshAllNoInit();
     await _syncTodoNotifications(todos.value.where((e) => e.id == id).toList());
-
-    _engine ??= ChillCompanionEngine(seed: profile.value.seed);
-    headline.value = _engine!.onTodoAdded(title: title);
   }
 
   Future<void> toggleTodoDone(ChillTodo todo) async {
@@ -1114,12 +932,7 @@ class ChillStore {
     final notiId = _todoNotifId(todo.id);
     await _cancelNotification(notiId);
 
-    if (nextDone == 1) {
-      _engine ??= ChillCompanionEngine(seed: profile.value.seed);
-      headline.value = _engine!.onTodoDone(title: todo.displayTitle());
-      mood.value = ChillMood.proud;
-    } else {
-      mood.value = ChillMood.calm;
+    if (nextDone == 0) {
       await _syncTodoNotifications([todo.copyWith(isDone: false)]);
     }
 
@@ -1184,8 +997,6 @@ class ChillStore {
       );
     }
     await _refreshAllNoInit();
-    _engine ??= ChillCompanionEngine(seed: profile.value.seed);
-    headline.value = _engine!.onNoteSaved();
   }
 
   Future<void> deleteNote(ChillNote note) async {
@@ -1232,8 +1043,6 @@ class ChillStore {
     }
 
     await _refreshEventsAfterMutate();
-    _engine ??= ChillCompanionEngine(seed: profile.value.seed);
-    headline.value = _engine!.onEventAdded();
   }
 
   Future<void> updateEvent({
@@ -1628,34 +1437,6 @@ class ChillRoutine {
     final tm = (r['time_minutes'] as int?) ?? 0;
     final en = ((r['enabled'] as int?) ?? 1) == 1;
     return ChillRoutine(id: id, title: title, timeMinutes: tm, enabled: en);
-  }
-}
-
-class ChillChatMessage {
-  final ChatRole role;
-  final String text;
-  final DateTime at;
-
-  const ChillChatMessage({required this.role, required this.text, required this.at});
-
-  Map<String, Object?> toJson() {
-    return <String, Object?>{
-      'role': role == ChatRole.user ? 'u' : 'a',
-      'text': text,
-      'at_ms': at.millisecondsSinceEpoch,
-    };
-  }
-
-  static ChillChatMessage fromJson(Map<String, Object?> j) {
-    final roleRaw = (j['role'] ?? 'a').toString();
-    final role = roleRaw == 'u' ? ChatRole.user : ChatRole.assistant;
-    final text = (j['text'] ?? '').toString();
-    final ms = (j['at_ms'] as int?) ?? DateTime.now().millisecondsSinceEpoch;
-    return ChillChatMessage(
-      role: role,
-      text: text,
-      at: DateTime.fromMillisecondsSinceEpoch(ms),
-    );
   }
 }
 
