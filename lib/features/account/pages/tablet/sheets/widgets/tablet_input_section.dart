@@ -124,8 +124,7 @@ class TabletInputSection extends StatelessWidget {
     final nameError = errorMessage == '이름을 다시 입력하세요' ? errorMessage : null;
 
     final handleError = (errorMessage == '아이디는 소문자 영어 3~20자로 입력하세요' ||
-        errorMessage == '아이디를 다시 입력하세요' ||
-        errorMessage == '전화번호를 다시 입력하세요')
+        errorMessage == '아이디를 다시 입력하세요')
         ? errorMessage
         : null;
 

@@ -2,7 +2,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../../domain/models/tablet/tablet_model.dart';
-import '../../user/sheets/widgets/user_validation_helpers_section.dart';
+import 'widgets/tablet_validation_helpers.dart';
 import 'widgets/tablet_input_section.dart';
 import 'widgets/tablet_password_display.dart';
 import 'widgets/tablet_role_dropdown_section.dart';
@@ -119,10 +119,10 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
   
 
   bool _validateInputs() {
-    final error = validateInputs({
-      '이름': _nameController.text,
-      '아이디': _handleController.text,
-      '이메일': _emailController.text, 
+    final error = validateTabletInputs({
+      '이름': _nameController.text.trim(),
+      '아이디': _handleController.text.trim(),
+      '이메일': _emailController.text.trim(),
     });
     _setErrorMessage(error);
     return error == null;
@@ -608,12 +608,12 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
                                 return;
                               }
 
-                              final fullEmail = '${_emailController.text}@gmail.com';
+                              final fullEmail = '${_emailController.text.trim()}@gmail.com';
 
                               
                               widget.onSave(
-                                _nameController.text,
-                                _handleController.text,
+                                _nameController.text.trim(),
+                                _handleController.text.trim(),
                                 fullEmail,
                                 _selectedRole.name,
                                 _passwordController.text,
