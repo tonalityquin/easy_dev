@@ -3,74 +3,57 @@ import 'package:flutter/material.dart';
 class ModifyPlateSection extends StatelessWidget {
   final String? selectedManufacturerName;
   final String? selectedModelName;
-  final VoidCallback onTapManufacturer;
-  final VoidCallback onTapModel;
 
   const ModifyPlateSection({
     super.key,
     required this.selectedManufacturerName,
     required this.selectedModelName,
-    required this.onTapManufacturer,
-    required this.onTapModel,
   });
 
-  Widget _buildSelectBox({
+  Widget _buildReadOnlyInfoBox({
     required BuildContext context,
     required String label,
-    required String value,
-    required VoidCallback onTap,
+    required String? value,
   }) {
     final cs = Theme.of(context).colorScheme;
+    final displayValue =
+        value == null || value.trim().isEmpty ? '미등록' : value.trim();
+    final isEmptyValue = displayValue == '미등록';
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
+    return Container(
+      height: 58,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLow,
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
         borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Container(
-          height: 58,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: cs.surfaceContainerLow,
-            border: Border.all(color: cs.outlineVariant.withOpacity(0.85)),
-            borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: cs.onSurfaceVariant,
+            ),
           ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      value,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
-                        color: cs.onSurface,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 6),
-              Icon(Icons.expand_more, color: cs.onSurface),
-            ],
+          const SizedBox(height: 3),
+          Text(
+            displayValue,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+              color: isEmptyValue ? cs.onSurfaceVariant : cs.onSurface,
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -93,20 +76,18 @@ class ModifyPlateSection extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: _buildSelectBox(
+              child: _buildReadOnlyInfoBox(
                 context: context,
                 label: '제조사 명',
-                value: selectedManufacturerName ?? '선택',
-                onTap: onTapManufacturer,
+                value: selectedManufacturerName,
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: _buildSelectBox(
+              child: _buildReadOnlyInfoBox(
                 context: context,
                 label: '차종 명',
-                value: selectedModelName ?? '선택',
-                onTap: onTapModel,
+                value: selectedModelName,
               ),
             ),
           ],

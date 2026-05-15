@@ -12,7 +12,6 @@ import '../../../../features/payment/applications/bill_state.dart';
 import '../../../plate/domain/repositories/plate_repository.dart';
 import '../../../plate/domain/services/plate_status_record.dart';
 import '../controllers/input_plate_controller.dart';
-import '../data/vehicle_parking_preference_repository.dart';
 import 'live_ocr_page.dart';
 import 'sheets/input_bottom_navigation.dart';
 import 'sheets/input_region_bottom_sheet.dart';
@@ -158,12 +157,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
 
   LiveOcrSessionResult? _lastOcrSessionResult;
 
-  final VehicleParkingPreferenceRepository _vehiclePrefRepo =
-      VehicleParkingPreferenceRepository.instance;
-  List<String> _manufacturerOptions = const [];
-  List<String> _modelOptions = const [];
-  String? _selectedManufacturerName;
-  String? _selectedModelName;
 
   String _safeArea(String area) {
     final a = area.trim();
@@ -411,8 +404,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     controller = InputPlateController(isMinorMode: widget.isMinorMode);
 
     _loadHasMonthlyParkingFlag();
-    Future.microtask(_loadVehicleManufacturers);
-
     if (controller.selectedBillType == '고정' ||
         controller.selectedBillType.trim().isEmpty) {
       controller.selectedBillType = '변동';
@@ -1097,183 +1088,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     );
   }
 
-  Future<void> _loadVehicleManufacturers() async {
-    try {
-      final manufacturers = await _vehiclePrefRepo.getManufacturers();
-      if (!mounted) return;
-      setState(() => _manufacturerOptions = manufacturers);
-    } catch (e) {
-      debugPrint('[VehicleParkingPreference] manufacturer load failed: $e');
-    }
-  }
-
-  Future<String?> _showCenteredOptionDialog({
-    required String title,
-    required List<String> options,
-    String? selectedValue,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-
-    return showDialog<String>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        return Dialog(
-          insetPadding:
-              const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-          backgroundColor: cs.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: 420,
-              maxHeight: 520,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 16, 8, 10),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            color: cs.onSurface,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: '닫기',
-                        onPressed: () => Navigator.of(dialogContext).pop(),
-                        icon: const Icon(Icons.close_rounded),
-                      ),
-                    ],
-                  ),
-                ),
-                Divider(height: 1, color: cs.outlineVariant.withOpacity(0.85)),
-                Flexible(
-                  child: options.isEmpty
-                      ? Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(
-                            '선택 가능한 항목이 없습니다.',
-                            style: TextStyle(color: cs.onSurfaceVariant),
-                          ),
-                        )
-                      : ListView.separated(
-                          shrinkWrap: true,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          itemCount: options.length,
-                          separatorBuilder: (_, __) => Divider(
-                            height: 1,
-                            color: cs.outlineVariant.withOpacity(0.45),
-                          ),
-                          itemBuilder: (_, index) {
-                            final value = options[index];
-                            final selected = value == selectedValue;
-
-                            return ListTile(
-                              title: Text(
-                                value,
-                                style: TextStyle(
-                                  fontWeight: selected
-                                      ? FontWeight.w900
-                                      : FontWeight.w700,
-                                  color: cs.onSurface,
-                                ),
-                              ),
-                              trailing: selected
-                                  ? Icon(Icons.check_rounded,
-                                      color: cs.primary)
-                                  : null,
-                              onTap: () =>
-                                  Navigator.of(dialogContext).pop(value),
-                            );
-                          },
-                        ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _openManufacturerDialog() async {
-    if (_manufacturerOptions.isEmpty) {
-      await _loadVehicleManufacturers();
-    }
-    if (!mounted) return;
-
-    final selected = await _showCenteredOptionDialog(
-      title: '제조사 선택',
-      options: _manufacturerOptions,
-      selectedValue: _selectedManufacturerName,
-    );
-
-    if (!mounted || selected == null) return;
-
-    final models = await _vehiclePrefRepo.getModelsByManufacturer(selected);
-    if (!mounted) return;
-
-    setState(() {
-      _selectedManufacturerName = selected;
-      _selectedModelName = null;
-      _modelOptions = models;
-      controller.selectedManufacturerName = selected;
-      controller.selectedModelName = null;
-      controller.priority1SlotKey = null;
-      controller.priority2SlotKey = null;
-      controller.priority3SlotKey = null;
-    });
-  }
-
-  Future<void> _openModelDialog() async {
-    final manufacturer = _selectedManufacturerName;
-    if (manufacturer == null || manufacturer.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('제조사를 먼저 선택해주세요.')),
-      );
-      return;
-    }
-
-    if (_modelOptions.isEmpty) {
-      final models = await _vehiclePrefRepo.getModelsByManufacturer(manufacturer);
-      if (!mounted) return;
-      setState(() => _modelOptions = models);
-    }
-    if (!mounted) return;
-
-    final selected = await _showCenteredOptionDialog(
-      title: '차종 선택',
-      options: _modelOptions,
-      selectedValue: _selectedModelName,
-    );
-
-    if (!mounted || selected == null) return;
-
-    final pref = await _vehiclePrefRepo.findPreference(
-      manufacturerName: manufacturer,
-      modelName: selected,
-    );
-    if (!mounted) return;
-
-    setState(() {
-      _selectedModelName = selected;
-      controller.selectedManufacturerName = manufacturer;
-      controller.selectedModelName = selected;
-      controller.priority1SlotKey = pref?.priority1SlotKey;
-      controller.priority2SlotKey = pref?.priority2SlotKey;
-      controller.priority3SlotKey = pref?.priority3SlotKey;
-    });
-  }
-
   void _openRegionPicker() {
     inputRegionPickerBottomSheet(
       context: context,
@@ -1747,10 +1561,9 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         InputPlateSection(
-                          selectedManufacturerName: _selectedManufacturerName,
-                          selectedModelName: _selectedModelName,
-                          onTapManufacturer: _openManufacturerDialog,
-                          onTapModel: _openModelDialog,
+                          selectedManufacturerName:
+                              controller.selectedManufacturerName,
+                          selectedModelName: controller.selectedModelName,
                         ),
                         const SizedBox(height: 16),
                         InputLocationSection(

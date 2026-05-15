@@ -4,7 +4,6 @@ import '../../../../app/utils/snackbar_helper.dart';
 import '../../../plate/domain/enums/plate_type.dart';
 import '../../../plate/domain/models/plate_model.dart';
 import '../../../plate/widgets/action_trace_dialog.dart';
-import '../../input/data/vehicle_parking_preference_repository.dart';
 import '../../input/pages/sheets/input_location_bottom_sheet.dart';
 import '../application/modify_camera_helper.dart';
 import '../controllers/modify_plate_controller.dart';
@@ -101,10 +100,6 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
   late ModifyPlateController _controller;
   late ModifyCameraHelper _cameraHelper;
 
-  final VehicleParkingPreferenceRepository _vehiclePrefRepo =
-      VehicleParkingPreferenceRepository.instance;
-  List<String> _manufacturerOptions = const [];
-  List<String> _modelOptions = const [];
 
   final TextEditingController controllerFrontdigit = TextEditingController();
   final TextEditingController controllerMidDigit = TextEditingController();
@@ -204,8 +199,6 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
 
     _controller.initializePlate();
     _controller.initializeFieldValues();
-    Future.microtask(_loadVehicleOptions);
-
     selectedStatusNames = List<String>.from(widget.plate.statusList);
 
     _sheetController.addListener(() {
@@ -216,193 +209,6 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
           setState(() => _sheetOpen = openNow);
         }
       } catch (_) {}
-    });
-  }
-
-  Future<void> _loadVehicleOptions() async {
-    await _loadVehicleManufacturers();
-    final manufacturer = _controller.selectedManufacturerName?.trim();
-    if (manufacturer == null || manufacturer.isEmpty) return;
-
-    try {
-      final models = await _vehiclePrefRepo.getModelsByManufacturer(manufacturer);
-      if (!mounted) return;
-      setState(() => _modelOptions = models);
-    } catch (e) {
-      debugPrint('[VehicleParkingPreference] model load failed: $e');
-    }
-  }
-
-  Future<void> _loadVehicleManufacturers() async {
-    try {
-      final manufacturers = await _vehiclePrefRepo.getManufacturers();
-      if (!mounted) return;
-      setState(() => _manufacturerOptions = manufacturers);
-    } catch (e) {
-      debugPrint('[VehicleParkingPreference] manufacturer load failed: $e');
-    }
-  }
-
-  Future<String?> _showCenteredOptionDialog({
-    required String title,
-    required List<String> options,
-    String? selectedValue,
-  }) {
-    final cs = Theme.of(context).colorScheme;
-
-    return showDialog<String>(
-      context: context,
-      barrierDismissible: true,
-      builder: (dialogContext) {
-        return Dialog(
-          insetPadding:
-              const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-          backgroundColor: cs.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: 420,
-              maxHeight: 520,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(18, 16, 8, 10),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          title,
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            color: cs.onSurface,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: '닫기',
-                        onPressed: () => Navigator.of(dialogContext).pop(),
-                        icon: const Icon(Icons.close_rounded),
-                      ),
-                    ],
-                  ),
-                ),
-                Divider(height: 1, color: cs.outlineVariant.withOpacity(0.85)),
-                Flexible(
-                  child: options.isEmpty
-                      ? Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(
-                            '선택 가능한 항목이 없습니다.',
-                            style: TextStyle(color: cs.onSurfaceVariant),
-                          ),
-                        )
-                      : ListView.separated(
-                          shrinkWrap: true,
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          itemCount: options.length,
-                          separatorBuilder: (_, __) => Divider(
-                            height: 1,
-                            color: cs.outlineVariant.withOpacity(0.45),
-                          ),
-                          itemBuilder: (_, index) {
-                            final value = options[index];
-                            final selected = value == selectedValue;
-
-                            return ListTile(
-                              title: Text(
-                                value,
-                                style: TextStyle(
-                                  fontWeight: selected
-                                      ? FontWeight.w900
-                                      : FontWeight.w700,
-                                  color: cs.onSurface,
-                                ),
-                              ),
-                              trailing: selected
-                                  ? Icon(Icons.check_rounded,
-                                      color: cs.primary)
-                                  : null,
-                              onTap: () =>
-                                  Navigator.of(dialogContext).pop(value),
-                            );
-                          },
-                        ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Future<void> _openManufacturerDialog() async {
-    if (_manufacturerOptions.isEmpty) {
-      await _loadVehicleManufacturers();
-    }
-    if (!mounted) return;
-
-    final selected = await _showCenteredOptionDialog(
-      title: '제조사 선택',
-      options: _manufacturerOptions,
-      selectedValue: _controller.selectedManufacturerName,
-    );
-
-    if (!mounted || selected == null) return;
-
-    final models = await _vehiclePrefRepo.getModelsByManufacturer(selected);
-    if (!mounted) return;
-
-    setState(() {
-      _controller.selectedManufacturerName = selected;
-      _controller.selectedModelName = null;
-      _controller.priority1SlotKey = null;
-      _controller.priority2SlotKey = null;
-      _controller.priority3SlotKey = null;
-      _modelOptions = models;
-    });
-  }
-
-  Future<void> _openModelDialog() async {
-    final manufacturer = _controller.selectedManufacturerName;
-    if (manufacturer == null || manufacturer.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('제조사를 먼저 선택해주세요.')),
-      );
-      return;
-    }
-
-    if (_modelOptions.isEmpty) {
-      final models = await _vehiclePrefRepo.getModelsByManufacturer(manufacturer);
-      if (!mounted) return;
-      setState(() => _modelOptions = models);
-    }
-    if (!mounted) return;
-
-    final selected = await _showCenteredOptionDialog(
-      title: '차종 선택',
-      options: _modelOptions,
-      selectedValue: _controller.selectedModelName,
-    );
-
-    if (!mounted || selected == null) return;
-
-    final pref = await _vehiclePrefRepo.findPreference(
-      manufacturerName: manufacturer,
-      modelName: selected,
-    );
-    if (!mounted) return;
-
-    setState(() {
-      _controller.selectedModelName = selected;
-      _controller.priority1SlotKey = pref?.priority1SlotKey;
-      _controller.priority2SlotKey = pref?.priority2SlotKey;
-      _controller.priority3SlotKey = pref?.priority3SlotKey;
     });
   }
 
@@ -555,8 +361,6 @@ class _ModifyPlateScreenState extends State<ModifyPlateScreen> {
                         selectedManufacturerName:
                             _controller.selectedManufacturerName,
                         selectedModelName: _controller.selectedModelName,
-                        onTapManufacturer: _openManufacturerDialog,
-                        onTapModel: _openModelDialog,
                       ),
                       const SizedBox(height: 32.0),
                       ModifyLocationSection(

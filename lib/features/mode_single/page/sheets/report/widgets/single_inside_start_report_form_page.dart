@@ -1,15 +1,15 @@
-import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:googleapis/gmail/v1.dart' as gmail;
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../../../app/auth/google_auth_v7.dart';
 import '../../../../../../app/config/email_config.dart';
+import '../../../../../../shared/utils/gmail_pdf_mailer.dart';
+import '../../../../../dev/application/area_state.dart';
 import '../../../../../dev/debug/debug_api_logger.dart';
 import 'single_inside_report_styles.dart';
 
@@ -46,7 +46,6 @@ class _SingleInsideStartReportFormPageState
   static const String _tGmail = 'gmail';
   static const String _tGmailSend = 'gmail/send';
 
-  static const int _mimeB64LineLength = 76;
   static const String _prefsSelectedAreaKey = 'selectedArea';
   static const String _prefsHasSpecialNoteKey =
       'singleInsideStartReport.hasSpecialNote';
@@ -240,6 +239,18 @@ class _SingleInsideStartReportFormPageState
     _pageController.jumpToPage(0);
   }
 
+  String _resolveReportArea() {
+    try {
+      final currentArea = context.read<AreaState>().currentArea.trim();
+      if (currentArea.isNotEmpty) return currentArea;
+    } catch (_) {}
+
+    final selectedArea = (_selectedArea ?? '').trim();
+    if (selectedArea.isNotEmpty) return selectedArea;
+
+    return '업무';
+  }
+
   void _updateMailSubject() {
     final now = DateTime.now();
     final month = now.month;
@@ -250,9 +261,7 @@ class _SingleInsideStartReportFormPageState
       suffixSpecial = _hasSpecialNote! ? ' - 특이사항 있음' : ' - 특이사항 없음';
     }
 
-    final area = (_selectedArea != null && _selectedArea!.trim().isNotEmpty)
-        ? _selectedArea!.trim()
-        : '업무';
+    final area = _resolveReportArea();
 
     _mailSubjectCtrl.text =
     '$area 업무 시작 보고서 – ${month}월 ${day}일자$suffixSpecial';
@@ -1059,22 +1068,6 @@ class _SingleInsideStartReportFormPageState
     }
   }
 
-  String _wrapBase64Lines(String b64, {int lineLength = _mimeB64LineLength}) {
-    if (b64.isEmpty) return '';
-    final sb = StringBuffer();
-    for (int i = 0; i < b64.length; i += lineLength) {
-      final end = (i + lineLength < b64.length) ? i + lineLength : b64.length;
-      sb.write(b64.substring(i, end));
-      sb.write('\r\n');
-    }
-    return sb.toString();
-  }
-
-  String _encodeSubjectRfc2047(String subject) {
-    final subjectB64 = base64.encode(utf8.encode(subject));
-    return '=?utf-8?B?$subjectB64?=';
-  }
-
   Future<void> _sendEmailViaGmail({
     required Uint8List pdfBytes,
     required String filename,
@@ -1082,41 +1075,14 @@ class _SingleInsideStartReportFormPageState
     required String subject,
     required String body,
   }) async {
-    final client = await GoogleAuthV7.authedClient(const <String>[]);
     try {
-      final api = gmail.GmailApi(client);
-
-      final boundary =
-          'dart-mail-boundary-${DateTime.now().millisecondsSinceEpoch}';
-      const crlf = '\r\n';
-
-      final pdfB64Wrapped = _wrapBase64Lines(base64.encode(pdfBytes));
-
-      final mime = StringBuffer()
-        ..write('To: $to$crlf')
-        ..write('Subject: ${_encodeSubjectRfc2047(subject)}$crlf')
-        ..write('MIME-Version: 1.0$crlf')
-        ..write('Content-Type: multipart/mixed; boundary="$boundary"$crlf')
-        ..write(crlf)
-        ..write('--$boundary$crlf')
-        ..write('Content-Type: text/plain; charset="utf-8"$crlf')
-        ..write('Content-Transfer-Encoding: 7bit$crlf')
-        ..write(crlf)
-        ..write(body)
-        ..write(crlf)
-        ..write('--$boundary$crlf')
-        ..write('Content-Type: application/pdf; name="$filename"$crlf')
-        ..write('Content-Disposition: attachment; filename="$filename"$crlf')
-        ..write('Content-Transfer-Encoding: base64$crlf')
-        ..write(crlf)
-        ..write(pdfB64Wrapped)
-        ..write('--$boundary--$crlf');
-
-      final raw =
-      base64UrlEncode(utf8.encode(mime.toString())).replaceAll('=', '');
-      final msg = gmail.Message()..raw = raw;
-
-      await api.users.messages.send(msg, 'me');
+      await GmailPdfMailer.sendPdf(
+        pdfBytes: pdfBytes,
+        filename: filename,
+        to: to,
+        subject: subject,
+        body: body,
+      );
     } catch (e) {
       await _logApiError(
         tag: 'SingleInsideStartReportFormPage._sendEmailViaGmail',
@@ -1130,20 +1096,17 @@ class _SingleInsideStartReportFormPageState
           'filename': filename,
         },
         tags: const <String>[
-          _tReport,
-          _tReportStart,
           _tReportEmail,
           _tGmail,
           _tGmailSend,
+          _tReportStart,
+          _tReport,
         ],
       );
       rethrow;
-    } finally {
-      try {
-        client.close();
-      } catch (_) {}
     }
   }
+
 
   InputDecoration _inputDec(
       BuildContext context, {
