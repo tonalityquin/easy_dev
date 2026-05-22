@@ -150,6 +150,24 @@ class StatisticsDeepReport {
   int get totalOutput => overallSection.metrics.outputTotalSum;
 
   int get totalFee => rows.fold<int>(0, (sum, row) => sum + (row.fee ?? 0));
+
+  Map<String, int> get feeByPaymentMethod {
+    final result = <String, int>{};
+    for (final row in rows) {
+      final fee = row.fee;
+      if (fee == null) continue;
+      final key = row.paymentMethodLabel;
+      result[key] = (result[key] ?? 0) + fee;
+    }
+    final entries = result.entries.toList()..sort((a, b) {
+      if (a.key == '미분류') return 1;
+      if (b.key == '미분류') return -1;
+      final valueCmp = b.value.compareTo(a.value);
+      if (valueCmp != 0) return valueCmp;
+      return a.key.compareTo(b.key);
+    });
+    return Map<String, int>.fromEntries(entries);
+  }
 }
 
 class StatisticsDeepSection {
@@ -207,6 +225,24 @@ class StatisticsDeepSection {
   }
 
   int get totalFee => rows.fold<int>(0, (sum, row) => sum + (row.fee ?? 0));
+
+  Map<String, int> get feeByPaymentMethod {
+    final result = <String, int>{};
+    for (final row in rows) {
+      final fee = row.fee;
+      if (fee == null) continue;
+      final key = row.paymentMethodLabel;
+      result[key] = (result[key] ?? 0) + fee;
+    }
+    final entries = result.entries.toList()..sort((a, b) {
+      if (a.key == '미분류') return 1;
+      if (b.key == '미분류') return -1;
+      final valueCmp = b.value.compareTo(a.value);
+      if (valueCmp != 0) return valueCmp;
+      return a.key.compareTo(b.key);
+    });
+    return Map<String, int>.fromEntries(entries);
+  }
 }
 
 enum StatisticsDeepSectionType { overall, date, weekday }
@@ -277,6 +313,7 @@ class StatisticsDeepVehicleRow {
   final DateTime? createdAt;
   final DateTime? departureAt;
   final int? fee;
+  final String paymentMethod;
   final String docId;
 
   const StatisticsDeepVehicleRow({
@@ -286,6 +323,7 @@ class StatisticsDeepVehicleRow {
     required this.createdAt,
     required this.departureAt,
     required this.fee,
+    required this.paymentMethod,
     required this.docId,
   });
 
@@ -296,6 +334,7 @@ class StatisticsDeepVehicleRow {
     DateTime? createdAt,
     DateTime? departureAt,
     int? fee,
+    String? paymentMethod,
     String? docId,
   }) {
     return StatisticsDeepVehicleRow(
@@ -305,8 +344,14 @@ class StatisticsDeepVehicleRow {
       createdAt: createdAt ?? this.createdAt,
       departureAt: departureAt ?? this.departureAt,
       fee: fee ?? this.fee,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
       docId: docId ?? this.docId,
     );
+  }
+
+  String get paymentMethodLabel {
+    final value = paymentMethod.trim();
+    return value.isEmpty ? '미분류' : value;
   }
 }
 

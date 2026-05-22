@@ -324,6 +324,8 @@ class _ReportSummary extends StatelessWidget {
               _MetricTile(label: '입차 집계', value: '${_fmt(report.totalInput)}대', icon: Icons.login_rounded),
               _MetricTile(label: '출차 집계', value: '${_fmt(report.totalOutput)}대', icon: Icons.logout_rounded),
               _MetricTile(label: '정산액 합계', value: '₩${_fmt(report.totalFee)}', icon: Icons.payments_rounded),
+              for (final entry in report.feeByPaymentMethod.entries)
+                _MetricTile(label: '${entry.key} 합계', value: '₩${_fmt(entry.value)}', icon: Icons.account_balance_wallet_rounded),
               _MetricTile(label: '날짜별 페이지', value: '${report.dailySections.length}개', icon: Icons.event_note_rounded),
               _MetricTile(label: '요일별 페이지', value: '${report.weekdaySections.length}개', icon: Icons.calendar_view_week_rounded),
             ],
@@ -455,6 +457,8 @@ class _DeepSectionView extends StatelessWidget {
               _MetricTile(label: '입차 합계', value: '${_fmt(section.metrics.inputTotalSum)}대', icon: Icons.login_rounded),
               _MetricTile(label: '출차 합계', value: '${_fmt(section.metrics.outputTotalSum)}대', icon: Icons.logout_rounded),
               _MetricTile(label: '정산액', value: '₩${_fmt(section.totalFee)}', icon: Icons.payments_rounded),
+              for (final entry in section.feeByPaymentMethod.entries)
+                _MetricTile(label: '${entry.key}', value: '₩${_fmt(entry.value)}', icon: Icons.account_balance_wallet_rounded),
             ],
           ),
           const SizedBox(height: 14),
@@ -771,6 +775,7 @@ class _VehicleTableCard extends StatelessWidget {
                   DataColumn(label: Text('생성 시간')),
                   DataColumn(label: Text('출차 시간')),
                   DataColumn(label: Text('정산액')),
+                  DataColumn(label: Text('결제수단')),
                 ],
                 rows: [
                   for (final row in rows)
@@ -782,6 +787,7 @@ class _VehicleTableCard extends StatelessWidget {
                         DataCell(Text(_fmtTime(row.createdAt))),
                         DataCell(Text(_fmtTime(row.departureAt))),
                         DataCell(Text(row.fee == null ? '-' : '₩${_fmt(row.fee!)}')),
+                        DataCell(Text(row.paymentMethodLabel)),
                       ],
                     ),
                 ],

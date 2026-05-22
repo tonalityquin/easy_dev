@@ -181,6 +181,7 @@ class StatisticsDeepLogService {
             createdAt: createdAt,
             departureAt: departureAt,
             fee: doc.lockedFeeAmount?.round(),
+            paymentMethod: doc.paymentMethod,
             docId: doc.docId,
           ),
         );
@@ -358,6 +359,31 @@ class StatisticsDeepLogService {
         _toNum(meta['lockedFee']) ??
         _pickNumFromLogs(logs, <String>['lockedFee', 'lockedFeeAmount']);
 
+    final paymentMethod = _normalizePaymentMethod(
+          _pickString(<dynamic>[
+            meta['paymentMethod'],
+            meta['payMethod'],
+            meta['paymentType'],
+            meta['payment_method'],
+            meta['settlementMethod'],
+            meta['feePaymentMethod'],
+          ]),
+        ) ??
+        _normalizePaymentMethod(
+          _pickStringFromLogs(
+            logs,
+            <String>[
+              'paymentMethod',
+              'payMethod',
+              'paymentType',
+              'payment_method',
+              'settlementMethod',
+              'feePaymentMethod',
+            ],
+          ),
+        ) ??
+        '';
+
     return _DeepDocBundle(
       docId: docId,
       dateStr: dateStr,
@@ -367,6 +393,7 @@ class StatisticsDeepLogService {
       updatedAt: updatedAt,
       lastLogTime: lastLogTime,
       lockedFeeAmount: lockedFeeAmount,
+      paymentMethod: paymentMethod,
       meta: meta,
       logs: logs,
     );
@@ -428,7 +455,7 @@ class StatisticsDeepLogService {
     final from = (entry['from'] ?? '').toString();
     final to = (entry['to'] ?? '').toString();
     final fee = (entry['lockedFee'] ?? entry['lockedFeeAmount'] ?? '').toString();
-    final pay = (entry['paymentMethod'] ?? '').toString();
+    final pay = (entry['paymentMethod'] ?? entry['payMethod'] ?? entry['paymentType'] ?? entry['payment_method'] ?? '').toString();
     return '$ts|$action|$by|$from|$to|$fee|$pay';
   }
 
@@ -452,6 +479,35 @@ class StatisticsDeepLogService {
       }
     }
     return null;
+  }
+
+  String? _pickString(List<dynamic> values) {
+    for (final value in values) {
+      final text = (value ?? '').toString().trim();
+      if (text.isNotEmpty) return text;
+    }
+    return null;
+  }
+
+  String? _pickStringFromLogs(List<Map<String, dynamic>> logs, List<String> keys) {
+    for (int i = logs.length - 1; i >= 0; i--) {
+      final entry = logs[i];
+      for (final key in keys) {
+        final text = (entry[key] ?? '').toString().trim();
+        if (text.isNotEmpty) return text;
+      }
+    }
+    return null;
+  }
+
+  String? _normalizePaymentMethod(String? raw) {
+    final value = raw?.trim();
+    if (value == null || value.isEmpty) return null;
+    final lower = value.toLowerCase();
+    if (lower == 'cash' || lower == 'money' || value.contains('현금')) return '현금';
+    if (lower == 'card' || lower == 'credit' || lower == 'creditcard' || value.contains('카드')) return '카드';
+    if (lower == 'transfer' || lower == 'bank' || lower == 'wire' || lower == 'remit' || value.contains('송금') || value.contains('계좌') || value.contains('이체')) return '송금';
+    return value;
   }
 
   num? _toNum(dynamic value) {
@@ -526,6 +582,7 @@ class _DeepDocBundle {
   final DateTime? updatedAt;
   final DateTime? lastLogTime;
   final num? lockedFeeAmount;
+  final String paymentMethod;
   final Map<String, dynamic> meta;
   final List<Map<String, dynamic>> logs;
 
@@ -538,6 +595,7 @@ class _DeepDocBundle {
     required this.updatedAt,
     required this.lastLogTime,
     required this.lockedFeeAmount,
+    required this.paymentMethod,
     required this.meta,
     required this.logs,
   });
