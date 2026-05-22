@@ -537,8 +537,7 @@ class _StatisticsState extends State<Statistics> {
       final vc = _asMap(day['vehicleCount']);
       final metrics = _asMap(day['metrics']);
 
-      final inCount = _asInt(day['vehicleInput'] ?? vc?['vehicleInput']) ?? 0;
-      final outCount = _asInt(day['vehicleOutput'] ?? vc?['vehicleOutput']) ?? 0;
+      final outCount = _asInt(day['vehicleOutput'] ?? vc?['vehicleOutput'] ?? day['vehicleInput'] ?? vc?['vehicleInput']) ?? 0;
       final lockedFee = _asInt(
         day['totalLockedFee'] ?? vc?['totalLockedFee'] ?? metrics?['snapshot_totalLockedFee'],
       ) ??
@@ -546,7 +545,6 @@ class _StatisticsState extends State<Statistics> {
 
       _savedReports.add({
         'date': dateStr,
-        '입차': inCount,
         '출차': outCount,
         '정산금': lockedFee,
       });
@@ -568,7 +566,6 @@ class _StatisticsState extends State<Statistics> {
       if (date == null) continue;
 
       parsedData[date] = {
-        'vehicleInput': (report['입차'] as int?) ?? 0,
         'vehicleOutput': (report['출차'] as int?) ?? 0,
         'totalLockedFee': (report['정산금'] as int?) ?? 0,
       };
@@ -577,7 +574,11 @@ class _StatisticsState extends State<Statistics> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => StatisticsChartPage(reportDataMap: parsedData),
+        builder: (_) => StatisticsChartPage(
+          reportDataMap: parsedData,
+          division: (_division ?? '').trim(),
+          area: (_selectedArea ?? '').trim(),
+        ),
       ),
     );
   }
@@ -613,7 +614,7 @@ class _StatisticsState extends State<Statistics> {
     if (!widget.asBottomSheet) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('입·출차 통계'),
+          title: const Text('출차 통계'),
           centerTitle: true,
           backgroundColor: Colors.white,
           foregroundColor: Colors.black87,
@@ -629,7 +630,7 @@ class _StatisticsState extends State<Statistics> {
     }
 
     return _SheetScaffold(
-      title: '입·출차 통계',
+      title: '출차 통계',
       onClose: () => Navigator.of(context).maybePop(),
       body: body,
     );
@@ -1007,11 +1008,9 @@ class _StatisticsState extends State<Statistics> {
     final createdAt = day['createdAt']?.toString();
     final uploadedBy = day['uploadedBy']?.toString();
 
-    final inCount = _asInt(day['vehicleInput'] ?? vc?['vehicleInput']);
-    final outCount = _asInt(day['vehicleOutput'] ?? vc?['vehicleOutput']);
+    final outCount = _asInt(day['vehicleOutput'] ?? vc?['vehicleOutput'] ?? day['vehicleInput'] ?? vc?['vehicleInput']);
     final lockedFee = _asInt(day['totalLockedFee'] ?? vc?['totalLockedFee'] ?? metrics?['snapshot_totalLockedFee']);
 
-    final inText = inCount?.toString() ?? '정보 없음';
     final outText = outCount?.toString() ?? '정보 없음';
     final feeText = lockedFee?.toString() ?? '정보 없음';
 
@@ -1081,14 +1080,6 @@ class _StatisticsState extends State<Statistics> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('🚗 입차 차량 수', style: TextStyle(fontSize: 15)),
-                          Text(inText, style: const TextStyle(fontWeight: FontWeight.w900)),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
                           const Text('🚙 출차 차량 수', style: TextStyle(fontSize: 15)),
                           Text(outText, style: const TextStyle(fontWeight: FontWeight.w900)),
                         ],
@@ -1111,8 +1102,7 @@ class _StatisticsState extends State<Statistics> {
                             final vc2 = _asMap(day['vehicleCount']);
                             final metrics2 = _asMap(day['metrics']);
 
-                            final inC = _asInt(day['vehicleInput'] ?? vc2?['vehicleInput']) ?? 0;
-                            final outC = _asInt(day['vehicleOutput'] ?? vc2?['vehicleOutput']) ?? 0;
+                            final outC = _asInt(day['vehicleOutput'] ?? vc2?['vehicleOutput'] ?? day['vehicleInput'] ?? vc2?['vehicleInput']) ?? 0;
                             final feeC = _asInt(
                               day['totalLockedFee'] ??
                                   vc2?['totalLockedFee'] ??
@@ -1123,7 +1113,6 @@ class _StatisticsState extends State<Statistics> {
                             setState(() {
                               _savedReports.add({
                                 'date': dateStr,
-                                '입차': inC,
                                 '출차': outC,
                                 '정산금': feeC,
                               });

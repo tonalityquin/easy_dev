@@ -10,13 +10,21 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:googleapis/gmail/v1.dart' as gmail;
 import '../../../../app/auth/google_auth_v7.dart';
 import '../../../../app/config/email_config.dart';
+import 'statistics_chart_b_page.dart';
+import 'statistics_deep_log_service.dart';
+import 'statistics_deep_model.dart';
+import 'statistics_report_design.dart';
 
 class StatisticsChartPage extends StatefulWidget {
   final Map<DateTime, Map<String, int>> reportDataMap;
+  final String division;
+  final String area;
 
   const StatisticsChartPage({
     super.key,
     required this.reportDataMap,
+    this.division = '',
+    this.area = '',
   });
 
   @override
@@ -24,15 +32,19 @@ class StatisticsChartPage extends StatefulWidget {
 }
 
 class _StatisticsChartPageState extends State<StatisticsChartPage> {
-  bool showInput = true;
   bool showOutput = true;
   bool showLockedFeeChart = false;
 
-  bool get _hasVehicleSeries => showInput || showOutput;
+  bool get _hasVehicleSeries => showOutput;
 
   final TextEditingController _mailSubjectCtrl = TextEditingController();
   final TextEditingController _mailBodyCtrl = TextEditingController();
   bool _sending = false;
+  bool _deepLoading = false;
+  StatisticsDeepReport? _deepReport;
+  String? _deepLabel;
+
+  final StatisticsDeepLogService _deepLogService = StatisticsDeepLogService();
 
   final ScrollController _chartHCtrl = ScrollController();
 
@@ -152,6 +164,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         model: model,
         vehicleChartPng: vehiclePng,
         feeChartPng: feePng,
+        deepReport: _deepReport,
       );
 
       final now = DateTime.now();
@@ -201,6 +214,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
     required _ChartModel model,
     required Uint8List vehicleChartPng,
     required Uint8List feeChartPng,
+    StatisticsDeepReport? deepReport,
   }) async {
     pw.Font? regular;
     pw.Font? bold;
@@ -256,20 +270,136 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
     }
 
     pw.Widget footer(pw.Context ctx) {
-      return pw.Row(
-        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-        children: [
-          pw.Text(
-            '생성 시각: ${_fmtCompact(createdAt)}',
-            style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
-          ),
-          pw.Text(
-            '${ctx.pageNumber} / ${ctx.pagesCount}',
-            style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
-          ),
-        ],
+      return StatisticsReportDesign.pdfFooter(
+        context: ctx,
+        createdAt: createdAt,
+        label: '통계 리포트',
       );
     }
+
+    final range = model.labels.isEmpty ? '-' : '${model.labels.first} ~ ${model.labels.last}';
+    final baseTocRows = <List<String>>[
+      ['1', '기본 통계 요약', range],
+      ['2', '출차 통계표', '날짜별 출차 대수'],
+      ['3', '정산금 통계표', '날짜별 정산금'],
+      ['4', '차트 설정', '현재 화면 기준'],
+      ['5', '출차 그래프', '날짜별 출차 흐름'],
+      ['6', '정산금 그래프', '날짜별 정산금 흐름'],
+    ];
+
+    final deepTocRows = <List<String>>[];
+    if (deepReport != null) {
+      var n = 7;
+      deepTocRows.add([n.toString(), deepReport.overallSection.title, deepReport.scopeLabel]);
+      n++;
+      for (final section in deepReport.dailySections) {
+        deepTocRows.add([n.toString(), section.title, section.subtitle]);
+        n++;
+      }
+      for (final section in deepReport.weekdaySections) {
+        deepTocRows.add([n.toString(), section.title, section.subtitle]);
+        n++;
+      }
+    }
+
+    doc.addPage(
+      pw.Page(
+        theme: theme,
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.fromLTRB(34, 38, 34, 38),
+        build: (ctx) {
+          final sumOut = model.dailyStats.fold<int>(0, (p, e) => p + e.output);
+          final sumFee = model.dailyStats.fold<int>(0, (p, e) => p + e.fee);
+          return pw.Container(
+            width: double.infinity,
+            decoration: StatisticsReportDesign.pdfCard(fill: PdfColors.white),
+            padding: const pw.EdgeInsets.all(28),
+            child: pw.Column(
+              crossAxisAlignment: pw.CrossAxisAlignment.start,
+              children: [
+                pw.Text('PARKINWORKIN', style: StatisticsReportDesign.pdfLabel(size: 9)),
+                pw.SizedBox(height: 18),
+                pw.Text('통계 리포트', style: StatisticsReportDesign.pdfTitle(size: 30)),
+                pw.SizedBox(height: 8),
+                pw.Text(range, style: StatisticsReportDesign.pdfBody(size: 13, color: StatisticsReportDesign.pdfMuted)),
+                pw.Spacer(),
+                pw.Row(
+                  children: [
+                    StatisticsReportDesign.pdfMetricCard(label: '데이터 일수', value: '${model.dailyStats.length}일'),
+                    pw.SizedBox(width: 8),
+                    StatisticsReportDesign.pdfMetricCard(label: '출차 합계', value: '${_fmt(sumOut)}대'),
+                    pw.SizedBox(width: 8),
+                    StatisticsReportDesign.pdfMetricCard(label: '정산금 합계', value: '₩${_fmt(sumFee)}'),
+                  ],
+                ),
+                if (deepReport != null) ...[
+                  pw.SizedBox(height: 10),
+                  pw.Row(
+                    children: [
+                      StatisticsReportDesign.pdfMetricCard(label: '심화 차량', value: '${_fmt(deepReport.rows.length)}대'),
+                      pw.SizedBox(width: 8),
+                      StatisticsReportDesign.pdfMetricCard(label: '심화 날짜', value: '${deepReport.dateStrs.length}일'),
+                      pw.SizedBox(width: 8),
+                      StatisticsReportDesign.pdfMetricCard(label: '심화 섹션', value: '${deepReport.sections.length}개'),
+                    ],
+                  ),
+                ],
+                pw.Spacer(),
+                pw.Container(
+                  width: double.infinity,
+                  padding: const pw.EdgeInsets.all(12),
+                  decoration: StatisticsReportDesign.pdfCard(fill: StatisticsReportDesign.pdfSoft),
+                  child: pw.Column(
+                    crossAxisAlignment: pw.CrossAxisAlignment.start,
+                    children: [
+                      pw.Text('문서 표지', style: StatisticsReportDesign.pdfTitle(size: 14)),
+                      pw.SizedBox(height: 5),
+                      pw.Text('생성 시각: ${_fmtCompact(createdAt)}', style: StatisticsReportDesign.pdfBody(size: 10, color: StatisticsReportDesign.pdfMuted)),
+                      if (deepReport != null) pw.Text('심화 범위: ${deepReport.scopeLabel}', style: StatisticsReportDesign.pdfBody(size: 10, color: StatisticsReportDesign.pdfMuted)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+
+    doc.addPage(
+      pw.MultiPage(
+        theme: theme,
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.fromLTRB(32, 36, 32, 36),
+        footer: footer,
+        build: (ctx) => [
+          StatisticsReportDesign.pdfSectionHeader(
+            title: '목차',
+            subtitle: '전체 문서 구성',
+            eyebrow: 'Table of Contents',
+          ),
+          pw.SizedBox(height: 14),
+          pw.Table.fromTextArray(
+            headers: const ['순서', '섹션', '기준'],
+            data: [...baseTocRows, ...deepTocRows],
+            headerDecoration: const pw.BoxDecoration(color: StatisticsReportDesign.pdfAccentSoft),
+            headerStyle: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+            cellStyle: const pw.TextStyle(fontSize: 9),
+            border: pw.TableBorder.all(color: StatisticsReportDesign.pdfLine, width: 0.5),
+            columnWidths: const {
+              0: pw.FlexColumnWidth(1.2),
+              1: pw.FlexColumnWidth(4.0),
+              2: pw.FlexColumnWidth(5.2),
+            },
+            cellAlignments: const {
+              0: pw.Alignment.center,
+              1: pw.Alignment.centerLeft,
+              2: pw.Alignment.centerLeft,
+            },
+          ),
+        ],
+      ),
+    );
 
     doc.addPage(
       pw.MultiPage(
@@ -278,73 +408,54 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         margin: const pw.EdgeInsets.fromLTRB(32, 36, 32, 36),
         footer: footer,
         build: (ctx) {
-          final sumIn = model.dailyStats.fold<int>(0, (p, e) => p + e.input);
           final sumOut = model.dailyStats.fold<int>(0, (p, e) => p + e.output);
           final sumFee = model.dailyStats.fold<int>(0, (p, e) => p + e.fee);
 
-          final avgIn = model.dailyStats.isEmpty
-              ? 0
-              : (sumIn / model.dailyStats.length).round();
           final avgOut = model.dailyStats.isEmpty
               ? 0
               : (sumOut / model.dailyStats.length).round();
           final avgFee = model.dailyStats.isEmpty
               ? 0
               : (sumFee / model.dailyStats.length).round();
-
-          final range = '${model.labels.first} ~ ${model.labels.last}';
-          final modeText = showLockedFeeChart ? '정산금' : '입·출차';
+          final modeText = showLockedFeeChart ? '정산금' : '출차';
 
           return [
-            pw.Center(
-              child: pw.Text(
-                '통계 리포트',
-                style: pw.TextStyle(
-                  fontSize: 22,
-                  fontWeight: pw.FontWeight.bold,
-                ),
-              ),
+            StatisticsReportDesign.pdfSectionHeader(
+              title: '기본 통계 요약',
+              subtitle: range,
+              eyebrow: 'Summary',
             ),
-            pw.SizedBox(height: 10),
-            pw.Center(
-              child: pw.Text(
-                range,
-                style:
-                    const pw.TextStyle(fontSize: 12, color: PdfColors.grey800),
-              ),
+            pw.SizedBox(height: 12),
+            pw.Row(
+              children: [
+                StatisticsReportDesign.pdfMetricCard(label: '데이터 일수', value: '${model.dailyStats.length}일'),
+                pw.SizedBox(width: 8),
+                StatisticsReportDesign.pdfMetricCard(label: '출차 합계', value: '${_fmt(sumOut)}대'),
+                pw.SizedBox(width: 8),
+                StatisticsReportDesign.pdfMetricCard(label: '출차 평균', value: '${_fmt(avgOut)}대'),
+              ],
             ),
-            pw.SizedBox(height: 18),
-            header('요약'),
-            pw.Container(
-              padding: const pw.EdgeInsets.all(10),
-              decoration: pw.BoxDecoration(
-                border: pw.Border.all(color: PdfColors.grey400, width: 0.6),
-                borderRadius: pw.BorderRadius.circular(6),
-              ),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text('데이터 일수: ${model.dailyStats.length}일',
-                      style: const pw.TextStyle(fontSize: 11)),
-                  pw.SizedBox(height: 6),
-                  pw.Text('입차 합계: ${_fmt(sumIn)} / 평균: ${_fmt(avgIn)}',
-                      style: const pw.TextStyle(fontSize: 11)),
-                  pw.Text('출차 합계: ${_fmt(sumOut)} / 평균: ${_fmt(avgOut)}',
-                      style: const pw.TextStyle(fontSize: 11)),
-                  pw.Text('정산금 합계: ₩${_fmt(sumFee)} / 평균: ₩${_fmt(avgFee)}',
-                      style: const pw.TextStyle(fontSize: 11)),
-                ],
-              ),
+            pw.SizedBox(height: 8),
+            pw.Row(
+              children: [
+                StatisticsReportDesign.pdfMetricCard(label: '정산금 합계', value: '₩${_fmt(sumFee)}'),
+                pw.SizedBox(width: 8),
+                StatisticsReportDesign.pdfMetricCard(label: '정산금 평균', value: '₩${_fmt(avgFee)}'),
+                pw.SizedBox(width: 8),
+                StatisticsReportDesign.pdfMetricCard(label: '차트 모드', value: modeText),
+              ],
             ),
             pw.SizedBox(height: 14),
-            header('내보내기 설정(현재 화면 기준)'),
-            pw.Bullet(text: '차트 모드: $modeText'),
-            pw.Bullet(text: '입차 표시: ${showInput ? "ON" : "OFF"}'),
-            pw.Bullet(text: '출차 표시: ${showOutput ? "ON" : "OFF"}'),
-            pw.SizedBox(height: 10),
-            pw.Text(
-              '다음 페이지부터: 입차 통계표 / 출차 통계표 / 정산금 통계표 / 차트 설정 / 입·출차 그래프 / 정산금 그래프 순으로 구성됩니다.',
-              style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey800),
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(12),
+              decoration: StatisticsReportDesign.pdfCard(fill: StatisticsReportDesign.pdfSoft),
+              child: pw.Text(
+                deepReport == null
+                    ? '심화 통계를 열지 않은 상태로 생성되어 기본 통계만 포함됩니다.'
+                    : '심화 통계가 포함되어 전체, 날짜별, 요일별 보고서 페이지가 뒤쪽에 추가됩니다.',
+                style: StatisticsReportDesign.pdfBody(size: 10, color: StatisticsReportDesign.pdfMuted),
+              ),
             ),
           ];
         },
@@ -389,14 +500,6 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
     }
 
     addTableSection(
-      title: '입차 통계표',
-      valueHeader: '대수',
-      rows: [
-        for (final d in model.dailyStats) [_dateOnly(d.date), _fmt(d.input)],
-      ],
-    );
-
-    addTableSection(
       title: '출차 통계표',
       valueHeader: '대수',
       rows: [
@@ -420,7 +523,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         margin: const pw.EdgeInsets.fromLTRB(32, 36, 32, 36),
         footer: footer,
         build: (ctx) {
-          final modeText = showLockedFeeChart ? '정산금' : '입·출차';
+          final modeText = showLockedFeeChart ? '정산금' : '출차';
           return [
             header('차트 설정(현재 화면 상태)'),
             pw.SizedBox(height: 8),
@@ -437,8 +540,6 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
                   pw.Text('차트 모드: $modeText',
                       style: const pw.TextStyle(fontSize: 12)),
                   pw.SizedBox(height: 6),
-                  pw.Text('입차 표시: ${showInput ? "ON" : "OFF"}',
-                      style: const pw.TextStyle(fontSize: 12)),
                   pw.Text('출차 표시: ${showOutput ? "ON" : "OFF"}',
                       style: const pw.TextStyle(fontSize: 12)),
                   pw.SizedBox(height: 10),
@@ -462,7 +563,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         margin: const pw.EdgeInsets.fromLTRB(32, 36, 32, 36),
         footer: footer,
         build: (ctx) => [
-          header('입·출차 그래프'),
+          header('출차 그래프'),
           pw.SizedBox(height: 10),
           pw.Container(
             padding: const pw.EdgeInsets.all(8),
@@ -503,7 +604,249 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
       ),
     );
 
+    if (deepReport != null) {
+      addDeepReportSections(
+        doc: doc,
+        theme: theme,
+        footer: footer,
+        report: deepReport,
+      );
+    }
+
     return doc.save();
+  }
+
+  void addDeepReportSections({
+    required pw.Document doc,
+    required pw.ThemeData theme,
+    required pw.Widget Function(pw.Context) footer,
+    required StatisticsDeepReport report,
+  }) {
+    pw.Widget sectionHeader(StatisticsDeepSection section) {
+      return StatisticsReportDesign.pdfSectionHeader(
+        title: section.title,
+        subtitle: '${section.subtitle} · 차량 ${section.rows.length}대 · 날짜 ${section.sourceDateCount}일',
+        eyebrow: '${report.division} / ${report.area}',
+      );
+    }
+
+    pw.Widget metricRow(StatisticsDeepSection section) {
+      return pw.Row(
+        children: [
+          StatisticsReportDesign.pdfMetricCard(label: '차량', value: '${_fmt(section.rows.length)}대'),
+          pw.SizedBox(width: 8),
+          StatisticsReportDesign.pdfMetricCard(label: '입차 합계', value: '${_fmt(section.metrics.inputTotalSum)}대'),
+          pw.SizedBox(width: 8),
+          StatisticsReportDesign.pdfMetricCard(label: '출차 합계', value: '${_fmt(section.metrics.outputTotalSum)}대'),
+          pw.SizedBox(width: 8),
+          StatisticsReportDesign.pdfMetricCard(label: '정산액', value: '₩${_fmt(section.totalFee)}'),
+        ],
+      );
+    }
+
+    pw.Widget hourlyBars({
+      required String title,
+      required String subtitle,
+      required List<num> values,
+      required bool decimal,
+    }) {
+      final maxValue = values.fold<double>(0, (p, e) => e.toDouble() > p ? e.toDouble() : p);
+      return pw.Container(
+        padding: const pw.EdgeInsets.all(10),
+        decoration: StatisticsReportDesign.pdfCard(),
+        child: pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Text(title, style: StatisticsReportDesign.pdfTitle(size: 12)),
+            pw.SizedBox(height: 2),
+            pw.Text(subtitle, style: StatisticsReportDesign.pdfBody(size: 8.5, color: StatisticsReportDesign.pdfMuted)),
+            pw.SizedBox(height: 8),
+            ...List.generate(24, (i) {
+              final value = values[i].toDouble();
+              final ratio = maxValue <= 0 ? 0.0 : value / maxValue;
+              final width = ratio * 210;
+              final text = decimal ? value.toStringAsFixed(1) : value.toInt().toString();
+              return pw.Padding(
+                padding: const pw.EdgeInsets.only(bottom: 3.2),
+                child: pw.Row(
+                  children: [
+                    pw.SizedBox(
+                      width: 30,
+                      child: pw.Text('${i.toString().padLeft(2, '0')}시', style: StatisticsReportDesign.pdfBody(size: 7.8)),
+                    ),
+                    pw.Container(width: width, height: 6.5, color: StatisticsReportDesign.pdfAccent),
+                    pw.SizedBox(width: 6),
+                    pw.Text('$text대', style: StatisticsReportDesign.pdfBody(size: 7.8)),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      );
+    }
+
+    pw.Widget chartSet(StatisticsDeepSection section) {
+      final firstRow = pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          pw.Expanded(
+            child: hourlyBars(
+              title: '입차 통산 합계',
+              subtitle: '생성 시간 기준',
+              values: section.metrics.inputTotalCounts,
+              decimal: false,
+            ),
+          ),
+          pw.SizedBox(width: 8),
+          pw.Expanded(
+            child: hourlyBars(
+              title: '출차 통산 합계',
+              subtitle: '출차 시간 기준',
+              values: section.metrics.outputTotalCounts,
+              decimal: false,
+            ),
+          ),
+        ],
+      );
+
+      if (!section.showAverageCharts) return firstRow;
+
+      return pw.Column(
+        children: [
+          firstRow,
+          pw.SizedBox(height: 8),
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Expanded(
+                child: hourlyBars(
+                  title: '입차 평균',
+                  subtitle: '${section.sourceDateCount}일 기준 시간대별 평균',
+                  values: section.metrics.inputAverageCounts,
+                  decimal: true,
+                ),
+              ),
+              pw.SizedBox(width: 8),
+              pw.Expanded(
+                child: hourlyBars(
+                  title: '출차 평균',
+                  subtitle: '${section.sourceDateCount}일 기준 시간대별 평균',
+                  values: section.metrics.outputAverageCounts,
+                  decimal: true,
+                ),
+              ),
+            ],
+          ),
+        ],
+      );
+    }
+
+    void addVehicleTables(StatisticsDeepSection section) {
+      final rows = section.rows;
+      if (rows.isEmpty) {
+        doc.addPage(
+          pw.MultiPage(
+            theme: theme,
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.fromLTRB(26, 34, 26, 34),
+            footer: footer,
+            build: (ctx) => [
+              StatisticsReportDesign.pdfSectionHeader(
+                title: '${section.title} 차량 상세표',
+                subtitle: '표시할 차량 데이터가 없습니다.',
+                eyebrow: report.scopeLabel,
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+
+      const chunkSize = 26;
+      for (int start = 0; start < rows.length; start += chunkSize) {
+        final chunk = rows.skip(start).take(chunkSize).toList();
+        doc.addPage(
+          pw.MultiPage(
+            theme: theme,
+            pageFormat: PdfPageFormat.a4,
+            margin: const pw.EdgeInsets.fromLTRB(22, 34, 22, 34),
+            footer: footer,
+            build: (ctx) => [
+              StatisticsReportDesign.pdfSectionHeader(
+                title: '${section.title} 차량 상세표',
+                subtitle: '${start + 1}-${start + chunk.length} / ${rows.length}대',
+                eyebrow: report.scopeLabel,
+              ),
+              pw.SizedBox(height: 12),
+              pw.Table.fromTextArray(
+                headers: const ['No', '날짜', '차량 번호', '생성 시간', '출차 시간', '정산액'],
+                data: [
+                  for (final row in chunk)
+                    [
+                      row.no.toString(),
+                      row.dateStr,
+                      row.plateNumber,
+                      _fmtPdfTime(row.createdAt),
+                      _fmtPdfTime(row.departureAt),
+                      row.fee == null ? '-' : '₩${_fmt(row.fee!)}',
+                    ],
+                ],
+                headerDecoration: const pw.BoxDecoration(color: StatisticsReportDesign.pdfAccentSoft),
+                headerStyle: pw.TextStyle(fontSize: 8.5, fontWeight: pw.FontWeight.bold, color: StatisticsReportDesign.pdfInk),
+                cellStyle: const pw.TextStyle(fontSize: 7.5, color: StatisticsReportDesign.pdfInk),
+                border: pw.TableBorder.all(color: StatisticsReportDesign.pdfLine, width: 0.45),
+                columnWidths: const {
+                  0: pw.FlexColumnWidth(1.0),
+                  1: pw.FlexColumnWidth(2.5),
+                  2: pw.FlexColumnWidth(3.1),
+                  3: pw.FlexColumnWidth(2.0),
+                  4: pw.FlexColumnWidth(2.0),
+                  5: pw.FlexColumnWidth(2.3),
+                },
+                cellAlignments: const {
+                  0: pw.Alignment.centerRight,
+                  1: pw.Alignment.centerLeft,
+                  2: pw.Alignment.centerLeft,
+                  3: pw.Alignment.center,
+                  4: pw.Alignment.center,
+                  5: pw.Alignment.centerRight,
+                },
+              ),
+            ],
+          ),
+        );
+      }
+    }
+
+    void addSection(StatisticsDeepSection section) {
+      doc.addPage(
+        pw.MultiPage(
+          theme: theme,
+          pageFormat: PdfPageFormat.a4,
+          margin: const pw.EdgeInsets.fromLTRB(26, 34, 26, 34),
+          footer: footer,
+          build: (ctx) => [
+            sectionHeader(section),
+            pw.SizedBox(height: 12),
+            metricRow(section),
+            pw.SizedBox(height: 12),
+            chartSet(section),
+          ],
+        ),
+      );
+      addVehicleTables(section);
+    }
+
+    addSection(report.overallSection);
+
+    for (final section in report.dailySections) {
+      addSection(section);
+    }
+
+    for (final section in report.weekdaySections) {
+      addSection(section);
+    }
   }
 
   Future<void> _sendEmailViaGmail({
@@ -607,13 +950,12 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
     final vehicleExportChild = _hasVehicleSeries
         ? LineChart(
             _buildVehicleExportChartData(
-              model.inSpots,
               model.outSpots,
               model.labels,
             ),
           )
         : _buildExportPlaceholder(
-            '입·출차 그래프\n표시할 항목이 없습니다.\n(입차/출차 중 하나 이상 선택)',
+            '출차 그래프\n표시할 항목이 없습니다.',
           );
 
     return IgnorePointer(
@@ -652,6 +994,231 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<_DeepLoadRequest?> _pickDeepLoadRequest(_ChartModel model) async {
+    if (model.sortedDates.isEmpty) return null;
+    final sortedDates = model.sortedDates
+        .map((e) => DateTime(e.year, e.month, e.day))
+        .toList()
+      ..sort((a, b) => a.compareTo(b));
+
+    if (sortedDates.length == 1) {
+      final only = sortedDates.first;
+      return _DeepLoadRequest.dates(
+        dates: <DateTime>[only],
+        label: _dateOnly(only),
+      );
+    }
+
+    return showDialog<_DeepLoadRequest>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        final first = sortedDates.first;
+        final last = sortedDates.last;
+        return AlertDialog(
+          title: const Text('심화 통계 범위 선택'),
+          content: SizedBox(
+            width: 380,
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.dataset_rounded),
+                  title: const Text('가져온 날짜 모두'),
+                  subtitle: Text('${_dateOnly(first)} ~ ${_dateOnly(last)} / ${sortedDates.length}일'),
+                  onTap: () => Navigator.of(ctx).pop(
+                    _DeepLoadRequest.dates(
+                      dates: sortedDates,
+                      label: '${_dateOnly(first)} ~ ${_dateOnly(last)}',
+                    ),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.date_range_rounded),
+                  title: const Text('기간 지정'),
+                  subtitle: const Text('시작일과 종료일을 선택합니다.'),
+                  onTap: () async {
+                    final picked = await showDateRangePicker(
+                      context: ctx,
+                      firstDate: first,
+                      lastDate: last,
+                      initialDateRange: DateTimeRange(start: first, end: last),
+                      helpText: '심화 통계 기간 선택',
+                      cancelText: '취소',
+                      confirmText: '적용',
+                    );
+                    if (picked == null) return;
+                    final a = DateTime(picked.start.year, picked.start.month, picked.start.day);
+                    final b = DateTime(picked.end.year, picked.end.month, picked.end.day);
+                    Navigator.of(ctx).pop(
+                      _DeepLoadRequest.range(
+                        start: a,
+                        end: b,
+                        label: '${_dateOnly(a)} ~ ${_dateOnly(b)}',
+                      ),
+                    );
+                  },
+                ),
+                Divider(color: cs.outlineVariant),
+                for (final date in sortedDates)
+                  ListTile(
+                    leading: const Icon(Icons.event_rounded),
+                    title: Text(_dateOnly(date)),
+                    onTap: () => Navigator.of(ctx).pop(
+                      _DeepLoadRequest.dates(
+                        dates: <DateTime>[date],
+                        label: _dateOnly(date),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(null),
+              child: const Text('취소'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _openDeepStatistics(_ChartModel model) async {
+    if (_deepLoading) return;
+
+    final division = widget.division.trim();
+    final area = widget.area.trim();
+    if (division.isEmpty || area.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('심화 통계에 필요한 사업부/지역 정보가 없습니다.')),
+      );
+      return;
+    }
+
+    final request = await _pickDeepLoadRequest(model);
+    if (request == null) return;
+
+    setState(() => _deepLoading = true);
+    try {
+      final StatisticsDeepReport deep;
+      if (request.isRange) {
+        deep = await _deepLogService.loadByDateRange(
+          division: division,
+          area: area,
+          start: request.start!,
+          end: request.end!,
+        );
+      } else {
+        deep = await _deepLogService.loadByDates(
+          division: division,
+          area: area,
+          dates: request.dates,
+          scopeLabel: request.label,
+        );
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _deepReport = deep;
+        _deepLabel = deep.scopeLabel;
+      });
+
+      final visible = await Navigator.of(context).push<StatisticsDeepReport>(
+        MaterialPageRoute(
+          builder: (_) => StatisticsChartBPage(report: deep),
+        ),
+      );
+
+      if (!mounted) return;
+      final nextModel = visible ?? deep;
+      setState(() {
+        _deepReport = nextModel;
+        _deepLabel = nextModel.scopeLabel;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('심화 통계 로드 실패: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _deepLoading = false);
+    }
+  }
+
+  Widget _buildDeepActionButton({
+    required BuildContext context,
+    required VoidCallback onPressed,
+    required bool enabled,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final hasDeep = _deepReport != null;
+    final bg = _deepLoading
+        ? cs.surfaceContainerHighest
+        : hasDeep
+            ? cs.tertiaryContainer
+            : cs.secondaryContainer;
+    final fg = _deepLoading
+        ? cs.onSurfaceVariant
+        : hasDeep
+            ? cs.onTertiaryContainer
+            : cs.onSecondaryContainer;
+    final label = hasDeep && (_deepLabel ?? '').trim().isNotEmpty
+        ? '심화 ${_deepLabel!.trim()}'
+        : '심화';
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: InkWell(
+        onTap: enabled && !_deepLoading ? onPressed : null,
+        borderRadius: BorderRadius.circular(999),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: cs.outlineVariant.withOpacity(0.7)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_deepLoading)
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(fg),
+                  ),
+                )
+              else
+                Icon(Icons.auto_graph_rounded, size: 18, color: fg),
+              const SizedBox(width: 6),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 150),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: fg,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12.5,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -796,6 +1363,11 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
         ),
       ),
       actions: [
+        _buildDeepActionButton(
+          context: context,
+          enabled: model.sortedDates.isNotEmpty,
+          onPressed: () => _openDeepStatistics(model),
+        ),
         _buildSendActionButton(
           context: context,
           onPressed: () => _openMailDialogAndSend(model),
@@ -862,9 +1434,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
                           dailyStats: model.dailyStats,
                           showLockedFeeChart: showLockedFeeChart,
                           onToggleMode: _setChartMode,
-                          showInput: showInput,
                           showOutput: showOutput,
-                          onToggleInput: (v) => setState(() => showInput = v),
                           onToggleOutput: (v) => setState(() => showOutput = v),
                         ),
                       ),
@@ -908,7 +1478,6 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
                                           key: const ValueKey('scrollVehicle'),
                                           pointCount: model.labels.length,
                                           child: _buildVehicleChartOrEmpty(
-                                            model.inSpots,
                                             model.outSpots,
                                             model.labels,
                                           ),
@@ -932,14 +1501,13 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
   }
 
   Widget _buildVehicleChartOrEmpty(
-    List<FlSpot> inSpots,
     List<FlSpot> outSpots,
     List<String> labels,
   ) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
 
-    if (!showInput && !showOutput) {
+    if (!showOutput) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -955,7 +1523,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
               ),
               const SizedBox(height: 6),
               Text(
-                '상단에서 입차/출차 항목을 하나 이상 선택해 주세요.',
+                '상단에서 출차 항목을 선택해 주세요.',
                 style: theme.textTheme.bodyMedium
                     ?.copyWith(color: cs.onSurfaceVariant),
                 textAlign: TextAlign.center,
@@ -967,13 +1535,12 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
     }
 
     return LineChart(
-      _buildInputOutputChartData(inSpots, outSpots, labels),
+      _buildVehicleChartData(outSpots, labels),
       key: const ValueKey('vehicleChart'),
     );
   }
 
-  LineChartData _buildInputOutputChartData(
-    List<FlSpot> inSpots,
+  LineChartData _buildVehicleChartData(
     List<FlSpot> outSpots,
     List<String> labels,
   ) {
@@ -982,20 +1549,8 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
       gridData: _buildGrid(),
       borderData: _buildBorder(),
       minY: 0,
-      maxY: _calculateMaxY([
-        if (showInput) ...inSpots,
-        if (showOutput) ...outSpots,
-      ]),
+      maxY: _calculateMaxY(showOutput ? outSpots : const <FlSpot>[]),
       lineBarsData: [
-        if (showInput)
-          LineChartBarData(
-            spots: inSpots,
-            isCurved: true,
-            color: Colors.blue,
-            dotData: FlDotData(show: true),
-            barWidth: 3,
-            belowBarData: BarAreaData(show: false),
-          ),
         if (showOutput)
           LineChartBarData(
             spots: outSpots,
@@ -1032,24 +1587,11 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
   }
 
   LineChartData _buildVehicleExportChartData(
-    List<FlSpot> inSpots,
     List<FlSpot> outSpots,
     List<String> labels,
   ) {
     final bars = <LineChartBarData>[];
 
-    if (showInput) {
-      bars.add(
-        LineChartBarData(
-          spots: inSpots,
-          isCurved: true,
-          color: Colors.blue,
-          dotData: FlDotData(show: false),
-          barWidth: 3,
-          belowBarData: BarAreaData(show: false),
-        ),
-      );
-    }
     if (showOutput) {
       bars.add(
         LineChartBarData(
@@ -1068,10 +1610,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
       gridData: _buildGrid(),
       borderData: _buildBorder(),
       minY: 0,
-      maxY: _calculateMaxY([
-        if (showInput) ...inSpots,
-        if (showOutput) ...outSpots,
-      ]),
+      maxY: _calculateMaxY(showOutput ? outSpots : const <FlSpot>[]),
       lineBarsData: bars,
       lineTouchData: LineTouchData(enabled: false),
     );
@@ -1187,7 +1726,7 @@ class _StatisticsChartPageState extends State<StatisticsChartPage> {
             final value = spot.y.toInt();
             final series = (type == 'fee')
                 ? '정산금'
-                : (spot.bar.color == Colors.blue ? '입차' : '출차');
+                : '출차';
 
             return LineTooltipItem(
               '$label\n$series: ${type == 'fee' ? '₩' : ''}$value',
@@ -1212,18 +1751,14 @@ class _TopPanel extends StatelessWidget {
   final List<_DailyStat> dailyStats;
   final bool showLockedFeeChart;
   final ValueChanged<bool> onToggleMode;
-  final bool showInput;
   final bool showOutput;
-  final ValueChanged<bool> onToggleInput;
   final ValueChanged<bool> onToggleOutput;
 
   const _TopPanel({
     required this.dailyStats,
     required this.showLockedFeeChart,
     required this.onToggleMode,
-    required this.showInput,
     required this.showOutput,
-    required this.onToggleInput,
     required this.onToggleOutput,
   });
 
@@ -1272,7 +1807,7 @@ class _TopPanel extends StatelessWidget {
                   segments: const [
                     ButtonSegment<bool>(
                       value: false,
-                      label: Text('입·출차'),
+                      label: Text('출차'),
                       icon: Icon(Icons.directions_car_filled_rounded),
                     ),
                     ButtonSegment<bool>(
@@ -1300,16 +1835,6 @@ class _TopPanel extends StatelessWidget {
                       spacing: 10,
                       runSpacing: 10,
                       children: [
-                        FilterChip(
-                          selected: showInput,
-                          onSelected: onToggleInput,
-                          label: const Text('입차'),
-                          avatar: const Icon(
-                            Icons.directions_car_rounded,
-                            color: Colors.blue,
-                          ),
-                          showCheckmark: false,
-                        ),
                         FilterChip(
                           selected: showOutput,
                           onSelected: onToggleOutput,
@@ -1342,7 +1867,7 @@ class _TopPanel extends StatelessWidget {
   }
 }
 
-enum _StatTableKind { input, output, fee }
+enum _StatTableKind { output, fee }
 
 class _StatsTableCarousel extends StatefulWidget {
   final List<_DailyStat> dailyStats;
@@ -1360,7 +1885,6 @@ class _StatsTableCarouselState extends State<_StatsTableCarousel> {
   int _index = 0;
 
   static const _items = <_StatTableKind>[
-    _StatTableKind.input,
     _StatTableKind.output,
     _StatTableKind.fee,
   ];
@@ -1466,8 +1990,6 @@ class _StatisticsTableViewState extends State<_StatisticsTableView> {
 
   String _title() {
     switch (widget.kind) {
-      case _StatTableKind.input:
-        return '입차 통계표';
       case _StatTableKind.output:
         return '출차 통계표';
       case _StatTableKind.fee:
@@ -1477,8 +1999,6 @@ class _StatisticsTableViewState extends State<_StatisticsTableView> {
 
   IconData _icon() {
     switch (widget.kind) {
-      case _StatTableKind.input:
-        return Icons.directions_car_rounded;
       case _StatTableKind.output:
         return Icons.exit_to_app_rounded;
       case _StatTableKind.fee:
@@ -1488,8 +2008,6 @@ class _StatisticsTableViewState extends State<_StatisticsTableView> {
 
   Color _accentColor() {
     switch (widget.kind) {
-      case _StatTableKind.input:
-        return Colors.blue;
       case _StatTableKind.output:
         return Colors.red;
       case _StatTableKind.fee:
@@ -1499,8 +2017,6 @@ class _StatisticsTableViewState extends State<_StatisticsTableView> {
 
   int _valueOf(_DailyStat d) {
     switch (widget.kind) {
-      case _StatTableKind.input:
-        return d.input;
       case _StatTableKind.output:
         return d.output;
       case _StatTableKind.fee:
@@ -1512,7 +2028,6 @@ class _StatisticsTableViewState extends State<_StatisticsTableView> {
     switch (widget.kind) {
       case _StatTableKind.fee:
         return '₩${_fmt(v)}';
-      case _StatTableKind.input:
       case _StatTableKind.output:
         return _fmt(v);
     }
@@ -2241,13 +2756,11 @@ class _BadgePill extends StatelessWidget {
 
 class _DailyStat {
   final DateTime date;
-  final int input;
   final int output;
   final int fee;
 
   const _DailyStat({
     required this.date,
-    required this.input,
     required this.output,
     required this.fee,
   });
@@ -2263,7 +2776,6 @@ class _MinMax<T> {
 class _ChartModel {
   final List<DateTime> sortedDates;
   final List<String> labels;
-  final List<FlSpot> inSpots;
   final List<FlSpot> outSpots;
   final List<FlSpot> feeSpots;
   final List<_DailyStat> dailyStats;
@@ -2271,7 +2783,6 @@ class _ChartModel {
   const _ChartModel({
     required this.sortedDates,
     required this.labels,
-    required this.inSpots,
     required this.outSpots,
     required this.feeSpots,
     required this.dailyStats,
@@ -2281,7 +2792,6 @@ class _ChartModel {
     final sortedDates = reportDataMap.keys.toList()..sort();
     final labels = sortedDates.map((d) => _dateOnly(d)).toList();
 
-    final inSpots = <FlSpot>[];
     final outSpots = <FlSpot>[];
     final feeSpots = <FlSpot>[];
     final dailyStats = <_DailyStat>[];
@@ -2290,23 +2800,24 @@ class _ChartModel {
       final date = sortedDates[i];
       final counts = reportDataMap[date] ?? {};
 
-      final inCount = counts['vehicleInput'] ?? counts['입차'] ?? 0;
-      final outCount = counts['vehicleOutput'] ?? counts['출차'] ?? 0;
+      final outCount = counts['vehicleOutput'] ??
+          counts['출차'] ??
+          counts['vehicleInput'] ??
+          counts['입차'] ??
+          0;
       final fee = counts['totalLockedFee'] ?? counts['정산금'] ?? 0;
 
-      inSpots.add(FlSpot(i.toDouble(), (inCount as num).toDouble()));
       outSpots.add(FlSpot(i.toDouble(), (outCount as num).toDouble()));
       feeSpots.add(FlSpot(i.toDouble(), (fee as num).toDouble()));
 
       dailyStats.add(
-        _DailyStat(date: date, input: inCount, output: outCount, fee: fee),
+        _DailyStat(date: date, output: outCount, fee: fee),
       );
     }
 
     return _ChartModel(
       sortedDates: sortedDates,
       labels: labels,
-      inSpots: inSpots,
       outSpots: outSpots,
       feeSpots: feeSpots,
       dailyStats: dailyStats,
@@ -2315,6 +2826,14 @@ class _ChartModel {
 }
 
 String _dateOnly(DateTime dt) => dt.toIso8601String().split('T').first;
+
+
+String _fmtPdfTime(DateTime? dt) {
+  if (dt == null) return '-';
+  final hh = dt.hour.toString().padLeft(2, '0');
+  final mm = dt.minute.toString().padLeft(2, '0');
+  return '$hh:$mm';
+}
 
 String _fmt(int value) {
   final negative = value < 0;
@@ -2440,4 +2959,45 @@ class _MailComposeDialogState extends State<_MailComposeDialog> {
       ],
     );
   }
+}
+
+class _DeepLoadRequest {
+  final List<DateTime> dates;
+  final DateTime? start;
+  final DateTime? end;
+  final String label;
+
+  const _DeepLoadRequest._({
+    required this.dates,
+    required this.start,
+    required this.end,
+    required this.label,
+  });
+
+  factory _DeepLoadRequest.dates({
+    required List<DateTime> dates,
+    required String label,
+  }) {
+    return _DeepLoadRequest._(
+      dates: dates,
+      start: null,
+      end: null,
+      label: label,
+    );
+  }
+
+  factory _DeepLoadRequest.range({
+    required DateTime start,
+    required DateTime end,
+    required String label,
+  }) {
+    return _DeepLoadRequest._(
+      dates: const <DateTime>[],
+      start: start,
+      end: end,
+      label: label,
+    );
+  }
+
+  bool get isRange => start != null && end != null;
 }

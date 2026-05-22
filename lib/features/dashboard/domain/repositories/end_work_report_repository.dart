@@ -13,7 +13,7 @@ class EndWorkReportRepository {
     required String area,
     required String division,
     required String uploadedBy,
-    required int vehicleInputCount,
+    required int vehicleOutputCount,
     DateTime? nowOverride,
   }) async {
     final now = nowOverride ?? DateTime.now();
@@ -21,7 +21,6 @@ class EndWorkReportRepository {
     final monthKey = DateFormat('yyyyMM').format(now);
     final createdAtIso = now.toIso8601String();
 
-    const int vehicleOutputManual = 0;
     const int snapshotLockedVehicleCount = 0;
     const int snapshotTotalLockedFee = 0;
 
@@ -34,8 +33,7 @@ class EndWorkReportRepository {
       'createdAt': createdAtIso,
       'uploadedBy': uploadedBy,
       'vehicleCount': <String, dynamic>{
-        'vehicleInput': vehicleInputCount,
-        'vehicleOutput': vehicleOutputManual,
+        'vehicleOutput': vehicleOutputCount,
       },
       'metrics': <String, dynamic>{
         'snapshot_lockedVehicleCount': snapshotLockedVehicleCount,
@@ -57,8 +55,7 @@ class EndWorkReportRepository {
       'date': dateStr,
       'monthKey': monthKey,
       'vehicleCount': <String, dynamic>{
-        'vehicleInput': vehicleInputCount,
-        'vehicleOutput': vehicleOutputManual,
+        'vehicleOutput': vehicleOutputCount,
       },
       'metrics': <String, dynamic>{
         'snapshot_lockedVehicleCount': snapshotLockedVehicleCount,
@@ -91,8 +88,7 @@ class EndWorkReportRepository {
       monthKey: monthKey,
       dateStr: dateStr,
       createdAtIso: createdAtIso,
-      vehicleInputCount: vehicleInputCount,
-      vehicleOutputCount: vehicleOutputManual,
+      vehicleOutputCount: vehicleOutputCount,
       snapshotLockedVehicleCount: snapshotLockedVehicleCount,
       snapshotTotalLockedFee: snapshotTotalLockedFee,
       areaDocPath: areaRef.path,
@@ -466,7 +462,6 @@ class EndWorkReportWriteResult {
     required this.monthKey,
     required this.dateStr,
     required this.createdAtIso,
-    required this.vehicleInputCount,
     required this.vehicleOutputCount,
     required this.snapshotLockedVehicleCount,
     required this.snapshotTotalLockedFee,
@@ -480,7 +475,6 @@ class EndWorkReportWriteResult {
   final String monthKey;
   final String dateStr;
   final String createdAtIso;
-  final int vehicleInputCount;
   final int vehicleOutputCount;
   final int snapshotLockedVehicleCount;
   final int snapshotTotalLockedFee;

@@ -5,6 +5,7 @@ import '../../../../app/utils/snackbar_helper.dart';
 import 'tabs/add_area_tab.dart';
 import 'tabs/division_management_tab.dart';
 import 'tabs/user_account_tab.dart';
+import 'tabs/status_mapping_helper.dart';
 
 class AreaManagement extends StatefulWidget {
   const AreaManagement({super.key});
@@ -48,7 +49,7 @@ class _AreaManagementState extends State<AreaManagement>
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) return;
       final i = _tabController.index;
-      if (!_divisionsLoaded && (i == 0 || i == 1 || i == 2)) {
+      if (!_divisionsLoaded && (i == 0 || i == 1 || i == 2 || i == 3)) {
         _divisionsLoaded = true;
         _loadDivisions();
       }
@@ -257,6 +258,9 @@ class _AreaManagementState extends State<AreaManagement>
           },
           onAreaChanged: (val) => setState(() => _accountSelectedArea = val),
         ),
+
+
+        const StatusMappingHelper(),
       ],
     );
 

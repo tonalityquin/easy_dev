@@ -458,7 +458,7 @@ class _SingleInsideEndReportFormPageState
       '— 업무 종료 보고서 —',
       '',
       '특이사항: $specialText',
-      '일일 차량 입고 대수: $vehicleText',
+      '출차 대수: $vehicleText',
       '',
       '[업무 내용]',
       _contentCtrl.text,
@@ -640,7 +640,7 @@ class _SingleInsideEndReportFormPageState
     setState(() => _firstSubmitting = true);
 
     try {
-      final vehicleInputCount = int.parse(raw);
+      final vehicleOutputCount = int.parse(raw);
       EndWorkReportWriteResult? result;
 
       await _runWithBlockingDialog(
@@ -651,7 +651,7 @@ class _SingleInsideEndReportFormPageState
             area: area,
             division: division,
             uploadedBy: userName,
-            vehicleInputCount: vehicleInputCount,
+            vehicleOutputCount: vehicleOutputCount,
           );
         },
       );
@@ -688,8 +688,7 @@ class _SingleInsideEndReportFormPageState
           '• monthKey: ${r.monthKey}',
           '• 저장 문서: ${r.monthDocPath}',
           '• 저장 필드: ${r.reportsFieldPath}',
-          '• 서버 저장 입고 대수(vehicleInput): ${r.vehicleInputCount}대',
-          '• 서버 저장 출고 대수(vehicleOutput): ${r.vehicleOutputCount}대 (조회 없음 → 0)',
+          '• 서버 저장 출고 대수(vehicleOutput): ${r.vehicleOutputCount}대',
           '• metrics 스냅샷: ${r.snapshotLockedVehicleCount} / ${r.snapshotTotalLockedFee} (조회 없음 → 0)',
         ].join('\n'),
       );
@@ -701,7 +700,7 @@ class _SingleInsideEndReportFormPageState
         extra: <String, dynamic>{
           'area': area,
           'division': division,
-          'vehicleInputCount': raw,
+          'vehicleOutputCount': raw,
           'uploadedBy': userName,
         },
         tags: const <String>[
@@ -962,7 +961,7 @@ class _SingleInsideEndReportFormPageState
 
     final fields = <MapEntry<String, String>>[
       MapEntry('특이사항', specialText),
-      MapEntry('일일 차량 입고 대수', vehicleText),
+      MapEntry('출차 대수', vehicleText),
     ];
 
     pw.Widget buildFieldTable() => pw.Table(
@@ -1174,7 +1173,7 @@ class _SingleInsideEndReportFormPageState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '오늘 하루 동안 해당 업무로 입고된 차량 대수를 입력해 주세요.',
+          '오늘 하루 동안 해당 업무의 출차 대수를 입력해 주세요.',
           style:
               textTheme.bodyMedium?.copyWith(height: 1.4, color: cs.onSurface),
         ),
@@ -1183,7 +1182,7 @@ class _SingleInsideEndReportFormPageState
           key: _vehicleFieldKey,
           controller: _vehicleCountCtrl,
           decoration:
-              _inputDec(context, labelText: '일일 차량 입고 대수', hintText: '예: 12'),
+              _inputDec(context, labelText: '출차 대수', hintText: '예: 12'),
           keyboardType: TextInputType.number,
           onTap: () {
             Future.delayed(const Duration(milliseconds: 150), () {
@@ -1199,7 +1198,7 @@ class _SingleInsideEndReportFormPageState
           },
           validator: (v) {
             final value = v?.trim() ?? '';
-            if (value.isEmpty) return '일일 차량 입고 대수를 입력하세요.';
+            if (value.isEmpty) return '출차 대수를 입력하세요.';
             if (!RegExp(r'^\d+$').hasMatch(value)) return '숫자만 입력하세요.';
             return null;
           },
@@ -1233,7 +1232,7 @@ class _SingleInsideEndReportFormPageState
               const SizedBox(height: 8),
               Text(
                 '이 화면은 Firebase 조회를 수행하지 않으므로, 시스템 집계 값을 표시하지 않습니다.\n'
-                '보고용 "일일 차량 입고 대수"는 반드시 직접 입력해 주세요.',
+                '보고용 출차 대수는 직접 입력한 숫자로 저장됩니다.',
                 style: textTheme.bodySmall
                     ?.copyWith(color: cs.onSurfaceVariant, height: 1.4),
               ),
@@ -1249,14 +1248,7 @@ class _SingleInsideEndReportFormPageState
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    metricRow('시스템 입차', '미집계'),
-                    const SizedBox(height: 4),
-                    metricRow('출차', '미집계'),
-                    const SizedBox(height: 4),
-                    metricRow('중복 입차', '미집계'),
-                    Divider(
-                        height: 16, color: cs.outlineVariant.withOpacity(0.7)),
-                    metricRow('시스템 합산(입차+출차+중복 입차)', '미집계', isEmphasis: true),
+                    metricRow('출차', '직접 입력'),
                   ],
                 ),
               ),
@@ -1751,7 +1743,7 @@ class _SingleInsideEndReportFormPageState
               },
               children: [
                 _buildReportPage(
-                  sectionTitle: '1. 일일 차량 입고 대수',
+                  sectionTitle: '1. 출차 대수',
                   sectionBody: _buildVehicleBody(),
                 ),
                 _buildReportPage(

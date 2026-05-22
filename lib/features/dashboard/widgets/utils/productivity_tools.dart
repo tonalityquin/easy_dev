@@ -34,6 +34,7 @@ class ChillStore {
     5000016,
     5000018,
   };
+  static const String _kProtectedBreakReminderTitle = '근무일 주어진 휴게시간은 꼭 휴식을 취하세요';
   static const String _kProtectedSubmissionTitle = '매 주 마지막 근무요일에 출근부, 휴게시간 기록부는 제출';
   static const String _kProtectedEventKeyPrefix = 'protected_weekly_submission';
   static const int _kProtectedEventDays = 90;
@@ -309,30 +310,41 @@ class ChillStore {
     }
   }
 
+  String _protectedSubmissionTitleFor(TimeOfDay time) {
+    if (time.hour == 11 && time.minute == 0) {
+      return _kProtectedBreakReminderTitle;
+    }
+    return _kProtectedSubmissionTitle;
+  }
+
   Future<void> _scheduleProtectedSubmissionNotifications() async {
+    const time1100 = TimeOfDay(hour: 11, minute: 0);
+    const time1700 = TimeOfDay(hour: 17, minute: 0);
+    const time2000 = TimeOfDay(hour: 20, minute: 0);
+
     await _scheduleDailyTime(
       id: _kNotifDailySubmission1100,
-      time: const TimeOfDay(hour: 11, minute: 0),
-      title: _kProtectedSubmissionTitle,
-      body: _kProtectedSubmissionTitle,
+      time: time1100,
+      title: _protectedSubmissionTitleFor(time1100),
+      body: _protectedSubmissionTitleFor(time1100),
       payload: 'system_submission:daily_1100',
       exact: true,
       highImportance: true,
     );
     await _scheduleDailyTime(
       id: _kNotifDailySubmission1700,
-      time: const TimeOfDay(hour: 17, minute: 0),
-      title: _kProtectedSubmissionTitle,
-      body: _kProtectedSubmissionTitle,
+      time: time1700,
+      title: _protectedSubmissionTitleFor(time1700),
+      body: _protectedSubmissionTitleFor(time1700),
       payload: 'system_submission:daily_1700',
       exact: true,
       highImportance: true,
     );
     await _scheduleDailyTime(
       id: _kNotifDailySubmission2000,
-      time: const TimeOfDay(hour: 20, minute: 0),
-      title: _kProtectedSubmissionTitle,
-      body: _kProtectedSubmissionTitle,
+      time: time2000,
+      title: _protectedSubmissionTitleFor(time2000),
+      body: _protectedSubmissionTitleFor(time2000),
       payload: 'system_submission:daily_2000',
       exact: true,
       highImportance: true,
@@ -421,11 +433,20 @@ class ChillStore {
           whereArgs: [key],
           limit: 1,
         );
-        if (exists.isNotEmpty) continue;
-
+        final title = _protectedSubmissionTitleFor(time);
         final nowMs = DateTime.now().millisecondsSinceEpoch;
+        if (exists.isNotEmpty) {
+          await db.update(
+            'events',
+            {'title': title, 'updated_at_ms': nowMs},
+            where: 'system_key = ? AND title != ?',
+            whereArgs: [key, title],
+          );
+          continue;
+        }
+
         await db.insert('events', {
-          'title': _kProtectedSubmissionTitle,
+          'title': title,
           'start_at_ms': startAt.millisecondsSinceEpoch,
           'end_at_ms': null,
           'all_day': 0,

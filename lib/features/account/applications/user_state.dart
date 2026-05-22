@@ -239,12 +239,19 @@ class UserState extends ChangeNotifier {
     notifyListeners();
   }
 
-  String? _tryParseActiveLimitError(Object e) {
+  String? _tryParseLimitError(Object e, String key) {
     final s = e.toString();
-    const key = 'ACTIVE_LIMIT_REACHED:';
     final idx = s.indexOf(key);
     if (idx < 0) return null;
     return s.substring(idx + key.length).trim();
+  }
+
+  String? _tryParseActiveLimitError(Object e) {
+    return _tryParseLimitError(e, 'ACTIVE_LIMIT_REACHED:');
+  }
+
+  String? _tryParseTotalLimitError(Object e) {
+    return _tryParseLimitError(e, 'TOTAL_LIMIT_REACHED:');
   }
 
   Future<void> setSelectedUserActiveStatus(
@@ -270,9 +277,14 @@ class UserState extends ChangeNotifier {
 
       notifyListeners();
     } catch (e) {
-      final limit = _tryParseActiveLimitError(e);
-      if (limit != null && isActive) {
-        onError?.call('활성화 제한에 도달했습니다. (최대 $limit)');
+      final activeLimit = _tryParseActiveLimitError(e);
+      if (activeLimit != null && isActive) {
+        onError?.call('활성화 제한에 도달했습니다. (최대 $activeLimit)');
+        return;
+      }
+      final totalLimit = _tryParseTotalLimitError(e);
+      if (totalLimit != null) {
+        onError?.call('전체 계정 제한에 도달했습니다. (최대 $totalLimit)');
         return;
       }
       onError?.call('계정 활성 상태 변경 실패: $e');
@@ -460,6 +472,16 @@ class UserState extends ChangeNotifier {
       return true;
     } catch (e, st) {
       debugPrint('updateUserCardAsAdmin error: $e\n$st');
+      final activeLimit = _tryParseActiveLimitError(e);
+      if (activeLimit != null) {
+        onError?.call('활성화 제한에 도달했습니다. (최대 $activeLimit)');
+        return false;
+      }
+      final totalLimit = _tryParseTotalLimitError(e);
+      if (totalLimit != null) {
+        onError?.call('전체 계정 제한에 도달했습니다. (최대 $totalLimit)');
+        return false;
+      }
       onError?.call('사용자 수정 실패: $e');
       return false;
     }
@@ -595,6 +617,16 @@ class UserState extends ChangeNotifier {
 
       notifyListeners();
     } catch (e) {
+      final activeLimit = _tryParseActiveLimitError(e);
+      if (activeLimit != null) {
+        onError?.call('활성화 제한에 도달했습니다. (최대 $activeLimit)');
+        return;
+      }
+      final totalLimit = _tryParseTotalLimitError(e);
+      if (totalLimit != null) {
+        onError?.call('전체 계정 제한에 도달했습니다. (최대 $totalLimit)');
+        return;
+      }
       onError?.call('사용자 추가 실패: $e');
     }
   }

@@ -1,6 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../app/utils/status_dialog.dart';
 import '../../../dev/application/area_state.dart';
 import '../../applications/user_state.dart';
 import '../../domain/models/user/user_model.dart';
@@ -14,6 +16,24 @@ extension IterableX<T> on Iterable<T> {
     }
     return null;
   }
+}
+
+class _AccountSummary {
+  const _AccountSummary({
+    required this.activeCount,
+    required this.inactiveCount,
+    required this.totalLimit,
+  });
+
+  final int activeCount;
+  final int inactiveCount;
+  final int? totalLimit;
+
+  int get totalCount => activeCount + inactiveCount;
+
+  String get maxLabel => totalLimit == null ? '∞' : totalLimit.toString();
+
+  String get compactLabel => '활성 $activeCount · 비활성 $inactiveCount · 전체 $totalCount · 최대 $maxLabel';
 }
 
 enum _UserMenuAction {
@@ -91,6 +111,40 @@ class _UserManagementState extends State<UserManagement> {
     setState(() {
       _isAccountManagementMode = !_isAccountManagementMode;
     });
+  }
+
+
+  String? _limitNumberFromMessage(String message) {
+    final match = RegExp(r'최대\s*(\d+)').firstMatch(message);
+    return match?.group(1);
+  }
+
+  Future<void> _showAccountFailureDialog(
+    BuildContext context, {
+    required String title,
+    required String message,
+    required String fallbackDescription,
+  }) async {
+    if (!context.mounted) return;
+
+    final limit = _limitNumberFromMessage(message);
+    String description = fallbackDescription;
+
+    if (message.contains('활성화 제한')) {
+      description = limit == null
+          ? '선택한 지역의 활성 계정 한도에 도달했습니다. 기존 활성 계정을 비활성화하거나 리밋 설정에서 활성 한도를 늘린 뒤 다시 시도하세요.'
+          : '선택한 지역의 활성 계정 한도에 도달했습니다. 활성 계정은 최대 ${limit}개까지만 사용할 수 있습니다. 기존 활성 계정을 비활성화하거나 리밋 설정에서 활성 한도를 늘린 뒤 다시 시도하세요.';
+    } else if (message.contains('전체 계정 제한')) {
+      description = limit == null
+          ? '선택한 지역의 전체 계정 생성 한도에 도달했습니다. 기존 계정을 삭제하거나 리밋 설정에서 전체 한도를 늘린 뒤 다시 시도하세요.'
+          : '선택한 지역의 전체 계정 생성 한도에 도달했습니다. 활성 계정과 비활성 계정을 합쳐 최대 ${limit}개까지만 생성할 수 있습니다. 기존 계정을 삭제하거나 리밋 설정에서 전체 한도를 늘린 뒤 다시 시도하세요.';
+    }
+
+    await StatusDialog.showFailure(
+      context,
+      title: title,
+      description: description,
+    );
   }
 
   TimeOfDay? _stringToTimeOfDay(String? timeString) {
@@ -317,7 +371,15 @@ class _UserManagementState extends State<UserManagement> {
 
             await userState.addUserCard(
               newUser,
-              onError: (_) {},
+              onError: (message) {
+                _showAccountFailureDialog(
+                  context,
+                  title: '계정 생성 불가',
+                  message: message,
+                  fallbackDescription:
+                      '계정을 생성하는 중 문제가 발생했습니다. 입력값과 네트워크 상태를 확인한 뒤 다시 시도하세요.',
+                );
+              },
             );
 
             if (!context.mounted) return;
@@ -389,7 +451,15 @@ class _UserManagementState extends State<UserManagement> {
 
           await userState.updateUserCardAsAdmin(
             updatedUser,
-            onError: (_) {},
+            onError: (message) {
+              _showAccountFailureDialog(
+                context,
+                title: '계정 저장 불가',
+                message: message,
+                fallbackDescription:
+                    '계정 정보를 저장하는 중 문제가 발생했습니다. 입력값과 네트워크 상태를 확인한 뒤 다시 시도하세요.',
+              );
+            },
           );
 
           if (!context.mounted) return;
@@ -422,7 +492,16 @@ class _UserManagementState extends State<UserManagement> {
 
     await userState.setSelectedUserActiveStatus(
       toActive,
-      onError: (_) {},
+      onError: (message) {
+        _showAccountFailureDialog(
+          context,
+          title: toActive ? '계정 활성화 불가' : '계정 비활성화 불가',
+          message: message,
+          fallbackDescription: toActive
+              ? '계정을 활성화하는 중 문제가 발생했습니다. 선택한 지역의 계정 제한과 네트워크 상태를 확인한 뒤 다시 시도하세요.'
+              : '계정을 비활성화하는 중 문제가 발생했습니다. 네트워크 상태를 확인한 뒤 다시 시도하세요.',
+        );
+      },
     );
 
     if (!context.mounted) return;
@@ -632,22 +711,33 @@ class _UserManagementState extends State<UserManagement> {
           valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
         ),
       )
-          : filteredUsers.isEmpty
-          ? Center(
-        child: userState.users.isEmpty
-            ? const Text('전체 계정 데이터가 없습니다')
-            : const Text('현재 지역/사업소에 해당하는 계정이 없습니다'),
-      )
           : ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        itemCount: 1 +
+        itemCount: filteredUsers.isEmpty
+            ? 2
+            : 1 +
             activeUsers.length +
             (needDivider ? 1 : 0) +
             inactiveUsers.length,
         itemBuilder: (context, index) {
           if (index == 0) {
             return _HeaderBanner(
+              currentDivision: currentDivision,
+              currentArea: currentArea,
+              fallbackActiveCount: activeUsers.length,
+              fallbackInactiveCount: inactiveUsers.length,
               isAccountManagementMode: _isAccountManagementMode,
+            );
+          }
+
+          if (filteredUsers.isEmpty) {
+            return Padding(
+              padding: const EdgeInsets.only(top: 96),
+              child: Center(
+                child: userState.users.isEmpty
+                    ? const Text('전체 계정 데이터가 없습니다')
+                    : const Text('현재 지역/사업소에 해당하는 계정이 없습니다'),
+              ),
             );
           }
 
@@ -695,9 +785,66 @@ class _UserManagementState extends State<UserManagement> {
 }
 
 class _HeaderBanner extends StatelessWidget {
-  const _HeaderBanner({required this.isAccountManagementMode});
+  const _HeaderBanner({
+    required this.currentDivision,
+    required this.currentArea,
+    required this.fallbackActiveCount,
+    required this.fallbackInactiveCount,
+    required this.isAccountManagementMode,
+  });
 
+  final String currentDivision;
+  final String currentArea;
+  final int fallbackActiveCount;
+  final int fallbackInactiveCount;
   final bool isAccountManagementMode;
+
+  String _showDocId(String division, String area) {
+    final d = division.trim().isEmpty ? 'unknownDivision' : division.trim();
+    final a = area.trim().isEmpty ? 'unknownArea' : area.trim();
+    return '$d-$a';
+  }
+
+  int? _asNonNegativeInt(dynamic value) {
+    if (value is int && value >= 0) return value;
+    if (value is num && value >= 0) return value.toInt();
+    return null;
+  }
+
+  int? _asLimit(dynamic value) {
+    if (value is int && value >= 0) return value;
+    if (value is num && value >= 0) return value.toInt();
+    return null;
+  }
+
+  Future<_AccountSummary> _loadSummary() async {
+    if (currentDivision.trim().isEmpty || currentArea.trim().isEmpty) {
+      return _AccountSummary(
+        activeCount: fallbackActiveCount,
+        inactiveCount: fallbackInactiveCount,
+        totalLimit: null,
+      );
+    }
+
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('user_accounts_show')
+          .doc(_showDocId(currentDivision, currentArea))
+          .get(const GetOptions(source: Source.server));
+      final data = snap.data();
+      return _AccountSummary(
+        activeCount: _asNonNegativeInt(data?['activeCount']) ?? fallbackActiveCount,
+        inactiveCount: _asNonNegativeInt(data?['inactiveCount']) ?? fallbackInactiveCount,
+        totalLimit: _asLimit(data?['totalLimit']),
+      );
+    } catch (_) {
+      return _AccountSummary(
+        activeCount: fallbackActiveCount,
+        inactiveCount: fallbackInactiveCount,
+        totalLimit: null,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -705,50 +852,65 @@ class _HeaderBanner extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
 
     final titleStyle =
-    (tt.titleSmall ?? const TextStyle(fontSize: 14)).copyWith(
+        (tt.titleSmall ?? const TextStyle(fontSize: 14)).copyWith(
       color: cs.onPrimaryContainer,
       fontWeight: FontWeight.w800,
       height: 1.25,
     );
 
-    final String message = isAccountManagementMode
-        ? '계정 관리 모드입니다. 삭제할 계정을 선택하면 우하단에 계정 삭제 버튼이 표시됩니다.'
-        : '계정을 추가/수정/활성/비활성할 수 있습니다.\n선택 시 항목이 강조 표시됩니다.';
+    return FutureBuilder<_AccountSummary>(
+      future: _loadSummary(),
+      initialData: _AccountSummary(
+        activeCount: fallbackActiveCount,
+        inactiveCount: fallbackInactiveCount,
+        totalLimit: null,
+      ),
+      builder: (context, snapshot) {
+        final summary = snapshot.data ??
+            _AccountSummary(
+              activeCount: fallbackActiveCount,
+              inactiveCount: fallbackInactiveCount,
+              totalLimit: null,
+            );
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: cs.primaryContainer.withOpacity(.60),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.outlineVariant.withOpacity(.85)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: cs.primary.withOpacity(.12),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: cs.primary.withOpacity(.18)),
-            ),
-            child: Icon(
-              isAccountManagementMode
-                  ? Icons.delete_sweep_rounded
-                  : Icons.manage_accounts_rounded,
-              color: cs.primary,
-            ),
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: cs.primaryContainer.withOpacity(.60),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: cs.outlineVariant.withOpacity(.85)),
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: titleStyle,
-            ),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: cs.primary.withOpacity(.12),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: cs.primary.withOpacity(.18)),
+                ),
+                child: Icon(
+                  isAccountManagementMode
+                      ? Icons.delete_sweep_rounded
+                      : Icons.manage_accounts_rounded,
+                  color: cs.primary,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  summary.compactLabel,
+                  style: titleStyle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

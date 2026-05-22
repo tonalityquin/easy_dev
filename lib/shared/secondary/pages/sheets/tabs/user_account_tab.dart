@@ -6,6 +6,27 @@ import 'package:flutter/material.dart';
 import '../../../../../app/usage/usage_reporter.dart';
 import '../../../../../app/utils/status_dialog.dart';
 
+
+class _UserAccountsTabCounts {
+  const _UserAccountsTabCounts({
+    required this.activeCount,
+    required this.inactiveCount,
+  });
+
+  final int activeCount;
+  final int inactiveCount;
+
+  int get totalCount => activeCount + inactiveCount;
+
+  Map<String, int> toMap() {
+    return <String, int>{
+      'activeCount': activeCount,
+      'inactiveCount': inactiveCount,
+      'totalCount': totalCount,
+    };
+  }
+}
+
 class UserAccountsTab extends StatefulWidget {
   final String? selectedDivision;
   final String? selectedArea;
@@ -208,8 +229,62 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
   }
 
   int _normalizeLimit(dynamic v) {
-    if (v is int && v > 0) return v;
+    if (v is int && v >= 0) return v;
     return 1 << 30;
+  }
+
+
+  String? _limitValueFromError(Object e, String key) {
+    final raw = e.toString();
+    final idx = raw.indexOf(key);
+    if (idx < 0) return null;
+    final rest = raw.substring(idx + key.length).trim();
+    final end = rest.indexOf(RegExp(r'[^0-9]'));
+    final value = end < 0 ? rest : rest.substring(0, end);
+    return value.trim().isEmpty ? null : value.trim();
+  }
+
+  String? _activeLimitFromError(Object e) {
+    return _limitValueFromError(e, 'ACTIVE_LIMIT_REACHED:');
+  }
+
+  String? _totalLimitFromError(Object e) {
+    return _limitValueFromError(e, 'TOTAL_LIMIT_REACHED:');
+  }
+
+  Future<void> _showAccountLimitFailureDialog(
+    Object e, {
+    required String fallbackTitle,
+    required String activeTitle,
+    required String totalTitle,
+  }) async {
+    final activeLimit = _activeLimitFromError(e);
+    if (activeLimit != null) {
+      await StatusDialog.showFailure(
+        context,
+        title: activeTitle,
+        description:
+            '선택한 지역의 활성 계정 한도에 도달했습니다. 활성 계정은 최대 ${activeLimit}개까지만 사용할 수 있습니다. 기존 활성 계정을 비활성화하거나 리밋 설정에서 활성 한도를 늘린 뒤 다시 시도하세요.',
+      );
+      return;
+    }
+
+    final totalLimit = _totalLimitFromError(e);
+    if (totalLimit != null) {
+      await StatusDialog.showFailure(
+        context,
+        title: totalTitle,
+        description:
+            '선택한 지역의 전체 계정 생성 한도에 도달했습니다. 활성 계정과 비활성 계정을 합쳐 최대 ${totalLimit}개까지만 생성할 수 있습니다. 기존 계정을 삭제하거나 리밋 설정에서 전체 한도를 늘린 뒤 다시 시도하세요.',
+      );
+      return;
+    }
+
+    await StatusDialog.showFailure(
+      context,
+      title: fallbackTitle,
+      description: '계정 정보를 저장하는 중 문제가 발생했습니다. 입력값과 네트워크 상태를 확인한 뒤 다시 시도하세요.',
+    );
   }
 
   int? _asInt(dynamic v) => v is int ? v : null;
@@ -223,7 +298,35 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     return payload;
   }
 
-  Future<int> _syncActiveCount({
+  int _nonNegative(dynamic v) {
+    final i = _asInt(v);
+    if (i == null || i < 0) return 0;
+    return i;
+  }
+
+  _UserAccountsTabCounts _countsFromMeta(Map<String, dynamic> data) {
+    final active = _nonNegative(data['activeCount']);
+    final inactiveRaw = _asInt(data['inactiveCount']);
+    final totalRaw = _asInt(data['totalCount']);
+    var inactive = inactiveRaw == null || inactiveRaw < 0 ? 0 : inactiveRaw;
+    if ((inactiveRaw == null || inactiveRaw < 0) && totalRaw != null && totalRaw >= active) {
+      inactive = totalRaw - active;
+    }
+    return _UserAccountsTabCounts(activeCount: active, inactiveCount: inactive);
+  }
+
+  bool _metaNeedsCountCompute(Map<String, dynamic> data, bool strict) {
+    if (strict) return true;
+    final active = _asInt(data['activeCount']);
+    final inactive = _asInt(data['inactiveCount']);
+    final total = _asInt(data['totalCount']);
+    if (active == null || active < 0) return true;
+    if (inactive == null || inactive < 0) return true;
+    if (total == null || total < 0) return true;
+    return total != active + inactive;
+  }
+
+  Future<_UserAccountsTabCounts> _syncAccountCounts({
     required DocumentReference<Map<String, dynamic>> showDocRef,
     required String division,
     required String area,
@@ -232,25 +335,33 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     try {
       final metaSnap = await showDocRef.get(const GetOptions(source: Source.server));
       final meta = metaSnap.data() ?? <String, dynamic>{};
-      final metaCount = _asInt(meta['activeCount']);
 
       try {
         await UsageReporter.instance.report(
           area: area,
           action: 'read',
           n: 1,
-          source: 'UserAccountsTab._syncActiveCount.meta.get',
+          source: 'UserAccountsTab._syncAccountCounts.meta.get',
         );
       } catch (_) {}
 
-      final needCompute = strict || metaCount == null || metaCount < 0;
-      if (!needCompute) return metaCount;
+      if (!_metaNeedsCountCompute(meta, strict)) {
+        return _countsFromMeta(meta);
+      }
 
-      final qs = await showDocRef
-          .collection('users')
-          .where('isActive', isEqualTo: true)
-          .get(const GetOptions(source: Source.server));
-      final actual = qs.docs.length;
+      final qs = await showDocRef.collection('users').get(const GetOptions(source: Source.server));
+      var active = 0;
+      var inactive = 0;
+      for (final doc in qs.docs) {
+        final data = doc.data();
+        final isActive = (data['isActive'] as bool?) ?? true;
+        if (isActive) {
+          active += 1;
+        } else {
+          inactive += 1;
+        }
+      }
+      final counts = _UserAccountsTabCounts(activeCount: active, inactiveCount: inactive);
 
       try {
         final n = qs.docs.isEmpty ? 1 : qs.docs.length;
@@ -258,34 +369,32 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
           area: area,
           action: 'read',
           n: n,
-          source: 'UserAccountsTab._syncActiveCount.users.get',
+          source: 'UserAccountsTab._syncAccountCounts.users.get',
         );
       } catch (_) {}
 
-      if (metaCount == null || metaCount < 0 || metaCount != actual) {
-        await showDocRef.set(
-          <String, dynamic>{
-            'division': division,
-            'area': area,
-            'activeCount': actual,
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
+      await showDocRef.set(
+        <String, dynamic>{
+          'division': division,
+          'area': area,
+          ...counts.toMap(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+
+      try {
+        await UsageReporter.instance.report(
+          area: area,
+          action: 'write',
+          n: 1,
+          source: 'UserAccountsTab._syncAccountCounts.meta.set',
         );
+      } catch (_) {}
 
-        try {
-          await UsageReporter.instance.report(
-            area: area,
-            action: 'write',
-            n: 1,
-            source: 'UserAccountsTab._syncActiveCount.meta.set',
-          );
-        } catch (_) {}
-      }
-
-      return actual;
+      return counts;
     } catch (_) {
-      return 0;
+      return const _UserAccountsTabCounts(activeCount: 0, inactiveCount: 0);
     }
   }
 
@@ -294,18 +403,52 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     Map<String, dynamic> oldData,
     Map<String, dynamic> newData,
   ) async {
+    String firstListValue(Map<String, dynamic> data, String key, String fallback) {
+      final list = List.from(data[key] ?? const []);
+      if (list.isEmpty) return fallback;
+      final value = list.first.toString().trim();
+      return value.isEmpty ? fallback : value;
+    }
+
     final phone = (oldData['phone'] ?? '').toString();
-    final List areas = List.from(newData['areas'] ?? const []);
-    final String newArea = areas.isNotEmpty ? areas.first.toString() : 'default';
+    final String newArea = firstListValue(newData, 'areas', 'default');
+    final String newDivision = firstListValue(newData, 'divisions', 'unknownDivision');
+    final String oldArea = firstListValue(oldData, 'areas', newArea);
+    final String oldDivision = firstListValue(oldData, 'divisions', newDivision);
     final String newId = '$phone-$newArea';
+    final String oldShowId = _showDocId(oldDivision, oldArea);
+    final String newShowId = _showDocId(newDivision, newArea);
+    final bool idChanged = oldId != newId;
+    final bool showChanged = oldShowId != newShowId;
+    final bool moved = idChanged || showChanged;
 
     final fs = FirebaseFirestore.instance;
+    final oldShowDocRef = fs.collection('user_accounts_show').doc(oldShowId);
+    final newShowDocRef = fs.collection('user_accounts_show').doc(newShowId);
+    final oldShowUserDocRef = oldShowDocRef.collection('users').doc(oldId);
+    final newShowUserDocRef = newShowDocRef.collection('users').doc(newId);
+
     bool didCreate = false;
     bool didUpdate = false;
     bool didDelete = false;
     int readOps = 0;
 
     try {
+      await _syncAccountCounts(
+        showDocRef: newShowDocRef,
+        division: newDivision,
+        area: newArea,
+        strict: true,
+      );
+      if (moved) {
+        await _syncAccountCounts(
+          showDocRef: oldShowDocRef,
+          division: oldDivision,
+          area: oldArea,
+          strict: true,
+        );
+      }
+
       await fs.runTransaction((tx) async {
         final oldRef = fs.collection('user_accounts').doc(oldId);
         final newRef = fs.collection('user_accounts').doc(newId);
@@ -316,24 +459,157 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
           throw Exception('원본 계정이 존재하지 않습니다.');
         }
 
-        final payload = _userAccountsPayload(newData)
-          ..['createdAt'] = oldSnap.data()?['createdAt'] ?? FieldValue.serverTimestamp()
-          ..['updatedAt'] = FieldValue.serverTimestamp();
-
-        if (newId == oldId) {
-          tx.update(oldRef, payload);
-          didUpdate = true;
-        } else {
+        if (idChanged) {
           final newSnap = await tx.get(newRef);
           readOps += 1;
           if (newSnap.exists) {
             throw Exception('동일 ID가 이미 존재합니다: $newId');
           }
+        }
+
+        final newShowSnap = await tx.get(newShowDocRef);
+        readOps += 1;
+        final newShowData = newShowSnap.data() ?? <String, dynamic>{};
+        final newCounts0 = _countsFromMeta(newShowData);
+        final newActiveLimit = _normalizeLimit(newShowData['activeLimit']);
+        final newTotalLimit = _normalizeLimit(newShowData['totalLimit']);
+
+        final newShowUserSnap = await tx.get(newShowUserDocRef);
+        readOps += 1;
+        final newShowUserData = newShowUserSnap.data() ?? <String, dynamic>{};
+        final newShowUserExists = newShowUserSnap.exists;
+        final newShowUserActive = (newShowUserData['isActive'] as bool?) ?? false;
+
+        final payload = _userAccountsPayload(newData)
+          ..['createdAt'] = oldSnap.data()?['createdAt'] ?? FieldValue.serverTimestamp()
+          ..['updatedAt'] = FieldValue.serverTimestamp();
+
+        if (!moved) {
+          final targetActive = newShowUserExists
+              ? newShowUserActive
+              : ((newData['isActive'] as bool?) ?? true);
+          var counts1 = newCounts0;
+          if (!newShowUserExists) {
+            if (newCounts0.totalCount >= newTotalLimit) {
+              throw StateError('TOTAL_LIMIT_REACHED:$newTotalLimit');
+            }
+            if (targetActive && newCounts0.activeCount >= newActiveLimit) {
+              throw StateError('ACTIVE_LIMIT_REACHED:$newActiveLimit');
+            }
+            counts1 = _UserAccountsTabCounts(
+              activeCount: newCounts0.activeCount + (targetActive ? 1 : 0),
+              inactiveCount: newCounts0.inactiveCount + (targetActive ? 0 : 1),
+            );
+          }
+
+          final showPayload = Map<String, dynamic>.from(newData)
+            ..remove('id')
+            ..['createdAt'] = newShowUserData['createdAt'] ?? oldSnap.data()?['createdAt'] ?? FieldValue.serverTimestamp()
+            ..['updatedAt'] = FieldValue.serverTimestamp()
+            ..['isActive'] = targetActive;
+          showPayload['disabledAt'] = targetActive
+              ? FieldValue.delete()
+              : (newShowUserData['disabledAt'] ?? FieldValue.serverTimestamp());
+
+          tx.update(oldRef, payload);
+          tx.set(
+            newShowDocRef,
+            <String, dynamic>{
+              'division': newDivision,
+              'area': newArea,
+              ...counts1.toMap(),
+              'updatedAt': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true),
+          );
+          tx.set(newShowUserDocRef, showPayload, SetOptions(merge: true));
+          didUpdate = true;
+          return;
+        }
+
+        final oldShowSnap = await tx.get(oldShowDocRef);
+        readOps += 1;
+        final oldShowData = oldShowSnap.data() ?? <String, dynamic>{};
+        final oldCounts0 = _countsFromMeta(oldShowData);
+
+        final oldShowUserSnap = await tx.get(oldShowUserDocRef);
+        readOps += 1;
+        final oldShowUserData = oldShowUserSnap.data() ?? <String, dynamic>{};
+        final oldShowUserExists = oldShowUserSnap.exists;
+        final oldShowUserActive = (oldShowUserData['isActive'] as bool?) ?? false;
+        final targetActive = oldShowUserExists
+            ? oldShowUserActive
+            : (newShowUserExists ? newShowUserActive : ((newData['isActive'] as bool?) ?? true));
+
+        final oldActiveDelta = oldShowUserExists && oldShowUserActive ? -1 : 0;
+        final oldInactiveDelta = oldShowUserExists && !oldShowUserActive ? -1 : 0;
+        final newActiveDelta = targetActive
+            ? (newShowUserExists && newShowUserActive ? 0 : 1)
+            : (newShowUserExists && newShowUserActive ? -1 : 0);
+        final newInactiveDelta = targetActive
+            ? (newShowUserExists && !newShowUserActive ? -1 : 0)
+            : (newShowUserExists && !newShowUserActive ? 0 : 1);
+        final newTotalDelta = newShowUserExists ? 0 : 1;
+
+        if (newTotalDelta > 0 && newCounts0.totalCount >= newTotalLimit) {
+          throw StateError('TOTAL_LIMIT_REACHED:$newTotalLimit');
+        }
+        if (newActiveDelta > 0 && newCounts0.activeCount >= newActiveLimit) {
+          throw StateError('ACTIVE_LIMIT_REACHED:$newActiveLimit');
+        }
+
+        final oldCounts1 = _UserAccountsTabCounts(
+          activeCount: (oldCounts0.activeCount + oldActiveDelta) < 0 ? 0 : oldCounts0.activeCount + oldActiveDelta,
+          inactiveCount: (oldCounts0.inactiveCount + oldInactiveDelta) < 0 ? 0 : oldCounts0.inactiveCount + oldInactiveDelta,
+        );
+        final newCounts1 = _UserAccountsTabCounts(
+          activeCount: (newCounts0.activeCount + newActiveDelta) < 0 ? 0 : newCounts0.activeCount + newActiveDelta,
+          inactiveCount: (newCounts0.inactiveCount + newInactiveDelta) < 0 ? 0 : newCounts0.inactiveCount + newInactiveDelta,
+        );
+
+        final showPayload = Map<String, dynamic>.from(newData)
+          ..remove('id')
+          ..['createdAt'] = oldShowUserData['createdAt'] ?? newShowUserData['createdAt'] ?? oldSnap.data()?['createdAt'] ?? FieldValue.serverTimestamp()
+          ..['updatedAt'] = FieldValue.serverTimestamp()
+          ..['isActive'] = targetActive;
+        showPayload['disabledAt'] = targetActive
+            ? FieldValue.delete()
+            : (oldShowUserData['disabledAt'] ?? newShowUserData['disabledAt'] ?? FieldValue.serverTimestamp());
+
+        if (idChanged) {
           tx.set(newRef, payload);
           tx.delete(oldRef);
           didCreate = true;
           didDelete = true;
+        } else {
+          tx.update(oldRef, payload);
+          didUpdate = true;
         }
+
+        if (oldShowUserExists) {
+          tx.delete(oldShowUserDocRef);
+        }
+        tx.set(newShowUserDocRef, showPayload, SetOptions(merge: true));
+        tx.set(
+          newShowDocRef,
+          <String, dynamic>{
+            'division': newDivision,
+            'area': newArea,
+            ...newCounts1.toMap(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+        tx.set(
+          oldShowDocRef,
+          <String, dynamic>{
+            'division': oldDivision,
+            'area': oldArea,
+            ...oldCounts1.toMap(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
       });
 
       try {
@@ -349,7 +625,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
           await UsageReporter.instance.report(
             area: newArea,
             action: 'write',
-            n: 1,
+            n: moved ? 3 : 2,
             source: 'UserAccountsTab._saveChanges.update',
           );
         }
@@ -357,15 +633,15 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
           await UsageReporter.instance.report(
             area: newArea,
             action: 'write',
-            n: 1,
+            n: 3,
             source: 'UserAccountsTab._saveChanges.create',
           );
         }
         if (didDelete) {
           await UsageReporter.instance.report(
-            area: newArea,
+            area: oldArea,
             action: 'delete',
-            n: 1,
+            n: 2,
             source: 'UserAccountsTab._saveChanges.deleteOld',
           );
         }
@@ -388,9 +664,11 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       debugPrint('❌ 계정 저장 실패: $e');
       if (!mounted) return;
 
-      await StatusDialog.showFailure(
-        context,
-        title: StatusDialog.userAccountSaveFailed,
+      await _showAccountLimitFailureDialog(
+        e,
+        fallbackTitle: StatusDialog.userAccountSaveFailed,
+        activeTitle: '계정 저장 불가',
+        totalTitle: '계정 저장 불가',
       );
     }
   }
@@ -430,7 +708,7 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
 
     try {
       final englishName = await _fetchEnglishNameByArea(draft.division, draft.area) ?? draft.area;
-      await _syncActiveCount(
+      await _syncAccountCounts(
         showDocRef: showDocRef,
         division: draft.division,
         area: draft.area,
@@ -447,12 +725,15 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         final showSnap = await tx.get(showDocRef);
         readOps += 1;
         final showData = showSnap.data() ?? <String, dynamic>{};
-        final limit = _normalizeLimit(showData['activeLimit']);
-        final activeCountRaw = _asInt(showData['activeCount']) ?? 0;
-        final activeCount = activeCountRaw < 0 ? 0 : activeCountRaw;
+        final activeLimit = _normalizeLimit(showData['activeLimit']);
+        final totalLimit = _normalizeLimit(showData['totalLimit']);
+        final counts = _countsFromMeta(showData);
 
-        if (activeCount >= limit) {
-          throw StateError('ACTIVE_LIMIT_REACHED:$limit');
+        if (counts.activeCount >= activeLimit) {
+          throw StateError('ACTIVE_LIMIT_REACHED:$activeLimit');
+        }
+        if (counts.totalCount >= totalLimit) {
+          throw StateError('TOTAL_LIMIT_REACHED:$totalLimit');
         }
 
         final accountMap = draft.toUserAccountsMap(englishName)
@@ -469,7 +750,9 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
           <String, dynamic>{
             'division': draft.division,
             'area': draft.area,
-            'activeCount': activeCount + 1,
+            'activeCount': counts.activeCount + 1,
+            'inactiveCount': counts.inactiveCount,
+            'totalCount': counts.totalCount + 1,
             'updatedAt': FieldValue.serverTimestamp(),
           },
           SetOptions(merge: true),
@@ -514,9 +797,11 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       debugPrint('❌ 계정 생성 실패: $e');
       if (!mounted) return;
 
-      await StatusDialog.showFailure(
-        context,
-        title: StatusDialog.userAccountSaveFailed,
+      await _showAccountLimitFailureDialog(
+        e,
+        fallbackTitle: StatusDialog.userAccountSaveFailed,
+        activeTitle: '계정 생성 불가',
+        totalTitle: '계정 생성 불가',
       );
     } finally {
       if (mounted) {

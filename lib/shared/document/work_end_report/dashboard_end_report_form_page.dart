@@ -98,7 +98,6 @@ class EndReportButtonStyles {
 class SimpleEndWorkReportResult {
   final String division;
   final String area;
-  final int vehicleInputCount;
   final int vehicleOutputManual;
   final int snapshotLockedVehicleCount;
   final num snapshotTotalLockedFee;
@@ -114,7 +113,6 @@ class SimpleEndWorkReportResult {
   const SimpleEndWorkReportResult({
     required this.division,
     required this.area,
-    required this.vehicleInputCount,
     required this.vehicleOutputManual,
     required this.snapshotLockedVehicleCount,
     required this.snapshotTotalLockedFee,
@@ -165,7 +163,6 @@ class SimpleEndWorkReportService {
     required String division,
     required String area,
     required String userName,
-    required int vehicleInputCount,
     required int vehicleOutputManual,
   }) async {
     dev.log(
@@ -254,7 +251,6 @@ class SimpleEndWorkReportService {
       'division': division,
       'area': area,
       'vehicleCount': <String, dynamic>{
-        'vehicleInput': vehicleInputCount,
         'vehicleOutput': vehicleOutputManual,
       },
       'metrics': <String, dynamic>{
@@ -439,7 +435,6 @@ class SimpleEndWorkReportService {
     return SimpleEndWorkReportResult(
       division: division,
       area: area,
-      vehicleInputCount: vehicleInputCount,
       vehicleOutputManual: vehicleOutputManual,
       snapshotLockedVehicleCount: snapshotLockedVehicleCount,
       snapshotTotalLockedFee: snapshotTotalLockedFee,
@@ -491,19 +486,14 @@ class _DashboardEndReportFormPageState
   final PageController _pageController = PageController();
   int _currentPageIndex = 0;
 
-  final GlobalKey _vehicleFieldKey = GlobalKey();
   final GlobalKey _contentFieldKey = GlobalKey();
 
   final PlateCountService _plateCountService = PlateCountService();
 
-  int _sysVehicleInput = 0;
   int _sysVehicleOutput = 0;
   int _sysDepartureExtra = 0;
 
   int get _sysDepartureTotal => _sysVehicleOutput + _sysDepartureExtra;
-
-  int get _sysVehicleFieldTotal =>
-      _sysVehicleInput + _sysVehicleOutput + _sysDepartureExtra;
 
   static const String _tEnd = 'end_report';
   static const String _tEndUi = 'end_report/ui';
@@ -581,7 +571,6 @@ class _DashboardEndReportFormPageState
       if (area.isEmpty) return;
 
       final results = await Future.wait<int>([
-        _plateCountService.getParkingCompletedAggCount(area),
         _plateCountService.getDepartureCompletedAggCount(area),
         _plateCountService.getDepartureCompletedExtraCount(area),
       ]);
@@ -589,9 +578,8 @@ class _DashboardEndReportFormPageState
       if (!mounted) return;
 
       setState(() {
-        _sysVehicleInput = results[0];
-        _sysVehicleOutput = results[1];
-        _sysDepartureExtra = results[2];
+        _sysVehicleOutput = results[0];
+        _sysDepartureExtra = results[1];
       });
 
       _updateMailSubject();
@@ -605,10 +593,9 @@ class _DashboardEndReportFormPageState
 
       await _logApiError(
         tag: 'DashboardEndReportFormPage._loadSystemVehicleCount',
-        message: '시스템 집계(입차/출차/중복입차) 로드 실패',
+        message: '시스템 집계(출차/중복입차) 로드 실패',
         error: e,
         extra: <String, dynamic>{
-          'sysVehicleInput': _sysVehicleInput,
           'sysVehicleOutput': _sysVehicleOutput,
           'sysDepartureExtra': _sysDepartureExtra,
         },
@@ -710,7 +697,6 @@ class _DashboardEndReportFormPageState
         message: '업무 종료 보고서 임시저장 실패',
         error: e,
         extra: <String, dynamic>{
-          'vehicleRaw': _vehicleCountCtrl.text.trim(),
           'hasSpecialNote': _hasSpecialNote,
           'contentLen': _contentCtrl.text.trim().length,
         },
@@ -822,14 +808,7 @@ class _DashboardEndReportFormPageState
       suffixSpecial = _hasSpecialNote! ? ' - 특이사항 있음' : ' - 특이사항 없음';
     }
 
-    String vehiclePart = '';
-    final vehicleRaw = _vehicleCountCtrl.text.trim();
-    if (vehicleRaw.isNotEmpty) {
-      final count = int.tryParse(vehicleRaw);
-      if (count != null) {
-        vehiclePart = ' ${count}대';
-      }
-    }
+    final vehiclePart = ' ${_sysDepartureTotal}대';
 
     final area = _resolveReportArea();
     _mailSubjectCtrl.text =
@@ -864,14 +843,11 @@ class _DashboardEndReportFormPageState
     final specialText =
     _hasSpecialNote == null ? '미선택' : (_hasSpecialNote! ? '있음' : '없음');
 
-    final vehicleRaw = _vehicleCountCtrl.text.trim();
-    final vehicleText = vehicleRaw.isEmpty ? '입력 안 됨' : '$vehicleRaw대';
-
     return [
       '— 업무 종료 보고서 —',
       '',
       '특이사항: $specialText',
-      '일일 차량 입고 대수: $vehicleText',
+      '출차 대수: $_sysDepartureTotal대',
       '',
       '[업무 내용]',
       _contentCtrl.text,
@@ -889,8 +865,6 @@ class _DashboardEndReportFormPageState
 
     final specialText =
     _hasSpecialNote == null ? '미선택' : (_hasSpecialNote! ? '있음' : '없음');
-    final vehicleRaw = _vehicleCountCtrl.text.trim();
-    final vehicleText = vehicleRaw.isEmpty ? '입력 안 됨' : '$vehicleRaw대';
     final createdAtText = _fmtDT(context, DateTime.now());
 
     Widget infoPill(ColorScheme cs, TextTheme t, IconData icon, String label,
@@ -1066,8 +1040,8 @@ class _DashboardEndReportFormPageState
                                             cs,
                                             t,
                                             Icons.directions_car_outlined,
-                                            '일일 차량 입고 대수',
-                                            vehicleText),
+                                            '출차 대수',
+                                            '${_sysDepartureTotal}대'),
                                       ],
                                     ),
                                     const SizedBox(height: 16),
@@ -1232,15 +1206,6 @@ class _DashboardEndReportFormPageState
   Future<void> _submitFirstEndReport() async {
     if (_firstSubmitting) return;
 
-    final raw = _vehicleCountCtrl.text.trim();
-
-    if (raw.isEmpty) {
-      return;
-    }
-    if (!RegExp(r'^\d+$').hasMatch(raw)) {
-      return;
-    }
-
     final areaState = context.read<AreaState>();
     final userState = context.read<UserState>();
 
@@ -1266,16 +1231,11 @@ class _DashboardEndReportFormPageState
     setState(() => _firstSubmitting = true);
 
     try {
-      final inputFromText = int.tryParse(raw);
-      final vehicleFieldValue = inputFromText ?? _sysVehicleFieldTotal;
-
-      final vehicleInputCount = _sysVehicleInput + _sysDepartureExtra;
       final vehicleOutputManual = _sysDepartureTotal;
 
       dev.log(
         '[END][Dashboard] first submit counts (area=$area, division=$division, user=$userName) '
-            'sysParking=$_sysVehicleInput, sysDeparture=$_sysVehicleOutput, sysExtra=$_sysDepartureExtra, '
-            'uiField=$vehicleFieldValue, vehicleInput(parking+extra)=$vehicleInputCount, '
+            'sysDeparture=$_sysVehicleOutput, sysExtra=$_sysDepartureExtra, '
             'vehicleOutput(departure+extra)=$vehicleOutputManual',
         name: 'DashboardEndReportFormPage',
       );
@@ -1285,7 +1245,6 @@ class _DashboardEndReportFormPageState
         division: division,
         area: area,
         userName: userName,
-        vehicleInputCount: vehicleInputCount,
         vehicleOutputManual: vehicleOutputManual,
       );
 
@@ -1327,7 +1286,6 @@ class _DashboardEndReportFormPageState
         extra: <String, dynamic>{
           'area': context.read<AreaState>().currentArea.trim(),
           'division': context.read<AreaState>().currentDivision.trim(),
-          'vehicleRaw': _vehicleCountCtrl.text.trim(),
         },
         tags: const <String>[_tEndFirst, _tEndUi, _tEnd],
       );
@@ -1407,7 +1365,6 @@ class _DashboardEndReportFormPageState
         error: e,
         extra: <String, dynamic>{
           'hasSpecialNote': _hasSpecialNote,
-          'vehicleRaw': _vehicleCountCtrl.text.trim(),
           'contentLen': _contentCtrl.text.trim().length,
           'subjectLen': _mailSubjectCtrl.text.trim().length,
           'bodyLen': _mailBodyCtrl.text.trim().length,
@@ -1467,12 +1424,9 @@ class _DashboardEndReportFormPageState
       final specialText =
       _hasSpecialNote == null ? '미선택' : (_hasSpecialNote! ? '있음' : '없음');
 
-      final vehicleRaw = _vehicleCountCtrl.text.trim();
-      final vehicleText = vehicleRaw.isEmpty ? '입력 안 됨' : '$vehicleRaw대';
-
       final fields = <MapEntry<String, String>>[
         MapEntry('특이사항', specialText),
-        MapEntry('일일 차량 입고 대수', vehicleText),
+        MapEntry('출차 대수', '${_sysDepartureTotal}대'),
       ];
 
       pw.Widget buildFieldTable() => pw.Table(
@@ -1555,7 +1509,6 @@ class _DashboardEndReportFormPageState
         error: e,
         extra: <String, dynamic>{
           'hasSpecialNote': _hasSpecialNote,
-          'vehicleRaw': _vehicleCountCtrl.text.trim(),
           'contentLen': _contentCtrl.text.trim().length,
         },
         tags: const <String>[_tEndPdf, _tEndUi, _tEnd],
@@ -1747,34 +1700,10 @@ class _DashboardEndReportFormPageState
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          '오늘 하루 동안 해당 업무로 입고된 차량 대수를 입력해 주세요.',
+          '대시보드 업무 종료 보고는 시스템 입차를 사용하지 않고 출차와 중복 입차 합계만 저장합니다.',
           style: t.bodyMedium?.copyWith(height: 1.4, color: cs.onSurface),
         ),
         const SizedBox(height: 12),
-        TextFormField(
-          key: _vehicleFieldKey,
-          controller: _vehicleCountCtrl,
-          decoration:
-          _inputDec(context, labelText: '일일 차량 입고 대수', hintText: '예: 12'),
-          keyboardType: TextInputType.number,
-          onTap: () {
-            Future.delayed(const Duration(milliseconds: 150), () {
-              final ctx = _vehicleFieldKey.currentContext;
-              if (ctx != null) {
-                Scrollable.ensureVisible(ctx,
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeOut);
-              }
-            });
-          },
-          validator: (v) {
-            final value = v?.trim() ?? '';
-            if (value.isEmpty) return '일일 차량 입고 대수를 입력하세요.';
-            if (!RegExp(r'^\d+$').hasMatch(value)) return '숫자만 입력하세요.';
-            return null;
-          },
-        ),
-        const SizedBox(height: 8),
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(12),
@@ -1789,11 +1718,10 @@ class _DashboardEndReportFormPageState
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Icon(Icons.info_outline,
-                      size: 18, color: cs.onSurfaceVariant),
+                  Icon(Icons.info_outline, size: 18, color: cs.onSurfaceVariant),
                   const SizedBox(width: 8),
                   Text(
-                    '시스템 집계 기준 (참고용)',
+                    '출차 집계 기준',
                     style: t.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w800,
                       color: cs.onSurface,
@@ -1803,9 +1731,8 @@ class _DashboardEndReportFormPageState
               ),
               const SizedBox(height: 8),
               Text(
-                '아래 수치는 시스템에서 집계한 값이며, 실제 보고용 "일일 차량 입고 대수"는 반드시 직접 입력해 주세요.',
-                style: t.bodySmall
-                    ?.copyWith(color: cs.onSurfaceVariant, height: 1.4),
+                '저장되는 차량 대수는 출차와 중복 입차를 합산한 값입니다.',
+                style: t.bodySmall?.copyWith(color: cs.onSurfaceVariant, height: 1.4),
               ),
               const SizedBox(height: 10),
               Container(
@@ -1814,30 +1741,18 @@ class _DashboardEndReportFormPageState
                 decoration: BoxDecoration(
                   color: cs.surface,
                   borderRadius: BorderRadius.circular(10),
-                  border:
-                  Border.all(color: cs.outlineVariant.withOpacity(0.75)),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(0.75)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildMetricRow('시스템 입차', '$_sysVehicleInput대'),
-                    const SizedBox(height: 4),
                     _buildMetricRow('출차', '$_sysVehicleOutput대'),
                     const SizedBox(height: 4),
                     _buildMetricRow('중복 입차', '$_sysDepartureExtra대'),
-                    Divider(
-                        height: 16, color: cs.outlineVariant.withOpacity(0.8)),
-                    _buildMetricRow(
-                        '시스템 합산(입차+출차+중복 입차)', '${_sysVehicleFieldTotal}대',
-                        isEmphasis: true),
+                    Divider(height: 16, color: cs.outlineVariant.withOpacity(0.8)),
+                    _buildMetricRow('저장 출차 대수', '${_sysDepartureTotal}대', isEmphasis: true),
                   ],
                 ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '※ 위 값은 참고용이며, "일일 차량 입고 대수" 입력란에는 자동으로 채워지지 않습니다.',
-                style: t.bodySmall
-                    ?.copyWith(color: cs.onSurfaceVariant, height: 1.3),
               ),
             ],
           ),
@@ -1846,9 +1761,7 @@ class _DashboardEndReportFormPageState
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
-            onPressed: (_firstSubmitting || !_isVehicleCountValid)
-                ? null
-                : _submitFirstEndReport,
+            onPressed: _firstSubmitting ? null : _submitFirstEndReport,
             style: EndReportButtonStyles.primary(context),
             icon: _firstSubmitting
                 ? SizedBox(
@@ -2235,7 +2148,7 @@ class _DashboardEndReportFormPageState
               },
               children: [
                 _buildReportPage(
-                    sectionTitle: '1. 일일 차량 입고 대수',
+                    sectionTitle: '1. 출차 집계 확인',
                     sectionBody: _buildVehicleBody()),
                 _buildReportPage(
                     sectionTitle: '2. 특이사항 여부 (필수)',

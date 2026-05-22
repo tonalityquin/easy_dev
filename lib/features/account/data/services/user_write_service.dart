@@ -2,6 +2,38 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../../app/usage/usage_reporter.dart';
 import '../../domain/models/tablet/tablet_model.dart';
 import '../../domain/models/user/user_model.dart';
+
+class _ShowAccountCounts {
+  const _ShowAccountCounts({
+    required this.activeCount,
+    required this.inactiveCount,
+  });
+
+  final int activeCount;
+  final int inactiveCount;
+
+  int get totalCount => activeCount + inactiveCount;
+
+  _ShowAccountCounts applyDeltas({
+    int activeDelta = 0,
+    int inactiveDelta = 0,
+  }) {
+    var active = activeCount + activeDelta;
+    var inactive = inactiveCount + inactiveDelta;
+    if (active < 0) active = 0;
+    if (inactive < 0) inactive = 0;
+    return _ShowAccountCounts(activeCount: active, inactiveCount: inactive);
+  }
+
+  Map<String, int> toMap() {
+    return <String, int>{
+      'activeCount': activeCount,
+      'inactiveCount': inactiveCount,
+      'totalCount': totalCount,
+    };
+  }
+}
+
 class UserWriteService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
@@ -23,7 +55,6 @@ class UserWriteService {
     return id.substring(idx + 1);
   }
 
-  
   String _showDocId(String? division, String? area) {
     final d = (division ?? '').trim().isEmpty ? 'unknownDivision' : (division ?? '').trim();
     final a = (area ?? '').trim().isEmpty ? 'unknownArea' : (area ?? '').trim();
@@ -48,36 +79,50 @@ class UserWriteService {
     return _inferAreaFromHyphenId(u.id);
   }
 
-  
-  
   Map<String, dynamic> _toUserAccountsMap(UserModel user) {
     final map = Map<String, dynamic>.from(user.toMap());
     map.remove('isActive');
     map.remove('disabledAt');
-    
     map.remove('updatedAt');
     return map;
   }
 
-  
   int _normalizeLimit(dynamic v) {
-    if (v is int && v > 0) return v;
-    
+    if (v is int && v >= 0) return v;
     return 1 << 30;
   }
 
   int? _asInt(dynamic v) => (v is int) ? v : null;
 
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  Future<int> _ensureOrSyncActiveCount({
+  int _nonNegative(dynamic v) {
+    final i = _asInt(v);
+    if (i == null || i < 0) return 0;
+    return i;
+  }
+
+  _ShowAccountCounts _countsFromMeta(Map<String, dynamic> data) {
+    final active = _nonNegative(data['activeCount']);
+    final inactiveRaw = _asInt(data['inactiveCount']);
+    final totalRaw = _asInt(data['totalCount']);
+    var inactive = inactiveRaw == null || inactiveRaw < 0 ? 0 : inactiveRaw;
+    if ((inactiveRaw == null || inactiveRaw < 0) && totalRaw != null && totalRaw >= active) {
+      inactive = totalRaw - active;
+    }
+    return _ShowAccountCounts(activeCount: active, inactiveCount: inactive);
+  }
+
+  bool _metaNeedsCountCompute(Map<String, dynamic> data, bool strict) {
+    if (strict) return true;
+    final active = _asInt(data['activeCount']);
+    final inactive = _asInt(data['inactiveCount']);
+    final total = _asInt(data['totalCount']);
+    if (active == null || active < 0) return true;
+    if (inactive == null || inactive < 0) return true;
+    if (total == null || total < 0) return true;
+    return total != active + inactive;
+  }
+
+  Future<_ShowAccountCounts> _ensureOrSyncAccountCounts({
     required DocumentReference<Map<String, dynamic>> showDocRef,
     required String division,
     required String area,
@@ -86,43 +131,74 @@ class UserWriteService {
     try {
       final metaSnap = await showDocRef.get();
       final meta = metaSnap.data() ?? <String, dynamic>{};
-      final metaCount = _asInt(meta['activeCount']);
-
-      final bool needCompute = strict || metaCount == null || metaCount < 0;
-      if (!needCompute) return metaCount;
-
-      
-      final qSnap = await showDocRef.collection('users').where('isActive', isEqualTo: true).get();
-      final actual = qSnap.docs.length;
-
-      
-      if (metaCount == null || metaCount < 0 || metaCount != actual) {
-        await showDocRef.set(
-          {
-            'division': division,
-            'area': area,
-            'activeCount': actual,
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
+      if (!_metaNeedsCountCompute(meta, strict)) {
+        return _countsFromMeta(meta);
       }
 
-      return actual;
+      final qSnap = await showDocRef.collection('users').get();
+      var active = 0;
+      var inactive = 0;
+      for (final doc in qSnap.docs) {
+        final data = doc.data();
+        final isActive = (data['isActive'] as bool?) ?? true;
+        if (isActive) {
+          active += 1;
+        } else {
+          inactive += 1;
+        }
+      }
+
+      final counts = _ShowAccountCounts(activeCount: active, inactiveCount: inactive);
+      await showDocRef.set(
+        {
+          'division': division,
+          'area': area,
+          ...counts.toMap(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+      return counts;
     } catch (_) {
-      
-      return 0;
+      return const _ShowAccountCounts(activeCount: 0, inactiveCount: 0);
     }
   }
 
-  
-  
-  
-  
-  
-  
-  
-  
+  void _assertActiveLimit({
+    required _ShowAccountCounts counts,
+    required int activeDelta,
+    required int limit,
+  }) {
+    if (activeDelta <= 0) return;
+    if (counts.activeCount >= limit || counts.activeCount + activeDelta > limit) {
+      throw StateError('ACTIVE_LIMIT_REACHED:$limit');
+    }
+  }
+
+  void _assertTotalLimit({
+    required _ShowAccountCounts counts,
+    required int totalDelta,
+    required int limit,
+  }) {
+    if (totalDelta <= 0) return;
+    if (counts.totalCount >= limit || counts.totalCount + totalDelta > limit) {
+      throw StateError('TOTAL_LIMIT_REACHED:$limit');
+    }
+  }
+
+  Map<String, dynamic> _showMetaPayload({
+    required String division,
+    required String area,
+    required _ShowAccountCounts counts,
+  }) {
+    return <String, dynamic>{
+      'division': division,
+      'area': area,
+      ...counts.toMap(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+  }
+
   Future<void> addUserCard(UserModel user) async {
     final userDocRef = _getUserCollectionRef().doc(user.id);
 
@@ -135,12 +211,11 @@ class UserWriteService {
 
     final bool wantActive = user.isActive;
 
-    
-    await _ensureOrSyncActiveCount(
+    await _ensureOrSyncAccountCounts(
       showDocRef: showDocRef,
       division: division,
       area: area,
-      strict: wantActive,
+      strict: true,
     );
 
     try {
@@ -148,52 +223,48 @@ class UserWriteService {
         final showSnap = await tx.get(showDocRef);
         final showData = showSnap.data() ?? <String, dynamic>{};
 
-        final limit = _normalizeLimit(showData['activeLimit']);
-        final activeCount0Raw = _asInt(showData['activeCount']) ?? 0;
-        final activeCount0 = activeCount0Raw < 0 ? 0 : activeCount0Raw;
+        final activeLimit = _normalizeLimit(showData['activeLimit']);
+        final totalLimit = _normalizeLimit(showData['totalLimit']);
+        final counts0 = _countsFromMeta(showData);
 
-        
         final existingSnap = await tx.get(showUserDocRef);
         final existingData = existingSnap.data() ?? <String, dynamic>{};
         final bool existed = existingSnap.exists;
         final bool existingActive = (existingData['isActive'] as bool?) ?? false;
 
-        int delta = 0;
+        var activeDelta = 0;
+        var inactiveDelta = 0;
+        var totalDelta = 0;
         if (!existed) {
-          
-          delta = wantActive ? 1 : 0;
-        } else {
-          
-          if (!existingActive && wantActive) delta = 1;
-          if (existingActive && !wantActive) delta = -1;
+          totalDelta = 1;
+          if (wantActive) {
+            activeDelta = 1;
+          } else {
+            inactiveDelta = 1;
+          }
+        } else if (!existingActive && wantActive) {
+          activeDelta = 1;
+          inactiveDelta = -1;
+        } else if (existingActive && !wantActive) {
+          activeDelta = -1;
+          inactiveDelta = 1;
         }
 
-        
-        if (delta > 0) {
-          if (activeCount0 >= limit) {
-            throw StateError('ACTIVE_LIMIT_REACHED:$limit');
-          }
-          if ((activeCount0 + delta) > limit) {
-            throw StateError('ACTIVE_LIMIT_REACHED:$limit');
-          }
-        }
+        _assertTotalLimit(counts: counts0, totalDelta: totalDelta, limit: totalLimit);
+        _assertActiveLimit(counts: counts0, activeDelta: activeDelta, limit: activeLimit);
 
-        
+        final counts1 = counts0.applyDeltas(
+          activeDelta: activeDelta,
+          inactiveDelta: inactiveDelta,
+        );
+
         tx.set(userDocRef, _toUserAccountsMap(user));
-
-        
         tx.set(
           showDocRef,
-          {
-            'division': division,
-            'area': area,
-            'updatedAt': FieldValue.serverTimestamp(),
-            'activeCount': activeCount0 + delta,
-          },
+          _showMetaPayload(division: division, area: area, counts: counts1),
           SetOptions(merge: true),
         );
 
-        
         final userMap = Map<String, dynamic>.from(user.toMap());
         userMap['updatedAt'] = FieldValue.serverTimestamp();
         userMap['isActive'] = wantActive;
@@ -205,13 +276,9 @@ class UserWriteService {
 
         tx.set(showUserDocRef, userMap, SetOptions(merge: true));
       });
-
-      
     } on FirebaseException {
-      
       rethrow;
     } catch (_) {
-      
       rethrow;
     }
   }
@@ -228,27 +295,15 @@ class UserWriteService {
         source: 'UserWriteService.addTabletCard',
       );
     } on FirebaseException {
-      
       rethrow;
     } catch (_) {
-      
       rethrow;
     }
   }
 
-  
-  
-  
-  
-  
-  
-  
-  
-  
   Future<void> updateUser(UserModel user) async {
     final userDocRef = _getUserCollectionRef().doc(user.id);
 
-    
     UserModel? prevUser;
     try {
       final prevSnap = await userDocRef.get();
@@ -273,19 +328,18 @@ class UserWriteService {
     final oldShowDocRef = _getUserShowCollectionRef().doc(oldShowId);
     final oldShowUserDocRef = oldShowDocRef.collection('users').doc(user.id);
 
-    
-    await _ensureOrSyncActiveCount(
+    await _ensureOrSyncAccountCounts(
       showDocRef: newShowDocRef,
       division: newDivision,
       area: newArea,
-      strict: moved,
+      strict: true,
     );
     if (moved) {
-      await _ensureOrSyncActiveCount(
+      await _ensureOrSyncAccountCounts(
         showDocRef: oldShowDocRef,
         division: oldDivision,
         area: oldArea,
-        strict: false,
+        strict: true,
       );
     }
 
@@ -293,114 +347,107 @@ class UserWriteService {
       await _firestore.runTransaction((tx) async {
         final newShowSnap = await tx.get(newShowDocRef);
         final newShowData = newShowSnap.data() ?? <String, dynamic>{};
-        final newLimit = _normalizeLimit(newShowData['activeLimit']);
-        final newCount0Raw = _asInt(newShowData['activeCount']) ?? 0;
-        final newCount0 = newCount0Raw < 0 ? 0 : newCount0Raw;
+        final newActiveLimit = _normalizeLimit(newShowData['activeLimit']);
+        final newTotalLimit = _normalizeLimit(newShowData['totalLimit']);
+        final newCounts0 = _countsFromMeta(newShowData);
 
-        
-        bool wasActive = false;
-        dynamic disabledAtValue;
-        if (moved) {
-          final oldUserSnap = await tx.get(oldShowUserDocRef);
-          if (oldUserSnap.exists) {
-            final d = oldUserSnap.data() ?? <String, dynamic>{};
-            wasActive = (d['isActive'] as bool?) ?? false;
-            disabledAtValue = d['disabledAt'];
-          } else {
-            wasActive = false;
-          }
-        }
-
-        int oldCount0 = 0;
-        if (moved) {
-          final oldShowSnap = await tx.get(oldShowDocRef);
-          final oldShowData = oldShowSnap.data() ?? <String, dynamic>{};
-          final oldCount0Raw = _asInt(oldShowData['activeCount']) ?? 0;
-          oldCount0 = oldCount0Raw < 0 ? 0 : oldCount0Raw;
-        }
-
-        
-        if (moved && wasActive) {
-          if (newCount0 >= newLimit) {
-            throw StateError('ACTIVE_LIMIT_REACHED:$newLimit');
-          }
-          if ((newCount0 + 1) > newLimit) {
-            throw StateError('ACTIVE_LIMIT_REACHED:$newLimit');
-          }
-        }
-
-        
-        tx.set(userDocRef, _toUserAccountsMap(user));
-
-        
         final userMap = Map<String, dynamic>.from(user.toMap());
         userMap.remove('isActive');
         userMap.remove('disabledAt');
         userMap['updatedAt'] = FieldValue.serverTimestamp();
 
         if (!moved) {
-          
+          final currentShowUserSnap = await tx.get(newShowUserDocRef);
+          var counts1 = newCounts0;
+          if (!currentShowUserSnap.exists) {
+            final wantActive = user.isActive;
+            final activeDelta = wantActive ? 1 : 0;
+            final inactiveDelta = wantActive ? 0 : 1;
+            _assertTotalLimit(counts: newCounts0, totalDelta: 1, limit: newTotalLimit);
+            _assertActiveLimit(counts: newCounts0, activeDelta: activeDelta, limit: newActiveLimit);
+            counts1 = newCounts0.applyDeltas(
+              activeDelta: activeDelta,
+              inactiveDelta: inactiveDelta,
+            );
+            userMap['isActive'] = wantActive;
+            userMap['disabledAt'] = wantActive ? FieldValue.delete() : FieldValue.serverTimestamp();
+          }
+
+          tx.set(userDocRef, _toUserAccountsMap(user));
           tx.set(
             newShowDocRef,
-            {
-              'division': newDivision,
-              'area': newArea,
-              'updatedAt': FieldValue.serverTimestamp(),
-            },
+            _showMetaPayload(division: newDivision, area: newArea, counts: counts1),
             SetOptions(merge: true),
           );
           tx.set(newShowUserDocRef, userMap, SetOptions(merge: true));
           return;
         }
 
-        
-        tx.delete(oldShowUserDocRef);
+        final oldShowSnap = await tx.get(oldShowDocRef);
+        final oldShowData = oldShowSnap.data() ?? <String, dynamic>{};
+        final oldCounts0 = _countsFromMeta(oldShowData);
+
+        final oldUserSnap = await tx.get(oldShowUserDocRef);
+        final newUserSnap = await tx.get(newShowUserDocRef);
+
+        final oldExists = oldUserSnap.exists;
+        final newExists = newUserSnap.exists;
+        final oldData = oldUserSnap.data() ?? <String, dynamic>{};
+        final newData = newUserSnap.data() ?? <String, dynamic>{};
+        final oldActive = (oldData['isActive'] as bool?) ?? false;
+        final newActive = (newData['isActive'] as bool?) ?? false;
+        final targetActive = oldExists ? oldActive : (newExists ? newActive : user.isActive);
+        final disabledAtValue = oldExists ? oldData['disabledAt'] : newData['disabledAt'];
+
+        final oldActiveDelta = oldExists && oldActive ? -1 : 0;
+        final oldInactiveDelta = oldExists && !oldActive ? -1 : 0;
+        final newActiveDelta = targetActive
+            ? (newExists && newActive ? 0 : 1)
+            : (newExists && newActive ? -1 : 0);
+        final newInactiveDelta = targetActive
+            ? (newExists && !newActive ? -1 : 0)
+            : (newExists && !newActive ? 0 : 1);
+        final newTotalDelta = newExists ? 0 : 1;
+
+        _assertTotalLimit(counts: newCounts0, totalDelta: newTotalDelta, limit: newTotalLimit);
+        _assertActiveLimit(counts: newCounts0, activeDelta: newActiveDelta, limit: newActiveLimit);
+
+        final oldCounts1 = oldCounts0.applyDeltas(
+          activeDelta: oldActiveDelta,
+          inactiveDelta: oldInactiveDelta,
+        );
+        final newCounts1 = newCounts0.applyDeltas(
+          activeDelta: newActiveDelta,
+          inactiveDelta: newInactiveDelta,
+        );
+
+        tx.set(userDocRef, _toUserAccountsMap(user));
+        if (oldExists) {
+          tx.delete(oldShowUserDocRef);
+        }
 
         final movedUserMap = <String, dynamic>{
           ...userMap,
-          'isActive': wasActive,
-          if (wasActive) 'disabledAt': FieldValue.delete(),
-          if (!wasActive) 'disabledAt': (disabledAtValue != null) ? disabledAtValue : FieldValue.serverTimestamp(),
+          'isActive': targetActive,
+          if (targetActive) 'disabledAt': FieldValue.delete(),
+          if (!targetActive) 'disabledAt': disabledAtValue ?? FieldValue.serverTimestamp(),
         };
         tx.set(newShowUserDocRef, movedUserMap, SetOptions(merge: true));
 
-        
-        final newCount = wasActive ? (newCount0 + 1) : newCount0;
-        var oldCount = oldCount0;
-        if (wasActive) {
-          oldCount = oldCount - 1;
-          if (oldCount < 0) oldCount = 0;
-        }
-
         tx.set(
           newShowDocRef,
-          {
-            'division': newDivision,
-            'area': newArea,
-            'activeCount': newCount,
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
+          _showMetaPayload(division: newDivision, area: newArea, counts: newCounts1),
           SetOptions(merge: true),
         );
-
         tx.set(
           oldShowDocRef,
-          {
-            'division': oldDivision,
-            'area': oldArea,
-            'activeCount': oldCount,
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
+          _showMetaPayload(division: oldDivision, area: oldArea, counts: oldCounts1),
           SetOptions(merge: true),
         );
       });
-
-      
     } on FirebaseException {
-      
       rethrow;
     } catch (_) {
-      
       rethrow;
     }
   }
@@ -417,30 +464,19 @@ class UserWriteService {
         source: 'UserWriteService.updateTablet',
       );
     } on FirebaseException {
-      
       rethrow;
     } catch (_) {
-      
       rethrow;
     }
   }
 
-  
-  
-  
-  
-  
-  
-  
-  
   Future<void> setUserActiveStatus(
-      String userId, {
-        required bool isActive,
-      }) async {
+    String userId, {
+    required bool isActive,
+  }) async {
     final userDocRef = _getUserCollectionRef().doc(userId);
 
     try {
-      
       final snap = await userDocRef.get();
       if (!snap.exists || snap.data() == null) {
         throw Exception('setUserActiveStatus 실패: user_accounts 문서가 없습니다. (userId=$userId)');
@@ -455,21 +491,19 @@ class UserWriteService {
       final showDocRef = _getUserShowCollectionRef().doc(showId);
       final showUserDocRef = showDocRef.collection('users').doc(userId);
 
-      
-      await _ensureOrSyncActiveCount(
+      await _ensureOrSyncAccountCounts(
         showDocRef: showDocRef,
         division: division,
         area: area,
-        strict: isActive,
+        strict: true,
       );
 
       await _firestore.runTransaction((tx) async {
         final showSnap = await tx.get(showDocRef);
         final showData = showSnap.data() ?? <String, dynamic>{};
 
-        final int limit = _normalizeLimit(showData['activeLimit']);
-        int activeCountRaw = _asInt(showData['activeCount']) ?? 0;
-        int activeCount = activeCountRaw < 0 ? 0 : activeCountRaw;
+        final int activeLimit = _normalizeLimit(showData['activeLimit']);
+        final counts0 = _countsFromMeta(showData);
 
         final userSnap = await tx.get(showUserDocRef);
         if (!userSnap.exists) {
@@ -479,28 +513,21 @@ class UserWriteService {
         final userData = userSnap.data() ?? <String, dynamic>{};
         final bool currentActive = (userData['isActive'] as bool?) ?? true;
 
-        
         if (currentActive == isActive) {
           tx.set(
             showDocRef,
-            {
-              'division': division,
-              'area': area,
-              'activeCount': activeCount,
-              'updatedAt': FieldValue.serverTimestamp(),
-            },
+            _showMetaPayload(division: division, area: area, counts: counts0),
             SetOptions(merge: true),
           );
           return;
         }
 
+        var activeDelta = 0;
+        var inactiveDelta = 0;
         if (isActive) {
-          if (activeCount >= limit) {
-            throw StateError('ACTIVE_LIMIT_REACHED:$limit');
-          }
-          if ((activeCount + 1) > limit) {
-            throw StateError('ACTIVE_LIMIT_REACHED:$limit');
-          }
+          activeDelta = 1;
+          inactiveDelta = -1;
+          _assertActiveLimit(counts: counts0, activeDelta: activeDelta, limit: activeLimit);
 
           tx.set(
             showUserDocRef,
@@ -511,9 +538,9 @@ class UserWriteService {
             },
             SetOptions(merge: true),
           );
-
-          activeCount = activeCount + 1;
         } else {
+          activeDelta = -1;
+          inactiveDelta = 1;
           tx.set(
             showUserDocRef,
             {
@@ -523,38 +550,25 @@ class UserWriteService {
             },
             SetOptions(merge: true),
           );
-
-          activeCount = activeCount - 1;
-          if (activeCount < 0) activeCount = 0;
         }
 
+        final counts1 = counts0.applyDeltas(
+          activeDelta: activeDelta,
+          inactiveDelta: inactiveDelta,
+        );
         tx.set(
           showDocRef,
-          {
-            'division': division,
-            'area': area,
-            'activeCount': activeCount,
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
+          _showMetaPayload(division: division, area: area, counts: counts1),
           SetOptions(merge: true),
         );
       });
     } on FirebaseException {
-      
       rethrow;
     } catch (_) {
-      
       rethrow;
     }
   }
 
-  
-  
-  
-  
-  
-  
-  
   Future<void> deleteUsers(List<String> ids) async {
     final buckets = <String, int>{};
 
@@ -562,7 +576,6 @@ class UserWriteService {
       final userDocRef = _getUserCollectionRef().doc(id);
 
       try {
-        
         UserModel? prevUser;
         try {
           final snap = await userDocRef.get();
@@ -585,46 +598,34 @@ class UserWriteService {
         final showDocRef = _getUserShowCollectionRef().doc(showId);
         final showUserDocRef = showDocRef.collection('users').doc(id);
 
-        
-        await _ensureOrSyncActiveCount(
+        await _ensureOrSyncAccountCounts(
           showDocRef: showDocRef,
           division: division,
           area: area,
-          strict: false,
+          strict: true,
         );
 
         await _firestore.runTransaction((tx) async {
           final showSnap = await tx.get(showDocRef);
           final showData = showSnap.data() ?? <String, dynamic>{};
-          int activeCountRaw = _asInt(showData['activeCount']) ?? 0;
-          int activeCount = activeCountRaw < 0 ? 0 : activeCountRaw;
+          final counts0 = _countsFromMeta(showData);
 
-          bool wasActive = false;
           final showUserSnap = await tx.get(showUserDocRef);
+          var counts1 = counts0;
           if (showUserSnap.exists) {
             final d = showUserSnap.data() ?? <String, dynamic>{};
-            wasActive = (d['isActive'] as bool?) ?? false;
+            final wasActive = (d['isActive'] as bool?) ?? false;
+            counts1 = counts0.applyDeltas(
+              activeDelta: wasActive ? -1 : 0,
+              inactiveDelta: wasActive ? 0 : -1,
+            );
           }
 
-          if (wasActive) {
-            activeCount = activeCount - 1;
-            if (activeCount < 0) activeCount = 0;
-          }
-
-          
           tx.delete(showUserDocRef);
-          
           tx.delete(userDocRef);
-
-          
           tx.set(
             showDocRef,
-            {
-              'division': division,
-              'area': area,
-              'activeCount': activeCount,
-              'updatedAt': FieldValue.serverTimestamp(),
-            },
+            _showMetaPayload(division: division, area: area, counts: counts1),
             SetOptions(merge: true),
           );
         });
@@ -632,15 +633,11 @@ class UserWriteService {
         final infer = _inferAreaFromHyphenId(id);
         buckets.update(infer, (v) => v + 1, ifAbsent: () => 1);
       } on FirebaseException {
-        
         rethrow;
       } catch (_) {
-        
         rethrow;
       }
     }
-
-    
   }
 
   Future<void> deleteTablets(List<String> ids) async {
@@ -654,10 +651,8 @@ class UserWriteService {
         final area = _inferAreaFromHyphenId(id);
         buckets.update(area, (v) => v + 1, ifAbsent: () => 1);
       } on FirebaseException {
-        
         rethrow;
       } catch (_) {
-        
         rethrow;
       }
     }

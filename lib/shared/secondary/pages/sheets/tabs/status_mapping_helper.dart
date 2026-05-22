@@ -10,6 +10,26 @@ class StatusMappingHelper extends StatefulWidget {
   State<StatusMappingHelper> createState() => _StatusMappingHelperState();
 }
 
+class _AccountCounts {
+  const _AccountCounts({
+    required this.activeCount,
+    required this.inactiveCount,
+  });
+
+  final int activeCount;
+  final int inactiveCount;
+
+  int get totalCount => activeCount + inactiveCount;
+
+  Map<String, int> toMap() {
+    return <String, int>{
+      'activeCount': activeCount,
+      'inactiveCount': inactiveCount,
+      'totalCount': totalCount,
+    };
+  }
+}
+
 class _StatusMappingHelperState extends State<StatusMappingHelper> {
   static const int _maxLimit = 1 << 30;
 
@@ -19,7 +39,8 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
   List<String> _divisions = [];
   List<String> _areas = [];
 
-  final TextEditingController _limitCtrl = TextEditingController();
+  final TextEditingController _activeLimitCtrl = TextEditingController();
+  final TextEditingController _totalLimitCtrl = TextEditingController();
 
   bool _busy = false;
 
@@ -35,7 +56,8 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
 
   @override
   void dispose() {
-    _limitCtrl.dispose();
+    _activeLimitCtrl.dispose();
+    _totalLimitCtrl.dispose();
     super.dispose();
   }
 
@@ -47,15 +69,32 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
     return '$d-$a';
   }
 
-  DocumentReference<Map<String, dynamic>> _showDocRef(
-      String division, String area) {
+  DocumentReference<Map<String, dynamic>> _showDocRef(String division, String area) {
     final id = _showDocId(division, area);
     return _fs.collection('user_accounts_show').doc(id);
   }
 
-  CollectionReference<Map<String, dynamic>> _showUsersCol(
-      String division, String area) {
+  CollectionReference<Map<String, dynamic>> _showUsersCol(String division, String area) {
     return _showDocRef(division, area).collection('users');
+  }
+
+  int? _asInt(dynamic v) => v is int ? v : null;
+
+  int _nonNegative(dynamic v) {
+    final i = _asInt(v);
+    if (i == null || i < 0) return 0;
+    return i;
+  }
+
+  _AccountCounts _countsFromMeta(Map<String, dynamic> data) {
+    final active = _nonNegative(data['activeCount']);
+    final inactiveRaw = _asInt(data['inactiveCount']);
+    final totalRaw = _asInt(data['totalCount']);
+    var inactive = inactiveRaw == null || inactiveRaw < 0 ? 0 : inactiveRaw;
+    if ((inactiveRaw == null || inactiveRaw < 0) && totalRaw != null && totalRaw >= active) {
+      inactive = totalRaw - active;
+    }
+    return _AccountCounts(activeCount: active, inactiveCount: inactive);
   }
 
   Future<void> _loadDivisions() async {
@@ -144,10 +183,11 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
     return v;
   }
 
-  Future<void> _saveActiveLimit({
+  Future<void> _saveLimits({
     required String division,
     required String area,
     required int activeLimit,
+    required int totalLimit,
   }) async {
     final ref = _showDocRef(division, area);
     final showId = _showDocId(division, area);
@@ -157,6 +197,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
         'division': division,
         'area': area,
         'activeLimit': activeLimit,
+        'totalLimit': totalLimit,
         'updatedAt': FieldValue.serverTimestamp(),
       },
       SetOptions(merge: true),
@@ -167,38 +208,48 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
         area: area,
         action: 'write',
         n: 1,
-        source:
-            'StatusMappingHelper._saveActiveLimit.user_accounts_show.set:$showId',
+        source: 'StatusMappingHelper._saveLimits.user_accounts_show.set:$showId',
       );
     } catch (_) {}
   }
 
-  Future<int> _rebuildActiveCountForOne({
+  Future<_AccountCounts> _rebuildCountsForOne({
     required String division,
     required String area,
   }) async {
     final showId = _showDocId(division, area);
     final usersCol = _showUsersCol(division, area);
 
-    final qSnap = await usersCol.where('isActive', isEqualTo: true).get();
+    final qSnap = await usersCol.get();
 
     try {
       await UsageReporter.instance.report(
         area: area,
         action: 'read',
         n: qSnap.docs.isEmpty ? 1 : qSnap.docs.length,
-        source:
-            'StatusMappingHelper._rebuildActiveCountForOne.showUsers.query:$showId',
+        source: 'StatusMappingHelper._rebuildCountsForOne.showUsers.get:$showId',
       );
     } catch (_) {}
 
-    final count = qSnap.docs.length;
+    var active = 0;
+    var inactive = 0;
+    for (final doc in qSnap.docs) {
+      final data = doc.data();
+      final isActive = (data['isActive'] as bool?) ?? true;
+      if (isActive) {
+        active += 1;
+      } else {
+        inactive += 1;
+      }
+    }
+
+    final counts = _AccountCounts(activeCount: active, inactiveCount: inactive);
 
     await _showDocRef(division, area).set(
       {
         'division': division,
         'area': area,
-        'activeCount': count,
+        ...counts.toMap(),
         'updatedAt': FieldValue.serverTimestamp(),
       },
       SetOptions(merge: true),
@@ -209,18 +260,17 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
         area: area,
         action: 'write',
         n: 1,
-        source:
-            'StatusMappingHelper._rebuildActiveCountForOne.meta.set:$showId',
+        source: 'StatusMappingHelper._rebuildCountsForOne.meta.set:$showId',
       );
     } catch (_) {}
 
-    return count;
+    return counts;
   }
 
-  Future<void> _rebuildActiveCountForDivision(String division) async {
+  Future<void> _rebuildCountsForDivision(String division) async {
     setState(() {
       _busy = true;
-      _progressLabel = '회사 전체(activeCount) 리빌드 중: $division';
+      _progressLabel = '회사 전체 계정 수 리빌드 중: $division';
       _progressDone = 0;
       _progressTotal = 0;
     });
@@ -237,8 +287,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
           area: division,
           action: 'read',
           n: areasSnap.docs.isEmpty ? 1 : areasSnap.docs.length,
-          source:
-              'StatusMappingHelper._rebuildActiveCountForDivision.areas.get',
+          source: 'StatusMappingHelper._rebuildCountsForDivision.areas.get',
         );
       } catch (_) {}
 
@@ -260,7 +309,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
           _progressLabel = '리빌드 진행: $division / $area';
         });
 
-        await _rebuildActiveCountForOne(division: division, area: area);
+        await _rebuildCountsForOne(division: division, area: area);
 
         if (!mounted) return;
         setState(() {
@@ -269,7 +318,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
       }
 
       if (!mounted) return;
-      showSuccessSnackbar(context, '✅ 회사 "$division" activeCount 리빌드 완료');
+      showSuccessSnackbar(context, '✅ 회사 "$division" 계정 수 리빌드 완료');
     } catch (e) {
       if (!mounted) return;
       showFailedSnackbar(context, '❌ 회사 전체 리빌드 실패: $e');
@@ -302,7 +351,8 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                 _selectedDivision = v;
                 _areas = [];
                 _selectedArea = null;
-                _limitCtrl.clear();
+                _activeLimitCtrl.clear();
+                _totalLimitCtrl.clear();
               });
               await _loadAreas();
             },
@@ -328,7 +378,8 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
           : (v) {
               setState(() {
                 _selectedArea = v;
-                _limitCtrl.clear();
+                _activeLimitCtrl.clear();
+                _totalLimitCtrl.clear();
               });
             },
       decoration: const InputDecoration(
@@ -351,10 +402,11 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
               final exists = snap.data?.exists ?? false;
 
               final activeLimit = data['activeLimit'];
-              final activeCount = data['activeCount'];
+              final totalLimit = data['totalLimit'];
+              final counts = _countsFromMeta(data);
 
-              final int? limitInt = (activeLimit is int) ? activeLimit : null;
-              final int? countInt = (activeCount is int) ? activeCount : null;
+              final int? activeLimitInt = activeLimit is int ? activeLimit : null;
+              final int? totalLimitInt = totalLimit is int ? totalLimit : null;
 
               DateTime? updatedAt;
               final ua = data['updatedAt'];
@@ -368,18 +420,20 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                     area: area,
                     action: 'read',
                     n: 1,
-                    source:
-                        'StatusMappingHelper.showMeta.stream:$division-$area',
+                    source: 'StatusMappingHelper.showMeta.stream:$division-$area',
                   );
                 } catch (_) {}
               }
 
-              if (_limitCtrl.text.trim().isEmpty && limitInt != null) {
-                _limitCtrl.text = '$limitInt';
+              if (_activeLimitCtrl.text.trim().isEmpty && activeLimitInt != null) {
+                _activeLimitCtrl.text = '$activeLimitInt';
+              }
+              if (_totalLimitCtrl.text.trim().isEmpty && totalLimitInt != null) {
+                _totalLimitCtrl.text = '$totalLimitInt';
               }
 
-              final warn =
-                  (limitInt != null && countInt != null && countInt > limitInt);
+              final activeWarn = activeLimitInt != null && counts.activeCount > activeLimitInt;
+              final totalWarn = totalLimitInt != null && counts.totalCount > totalLimitInt;
 
               return Container(
                 padding: const EdgeInsets.all(12),
@@ -392,8 +446,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                   children: [
                     Text(
                       '메타 문서: user_accounts_show/${_showDocId(division, area)}',
-                      style:
-                          const TextStyle(fontSize: 12, color: Colors.black54),
+                      style: const TextStyle(fontSize: 12, color: Colors.black54),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -403,48 +456,78 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                             exists ? '상태: 존재함' : '상태: 없음(저장 시 생성됨)',
                             style: TextStyle(
                               fontWeight: FontWeight.w600,
-                              color:
-                                  exists ? Colors.black87 : Colors.orange[800],
+                              color: exists ? Colors.black87 : Colors.orange[800],
                             ),
                           ),
                         ),
                         if (updatedAt != null)
                           Text(
                             'updatedAt: ${updatedAt.toString()}',
-                            style: const TextStyle(
-                                fontSize: 11, color: Colors.black54),
+                            style: const TextStyle(fontSize: 11, color: Colors.black54),
                           ),
                       ],
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     Text(
-                      'activeCount: ${countInt ?? '(미설정)'}   /   activeLimit: ${limitInt ?? '(미설정)'}',
+                      '활성: ${counts.activeCount} / ${activeLimitInt ?? '(미설정)'}',
                       style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: warn ? Colors.redAccent : Colors.black87,
+                        fontWeight: FontWeight.w700,
+                        color: activeWarn ? Colors.redAccent : Colors.black87,
                       ),
                     ),
-                    if (warn)
+                    const SizedBox(height: 4),
+                    Text(
+                      '비활성: ${counts.inactiveCount}',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '전체: ${counts.totalCount} / ${totalLimitInt ?? '(미설정)'}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: totalWarn ? Colors.redAccent : Colors.black87,
+                      ),
+                    ),
+                    if (activeWarn)
                       const Padding(
                         padding: EdgeInsets.only(top: 6),
                         child: Text(
-                          '주의: activeCount가 activeLimit을 초과합니다. 제한을 상향하거나 비활성화를 진행하세요.',
-                          style:
-                              TextStyle(color: Colors.redAccent, fontSize: 12),
+                          '주의: 활성 계정 수가 activeLimit을 초과합니다.',
+                          style: TextStyle(color: Colors.redAccent, fontSize: 12),
+                        ),
+                      ),
+                    if (totalWarn)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 6),
+                        child: Text(
+                          '주의: 전체 계정 수가 totalLimit을 초과합니다.',
+                          style: TextStyle(color: Colors.redAccent, fontSize: 12),
                         ),
                       ),
                     const SizedBox(height: 12),
                     TextField(
-                      controller: _limitCtrl,
+                      controller: _activeLimitCtrl,
                       keyboardType: TextInputType.number,
                       enabled: !_busy,
                       decoration: const InputDecoration(
-                        labelText: 'activeLimit (정수)',
+                        labelText: 'activeLimit 활성 계정 제한',
                         hintText: '예: 30',
                         border: OutlineInputBorder(),
                         isDense: true,
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _totalLimitCtrl,
+                      keyboardType: TextInputType.number,
+                      enabled: !_busy,
+                      decoration: const InputDecoration(
+                        labelText: 'totalLimit 전체 계정 제한',
+                        hintText: '예: 50',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -453,31 +536,38 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                         Expanded(
                           child: ElevatedButton.icon(
                             icon: const Icon(Icons.save),
-                            label: const Text('activeLimit 저장'),
+                            label: const Text('리밋 저장'),
                             onPressed: _busy
                                 ? null
                                 : () async {
-                                    final v = _parseLimit(_limitCtrl.text);
-                                    if (v == null) {
-                                      showFailedSnackbar(
-                                          context, 'activeLimit 값이 올바르지 않습니다.');
+                                    final activeValue = _parseLimit(_activeLimitCtrl.text);
+                                    final totalValue = _parseLimit(_totalLimitCtrl.text);
+                                    if (activeValue == null) {
+                                      showFailedSnackbar(context, 'activeLimit 값이 올바르지 않습니다.');
+                                      return;
+                                    }
+                                    if (totalValue == null) {
+                                      showFailedSnackbar(context, 'totalLimit 값이 올바르지 않습니다.');
+                                      return;
+                                    }
+                                    if (activeValue > totalValue) {
+                                      showFailedSnackbar(context, 'activeLimit은 totalLimit보다 클 수 없습니다.');
                                       return;
                                     }
 
                                     setState(() => _busy = true);
                                     try {
-                                      await _saveActiveLimit(
+                                      await _saveLimits(
                                         division: division,
                                         area: area,
-                                        activeLimit: v,
+                                        activeLimit: activeValue,
+                                        totalLimit: totalValue,
                                       );
                                       if (!mounted) return;
-                                      showSuccessSnackbar(context,
-                                          '✅ activeLimit 저장 완료 (N=$v)');
+                                      showSuccessSnackbar(context, '✅ 리밋 저장 완료');
                                     } catch (e) {
                                       if (!mounted) return;
-                                      showFailedSnackbar(
-                                          context, '❌ 저장 실패: $e');
+                                      showFailedSnackbar(context, '❌ 저장 실패: $e');
                                     } finally {
                                       if (!mounted) return;
                                       setState(() => _busy = false);
@@ -488,19 +578,21 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                         const SizedBox(width: 10),
                         OutlinedButton.icon(
                           icon: const Icon(Icons.refresh),
-                          label: const Text('activeCount 리빌드'),
+                          label: const Text('카운트 리빌드'),
                           onPressed: _busy
                               ? null
                               : () async {
                                   setState(() => _busy = true);
                                   try {
-                                    final c = await _rebuildActiveCountForOne(
+                                    final c = await _rebuildCountsForOne(
                                       division: division,
                                       area: area,
                                     );
                                     if (!mounted) return;
-                                    showSuccessSnackbar(context,
-                                        '✅ activeCount 리빌드 완료 (activeCount=$c)');
+                                    showSuccessSnackbar(
+                                      context,
+                                      '✅ 리빌드 완료 (활성=${c.activeCount}, 비활성=${c.inactiveCount}, 전체=${c.totalCount})',
+                                    );
                                   } catch (e) {
                                     if (!mounted) return;
                                     showFailedSnackbar(context, '❌ 리빌드 실패: $e');
@@ -515,7 +607,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
                       icon: const Icon(Icons.playlist_add_check),
-                      label: const Text('회사 전체 activeCount 리빌드'),
+                      label: const Text('회사 전체 카운트 리빌드'),
                       onPressed: _busy
                           ? null
                           : () async {
@@ -524,18 +616,15 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                                     builder: (_) => AlertDialog(
                                       title: const Text('회사 전체 리빌드'),
                                       content: const Text(
-                                        '선택된 회사의 모든 지역(area)에 대해 activeCount를 재집계합니다.\n'
-                                        '레거시 데이터가 많거나 users가 많은 경우 시간이 오래 걸릴 수 있습니다.',
+                                        '선택된 회사의 모든 지역(area)에 대해 활성, 비활성, 전체 계정 수를 재집계합니다.',
                                       ),
                                       actions: [
                                         TextButton(
-                                          onPressed: () =>
-                                              Navigator.pop(context, false),
+                                          onPressed: () => Navigator.pop(context, false),
                                           child: const Text('취소'),
                                         ),
                                         TextButton(
-                                          onPressed: () =>
-                                              Navigator.pop(context, true),
+                                          onPressed: () => Navigator.pop(context, true),
                                           child: const Text('실행'),
                                         ),
                                       ],
@@ -543,7 +632,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                                   ) ??
                                   false;
                               if (!ok) return;
-                              await _rebuildActiveCountForDivision(division);
+                              await _rebuildCountsForDivision(division);
                             },
                     ),
                   ],
@@ -561,8 +650,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
             const Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                '이 화면은 더 이상 location_limits를 사용하지 않습니다.\n'
-                'user_accounts_show/{division-area} 메타의 activeLimit 설정 및 activeCount 리빌드(재집계) 용도입니다.',
+                'user_accounts_show/{division-area} 메타의 activeLimit, totalLimit 설정 및 계정 수 리빌드 용도입니다.',
                 style: TextStyle(fontSize: 12, color: Colors.black54),
               ),
             ),
@@ -601,8 +689,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_progressLabel!,
-                        style: const TextStyle(fontWeight: FontWeight.w600)),
+                    Text(_progressLabel!, style: const TextStyle(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 8),
                     if (_progressTotal > 0)
                       LinearProgressIndicator(
@@ -610,8 +697,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
                       ),
                     const SizedBox(height: 6),
                     if (_progressTotal > 0)
-                      Text('$_progressDone / $_progressTotal',
-                          style: const TextStyle(fontSize: 12)),
+                      Text('$_progressDone / $_progressTotal', style: const TextStyle(fontSize: 12)),
                   ],
                 ),
               ),
@@ -619,9 +705,7 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
             Expanded(
               child: (division == null || area == null)
                   ? const Center(child: Text('회사와 지역을 선택하세요.'))
-                  : SingleChildScrollView(
-                      child: showMeta,
-                    ),
+                  : SingleChildScrollView(child: showMeta),
             ),
             if (_busy) const SizedBox(height: 8),
             if (_busy) const LinearProgressIndicator(),

@@ -46,6 +46,7 @@ class StatusDialog {
     Duration transitionDuration = const Duration(milliseconds: 180),
     Duration pagePopDelay = const Duration(milliseconds: 80),
     String? barrierLabel,
+    String? description,
   }) async {
     if (!context.mounted) return;
 
@@ -109,6 +110,17 @@ class StatusDialog {
                         color: colorScheme.onSurface,
                       ),
                     ),
+                    if (description != null && description.trim().isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        description.trim(),
+                        textAlign: TextAlign.center,
+                        style: textTheme.bodyMedium?.copyWith(
+                          height: 1.35,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -155,12 +167,19 @@ class StatusDialog {
     BuildContext context, {
     String title = workStartReportSuccess,
     bool closeCurrentPageAfter = false,
+    String? description,
+    Duration? visibleDuration,
   }) {
     return show(
       context,
       title: title,
       tone: StatusDialogTone.success,
       closeCurrentPageAfter: closeCurrentPageAfter,
+      description: description,
+      visibleDuration: visibleDuration ??
+          (description == null || description.trim().isEmpty
+              ? const Duration(milliseconds: 1200)
+              : const Duration(milliseconds: 2600)),
     );
   }
 
@@ -168,12 +187,19 @@ class StatusDialog {
     BuildContext context, {
     String title = loginFailed,
     bool closeCurrentPageAfter = false,
+    String? description,
+    Duration? visibleDuration,
   }) {
     return show(
       context,
       title: title,
       tone: StatusDialogTone.failure,
       closeCurrentPageAfter: closeCurrentPageAfter,
+      description: description,
+      visibleDuration: visibleDuration ??
+          (description == null || description.trim().isEmpty
+              ? const Duration(milliseconds: 1200)
+              : const Duration(milliseconds: 3200)),
     );
   }
 
