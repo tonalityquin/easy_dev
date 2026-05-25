@@ -274,7 +274,7 @@ class SimpleEndWorkReportService {
           },
       ];
 
-      logsUrl = await uploadEndLogJson(
+      logsUrl = await uploadEndLogCsv(
         report: <String, dynamic>{
           'division': division,
           'area': area,

@@ -21,18 +21,21 @@ import '../../shared/page/pages/double/double_type_page.dart';
 import '../../shared/page/pages/minor/minor_type_page.dart';
 import '../../shared/page/pages/triple/triple_type_page.dart';
 import '../space/practice_space_lab_screen.dart';
-import '../tutorial/tutorial/app_start_finish_screen.dart';
-import '../tutorial/tutorial/app_start_next_tutorial_full_screen.dart';
-import '../tutorial/tutorial/app_start_next_tutorial_quick_screen.dart';
-import '../tutorial/tutorial/app_start_tutorial_lab_screen.dart';
+import '../tutorial/policy/policy_consent_screen.dart';
+import '../tutorial/tutorial/app_start_permission_setup_screen.dart';
 import '../tutorial/tutorial/start_gate_screen.dart';
 
 class AppRoutes {
   static const startGate = '/';
   static const appStartTutorial = '/app_start_tutorial';
+  static const appStartPermissionSetup = '/app_start_permission_setup';
   static const appStartNextTutorialFull = '/app_start_next_tutorial_full';
   static const appStartNextTutorialQuick = '/app_start_next_tutorial_quick';
   static const appStartFinish = '/app_start_finish';
+  static const termsConsent = '/app_start_terms_consent';
+  static const privacyPolicyConsent = '/app_start_privacy_policy_consent';
+  static const accountDeletionPolicyConsent =
+      '/app_start_account_deletion_policy_consent';
   static const selector = '/selector';
   static const descriptionIntro = '/description_intro';
 
@@ -77,13 +80,23 @@ class AppRoutes {
 
 final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.startGate: (context) => const StartGateScreen(),
-  AppRoutes.appStartTutorial: (context) => const AppStartTutorialLabScreen(),
-  AppRoutes.appStartNextTutorialFull: (context) => const AppStartNextTutorialFullScreen(),
-  AppRoutes.appStartNextTutorialQuick: (context) => const AppStartNextTutorialQuickScreen(),
-  AppRoutes.appStartFinish: (context) => const AppStartFinishScreen(),
+  AppRoutes.appStartTutorial: (context) => const AppStartPermissionSetupScreen(),
+  AppRoutes.appStartPermissionSetup: (context) =>
+      const AppStartPermissionSetupScreen(),
+  AppRoutes.appStartNextTutorialFull: (context) => const StartGateScreen(),
+  AppRoutes.appStartNextTutorialQuick: (context) => const StartGateScreen(),
+  AppRoutes.appStartFinish: (context) => const StartGateScreen(),
+  AppRoutes.termsConsent: (context) => const PolicyConsentScreen(
+        kind: PolicyConsentKind.termsOfService,
+      ),
+  AppRoutes.privacyPolicyConsent: (context) => const PolicyConsentScreen(
+        kind: PolicyConsentKind.privacyPolicy,
+      ),
+  AppRoutes.accountDeletionPolicyConsent: (context) => const PolicyConsentScreen(
+        kind: PolicyConsentKind.accountDeletion,
+      ),
   AppRoutes.selector: (context) => const SelectorHubsPage(),
   AppRoutes.descriptionIntro: (context) => const DescriptionPage(),
-
   AppRoutes.serviceLogin: (context) => const LoginScreen(),
   AppRoutes.tabletLogin: (context) => const LoginScreen(mode: 'tablet'),
   AppRoutes.singleLogin: (context) => const LoginScreen(mode: 'single'),
@@ -91,30 +104,27 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.tripleLogin: (context) => const LoginScreen(mode: 'triple'),
   AppRoutes.minorLogin: (context) => const LoginScreen(mode: 'minor'),
   AppRoutes.practiceSpaceLab: (context) => const PracticeSpaceLabScreen(),
-
   AppRoutes.doubleCommute: (context) => const DoubleCommuteInScreen(),
   AppRoutes.singleCommute: (context) => const SingleInsideScreen(),
   AppRoutes.tripleCommute: (context) => const TripleCommuteInScreen(),
   AppRoutes.minorCommute: (context) => const MinorCommuteInScreen(),
-
   AppRoutes.doubleHeadquarterPage: (context) => const DoubleHeadquarterPage(),
   AppRoutes.tripleHeadquarterPage: (context) => const TripleHeadquarterPage(),
   AppRoutes.minorHeadquarterPage: (context) => const MinorHeadquarterPage(),
-
   AppRoutes.doubleTypePage: (context) => const DoubleTypePage(),
   AppRoutes.tripleTypePage: (context) => const TripleTypePage(),
   AppRoutes.minorTypePage: (context) => const MinorTypePage(),
-
   AppRoutes.tablet: (context) => const TabletPage(),
   AppRoutes.faq: (context) => const FaqPage(),
-
   AppRoutes.communityStub: (context) => const CommunityStubPage(),
   AppRoutes.headStub: (context) => const HeadStubPage(),
   AppRoutes.devStub: (context) => const DevStubPage(),
-
   AppRoutes.companyCalendar: (context) => const CompanyCalendarPage(),
   AppRoutes.devCalendar: (context) => const DevCalendarPage(),
-
-  AppRoutes.attendanceSheet: (context) => const TimesheetPage(initialTab: TimesheetTab.attendance),
-  AppRoutes.breakSheet: (context) => const TimesheetPage(initialTab: TimesheetTab.breakTime),
+  AppRoutes.attendanceSheet: (context) => const TimesheetPage(
+        initialTab: TimesheetTab.attendance,
+      ),
+  AppRoutes.breakSheet: (context) => const TimesheetPage(
+        initialTab: TimesheetTab.breakTime,
+      ),
 };

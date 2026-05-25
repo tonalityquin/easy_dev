@@ -123,7 +123,7 @@ class _GcsHelper {
     }
   }
 
-  Future<Map<String, dynamic>> loadJsonByObjectName(String objectName) async {
+  Future<List<Map<String, String>>> loadCsvRowsByObjectName(String objectName) async {
     final url =
         Uri.parse('https://storage.googleapis.com/$kBucketName/$objectName');
 
@@ -132,12 +132,12 @@ class _GcsHelper {
       resp = await http.get(url);
     } catch (e) {
       await _logApiError(
-        tag: '_GcsHelper.loadJsonByObjectName',
+        tag: '_GcsHelper.loadCsvRowsByObjectName',
         message: 'HTTP GET 실패',
         error: e,
         extra: <String, dynamic>{
           'url': url.toString(),
-          'objectName': objectName
+          'objectName': objectName,
         },
         tags: const <String>[_tLogs, _tGcs, _tGcsGet],
       );
@@ -146,7 +146,7 @@ class _GcsHelper {
 
     if (resp.statusCode != 200) {
       await _logApiError(
-        tag: '_GcsHelper.loadJsonByObjectName',
+        tag: '_GcsHelper.loadCsvRowsByObjectName',
         message: 'GCS GET 실패(status != 200)',
         error: Exception('status=${resp.statusCode}'),
         extra: <String, dynamic>{
@@ -164,27 +164,103 @@ class _GcsHelper {
     }
 
     try {
-      final decoded = jsonDecode(utf8.decode(resp.bodyBytes));
-      if (decoded is Map<String, dynamic>) return decoded;
-
-      await _logApiError(
-        tag: '_GcsHelper.loadJsonByObjectName',
-        message: 'JSON이 Map 형태가 아님',
-        error: Exception('decoded_type=${decoded.runtimeType}'),
-        extra: <String, dynamic>{'objectName': objectName},
-        tags: const <String>[_tLogs, _tGcs, _tGcsGet, _tLogsParse],
-      );
-      return <String, dynamic>{};
+      return _decodeCsv(utf8.decode(resp.bodyBytes));
     } catch (e) {
       await _logApiError(
-        tag: '_GcsHelper.loadJsonByObjectName',
-        message: 'JSON 디코딩 실패',
+        tag: '_GcsHelper.loadCsvRowsByObjectName',
+        message: 'CSV 디코딩 실패',
         error: e,
         extra: <String, dynamic>{'objectName': objectName},
         tags: const <String>[_tLogs, _tGcs, _tGcsGet, _tLogsParse],
       );
       rethrow;
     }
+  }
+
+  List<Map<String, String>> _decodeCsv(String text) {
+    final table = _parseCsvTable(text);
+    if (table.isEmpty) return <Map<String, String>>[];
+
+    final headers = table.first
+        .map((header) => header.replaceFirst('\ufeff', '').trim())
+        .toList();
+    final rows = <Map<String, String>>[];
+
+    for (int i = 1; i < table.length; i++) {
+      final cells = table[i];
+      if (cells.every((cell) => cell.trim().isEmpty)) continue;
+      final row = <String, String>{};
+      for (int j = 0; j < headers.length; j++) {
+        if (headers[j].isEmpty) continue;
+        row[headers[j]] = j < cells.length ? cells[j] : '';
+      }
+      rows.add(row);
+    }
+
+    return rows;
+  }
+
+  List<List<String>> _parseCsvTable(String text) {
+    final rows = <List<String>>[];
+    var row = <String>[];
+    final cell = StringBuffer();
+    var inQuotes = false;
+    var i = 0;
+
+    while (i < text.length) {
+      final char = text[i];
+      if (inQuotes) {
+        if (char == '"') {
+          if (i + 1 < text.length && text[i + 1] == '"') {
+            cell.write('"');
+            i += 2;
+            continue;
+          }
+          inQuotes = false;
+          i++;
+          continue;
+        }
+        cell.write(char);
+        i++;
+        continue;
+      }
+
+      if (char == '"') {
+        inQuotes = true;
+        i++;
+        continue;
+      }
+
+      if (char == ',') {
+        row.add(cell.toString());
+        cell.clear();
+        i++;
+        continue;
+      }
+
+      if (char == '\n' || char == '\r') {
+        row.add(cell.toString());
+        cell.clear();
+        rows.add(row);
+        row = <String>[];
+        if (char == '\r' && i + 1 < text.length && text[i + 1] == '\n') {
+          i += 2;
+        } else {
+          i++;
+        }
+        continue;
+      }
+
+      cell.write(char);
+      i++;
+    }
+
+    if (inQuotes || cell.isNotEmpty || row.isNotEmpty) {
+      row.add(cell.toString());
+      rows.add(row);
+    }
+
+    return rows;
   }
 }
 
@@ -398,30 +474,6 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     return _Brand.actionColor(cs, action);
   }
 
-  Map<String, dynamic>? _asMap(dynamic v) {
-    if (v is Map<String, dynamic>) return v;
-    if (v is Map) return Map<String, dynamic>.from(v);
-    return null;
-  }
-
-  Map<String, dynamic> _extractMeta(Map<String, dynamic> item) {
-    final meta = <String, dynamic>{};
-
-    item.forEach((k, v) {
-      if (k == 'docId' || k == 'data' || k == 'logs') return;
-      meta[k] = v;
-    });
-
-    final dataMap = _asMap(item['data']);
-    if (dataMap != null) {
-      dataMap.forEach((k, v) {
-        if (k == 'logs') return;
-        meta[k] = v;
-      });
-    }
-    return meta;
-  }
-
   String _extractPlate(
       Map<String, dynamic> item, Map<String, dynamic> meta, String docId) {
     final v = item['plateNumber'] ??
@@ -431,24 +483,44 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
     return (v ?? '').toString();
   }
 
-  List<Map<String, dynamic>> _extractLogs(Map<String, dynamic> item) {
-    final dataMap = _asMap(item['data']);
-    final raw = item['logs'] ?? dataMap?['logs'];
+  Map<String, dynamic> _extractCsvMeta(Map<String, String> row) {
+    final meta = <String, dynamic>{};
 
-    if (raw is! List) return <Map<String, dynamic>>[];
-
-    final logs =
-        raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
-
-    logs.sort((a, b) {
-      final at =
-          _parseTs(a['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final bt =
-          _parseTs(b['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
-      return at.compareTo(bt);
+    row.forEach((key, value) {
+      if (!key.startsWith('meta.')) return;
+      final outKey = key.substring(5).trim();
+      if (outKey.isEmpty) return;
+      if (value.trim().isEmpty) return;
+      meta[outKey] = value;
     });
 
-    return logs;
+    for (final key in <String>[
+      'division',
+      'area',
+      'uploadedAt',
+      'uploadedBy',
+      'monthKey',
+    ]) {
+      final value = row[key];
+      if (value != null && value.trim().isNotEmpty) meta[key] = value;
+    }
+
+    final docId = _toStr(row['docId']) ?? _toStr(row['meta.docId']);
+    if (docId != null) meta['docId'] = docId;
+
+    return meta;
+  }
+
+  Map<String, dynamic> _extractCsvLog(Map<String, String> row) {
+    final log = <String, dynamic>{};
+    row.forEach((key, value) {
+      if (!key.startsWith('log.')) return;
+      final outKey = key.substring(4).trim();
+      if (outKey.isEmpty) return;
+      if (value.trim().isEmpty) return;
+      log[outKey] = value;
+    });
+    return log;
   }
 
   num? _pickNumFromLogs(List<Map<String, dynamic>> logs, List<String> keys) {
@@ -683,7 +755,7 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
       for (DateTime d = start;
           !d.isAfter(end);
           d = d.add(const Duration(days: 1))) {
-        wantedSuffix.add('_ToDoLogs_${_yyyymmdd(d)}.json');
+        wantedSuffix.add('_ToDoLogs_${_yyyymmdd(d)}.csv');
       }
 
       final inRange = names
@@ -700,27 +772,25 @@ class _TripleMergedLogSectionState extends State<TripleMergedLogSection> {
       final Map<String, Map<String, _DocBundle>> dayDocMap = {};
 
       for (final objectName in inRange) {
-        final m = RegExp(r'_ToDoLogs_(\d{4}-\d{2}-\d{2})\.json$')
+        final m = RegExp(r'_ToDoLogs_(\d{4}-\d{2}-\d{2})\.csv$')
             .firstMatch(objectName);
         final dateStr = m?.group(1) ?? 'Unknown';
 
-        final json = await gcsHelper.loadJsonByObjectName(objectName);
-        final List items =
-            (json['items'] as List?) ?? (json['data'] as List?) ?? const [];
+        final rows = await gcsHelper.loadCsvRowsByObjectName(objectName);
 
         final Map<String, _DocBundle> docsById =
             dayDocMap.putIfAbsent(dateStr, () => <String, _DocBundle>{});
 
-        for (final raw in items) {
-          final item = _asMap(raw);
-          if (item == null) continue;
+        for (final row in rows) {
+          final docId = _toStr(row['docId']) ?? _toStr(row['meta.docId']);
+          if (docId == null) continue;
 
-          final docId = (item['docId'] ?? '').toString();
-          if (docId.isEmpty) continue;
-
-          final meta = _extractMeta(item);
-          final plate = _extractPlate(item, meta, docId);
-          final logs = _extractLogs(item);
+          final meta = _extractCsvMeta(row);
+          final plate = _extractPlate(<String, dynamic>{}, meta, docId);
+          final log = _extractCsvLog(row);
+          final logs = log.isEmpty
+              ? <Map<String, dynamic>>[]
+              : <Map<String, dynamic>>[log];
 
           final doc = _makeDocBundle(
             docId: docId,

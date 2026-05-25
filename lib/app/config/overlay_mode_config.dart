@@ -13,7 +13,7 @@ class OverlayModeConfig {
     final raw = prefs.getString(_prefsKey);
 
     if (raw == null) {
-      return OverlayMode.topHalf;
+      return OverlayMode.bubble;
     }
 
     switch (raw) {
@@ -22,7 +22,7 @@ class OverlayModeConfig {
       case 'bubble':
         return OverlayMode.bubble;
       default:
-        return OverlayMode.topHalf;
+        return OverlayMode.bubble;
     }
   }
 

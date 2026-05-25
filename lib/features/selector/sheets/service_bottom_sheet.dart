@@ -144,7 +144,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
   bool _bootLoading = true;
   SharedPreferences? _prefs;
 
-  OverlayMode _overlayMode = OverlayMode.topHalf;
+  OverlayMode _overlayMode = OverlayMode.bubble;
 
   OverlayEdgeSide _edgeSide = OverlayEdgeSide.left;
 
@@ -179,13 +179,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
 
       _devModeEnabled = prefs.getBool(kDevModeEnabledKey) ?? false;
 
-      var currentOverlayMode = await OverlayModeConfig.getMode();
-      final initialized = prefs.getBool('overlay_mode_initialized_v2') ?? false;
-      if (!initialized) {
-        currentOverlayMode = OverlayMode.topHalf;
-        await OverlayModeConfig.setMode(OverlayMode.topHalf);
-        await prefs.setBool('overlay_mode_initialized_v2', true);
-      }
+      final currentOverlayMode = await OverlayModeConfig.getMode();
       _overlayMode = currentOverlayMode;
 
       _edgeSide = await OverlayEdgeSideConfig.getSide();

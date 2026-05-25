@@ -9,6 +9,13 @@ class AppStartFlowPrefs {
   static const String selectorScreenTutorialDoneKey =
       'app_start_selector_screen_tutorial_done_v1';
 
+  static const String termsOfServiceAgreedKey =
+      'app_start_terms_of_service_agreed_v1';
+  static const String privacyPolicyAgreedKey =
+      'app_start_privacy_policy_agreed_v1';
+  static const String accountDeletionPolicyAgreedKey =
+      'app_start_account_deletion_policy_agreed_v1';
+
   static const String legacyYes = 'yes';
   static const String legacyUsageTutorialDoneKey =
       'app_start_usage_tutorial_done_v1';
@@ -61,10 +68,60 @@ class AppStartFlowPrefs {
     await prefs.setBool(selectorScreenTutorialDoneKey, value);
   }
 
+  static Future<bool> getTermsOfServiceAgreed() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(termsOfServiceAgreedKey) ?? false;
+  }
+
+  static Future<void> setTermsOfServiceAgreed(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(termsOfServiceAgreedKey, value);
+  }
+
+  static Future<bool> getPrivacyPolicyAgreed() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(privacyPolicyAgreedKey) ?? false;
+  }
+
+  static Future<void> setPrivacyPolicyAgreed(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(privacyPolicyAgreedKey, value);
+  }
+
+  static Future<bool> getAccountDeletionPolicyAgreed() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(accountDeletionPolicyAgreedKey) ?? false;
+  }
+
+  static Future<void> setAccountDeletionPolicyAgreed(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(accountDeletionPolicyAgreedKey, value);
+  }
+
+  static Future<bool> getAllPolicyConsentsDone() async {
+    final terms = await getTermsOfServiceAgreed();
+    if (!terms) return false;
+
+    final privacy = await getPrivacyPolicyAgreed();
+    if (!privacy) return false;
+
+    return getAccountDeletionPolicyAgreed();
+  }
+
+  static Future<void> resetPolicyConsents() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(termsOfServiceAgreedKey, false);
+    await prefs.setBool(privacyPolicyAgreedKey, false);
+    await prefs.setBool(accountDeletionPolicyAgreedKey, false);
+  }
+
   static Future<void> resetTutorialFlags() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(permissionTutorialDoneKey, false);
     await prefs.setBool(selectorScreenTutorialDoneKey, false);
+    await prefs.setBool(termsOfServiceAgreedKey, false);
+    await prefs.setBool(privacyPolicyAgreedKey, false);
+    await prefs.setBool(accountDeletionPolicyAgreedKey, false);
   }
 
   static Future<bool> getUsedBefore() async {

@@ -118,24 +118,26 @@ class StatisticsDeepLogService {
         final objectDateStr = _extractDateStrFromObjectName(objectName);
         if (objectDateStr == null || !dateStrs.contains(objectDateStr)) continue;
 
-        final decoded = await _loadJsonByObjectName(
+        final rows = await _loadCsvRowsByObjectName(
           storage: storage,
           objectName: objectName,
         );
 
-        final rootItems = _extractRootItems(decoded);
-        for (int i = 0; i < rootItems.length; i++) {
-          final item = _asMap(rootItems[i]);
-          if (item == null) continue;
-
-          final dataMap = _asMap(item['data']);
-          final docIdRaw = item['docId'] ?? dataMap?['docId'];
-          final docIdBase = (docIdRaw ?? '').toString().trim();
+        for (int i = 0; i < rows.length; i++) {
+          final row = rows[i];
+          final docIdBase = _pickString(<dynamic>[
+                row['docId'],
+                row['meta.docId'],
+              ]) ??
+              '';
           final docId = docIdBase.isEmpty ? '$objectName#$i' : docIdBase;
           final mergeKey = '$objectDateStr|$docId';
-          final meta = _extractMeta(item);
-          final logs = _extractLogs(item);
-          final plate = _extractPlate(item, meta, docId);
+          final meta = _extractCsvMeta(row);
+          final log = _extractCsvLog(row);
+          final logs = log.isEmpty
+              ? <Map<String, dynamic>>[]
+              : <Map<String, dynamic>>[log];
+          final plate = _extractPlate(meta, docId);
           final doc = _makeDocBundle(
             docId: docId,
             dateStr: objectDateStr,
@@ -210,7 +212,7 @@ class StatisticsDeepLogService {
   }
 
   String? _extractDateStrFromObjectName(String objectName) {
-    final match = RegExp(r'_ToDoLogs_(\d{4}-\d{2}-\d{2})\.json$').firstMatch(objectName);
+    final match = RegExp(r'_ToDoLogs_(\d{4}-\d{2}-\d{2})\.csv$').firstMatch(objectName);
     return match?.group(1);
   }
 
@@ -238,7 +240,7 @@ class StatisticsDeepLogService {
     return acc;
   }
 
-  Future<dynamic> _loadJsonByObjectName({
+  Future<List<Map<String, String>>> _loadCsvRowsByObjectName({
     required gcs.StorageApi storage,
     required String objectName,
   }) async {
@@ -249,57 +251,141 @@ class StatisticsDeepLogService {
     );
 
     if (res is! gcs.Media) {
-      throw StateError('Storage JSON 응답 형식이 올바르지 않습니다.');
+      throw StateError('Storage CSV 응답 형식이 올바르지 않습니다.');
     }
 
     final bytes = await res.stream.expand((chunk) => chunk).toList();
-    return jsonDecode(utf8.decode(bytes));
+    return _decodeCsv(utf8.decode(bytes));
   }
 
-  List<dynamic> _extractRootItems(dynamic decoded) {
-    if (decoded is Map && decoded['items'] is List) {
-      return decoded['items'] as List;
+  List<Map<String, String>> _decodeCsv(String text) {
+    final table = _parseCsvTable(text);
+    if (table.isEmpty) return <Map<String, String>>[];
+
+    final headers = table.first
+        .map((header) => header.replaceFirst('\ufeff', '').trim())
+        .toList();
+    final rows = <Map<String, String>>[];
+
+    for (int i = 1; i < table.length; i++) {
+      final cells = table[i];
+      if (cells.every((cell) => cell.trim().isEmpty)) continue;
+      final row = <String, String>{};
+      for (int j = 0; j < headers.length; j++) {
+        if (headers[j].isEmpty) continue;
+        row[headers[j]] = j < cells.length ? cells[j] : '';
+      }
+      rows.add(row);
     }
-    if (decoded is Map && decoded['data'] is List) {
-      return decoded['data'] as List;
+
+    return rows;
+  }
+
+  List<List<String>> _parseCsvTable(String text) {
+    final rows = <List<String>>[];
+    var row = <String>[];
+    final cell = StringBuffer();
+    var inQuotes = false;
+    var i = 0;
+
+    while (i < text.length) {
+      final char = text[i];
+      if (inQuotes) {
+        if (char == '"') {
+          if (i + 1 < text.length && text[i + 1] == '"') {
+            cell.write('"');
+            i += 2;
+            continue;
+          }
+          inQuotes = false;
+          i++;
+          continue;
+        }
+        cell.write(char);
+        i++;
+        continue;
+      }
+
+      if (char == '"') {
+        inQuotes = true;
+        i++;
+        continue;
+      }
+
+      if (char == ',') {
+        row.add(cell.toString());
+        cell.clear();
+        i++;
+        continue;
+      }
+
+      if (char == '\n' || char == '\r') {
+        row.add(cell.toString());
+        cell.clear();
+        rows.add(row);
+        row = <String>[];
+        if (char == '\r' && i + 1 < text.length && text[i + 1] == '\n') {
+          i += 2;
+        } else {
+          i++;
+        }
+        continue;
+      }
+
+      cell.write(char);
+      i++;
     }
-    if (decoded is List) return decoded;
-    return const <dynamic>[];
+
+    if (inQuotes || cell.isNotEmpty || row.isNotEmpty) {
+      row.add(cell.toString());
+      rows.add(row);
+    }
+
+    return rows;
   }
 
-  Map<String, dynamic>? _asMap(dynamic value) {
-    if (value is Map<String, dynamic>) return value;
-    if (value is Map) return Map<String, dynamic>.from(value);
-    return null;
-  }
-
-  Map<String, dynamic> _extractMeta(Map<String, dynamic> item) {
+  Map<String, dynamic> _extractCsvMeta(Map<String, String> row) {
     final meta = <String, dynamic>{};
 
-    item.forEach((key, value) {
-      if (key == 'docId' || key == 'data' || key == 'logs') return;
-      meta[key] = value;
+    row.forEach((key, value) {
+      if (!key.startsWith('meta.')) return;
+      final outKey = key.substring(5).trim();
+      if (outKey.isEmpty) return;
+      if (value.trim().isEmpty) return;
+      meta[outKey] = value;
     });
 
-    final dataMap = _asMap(item['data']);
-    if (dataMap != null) {
-      dataMap.forEach((key, value) {
-        if (key == 'logs') return;
-        meta[key] = value;
-      });
+    for (final key in <String>[
+      'division',
+      'area',
+      'uploadedAt',
+      'uploadedBy',
+      'monthKey',
+    ]) {
+      final value = row[key];
+      if (value != null && value.trim().isNotEmpty) meta[key] = value;
     }
+
+    final docId = _pickString(<dynamic>[row['docId'], row['meta.docId']]);
+    if (docId != null) meta['docId'] = docId;
 
     return meta;
   }
 
-  String _extractPlate(
-    Map<String, dynamic> item,
-    Map<String, dynamic> meta,
-    String docId,
-  ) {
+  Map<String, dynamic> _extractCsvLog(Map<String, String> row) {
+    final log = <String, dynamic>{};
+    row.forEach((key, value) {
+      if (!key.startsWith('log.')) return;
+      final outKey = key.substring(4).trim();
+      if (outKey.isEmpty) return;
+      if (value.trim().isEmpty) return;
+      log[outKey] = value;
+    });
+    return log;
+  }
+
+  String _extractPlate(Map<String, dynamic> meta, String docId) {
     final candidates = <dynamic>[
-      item['plateNumber'],
-      item['plate_number'],
       meta['plateNumber'],
       meta['plate_number'],
       meta['plate'],
@@ -316,25 +402,6 @@ class StatisticsDeepLogService {
 
     if (docId.contains('_')) return docId.split('_').first;
     return docId;
-  }
-
-  List<Map<String, dynamic>> _extractLogs(Map<String, dynamic> item) {
-    final dataMap = _asMap(item['data']);
-    final raw = item['logs'] ?? dataMap?['logs'];
-    if (raw is! List) return <Map<String, dynamic>>[];
-
-    final logs = raw
-        .whereType<Map>()
-        .map((entry) => Map<String, dynamic>.from(entry))
-        .toList();
-
-    logs.sort((a, b) {
-      final at = _parseDateTime(a['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final bt = _parseDateTime(b['timestamp']) ?? DateTime.fromMillisecondsSinceEpoch(0);
-      return at.compareTo(bt);
-    });
-
-    return logs;
   }
 
   _DeepDocBundle _makeDocBundle({
@@ -539,26 +606,6 @@ class StatisticsDeepLogService {
     if (value is String) {
       return DateTime.tryParse(value)?.toLocal();
     }
-
-    if (value is Map) {
-      final seconds = value['seconds'] ?? value['_seconds'];
-      final nanos = value['nanoseconds'] ?? value['_nanoseconds'] ?? 0;
-      if (seconds is num) {
-        return DateTime.fromMillisecondsSinceEpoch(
-          seconds.toInt() * 1000 + (nanos is num ? (nanos.toInt() ~/ 1000000) : 0),
-        ).toLocal();
-      }
-    }
-
-    try {
-      final seconds = (value as dynamic).seconds;
-      final nanos = (value as dynamic).nanoseconds;
-      if (seconds is int) {
-        return DateTime.fromMillisecondsSinceEpoch(
-          seconds * 1000 + (nanos is int ? nanos ~/ 1000000 : 0),
-        ).toLocal();
-      }
-    } catch (_) {}
 
     return null;
   }

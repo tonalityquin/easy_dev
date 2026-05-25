@@ -3,22 +3,20 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../../app/config/email_config.dart';
 import '../../../app/di/routes.dart';
 import '../../../app/init/app_start_flow_prefs.dart';
-import '../../../app/init/startup_tasks.dart';
 import '../../../app/utils/status_dialog.dart';
 
-class AppStartTutorialLabScreen extends StatefulWidget {
-  const AppStartTutorialLabScreen({super.key});
+class AppStartPermissionSetupScreen extends StatefulWidget {
+  const AppStartPermissionSetupScreen({super.key});
 
   @override
-  State<AppStartTutorialLabScreen> createState() =>
-      _AppStartTutorialLabScreenState();
+  State<AppStartPermissionSetupScreen> createState() =>
+      _AppStartPermissionSetupScreenState();
 }
 
-enum _StepKind {
+enum _PermissionStepKind {
   welcome,
   notifications,
   location,
@@ -27,11 +25,10 @@ enum _StepKind {
   overlay,
   microphone,
   mailRecipient,
-  usedBefore,
 }
 
-class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
-    with WidgetsBindingObserver {
+class _AppStartPermissionSetupScreenState
+    extends State<AppStartPermissionSetupScreen> with WidgetsBindingObserver {
   final PageController _pageController = PageController();
   final TextEditingController _mailToCtrl = TextEditingController();
 
@@ -44,19 +41,17 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
   PermissionStatus? _cameraStatus;
   PermissionStatus? _microphoneStatus;
   bool? _overlayGranted;
-
   String _savedMailTo = '';
 
-  final List<_StepKind> _steps = const [
-    _StepKind.welcome,
-    _StepKind.notifications,
-    _StepKind.location,
-    _StepKind.battery,
-    _StepKind.camera,
-    _StepKind.overlay,
-    _StepKind.microphone,
-    _StepKind.mailRecipient,
-    _StepKind.usedBefore,
+  final List<_PermissionStepKind> _steps = const [
+    _PermissionStepKind.welcome,
+    _PermissionStepKind.notifications,
+    _PermissionStepKind.location,
+    _PermissionStepKind.battery,
+    _PermissionStepKind.camera,
+    _PermissionStepKind.overlay,
+    _PermissionStepKind.microphone,
+    _PermissionStepKind.mailRecipient,
   ];
 
   @override
@@ -66,13 +61,6 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
     _mailToCtrl.addListener(_handleMailToChanged);
     _loadSavedMailRecipient();
     _refreshForStep(_steps.first);
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state != AppLifecycleState.resumed) return;
-    if (!mounted) return;
-    _refreshForStep(_steps[_index]);
   }
 
   void _handleMailToChanged() {
@@ -91,40 +79,46 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
     setState(() => _savedMailTo = value);
   }
 
-  Future<void> _refreshForStep(_StepKind kind) async {
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    if (!mounted) return;
+    _refreshForStep(_steps[_index]);
+  }
+
+  Future<void> _refreshForStep(_PermissionStepKind kind) async {
     switch (kind) {
-      case _StepKind.welcome:
-      case _StepKind.usedBefore:
+      case _PermissionStepKind.welcome:
         return;
-      case _StepKind.notifications:
+      case _PermissionStepKind.notifications:
         final s = await Permission.notification.status;
         if (!mounted) return;
         setState(() => _notifStatus = s);
         return;
-      case _StepKind.location:
+      case _PermissionStepKind.location:
         final s = await Permission.locationWhenInUse.status;
         if (!mounted) return;
         setState(() => _locationStatus = s);
         return;
-      case _StepKind.battery:
+      case _PermissionStepKind.battery:
         final s = await Permission.ignoreBatteryOptimizations.status;
         if (!mounted) return;
         setState(() => _batteryStatus = s);
         return;
-      case _StepKind.camera:
+      case _PermissionStepKind.camera:
         final s = await Permission.camera.status;
         if (!mounted) return;
         setState(() => _cameraStatus = s);
         return;
-      case _StepKind.overlay:
+      case _PermissionStepKind.overlay:
         await _refreshOverlayPermissionStatus();
         return;
-      case _StepKind.microphone:
+      case _PermissionStepKind.microphone:
         final s = await Permission.microphone.status;
         if (!mounted) return;
         setState(() => _microphoneStatus = s);
         return;
-      case _StepKind.mailRecipient:
+      case _PermissionStepKind.mailRecipient:
         final cfg = await EmailConfig.load();
         if (!mounted) return;
         final value = cfg.to.trim();
@@ -177,75 +171,27 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
     return '저장됨';
   }
 
-  String? _normalizeMode(String? raw) {
-    if (raw == null) return null;
-    final v = raw.trim().toLowerCase();
-    if (v.isEmpty) return null;
-
-    switch (v) {
-      case 'service':
-        return null;
-      case 'tablet':
-        return 'tablet';
-      case 'single':
-      case 'simple':
-        return 'single';
-      case 'double':
-      case 'lite':
-      case 'light':
-        return 'double';
-      case 'triple':
-      case 'normal':
-        return 'triple';
-      case 'minor':
-        return 'minor';
-      default:
-        return null;
-    }
-  }
-
-  Future<String?> _resolveReturnUserRoute() async {
-    final prefs = await SharedPreferences.getInstance();
-    final mode = _normalizeMode(prefs.getString('mode'));
-    switch (mode) {
-      case 'single':
-        return AppRoutes.singleLogin;
-      case 'tablet':
-        return AppRoutes.tabletLogin;
-      case 'double':
-        return AppRoutes.doubleLogin;
-      case 'triple':
-        return AppRoutes.tripleLogin;
-      case 'minor':
-        return AppRoutes.minorLogin;
-      default:
-        return null;
-    }
-  }
-
-  bool _canProceed(_StepKind kind) {
+  bool _canProceed(_PermissionStepKind kind) {
     switch (kind) {
-      case _StepKind.welcome:
+      case _PermissionStepKind.welcome:
         return true;
-      case _StepKind.notifications:
+      case _PermissionStepKind.notifications:
         return _notifStatus?.isGranted == true;
-      case _StepKind.location:
+      case _PermissionStepKind.location:
         return _locationStatus?.isGranted == true;
-      case _StepKind.battery:
+      case _PermissionStepKind.battery:
         return _batteryStatus?.isGranted == true;
-      case _StepKind.camera:
+      case _PermissionStepKind.camera:
         return _cameraStatus?.isGranted == true;
-      case _StepKind.overlay:
+      case _PermissionStepKind.overlay:
         return _overlayGranted == true;
-      case _StepKind.microphone:
+      case _PermissionStepKind.microphone:
         return _microphoneStatus?.isGranted == true;
-      case _StepKind.mailRecipient:
+      case _PermissionStepKind.mailRecipient:
         final current = _mailToCtrl.text.trim();
         return _isValidGmailToList(current) &&
             current.isNotEmpty &&
             current == _savedMailTo;
-      case _StepKind.usedBefore:
-        return false;
     }
   }
 
@@ -316,7 +262,7 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
       builder: (ctx) {
         return AlertDialog(
           title: const Text('지메일 수신자 입력 필요'),
-          content: const Text('수신자(To)를 입력하고 저장해 주세요.'),
+          content: const Text('수신자(To)를 지메일 주소로 입력하고 저장해 주세요.'),
           actions: [
             FilledButton(
               onPressed: () => Navigator.of(ctx).pop(),
@@ -406,7 +352,7 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
       if (!mounted) return;
       setState(() => _cameraStatus = s);
       if (!s.isGranted) {
-        await _showNeedPermissionDialog('카메라(사진 촬영)');
+        await _showNeedPermissionDialog('카메라');
       }
     } finally {
       if (!mounted) return;
@@ -504,29 +450,16 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
     );
   }
 
-  Future<void> _setUsedBeforeAndRoute(bool usedBefore) async {
+  Future<void> _completePermissions() async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      await AppStartFlowPrefs.setUsedBefore(usedBefore);
       await AppStartFlowPrefs.setPermissionTutorialDone(true);
       if (!mounted) return;
-
-      if (usedBefore) {
-        await AppStartFlowPrefs.setSelectorScreenTutorialDone(true);
-        await StartupTasks.runAfterPermissions();
-        if (!mounted) return;
-        final route = await _resolveReturnUserRoute();
-        if (!mounted) return;
-        Navigator.of(context).pushNamedAndRemoveUntil(
-          route ?? AppRoutes.selector,
-          (r) => false,
-        );
-        return;
-      }
-
-      Navigator.of(context)
-          .pushReplacementNamed(AppRoutes.appStartNextTutorialFull);
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        AppRoutes.startGate,
+        (route) => false,
+      );
     } finally {
       if (!mounted) return;
       setState(() => _busy = false);
@@ -539,27 +472,33 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
     String title,
     String desc,
   ) {
-    final cs = Theme.of(context).colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 76, color: cs.primary),
-        const SizedBox(height: 14),
+        Container(
+          width: 88,
+          height: 88,
+          decoration: BoxDecoration(
+            color: colorScheme.primaryContainer,
+            borderRadius: BorderRadius.circular(30),
+          ),
+          child: Icon(icon, size: 46, color: colorScheme.onPrimaryContainer),
+        ),
+        const SizedBox(height: 16),
         Text(
           title,
-          style: Theme.of(context)
-              .textTheme
-              .headlineSmall
-              ?.copyWith(fontWeight: FontWeight.w800),
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 8),
         Text(
           desc,
-          style: Theme.of(context)
-              .textTheme
-              .bodyLarge
-              ?.copyWith(color: cs.onSurfaceVariant),
+          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
           textAlign: TextAlign.center,
         ),
       ],
@@ -573,7 +512,7 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
     required Future<void> Function() onRequest,
     Future<void> Function()? onOpenSettings,
   }) {
-    final cs = Theme.of(context).colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
       elevation: 1,
@@ -587,17 +526,18 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
                 Expanded(
                   child: Text(
                     label,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                   ),
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest,
+                    color: colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(status),
@@ -645,7 +585,7 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
   }
 
   Widget _buildMailRecipientCard(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
       elevation: 1,
@@ -659,17 +599,18 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
                 Expanded(
                   child: Text(
                     '지메일 수신자(To)',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w700),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
                   ),
                 ),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
-                    color: cs.surfaceContainerHighest,
+                    color: colorScheme.surfaceContainerHighest,
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(_mailRecipientStatusLabel()),
@@ -766,62 +707,62 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
     );
   }
 
-  Widget _buildStep(BuildContext context, _StepKind kind) {
+  Widget _buildStep(BuildContext context, _PermissionStepKind kind) {
     switch (kind) {
-      case _StepKind.welcome:
+      case _PermissionStepKind.welcome:
         return _buildScrollableStep(
           context,
           child: _buildPageHeader(
             context,
-            Icons.auto_awesome_rounded,
-            '권한 설정 튜토리얼',
-            '필수 권한과 필수 초기 설정을 단계별로 완료해야 다음으로 진행할 수 있습니다.',
+            Icons.verified_user_outlined,
+            '권한 설정',
+            '서비스 이용에 필요한 필수 권한을 순서대로 허용해 주세요.',
           ),
         );
-      case _StepKind.notifications:
+      case _PermissionStepKind.notifications:
         return _buildPermissionStep(
           context,
-          icon: Icons.notifications_active_rounded,
+          icon: Icons.notifications_active_outlined,
           title: '알림 권한',
           description: '리마인더와 상태 알림을 위해 필요합니다.',
           label: '알림',
           status: _statusLabelForPermission(_notifStatus),
           onRequest: _requestNotifications,
         );
-      case _StepKind.location:
+      case _PermissionStepKind.location:
         return _buildPermissionStep(
           context,
-          icon: Icons.my_location_rounded,
+          icon: Icons.my_location_outlined,
           title: '위치 권한',
-          description: '근무/이동 관련 기능을 위해 필요할 수 있습니다.',
-          label: '위치(앱 사용 중)',
+          description: '근무와 이동 관련 기능을 위해 필요할 수 있습니다.',
+          label: '위치',
           status: _statusLabelForPermission(_locationStatus),
           onRequest: _requestLocation,
         );
-      case _StepKind.battery:
+      case _PermissionStepKind.battery:
         return _buildPermissionStep(
           context,
-          icon: Icons.battery_saver_rounded,
+          icon: Icons.battery_saver_outlined,
           title: '배터리 최적화 제외',
           description: '포그라운드 서비스 안정성을 위해 필요합니다.',
           label: '배터리 최적화 제외',
           status: _statusLabelForPermission(_batteryStatus),
           onRequest: _requestBattery,
         );
-      case _StepKind.camera:
+      case _PermissionStepKind.camera:
         return _buildPermissionStep(
           context,
-          icon: Icons.photo_camera_rounded,
-          title: '사진 촬영 권한',
+          icon: Icons.photo_camera_outlined,
+          title: '카메라 권한',
           description: '업무 사진 촬영 기능을 위해 필요합니다.',
-          label: '카메라(사진 촬영)',
+          label: '카메라',
           status: _statusLabelForPermission(_cameraStatus),
           onRequest: _requestCamera,
         );
-      case _StepKind.overlay:
+      case _PermissionStepKind.overlay:
         return _buildPermissionStep(
           context,
-          icon: Icons.picture_in_picture_alt_rounded,
+          icon: Icons.picture_in_picture_alt_outlined,
           title: '다른 앱 위 사용 허용',
           description: '오버레이 표시 기능을 위해 필요합니다.',
           label: '다른 앱 위에 표시',
@@ -829,17 +770,17 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
           onRequest: _requestOverlay,
           onOpenSettings: _openOverlaySettingsHint,
         );
-      case _StepKind.microphone:
+      case _PermissionStepKind.microphone:
         return _buildPermissionStep(
           context,
-          icon: Icons.mic_rounded,
-          title: '오디오 · 마이크 권한',
-          description: '무전기 송신과 음성 기능 사용을 위해 필요합니다.',
+          icon: Icons.mic_none_outlined,
+          title: '마이크 권한',
+          description: '음성 기능과 무전기 송신 기능을 위해 필요합니다.',
           label: '오디오 · 마이크',
           status: _statusLabelForPermission(_microphoneStatus),
           onRequest: _requestMicrophone,
         );
-      case _StepKind.mailRecipient:
+      case _PermissionStepKind.mailRecipient:
         return _buildScrollableStep(
           context,
           child: Column(
@@ -857,66 +798,33 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
             ],
           ),
         );
-      case _StepKind.usedBefore:
-        return _buildScrollableStep(
-          context,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildPageHeader(
-                context,
-                Icons.help_outline_rounded,
-                '다음 튜토리얼 선택',
-                '앱을 사용해본 적이 있나요?',
-              ),
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _busy ? null : () => _setUsedBeforeAndRoute(true),
-                  icon: const Icon(Icons.check_rounded),
-                  label: const Text('예, 사용해본 적이 있어요'),
-                ),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  onPressed: _busy ? null : () => _setUsedBeforeAndRoute(false),
-                  icon: const Icon(Icons.play_arrow_rounded),
-                  label: const Text('아니요, 처음이에요'),
-                ),
-              ),
-            ],
-          ),
-        );
     }
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _pageController.dispose();
     _mailToCtrl.removeListener(_handleMailToChanged);
     _mailToCtrl.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
+    final colorScheme = Theme.of(context).colorScheme;
     final kind = _steps[_index];
     final isLast = _index == _steps.length - 1;
     final canNext = _canProceed(kind);
 
-    return GestureDetector(
-      onTap: () => FocusScope.of(context).unfocus(),
+    return PopScope(
+      canPop: false,
       child: Scaffold(
         resizeToAvoidBottomInset: true,
         appBar: AppBar(
-          title: const Text('앱 시작 튜토리얼'),
+          title: const Text('권한 설정'),
           centerTitle: true,
+          automaticallyImplyLeading: false,
         ),
         body: SafeArea(
           child: Padding(
@@ -951,7 +859,8 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
                       width: selected ? 18 : 8,
                       height: 8,
                       decoration: BoxDecoration(
-                        color: selected ? cs.primary : cs.outlineVariant,
+                        color:
+                            selected ? colorScheme.primary : colorScheme.outlineVariant,
                         borderRadius: BorderRadius.circular(8),
                       ),
                     );
@@ -969,6 +878,12 @@ class _AppStartTutorialLabScreenState extends State<AppStartTutorialLabScreen>
                       FilledButton(
                         onPressed: (!_busy && canNext) ? _goNext : null,
                         child: const Text('다음'),
+                      )
+                    else
+                      FilledButton(
+                        onPressed:
+                            (!_busy && canNext) ? _completePermissions : null,
+                        child: Text(_busy ? '저장 중' : '정책 확인으로'),
                       ),
                   ],
                 ),

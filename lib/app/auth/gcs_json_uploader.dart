@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show debugPrint;
@@ -8,10 +7,10 @@ import '../../app/config/auth_config.dart';
 import '../../features/dev/debug/debug_api_logger.dart';
 import 'google_auth_session.dart';
 
-class GcsJsonUploader {
+class GcsCsvUploader {
   final String bucketName;
 
-  GcsJsonUploader({String? bucketName})
+  GcsCsvUploader({String? bucketName})
       : bucketName = bucketName ?? AuthConfig.gcsBucketName;
 
   Future<List<Map<String, dynamic>>> loadPlateLogs({
@@ -44,7 +43,7 @@ class GcsJsonUploader {
 
           await DebugApiLogger().log(
             {
-              'tag': 'GcsJsonUploader.loadPlateLogs',
+              'tag': 'GcsCsvUploader.loadPlateLogs',
               'message': 'plate 로그 조회 실패 - 필수 인자 누락',
               'reason': 'validation_failed',
               'bucketName': bucketName,
@@ -54,7 +53,7 @@ class GcsJsonUploader {
               'date': date.toIso8601String(),
             },
             level: 'error',
-            tags: const ['gcs', 'json', 'plate_logs', 'validation'],
+            tags: const ['gcs', 'csv', 'plate_logs', 'validation'],
           );
 
           return <Map<String, dynamic>>[];
@@ -63,9 +62,7 @@ class GcsJsonUploader {
         final normalizedDate = DateTime(date.year, date.month, date.day);
         dateStr = _yyyymmdd(normalizedDate);
         monthKey = _yyyymm(normalizedDate);
-
-        wantedSuffix = '_ToDoLogs_$dateStr.json';
-
+        wantedSuffix = '_ToDoLogs_$dateStr.csv';
         needle = _digitsOnly(trimmedPlate);
         needleTail4 =
             needle.length >= 4 ? needle.substring(needle.length - 4) : needle;
@@ -76,7 +73,7 @@ class GcsJsonUploader {
         ];
 
         debugPrint(
-          '🔍 [GcsJsonUploader] plate 로그 조회 시작: '
+          '🔍 [GcsCsvUploader] plate 로그 조회 시작: '
           'bucket=$bucketName, prefixes="${prefixesToTry.join(' | ')}", '
           'suffix="$wantedSuffix", plate="$needle"',
         );
@@ -109,11 +106,11 @@ class GcsJsonUploader {
         if (candidates.isEmpty) {
           final msg = '해당 날짜에 매칭되는 로그 파일이 없습니다: '
               'prefixTried="${scannedPrefixes.join(' | ')}", suffix="$wantedSuffix"';
-          debugPrint('⚠️ [GcsJsonUploader] $msg');
+          debugPrint('⚠️ [GcsCsvUploader] $msg');
 
           await DebugApiLogger().log(
             {
-              'tag': 'GcsJsonUploader.loadPlateLogs',
+              'tag': 'GcsCsvUploader.loadPlateLogs',
               'message': '해당 날짜 로그 파일 없음',
               'reason': 'no_file_for_date',
               'bucketName': bucketName,
@@ -126,7 +123,7 @@ class GcsJsonUploader {
               'monthKey': monthKey,
             },
             level: 'info',
-            tags: const ['gcs', 'json', 'plate_logs', 'not_found'],
+            tags: const ['gcs', 'csv', 'plate_logs', 'not_found'],
           );
 
           return <Map<String, dynamic>>[];
@@ -140,64 +137,24 @@ class GcsJsonUploader {
         final objectName = candidates.last.name!;
 
         debugPrint(
-          '📄 [GcsJsonUploader] 대상 객체 선택: $objectName (updated=${candidates.last.updated})',
+          '📄 [GcsCsvUploader] 대상 객체 선택: $objectName (updated=${candidates.last.updated})',
         );
 
-        final dynamic res = await storage.objects.get(
-          bucketName,
-          objectName,
-          downloadOptions: gcs.DownloadOptions.fullMedia,
+        final rows = await _loadCsvRowsByObjectName(
+          storage: storage,
+          objectName: objectName,
         );
-        if (res is! gcs.Media) {
-          final msg = '예상치 못한 반환 타입: ${res.runtimeType}, Media가 아닙니다.';
-          debugPrint('⚠️ [GcsJsonUploader] $msg');
 
-          await DebugApiLogger().log(
-            {
-              'tag': 'GcsJsonUploader.loadPlateLogs',
-              'message': 'GCS objects.get 반환 타입이 Media가 아님',
-              'reason': 'invalid_response_type',
-              'bucketName': bucketName,
-              'objectName': objectName,
-              'responseType': res.runtimeType.toString(),
-            },
-            level: 'error',
-            tags: const ['gcs', 'json', 'plate_logs'],
-          );
-
-          return <Map<String, dynamic>>[];
-        }
-
-        final gcs.Media media = res;
-        final bytes = await media.stream.expand((e) => e).toList();
-        final decoded = jsonDecode(utf8.decode(bytes));
-
-        final List rootItems = (decoded is Map && decoded['items'] is List)
-            ? decoded['items'] as List
-            : (decoded is Map && decoded['data'] is List)
-                ? decoded['data'] as List
-                : (decoded is List)
-                    ? decoded
-                    : const [];
-
-        if (rootItems.isEmpty) {
+        if (rows.isEmpty) {
           debugPrint(
-            '⚠️ [GcsJsonUploader] JSON 내 items/data 배열이 비어 있습니다. objectName=$objectName',
+            '⚠️ [GcsCsvUploader] CSV 행이 비어 있습니다. objectName=$objectName',
           );
         }
 
         final aggregated = <Map<String, dynamic>>[];
 
-        for (final it in rootItems) {
-          if (it is! Map) continue;
-
-          final map = Map<String, dynamic>.from(it);
-
-          final Map<String, dynamic>? dataMap = (map['data'] is Map)
-              ? Map<String, dynamic>.from(map['data'] as Map)
-              : null;
-
-          final plateRaw = _pickPlateCandidate(map: map, dataMap: dataMap);
+        for (final row in rows) {
+          final plateRaw = _pickPlateCandidate(row);
           final pd = _digitsOnly(plateRaw);
 
           final matches = pd.isNotEmpty &&
@@ -205,16 +162,8 @@ class GcsJsonUploader {
                   (needle.isNotEmpty && pd == needle));
           if (!matches) continue;
 
-          final logsRaw = map['logs'] ?? dataMap?['logs'];
-
-          final logs = (logsRaw is List)
-              ? logsRaw
-                  .whereType<Map>()
-                  .map((e) => Map<String, dynamic>.from(e))
-                  .toList()
-              : const <Map<String, dynamic>>[];
-
-          aggregated.addAll(logs);
+          final log = _extractCsvLog(row);
+          if (log.isNotEmpty) aggregated.add(log);
         }
 
         aggregated.sort((a, b) {
@@ -226,18 +175,18 @@ class GcsJsonUploader {
         });
 
         debugPrint(
-          '✅ [GcsJsonUploader] plate 로그 조회 완료: plate="$needle", count=${aggregated.length}',
+          '✅ [GcsCsvUploader] plate 로그 조회 완료: plate="$needle", count=${aggregated.length}',
         );
 
         return aggregated;
       } catch (e, st) {
-        final msg = 'plate 로그 JSON 조회 중 오류가 발생했습니다. ($e)';
-        debugPrint('⚠️ [GcsJsonUploader] $msg');
+        final msg = 'plate 로그 CSV 조회 중 오류가 발생했습니다. ($e)';
+        debugPrint('⚠️ [GcsCsvUploader] $msg');
 
         await DebugApiLogger().log(
           {
-            'tag': 'GcsJsonUploader.loadPlateLogs',
-            'message': 'plate 로그 JSON 조회 중 예외 발생',
+            'tag': 'GcsCsvUploader.loadPlateLogs',
+            'message': 'plate 로그 CSV 조회 중 예외 발생',
             'reason': 'exception',
             'error': e.toString(),
             'stack': st.toString(),
@@ -253,7 +202,7 @@ class GcsJsonUploader {
             'needleTail4': needleTail4,
           },
           level: 'error',
-          tags: const ['gcs', 'json', 'plate_logs', 'exception'],
+          tags: const ['gcs', 'csv', 'plate_logs', 'exception'],
         );
 
         if (allowRethrowInvalid && GoogleAuthSession.isInvalidTokenError(e)) {
@@ -269,7 +218,7 @@ class GcsJsonUploader {
     } catch (e) {
       if (GoogleAuthSession.isInvalidTokenError(e)) {
         debugPrint(
-          '⚠️ [GcsJsonUploader] invalid_token 감지 -> 토큰 강제 갱신 후 재시도 시도 중...',
+          '⚠️ [GcsCsvUploader] invalid_token 감지 -> 토큰 강제 갱신 후 재시도 시도 중...',
         );
 
         try {
@@ -277,7 +226,7 @@ class GcsJsonUploader {
         } catch (refreshError, refreshSt) {
           await DebugApiLogger().log(
             {
-              'tag': 'GcsJsonUploader.loadPlateLogs',
+              'tag': 'GcsCsvUploader.loadPlateLogs',
               'message': '토큰 강제 갱신(refreshIfNeeded) 실패',
               'reason': 'refresh_failed',
               'error': refreshError.toString(),
@@ -289,7 +238,7 @@ class GcsJsonUploader {
               'date': date.toIso8601String(),
             },
             level: 'error',
-            tags: const ['gcs', 'json', 'plate_logs', 'auth'],
+            tags: const ['gcs', 'csv', 'plate_logs', 'auth'],
           );
           return <Map<String, dynamic>>[];
         }
@@ -298,10 +247,45 @@ class GcsJsonUploader {
       }
 
       debugPrint(
-        '❌ [GcsJsonUploader] plate 로그 조회 중 알 수 없는 오류가 발생했습니다. ($e)',
+        '❌ [GcsCsvUploader] plate 로그 조회 중 알 수 없는 오류가 발생했습니다. ($e)',
       );
       return <Map<String, dynamic>>[];
     }
+  }
+
+  Future<List<Map<String, String>>> _loadCsvRowsByObjectName({
+    required gcs.StorageApi storage,
+    required String objectName,
+  }) async {
+    final dynamic res = await storage.objects.get(
+      bucketName,
+      objectName,
+      downloadOptions: gcs.DownloadOptions.fullMedia,
+    );
+
+    if (res is! gcs.Media) {
+      final msg = '예상치 못한 반환 타입: ${res.runtimeType}, Media가 아닙니다.';
+      debugPrint('⚠️ [GcsCsvUploader] $msg');
+
+      await DebugApiLogger().log(
+        {
+          'tag': 'GcsCsvUploader.loadPlateLogs',
+          'message': 'GCS objects.get 반환 타입이 Media가 아님',
+          'reason': 'invalid_response_type',
+          'bucketName': bucketName,
+          'objectName': objectName,
+          'responseType': res.runtimeType.toString(),
+        },
+        level: 'error',
+        tags: const ['gcs', 'csv', 'plate_logs'],
+      );
+
+      return <Map<String, String>>[];
+    }
+
+    final gcs.Media media = res;
+    final bytes = await media.stream.expand((e) => e).toList();
+    return _decodeCsv(utf8.decode(bytes));
   }
 
   static Future<List<gcs.Object>> _listAllObjects({
@@ -327,6 +311,92 @@ class GcsJsonUploader {
     return allObjects;
   }
 
+  static List<Map<String, String>> _decodeCsv(String text) {
+    final table = _parseCsvTable(text);
+    if (table.isEmpty) return <Map<String, String>>[];
+
+    final headers = table.first
+        .map((header) => header.replaceFirst('\ufeff', '').trim())
+        .toList();
+    final rows = <Map<String, String>>[];
+
+    for (int i = 1; i < table.length; i++) {
+      final cells = table[i];
+      if (cells.every((cell) => cell.trim().isEmpty)) continue;
+      final row = <String, String>{};
+      for (int j = 0; j < headers.length; j++) {
+        if (headers[j].isEmpty) continue;
+        row[headers[j]] = j < cells.length ? cells[j] : '';
+      }
+      rows.add(row);
+    }
+
+    return rows;
+  }
+
+  static List<List<String>> _parseCsvTable(String text) {
+    final rows = <List<String>>[];
+    var row = <String>[];
+    final cell = StringBuffer();
+    var inQuotes = false;
+    var i = 0;
+
+    while (i < text.length) {
+      final char = text[i];
+      if (inQuotes) {
+        if (char == '"') {
+          if (i + 1 < text.length && text[i + 1] == '"') {
+            cell.write('"');
+            i += 2;
+            continue;
+          }
+          inQuotes = false;
+          i++;
+          continue;
+        }
+        cell.write(char);
+        i++;
+        continue;
+      }
+
+      if (char == '"') {
+        inQuotes = true;
+        i++;
+        continue;
+      }
+
+      if (char == ',') {
+        row.add(cell.toString());
+        cell.clear();
+        i++;
+        continue;
+      }
+
+      if (char == '\n' || char == '\r') {
+        row.add(cell.toString());
+        cell.clear();
+        rows.add(row);
+        row = <String>[];
+        if (char == '\r' && i + 1 < text.length && text[i + 1] == '\n') {
+          i += 2;
+        } else {
+          i++;
+        }
+        continue;
+      }
+
+      cell.write(char);
+      i++;
+    }
+
+    if (inQuotes || cell.isNotEmpty || row.isNotEmpty) {
+      row.add(cell.toString());
+      rows.add(row);
+    }
+
+    return rows;
+  }
+
   static String _yyyymmdd(DateTime d) => '${d.year.toString().padLeft(4, '0')}-'
       '${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
@@ -336,27 +406,35 @@ class GcsJsonUploader {
 
   static String _digitsOnly(String s) => s.replaceAll(RegExp(r'\D'), '');
 
-  static String _pickPlateCandidate({
-    required Map<String, dynamic> map,
-    required Map<String, dynamic>? dataMap,
-  }) {
-    final candidates = <dynamic>[
-      map['plateNumber'],
-      dataMap?['plateNumber'],
-      dataMap?['plate'],
-      dataMap?['plateNo'],
-      dataMap?['plate_no'],
-      dataMap?['carNumber'],
-      dataMap?['carNo'],
-      map['docId'],
-      dataMap?['docId'],
+  static String _pickPlateCandidate(Map<String, String> row) {
+    final candidates = <String?>[
+      row['meta.plateNumber'],
+      row['meta.plate'],
+      row['meta.plateNo'],
+      row['meta.plate_no'],
+      row['meta.carNumber'],
+      row['meta.carNo'],
+      row['docId'],
+      row['meta.docId'],
     ];
 
     for (final c in candidates) {
-      final s = (c ?? '').toString().trim();
+      final s = (c ?? '').trim();
       if (s.isNotEmpty) return s;
     }
     return '';
+  }
+
+  static Map<String, dynamic> _extractCsvLog(Map<String, String> row) {
+    final log = <String, dynamic>{};
+    row.forEach((key, value) {
+      if (!key.startsWith('log.')) return;
+      final outKey = key.substring(4).trim();
+      if (outKey.isEmpty) return;
+      if (value.trim().isEmpty) return;
+      log[outKey] = value;
+    });
+    return log;
   }
 
   static DateTime? _parseTs(dynamic ts) {
@@ -369,10 +447,22 @@ class GcsJsonUploader {
       return DateTime.fromMillisecondsSinceEpoch(ts * 1000).toLocal();
     }
 
+    if (ts is num) {
+      final n = ts.toInt();
+      if (n > 100000000000) {
+        return DateTime.fromMillisecondsSinceEpoch(n).toLocal();
+      }
+      return DateTime.fromMillisecondsSinceEpoch(n * 1000).toLocal();
+    }
+
     if (ts is String) {
       return DateTime.tryParse(ts)?.toLocal();
     }
 
     return null;
   }
+}
+
+class GcsJsonUploader extends GcsCsvUploader {
+  GcsJsonUploader({String? bucketName}) : super(bucketName: bucketName);
 }

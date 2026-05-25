@@ -20,7 +20,6 @@ class _StartGateScreenState extends State<StartGateScreen> {
     _decide();
   }
 
-
   String? _normalizeMode(String? raw) {
     if (raw == null) return null;
     final v = raw.trim().toLowerCase();
@@ -66,44 +65,52 @@ class _StartGateScreenState extends State<StartGateScreen> {
         return null;
     }
   }
+
+  Future<String?> _resolvePendingPolicyRoute() async {
+    final terms = await AppStartFlowPrefs.getTermsOfServiceAgreed();
+    if (!terms) return AppRoutes.termsConsent;
+
+    final privacy = await AppStartFlowPrefs.getPrivacyPolicyAgreed();
+    if (!privacy) return AppRoutes.privacyPolicyConsent;
+
+    final accountDeletion =
+        await AppStartFlowPrefs.getAccountDeletionPolicyAgreed();
+    if (!accountDeletion) return AppRoutes.accountDeletionPolicyConsent;
+
+    return null;
+  }
+
   Future<void> _decide() async {
     await AppStartFlowPrefs.migrateFromLegacyIfNeeded();
+
     final permDone = await AppStartFlowPrefs.getPermissionTutorialDone();
     if (!mounted || _navigated) return;
 
     if (!permDone) {
       _navigated = true;
-      Navigator.of(context).pushReplacementNamed(AppRoutes.appStartTutorial);
+      Navigator.of(context).pushReplacementNamed(
+        AppRoutes.appStartPermissionSetup,
+      );
       return;
     }
 
-    final usedBefore = await AppStartFlowPrefs.getUsedBefore();
+    final pendingPolicyRoute = await _resolvePendingPolicyRoute();
     if (!mounted || _navigated) return;
 
-    if (usedBefore) {
-      await AppStartFlowPrefs.setSelectorScreenTutorialDone(true);
-      await StartupTasks.runAfterPermissions();
-      if (!mounted || _navigated) return;
-      final route = await _resolveReturnUserRoute();
-      if (!mounted || _navigated) return;
+    if (pendingPolicyRoute != null) {
       _navigated = true;
-      Navigator.of(context).pushReplacementNamed(route ?? AppRoutes.selector);
-      return;
-    }
-
-    final selectorDone = await AppStartFlowPrefs.getSelectorScreenTutorialDone();
-    if (!mounted || _navigated) return;
-
-    if (!selectorDone) {
-      _navigated = true;
-      Navigator.of(context).pushReplacementNamed(AppRoutes.appStartNextTutorialFull);
+      Navigator.of(context).pushReplacementNamed(pendingPolicyRoute);
       return;
     }
 
     await StartupTasks.runAfterPermissions();
     if (!mounted || _navigated) return;
+
+    final route = await _resolveReturnUserRoute();
+    if (!mounted || _navigated) return;
+
     _navigated = true;
-    Navigator.of(context).pushReplacementNamed(AppRoutes.selector);
+    Navigator.of(context).pushReplacementNamed(route ?? AppRoutes.selector);
   }
 
   @override
