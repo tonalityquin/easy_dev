@@ -6,9 +6,6 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/app_navigator.dart';
-import 'dev_memo.dart';
-import 'dev_calendar_page.dart';
-import 'google_docs_bottom_sheet.dart';
 import 'local_prefs_bottom_sheet.dart';
 import 'sqlite_explorer_bottom_sheet.dart';
 
@@ -162,18 +159,6 @@ class DevQuickActions {
   static Future<dynamic> showSQLiteExplorerSheet(BuildContext ctx) {
     return SQLiteExplorerBottomSheet.showFullScreen(ctx);
   }
-
-  static Future<dynamic> showPersonalCalendarSheet(BuildContext ctx) {
-    return DevCalendarPage.showAsBottomSheet(ctx);
-  }
-
-  static Future<dynamic> showGoogleDocsSheet(BuildContext ctx) {
-    return GoogleDocsDocPanel.togglePanel();
-  }
-
-  static Future<dynamic> showMemoSheet(BuildContext ctx) {
-    return DevMemo.togglePanel();
-  }
 }
 
 class _DevBubble extends StatefulWidget {
@@ -261,39 +246,6 @@ class _DevBubbleState extends State<_DevBubble>
           await _ctrl.reverse();
           await DevQuickActions.openSheetExclusively(
             (ctx) => DevQuickActions.showSQLiteExplorerSheet(ctx),
-          );
-        },
-      ),
-      _DevDockAction(
-        icon: Icons.sticky_note_2_rounded,
-        label: '메모',
-        color: Colors.teal,
-        onTap: () async {
-          await _ctrl.reverse();
-          await DevQuickActions.openSheetExclusively(
-            (ctx) => DevQuickActions.showMemoSheet(ctx),
-          );
-        },
-      ),
-      _DevDockAction(
-        icon: Icons.calendar_today_rounded,
-        label: '개인 달력',
-        color: const Color(0xFF6A1B9A),
-        onTap: () async {
-          await _ctrl.reverse();
-          await DevQuickActions.openSheetExclusively(
-            (ctx) => DevQuickActions.showPersonalCalendarSheet(ctx),
-          );
-        },
-      ),
-      _DevDockAction(
-        icon: Icons.description_rounded,
-        label: '구글 독스',
-        color: const Color(0xFFF57C00),
-        onTap: () async {
-          await _ctrl.reverse();
-          await DevQuickActions.openSheetExclusively(
-            (ctx) => DevQuickActions.showGoogleDocsSheet(ctx),
           );
         },
       ),

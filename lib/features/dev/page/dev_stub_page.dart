@@ -2,15 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../app/di/routes.dart';
-import 'sheets/dev_calendar_page.dart';
-import 'sheets/dev_memo.dart';
 import 'sheets/dev_quick_actions.dart';
-import 'sheets/github_code_browser_bottom_sheet.dart';
-import 'sheets/github_markdown_bottom_sheet.dart';
-import 'sheets/google_docs_bottom_sheet.dart';
 import 'sheets/local_prefs_bottom_sheet.dart';
 import 'sheets/sqlite_explorer_bottom_sheet.dart';
-
 
 double _contrastRatio(Color a, Color b) {
   final la = a.computeLuminance();
@@ -69,8 +63,6 @@ class _DevTokens {
     required this.divider,
     required this.cardSurface,
     required this.cardBorder,
-    required this.titleColor,
-    required this.subtitleColor,
     required this.headerTintSurface,
     required this.headerBadgeBg,
     required this.headerBadgeFg,
@@ -91,8 +83,6 @@ class _DevTokens {
   final Color cardSurface;
   final Color cardBorder;
 
-  final Color titleColor;
-  final Color subtitleColor;
 
   final Color headerTintSurface;
   final Color headerBadgeBg;
@@ -123,8 +113,6 @@ class _DevTokens {
       divider: cs.outlineVariant,
       cardSurface: cs.surface,
       cardBorder: cs.outlineVariant.withOpacity(0.85),
-      titleColor: cs.onSurface,
-      subtitleColor: cs.onSurfaceVariant,
       headerTintSurface: headerTint,
       headerBadgeBg: badgeBg,
       headerBadgeFg: badgeFg,
@@ -139,10 +127,6 @@ class _DevTokens {
   }
 }
 
-const calBase = Color(0xFF43A047);
-const calDark = Color(0xFF2E7D32);
-const calLight = Color(0xFFA5D6A7);
-const calFg = Colors.white;
 
 class DevStubPage extends StatelessWidget {
   const DevStubPage({super.key});
@@ -225,45 +209,6 @@ class DevStubPage extends StatelessWidget {
 
                       final cards = <Widget>[
                         _ActionCard(
-                          icon: Icons.code,
-                          title: '코드',
-                          subtitle: 'Dev',
-                          bg: cs.primaryContainer,
-                          fg: cs.onPrimaryContainer,
-                          onTap: () {
-                            showModalBottomSheet(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              builder: (_) =>
-                                  const GithubCodeBrowserBottomSheet(
-                                owner: 'tonalityquin',
-                                repo: 'easy_dev',
-                                defaultBranch: 'main',
-                              ),
-                            );
-                          },
-                        ),
-                        _ActionCard(
-                          icon: Icons.menu_book_rounded,
-                          title: '텍스트',
-                          subtitle: 'Side Project',
-                          bg: cs.primaryContainer,
-                          fg: cs.onPrimaryContainer,
-                          onTap: () {
-                            showModalBottomSheet(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              builder: (_) => const GithubMarkdownBottomSheet(
-                                owner: 'tonalityquin',
-                                repo: 'side_project',
-                                defaultBranch: 'main',
-                              ),
-                            );
-                          },
-                        ),
-                        _ActionCard(
                           icon: Icons.computer_rounded,
                           title: '로컬 컴퓨터',
                           subtitle: 'SharedPreferences',
@@ -276,43 +221,6 @@ class DevStubPage extends StatelessWidget {
                               backgroundColor: Colors.transparent,
                               builder: (_) => const LocalPrefsBottomSheet(),
                             );
-                          },
-                        ),
-                        _ActionCard(
-                          icon: Icons.sticky_note_2_rounded,
-                          title: 'MarkDown',
-                          subtitle: 'Obsidian',
-                          bg: cs.primaryContainer,
-                          fg: cs.onPrimaryContainer,
-                          tintColor: cs.primary.withOpacity(0.10),
-                          titleColor: cs.primary,
-                          onTap: () async {
-                            await DevMemo.togglePanel();
-                          },
-                        ),
-                        _ActionCard(
-                          icon: Icons.calendar_month_rounded,
-                          title: '개인 달력',
-                          subtitle: 'Google Calendar',
-                          bg: calBase,
-                          fg: calFg,
-                          tintColor: calLight,
-                          titleColor: calDark,
-                          onTap: () {
-                            DevCalendarPage.showAsBottomSheet(context);
-                          },
-                        ),
-                        _ActionCard(
-                          icon: Icons.description_outlined,
-                          title: '구글 독스',
-                          subtitle: '문서 편집 · Docs API',
-                          bg: cs.primaryContainer,
-                          fg: cs.onPrimaryContainer,
-                          tintColor: cs.primary.withOpacity(0.08),
-                          titleColor: cs.primary,
-                          onTap: () async {
-                            GoogleDocsDocPanel.enabled.value = true;
-                            await GoogleDocsDocPanel.togglePanel();
                           },
                         ),
                         _ActionCard(
@@ -329,7 +237,8 @@ class DevStubPage extends StatelessWidget {
                               backgroundColor: Colors.transparent,
                               builder: (_) => const Material(
                                 borderRadius: BorderRadius.vertical(
-                                    top: Radius.circular(16)),
+                                  top: Radius.circular(16),
+                                ),
                                 clipBehavior: Clip.antiAlias,
                                 child: SizedBox(
                                   height: 560,
@@ -500,7 +409,6 @@ class _ActionCard extends StatelessWidget {
   final Color fg;
 
   final Color? tintColor;
-  final Color? titleColor;
 
   final VoidCallback? onTap;
 
@@ -511,7 +419,6 @@ class _ActionCard extends StatelessWidget {
     required this.bg,
     required this.fg,
     this.tintColor,
-    this.titleColor,
     this.onTap,
   });
 
@@ -558,7 +465,7 @@ class _ActionCard extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   fontWeight: FontWeight.w800,
-                  color: titleColor ?? cs.onSurface,
+                  color: cs.onSurface,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,

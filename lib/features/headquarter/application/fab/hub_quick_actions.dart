@@ -174,8 +174,8 @@ class _HubBubble extends StatefulWidget {
 
 class _HubBubbleState extends State<_HubBubble>
     with SingleTickerProviderStateMixin {
-  static const double _handleTouchWidth = 28;
-  static const double _handleVisualWidth = 12;
+  static const double _handleTouchWidth = 44;
+  static const double _handleVisualWidth = 18;
   static const double _handleHeight = 56;
   static const double _dockRadius = 18;
   static const double _gameTouchWidth = 34;
