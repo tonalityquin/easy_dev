@@ -71,6 +71,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
   TypeViewModeState? _viewMode;
   Timer? _idleTimer;
   int _lastActivityAtMs = 0;
+  int _autoPauseDepth = 0;
 
   bool _transitionMaskOn = false;
   String _transitionMaskMessage = '구역 불러오는 중...';
@@ -140,7 +141,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       _idleTimer = null;
       return;
     }
-    if (vm.mode == TypeViewMode.table) {
+    if (vm.mode == TypeViewMode.table && _autoPauseDepth == 0) {
       _scheduleIdle(auto);
     } else {
       _idleTimer?.cancel();
@@ -150,8 +151,13 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
 
   void _scheduleIdle(RealTimeViewModeAutoSpec auto) {
     _idleTimer?.cancel();
+    if (_autoPauseDepth > 0) {
+      _idleTimer = null;
+      return;
+    }
     _idleTimer = Timer(auto.idleToStatusAfter, () {
       if (!mounted) return;
+      if (_autoPauseDepth > 0) return;
       final vm = _viewMode;
       if (vm == null) return;
       if (widget.viewModeAuto == null) return;
@@ -169,6 +175,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       RealTimeViewModeAutoSpec auto) async {
     if (!mounted) return;
     if (_transitionMaskOn) return;
+    if (_autoPauseDepth > 0) return;
 
     setState(() {
       _transitionMaskMessage = '현황 전환 중...';
@@ -184,6 +191,7 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
       if (vm == null) return;
       if (widget.viewModeAuto == null) return;
       if (vm.mode != TypeViewMode.table) return;
+      if (_autoPauseDepth > 0) return;
 
       final now = DateTime.now().millisecondsSinceEpoch;
       if (now - _lastActivityAtMs < auto.idleToStatusAfter.inMilliseconds) {
@@ -214,7 +222,29 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
     final now = DateTime.now().millisecondsSinceEpoch;
     if (now - _lastActivityAtMs < 80) return;
     _lastActivityAtMs = now;
-    _scheduleIdle(auto);
+    if (_autoPauseDepth == 0) {
+      _scheduleIdle(auto);
+    }
+  }
+
+  void _beginAutoPause() {
+    final auto = widget.viewModeAuto;
+    if (auto == null) return;
+    _autoPauseDepth++;
+    _lastActivityAtMs = DateTime.now().millisecondsSinceEpoch;
+    _idleTimer?.cancel();
+    _idleTimer = null;
+  }
+
+  void _endAutoPause() {
+    final auto = widget.viewModeAuto;
+    if (auto == null) return;
+    if (_autoPauseDepth > 0) _autoPauseDepth--;
+    _lastActivityAtMs = DateTime.now().millisecondsSinceEpoch;
+    final vm = _viewMode;
+    if (_autoPauseDepth == 0 && vm != null && vm.mode == TypeViewMode.table) {
+      _scheduleIdle(auto);
+    }
   }
 
   bool _shouldForceTableOnTap(int index) {
@@ -591,6 +621,9 @@ class _RealTimeTabbedTableState extends State<RealTimeTabbedTable>
                           spec: t,
                           description: widget.description,
                           screen: widget.screen,
+                          onUserActivity: _onUserActivity,
+                          onAutoPauseStart: _beginAutoPause,
+                          onAutoPauseEnd: _endAutoPause,
                         ),
                       );
 

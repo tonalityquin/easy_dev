@@ -12,6 +12,7 @@ class ZoneVM {
   final int capacity;
   final int current;
   final int? remaining;
+  final List<RealTimeRowVM> rows;
 
   const ZoneVM({
     required this.fullName,
@@ -21,6 +22,7 @@ class ZoneVM {
     required this.capacity,
     required this.current,
     required this.remaining,
+    required this.rows,
   });
 }
 
@@ -102,25 +104,102 @@ int compositeChildTotalCapacity(List<LocationModel> meta) {
   return sum;
 }
 
-List<String> zoneDropdownOptions({
-  required List<LocationModel> meta,
-  required List<String> plateLocations,
-  required bool zoneMode,
-}) {
-  if (zoneMode && meta.isNotEmpty) {
-    final parents = extractParentsFromMeta(meta).toList()..sort();
+int _naturalCompareToken(String a, String b) {
+  final ai = int.tryParse(a);
+  final bi = int.tryParse(b);
 
-    final children = <String>{};
-    for (final loc in meta) {
-      final k = childKeyFromLocation(loc);
-      if (k.isNotEmpty) children.add(k);
-    }
-    final childList = children.toList()..sort();
-
-    return <String>[...parents, ...childList];
+  if (ai != null && bi != null) {
+    final c = ai.compareTo(bi);
+    if (c != 0) return c;
+    return a.length.compareTo(b.length);
   }
 
-  return plateLocations;
+  final al = a.toLowerCase();
+  final bl = b.toLowerCase();
+  final ci = al.compareTo(bl);
+  if (ci != 0) return ci;
+  return a.compareTo(b);
+}
+
+List<String> _naturalTokens(String value) {
+  final out = <String>[];
+  final buffer = StringBuffer();
+  bool? numeric;
+
+  for (var i = 0; i < value.length; i++) {
+    final ch = value[i];
+    final isDigit = RegExp(r'\d').hasMatch(ch);
+
+    if (numeric == null || numeric == isDigit) {
+      buffer.write(ch);
+      numeric = isDigit;
+      continue;
+    }
+
+    out.add(buffer.toString());
+    buffer
+      ..clear()
+      ..write(ch);
+    numeric = isDigit;
+  }
+
+  if (buffer.isNotEmpty) out.add(buffer.toString());
+  return out;
+}
+
+int naturalLocationCompare(String a, String b) {
+  final at = _naturalTokens(a.trim());
+  final bt = _naturalTokens(b.trim());
+  final n = at.length < bt.length ? at.length : bt.length;
+
+  for (var i = 0; i < n; i++) {
+    final c = _naturalCompareToken(at[i], bt[i]);
+    if (c != 0) return c;
+  }
+
+  return at.length.compareTo(bt.length);
+}
+
+List<String> normalizedLocationFilterOptions(List<String> plateLocations) {
+  final parents = <String>{};
+  final children = <String>{};
+
+  for (final raw in plateLocations) {
+    final seg = splitLocationSegments(raw);
+    if (seg.isEmpty) continue;
+
+    parents.add(seg[0]);
+
+    if (seg.length >= 2) {
+      children.add('${seg[0]}$kRealTimeSegSep${seg[1]}');
+    }
+  }
+
+  final parentList = parents.toList()..sort(naturalLocationCompare);
+  final childList = children.toList()..sort(naturalLocationCompare);
+  return <String>[...parentList, ...childList];
+}
+
+List<String> locationFilterOptions({
+  required List<LocationModel> meta,
+  required List<String> plateLocations,
+}) {
+  final fromRows = normalizedLocationFilterOptions(plateLocations);
+  if (fromRows.isNotEmpty) return fromRows;
+
+  if (meta.isEmpty) return const <String>[];
+
+  final parents = extractParentsFromMeta(meta).toList()
+    ..sort(naturalLocationCompare);
+
+  final children = <String>{};
+  for (final loc in meta) {
+    final k = childKeyFromLocation(loc);
+    if (k.isNotEmpty) children.add(k);
+  }
+
+  final childList = children.toList()..sort(naturalLocationCompare);
+  return <String>[...parents, ...childList];
 }
 
 List<ZoneGroupVM> buildZoneGroups({
@@ -129,12 +208,12 @@ List<ZoneGroupVM> buildZoneGroups({
   required String selected,
   required String search,
 }) {
-  final childKeyCounts = <String, int>{};
+  final childKeyRows = <String, List<RealTimeRowVM>>{};
 
   for (final r in rows) {
     final ck = zoneKeyFromRowLocation(r.location);
     if (ck.isEmpty) continue;
-    childKeyCounts[ck] = (childKeyCounts[ck] ?? 0) + 1;
+    childKeyRows.putIfAbsent(ck, () => <RealTimeRowVM>[]).add(r);
   }
 
   final childrenByParent = <String, List<LocationModel>>{};
@@ -175,21 +254,27 @@ List<ZoneGroupVM> buildZoneGroups({
     final p = parent.toLowerCase();
     final ck = childKey.toLowerCase();
     final c = childName.toLowerCase();
-    return p.contains(searchTrimmed) || ck.contains(searchTrimmed) || c.contains(searchTrimmed);
+    return p.contains(searchTrimmed) ||
+        ck.contains(searchTrimmed) ||
+        c.contains(searchTrimmed);
   }
 
   final out = <ZoneGroupVM>[];
 
-  final parentList = parents.toList()..sort();
+  final parentList = parents.toList()..sort(naturalLocationCompare);
   for (final p in parentList) {
-    if (selectedTrimmed != kRealTimeLocationAll && !selectedIsChildKey && selectedParent.isNotEmpty && p != selectedParent) {
+    if (selectedTrimmed != kRealTimeLocationAll &&
+        !selectedIsChildKey &&
+        selectedParent.isNotEmpty &&
+        p != selectedParent) {
       continue;
     }
     if (selectedIsChildKey && selectedParent.isNotEmpty && p != selectedParent) {
       continue;
     }
 
-    final children = childrenByParent[p] ?? const <LocationModel>[];
+    final children = List<LocationModel>.of(childrenByParent[p] ?? const <LocationModel>[])
+      ..sort((a, b) => naturalLocationCompare(a.locationName, b.locationName));
     if (children.isEmpty) continue;
 
     final zoneVms = <ZoneVM>[];
@@ -197,15 +282,20 @@ List<ZoneGroupVM> buildZoneGroups({
       final childKey = childKeyFromLocation(childLoc);
       if (childKey.isEmpty) continue;
 
-      if (selectedIsChildKey && selectedChildKey.isNotEmpty && childKey != selectedChildKey) {
+      if (selectedIsChildKey &&
+          selectedChildKey.isNotEmpty &&
+          childKey != selectedChildKey) {
         continue;
       }
 
       final childName = childLoc.locationName.trim();
       if (!matchSearch(p, childKey, childName)) continue;
 
+      final childRows = List<RealTimeRowVM>.unmodifiable(
+        childKeyRows[childKey] ?? const <RealTimeRowVM>[],
+      );
       final cap = capacityForChild(childLoc);
-      final cur = childKeyCounts[childKey] ?? 0;
+      final cur = childRows.length;
       final rem = cap > 0 ? (cap - cur) : null;
 
       zoneVms.add(
@@ -217,19 +307,16 @@ List<ZoneGroupVM> buildZoneGroups({
           capacity: cap,
           current: cur,
           remaining: rem,
+          rows: childRows,
         ),
       );
     }
 
     if (zoneVms.isEmpty) continue;
 
-    zoneVms.sort((a, b) {
-      final ar = a.remaining ?? (1 << 30);
-      final br = b.remaining ?? (1 << 30);
-      final c = ar.compareTo(br);
-      if (c != 0) return c;
-      return a.displayName.compareTo(b.displayName);
-    });
+    zoneVms.sort(
+      (a, b) => naturalLocationCompare(a.displayName, b.displayName),
+    );
 
     final totalCap = zoneVms.fold<int>(0, (s, z) => s + z.capacity);
     final totalCur = zoneVms.fold<int>(0, (s, z) => s + z.current);
@@ -246,6 +333,6 @@ List<ZoneGroupVM> buildZoneGroups({
     );
   }
 
-  out.sort((a, b) => a.group.compareTo(b.group));
+  out.sort((a, b) => naturalLocationCompare(a.group, b.group));
   return out;
 }

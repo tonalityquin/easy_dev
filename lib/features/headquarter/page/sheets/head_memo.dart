@@ -1882,16 +1882,24 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
     if (removed == null || !mounted) return;
     HapticFeedback.selectionClick();
     _jumpTo((index + 1).clamp(0, HeadMemo.book.value.pages.length + 1).toInt());
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${_pageTitle(removed)} 페이지를 삭제했습니다.'),
-        behavior: SnackBarBehavior.floating,
-        action: SnackBarAction(
-          label: '되돌리기',
-          onPressed: () => HeadMemo.restorePage(removed, index),
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('${_pageTitle(removed)} 페이지를 삭제했습니다.'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+          persist: false,
+          action: SnackBarAction(
+            label: '되돌리기',
+            onPressed: () {
+              messenger.hideCurrentSnackBar();
+              HeadMemo.restorePage(removed, index);
+            },
+          ),
         ),
-      ),
-    );
+      );
   }
 
   String _pageTitle(HeadMemoPage page) {
@@ -2246,16 +2254,27 @@ class _HeadMemoSheetState extends State<_HeadMemoSheet> {
       _nameCtrl.text = HeadMemo.book.value.name;
     });
     HapticFeedback.selectionClick();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('${removed.name} 메모북을 책장에서 뺐습니다.'),
-        behavior: SnackBarBehavior.floating,
-        action: SnackBarAction(
-          label: '되돌리기',
-          onPressed: () => HeadMemo.restoreBook(removed, originalIndex < 0 ? visualIndex : originalIndex),
+    final messenger = ScaffoldMessenger.of(context);
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text('${removed.name} 메모북을 책장에서 뺐습니다.'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
+          persist: false,
+          action: SnackBarAction(
+            label: '되돌리기',
+            onPressed: () {
+              messenger.hideCurrentSnackBar();
+              HeadMemo.restoreBook(
+                removed,
+                originalIndex < 0 ? visualIndex : originalIndex,
+              );
+            },
+          ),
         ),
-      ),
-    );
+      );
   }
 
   Future<void> _openFontDialog(HeadMemoBook book) async {

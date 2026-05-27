@@ -28,6 +28,9 @@ class RealTimeTableBody extends StatefulWidget {
   final RealTimeTabSpec spec;
   final String description;
   final String screen;
+  final VoidCallback? onUserActivity;
+  final VoidCallback? onAutoPauseStart;
+  final VoidCallback? onAutoPauseEnd;
 
   const RealTimeTableBody({
     super.key,
@@ -35,6 +38,9 @@ class RealTimeTableBody extends StatefulWidget {
     required this.spec,
     required this.description,
     required this.screen,
+    this.onUserActivity,
+    this.onAutoPauseStart,
+    this.onAutoPauseEnd,
   });
 
   @override
@@ -81,7 +87,14 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
   String _locationsLoadedArea = '';
   bool _loadingLocationMeta = false;
 
-  final Map<String, bool> _groupExpanded = <String, bool>{};
+
+  static const String _zoneChildOrderPrefsPrefix =
+      'realtime_zone_child_order_v1';
+
+  final Map<String, List<String>> _zoneChildOrderByParent =
+      <String, List<String>>{};
+  String _zoneChildOrderLoadedArea = '';
+  bool _zoneChildOrderLoading = false;
 
   Map<String, int>? _pendingPlateCountsByDisplayName;
   bool _plateCountsApplyScheduled = false;
@@ -94,10 +107,172 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
   @override
   bool get wantKeepAlive => true;
 
+  void _markUserActivity() {
+    widget.onUserActivity?.call();
+  }
+
+  Future<T?> _showAutoPausedDialog<T>({
+    required WidgetBuilder builder,
+    bool barrierDismissible = true,
+  }) async {
+    _markUserActivity();
+    widget.onAutoPauseStart?.call();
+    try {
+      return await showDialog<T>(
+        context: context,
+        barrierDismissible: barrierDismissible,
+        builder: builder,
+      );
+    } finally {
+      widget.onAutoPauseEnd?.call();
+      _markUserActivity();
+    }
+  }
+
+  void _closeDialogAndOpenPlate(BuildContext dialogContext, RealTimeRowVM row) {
+    Navigator.of(dialogContext).pop();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _markUserActivity();
+      _openHybridDetailPopup(row);
+    });
+  }
+
   String get _currentArea {
     final a1 = context.read<UserState>().currentArea.trim();
     final a2 = context.read<AreaState>().currentArea.trim();
     return a1.isNotEmpty ? a1 : a2;
+  }
+
+  String _encodedPrefsPart(String v) => base64Url.encode(utf8.encode(v));
+
+  String _decodedPrefsPart(String v) {
+    try {
+      return utf8.decode(base64Url.decode(v));
+    } catch (_) {
+      return v;
+    }
+  }
+
+  String _zoneChildOrderPrefsPrefixForArea(String area) {
+    return '$_zoneChildOrderPrefsPrefix:${widget.spec.collection}:${_encodedPrefsPart(area)}:';
+  }
+
+  String _zoneChildOrderPrefsKey(String area, String parent) {
+    return '${_zoneChildOrderPrefsPrefixForArea(area)}${_encodedPrefsPart(parent)}';
+  }
+
+  Future<void> _loadZoneChildOrdersForCurrentArea({bool force = false}) async {
+    if (!widget.spec.zoneSupported) return;
+
+    final area = _currentArea.trim();
+    if (area.isEmpty) return;
+
+    if (!force && _zoneChildOrderLoadedArea == area) return;
+    if (_zoneChildOrderLoading) return;
+
+    _zoneChildOrderLoading = true;
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final prefix = _zoneChildOrderPrefsPrefixForArea(area);
+      final next = <String, List<String>>{};
+
+      for (final key in prefs.getKeys()) {
+        if (!key.startsWith(prefix)) continue;
+        final parentPart = key.substring(prefix.length);
+        final parent = _decodedPrefsPart(parentPart);
+        final value = prefs.getStringList(key) ?? const <String>[];
+        if (parent.trim().isNotEmpty && value.isNotEmpty) {
+          next[parent] = List<String>.of(value);
+        }
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        _zoneChildOrderByParent
+          ..clear()
+          ..addAll(next);
+        _zoneChildOrderLoadedArea = area;
+      });
+    } finally {
+      _zoneChildOrderLoading = false;
+    }
+  }
+
+  Future<void> _clearZoneChildOrdersForCurrentScope() async {
+    if (!widget.spec.zoneSupported) return;
+
+    final area = _currentArea.trim();
+    if (area.isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final prefix = _zoneChildOrderPrefsPrefixForArea(area);
+
+    for (final key in prefs.getKeys().where((e) => e.startsWith(prefix)).toList()) {
+      await prefs.remove(key);
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _zoneChildOrderByParent.clear();
+      _zoneChildOrderLoadedArea = area;
+    });
+  }
+
+  Future<void> _saveZoneChildOrder(String parent, List<String> order) async {
+    final area = _currentArea.trim();
+    if (area.isEmpty || parent.trim().isEmpty) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    final key = _zoneChildOrderPrefsKey(area, parent);
+    await prefs.setStringList(key, order);
+
+    if (!mounted) return;
+
+    setState(() {
+      _zoneChildOrderByParent[parent] = List<String>.of(order);
+      _zoneChildOrderLoadedArea = area;
+    });
+  }
+
+  List<ZoneVM> _orderedZonesForGroup(ZoneGroupVM group) {
+    final zones = List<ZoneVM>.of(group.zones);
+    final order = _zoneChildOrderByParent[group.group];
+    if (order == null || order.isEmpty) return zones;
+
+    final byKey = <String, ZoneVM>{
+      for (final z in zones) z.fullName: z,
+    };
+
+    final used = <String>{};
+    final out = <ZoneVM>[];
+
+    for (final key in order) {
+      final z = byKey[key];
+      if (z == null) continue;
+      out.add(z);
+      used.add(key);
+    }
+
+    for (final z in zones) {
+      if (!used.contains(z.fullName)) out.add(z);
+    }
+
+    return out;
+  }
+
+  bool _rowMatchesSelectedLocation(String rawLocation) {
+    final selected = _selectedLocation.trim();
+    if (selected.isEmpty || selected == kRealTimeLocationAll) return true;
+
+    if (selected.contains(kRealTimeSegSep)) {
+      return zoneKeyFromRowLocation(rawLocation) == selected;
+    }
+
+    return parentFromRowLocation(rawLocation) == selected;
   }
 
   void _trace(String name, {Map<String, dynamic>? meta}) {
@@ -131,6 +306,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
     _pullFromStore(reason: 'didChangeDependencies');
     if (widget.spec.zoneSupported) {
       _ensureLocationMetaLoaded();
+      unawaited(_loadZoneChildOrdersForCurrentArea());
     }
   }
 
@@ -219,9 +395,9 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
       _allRows = List<RealTimeRowVM>.of(rows);
       _availableLocations = _extractLocations(_allRows);
 
-      if (_viewMode == RealTimeViewMode.plate &&
-          _selectedLocation != kRealTimeLocationAll &&
-          !_availableLocations.contains(_selectedLocation)) {
+      final filterOptions = _locationFilterOptions();
+      if (_selectedLocation != kRealTimeLocationAll &&
+          !filterOptions.contains(_selectedLocation)) {
         _selectedLocation = kRealTimeLocationAll;
       }
 
@@ -230,7 +406,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
       }
 
       if (widget.spec.zoneSupported && _viewMode == RealTimeViewMode.zone) {
-        final opts = _locationOptionsForDropdown();
+        final opts = _locationFilterOptions();
         if (_selectedLocation != kRealTimeLocationAll &&
             !opts.contains(_selectedLocation)) {
           _selectedLocation = kRealTimeLocationAll;
@@ -253,7 +429,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
       final k = r.location.trim();
       if (k.isNotEmpty) set.add(k);
     }
-    final list = set.toList()..sort();
+    final list = set.toList()..sort(naturalLocationCompare);
     return list;
   }
 
@@ -302,21 +478,16 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
 
       _locationsLoadedArea = area;
 
-      final parentSet = extractParentsFromMeta(_cachedLocations);
-      for (final p in parentSet) {
-        _groupExpanded.putIfAbsent(p, () => true);
-      }
     } finally {
       _loadingLocationMeta = false;
       if (mounted) setState(() {});
     }
   }
 
-  List<String> _locationOptionsForDropdown() {
-    return zoneDropdownOptions(
+  List<String> _locationFilterOptions() {
+    return locationFilterOptions(
       meta: _cachedLocations,
       plateLocations: _availableLocations,
-      zoneMode: widget.spec.zoneSupported && _viewMode == RealTimeViewMode.zone,
     );
   }
 
@@ -333,8 +504,9 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
       _viewMode = next;
 
       if (next == RealTimeViewMode.plate) {
+        final opts = _locationFilterOptions();
         if (_selectedLocation != kRealTimeLocationAll &&
-            !_availableLocations.contains(_selectedLocation)) {
+            !opts.contains(_selectedLocation)) {
           _selectedLocation = kRealTimeLocationAll;
         }
       }
@@ -344,7 +516,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
 
     if (next == RealTimeViewMode.zone) {
       await _ensureLocationMetaLoaded();
-      final opts = _locationOptionsForDropdown();
+      final opts = _locationFilterOptions();
       if (!mounted) return;
       setState(() {
         if (_selectedLocation != kRealTimeLocationAll &&
@@ -377,9 +549,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
     final search = _searchCtrl.text.trim().toLowerCase();
 
     _rows = _allRows.where((r) {
-      if (_selectedLocation != kRealTimeLocationAll) {
-        if (r.location != _selectedLocation) return false;
-      }
+      if (!_rowMatchesSelectedLocation(r.location)) return false;
       if (search.isNotEmpty) {
         final hit = r.plateNumber.toLowerCase().contains(search) ||
             r.location.toLowerCase().contains(search);
@@ -423,6 +593,8 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
         'loading': _loading,
       },
     );
+
+    await _clearZoneChildOrdersForCurrentScope();
 
     _pullFromStore(reason: 'userTap');
   }
@@ -471,8 +643,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
     required String plateId,
     required RealTimeRowVM viewRow,
   }) async {
-    await showDialog<void>(
-      context: context,
+    await _showAutoPausedDialog<void>(
       barrierDismissible: kRealTimeDialogBarrierDismissible,
       builder: (_) {
         final cs = Theme.of(context).colorScheme;
@@ -726,10 +897,14 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
       if (raw.isEmpty) continue;
       rawCounts[raw] = (rawCounts[raw] ?? 0) + 1;
 
-      final seg = splitLocationSegments(raw);
-      if (seg.length == 1) {
-        final leaf = seg[0];
-        rawCounts[leaf] = (rawCounts[leaf] ?? 0) + 0;
+      final parent = parentFromRowLocation(raw);
+      if (parent.isNotEmpty) {
+        rawCounts[parent] = (rawCounts[parent] ?? 0) + 1;
+      }
+
+      final childKey = zoneKeyFromRowLocation(raw);
+      if (childKey.isNotEmpty) {
+        rawCounts[childKey] = (rawCounts[childKey] ?? 0) + 1;
       }
     }
 
@@ -823,8 +998,286 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
     );
   }
 
+  String _locationDisplayLabel(String value) {
+    final v = value.trim();
+    if (v.isEmpty || v == kRealTimeLocationAll) return kRealTimeLocationAll;
+
+    final seg = splitLocationSegments(v);
+    if (seg.length >= 2) return '${seg[0]} · ${seg[1]}';
+    return v;
+  }
+
+  Map<String, List<String>> _locationOptionsByParent(List<String> options) {
+    final out = <String, List<String>>{};
+
+    for (final option in options) {
+      final seg = splitLocationSegments(option);
+      if (seg.isEmpty) continue;
+
+      final parent = seg[0];
+      out.putIfAbsent(parent, () => <String>[]);
+
+      if (seg.length >= 2) {
+        final childKey = '${seg[0]}$kRealTimeSegSep${seg[1]}';
+        if (!out[parent]!.contains(childKey)) out[parent]!.add(childKey);
+      }
+    }
+
+    final entries = out.entries.toList()
+      ..sort((a, b) => naturalLocationCompare(a.key, b.key));
+
+    return <String, List<String>>{
+      for (final e in entries)
+        e.key: (List<String>.of(e.value)..sort(naturalLocationCompare)),
+    };
+  }
+
+  Future<void> _openLocationFilterDialog({
+    required List<String> options,
+    required ColorScheme cs,
+    required TextTheme text,
+  }) async {
+    if (options.isEmpty) return;
+
+    final searchCtrl = TextEditingController();
+    var draft = _selectedLocation;
+
+    try {
+      final picked = await _showAutoPausedDialog<String>(
+        barrierDismissible: true,
+        builder: (dialogContext) {
+          return StatefulBuilder(
+            builder: (dialogContext, setLocal) {
+              final q = searchCtrl.text.trim().toLowerCase();
+              final grouped = _locationOptionsByParent(options);
+
+              final visibleEntries = grouped.entries.where((entry) {
+                if (q.isEmpty) return true;
+                final parentHit = entry.key.toLowerCase().contains(q);
+                final childHit = entry.value.any(
+                  (childKey) => childKey.toLowerCase().contains(q),
+                );
+                return parentHit || childHit;
+              }).toList();
+
+              Widget buildChoice({
+                required String value,
+                required String label,
+                required bool selected,
+              }) {
+                return ChoiceChip(
+                  label: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 112),
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  selected: selected,
+                  onSelected: (_) => setLocal(() => draft = value),
+                );
+              }
+
+              final media = MediaQuery.of(dialogContext).size;
+              final h = (media.height * 0.62).clamp(260.0, 460.0).toDouble();
+
+              return AlertDialog(
+                backgroundColor: cs.surface,
+                surfaceTintColor: Colors.transparent,
+                insetPadding:
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                titlePadding: const EdgeInsets.fromLTRB(18, 16, 12, 0),
+                contentPadding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
+                actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+                title: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '주차구역 선택',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: '닫기',
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      icon: Icon(Icons.close, color: cs.onSurface),
+                    ),
+                  ],
+                ),
+                content: SizedBox(
+                  width: 420,
+                  height: h,
+                  child: Column(
+                    children: [
+                      TextField(
+                        controller: searchCtrl,
+                        textInputAction: TextInputAction.search,
+                        decoration: InputDecoration(
+                          hintText: '부모/자식 검색',
+                          prefixIcon: Icon(
+                            Icons.search,
+                            color: cs.onSurfaceVariant,
+                          ),
+                          isDense: true,
+                          filled: true,
+                          fillColor: cs.surfaceContainerLow,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(
+                              color: cs.outlineVariant.withOpacity(.75),
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(
+                              color: cs.outlineVariant.withOpacity(.75),
+                            ),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(
+                              color: cs.primary,
+                              width: 1.4,
+                            ),
+                          ),
+                        ),
+                        onChanged: (_) => setLocal(() {}),
+                      ),
+                      const SizedBox(height: 10),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: buildChoice(
+                          value: kRealTimeLocationAll,
+                          label: kRealTimeLocationAll,
+                          selected: draft == kRealTimeLocationAll,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: visibleEntries.isEmpty
+                            ? Center(
+                                child: Text(
+                                  '표시할 구역이 없습니다.',
+                                  style: text.bodyMedium?.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                ),
+                              )
+                            : Scrollbar(
+                                child: ListView.separated(
+                                  itemCount: visibleEntries.length,
+                                  separatorBuilder: (_, __) => Divider(
+                                    height: 14,
+                                    color: cs.outlineVariant.withOpacity(.5),
+                                  ),
+                                  itemBuilder: (_, i) {
+                                    final entry = visibleEntries[i];
+                                    final parent = entry.key;
+                                    final childKeys = q.isEmpty
+                                        ? entry.value
+                                        : entry.value.where((childKey) {
+                                            return parent
+                                                    .toLowerCase()
+                                                    .contains(q) ||
+                                                childKey
+                                                    .toLowerCase()
+                                                    .contains(q);
+                                          }).toList(growable: false);
+
+                                    return Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                parent,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: text.labelLarge?.copyWith(
+                                                  color: cs.onSurface,
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            buildChoice(
+                                              value: parent,
+                                              label: '부모',
+                                              selected: draft == parent,
+                                            ),
+                                          ],
+                                        ),
+                                        if (childKeys.isNotEmpty) ...[
+                                          const SizedBox(height: 8),
+                                          Wrap(
+                                            spacing: 6,
+                                            runSpacing: 6,
+                                            children: [
+                                              for (final childKey in childKeys)
+                                                buildChoice(
+                                                  value: childKey,
+                                                  label: splitLocationSegments(
+                                                              childKey)
+                                                          .length >=
+                                                      2
+                                                      ? splitLocationSegments(
+                                                          childKey,
+                                                        )[1]
+                                                      : childKey,
+                                                  selected: draft == childKey,
+                                                ),
+                                            ],
+                                          ),
+                                        ],
+                                      ],
+                                    );
+                                  },
+                                ),
+                              ),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text('취소'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(draft),
+                    child: const Text('적용'),
+                  ),
+                ],
+              );
+            },
+          );
+        },
+      );
+
+      if (picked == null || !mounted) return;
+
+      setState(() {
+        _selectedLocation = picked;
+        _applyFilterAndSort();
+      });
+    } finally {
+      searchCtrl.dispose();
+    }
+  }
+
   Widget _buildRealtimeLocationFilter(ColorScheme cs, TextTheme text) {
-    final options = _locationOptionsForDropdown();
+    final options = _locationFilterOptions();
     final disabled = _loading || options.isEmpty;
 
     if (_selectedLocation != kRealTimeLocationAll &&
@@ -832,60 +1285,57 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
       _selectedLocation = kRealTimeLocationAll;
     }
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerLow,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: cs.outlineVariant.withOpacity(.6)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.place_outlined, size: 16, color: cs.primary),
-          const SizedBox(width: 6),
-          Text(
-            '주차구역:',
-            style: text.labelMedium?.copyWith(
-              color: cs.onSurface,
-              fontWeight: FontWeight.w800,
-            ),
+        onTap: disabled
+            ? null
+            : () => _openLocationFilterDialog(
+                  options: options,
+                  cs: cs,
+                  text: text,
+                ),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: cs.outlineVariant.withOpacity(.6)),
           ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: _selectedLocation,
-                isDense: true,
-                isExpanded: true,
-                icon: Icon(Icons.expand_more, color: cs.onSurfaceVariant),
-                items: <String>[kRealTimeLocationAll, ...options].map((v) {
-                  return DropdownMenuItem<String>(
-                    value: v,
-                    child: Text(
-                      v,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.labelMedium?.copyWith(
-                        color: disabled ? cs.onSurfaceVariant : cs.onSurface,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  );
-                }).toList(),
-                onChanged: disabled
-                    ? null
-                    : (v) {
-                  if (v == null) return;
-                  setState(() {
-                    _selectedLocation = v;
-                    _applyFilterAndSort();
-                  });
-                },
+          child: Row(
+            children: [
+              Icon(Icons.place_outlined, size: 16, color: cs.primary),
+              const SizedBox(width: 6),
+              Text(
+                '주차:',
+                style: text.labelMedium?.copyWith(
+                  color: cs.onSurface,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  _locationDisplayLabel(_selectedLocation),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.labelMedium?.copyWith(
+                    color: disabled ? cs.onSurfaceVariant : cs.onSurface,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Icon(
+                Icons.open_in_new_rounded,
+                size: 16,
+                color: disabled ? cs.outline : cs.onSurfaceVariant,
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -1103,6 +1553,28 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
     );
   }
 
+  List<RealTimeRowVM> _sortedZoneRows(ZoneVM z) {
+    final rows = List<RealTimeRowVM>.of(z.rows);
+    rows.sort((a, b) {
+      final ca = a.createdAt;
+      final cb = b.createdAt;
+
+      if (ca == null && cb == null) return 0;
+      if (ca == null) return _sortOldFirst ? 1 : -1;
+      if (cb == null) return _sortOldFirst ? -1 : 1;
+
+      final cmp = ca.compareTo(cb);
+      return _sortOldFirst ? cmp : -cmp;
+    });
+    return rows;
+  }
+
+  String _compactZoneStats(int current, int capacity, int? remaining) {
+    if (capacity <= 0) return '$current/-';
+    final rem = remaining == null ? '-' : (remaining >= 0 ? '$remaining' : '0');
+    return '$current/$capacity · 잔 $rem';
+  }
+
   Future<void> _openZonePlatesDialog(ZoneVM z) async {
     if (!mounted) return;
 
@@ -1123,46 +1595,26 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
 
     final cs = Theme.of(context).colorScheme;
     final text = Theme.of(context).textTheme;
-
-    final rows = <RealTimeRowVM>[];
-    for (final r in _allRows) {
-      final ck = zoneKeyFromRowLocation(r.location);
-      if (ck.isNotEmpty && ck == z.fullName) rows.add(r);
-    }
-
-    rows.sort((a, b) {
-      final ca = a.createdAt;
-      final cb = b.createdAt;
-
-      if (ca == null && cb == null) return 0;
-      if (ca == null) return _sortOldFirst ? 1 : -1;
-      if (cb == null) return _sortOldFirst ? -1 : 1;
-
-      final cmp = ca.compareTo(cb);
-      return _sortOldFirst ? cmp : -cmp;
-    });
-
+    final rows = _sortedZoneRows(z);
     final dialogNos = widget.spec.dialogNoStrategy
         .buildNos(rows, sortOldFirst: _sortOldFirst);
 
-    await showDialog<void>(
-      context: context,
+    await _showAutoPausedDialog<void>(
       barrierDismissible: kRealTimeDialogBarrierDismissible,
-      builder: (_) {
-        final remainText = (z.remaining == null)
+      builder: (dialogContext) {
+        final remain = z.remaining == null
             ? '-'
-            : (z.remaining! >= 0 ? '${z.remaining}대' : '0대');
-        final capText = z.capacity > 0 ? '${z.capacity}대' : '-';
-
-        final title = '구역: ${z.fullName}';
-        final subtitle = '현재 ${rows.length}대 / 총 $capText / 잔여 $remainText';
+            : (z.remaining! >= 0 ? '${z.remaining}' : '0');
+        final capText = z.capacity > 0 ? '${z.capacity}' : '-';
+        final title = z.displayName;
+        final subtitle = '${z.group} · ${rows.length}/$capText · 잔 $remain';
 
         TextStyle monoSmall(Color color) => text.labelMedium!.copyWith(
-          fontFeatures: const [FontFeature.tabularFigures()],
-          fontFamilyFallback: const ['monospace'],
-          fontWeight: FontWeight.w900,
-          color: color,
-        );
+              fontFeatures: const [FontFeature.tabularFigures()],
+              fontFamilyFallback: const ['monospace'],
+              fontWeight: FontWeight.w900,
+              color: color,
+            );
 
         return Center(
           child: ConstrainedBox(
@@ -1174,7 +1626,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                 surfaceTintColor: Colors.transparent,
                 elevation: 8,
                 insetPadding:
-                const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                    const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18)),
                 contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -1192,13 +1644,13 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                                 fontWeight: FontWeight.w900,
                                 color: cs.onSurface,
                               ),
-                              maxLines: 2,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           IconButton(
                             tooltip: '닫기',
-                            onPressed: () => Navigator.of(context).maybePop(),
+                            onPressed: () => Navigator.of(dialogContext).maybePop(),
                             icon: Icon(Icons.close, color: cs.onSurface),
                           ),
                         ],
@@ -1209,7 +1661,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                           subtitle,
                           style: text.bodySmall
                               ?.copyWith(color: cs.onSurfaceVariant),
-                          maxLines: 2,
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
@@ -1224,7 +1676,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                                   size: 40, color: cs.outline),
                               const SizedBox(height: 10),
                               Text(
-                                '표시할 번호판이 없습니다.',
+                                '비어있음',
                                 style: text.bodyMedium
                                     ?.copyWith(color: cs.onSurfaceVariant),
                               ),
@@ -1256,19 +1708,15 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                                       ? dialogNos[i]
                                       : (i + 1);
                                   final noText =
-                                  rawNo.toString().padLeft(2, '0');
+                                      rawNo.toString().padLeft(2, '0');
 
                                   return Material(
                                     color: Colors.transparent,
                                     child: InkWell(
-                                      onTap: () {
-                                        Navigator.of(context).pop();
-                                        WidgetsBinding.instance
-                                            .addPostFrameCallback((_) {
-                                          if (!mounted) return;
-                                          _openHybridDetailPopup(r);
-                                        });
-                                      },
+                                      onTap: () => _closeDialogAndOpenPlate(
+                                        dialogContext,
+                                        r,
+                                      ),
                                       child: Padding(
                                         padding: const EdgeInsets.fromLTRB(
                                             10, 10, 10, 10),
@@ -1283,35 +1731,15 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                                             ),
                                             const SizedBox(width: 10),
                                             Expanded(
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    r.plateNumber,
-                                                    style: text.bodyMedium
-                                                        ?.copyWith(
-                                                      fontWeight:
-                                                      FontWeight.w900,
-                                                      color: cs.onSurface,
-                                                    ),
-                                                    maxLines: 1,
-                                                    overflow:
-                                                    TextOverflow.ellipsis,
-                                                  ),
-                                                  const SizedBox(height: 2),
-                                                  Text(
-                                                    r.location,
-                                                    style: text.bodySmall
-                                                        ?.copyWith(
-                                                      color:
-                                                      cs.onSurfaceVariant,
-                                                    ),
-                                                    maxLines: 1,
-                                                    overflow:
-                                                    TextOverflow.ellipsis,
-                                                  ),
-                                                ],
+                                              child: Text(
+                                                r.plateNumber,
+                                                style: text.bodyMedium
+                                                    ?.copyWith(
+                                                  fontWeight: FontWeight.w900,
+                                                  color: cs.onSurface,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
                                               ),
                                             ),
                                             const SizedBox(width: 10),
@@ -1334,7 +1762,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                       Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          '항목을 탭하면 작업 수행 바텀시트로 이동합니다.',
+                          '번호판을 탭하면 작업으로 이동합니다.',
                           style: text.bodySmall
                               ?.copyWith(color: cs.onSurfaceVariant),
                         ),
@@ -1345,6 +1773,451 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
               ),
             ),
           ),
+        );
+      },
+    );
+  }
+
+  Future<void> _openChildZoneOrderDialog(ZoneGroupVM group) async {
+    final initial = _orderedZonesForGroup(group);
+    if (initial.length <= 1) return;
+
+    var draft = List<ZoneVM>.of(initial);
+    var selectedKey = draft.first.fullName;
+
+    final picked = await _showAutoPausedDialog<List<String>>(
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (dialogContext, setLocal) {
+            final cs = Theme.of(dialogContext).colorScheme;
+            final text = Theme.of(dialogContext).textTheme;
+            final media = MediaQuery.of(dialogContext).size;
+            final h = (media.height * 0.58).clamp(260.0, 430.0).toDouble();
+
+            int selectedIndex() => draft.indexWhere((z) => z.fullName == selectedKey);
+
+            void moveSelected(int delta) {
+              final from = selectedIndex();
+              if (from < 0) return;
+              final to = from + delta;
+              if (to < 0 || to >= draft.length) return;
+              setLocal(() {
+                final item = draft.removeAt(from);
+                draft.insert(to, item);
+              });
+            }
+
+            void resetToDefault() {
+              setLocal(() {
+                draft = List<ZoneVM>.of(group.zones);
+                selectedKey = draft.first.fullName;
+              });
+            }
+
+            Widget buildZoneChip(int index, ZoneVM z) {
+              final selected = z.fullName == selectedKey;
+              return ChoiceChip(
+                label: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 136),
+                  child: Text(
+                    '${index + 1}. ${z.displayName}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                selected: selected,
+                onSelected: (_) => setLocal(() => selectedKey = z.fullName),
+              );
+            }
+
+            final idx = selectedIndex();
+            final canUp = idx > 0;
+            final canDown = idx >= 0 && idx < draft.length - 1;
+
+            return AlertDialog(
+              backgroundColor: cs.surface,
+              surfaceTintColor: Colors.transparent,
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              titlePadding: const EdgeInsets.fromLTRB(18, 16, 12, 0),
+              contentPadding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
+              actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+              title: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '구역 순서',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w900,
+                            color: cs.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          group.group,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.bodySmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '닫기',
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    icon: Icon(Icons.close, color: cs.onSurface),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 420,
+                height: h,
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        IconButton.filledTonal(
+                          tooltip: '위로',
+                          onPressed: canUp ? () => moveSelected(-1) : null,
+                          icon: const Icon(Icons.arrow_upward_rounded),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton.filledTonal(
+                          tooltip: '아래로',
+                          onPressed: canDown ? () => moveSelected(1) : null,
+                          icon: const Icon(Icons.arrow_downward_rounded),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: resetToDefault,
+                          child: const Text('기본'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              for (var i = 0; i < draft.length; i++)
+                                buildZoneChip(i, draft[i]),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('취소'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop(
+                      draft.map((z) => z.fullName).toList(growable: false),
+                    );
+                  },
+                  child: const Text('반영'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (picked == null || !mounted) return;
+    await _saveZoneChildOrder(group.group, picked);
+  }
+
+  Future<void> _openParentZoneDialog(ZoneGroupVM group) async {
+    if (!mounted) return;
+
+    _trace(
+      '부모 구역 탭(자식 구역 다이얼로그)',
+      meta: <String, dynamic>{
+        'screen': widget.screen,
+        'action': 'parent_zone_tap_open_dialog',
+        'tabId': widget.spec.id,
+        'area': _currentArea,
+        'parent': group.group,
+        'zoneCount': group.zones.length,
+        'current': group.totalCurrent,
+        'capacity': group.totalCapacity,
+      },
+    );
+
+    await _showAutoPausedDialog<void>(
+      barrierDismissible: true,
+      builder: (dialogContext) {
+        final cs = Theme.of(dialogContext).colorScheme;
+        final text = Theme.of(dialogContext).textTheme;
+        final media = MediaQuery.of(dialogContext).size;
+        final h = (media.height * 0.68).clamp(300.0, 520.0).toDouble();
+        final orderedZones = _orderedZonesForGroup(group);
+        final stats = _compactZoneStats(
+          group.totalCurrent,
+          group.totalCapacity,
+          group.totalRemaining,
+        );
+        final remainColor =
+            (group.totalRemaining != null && group.totalRemaining! <= 0)
+                ? cs.error
+                : cs.tertiary;
+
+        Widget buildPlateChip(RealTimeRowVM r) {
+          return Material(
+            color: cs.primary.withOpacity(.08),
+            borderRadius: BorderRadius.circular(999),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: _loading
+                  ? null
+                  : () => _closeDialogAndOpenPlate(dialogContext, r),
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 96),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Text(
+                  r.plateNumber,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.labelMedium?.copyWith(
+                    color: cs.primary,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        Widget buildMoreChip(ZoneVM z, int hiddenCount) {
+          return Material(
+            color: cs.surfaceContainerHighest.withOpacity(.75),
+            borderRadius: BorderRadius.circular(999),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(999),
+              onTap: _loading
+                  ? null
+                  : () {
+                      Navigator.of(dialogContext).pop();
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        _markUserActivity();
+                        _openZonePlatesDialog(z);
+                      });
+                    },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                child: Text(
+                  '+$hiddenCount',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: text.labelMedium?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        Widget buildVehicleChips(ZoneVM z) {
+          final rows = _sortedZoneRows(z);
+          if (rows.isEmpty) {
+            return Text(
+              '비어있음',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: text.bodySmall?.copyWith(
+                color: cs.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
+            );
+          }
+
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final maxVisible = constraints.maxWidth < 330 ? 2 : 3;
+              final visible = rows.take(maxVisible).toList(growable: false);
+              final hidden = rows.length - visible.length;
+
+              return Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: [
+                  for (final r in visible) buildPlateChip(r),
+                  if (hidden > 0) buildMoreChip(z, hidden),
+                ],
+              );
+            },
+          );
+        }
+
+        Widget buildChildZoneCard(ZoneVM z) {
+          final zoneStats = _compactZoneStats(z.current, z.capacity, z.remaining);
+          final zoneRemainColor =
+              (z.remaining != null && z.remaining! <= 0) ? cs.error : cs.tertiary;
+
+          return Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(10, 9, 10, 10),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: cs.outlineVariant.withOpacity(.6)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.subdirectory_arrow_right_rounded,
+                      size: 17,
+                      color: cs.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        z.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w900,
+                          color: cs.onSurface,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      zoneStats,
+                      maxLines: 1,
+                      overflow: TextOverflow.fade,
+                      softWrap: false,
+                      style: text.labelMedium?.copyWith(
+                        color: zoneRemainColor,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 7),
+                buildVehicleChips(z),
+              ],
+            ),
+          );
+        }
+
+        return AlertDialog(
+          backgroundColor: cs.surface,
+          surfaceTintColor: Colors.transparent,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+          ),
+          titlePadding: const EdgeInsets.fromLTRB(18, 16, 12, 0),
+          contentPadding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
+          actionsPadding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+          title: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      group.group,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w900,
+                        color: cs.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      stats,
+                      maxLines: 1,
+                      overflow: TextOverflow.fade,
+                      softWrap: false,
+                      style: text.bodySmall?.copyWith(
+                        color: remainColor,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (group.zones.length > 1)
+                IconButton(
+                  tooltip: '순서',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () {
+                    Navigator.of(dialogContext).pop();
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (!mounted) return;
+                      _markUserActivity();
+                      _openChildZoneOrderDialog(group);
+                    });
+                  },
+                  icon: Icon(
+                    Icons.swap_vert_rounded,
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
+              IconButton(
+                tooltip: '닫기',
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                icon: Icon(Icons.close, color: cs.onSurface),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 420,
+            height: h,
+            child: orderedZones.isEmpty
+                ? Center(
+                    child: Text(
+                      '표시할 구역이 없습니다.',
+                      style: text.bodyMedium?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                : Scrollbar(
+                    child: ListView.separated(
+                      itemCount: orderedZones.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (_, i) => buildChildZoneCard(orderedZones[i]),
+                    ),
+                  ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('닫기'),
+            ),
+          ],
         );
       },
     );
@@ -1382,98 +2255,35 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
     final totalCapAll = capFromChildren > 0
         ? capFromChildren
         : (_totalCompositeChildCapacityFromMeta > 0
-        ? _totalCompositeChildCapacityFromMeta
-        : _totalCapacityFromPrefs);
+            ? _totalCompositeChildCapacityFromMeta
+            : _totalCapacityFromPrefs);
 
     final matchedCurAll = groups.fold<int>(0, (s, g) => s + g.totalCurrent);
     final unknown = _allRows.length - matchedCurAll;
 
     final totalCurAll =
-    widget.spec.showUnknownInZoneSummary ? matchedCurAll : _allRows.length;
+        widget.spec.showUnknownInZoneSummary ? matchedCurAll : _allRows.length;
 
     final totalRemAll = totalCapAll > 0 ? (totalCapAll - totalCurAll) : null;
-
-    Widget buildZoneRow(ZoneVM z, {required bool indented}) {
-      final remainText = (z.remaining == null)
-          ? '-'
-          : (z.remaining! >= 0 ? '${z.remaining}대' : '0대');
-      final capText = z.capacity > 0 ? '${z.capacity}대' : '-';
-      final leftPad = indented ? 28.0 : 12.0;
-
-      final remainColor =
-      (z.remaining != null && z.remaining! <= 0) ? cs.error : cs.tertiary;
-
-      return Material(
-        color: cs.surface,
-        child: InkWell(
-          onTap: _loading ? null : () => _openZonePlatesDialog(z),
-          child: Container(
-            width: double.infinity,
-            padding: EdgeInsets.fromLTRB(leftPad, 10, 12, 10),
-            decoration: BoxDecoration(
-              color: cs.surface,
-              border: Border(
-                bottom: BorderSide(color: cs.outlineVariant.withOpacity(.55)),
-              ),
-            ),
-            child: Row(
-              children: [
-                if (indented) ...[
-                  Icon(Icons.subdirectory_arrow_right_rounded,
-                      size: 18, color: cs.onSurfaceVariant),
-                  const SizedBox(width: 6),
-                ],
-                Expanded(
-                  child: Text(
-                    z.displayName,
-                    style: text.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      color: cs.onSurface,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text('현재 ${z.current}대',
-                    style:
-                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
-                const SizedBox(width: 10),
-                Text('총 $capText',
-                    style:
-                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
-                const SizedBox(width: 10),
-                Text(
-                  '잔여 $remainText',
-                  style: text.bodySmall?.copyWith(
-                    color: remainColor,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
 
     final children = <Widget>[];
 
     for (final g in groups) {
-      final expanded = _groupExpanded[g.group] ?? true;
-
-      final groupRemainText = g.totalRemaining == null
-          ? '-'
-          : (g.totalRemaining! >= 0 ? '${g.totalRemaining}대' : '0대');
+      final groupStats = _compactZoneStats(
+        g.totalCurrent,
+        g.totalCapacity,
+        g.totalRemaining,
+      );
       final groupRemainColor =
-      (g.totalRemaining != null && g.totalRemaining! <= 0)
-          ? cs.error
-          : cs.tertiary;
+          (g.totalRemaining != null && g.totalRemaining! <= 0)
+              ? cs.error
+              : cs.tertiary;
 
       children.add(
         Material(
           color: cs.surface,
           child: InkWell(
-            onTap: () => setState(() => _groupExpanded[g.group] = !expanded),
+            onTap: () => _openParentZoneDialog(g),
             child: Container(
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
@@ -1485,58 +2295,65 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
               ),
               child: Row(
                 children: [
-                  Icon(expanded ? Icons.expand_less : Icons.expand_more,
-                      color: cs.onSurfaceVariant),
+                  Icon(Icons.folder_open_rounded, color: cs.onSurfaceVariant),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       g.group,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: text.bodyMedium?.copyWith(
                         fontWeight: FontWeight.w900,
                         color: cs.onSurface,
                       ),
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Text('현재 ${g.totalCurrent}대',
-                      style:
-                      text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 6),
+                  if (g.zones.length > 1)
+                    IconButton(
+                      tooltip: '순서',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 34,
+                        minHeight: 34,
+                      ),
+                      onPressed: () => _openChildZoneOrderDialog(g),
+                      icon: Icon(
+                        Icons.swap_vert_rounded,
+                        size: 20,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  const SizedBox(width: 4),
                   Text(
-                    '총 ${g.totalCapacity > 0 ? "${g.totalCapacity}대" : "-"}',
-                    style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    '잔여 $groupRemainText',
-                    style: text.bodySmall?.copyWith(
+                    groupStats,
+                    maxLines: 1,
+                    overflow: TextOverflow.fade,
+                    softWrap: false,
+                    style: text.labelMedium?.copyWith(
                       color: groupRemainColor,
                       fontWeight: FontWeight.w900,
                     ),
                   ),
+                  const SizedBox(width: 4),
+                  Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
                 ],
               ),
             ),
           ),
         ),
       );
-
-      if (expanded) {
-        for (final z in g.zones) {
-          children.add(buildZoneRow(z, indented: true));
-        }
-      }
     }
 
     final summary = totalCapAll > 0
-        ? '총 ${totalCapAll}대 / 현재 ${totalCurAll}대 / 잔여 ${totalRemAll ?? 0}대'
-        : '현재 ${totalCurAll}대';
+        ? _compactZoneStats(totalCurAll, totalCapAll, totalRemAll)
+        : '$totalCurAll/-';
 
     final summaryWithUnknown =
-    widget.spec.showUnknownInZoneSummary && unknown > 0
-        ? '$summary (미지정 $unknown대)'
-        : summary;
+        widget.spec.showUnknownInZoneSummary && unknown > 0
+            ? '$summary · 미 $unknown'
+            : summary;
 
     return Column(
       children: [
@@ -1553,17 +2370,21 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
             children: [
               Expanded(
                 child: Text(
-                  '구역별 잔여 공간',
+                  '구역별 차량',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: text.labelLarge?.copyWith(
                     fontWeight: FontWeight.w900,
                     color: cs.onSurface,
                   ),
-                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               const SizedBox(width: 8),
               Text(
                 summaryWithUnknown,
+                maxLines: 1,
+                overflow: TextOverflow.fade,
+                softWrap: false,
                 style: text.labelMedium?.copyWith(color: cs.onSurfaceVariant),
               ),
             ],
