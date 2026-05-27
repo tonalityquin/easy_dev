@@ -69,7 +69,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
 
   final Map<String, PlateModel> _plateDetailCache = <String, PlateModel>{};
   final Map<String, Future<PlateModel?>> _plateDetailInflight =
-      <String, Future<PlateModel?>>{};
+  <String, Future<PlateModel?>>{};
 
   bool _openingDetail = false;
 
@@ -107,8 +107,6 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
       meta: meta,
     );
   }
-
-  Color _accent(ColorScheme cs) => widget.spec.accent(cs);
 
   @override
   void initState() {
@@ -207,14 +205,14 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
     final rows = data
         .map(
           (e) => RealTimeRowVM(
-            plateId: e.plateId,
-            plateNumber: e.plateNumber,
-            location: e.location,
-            primaryAt: e.primaryAt,
-            updatedAt: e.updatedAt,
-            createdAt: e.createdAt,
-          ),
-        )
+        plateId: e.plateId,
+        plateNumber: e.plateNumber,
+        location: e.location,
+        primaryAt: e.primaryAt,
+        updatedAt: e.updatedAt,
+        createdAt: e.createdAt,
+      ),
+    )
         .toList(growable: false);
 
     setState(() {
@@ -289,9 +287,9 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
           _cachedLocations = decoded
               .map(
                 (e) => LocationModel.fromCacheMap(
-                  Map<String, dynamic>.from(e as Map),
-                ),
-              )
+              Map<String, dynamic>.from(e as Map),
+            ),
+          )
               .toList();
         }
       }
@@ -489,7 +487,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                 surfaceTintColor: Colors.transparent,
                 elevation: 8,
                 insetPadding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18)),
                 contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -535,8 +533,8 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                     message,
                     textAlign: TextAlign.center,
                     style: (text.titleMedium ??
-                            text.bodyLarge ??
-                            const TextStyle())
+                        text.bodyLarge ??
+                        const TextStyle())
                         .copyWith(fontWeight: FontWeight.w800),
                   ),
                 ],
@@ -762,63 +760,6 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
     _scheduleApplyPlateCountsAfterFrame(countsByDisplayName);
   }
 
-  Widget _buildRowsChip(ColorScheme cs, TextTheme text) {
-    final count =
-        (_viewMode == RealTimeViewMode.plate) ? _rows.length : _allRows.length;
-    final accent = _accent(cs);
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: accent.withOpacity(.10),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: cs.outlineVariant.withOpacity(.6)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.list_alt_outlined, size: 16, color: accent),
-          const SizedBox(width: 6),
-          Text(
-            'Rows: $count',
-            style: text.labelMedium?.copyWith(
-              color: cs.onSurface,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLiveChip(ColorScheme cs, TextTheme text) {
-    final bg = cs.tertiaryContainer.withOpacity(0.45);
-    final fg = cs.onTertiaryContainer;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: cs.outlineVariant.withOpacity(.6)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.wifi_tethering_outlined, size: 16, color: fg),
-          const SizedBox(width: 6),
-          Text(
-            'LIVE',
-            style: text.labelMedium?.copyWith(
-              color: fg,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildViewModeTogglePill(ColorScheme cs, TextTheme text) {
     final disabled = _loading || !widget.spec.zoneSupported;
     final toggleLabel = !widget.spec.zoneSupported
@@ -935,12 +876,12 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                 onChanged: disabled
                     ? null
                     : (v) {
-                        if (v == null) return;
-                        setState(() {
-                          _selectedLocation = v;
-                          _applyFilterAndSort();
-                        });
-                      },
+                  if (v == null) return;
+                  setState(() {
+                    _selectedLocation = v;
+                    _applyFilterAndSort();
+                  });
+                },
               ),
             ),
           ),
@@ -951,9 +892,9 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
 
   Widget _buildSearchField(ColorScheme cs) {
     final hint =
-        (_viewMode == RealTimeViewMode.zone && widget.spec.zoneSupported)
-            ? '부모 또는 자식 주차구역 검색'
-            : '번호판 또는 주차 구역으로 검색';
+    (_viewMode == RealTimeViewMode.zone && widget.spec.zoneSupported)
+        ? '부모 또는 자식 주차구역 검색'
+        : '번호판 또는 주차 구역으로 검색';
 
     return TextField(
       controller: _searchCtrl,
@@ -964,16 +905,16 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
         suffixIcon: _searchCtrl.text.isEmpty
             ? null
             : IconButton(
-                icon: Icon(Icons.clear, color: cs.onSurfaceVariant),
-                onPressed: () {
-                  _searchCtrl.clear();
-                  setState(() => _applyFilterAndSort());
-                },
-              ),
+          icon: Icon(Icons.clear, color: cs.onSurfaceVariant),
+          onPressed: () {
+            _searchCtrl.clear();
+            setState(() => _applyFilterAndSort());
+          },
+        ),
         filled: true,
         fillColor: cs.surfaceContainerLow,
         contentPadding:
-            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.8)),
@@ -992,21 +933,21 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
 
   TextStyle _headStyle(ColorScheme cs) =>
       Theme.of(context).textTheme.labelMedium!.copyWith(
-            fontWeight: FontWeight.w900,
-            letterSpacing: .2,
-            color: cs.onSurface,
-          );
+        fontWeight: FontWeight.w900,
+        letterSpacing: .2,
+        color: cs.onSurface,
+      );
 
   TextStyle _cellStyle(ColorScheme cs) =>
       Theme.of(context).textTheme.bodyMedium!.copyWith(
-            height: 1.2,
-            color: cs.onSurface.withOpacity(.92),
-          );
+        height: 1.2,
+        color: cs.onSurface.withOpacity(.92),
+      );
 
   TextStyle _monoStyle(ColorScheme cs) => _cellStyle(cs).copyWith(
-        fontFeatures: const [FontFeature.tabularFigures()],
-        fontFamilyFallback: const ['monospace'],
-      );
+    fontFeatures: const [FontFeature.tabularFigures()],
+    fontFamilyFallback: const ['monospace'],
+  );
 
   Widget _buildTable(ColorScheme cs) {
     if (_loading) return const RealTimeExpandedLoading();
@@ -1090,7 +1031,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                     : cs.surfaceContainerLow.withOpacity(.55);
 
                 final rawNo =
-                    (i < _displayNos.length) ? _displayNos[i] : (i + 1);
+                (i < _displayNos.length) ? _displayNos[i] : (i + 1);
                 final noText = rawNo.toString().padLeft(2, '0');
 
                 return Material(
@@ -1217,11 +1158,11 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
         final subtitle = '현재 ${rows.length}대 / 총 $capText / 잔여 $remainText';
 
         TextStyle monoSmall(Color color) => text.labelMedium!.copyWith(
-              fontFeatures: const [FontFeature.tabularFigures()],
-              fontFamilyFallback: const ['monospace'],
-              fontWeight: FontWeight.w900,
-              color: color,
-            );
+          fontFeatures: const [FontFeature.tabularFigures()],
+          fontFamilyFallback: const ['monospace'],
+          fontWeight: FontWeight.w900,
+          color: color,
+        );
 
         return Center(
           child: ConstrainedBox(
@@ -1233,7 +1174,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                 surfaceTintColor: Colors.transparent,
                 elevation: 8,
                 insetPadding:
-                    const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+                const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18)),
                 contentPadding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
@@ -1315,7 +1256,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                                       ? dialogNos[i]
                                       : (i + 1);
                                   final noText =
-                                      rawNo.toString().padLeft(2, '0');
+                                  rawNo.toString().padLeft(2, '0');
 
                                   return Material(
                                     color: Colors.transparent,
@@ -1344,19 +1285,19 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                                             Expanded(
                                               child: Column(
                                                 crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
+                                                CrossAxisAlignment.start,
                                                 children: [
                                                   Text(
                                                     r.plateNumber,
                                                     style: text.bodyMedium
                                                         ?.copyWith(
                                                       fontWeight:
-                                                          FontWeight.w900,
+                                                      FontWeight.w900,
                                                       color: cs.onSurface,
                                                     ),
                                                     maxLines: 1,
                                                     overflow:
-                                                        TextOverflow.ellipsis,
+                                                    TextOverflow.ellipsis,
                                                   ),
                                                   const SizedBox(height: 2),
                                                   Text(
@@ -1364,11 +1305,11 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                                                     style: text.bodySmall
                                                         ?.copyWith(
                                                       color:
-                                                          cs.onSurfaceVariant,
+                                                      cs.onSurfaceVariant,
                                                     ),
                                                     maxLines: 1,
                                                     overflow:
-                                                        TextOverflow.ellipsis,
+                                                    TextOverflow.ellipsis,
                                                   ),
                                                 ],
                                               ),
@@ -1441,14 +1382,14 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
     final totalCapAll = capFromChildren > 0
         ? capFromChildren
         : (_totalCompositeChildCapacityFromMeta > 0
-            ? _totalCompositeChildCapacityFromMeta
-            : _totalCapacityFromPrefs);
+        ? _totalCompositeChildCapacityFromMeta
+        : _totalCapacityFromPrefs);
 
     final matchedCurAll = groups.fold<int>(0, (s, g) => s + g.totalCurrent);
     final unknown = _allRows.length - matchedCurAll;
 
     final totalCurAll =
-        widget.spec.showUnknownInZoneSummary ? matchedCurAll : _allRows.length;
+    widget.spec.showUnknownInZoneSummary ? matchedCurAll : _allRows.length;
 
     final totalRemAll = totalCapAll > 0 ? (totalCapAll - totalCurAll) : null;
 
@@ -1460,7 +1401,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
       final leftPad = indented ? 28.0 : 12.0;
 
       final remainColor =
-          (z.remaining != null && z.remaining! <= 0) ? cs.error : cs.tertiary;
+      (z.remaining != null && z.remaining! <= 0) ? cs.error : cs.tertiary;
 
       return Material(
         color: cs.surface,
@@ -1495,11 +1436,11 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                 const SizedBox(width: 8),
                 Text('현재 ${z.current}대',
                     style:
-                        text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
                 const SizedBox(width: 10),
                 Text('총 $capText',
                     style:
-                        text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                    text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
                 const SizedBox(width: 10),
                 Text(
                   '잔여 $remainText',
@@ -1524,9 +1465,9 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
           ? '-'
           : (g.totalRemaining! >= 0 ? '${g.totalRemaining}대' : '0대');
       final groupRemainColor =
-          (g.totalRemaining != null && g.totalRemaining! <= 0)
-              ? cs.error
-              : cs.tertiary;
+      (g.totalRemaining != null && g.totalRemaining! <= 0)
+          ? cs.error
+          : cs.tertiary;
 
       children.add(
         Material(
@@ -1560,7 +1501,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
                   const SizedBox(width: 8),
                   Text('현재 ${g.totalCurrent}대',
                       style:
-                          text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                      text.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
                   const SizedBox(width: 10),
                   Text(
                     '총 ${g.totalCapacity > 0 ? "${g.totalCapacity}대" : "-"}',
@@ -1593,9 +1534,9 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
         : '현재 ${totalCurAll}대';
 
     final summaryWithUnknown =
-        widget.spec.showUnknownInZoneSummary && unknown > 0
-            ? '$summary (미지정 $unknown대)'
-            : summary;
+    widget.spec.showUnknownInZoneSummary && unknown > 0
+        ? '$summary (미지정 $unknown대)'
+        : summary;
 
     return Column(
       children: [
@@ -1650,31 +1591,6 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
       child: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    widget.description,
-                    style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-            child: Row(
-              children: [
-                Expanded(flex: 5, child: _buildRowsChip(cs, text)),
-                const SizedBox(width: 8),
-                Expanded(flex: 5, child: _buildLiveChip(cs, text)),
-              ],
-            ),
-          ),
-          Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 6),
             child: Row(
               children: [
@@ -1692,7 +1608,7 @@ class _RealTimeTableBodyState extends State<RealTimeTableBody>
           Divider(height: 1, color: cs.outlineVariant.withOpacity(.7)),
           Expanded(
             child: (_viewMode == RealTimeViewMode.plate ||
-                    !widget.spec.zoneSupported)
+                !widget.spec.zoneSupported)
                 ? _buildTable(cs)
                 : _buildZoneAccordion(cs, text),
           ),

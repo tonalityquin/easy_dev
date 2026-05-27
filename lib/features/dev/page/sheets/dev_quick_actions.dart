@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/app_navigator.dart';
+import '../../../selector/application/dev_auth.dart';
 import 'local_prefs_bottom_sheet.dart';
 import 'sqlite_explorer_bottom_sheet.dart';
 
@@ -31,7 +32,14 @@ class DevQuickActions {
   static Future<void> init() async {
     if (_initialized) return;
     _prefs ??= await SharedPreferences.getInstance();
-    enabled.value = _prefs!.getBool(_kEnabledKey) ?? false;
+
+    final savedEnabled = _prefs!.getBool(_kEnabledKey);
+    final devLoggedIn = await DevAuth.isDeveloperLoggedIn();
+    enabled.value = savedEnabled ?? devLoggedIn;
+
+    if (savedEnabled == null && enabled.value) {
+      await _prefs!.setBool(_kEnabledKey, true);
+    }
 
     enabled.addListener(() {
       _prefs?.setBool(_kEnabledKey, enabled.value);
@@ -51,9 +59,50 @@ class DevQuickActions {
     if (enabled.value) _showOverlay();
   }
 
-  static void setEnabled(bool value) => enabled.value = value;
+  static Future<void> enableAndMount() async {
+    if (!_initialized || _prefs == null) {
+      await init();
+    }
+    setEnabled(true);
+    await mountIfNeeded();
+  }
 
-  static void toggle() => enabled.value = !enabled.value;
+  static Future<void> enableDeveloperMode() async {
+    await DevAuth.setDevModeEnabled(true);
+    await enableAndMount();
+  }
+
+  static Future<void> disableDeveloperMode() async {
+    await DevAuth.resetDeveloperLogin();
+    if (!_initialized || _prefs == null) {
+      await init();
+    }
+    setEnabled(false);
+    _hideOverlay();
+  }
+
+  static void unmount() => _hideOverlay();
+
+  static void setEnabled(bool value) {
+    if (!_initialized || _prefs == null) {
+      init().then((_) => setEnabled(value));
+      return;
+    }
+
+    if (enabled.value != value) {
+      enabled.value = value;
+    }
+
+    _prefs?.setBool(_kEnabledKey, value);
+
+    if (value) {
+      _showOverlay();
+    } else {
+      _hideOverlay();
+    }
+  }
+
+  static void toggle() => setEnabled(!enabled.value);
 
   static BuildContext? _bestContext() {
     final state = navigatorKey.currentState;
@@ -227,6 +276,24 @@ class _DevBubbleState extends State<_DevBubble>
     }
 
     final actions = <_DevDockAction>[
+      _DevDockAction(
+        icon: Icons.developer_mode_rounded,
+        label: '개발자 모드',
+        color: Colors.deepPurple,
+        onTap: () async {
+          await _ctrl.reverse();
+          await DevQuickActions.disableDeveloperMode();
+          final ctx = DevQuickActions._bestContext();
+          if (ctx == null) return;
+          ScaffoldMessenger.maybeOf(ctx)?.showSnackBar(
+            const SnackBar(
+              content: Text('개발자 모드가 비활성화되었습니다.'),
+              behavior: SnackBarBehavior.floating,
+              duration: Duration(milliseconds: 900),
+            ),
+          );
+        },
+      ),
       _DevDockAction(
         icon: Icons.tune_rounded,
         label: '로컬 Prefs',

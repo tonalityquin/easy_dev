@@ -128,8 +128,21 @@ class _DevTokens {
 }
 
 
-class DevStubPage extends StatelessWidget {
+class DevStubPage extends StatefulWidget {
   const DevStubPage({super.key});
+
+  @override
+  State<DevStubPage> createState() => _DevStubPageState();
+}
+
+class _DevStubPageState extends State<DevStubPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      DevQuickActions.enableDeveloperMode();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -362,7 +375,7 @@ class _HeaderBanner extends StatelessWidget {
                       ),
                     ),
                     child: Text(
-                      on ? 'Bubble ON' : 'Bubble OFF',
+                      on ? '개발자 모드 ON' : '개발자 모드 OFF',
                       style: text.labelMedium?.copyWith(
                         color: on
                             ? tokens.bubbleChipTextOn
@@ -376,14 +389,20 @@ class _HeaderBanner extends StatelessWidget {
                   Switch.adaptive(
                     value: on,
                     onChanged: (v) async {
-                      DevQuickActions.setEnabled(v);
                       if (v) {
-                        await DevQuickActions.mountIfNeeded();
+                        await DevQuickActions.enableDeveloperMode();
+                      } else {
+                        await DevQuickActions.disableDeveloperMode();
                       }
                       HapticFeedback.selectionClick();
+                      if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(v ? '개발 버블이 켜졌습니다.' : '개발 버블이 꺼졌습니다.'),
+                          content: Text(
+                            v
+                                ? '개발자 모드와 개발 버블이 켜졌습니다.'
+                                : '개발자 모드와 개발 버블이 꺼졌습니다.',
+                          ),
                           behavior: SnackBarBehavior.floating,
                           duration: const Duration(milliseconds: 900),
                         ),

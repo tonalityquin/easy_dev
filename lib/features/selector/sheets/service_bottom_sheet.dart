@@ -9,6 +9,7 @@ import '../../../app/config/overlay_edge_side_config.dart';
 import '../../../app/config/overlay_mode_config.dart';
 import '../../../app/theme/brand_theme.dart';
 import '../../../app/theme/theme_prefs_controller.dart';
+import '../../dev/page/sheets/dev_quick_actions.dart';
 import '../application/dev_auth.dart';
 
 const String kParkingRequestsWriteEnabledKey =
@@ -142,8 +143,6 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
   bool _privateCodeObscure = true;
 
   bool _bootLoading = true;
-  SharedPreferences? _prefs;
-
   OverlayMode _overlayMode = OverlayMode.bubble;
 
   OverlayEdgeSide _edgeSide = OverlayEdgeSide.left;
@@ -171,7 +170,6 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
   Future<void> _bootstrapPrivateSettings() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      _prefs = prefs;
       _selectedArea = (prefs.getString('selectedArea') ?? '').trim();
       await _ensureRealtimeDefaults(prefs);
       if (!mounted) return;
@@ -411,7 +409,6 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
   }
 
   Future<void> _applyPrivateCode() async {
-    final prefs = _prefs;
     final input = _privateCodeCtrl.text.trim();
 
     if (input.isEmpty) {
@@ -430,15 +427,12 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
 
     final isDev = DevAuth.verifyDevCode(input);
     if (isDev) {
+      await DevQuickActions.enableDeveloperMode();
       if (!mounted) return;
       setState(() {
         _devModeEnabled = true;
         _privateCodeCtrl.clear();
       });
-
-      if (prefs != null) {
-        await prefs.setBool(kDevModeEnabledKey, true);
-      }
 
       FocusScope.of(context).unfocus();
       return;
@@ -452,13 +446,11 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
   }
 
   Future<void> _disableDevMode() async {
-    final prefs = _prefs;
+    await DevQuickActions.disableDeveloperMode();
+    if (!mounted) return;
     setState(() {
       _devModeEnabled = false;
     });
-    if (prefs != null) {
-      await prefs.setBool(kDevModeEnabledKey, false);
-    }
   }
 
   Widget _sectionBox({
@@ -606,7 +598,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
           Text(
             '코드 입력으로 기능을 활성화합니다.\n'
                 '• 관리자 코드 → 앱 설정(앱관리) 섹션 ON\n'
-                '• 개발자 코드 → 개발자 모드 ON(재실행 후 유지)',
+                '• 개발자 코드 → 개발자 모드와 개발자 플로팅 버블 ON',
             style: text.bodyMedium?.copyWith(fontSize: 13, color: t.pageFg),
           ),
           const SizedBox(height: 10),
@@ -657,7 +649,7 @@ class _ServiceBottomSheetViewState extends State<_ServiceBottomSheetView> {
                   child: OutlinedButton.icon(
                     onPressed: _disableDevMode,
                     icon: const Icon(Icons.power_settings_new),
-                    label: const Text('개발자 OFF'),
+                    label: const Text('개발자 모드 OFF'),
                   ),
                 ),
               ],

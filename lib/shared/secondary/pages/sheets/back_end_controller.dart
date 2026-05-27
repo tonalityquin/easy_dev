@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../app/utils/snackbar_helper.dart';
+import '../../../../features/dev/page/sheets/dev_quick_actions.dart';
 import '../../../../features/selector/application/dev_auth.dart';
 import '../../../../features/selector/sheets/service_bottom_sheet.dart';
 import '../../application/secondary_state.dart';
@@ -54,9 +55,13 @@ class _BackEndControllerState extends State<BackEndController> {
   }
 
   Future<void> _resetDevAuthInline() async {
-    await DevAuth.resetDeveloperLogin();
+    await DevQuickActions.disableDeveloperMode();
 
     if (!mounted) return;
+    setState(() {
+      _devAuthorized = false;
+      _checkingDevAuth = false;
+    });
     showSelectedSnackbar(context, '개발자 모드가 비활성화되었습니다.');
 
     final state = context.read<SecondaryState>();
