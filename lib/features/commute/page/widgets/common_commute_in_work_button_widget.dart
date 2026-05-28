@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../app/init/missing_weekday_end_time_dialog.dart';
 import '../../../../app/utils/block_dialog/work_start_duration_blocking_dialog.dart';
 import '../../../../app/utils/status_dialog.dart';
 import '../../../account/applications/user_state.dart';
@@ -140,6 +141,18 @@ class CommonCommuteInWorkButtonWidget extends StatelessWidget {
               title: '출근 실패',
             );
             return;
+          }
+
+          if (result.type == CommuteResultType.success) {
+            if (loadingTurnedOn) {
+              onLoadingChanged(false);
+              loadingTurnedOn = false;
+            }
+            await showMissingWeekdayEndTimeDialogIfNeeded(
+              context,
+              clockInAt: DateTime.now(),
+            );
+            if (!context.mounted) return;
           }
 
           switch (result.destination) {

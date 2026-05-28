@@ -48,6 +48,8 @@ ThemeData _buildOverlayTheme() {
 enum OverlayUIMode {
   bubble,
   topHalf,
+  checkoutNudge,
+  workFinished,
 }
 
 class QuickOverlayApp extends StatelessWidget {
@@ -145,6 +147,28 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
     _sub = FlutterOverlayWindow.overlayListener.listen((event) {
       if (!mounted) return;
 
+      if (event == '__work_finished__') {
+        _cancelShortBreak();
+        if (!mounted) return;
+        setState(() {
+          _uiMode = OverlayUIMode.workFinished;
+          _overlayStartedAt = DateTime.now();
+          _elapsed = Duration.zero;
+        });
+        return;
+      }
+
+      if (event == '__checkout_nudge__') {
+        _cancelShortBreak();
+        if (!mounted) return;
+        setState(() {
+          _uiMode = OverlayUIMode.checkoutNudge;
+          _overlayStartedAt = DateTime.now();
+          _elapsed = Duration.zero;
+        });
+        return;
+      }
+
       if (event is String && event.startsWith('__mode:')) {
         _cancelShortBreak();
 
@@ -181,7 +205,8 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
     setState(() {
       _isSimpleMode = isSimple;
 
-      if (_isSimpleMode) {
+      if (_isSimpleMode && _uiMode != OverlayUIMode.checkoutNudge &&
+          _uiMode != OverlayUIMode.workFinished) {
         _cancelShortBreak();
         _uiMode = OverlayUIMode.bubble;
       }
@@ -520,7 +545,10 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
     );
   }
 
-  Widget _buildTopHalfOverlay(BuildContext context) {
+  Widget _buildTopHalfOverlay(
+    BuildContext context, {
+    bool checkoutNudge = false,
+  }) {
     return LayoutBuilder(
       builder: (context, constraints) {
         return Container(
@@ -545,9 +573,11 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                '앱이 아직 실행 중입니다.',
-                                style: TextStyle(
+                              Text(
+                                checkoutNudge
+                                    ? '퇴근 시간이 지났습니다.'
+                                    : '앱이 아직 실행 중입니다.',
+                                style: const TextStyle(
                                   color: Color(0xFF111827),
                                   fontSize: 16,
                                   fontWeight: FontWeight.w700,
@@ -560,19 +590,33 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                                     color: Color(0xFF4B5563),
                                     fontSize: 11,
                                   ),
-                                  children: const [
-                                    TextSpan(text: '당일 근무가 끝난 분들은 꼭 '),
-                                    TextSpan(
-                                      text: '퇴근',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.w700,
-                                        color: Color(0xFFDC2626),
-                                      ),
-                                    ),
-                                    TextSpan(
-                                      text: ' 버튼을\n눌러주시기 바랍니다.',
-                                    ),
-                                  ],
+                                  children: checkoutNudge
+                                      ? const [
+                                          TextSpan(text: '아직 오늘 '),
+                                          TextSpan(
+                                            text: '퇴근 기록',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFFDC2626),
+                                            ),
+                                          ),
+                                          TextSpan(
+                                            text: '이 없습니다.\n앱으로 돌아가 퇴근 버튼을 눌러주세요.',
+                                          ),
+                                        ]
+                                      : const [
+                                          TextSpan(text: '당일 근무가 끝난 분들은 꼭 '),
+                                          TextSpan(
+                                            text: '퇴근',
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w700,
+                                              color: Color(0xFFDC2626),
+                                            ),
+                                          ),
+                                          TextSpan(
+                                            text: ' 버튼을\n눌러주시기 바랍니다.',
+                                          ),
+                                        ],
                                 ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
@@ -724,9 +768,11 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                             label: '퇴근조는 오늘 하루 업무 종료에 대한 마감을 했는지',
                           ),
                           const SizedBox(height: 10),
-                          const Text(
-                            '위 항목 중 하나라도 놓쳤다면,\n아래의 "앱으로 돌아가기" 버튼을 눌러\n지금 바로 처리해 주세요.',
-                            style: TextStyle(
+                          Text(
+                            checkoutNudge
+                                ? '퇴근 처리가 아직 완료되지 않았습니다.\n아래의 "앱으로 돌아가 퇴근하기" 버튼을 눌러\n오늘 근무를 종료해 주세요.'
+                                : '위 항목 중 하나라도 놓쳤다면,\n아래의 "앱으로 돌아가기" 버튼을 눌러\n지금 바로 처리해 주세요.',
+                            style: const TextStyle(
                               color: Color(0xFFF97316),
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
@@ -737,84 +783,278 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
                       ),
                     ),
                     const SizedBox(height: 16),
+                    if (checkoutNudge)
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: _launchMainApp,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFDC2626),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                          icon: const Icon(
+                            Icons.logout_rounded,
+                            size: 18,
+                          ),
+                          label: const Text(
+                            '앱으로 돌아가 퇴근하기',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 4,
+                            child: ElevatedButton.icon(
+                              onPressed: _launchMainApp,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF111827),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                              icon: const Icon(
+                                Icons.open_in_new_rounded,
+                                size: 18,
+                              ),
+                              label: const Text(
+                                '앱으로 돌아가기',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 3,
+                            child: OutlinedButton.icon(
+                              onPressed: _startShortBreak,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF111827),
+                                side: const BorderSide(
+                                  color: Color(0xFF9CA3AF),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                              icon: const Icon(Icons.timer_rounded, size: 18),
+                              label: const Text(
+                                '15초 쉬기',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            flex: 4,
+                            child: OutlinedButton.icon(
+                              onPressed: _resetPanel,
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF111827),
+                                side: const BorderSide(
+                                  color: Color(0xFF9CA3AF),
+                                ),
+                                padding: const EdgeInsets.symmetric(vertical: 10),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                              icon: const Icon(Icons.refresh_rounded, size: 18),
+                              label: const Text(
+                                '휴게 중입니다',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildWorkFinishedOverlay(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Container(
+          width: constraints.maxWidth,
+          height: constraints.maxHeight,
+          color: Colors.white,
+          child: FittedBox(
+            alignment: Alignment.topCenter,
+            fit: BoxFit.scaleDown,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.max,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Expanded(
-                          flex: 4,
-                          child: ElevatedButton.icon(
-                            onPressed: _launchMainApp,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF111827),
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                            ),
-                            icon: const Icon(
-                              Icons.open_in_new_rounded,
-                              size: 18,
-                            ),
-                            label: const Text(
-                              '앱으로 돌아가기',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                        Container(
+                          width: 42,
+                          height: 42,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Icon(
+                            Icons.task_alt_rounded,
+                            color: Color(0xFF2563EB),
+                            size: 24,
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 12),
                         Expanded(
-                          flex: 3,
-                          child: OutlinedButton.icon(
-                            onPressed: _startShortBreak,
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF111827),
-                              side: const BorderSide(
-                                color: Color(0xFF9CA3AF),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              Text(
+                                '오늘의 업무는 종료되었습니다.',
+                                style: TextStyle(
+                                  color: Color(0xFF111827),
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(999),
+                              SizedBox(height: 4),
+                              Text(
+                                '이미 오늘 퇴근 처리가 완료되었습니다. 앱을 종료하려면 아래 경로를 확인해 주세요.',
+                                style: TextStyle(
+                                  color: Color(0xFF4B5563),
+                                  fontSize: 11,
+                                  height: 1.35,
+                                ),
                               ),
-                            ),
-                            icon: const Icon(Icons.timer_rounded, size: 18),
-                            label: const Text(
-                              '15초 쉬기',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          flex: 4,
-                          child: OutlinedButton.icon(
-                            onPressed: _resetPanel,
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF111827),
-                              side: const BorderSide(
-                                color: Color(0xFF9CA3AF),
-                              ),
-                              padding: const EdgeInsets.symmetric(vertical: 10),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                            ),
-                            icon: const Icon(Icons.refresh_rounded, size: 18),
-                            label: const Text(
-                              '휴게 중입니다',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                            ],
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        color: const Color(0xFFF9FAFB),
+                        border: Border.all(color: const Color(0xFFE5E7EB)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 12,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: const [
+                              Icon(
+                                Icons.power_settings_new_rounded,
+                                size: 18,
+                                color: Color(0xFF2563EB),
+                              ),
+                              SizedBox(width: 6),
+                              Text(
+                                '앱 종료 경로',
+                                style: TextStyle(
+                                  color: Color(0xFF111827),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          _buildChecklistItem(
+                            icon: Icons.more_horiz_rounded,
+                            label: '더보기로 이동합니다.',
+                          ),
+                          const SizedBox(height: 6),
+                          _buildChecklistItem(
+                            icon: Icons.tune_rounded,
+                            label: '모드 선택을 누릅니다.',
+                          ),
+                          const SizedBox(height: 6),
+                          _buildChecklistItem(
+                            icon: Icons.account_circle_outlined,
+                            label: '환영합니다 화면의 윗 아이콘을 누릅니다.',
+                          ),
+                          const SizedBox(height: 6),
+                          _buildChecklistItem(
+                            icon: Icons.logout_rounded,
+                            label: '앱 종료 버튼을 눌러 종료합니다.',
+                          ),
+                          const SizedBox(height: 10),
+                          const Text(
+                            '퇴근 처리는 이미 완료되어 있습니다. 앱이 계속 실행 중이면 위 순서대로 앱 종료를 진행해 주세요.',
+                            style: TextStyle(
+                              color: Color(0xFF2563EB),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              height: 1.35,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: _launchMainApp,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF2563EB),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                        icon: const Icon(
+                          Icons.open_in_new_rounded,
+                          size: 18,
+                        ),
+                        label: const Text(
+                          '앱으로 돌아가기',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -851,6 +1091,23 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
 
   @override
   Widget build(BuildContext context) {
+    if (_uiMode == OverlayUIMode.workFinished) {
+      return Material(
+        color: Colors.transparent,
+        child: _buildWorkFinishedOverlay(context),
+      );
+    }
+
+    if (_uiMode == OverlayUIMode.checkoutNudge) {
+      return Material(
+        color: Colors.transparent,
+        child: _buildTopHalfOverlay(
+          context,
+          checkoutNudge: true,
+        ),
+      );
+    }
+
     final effectiveMode = _uiMode == OverlayUIMode.topHalf && _topHalfAllowed
         ? OverlayUIMode.topHalf
         : OverlayUIMode.bubble;

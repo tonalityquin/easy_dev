@@ -1093,8 +1093,8 @@ class _UserPickerCard extends StatelessWidget {
                 isDense: true,
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                labelText: '사용자 (전화번호 또는 전화번호-지역)',
-                hintText: '예) 11100000000 또는 11100000000-belivus',
+                labelText: '전화번호 혹은 코드번호',
+                hintText: '예) 01012345678',
                 filled: true,
                 fillColor: paletteLight.withOpacity(.06),
                 enabledBorder: OutlineInputBorder(

@@ -10,6 +10,7 @@ import '../../../shared/tts/application/tts_ownership.dart';
 import '../../../shared/tts/application/tts_user_filters.dart';
 import '../../../shared/tts/services/plate/plate_tts_listener_service.dart';
 import '../../commute/domain/repositories/commute_log_repository.dart';
+import '../../mode_single/application/att_brk_repository.dart';
 import '../../dashboard/applications/common/firebase_google_auth_bridge.dart';
 import '../../dev/application/area_state.dart';
 import '../domain/models/session_account.dart';
@@ -374,10 +375,17 @@ class UserState extends ChangeNotifier {
   Future<void> clearClockInIssueFlag() async {
     if (_user == null) return;
 
-    final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final now = DateTime.now();
+    final today = DateFormat('yyyy-MM-dd').format(now);
     _hasClockInToday = false;
     _hasClockInTodayForDate = today;
     notifyListeners();
+
+    try {
+      await AttBrkRepository.instance.clearEventsForDate(now);
+    } catch (e, st) {
+      debugPrint('clearClockInIssueFlag 로컬 펀칭 초기화 실패: $e\n$st');
+    }
 
     final dateKey = _clockInCacheDateKey;
     final flagKey = _clockInCacheFlagKey;
@@ -432,6 +440,137 @@ class UserState extends ChangeNotifier {
         '[USER-STATE][${DateTime.now().toIso8601String()}] updateLoginUserLocalOnly firebaseOk=$firebaseOk currentUser=${FirebaseGoogleAuthBridge.instance.currentUser?.email} anonymous=${FirebaseGoogleAuthBridge.instance.currentUser?.isAnonymous}');
 
     await saveCardToUserPhone(updatedUser);
+  }
+
+  Future<void> _applyCurrentUserScheduleLocalOnly(UserModel updatedUser) async {
+    _guardSessionSwitchOrThrow(updatedUser.id, expectTablet: false);
+
+    _isTablet = false;
+    _user = updatedUser;
+    _tablet = null;
+    _session = UserSessionAccount(updatedUser);
+    _userList = _replaceItem(_userList, updatedUser);
+    notifyListeners();
+
+    await saveCardToUserPhone(updatedUser);
+    final prefs = await SharedPreferences.getInstance();
+    await WorkSchedulePrefs.refreshReminderFromPrefs(prefs);
+  }
+
+  Future<bool> setCurrentUserWeekdayEndTime({
+    required String day,
+    required TimeOfDay endTime,
+  }) async {
+    if (_isTablet || _user == null) return false;
+    if (!WorkSchedulePrefs.days.contains(day)) return false;
+
+    final normalizedEnd = WorkSchedulePrefs.normalizeDayTimeMap(
+      _user!.endTimeByWeekday,
+    );
+    normalizedEnd[day] = endTime;
+
+    final fixedHolidays = _user!.fixedHolidays
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty && value != day)
+        .toList(growable: false);
+
+    final updatedUser = _user!.copyWith(
+      endTime: WorkSchedulePrefs.pickRepresentative(normalizedEnd) ?? endTime,
+      endTimeByWeekday: normalizedEnd,
+      fixedHolidays: fixedHolidays,
+    );
+
+    try {
+      await _applyCurrentUserScheduleLocalOnly(updatedUser);
+      return true;
+    } catch (e, st) {
+      debugPrint('setCurrentUserWeekdayEndTime local error: $e\n$st');
+      return false;
+    }
+  }
+
+  Future<bool> setCurrentUserWeekdayWorkTimeLocalOnly({
+    required String day,
+    required TimeOfDay? startTime,
+    required TimeOfDay? endTime,
+  }) async {
+    if (_isTablet || _user == null) return false;
+    if (!WorkSchedulePrefs.days.contains(day)) return false;
+    if ((startTime == null) != (endTime == null)) return false;
+
+    final normalizedStart = WorkSchedulePrefs.normalizeDayTimeMap(
+      _user!.startTimeByWeekday,
+    );
+    final normalizedEnd = WorkSchedulePrefs.normalizeDayTimeMap(
+      _user!.endTimeByWeekday,
+    );
+
+    normalizedStart[day] = startTime;
+    normalizedEnd[day] = endTime;
+
+    final holidaySet = _user!.fixedHolidays
+        .map((value) => value.trim())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+
+    if (startTime == null && endTime == null) {
+      holidaySet.add(day);
+    } else {
+      holidaySet.remove(day);
+    }
+
+    final fixedHolidays = <String>[
+      for (final value in WorkSchedulePrefs.days)
+        if (holidaySet.contains(value)) value,
+      for (final value in holidaySet)
+        if (!WorkSchedulePrefs.days.contains(value)) value,
+    ];
+
+    final current = _user!;
+    final updatedUser = UserModel(
+      id: current.id,
+      areas: current.areas,
+      currentArea: current.currentArea,
+      divisions: current.divisions,
+      modes: current.modes,
+      email: current.email,
+      endTime: WorkSchedulePrefs.pickRepresentative(normalizedEnd),
+      englishSelectedAreaName: current.englishSelectedAreaName,
+      fixedHolidays: fixedHolidays,
+      isSaved: current.isSaved,
+      isSelected: current.isSelected,
+      isWorking: current.isWorking,
+      name: current.name,
+      password: current.password,
+      phone: current.phone,
+      position: current.position,
+      role: current.role,
+      selectedArea: current.selectedArea,
+      startTime: WorkSchedulePrefs.pickRepresentative(normalizedStart),
+      startTimeByWeekday: normalizedStart,
+      endTimeByWeekday: normalizedEnd,
+      isActive: current.isActive,
+    );
+
+    try {
+      await _applyCurrentUserScheduleLocalOnly(updatedUser);
+      return true;
+    } catch (e, st) {
+      debugPrint('setCurrentUserWeekdayWorkTimeLocalOnly error: $e\n$st');
+      return false;
+    }
+  }
+
+  Future<bool> setCurrentUserWeekdayWorkTime({
+    required String day,
+    required TimeOfDay? startTime,
+    required TimeOfDay? endTime,
+  }) {
+    return setCurrentUserWeekdayWorkTimeLocalOnly(
+      day: day,
+      startTime: startTime,
+      endTime: endTime,
+    );
   }
 
   Future<void> updateLoginTablet(TabletModel updatedTablet) async {

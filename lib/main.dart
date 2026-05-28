@@ -12,6 +12,7 @@ import 'app/config/overlay_mode_config.dart';
 import 'app/di/providers.dart';
 import 'app/di/routes.dart';
 import 'app/init/app_exit_flag.dart';
+import 'app/init/checkout_nudge_guard.dart';
 import 'app/init/app_navigator.dart';
 import 'app/init/quick_overlay_main.dart';
 import 'app/theme/theme_prefs_controller.dart';
@@ -27,7 +28,6 @@ import 'package:intl/intl.dart';
 
 const String kDevUnlockPassword = 'DEV-MODE-2025!';
 
-const double kTopOverlayLogicalHeight = 520.0;
 
 final _devUnlockRouteTracker = _DevUnlockRouteTracker();
 
@@ -121,8 +121,7 @@ Future<_OverlayWindowConfig> _buildOverlayWindowConfig(OverlayMode mode) async {
   final statusBarLogical = media.padding.top;
 
   if (mode == OverlayMode.topHalf) {
-    final desiredPhysicalHeight = kTopOverlayLogicalHeight * devicePixelRatio;
-    final h = desiredPhysicalHeight.clamp(0.0, physicalHeight).round();
+    final h = (physicalHeight * 0.5).round();
     final w = physicalWidth.round();
 
     return _OverlayWindowConfig(
@@ -192,6 +191,36 @@ Future<void> openQuickOverlay(BuildContext context) async {
 Future<void> closeQuickOverlay() async {
   if (await FlutterOverlayWindow.isActive()) {
     await FlutterOverlayWindow.closeOverlay();
+  }
+}
+
+class _LifecycleOverlayRequest {
+  final OverlayMode mode;
+  final bool checkoutNudge;
+  final bool workFinished;
+
+  const _LifecycleOverlayRequest({
+    required this.mode,
+    required this.checkoutNudge,
+    required this.workFinished,
+  });
+
+  String get wire {
+    if (workFinished) return 'workFinished';
+    if (checkoutNudge) return 'checkoutNudge';
+    return _overlayModeToWire(mode);
+  }
+
+  String get title {
+    if (workFinished) return 'ParkinWorkin 업무 종료 안내';
+    if (checkoutNudge) return 'ParkinWorkin 퇴근 확인';
+    return 'ParkinWorkin';
+  }
+
+  String get content {
+    if (workFinished) return '오늘의 업무는 종료되었습니다. 앱 종료 방법을 확인해 주세요.';
+    if (checkoutNudge) return '퇴근 시간이 지났습니다. 퇴근 버튼을 눌러주세요.';
+    return 'Simple 모드 플로팅';
   }
 }
 
@@ -333,6 +362,8 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  String? _lifecycleOverlayWire;
+
   @override
   void initState() {
     super.initState();
@@ -371,10 +402,50 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         break;
 
       case AppLifecycleState.detached:
+        _lifecycleOverlayWire = null;
         unawaited(GameQuickActions.terminateSession());
         unawaited(closeQuickOverlay());
         break;
     }
+  }
+
+  Future<_LifecycleOverlayRequest> _resolveLifecycleOverlayRequest() async {
+    final nudge = await CheckoutNudgeGuard.evaluate();
+
+    if (nudge.shouldShowWorkFinished) {
+      return const _LifecycleOverlayRequest(
+        mode: OverlayMode.topHalf,
+        checkoutNudge: false,
+        workFinished: true,
+      );
+    }
+
+    if (nudge.shouldNudge) {
+      return const _LifecycleOverlayRequest(
+        mode: OverlayMode.topHalf,
+        checkoutNudge: true,
+        workFinished: false,
+      );
+    }
+
+    return const _LifecycleOverlayRequest(
+      mode: OverlayMode.bubble,
+      checkoutNudge: false,
+      workFinished: false,
+    );
+  }
+
+  Future<void> _applyLifecycleOverlayMode(
+    _LifecycleOverlayRequest request,
+  ) async {
+    if (request.workFinished) {
+      await FlutterOverlayWindow.shareData('__work_finished__');
+    } else if (request.checkoutNudge) {
+      await FlutterOverlayWindow.shareData('__checkout_nudge__');
+    } else {
+      await FlutterOverlayWindow.shareData('__mode:${request.wire}__');
+    }
+    await FlutterOverlayWindow.shareData('__collapse__');
   }
 
   Future<void> _startOverlayFromLifecycle() async {
@@ -386,21 +457,26 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         return;
       }
 
-      final mode = await OverlayModeConfig.getMode();
-      final wire = _overlayModeToWire(mode);
+      final request = await _resolveLifecycleOverlayRequest();
+      final wire = request.wire;
 
       if (await FlutterOverlayWindow.isActive()) {
-        await FlutterOverlayWindow.shareData('__mode:${wire}__');
-        await FlutterOverlayWindow.shareData('__collapse__');
-        return;
+        if (_lifecycleOverlayWire == wire) {
+          await _applyLifecycleOverlayMode(request);
+          return;
+        }
+
+        await FlutterOverlayWindow.closeOverlay();
+        _lifecycleOverlayWire = null;
+        await Future<void>.delayed(const Duration(milliseconds: 120));
       }
 
-      final config = await _buildOverlayWindowConfig(mode);
+      final config = await _buildOverlayWindowConfig(request.mode);
 
       await FlutterOverlayWindow.showOverlay(
         enableDrag: config.enableDrag,
-        overlayTitle: 'ParkinWorkin',
-        overlayContent: 'Simple 모드 플로팅',
+        overlayTitle: request.title,
+        overlayContent: request.content,
         flag: OverlayFlag.defaultFlag,
         alignment: config.alignment,
         positionGravity: config.positionGravity,
@@ -409,8 +485,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         startPosition: config.startPosition,
       );
 
-      await FlutterOverlayWindow.shareData('__mode:${wire}__');
-      await FlutterOverlayWindow.shareData('__collapse__');
+      _lifecycleOverlayWire = wire;
+      await _applyLifecycleOverlayMode(request);
 
       debugPrint(
           '[OVERLAY][${_ts()}] auto start overlay from lifecycle (mode=$wire)');
@@ -424,6 +500,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     try {
       if (await FlutterOverlayWindow.isActive()) {
         await FlutterOverlayWindow.closeOverlay();
+        _lifecycleOverlayWire = null;
         debugPrint('[OVERLAY][${_ts()}] auto stop overlay from lifecycle');
       }
     } catch (e, st) {

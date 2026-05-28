@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../../app/config/commute_true_false_mode_config.dart';
 import '../../../../../app/init/app_exit_service.dart';
+import '../../../../../app/init/missing_weekday_end_time_dialog.dart';
 import '../../../../../app/utils/block_dialog/work_end_duration_blocking_dialog.dart';
 import '../../../../../app/utils/block_dialog/work_start_duration_blocking_dialog.dart';
 import '../../../../commute/domain/repositories/commute_true_false_repository.dart';
@@ -194,6 +195,11 @@ class _SingleInsidePunchRecorderSectionState
 
     if (type == AttBrkModeType.workIn) {
       await _recordClockInAtToCommuteTrueFalse(targetDateTime);
+      if (!mounted) return;
+      await showMissingWeekdayEndTimeDialogIfNeeded(
+        context,
+        clockInAt: targetDateTime,
+      );
     }
 
     await _loadForDate(_selectedDate);

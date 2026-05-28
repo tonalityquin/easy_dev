@@ -51,6 +51,18 @@ class UpdateBottomSheet extends StatelessWidget {
 
   static final List<UpdateEntry> defaultEntries = [
     UpdateEntry(
+      version: 'v0.1.2',
+      highlights: [
+        '업무 별 통계 시각화 기능 개선',
+        '차량 현황 출력 화면 개선',
+        '주차 도면으로 자동 전환 분기점 개선',
+        '로그 저장 확장값을 json에서 csv로 변경',
+        '본사 메모장 기능을 문서로 확대 개편',
+        '출*퇴근 알림 등 로직 개선',
+        '앱 첫 설치 후, 권한 설정 화면 다음 순서에 약관 관련 동의 화면 추가'
+      ],
+    ),
+    UpdateEntry(
       version: 'v0.1.1',
       highlights: [
         '개인정보 보안용 스키마 추가',

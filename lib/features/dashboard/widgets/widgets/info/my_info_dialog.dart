@@ -1,9 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../../../app/init/work_schedule_prefs.dart';
+import '../../../../account/applications/user_state.dart';
 
 Future<void> showMyInfoDialog({required BuildContext context}) {
   return showDialog<void>(
@@ -26,6 +27,7 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
   static const String _kEndMapKey = 'endTimeByWeekday';
 
   bool _loading = true;
+  String? _savingDay;
 
   String _name = '';
   String _phone = '';
@@ -33,7 +35,6 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
   String _division = '';
   String _role = '';
   String _position = '';
-
 
   Map<String, TimeOfDay?> _startByDay = <String, TimeOfDay?>{};
   Map<String, TimeOfDay?> _endByDay = <String, TimeOfDay?>{};
@@ -44,28 +45,6 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
     _loadPrefs();
   }
 
-
-  String _weekdayLabelFromNow() {
-    final w = DateTime.now().weekday;
-    switch (w) {
-      case DateTime.monday:
-        return '월';
-      case DateTime.tuesday:
-        return '화';
-      case DateTime.wednesday:
-        return '수';
-      case DateTime.thursday:
-        return '목';
-      case DateTime.friday:
-        return '금';
-      case DateTime.saturday:
-        return '토';
-      case DateTime.sunday:
-        return '일';
-      default:
-        return '월';
-    }
-  }
 
   String _formatTime(TimeOfDay? t) {
     if (t == null) return '-';
@@ -98,16 +77,6 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
     return <String, dynamic>{};
   }
 
-  String _encodeDayTimeMap(Map<String, TimeOfDay?> m) {
-    final out = <String, String>{};
-    for (final d in _days) {
-      final v = m[d];
-      if (v == null) continue;
-      out[d] = _formatTime(v);
-    }
-    return jsonEncode(out);
-  }
-
   Map<String, TimeOfDay?> _readDayTimeMapFromPrefs(SharedPreferences prefs, String key) {
     final raw = (prefs.getString(key) ?? '').trim();
     if (raw.isEmpty) return <String, TimeOfDay?>{};
@@ -115,7 +84,11 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
     final out = <String, TimeOfDay?>{};
     for (final d in _days) {
       final v = decoded[d];
-      if (v is String) out[d] = _parseHHmm(v);
+      if (v is String) {
+        out[d] = _parseHHmm(v);
+      } else {
+        out[d] = null;
+      }
     }
     return out;
   }
@@ -126,24 +99,6 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
       out[d] = t;
     }
     return out;
-  }
-
-  Map<String, int>? _timeToMap(TimeOfDay? t) {
-    if (t == null) return null;
-    return <String, int>{'hour': t.hour, 'minute': t.minute};
-  }
-
-  TimeOfDay? _pickLegacyValue(Map<String, TimeOfDay?> m) {
-    final today = _weekdayLabelFromNow();
-    final t = m[today];
-    if (t != null) return t;
-    final mon = m['월'];
-    if (mon != null) return mon;
-    for (final d in _days) {
-      final v = m[d];
-      if (v != null) return v;
-    }
-    return null;
   }
 
   Future<void> _loadPrefs() async {
@@ -158,7 +113,6 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
     final prefsDivision = (prefs.getString('division') ?? '').trim();
     final prefsRole = (prefs.getString('role') ?? '').trim();
     final prefsPosition = (prefs.getString('position') ?? '').trim();
-
 
     final name = ((cached['name'] as String?) ?? '').trim();
     final phoneFromCached = ((cached['phone'] as String?) ?? '').trim();
@@ -185,6 +139,8 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
       }
     }
 
+    if (!mounted) return;
+
     setState(() {
       _name = name;
       _phone = phone;
@@ -198,47 +154,61 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
     });
   }
 
-  Future<void> _refreshReminderUsingPrefs(SharedPreferences prefs) async {
-    await WorkSchedulePrefs.refreshReminderFromPrefs(prefs);
+  void _showSnack(String message) {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    messenger?.hideCurrentSnackBar();
+    messenger?.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
-  Future<void> _persistDayTimeMaps({
-    required SharedPreferences prefs,
-    required Map<String, TimeOfDay?> startMap,
-    required Map<String, TimeOfDay?> endMap,
+  Future<void> _saveWeeklyTime({
+    required String day,
+    required TimeOfDay? startTime,
+    required TimeOfDay? endTime,
   }) async {
-    final startJson = _encodeDayTimeMap(startMap);
-    final endJson = _encodeDayTimeMap(endMap);
+    if ((startTime == null) != (endTime == null)) {
+      _showSnack('출근/퇴근 시간을 모두 입력하거나 모두 비워 주세요.');
+      return;
+    }
 
-    await WorkSchedulePrefs.saveScheduleToPrefs(
-      prefs: prefs,
-      startByDay: startMap,
-      endByDay: endMap,
-      fixedHolidays: const <String>[],
-    );
+    setState(() => _savingDay = day);
 
-    final legacyStart = _pickLegacyValue(startMap);
-    final legacyEnd = _pickLegacyValue(endMap);
+    final ok = await context.read<UserState>().setCurrentUserWeekdayWorkTimeLocalOnly(
+          day: day,
+          startTime: startTime,
+          endTime: endTime,
+        );
 
-    final cachedJson = prefs.getString('cachedUserJson') ?? '';
-    final cached = _decodeJsonMap(cachedJson);
+    if (!mounted) return;
 
-    cached['startTimeByWeekday'] = jsonDecode(startJson);
-    cached['endTimeByWeekday'] = jsonDecode(endJson);
-    cached['startTime'] = _timeToMap(legacyStart);
-    cached['endTime'] = _timeToMap(legacyEnd);
-    cached['fixedHolidays'] = const <String>[];
+    if (ok) {
+      setState(() {
+        _startByDay = Map<String, TimeOfDay?>.of(_startByDay)..[day] = startTime;
+        _endByDay = Map<String, TimeOfDay?>.of(_endByDay)..[day] = endTime;
+        _savingDay = null;
+      });
+      _showSnack(startTime == null && endTime == null ? '$day요일이 휴무로 저장되었습니다.' : '$day요일 근무 시간이 저장되었습니다.');
+      return;
+    }
 
-    await prefs.setString('cachedUserJson', jsonEncode(cached));
+    setState(() => _savingDay = null);
+    await _loadPrefs();
+    if (!mounted) return;
+    _showSnack('근무 시간 저장에 실패했습니다.');
   }
 
   Future<void> _pickWeeklyTime({
     required String day,
     required bool isStart,
   }) async {
+    if (_savingDay != null) return;
+
     final current = isStart ? _startByDay[day] : _endByDay[day];
-    final initial = current ??
-        (isStart ? const TimeOfDay(hour: 9, minute: 0) : const TimeOfDay(hour: 18, minute: 0));
+    final initial = current ?? (isStart ? const TimeOfDay(hour: 9, minute: 0) : const TimeOfDay(hour: 18, minute: 0));
 
     final picked = await showTimePicker(
       context: context,
@@ -251,22 +221,18 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
     if (!mounted) return;
     if (picked == null) return;
 
-    setState(() {
-      if (isStart) {
-        _startByDay = Map<String, TimeOfDay?>.of(_startByDay)..[day] = picked;
-      } else {
-        _endByDay = Map<String, TimeOfDay?>.of(_endByDay)..[day] = picked;
-      }
-    });
+    final currentStart = _startByDay[day];
+    final currentEnd = _endByDay[day];
+    final nextStart = isStart ? picked : currentStart ?? const TimeOfDay(hour: 9, minute: 0);
+    final nextEnd = isStart ? currentEnd ?? const TimeOfDay(hour: 18, minute: 0) : picked;
 
-    final prefs = await SharedPreferences.getInstance();
-    await _persistDayTimeMaps(prefs: prefs, startMap: _startByDay, endMap: _endByDay);
-
-    if (!isStart) {
-      await _refreshReminderUsingPrefs(prefs);
-    }
+    await _saveWeeklyTime(day: day, startTime: nextStart, endTime: nextEnd);
   }
 
+  Future<void> _clearWeeklyTime(String day) async {
+    if (_savingDay != null) return;
+    await _saveWeeklyTime(day: day, startTime: null, endTime: null);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -281,8 +247,7 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
           Expanded(
             child: Text(
               '내 정보',
-              style: (tt.titleMedium ?? const TextStyle(fontSize: 16))
-                  .copyWith(fontWeight: FontWeight.w800, color: cs.onSurface),
+              style: (tt.titleMedium ?? const TextStyle(fontSize: 16)).copyWith(fontWeight: FontWeight.w800, color: cs.onSurface),
             ),
           ),
           IconButton(
@@ -296,59 +261,59 @@ class _MyInfoDialogState extends State<MyInfoDialog> {
 
     final body = _loading
         ? Padding(
-      padding: const EdgeInsets.symmetric(vertical: 26),
-      child: Center(
-        child: SizedBox(
-          width: 28,
-          height: 28,
-          child: CircularProgressIndicator(
-            strokeWidth: 3,
-            valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
-          ),
-        ),
-      ),
-    )
-        : Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _UserInfoCard(
-          name: _name,
-          position: _position,
-          role: _role,
-          phone: _phone,
-          area: _area,
-          division: _division,
-        ),
-        const SizedBox(height: 12),
-        _WeeklyWorkTimeCard(
-          days: _days,
-          startByDay: _startByDay,
-          endByDay: _endByDay,
-          formatTime: _formatTime,
-          onPickStart: (d) => _pickWeeklyTime(day: d, isStart: true),
-          onPickEnd: (d) => _pickWeeklyTime(day: d, isStart: false),
-        ),
-
-        const SizedBox(height: 14),
-        SizedBox(
-          width: double.infinity,
-          height: 44,
-          child: OutlinedButton(
-            onPressed: () => Navigator.of(context).pop(),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: cs.onSurface,
-              side: BorderSide(color: cs.outlineVariant.withOpacity(0.75)),
-              shape: const StadiumBorder(),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              backgroundColor: cs.surface.withOpacity(0.22),
-              textStyle: (tt.labelLarge ?? const TextStyle(fontSize: 14))
-                  .copyWith(fontWeight: FontWeight.w800),
+            padding: const EdgeInsets.symmetric(vertical: 26),
+            child: Center(
+              child: SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                ),
+              ),
             ),
-            child: const Text('닫기'),
-          ),
-        ),
-      ],
-    );
+          )
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _UserInfoCard(
+                name: _name,
+                position: _position,
+                role: _role,
+                phone: _phone,
+                area: _area,
+                division: _division,
+              ),
+              const SizedBox(height: 12),
+              _WeeklyWorkTimeCard(
+                days: _days,
+                startByDay: _startByDay,
+                endByDay: _endByDay,
+                savingDay: _savingDay,
+                formatTime: _formatTime,
+                onPickStart: (d) => _pickWeeklyTime(day: d, isStart: true),
+                onPickEnd: (d) => _pickWeeklyTime(day: d, isStart: false),
+                onClearDay: _clearWeeklyTime,
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                height: 44,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: cs.onSurface,
+                    side: BorderSide(color: cs.outlineVariant.withOpacity(0.75)),
+                    shape: const StadiumBorder(),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    backgroundColor: cs.surface.withOpacity(0.22),
+                    textStyle: (tt.labelLarge ?? const TextStyle(fontSize: 14)).copyWith(fontWeight: FontWeight.w800),
+                  ),
+                  child: const Text('닫기'),
+                ),
+              ),
+            ],
+          );
 
     return Dialog(
       backgroundColor: cs.surface,
@@ -489,17 +454,21 @@ class _WeeklyWorkTimeCard extends StatelessWidget {
   final List<String> days;
   final Map<String, TimeOfDay?> startByDay;
   final Map<String, TimeOfDay?> endByDay;
+  final String? savingDay;
   final String Function(TimeOfDay? t) formatTime;
   final Future<void> Function(String day) onPickStart;
   final Future<void> Function(String day) onPickEnd;
+  final Future<void> Function(String day) onClearDay;
 
   const _WeeklyWorkTimeCard({
     required this.days,
     required this.startByDay,
     required this.endByDay,
+    required this.savingDay,
     required this.formatTime,
     required this.onPickStart,
     required this.onPickEnd,
+    required this.onClearDay,
   });
 
   @override
@@ -519,59 +488,116 @@ class _WeeklyWorkTimeCard extends StatelessWidget {
     Widget dayRow(String d) {
       final st = startByDay[d];
       final et = endByDay[d];
-
-      final badgeBg = cs.surfaceContainerHigh.withOpacity(0.55);
-      final badgeFg = cs.onSurface.withOpacity(0.78);
-      final badgeBorder = cs.outlineVariant.withOpacity(0.55);
+      final isSaving = savingDay == d;
+      final isHoliday = st == null && et == null;
+      final hasPartial = (st == null) != (et == null);
+      final badgeBg = isHoliday ? cs.secondaryContainer.withOpacity(0.55) : cs.surfaceContainerHigh.withOpacity(0.55);
+      final badgeFg = isHoliday ? cs.onSecondaryContainer : cs.onSurface.withOpacity(0.78);
+      final badgeBorder = hasPartial ? cs.error.withOpacity(0.75) : cs.outlineVariant.withOpacity(0.55);
+      final status = hasPartial ? '시간 확인 필요' : isHoliday ? '휴무' : '${formatTime(st)} ~ ${formatTime(et)}';
+      final clearVisible = !isHoliday || hasPartial;
 
       return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        child: Row(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: badgeBg,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: badgeBorder),
-              ),
-              child: Text(
-                d,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                  color: badgeFg,
-                ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 38,
-                      child: OutlinedButton(
-                        onPressed: () => onPickStart(d),
-                        style: btnStyle,
-                        child: Text('출근  ${formatTime(st)}'),
-                      ),
+            Row(
+              children: [
+                Container(
+                  width: 34,
+                  alignment: Alignment.center,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: badgeBg,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: badgeBorder),
+                  ),
+                  child: Text(
+                    d,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: badgeFg,
                     ),
                   ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    status,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: hasPartial ? cs.error : cs.onSurfaceVariant,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (isSaving)
+                  SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.4,
+                      valueColor: AlwaysStoppedAnimation<Color>(cs.primary),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 38,
+                    child: OutlinedButton(
+                      onPressed: isSaving ? null : () => onPickStart(d),
+                      style: btnStyle,
+                      child: Text('출근  ${formatTime(st)}'),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: SizedBox(
+                    height: 38,
+                    child: OutlinedButton(
+                      onPressed: isSaving ? null : () => onPickEnd(d),
+                      style: btnStyle,
+                      child: Text('퇴근  ${formatTime(et)}'),
+                    ),
+                  ),
+                ),
+                if (clearVisible) ...[
                   const SizedBox(width: 8),
-                  Expanded(
-                    child: SizedBox(
-                      height: 38,
-                      child: OutlinedButton(
-                        onPressed: () => onPickEnd(d),
-                        style: btnStyle,
-                        child: Text('퇴근  ${formatTime(et)}'),
+                  SizedBox(
+                    height: 38,
+                    child: TextButton.icon(
+                      onPressed: isSaving ? null : () => onClearDay(d),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      label: const Text('휴무'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: cs.error,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        textStyle: (tt.labelMedium ?? const TextStyle(fontSize: 12)).copyWith(fontWeight: FontWeight.w900),
                       ),
                     ),
                   ),
                 ],
-              ),
+              ],
             ),
+            if (hasPartial) ...[
+              const SizedBox(height: 6),
+              Text(
+                '출근/퇴근 시간을 모두 입력하거나 휴무로 설정해 주세요.',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: cs.error,
+                ),
+              ),
+            ],
           ],
         ),
       );
@@ -605,6 +631,15 @@ class _WeeklyWorkTimeCard extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '휴무 요일은 출근/퇴근 시간을 모두 비워 저장할 수 있습니다.',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: cs.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 10),
             for (final d in days) dayRow(d),

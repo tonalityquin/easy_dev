@@ -109,6 +109,23 @@ class AttBrkRepository {
     }
   }
 
+  Future<void> clearEventsForDate(DateTime dateTime) async {
+    final db = await _database;
+    final date = _dateFormatter.format(dateTime);
+
+    await db.delete(
+      'simple_work_attendance',
+      where: 'date = ?',
+      whereArgs: <Object?>[date],
+    );
+
+    await db.delete(
+      'simple_break_attendance',
+      where: 'date = ?',
+      whereArgs: <Object?>[date],
+    );
+  }
+
   Future<Map<AttBrkModeType, String>> getEventsForDate(
       DateTime dateTime) async {
     final db = await _database;
