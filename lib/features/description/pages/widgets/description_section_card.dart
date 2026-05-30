@@ -275,7 +275,10 @@ class _PortraitLayout extends StatelessWidget {
       preferredAspectRatio: preferredAspectRatio,
       maxPanelHeight: useSideBySide
           ? math.min(viewportHeight - 8, 620.0)
-          : math.min(viewportHeight * 0.44, 320.0),
+          : math.min(
+        viewportHeight * (viewportHeight < 620 ? 0.34 : 0.44),
+        viewportHeight < 620 ? 240.0 : 320.0,
+      ),
     );
 
     if (useSideBySide) {
@@ -407,47 +410,47 @@ class _MediaPanel extends StatelessWidget {
           final hasAsset = media.assetPath != null && media.assetPath!.trim().isNotEmpty;
           final mediaWidget = hasAsset
               ? Material(
-                  color: cs.surface,
-                  child: InkWell(
-                    onTap: () => _showImagePreviewDialog(context, media),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Image.asset(
-                          media.assetPath!,
-                          fit: BoxFit.contain,
-                          alignment: Alignment.topCenter,
-                          errorBuilder: (context, error, stackTrace) => _MediaFallback(
-                            media: media,
-                            layout: layout,
-                          ),
-                        ),
-                        Positioned(
-                          right: 12,
-                          top: 12,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.52),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              '확대',
-                              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+            color: cs.surface,
+            child: InkWell(
+              onTap: () => _showImagePreviewDialog(context, media),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Image.asset(
+                    media.assetPath!,
+                    fit: BoxFit.contain,
+                    alignment: Alignment.topCenter,
+                    errorBuilder: (context, error, stackTrace) => _MediaFallback(
+                      media: media,
+                      layout: layout,
                     ),
                   ),
-                )
+                  Positioned(
+                    right: 12,
+                    top: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.52),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '확대',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
               : _MediaFallback(
-                  media: media,
-                  layout: layout,
-                );
+            media: media,
+            layout: layout,
+          );
 
           return Center(
             child: SizedBox(
@@ -577,7 +580,7 @@ class _MediaFallback extends StatelessWidget {
   }
 }
 
-class _TextPanel extends StatelessWidget {
+class _TextPanel extends StatefulWidget {
   const _TextPanel({
     required this.section,
     required this.compact,
@@ -585,6 +588,33 @@ class _TextPanel extends StatelessWidget {
 
   final DescriptionSection section;
   final bool compact;
+
+  @override
+  State<_TextPanel> createState() => _TextPanelState();
+}
+
+class _TextPanelState extends State<_TextPanel> {
+  late final ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TextPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.section.id != widget.section.id && _scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -595,7 +625,7 @@ class _TextPanel extends StatelessWidget {
       builder: (context, constraints) {
         final veryCompact = constraints.maxHeight < 280 || constraints.maxWidth < 340;
         final tight = constraints.maxHeight < 360 || constraints.maxWidth < 420;
-        final bodyPadding = veryCompact ? 14.0 : compact || tight ? 18.0 : 24.0;
+        final bodyPadding = veryCompact ? 14.0 : widget.compact || tight ? 18.0 : 24.0;
         final titleStyle = theme.textTheme.headlineSmall?.copyWith(
           fontWeight: FontWeight.w900,
           height: 1.15,
@@ -613,9 +643,16 @@ class _TextPanel extends StatelessWidget {
           color: cs.onSurface,
           fontSize: veryCompact ? 13 : tight ? 14 : 15,
         );
-        final summaryLines = veryCompact ? 2 : tight ? 3 : 4;
-        final paragraphLines = veryCompact ? 2 : tight ? 3 : 4;
-        final visibleParagraphs = constraints.maxHeight < 340 ? 1 : math.min(3, section.paragraphs.length);
+        final bulletStyle = theme.textTheme.bodyLarge?.copyWith(
+          height: 1.5,
+          fontWeight: FontWeight.w600,
+          color: cs.onSurface,
+          fontSize: veryCompact ? 13 : tight ? 14 : 15,
+        );
+        final bulletDotStyle = bulletStyle?.copyWith(
+          color: cs.primary,
+          fontWeight: FontWeight.w900,
+        );
 
         return Container(
           decoration: BoxDecoration(
@@ -624,42 +661,70 @@ class _TextPanel extends StatelessWidget {
             border: Border.all(color: cs.outlineVariant.withOpacity(0.34)),
           ),
           padding: EdgeInsets.all(bodyPadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.start,
-            children: [
-              Text(
-                section.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: titleStyle,
+          child: Scrollbar(
+            controller: _scrollController,
+            thumbVisibility: constraints.maxHeight >= 320 && constraints.maxWidth >= 340,
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              primary: false,
+              physics: const ClampingScrollPhysics(),
+              padding: const EdgeInsets.only(right: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.section.title,
+                    style: titleStyle,
+                  ),
+                  SizedBox(height: veryCompact ? 8 : 10),
+                  Text(
+                    widget.section.summary,
+                    style: summaryStyle,
+                  ),
+                  if (widget.section.paragraphs.isNotEmpty) ...[
+                    SizedBox(height: veryCompact ? 10 : 14),
+                    for (final paragraph in widget.section.paragraphs) ...[
+                      Text(
+                        paragraph,
+                        style: paragraphStyle,
+                      ),
+                      SizedBox(height: veryCompact ? 8 : 10),
+                    ],
+                  ],
+                  if (widget.section.bullets.isNotEmpty) ...[
+                    SizedBox(height: veryCompact ? 4 : 8),
+                    for (final bullet in widget.section.bullets) ...[
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: EdgeInsets.only(top: veryCompact ? 0 : 1),
+                            child: Text(
+                              '• ',
+                              style: bulletDotStyle,
+                            ),
+                          ),
+                          Expanded(
+                            child: Text(
+                              bullet,
+                              style: bulletStyle,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: veryCompact ? 6 : 8),
+                    ],
+                  ],
+                ],
               ),
-              SizedBox(height: veryCompact ? 8 : 10),
-              Text(
-                section.summary,
-                maxLines: summaryLines,
-                overflow: TextOverflow.ellipsis,
-                style: summaryStyle,
-              ),
-              SizedBox(height: veryCompact ? 10 : 14),
-              for (final paragraph in section.paragraphs.take(visibleParagraphs)) ...[
-                Text(
-                  paragraph,
-                  maxLines: paragraphLines,
-                  overflow: TextOverflow.ellipsis,
-                  style: paragraphStyle,
-                ),
-                SizedBox(height: veryCompact ? 8 : 10),
-              ],
-              const Spacer(),
-            ],
+            ),
           ),
         );
       },
     );
   }
 }
-
 class _MetaChip extends StatelessWidget {
   const _MetaChip({required this.label});
 

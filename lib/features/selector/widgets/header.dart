@@ -5,7 +5,7 @@ import '../../../app/init/db_connection_status_section.dart';
 import '../sheets/service_bottom_sheet.dart';
 
 const String _kPrivacyUrl =
-    'https://sites.google.com/view/parkinworkin/%ED%99%88';
+    'https://forms.gle/hDTkX1p6U9jMMuySA';
 
 class Header extends StatefulWidget {
   const Header({super.key});
@@ -68,7 +68,7 @@ class _HeaderState extends State<Header> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '앱 소개',
+                  '앱 이용 문의',
                   style: text.titleSmall?.copyWith(
                     fontWeight: FontWeight.w800,
                     color: t.pageFg,
@@ -76,7 +76,7 @@ class _HeaderState extends State<Header> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  '외부 웹페이지로 이동합니다.',
+                  '외부 설문조사 화면으로 이동합니다.',
                   style:
                       text.bodyMedium?.copyWith(fontSize: 13, color: t.mutedFg),
                 ),

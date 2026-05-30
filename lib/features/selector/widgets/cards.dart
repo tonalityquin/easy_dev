@@ -416,7 +416,7 @@ class SingleLoginCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = _selectorCardTitle(context, 'WorkFlow D');
+    final title = _selectorCardTitle(context, '출퇴근 기록형');
 
     return _selectorCardShell(
       context: context,
@@ -424,7 +424,7 @@ class SingleLoginCard extends StatelessWidget {
         icon: Icons.access_time_filled_rounded,
         titleWidget: title,
         featureText: '출/퇴근 · 휴게시간',
-        traceName: 'WorkFlow D',
+        traceName: '출퇴근 기록형',
         traceMeta: {
           'to': AppRoutes.singleLogin,
           'redirectAfterLogin': AppRoutes.singleCommute,
@@ -450,7 +450,7 @@ class DoubleLoginCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = _selectorCardTitle(context, 'WorkFlow A');
+    final title = _selectorCardTitle(context, '경량형');
 
     return _selectorCardShell(
       context: context,
@@ -458,7 +458,7 @@ class DoubleLoginCard extends StatelessWidget {
         icon: Icons.bolt_rounded,
         titleWidget: title,
         featureText: '입차 완료 · 출차 완료',
-        traceName: 'WorkFlow A',
+        traceName: '경량형',
         traceMeta: {'to': AppRoutes.doubleLogin, 'requiredMode': 'double'},
         onPressed: () => Navigator.of(context).pushReplacementNamed(
           AppRoutes.doubleLogin,
@@ -477,7 +477,7 @@ class MinorLoginCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = _selectorCardTitle(context, 'WorkFlow C');
+    final title = _selectorCardTitle(context, '확장형');
 
     return _selectorCardShell(
       context: context,
@@ -485,7 +485,7 @@ class MinorLoginCard extends StatelessWidget {
         icon: Icons.tune_rounded,
         titleWidget: title,
         featureText: '입차 요청 · 입차 완료 · 출차 요청 · 출차 완료',
-        traceName: 'WorkFlow C',
+        traceName: '확장형',
         traceMeta: {
           'to': AppRoutes.minorLogin,
           'redirectAfterLogin': AppRoutes.minorCommute,
@@ -511,7 +511,7 @@ class TabletCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = _selectorCardTitle(context, 'Tablet Mode');
+    final title = _selectorCardTitle(context, '태블릿형');
 
     return _selectorCardShell(
       context: context,
@@ -557,7 +557,7 @@ class TripleLoginCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = _selectorCardTitle(context, 'WorkFlow B');
+    final title = _selectorCardTitle(context, '기본형');
 
     return _selectorCardShell(
       context: context,
@@ -565,7 +565,7 @@ class TripleLoginCard extends StatelessWidget {
         icon: Icons.apps_rounded,
         titleWidget: title,
         featureText: '입차 완료 · 출차 요청 · 출차 완료',
-        traceName: 'WorkFlow B',
+        traceName: '기본형',
         traceMeta: {
           'to': AppRoutes.tripleLogin,
           'redirectAfterLogin': AppRoutes.tripleCommute,

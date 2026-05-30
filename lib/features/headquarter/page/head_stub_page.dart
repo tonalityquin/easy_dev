@@ -136,12 +136,13 @@ class HeadStubPage extends StatelessWidget {
                     final a5 = cs.primaryContainer;
                     final a6 = cs.secondaryContainer;
                     final a7 = cs.tertiaryContainer;
+                    final a8 = cs.errorContainer;
 
                     final cards = <Widget>[
                       _ActionCard(
                         icon: Icons.calendar_month_rounded,
                         title: '본사 달력',
-                        subtitle: 'Google Calendar\nSpread Sheets',
+                        subtitle: '본사 일정 공유',
                         bg: a1,
                         fg: cs.onPrimary,
                         onTap: () =>
@@ -150,7 +151,7 @@ class HeadStubPage extends StatelessWidget {
                       _ActionCard(
                         icon: Icons.how_to_reg_rounded,
                         title: '출/퇴근',
-                        subtitle: 'Spread Sheets',
+                        subtitle: '직원 출퇴근 관리',
                         bg: a2,
                         fg: cs.onSecondary,
                         onTap: () =>
@@ -160,7 +161,7 @@ class HeadStubPage extends StatelessWidget {
                       _ActionCard(
                         icon: Icons.free_breakfast_rounded,
                         title: '휴게 관리',
-                        subtitle: 'Spread Sheets',
+                        subtitle: '직원 휴게 관리',
                         bg: a3,
                         fg: cs.onTertiary,
                         onTap: () =>
@@ -196,6 +197,14 @@ class HeadStubPage extends StatelessWidget {
                         bg: a6,
                         fg: cs.onSecondaryContainer,
                         onTap: () async => HeadTutorials.open(context),
+                      ),
+                      _ActionCard(
+                        icon: Icons.contact_support_rounded,
+                        title: '문의하기',
+                        subtitle: '이슈 · 오류 · 궁금증',
+                        bg: a8,
+                        fg: cs.onErrorContainer,
+                        onTap: () async => HeadHubActions.openContactForm(context),
                       ),
                       _ActionCard(
                         icon: Icons.map_rounded,

@@ -97,6 +97,7 @@ class CommunityStubPage extends StatelessWidget {
       'https://sites.google.com/view/parkinworkin3/%ED%99%88';
   static const String _privacyPolicyUrl =
       'https://sites.google.com/view/parkinworkin4/%ED%99%88';
+  static const String _contactFormUrl = 'https://forms.gle/nbwaFeLhJfAKAf6o8';
 
   Future<bool?> _openWalkieTutorial(BuildContext context) {
     return showModalBottomSheet<bool>(
@@ -128,6 +129,10 @@ class CommunityStubPage extends StatelessWidget {
 
   Future<void> _openPrivacyPolicy() async {
     await _openExternalPage(_privacyPolicyUrl);
+  }
+
+  Future<void> _openContactForm() async {
+    await _openExternalPage(_contactFormUrl);
   }
 
   Future<void> _openWalkieFlow(BuildContext context) async {
@@ -215,12 +220,12 @@ class CommunityStubPage extends StatelessWidget {
                     final crossAxisCount = width >= 1100
                         ? 4
                         : width >= 800
-                            ? 3
-                            : 2;
+                        ? 3
+                        : 2;
 
                     const spacing = 12.0;
                     final textScale =
-                        MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
+                    MediaQuery.of(context).textScaleFactor.clamp(1.0, 1.3);
                     final tileWidth = (width - spacing * (crossAxisCount - 1)) /
                         crossAxisCount;
                     const baseTileHeight = 150.0;
@@ -244,6 +249,14 @@ class CommunityStubPage extends StatelessWidget {
                         accent: cs.secondary,
                         onAccent: cs.onSecondary,
                         onTap: () => _openArcadeSheet(context),
+                      ),
+                      _ActionCard(
+                        icon: Icons.contact_support_rounded,
+                        title: '문의하기',
+                        subtitle: 'Google Forms',
+                        accent: cs.primary,
+                        onAccent: cs.onPrimary,
+                        onTap: _openContactForm,
                       ),
                       _ActionCard(
                         icon: Icons.description_rounded,

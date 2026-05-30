@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../app/init/app_navigator.dart';
 import '../../page/sheets/company_calendar_page.dart';
@@ -23,6 +24,7 @@ class HeadHubActions {
 
   static const _kEnabledKey = 'head_hub_actions_enabled_v1';
   static const _kBubbleXKey = 'head_hub_actions_bubble_x_v1';
+  static const contactFormUrl = 'https://forms.gle/hDTkX1p6U9jMMuySA';
   static const _kBubbleYKey = 'head_hub_actions_bubble_y_v1';
   static const _kGameEnabledKey = 'game_quick_actions_enabled_v1';
   static const _kGameBubbleXKey = 'game_quick_actions_bubble_x_v1';
@@ -124,6 +126,41 @@ class HeadHubActions {
   static void setEnabled(bool value) => enabled.value = value;
 
   static void toggle() => enabled.value = !enabled.value;
+
+  static Future<bool> openContactForm([BuildContext? context]) async {
+    final uri = Uri.tryParse(contactFormUrl.trim());
+    if (uri == null) return false;
+
+    var opened = false;
+
+    try {
+      opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      opened = false;
+    }
+
+    if (!opened) {
+      try {
+        opened = await launchUrl(uri, mode: LaunchMode.platformDefault);
+      } catch (_) {
+        opened = false;
+      }
+    }
+
+    if (!opened) {
+      final ctx = context ?? _bestContext();
+      final messenger = ctx == null ? null : ScaffoldMessenger.maybeOf(ctx);
+      messenger?.showSnackBar(
+        const SnackBar(
+          content: Text('문의하기 화면을 열 수 없습니다.'),
+          behavior: SnackBarBehavior.floating,
+          duration: Duration(milliseconds: 1200),
+        ),
+      );
+    }
+
+    return opened;
+  }
 
   static Offset _restorePos() {
     final dx = _prefs?.getDouble(_kBubbleXKey) ?? 12.0;
@@ -261,7 +298,7 @@ class _HubBubbleState extends State<_HubBubble>
         id: 'company_calendar',
         icon: Icons.calendar_month_rounded,
         label: '본사 달력',
-        hint: 'Google Calendar · Spread Sheets',
+        hint: '본사 직원 간 일정 공유',
         color: const Color(0xFF43A047),
         onTap: () async {
           await closeMenu();
@@ -274,7 +311,7 @@ class _HubBubbleState extends State<_HubBubble>
         id: 'attendance',
         icon: Icons.how_to_reg_rounded,
         label: '출·퇴근',
-        hint: 'Spread Sheets',
+        hint: '각 직원 별 출퇴근 관리',
         color: const Color(0xFF1565C0),
         onTap: () async {
           await closeMenu();
@@ -287,7 +324,7 @@ class _HubBubbleState extends State<_HubBubble>
         id: 'break',
         icon: Icons.free_breakfast_rounded,
         label: '휴게 관리',
-        hint: 'Spread Sheets',
+        hint: '각 직원 별 휴게시간 관리',
         color: const Color(0xFF3949AB),
         onTap: () async {
           await closeMenu();
@@ -358,6 +395,18 @@ class _HubBubbleState extends State<_HubBubble>
           if (selected != null && ctx2 != null) {
             await TutorialPdfViewer.open(ctx2, selected);
           }
+        },
+      ),
+      _DockAction(
+        id: 'contact',
+        icon: Icons.contact_support_rounded,
+        label: '문의하기',
+        hint: '이슈 · 오류 · 궁금증',
+        color: const Color(0xFFD84315),
+        onTap: () async {
+          await closeMenu();
+          await HeadHubActions.closeAnySheet();
+          await HeadHubActions.openContactForm();
         },
       ),
     ];
