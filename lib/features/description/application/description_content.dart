@@ -9,7 +9,7 @@ final DescriptionBook parkinWorkinDescriptionBook = DescriptionBook(
   chapters: [
     DescriptionChapter(
       id: 'workflow',
-      title: '업무 모드, 대시보드, 근태',
+      title: '업무 모드, 대시보드, 근태 관리',
       summary: '현장 성격에 따라 달라지는 업무 화면과 출퇴근, 휴게, 사진 전송, 문서 진입 흐름입니다.',
       sections: [
         DescriptionSection(
@@ -55,13 +55,13 @@ final DescriptionBook parkinWorkinDescriptionBook = DescriptionBook(
           title: '확장형 업무 화면',
           tocTitle: '확장형 업무 화면',
           eyebrow: '입차 요청, 입차 완료, 출차 요청, 출차 완료',
-          summary: '확장형 현장은 차량 진입 직후 대기 상태부터 출차 완료까지 전체 상태 전이를 모두 관리합니다.',
+          summary: '확장형 현장은 차량 진입 직후 대기 상태부터 출차 완료까지 발렛 업무의 모든 부분을 관리합니다.',
           paragraphs: const [
             '입차 요청으로 들어온 차량을 확인하고, 구역 지정과 주차 완료를 거쳐 출차 요청과 완료까지 연결합니다.',
-            '업무가 많은 현장에서는 상태를 세분화해 여러 근무자가 동시에 작업하더라도 차량 단계와 담당 흐름을 명확하게 유지할 수 있습니다.',
+            '업무가 많은 현장에서는 상태를 세분화해 여러 근무자가 동시에 작업하더라도 차량 운행 단계와 주차 흐름을 명확하게 유지할 수 있습니다.',
           ],
           bullets: const [
-            '업무가 많은 현장에서는 상태를 세분화해 여러 근무자가 동시에 업무량이 발생하는 경우에 권장합니다.',
+            '업무가 많은 현장에서는 상태를 세분화해 여러 근무자가 동시에 주차 업무를 수행하는 경우에 권장합니다.',
           ],
           layout: DescriptionSectionLayout.portrait,
           media: const DescriptionMediaSpec(
@@ -148,9 +148,9 @@ final DescriptionBook parkinWorkinDescriptionBook = DescriptionBook(
           tocTitle: '데이터 구체화',
           eyebrow: '구역, 메모, 목적, 정산 유형, 차량 사진 촬영',
           summary:
-              '차량 생성 시 차량 상태와 특이사항, 입차 목적, 정산 유형, 구역 정보, 차량 사진 촬영 정보들을 함께 입력합니다.',
+              '차량 생성 시 차량 상태와 특이사항, 정산 유형, 구역 정보, 차량 사진 촬영 정보들을 함께 입력합니다.',
           paragraphs: const [
-            '입력 페이지는 번호판만 저장하는 것이 아니라 현장 업무에 필요한 구역, 위치, 메모, 차량 목적, 입차 여부, 정산 유형을 함께 다룹니다.',
+            '입력 페이지는 번호판만 저장하는 것이 아니라 현장 업무에 필요한 구역, 위치, 메모, 차량 상태, 입차 여부, 정산 유형을 함께 다룹니다.',
             '정기 차량이나 무료 차량처럼 현장 정책에 따라 다른 처리가 필요한 차량도 생성 단계에서 구분할 수 있습니다.',
           ],
           bullets: const [
@@ -181,7 +181,7 @@ final DescriptionBook parkinWorkinDescriptionBook = DescriptionBook(
           eyebrow: '정보 확인, 구역 설정, 주행 알림',
           summary: '선택한 차량의 기본 정보와 상태를 확인하고 구역, 위치, 메모, 주행 여부를 수정합니다.',
           paragraphs: const [
-            '상세 화면은 번호판, 등록 시각, 차량 이미지, 구역, 위치, 상태 태그, 정산 정보, 메모를 한곳에서 확인하도록 구성됩니다.',
+            '상세 화면은 번호판, 등록 시각, 차량 이미지, 구역, 위치, 상태 태그, 정산 정보, 메모를 한 곳에서 확인하도록 제공합니다.',
             '근무자는 필요할 때 곧바로 구역을 지정하거나 차량을 이동 중으로 표시해 다른 작업자와 상태를 공유할 수 있습니다.',
           ],
           bullets: const [
@@ -251,7 +251,7 @@ final DescriptionBook parkinWorkinDescriptionBook = DescriptionBook(
           ],
           bullets: const [
             '출차 완료 후에도 미정산 차량을 추적합니다.',
-            '정산이 없는 현장은 해당 제한 없이 완료 흐름을 사용할 수 있습니다.',
+            '정산이 없는 현장은 제한 없이 사용할 수 있습니다.',
           ],
           layout: DescriptionSectionLayout.portrait,
           media: const DescriptionMediaSpec(

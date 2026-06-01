@@ -28,6 +28,10 @@ android {
         targetSdk = 36                          // 35 → 36로 상향 정렬
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+            ndk {
+        abiFilters "arm64-v8a", "armeabi-v7a"
+    }
     }
 
     signingConfigs {
@@ -47,10 +51,19 @@ android {
     buildTypes {
         release {
             signingConfig signingConfigs.release
+
+            // Play Console 16KB page size 오류 회피:
+            // x86_64용 TensorFlow Lite native library를 release AAB에서 제외
+            ndk {
+                abiFilters.clear()
+                abiFilters.addAll(["armeabi-v7a", "arm64-v8a"])
+            }
+
             // 필요 시 최적화 활성화: 아래 두 옵션을 true로 바꾸고 proguard-rules.pro 구성
             minifyEnabled false
             shrinkResources false
         }
+
         debug {
             minifyEnabled false
             shrinkResources false
