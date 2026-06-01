@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../../app/usage/usage_reporter.dart';
 import '../../domain/models/tablet/tablet_model.dart';
 import '../../domain/models/user/user_model.dart';
 
@@ -27,12 +26,6 @@ class UserReadService {
   }
 
   String _normalizeHandle(String h) => h.trim().toLowerCase();
-
-  String _inferAreaFromHyphenId(String id) {
-    final idx = id.lastIndexOf('-');
-    if (idx <= 0 || idx >= id.length - 1) return 'unknown';
-    return id.substring(idx + 1);
-  }
 
   String _showDocId(String division, String area) {
     final d = division
@@ -144,12 +137,6 @@ class UserReadService {
     try {
       final snap = await _getTabletCollectionRef().doc(docId).get();
 
-      await UsageReporter.instance.report(
-        area: _inferAreaFromHyphenId(docId),
-        action: 'read',
-        n: 1,
-        source: 'UserReadService.getTabletByHandleAndAreaName',
-      );
 
       if (snap.exists && snap.data() != null) {
         return TabletModel.fromMap(snap.id, snap.data()!);
@@ -172,16 +159,6 @@ class UserReadService {
           .limit(1)
           .get();
 
-      final n = qs.docs.isEmpty ? 1 : qs.docs.length;
-      final area = qs.docs.isNotEmpty
-          ? _inferAreaFromHyphenId(qs.docs.first.id)
-          : 'unknown';
-      await UsageReporter.instance.report(
-        area: area,
-        action: 'read',
-        n: n,
-        source: 'UserReadService.getTabletByHandle',
-      );
 
       if (qs.docs.isNotEmpty) {
         final doc = qs.docs.first;
@@ -289,13 +266,6 @@ class UserReadService {
           .map((doc) => TabletModel.fromMap(doc.id, doc.data()))
           .toList(growable: false);
 
-      final n = tablets.isEmpty ? 1 : tablets.length;
-      await UsageReporter.instance.report(
-        area: selectedArea,
-        action: 'read',
-        n: n,
-        source: 'UserReadService.refreshTabletsBySelectedArea',
-      );
 
       await updateCacheWithTablets(selectedArea, tablets);
       return tablets;

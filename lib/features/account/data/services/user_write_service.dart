@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../../app/usage/usage_reporter.dart';
 import '../../domain/models/tablet/tablet_model.dart';
 import '../../domain/models/user/user_model.dart';
 
@@ -288,12 +287,6 @@ class UserWriteService {
     try {
       await docRef.set(tablet.toMap());
 
-      await UsageReporter.instance.report(
-        area: _inferAreaFromHyphenId(tablet.id),
-        action: 'write',
-        n: 1,
-        source: 'UserWriteService.addTabletCard',
-      );
     } on FirebaseException {
       rethrow;
     } catch (_) {
@@ -457,12 +450,6 @@ class UserWriteService {
     try {
       await docRef.set(tablet.toMap());
 
-      await UsageReporter.instance.report(
-        area: _inferAreaFromHyphenId(tablet.id),
-        action: 'write',
-        n: 1,
-        source: 'UserWriteService.updateTablet',
-      );
     } on FirebaseException {
       rethrow;
     } catch (_) {
@@ -570,8 +557,6 @@ class UserWriteService {
   }
 
   Future<void> deleteUsers(List<String> ids) async {
-    final buckets = <String, int>{};
-
     for (final id in ids) {
       final userDocRef = _getUserCollectionRef().doc(id);
 
@@ -586,8 +571,6 @@ class UserWriteService {
 
         if (prevUser == null) {
           await userDocRef.delete();
-          final area = _inferAreaFromHyphenId(id);
-          buckets.update(area, (v) => v + 1, ifAbsent: () => 1);
           continue;
         }
 
@@ -630,8 +613,6 @@ class UserWriteService {
           );
         });
 
-        final infer = _inferAreaFromHyphenId(id);
-        buckets.update(infer, (v) => v + 1, ifAbsent: () => 1);
       } on FirebaseException {
         rethrow;
       } catch (_) {
@@ -641,29 +622,16 @@ class UserWriteService {
   }
 
   Future<void> deleteTablets(List<String> ids) async {
-    final buckets = <String, int>{};
-
     for (final id in ids) {
       final docRef = _getTabletCollectionRef().doc(id);
       try {
         await docRef.delete();
 
-        final area = _inferAreaFromHyphenId(id);
-        buckets.update(area, (v) => v + 1, ifAbsent: () => 1);
       } on FirebaseException {
         rethrow;
       } catch (_) {
         rethrow;
       }
-    }
-
-    for (final entry in buckets.entries) {
-      await UsageReporter.instance.report(
-        area: entry.key,
-        action: 'delete',
-        n: entry.value,
-        source: 'UserWriteService.deleteTablets',
-      );
     }
   }
 }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../../../app/usage/usage_reporter.dart';
 import '../../../../../app/utils/snackbar_helper.dart';
 
 class StatusMappingHelper extends StatefulWidget {
@@ -101,15 +100,6 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
     try {
       final snap = await _fs.collection('divisions').orderBy('name').get();
 
-      try {
-        await UsageReporter.instance.report(
-          area: 'StatusMappingHelper',
-          action: 'read',
-          n: snap.docs.isEmpty ? 1 : snap.docs.length,
-          source: 'StatusMappingHelper._loadDivisions.divisions.get',
-        );
-      } catch (_) {}
-
       final list = snap.docs
           .map((d) => (d.data()['name'] as String?)?.trim())
           .whereType<String>()
@@ -147,15 +137,6 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
           .orderBy('name')
           .get();
 
-      try {
-        await UsageReporter.instance.report(
-          area: division,
-          action: 'read',
-          n: snap.docs.isEmpty ? 1 : snap.docs.length,
-          source: 'StatusMappingHelper._loadAreas.areas.get',
-        );
-      } catch (_) {}
-
       final list = snap.docs
           .map((d) => (d.data()['name'] as String?)?.trim())
           .whereType<String>()
@@ -190,7 +171,6 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
     required int totalLimit,
   }) async {
     final ref = _showDocRef(division, area);
-    final showId = _showDocId(division, area);
 
     await ref.set(
       {
@@ -202,34 +182,15 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
       },
       SetOptions(merge: true),
     );
-
-    try {
-      await UsageReporter.instance.report(
-        area: area,
-        action: 'write',
-        n: 1,
-        source: 'StatusMappingHelper._saveLimits.user_accounts_show.set:$showId',
-      );
-    } catch (_) {}
   }
 
   Future<_AccountCounts> _rebuildCountsForOne({
     required String division,
     required String area,
   }) async {
-    final showId = _showDocId(division, area);
     final usersCol = _showUsersCol(division, area);
 
     final qSnap = await usersCol.get();
-
-    try {
-      await UsageReporter.instance.report(
-        area: area,
-        action: 'read',
-        n: qSnap.docs.isEmpty ? 1 : qSnap.docs.length,
-        source: 'StatusMappingHelper._rebuildCountsForOne.showUsers.get:$showId',
-      );
-    } catch (_) {}
 
     var active = 0;
     var inactive = 0;
@@ -255,15 +216,6 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
       SetOptions(merge: true),
     );
 
-    try {
-      await UsageReporter.instance.report(
-        area: area,
-        action: 'write',
-        n: 1,
-        source: 'StatusMappingHelper._rebuildCountsForOne.meta.set:$showId',
-      );
-    } catch (_) {}
-
     return counts;
   }
 
@@ -281,15 +233,6 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
           .where('division', isEqualTo: division)
           .orderBy('name')
           .get();
-
-      try {
-        await UsageReporter.instance.report(
-          area: division,
-          action: 'read',
-          n: areasSnap.docs.isEmpty ? 1 : areasSnap.docs.length,
-          source: 'StatusMappingHelper._rebuildCountsForDivision.areas.get',
-        );
-      } catch (_) {}
 
       final areas = areasSnap.docs
           .map((d) => (d.data()['name'] as String?)?.trim())
@@ -339,23 +282,25 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
       value: _selectedDivision,
       isExpanded: true,
       items: _divisions
-          .map((e) => DropdownMenuItem(
-                value: e,
-                child: Text(e, maxLines: 1, overflow: TextOverflow.ellipsis),
-              ))
+          .map(
+            (e) => DropdownMenuItem(
+          value: e,
+          child: Text(e, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+      )
           .toList(),
       onChanged: _busy
           ? null
           : (v) async {
-              setState(() {
-                _selectedDivision = v;
-                _areas = [];
-                _selectedArea = null;
-                _activeLimitCtrl.clear();
-                _totalLimitCtrl.clear();
-              });
-              await _loadAreas();
-            },
+        setState(() {
+          _selectedDivision = v;
+          _areas = [];
+          _selectedArea = null;
+          _activeLimitCtrl.clear();
+          _totalLimitCtrl.clear();
+        });
+        await _loadAreas();
+      },
       decoration: const InputDecoration(
         labelText: '회사(division) 선택',
         border: OutlineInputBorder(),
@@ -368,20 +313,22 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
       value: _selectedArea,
       isExpanded: true,
       items: _areas
-          .map((e) => DropdownMenuItem(
-                value: e,
-                child: Text(e, maxLines: 1, overflow: TextOverflow.ellipsis),
-              ))
+          .map(
+            (e) => DropdownMenuItem(
+          value: e,
+          child: Text(e, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+      )
           .toList(),
       onChanged: _busy
           ? null
           : (v) {
-              setState(() {
-                _selectedArea = v;
-                _activeLimitCtrl.clear();
-                _totalLimitCtrl.clear();
-              });
-            },
+        setState(() {
+          _selectedArea = v;
+          _activeLimitCtrl.clear();
+          _totalLimitCtrl.clear();
+        });
+      },
       decoration: const InputDecoration(
         labelText: '지역(area) 선택',
         border: OutlineInputBorder(),
@@ -396,250 +343,239 @@ class _StatusMappingHelperState extends State<StatusMappingHelper> {
     final showMeta = (division == null || area == null)
         ? const SizedBox.shrink()
         : StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-            stream: _showDocRef(division, area).snapshots(),
-            builder: (context, snap) {
-              final data = snap.data?.data() ?? <String, dynamic>{};
-              final exists = snap.data?.exists ?? false;
+      stream: _showDocRef(division, area).snapshots(),
+      builder: (context, snap) {
+        final data = snap.data?.data() ?? <String, dynamic>{};
+        final exists = snap.data?.exists ?? false;
 
-              final activeLimit = data['activeLimit'];
-              final totalLimit = data['totalLimit'];
-              final counts = _countsFromMeta(data);
+        final activeLimit = data['activeLimit'];
+        final totalLimit = data['totalLimit'];
+        final counts = _countsFromMeta(data);
 
-              final int? activeLimitInt = activeLimit is int ? activeLimit : null;
-              final int? totalLimitInt = totalLimit is int ? totalLimit : null;
+        final int? activeLimitInt = activeLimit is int ? activeLimit : null;
+        final int? totalLimitInt = totalLimit is int ? totalLimit : null;
 
-              DateTime? updatedAt;
-              final ua = data['updatedAt'];
-              if (ua is Timestamp) {
-                updatedAt = ua.toDate();
-              }
+        DateTime? updatedAt;
+        final ua = data['updatedAt'];
+        if (ua is Timestamp) {
+          updatedAt = ua.toDate();
+        }
 
-              if (snap.hasData) {
-                try {
-                  UsageReporter.instance.report(
-                    area: area,
-                    action: 'read',
-                    n: 1,
-                    source: 'StatusMappingHelper.showMeta.stream:$division-$area',
-                  );
-                } catch (_) {}
-              }
+        if (_activeLimitCtrl.text.trim().isEmpty && activeLimitInt != null) {
+          _activeLimitCtrl.text = '$activeLimitInt';
+        }
+        if (_totalLimitCtrl.text.trim().isEmpty && totalLimitInt != null) {
+          _totalLimitCtrl.text = '$totalLimitInt';
+        }
 
-              if (_activeLimitCtrl.text.trim().isEmpty && activeLimitInt != null) {
-                _activeLimitCtrl.text = '$activeLimitInt';
-              }
-              if (_totalLimitCtrl.text.trim().isEmpty && totalLimitInt != null) {
-                _totalLimitCtrl.text = '$totalLimitInt';
-              }
+        final activeWarn = activeLimitInt != null && counts.activeCount > activeLimitInt;
+        final totalWarn = totalLimitInt != null && counts.totalCount > totalLimitInt;
 
-              final activeWarn = activeLimitInt != null && counts.activeCount > activeLimitInt;
-              final totalWarn = totalLimitInt != null && counts.totalCount > totalLimitInt;
-
-              return Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.black12),
-                  borderRadius: BorderRadius.circular(12),
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.black12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '메타 문서: user_accounts_show/${_showDocId(division, area)}',
+                style: const TextStyle(fontSize: 12, color: Colors.black54),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      exists ? '상태: 존재함' : '상태: 없음(저장 시 생성됨)',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: exists ? Colors.black87 : Colors.orange[800],
+                      ),
+                    ),
+                  ),
+                  if (updatedAt != null)
+                    Text(
+                      'updatedAt: ${updatedAt.toString()}',
+                      style: const TextStyle(fontSize: 11, color: Colors.black54),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                '활성: ${counts.activeCount} / ${activeLimitInt ?? '(미설정)'}',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: activeWarn ? Colors.redAccent : Colors.black87,
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '메타 문서: user_accounts_show/${_showDocId(division, area)}',
-                      style: const TextStyle(fontSize: 12, color: Colors.black54),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            exists ? '상태: 존재함' : '상태: 없음(저장 시 생성됨)',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: exists ? Colors.black87 : Colors.orange[800],
-                            ),
-                          ),
-                        ),
-                        if (updatedAt != null)
-                          Text(
-                            'updatedAt: ${updatedAt.toString()}',
-                            style: const TextStyle(fontSize: 11, color: Colors.black54),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      '활성: ${counts.activeCount} / ${activeLimitInt ?? '(미설정)'}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: activeWarn ? Colors.redAccent : Colors.black87,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '비활성: ${counts.inactiveCount}',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '전체: ${counts.totalCount} / ${totalLimitInt ?? '(미설정)'}',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: totalWarn ? Colors.redAccent : Colors.black87,
-                      ),
-                    ),
-                    if (activeWarn)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 6),
-                        child: Text(
-                          '주의: 활성 계정 수가 activeLimit을 초과합니다.',
-                          style: TextStyle(color: Colors.redAccent, fontSize: 12),
-                        ),
-                      ),
-                    if (totalWarn)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 6),
-                        child: Text(
-                          '주의: 전체 계정 수가 totalLimit을 초과합니다.',
-                          style: TextStyle(color: Colors.redAccent, fontSize: 12),
-                        ),
-                      ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _activeLimitCtrl,
-                      keyboardType: TextInputType.number,
-                      enabled: !_busy,
-                      decoration: const InputDecoration(
-                        labelText: 'activeLimit 활성 계정 제한',
-                        hintText: '예: 30',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: _totalLimitCtrl,
-                      keyboardType: TextInputType.number,
-                      enabled: !_busy,
-                      decoration: const InputDecoration(
-                        labelText: 'totalLimit 전체 계정 제한',
-                        hintText: '예: 50',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            icon: const Icon(Icons.save),
-                            label: const Text('리밋 저장'),
-                            onPressed: _busy
-                                ? null
-                                : () async {
-                                    final activeValue = _parseLimit(_activeLimitCtrl.text);
-                                    final totalValue = _parseLimit(_totalLimitCtrl.text);
-                                    if (activeValue == null) {
-                                      showFailedSnackbar(context, 'activeLimit 값이 올바르지 않습니다.');
-                                      return;
-                                    }
-                                    if (totalValue == null) {
-                                      showFailedSnackbar(context, 'totalLimit 값이 올바르지 않습니다.');
-                                      return;
-                                    }
-                                    if (activeValue > totalValue) {
-                                      showFailedSnackbar(context, 'activeLimit은 totalLimit보다 클 수 없습니다.');
-                                      return;
-                                    }
-
-                                    setState(() => _busy = true);
-                                    try {
-                                      await _saveLimits(
-                                        division: division,
-                                        area: area,
-                                        activeLimit: activeValue,
-                                        totalLimit: totalValue,
-                                      );
-                                      if (!mounted) return;
-                                      showSuccessSnackbar(context, '✅ 리밋 저장 완료');
-                                    } catch (e) {
-                                      if (!mounted) return;
-                                      showFailedSnackbar(context, '❌ 저장 실패: $e');
-                                    } finally {
-                                      if (!mounted) return;
-                                      setState(() => _busy = false);
-                                    }
-                                  },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        OutlinedButton.icon(
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('카운트 리빌드'),
-                          onPressed: _busy
-                              ? null
-                              : () async {
-                                  setState(() => _busy = true);
-                                  try {
-                                    final c = await _rebuildCountsForOne(
-                                      division: division,
-                                      area: area,
-                                    );
-                                    if (!mounted) return;
-                                    showSuccessSnackbar(
-                                      context,
-                                      '✅ 리빌드 완료 (활성=${c.activeCount}, 비활성=${c.inactiveCount}, 전체=${c.totalCount})',
-                                    );
-                                  } catch (e) {
-                                    if (!mounted) return;
-                                    showFailedSnackbar(context, '❌ 리빌드 실패: $e');
-                                  } finally {
-                                    if (!mounted) return;
-                                    setState(() => _busy = false);
-                                  }
-                                },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.playlist_add_check),
-                      label: const Text('회사 전체 카운트 리빌드'),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '비활성: ${counts.inactiveCount}',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '전체: ${counts.totalCount} / ${totalLimitInt ?? '(미설정)'}',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: totalWarn ? Colors.redAccent : Colors.black87,
+                ),
+              ),
+              if (activeWarn)
+                const Padding(
+                  padding: EdgeInsets.only(top: 6),
+                  child: Text(
+                    '주의: 활성 계정 수가 activeLimit을 초과합니다.',
+                    style: TextStyle(color: Colors.redAccent, fontSize: 12),
+                  ),
+                ),
+              if (totalWarn)
+                const Padding(
+                  padding: EdgeInsets.only(top: 6),
+                  child: Text(
+                    '주의: 전체 계정 수가 totalLimit을 초과합니다.',
+                    style: TextStyle(color: Colors.redAccent, fontSize: 12),
+                  ),
+                ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _activeLimitCtrl,
+                keyboardType: TextInputType.number,
+                enabled: !_busy,
+                decoration: const InputDecoration(
+                  labelText: 'activeLimit 활성 계정 제한',
+                  hintText: '예: 30',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _totalLimitCtrl,
+                keyboardType: TextInputType.number,
+                enabled: !_busy,
+                decoration: const InputDecoration(
+                  labelText: 'totalLimit 전체 계정 제한',
+                  hintText: '예: 50',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.save),
+                      label: const Text('리밋 저장'),
                       onPressed: _busy
                           ? null
                           : () async {
-                              final ok = await showDialog<bool>(
-                                    context: context,
-                                    builder: (_) => AlertDialog(
-                                      title: const Text('회사 전체 리빌드'),
-                                      content: const Text(
-                                        '선택된 회사의 모든 지역(area)에 대해 활성, 비활성, 전체 계정 수를 재집계합니다.',
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(context, false),
-                                          child: const Text('취소'),
-                                        ),
-                                        TextButton(
-                                          onPressed: () => Navigator.pop(context, true),
-                                          child: const Text('실행'),
-                                        ),
-                                      ],
-                                    ),
-                                  ) ??
-                                  false;
-                              if (!ok) return;
-                              await _rebuildCountsForDivision(division);
-                            },
+                        final activeValue = _parseLimit(_activeLimitCtrl.text);
+                        final totalValue = _parseLimit(_totalLimitCtrl.text);
+                        if (activeValue == null) {
+                          showFailedSnackbar(context, 'activeLimit 값이 올바르지 않습니다.');
+                          return;
+                        }
+                        if (totalValue == null) {
+                          showFailedSnackbar(context, 'totalLimit 값이 올바르지 않습니다.');
+                          return;
+                        }
+                        if (activeValue > totalValue) {
+                          showFailedSnackbar(context, 'activeLimit은 totalLimit보다 클 수 없습니다.');
+                          return;
+                        }
+
+                        setState(() => _busy = true);
+                        try {
+                          await _saveLimits(
+                            division: division,
+                            area: area,
+                            activeLimit: activeValue,
+                            totalLimit: totalValue,
+                          );
+                          if (!mounted) return;
+                          showSuccessSnackbar(context, '✅ 리밋 저장 완료');
+                        } catch (e) {
+                          if (!mounted) return;
+                          showFailedSnackbar(context, '❌ 저장 실패: $e');
+                        } finally {
+                          if (!mounted) return;
+                          setState(() => _busy = false);
+                        }
+                      },
                     ),
-                  ],
-                ),
-              );
-            },
-          );
+                  ),
+                  const SizedBox(width: 10),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('카운트 리빌드'),
+                    onPressed: _busy
+                        ? null
+                        : () async {
+                      setState(() => _busy = true);
+                      try {
+                        final c = await _rebuildCountsForOne(
+                          division: division,
+                          area: area,
+                        );
+                        if (!mounted) return;
+                        showSuccessSnackbar(
+                          context,
+                          '✅ 리빌드 완료 (활성=${c.activeCount}, 비활성=${c.inactiveCount}, 전체=${c.totalCount})',
+                        );
+                      } catch (e) {
+                        if (!mounted) return;
+                        showFailedSnackbar(context, '❌ 리빌드 실패: $e');
+                      } finally {
+                        if (!mounted) return;
+                        setState(() => _busy = false);
+                      }
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.playlist_add_check),
+                label: const Text('회사 전체 카운트 리빌드'),
+                onPressed: _busy
+                    ? null
+                    : () async {
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (_) => AlertDialog(
+                      title: const Text('회사 전체 리빌드'),
+                      content: const Text(
+                        '선택된 회사의 모든 지역(area)에 대해 활성, 비활성, 전체 계정 수를 재집계합니다.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, false),
+                          child: const Text('취소'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(context, true),
+                          child: const Text('실행'),
+                        ),
+                      ],
+                    ),
+                  ) ??
+                      false;
+                  if (!ok) return;
+                  await _rebuildCountsForDivision(division);
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
 
     return AbsorbPointer(
       absorbing: _busy,

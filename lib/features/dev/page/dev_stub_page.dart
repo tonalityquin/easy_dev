@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../app/di/routes.dart';
+import 'dialogs/plate_billing_count_dialog.dart';
 import 'sheets/dev_quick_actions.dart';
 import 'sheets/local_prefs_bottom_sheet.dart';
 import 'sheets/sqlite_explorer_bottom_sheet.dart';
@@ -234,6 +235,17 @@ class _DevStubPageState extends State<DevStubPage> {
                               backgroundColor: Colors.transparent,
                               builder: (_) => const LocalPrefsBottomSheet(),
                             );
+                          },
+                        ),
+                        _ActionCard(
+                          icon: Icons.receipt_long_rounded,
+                          title: '청구',
+                          subtitle: '회사 · 지역별 생성 대수',
+                          bg: cs.tertiaryContainer,
+                          fg: cs.onTertiaryContainer,
+                          tintColor: cs.tertiary.withOpacity(0.08),
+                          onTap: () {
+                            showPlateBillingCountDialog(context);
                           },
                         ),
                         _ActionCard(

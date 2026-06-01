@@ -102,6 +102,10 @@ class PlateFields {
   static const String basicAmount = 'basicAmount';
   static const String basicStandard = 'basicStandard';
   static const String billingType = 'billingType';
+  static const String company = 'company';
+  static const String division = 'division';
+  static const String createdAt = 'createdAt';
+  static const String lastBillingCountedAt = 'lastBillingCountedAt';
   static const String customStatus = 'customStatus';
   static const String endTime = 'end_time';
   static const String manufacturerName = 'manufacturerName';

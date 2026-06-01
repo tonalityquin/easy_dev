@@ -46,6 +46,7 @@ class InputPlate with ChangeNotifier {
         plateNumber: plateNumber,
         location: correctedLocation,
         area: areaState.currentArea,
+        division: areaState.currentDivision,
         userName: userState.name,
         plateType: plateType,
         billingType: billingType,
@@ -68,7 +69,6 @@ class InputPlate with ChangeNotifier {
         priority3SlotKey: priority3SlotKey,
       );
 
-      
       notifyListeners();
       return true;
     } catch (error) {

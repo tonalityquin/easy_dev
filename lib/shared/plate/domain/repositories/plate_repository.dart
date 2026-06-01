@@ -216,6 +216,7 @@ abstract class PlateRepository {
     required String plateNumber,
     required String location,
     required String area,
+    required String division,
     required PlateType plateType,
     required String userName,
     String? billingType,

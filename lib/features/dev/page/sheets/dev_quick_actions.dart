@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show HapticFeedback;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../app/init/app_exit_service.dart';
 import '../../../../app/init/app_navigator.dart';
+import '../dialogs/plate_billing_count_dialog.dart';
 import '../../../selector/application/dev_auth.dart';
 import 'local_prefs_bottom_sheet.dart';
 import 'sqlite_explorer_bottom_sheet.dart';
@@ -208,6 +209,10 @@ class DevQuickActions {
   static Future<dynamic> showSQLiteExplorerSheet(BuildContext ctx) {
     return SQLiteExplorerBottomSheet.showFullScreen(ctx);
   }
+
+  static Future<dynamic> showBillingDialog(BuildContext ctx) {
+    return showPlateBillingCountDialog(ctx);
+  }
 }
 
 class _DevBubble extends StatefulWidget {
@@ -302,6 +307,17 @@ class _DevBubbleState extends State<_DevBubble>
           await _ctrl.reverse();
           await DevQuickActions.openSheetExclusively(
             (ctx) => DevQuickActions.showLocalPrefsSheet(ctx),
+          );
+        },
+      ),
+      _DevDockAction(
+        icon: Icons.receipt_long_rounded,
+        label: '청구',
+        color: Colors.teal,
+        onTap: () async {
+          await _ctrl.reverse();
+          await DevQuickActions.openSheetExclusively(
+            (ctx) => DevQuickActions.showBillingDialog(ctx),
           );
         },
       ),

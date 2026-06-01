@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../../../../../app/usage/usage_reporter.dart';
 import '../../../../plate/domain/repositories/plate_repository.dart';
 import '../../../../plate/domain/services/plate_status_record.dart';
 
@@ -76,13 +75,6 @@ Future<Map<String, dynamic>?> inputCustomStatusBottomSheet(
     debugPrint('[InputCustomStatusBottomSheet] error: $e');
     data = null;
   } finally {
-    await UsageReporter.instance.report(
-      area: (area.isEmpty ? 'unknown' : area),
-      action: 'read',
-      n: 1,
-      source: 'InputCustomStatusBottomSheet/$collectionName.doc.get',
-      useSourceOnlyKey: true,
-    );
   }
 
   if (data == null) return null;

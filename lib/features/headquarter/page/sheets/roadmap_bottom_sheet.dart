@@ -22,12 +22,12 @@ class RoadmapItem {
 
 const List<RoadmapItem> _roadmapData = [
   RoadmapItem(
-    load: RoadmapLoad.light,
-    title: '가이드북 생성 및 액션 카드 추가',
+    load: RoadmapLoad.heavy,
+    title: '차량 차종 인식 모델 기능 추가',
     notes: [
-      '앱에서 캡처 등을 통해 특정 난이도 있는 행동들에 대한 가이드 북 삽입',
+      '차량 전면부를 촬영하여 제조사와 차종 명을 삽입할 수 있도록 하는 기능',
     ],
-    status: RoadmapStatus.done,
+    status: RoadmapStatus.inProgress,
   ),
   RoadmapItem(
     load: RoadmapLoad.heavy,
@@ -38,11 +38,10 @@ const List<RoadmapItem> _roadmapData = [
     status: RoadmapStatus.planned,
   ),
   RoadmapItem(
-    load: RoadmapLoad.light,
-    title: '근무지 현황 카드 리팩토링',
+    load: RoadmapLoad.medium,
+    title: '특정 고객용 모드 지원',
     notes: [
-      '지역 별 최근 출근 찍은 직원들 목록 나열'
-          '\n지역 별 현재 근무 차량 수 표기',
+      '고객 개인에게 설치되는 앱 내에서 본인 차량만 출차 요청 할 수 있도록 하는 모드 지원',
     ],
     status: RoadmapStatus.planned,
   ),
@@ -150,7 +149,7 @@ class RoadmapBottomSheet extends StatelessWidget {
                       ),
                       const Spacer(),
                       Text(
-                        '실시간 갱신 X',
+                        '로드맵은 상시 변경 혹은 취소될 수 있습니다.',
                         style:
                             text.labelMedium?.copyWith(color: Colors.grey[600]),
                       ),

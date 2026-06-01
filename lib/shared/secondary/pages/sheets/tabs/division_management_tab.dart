@@ -1,6 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../../../../../app/usage/usage_reporter.dart';
 import '../../../../../app/utils/snackbar_helper.dart';
 
 class DivisionManagementTab extends StatefulWidget {
@@ -49,14 +48,6 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
     try {
       await widget.onDivisionAdded(input);
 
-      try {
-        await UsageReporter.instance.report(
-          area: input,
-          action: 'write',
-          n: 1,
-          source: 'DivisionManagementTab.addDivision.divisions.callback',
-        );
-      } catch (_) {}
 
       final areaId = '$input-$input';
       await FirebaseFirestore.instance.collection('areas').doc(areaId).set({
@@ -67,14 +58,6 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      try {
-        await UsageReporter.instance.report(
-          area: input,
-          action: 'write',
-          n: 1,
-          source: 'DivisionManagementTab.addDivision.areas.headquarter.set',
-        );
-      } catch (_) {}
 
       if (!mounted) return;
       _controller.clear();
@@ -123,14 +106,6 @@ class _DivisionManagementTabState extends State<DivisionManagementTab> {
     try {
       await widget.onDivisionDeleted(division);
 
-      try {
-        await UsageReporter.instance.report(
-          area: division,
-          action: 'delete',
-          n: 1,
-          source: 'DivisionManagementTab.deleteDivision.cascade.callback',
-        );
-      } catch (_) {}
     } catch (e) {
       if (mounted) {
         showFailedSnackbar(context, '삭제 실패: $e');

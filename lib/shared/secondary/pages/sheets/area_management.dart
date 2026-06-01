@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../../app/usage/usage_reporter.dart';
 import '../../../../app/utils/snackbar_helper.dart';
 import 'tabs/add_area_tab.dart';
 import 'tabs/division_management_tab.dart';
@@ -73,14 +72,6 @@ class _AreaManagementState extends State<AreaManagement>
           .get();
 
 
-      try {
-        await UsageReporter.instance.report(
-          area: 'AreaManagement',
-          action: 'read',
-          n: snap.docs.length,
-          source: 'AreaManagement._loadDivisions.divisions.get',
-        );
-      } catch (_) {}
 
       final divisions = snap.docs
           .map((e) => (e['name'] as String?)?.trim())
@@ -123,14 +114,6 @@ class _AreaManagementState extends State<AreaManagement>
       });
 
 
-      try {
-        await UsageReporter.instance.report(
-          area: 'AreaManagement',
-          action: 'write',
-          n: 1,
-          source: 'AreaManagement._addDivision.divisions.set',
-        );
-      } catch (_) {}
 
       await _loadDivisions();
 
@@ -157,14 +140,6 @@ class _AreaManagementState extends State<AreaManagement>
       await fs.collection('areas').where('division', isEqualTo: name).get();
 
 
-      try {
-        await UsageReporter.instance.report(
-          area: 'AreaManagement',
-          action: 'read',
-          n: areasSnap.docs.length,
-          source: 'AreaManagement._deleteDivision.areas.queryForCascade',
-        );
-      } catch (_) {}
 
 
       WriteBatch batch = fs.batch();
@@ -180,14 +155,6 @@ class _AreaManagementState extends State<AreaManagement>
         if (ops >= 450) {
           await batch.commit();
 
-          try {
-            await UsageReporter.instance.report(
-              area: 'AreaManagement',
-              action: 'delete',
-              n: ops,
-              source: 'AreaManagement._deleteDivision.batch.commit.partial',
-            );
-          } catch (_) {}
           batch = fs.batch();
           ops = 0;
         }
@@ -196,14 +163,6 @@ class _AreaManagementState extends State<AreaManagement>
       if (ops > 0) {
         await batch.commit();
 
-        try {
-          await UsageReporter.instance.report(
-            area: 'AreaManagement',
-            action: 'delete',
-            n: ops,
-            source: 'AreaManagement._deleteDivision.batch.commit.final',
-          );
-        } catch (_) {}
       }
 
       await _loadDivisions();

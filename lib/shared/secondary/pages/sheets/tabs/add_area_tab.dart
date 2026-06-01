@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../../../../../app/usage/usage_reporter.dart';
 import '../../../../../app/utils/snackbar_helper.dart';
 
 class AddAreaTab extends StatefulWidget {
@@ -99,13 +98,8 @@ class _AddAreaTabState extends State<AddAreaTab> {
       final fs = FirebaseFirestore.instance;
       final ref = fs.collection('areas').doc(areaId);
 
-      int reads = 0;
-      int writes = 0;
-
       await fs.runTransaction((tx) async {
         final snap = await tx.get(ref);
-        reads += 1;
-
         if (snap.exists) {
           throw Exception('이미 존재하는 지역입니다.');
         }
@@ -115,28 +109,8 @@ class _AddAreaTabState extends State<AddAreaTab> {
           'division': division,
           'modes': modes,
           'createdAt': FieldValue.serverTimestamp(),
-        });
-        writes += 1;
-      });
+        });      });
 
-      try {
-        if (reads > 0) {
-          await UsageReporter.instance.report(
-            area: division,
-            action: 'read',
-            n: reads,
-            source: 'AddAreaTab._addArea.areas.tx.get:$areaId',
-          );
-        }
-        if (writes > 0) {
-          await UsageReporter.instance.report(
-            area: division,
-            action: 'write',
-            n: writes,
-            source: 'AddAreaTab._addArea.areas.tx.set:$areaId',
-          );
-        }
-      } catch (_) {}
 
       if (!mounted) return;
 
@@ -166,16 +140,6 @@ class _AddAreaTabState extends State<AddAreaTab> {
         .collection('areas')
         .where('division', isEqualTo: division)
         .get(const GetOptions(source: Source.serverAndCache));
-
-    final readN = snapshot.docs.isEmpty ? 1 : snapshot.docs.length;
-    try {
-      await UsageReporter.instance.report(
-        area: division,
-        action: 'read',
-        n: readN,
-        source: 'AddAreaTab._loadAreas.areas.query',
-      );
-    } catch (_) {}
 
     final list = snapshot.docs
         .map((e) => (e['name'] as String?)?.trim())
@@ -220,14 +184,6 @@ class _AddAreaTabState extends State<AddAreaTab> {
       final areaId = '$division-$areaName';
       await FirebaseFirestore.instance.collection('areas').doc(areaId).delete();
 
-      try {
-        await UsageReporter.instance.report(
-          area: division,
-          action: 'delete',
-          n: 1,
-          source: 'AddAreaTab._deleteArea.areas.delete:$areaId',
-        );
-      } catch (_) {}
 
       if (!mounted) return;
       setState(() {

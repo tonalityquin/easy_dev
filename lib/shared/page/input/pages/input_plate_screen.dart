@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
-import '../../../../app/usage/usage_reporter.dart';
 import '../../../../app/utils/status_dialog.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/monthly/page/sheets/widgets/keypad/kor_keypad.dart';
@@ -113,15 +112,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
   static const String _kScreenTagAsset = 'assets/images/pelican_text.png';
   static const double _kScreenTagHeight = 54.0;
   static const String _prefsHasMonthlyKey = 'has_monthly_parking';
-  static const bool _usageUseSourceOnlyKey = true;
-  static const int _usageSourceShardCount = 10;
-  static const String _usageSrcPlateStatusLookupOnComplete =
-      'plate_status.lookup.on_complete';
-  static const String _usageSrcMonthlyLookup =
-      'InputPlateScreen._fetchMonthlyPlateStatus/monthly_plate_status.lookup';
-  static const String _usageSrcMonthlyUpdate =
-      'InputPlateScreen._applyMonthlyMemoAndStatusOnly/monthly_plate_status.doc.update';
-
   bool _hasMonthlyParking = false;
   bool _hasMonthlyLoaded = false;
 
@@ -177,25 +167,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     return '${p}_$a';
   }
 
-  Future<void> _reportUsage({
-    required String area,
-    required String action,
-    required String source,
-    int n = 1,
-  }) async {
-    try {
-      await UsageReporter.instance.report(
-        area: area,
-        action: action,
-        n: n,
-        source: source,
-        useSourceOnlyKey: _usageUseSourceOnlyKey,
-        sourceShardCount: _usageSourceShardCount,
-      );
-    } catch (e) {
-      debugPrint('[UsageReporter] report failed ($source): $e');
-    }
-  }
 
   Future<void> _loadHasMonthlyParkingFlag() async {
     try {
@@ -539,13 +510,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     } catch (e) {
       debugPrint('[_fetchPlateStatus] error: $e');
       return null;
-    } finally {
-      await _reportUsage(
-        area: safeArea,
-        action: 'read',
-        n: 1,
-        source: _usageSrcPlateStatusLookupOnComplete,
-      );
     }
   }
 
@@ -575,13 +539,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       debugPrint('[_fetchMonthlyPlateStatus] error: $e');
       return const _MonthlyFetchResult.failure(
         _MonthlyFetchFailureType.readError,
-      );
-    } finally {
-      await _reportUsage(
-        area: safeArea,
-        action: 'read',
-        n: 1,
-        source: _usageSrcMonthlyLookup,
       );
     }
   }
@@ -683,13 +640,6 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
         customStatus: customStatus,
         statusList: statusList,
         skipIfDocMissing: false,
-      );
-
-      await _reportUsage(
-        area: _safeArea(area),
-        action: 'write',
-        n: 1,
-        source: _usageSrcMonthlyUpdate,
       );
     } on MonthlyPlateStatusWriteException catch (e) {
       debugPrint('[_applyMonthlyMemoAndStatusOnly] repository error: $e');

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../enums/plate_type.dart';
 import '../models/plate_model.dart';
+import 'plate_billing_count_service.dart';
 import 'plate_status_service.dart';
 
 const String _kLocSep = ' - ';
@@ -203,6 +204,7 @@ class PlateCreationService {
     required String plateNumber,
     required String location,
     required String area,
+    required String division,
     required PlateType plateType,
     required String userName,
     String? billingType,
@@ -280,6 +282,8 @@ class PlateCreationService {
         isLockedFee || (billingType == null || billingType.trim().isEmpty);
 
     final normalizedLocation = _normalizeLocationString(location);
+    final normalizedDivision = division.trim().isEmpty ? '미지정' : division.trim();
+    final countedAt = DateTime.now();
 
     final base = PlateModel(
       id: plateDocId,
@@ -331,6 +335,9 @@ class PlateCreationService {
     );
 
     final docRef = _firestore.collection('plates').doc(plateDocId);
+    final bool shouldIncrementBillingCount =
+        plateType == PlateType.parkingRequests ||
+        plateType == PlateType.parkingCompleted;
 
     try {
       await _firestore.runTransaction((tx) async {
@@ -353,6 +360,10 @@ class PlateCreationService {
             debugPrint("🚨 중복된 번호판 등록 시도: $plateNumber (${existingType.name})");
             throw DuplicatePlateException("이미 등록된 번호판입니다: $plateNumber");
           } else {
+            final bool shouldIncrementReentryBillingCount =
+                existingType == PlateType.departureCompleted &&
+                    shouldIncrementBillingCount;
+
             final List<Map<String, dynamic>> existingLogs = (() {
               final raw = data?['logs'];
               if (raw is List) {
@@ -373,6 +384,8 @@ class PlateCreationService {
 
             final partial = <String, dynamic>{
               PlateFields.type: plateType.firestoreValue,
+              PlateFields.company: normalizedDivision,
+              PlateFields.division: normalizedDivision,
               PlateFields.updatedAt: FieldValue.serverTimestamp(),
               if (base.location.isNotEmpty)
                 PlateFields.location: _locationToMap(base.location),
@@ -400,8 +413,13 @@ class PlateCreationService {
               PlateFields.logs: mergedLogs,
             };
 
+            if (shouldIncrementReentryBillingCount) {
+              partial[PlateFields.lastBillingCountedAt] =
+                  FieldValue.serverTimestamp();
+            }
+
             if (plateType == PlateType.parkingRequests) {
-              partial['requestTime'] = FieldValue.serverTimestamp();
+              partial[PlateFields.requestTime] = FieldValue.serverTimestamp();
 
               if (canWriteRequestsView) {
                 tx.set(
@@ -491,15 +509,34 @@ class PlateCreationService {
             }
 
             tx.update(docRef, partial);
+
+            if (shouldIncrementReentryBillingCount) {
+              PlateBillingCountService.incrementInTransaction(
+                transaction: tx,
+                firestore: _firestore,
+                company: normalizedDivision,
+                area: area,
+                plateDocId: plateDocId,
+                plateNumber: plateNumber,
+                countedAt: countedAt,
+                userName: userName,
+              );
+            }
           }
         } else {
           final map = plateWithLog.toMap();
+          map[PlateFields.company] = normalizedDivision;
+          map[PlateFields.division] = normalizedDivision;
+          map[PlateFields.createdAt] = FieldValue.serverTimestamp();
+          if (shouldIncrementBillingCount) {
+            map[PlateFields.lastBillingCountedAt] = FieldValue.serverTimestamp();
+          }
+          map[PlateFields.requestTime] = FieldValue.serverTimestamp();
           map[PlateFields.updatedAt] = FieldValue.serverTimestamp();
 
           map[PlateFields.location] = _locationToMap(base.location);
 
           if (plateType == PlateType.parkingRequests) {
-            map['requestTime'] = FieldValue.serverTimestamp();
 
             if (canWriteRequestsView) {
               tx.set(
@@ -563,6 +600,18 @@ class PlateCreationService {
           }
 
           tx.set(docRef, map);
+          if (shouldIncrementBillingCount) {
+            PlateBillingCountService.incrementInTransaction(
+              transaction: tx,
+              firestore: _firestore,
+              company: normalizedDivision,
+              area: area,
+              plateDocId: plateDocId,
+              plateNumber: plateNumber,
+              countedAt: countedAt,
+              userName: userName,
+            );
+          }
         }
       });
     } on DuplicatePlateException {

@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
-import '../../../../../app/usage/usage_reporter.dart';
 import '../../../../../app/utils/status_dialog.dart';
 
 
@@ -96,15 +95,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         .collection('areas')
         .get(const GetOptions(source: Source.server));
 
-    try {
-      final n = snapshot.docs.isEmpty ? 1 : snapshot.docs.length;
-      await UsageReporter.instance.report(
-        area: 'unknown',
-        action: 'read',
-        n: n,
-        source: 'UserAccountsTab.fetchDivisions.areas.get',
-      );
-    } catch (_) {}
 
     return snapshot.docs
         .map((doc) => (doc.data()['division'] ?? '').toString().trim())
@@ -127,15 +117,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
           .where('division', whereIn: chunk)
           .get(const GetOptions(source: Source.server));
 
-      try {
-        final n = qs.docs.isEmpty ? 1 : qs.docs.length;
-        await UsageReporter.instance.report(
-          area: 'unknown',
-          action: 'read',
-          n: n,
-          source: 'UserAccountsTab.getAreasByDivisions.chunk(${chunk.length})',
-        );
-      } catch (_) {}
 
       for (final d in qs.docs) {
         final name = (d.data()['name'] ?? '').toString().trim();
@@ -153,15 +134,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         .where('division', isEqualTo: division)
         .get(const GetOptions(source: Source.server));
 
-    try {
-      final n = qs.docs.isEmpty ? 1 : qs.docs.length;
-      await UsageReporter.instance.report(
-        area: 'unknown',
-        action: 'read',
-        n: n,
-        source: 'UserAccountsTab._fetchAreasForDivision.get',
-      );
-    } catch (_) {}
 
     return qs;
   }
@@ -184,14 +156,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
           .doc(docId)
           .get(const GetOptions(source: Source.server));
 
-      try {
-        await UsageReporter.instance.report(
-          area: area,
-          action: 'read',
-          n: 1,
-          source: 'UserAccountsTab._fetchEnglishNameByArea.get',
-        );
-      } catch (_) {}
 
       final data = snap.data();
       final englishName = (data?['englishName'] ?? '').toString().trim();
@@ -209,15 +173,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         .where('areas', arrayContains: area)
         .get(const GetOptions(source: Source.server));
 
-    try {
-      final n = qs.docs.isEmpty ? 1 : qs.docs.length;
-      await UsageReporter.instance.report(
-        area: area,
-        action: 'read',
-        n: n,
-        source: 'UserAccountsTab._fetchUsersForArea.get',
-      );
-    } catch (_) {}
 
     return qs;
   }
@@ -336,14 +291,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       final metaSnap = await showDocRef.get(const GetOptions(source: Source.server));
       final meta = metaSnap.data() ?? <String, dynamic>{};
 
-      try {
-        await UsageReporter.instance.report(
-          area: area,
-          action: 'read',
-          n: 1,
-          source: 'UserAccountsTab._syncAccountCounts.meta.get',
-        );
-      } catch (_) {}
 
       if (!_metaNeedsCountCompute(meta, strict)) {
         return _countsFromMeta(meta);
@@ -363,15 +310,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
       }
       final counts = _UserAccountsTabCounts(activeCount: active, inactiveCount: inactive);
 
-      try {
-        final n = qs.docs.isEmpty ? 1 : qs.docs.length;
-        await UsageReporter.instance.report(
-          area: area,
-          action: 'read',
-          n: n,
-          source: 'UserAccountsTab._syncAccountCounts.users.get',
-        );
-      } catch (_) {}
 
       await showDocRef.set(
         <String, dynamic>{
@@ -383,14 +321,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         SetOptions(merge: true),
       );
 
-      try {
-        await UsageReporter.instance.report(
-          area: area,
-          action: 'write',
-          n: 1,
-          source: 'UserAccountsTab._syncAccountCounts.meta.set',
-        );
-      } catch (_) {}
 
       return counts;
     } catch (_) {
@@ -428,11 +358,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     final oldShowUserDocRef = oldShowDocRef.collection('users').doc(oldId);
     final newShowUserDocRef = newShowDocRef.collection('users').doc(newId);
 
-    bool didCreate = false;
-    bool didUpdate = false;
-    bool didDelete = false;
-    int readOps = 0;
-
     try {
       await _syncAccountCounts(
         showDocRef: newShowDocRef,
@@ -454,28 +379,24 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         final newRef = fs.collection('user_accounts').doc(newId);
 
         final oldSnap = await tx.get(oldRef);
-        readOps += 1;
         if (!oldSnap.exists) {
           throw Exception('원본 계정이 존재하지 않습니다.');
         }
 
         if (idChanged) {
           final newSnap = await tx.get(newRef);
-          readOps += 1;
-          if (newSnap.exists) {
+            if (newSnap.exists) {
             throw Exception('동일 ID가 이미 존재합니다: $newId');
           }
         }
 
         final newShowSnap = await tx.get(newShowDocRef);
-        readOps += 1;
         final newShowData = newShowSnap.data() ?? <String, dynamic>{};
         final newCounts0 = _countsFromMeta(newShowData);
         final newActiveLimit = _normalizeLimit(newShowData['activeLimit']);
         final newTotalLimit = _normalizeLimit(newShowData['totalLimit']);
 
         final newShowUserSnap = await tx.get(newShowUserDocRef);
-        readOps += 1;
         final newShowUserData = newShowUserSnap.data() ?? <String, dynamic>{};
         final newShowUserExists = newShowUserSnap.exists;
         final newShowUserActive = (newShowUserData['isActive'] as bool?) ?? false;
@@ -523,17 +444,14 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
             SetOptions(merge: true),
           );
           tx.set(newShowUserDocRef, showPayload, SetOptions(merge: true));
-          didUpdate = true;
           return;
         }
 
         final oldShowSnap = await tx.get(oldShowDocRef);
-        readOps += 1;
         final oldShowData = oldShowSnap.data() ?? <String, dynamic>{};
         final oldCounts0 = _countsFromMeta(oldShowData);
 
         final oldShowUserSnap = await tx.get(oldShowUserDocRef);
-        readOps += 1;
         final oldShowUserData = oldShowUserSnap.data() ?? <String, dynamic>{};
         final oldShowUserExists = oldShowUserSnap.exists;
         final oldShowUserActive = (oldShowUserData['isActive'] as bool?) ?? false;
@@ -579,11 +497,8 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         if (idChanged) {
           tx.set(newRef, payload);
           tx.delete(oldRef);
-          didCreate = true;
-          didDelete = true;
         } else {
           tx.update(oldRef, payload);
-          didUpdate = true;
         }
 
         if (oldShowUserExists) {
@@ -612,40 +527,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         );
       });
 
-      try {
-        if (readOps > 0) {
-          await UsageReporter.instance.report(
-            area: newArea,
-            action: 'read',
-            n: readOps,
-            source: 'UserAccountsTab._saveChanges.tx.get',
-          );
-        }
-        if (didUpdate) {
-          await UsageReporter.instance.report(
-            area: newArea,
-            action: 'write',
-            n: moved ? 3 : 2,
-            source: 'UserAccountsTab._saveChanges.update',
-          );
-        }
-        if (didCreate) {
-          await UsageReporter.instance.report(
-            area: newArea,
-            action: 'write',
-            n: 3,
-            source: 'UserAccountsTab._saveChanges.create',
-          );
-        }
-        if (didDelete) {
-          await UsageReporter.instance.report(
-            area: oldArea,
-            action: 'delete',
-            n: 2,
-            source: 'UserAccountsTab._saveChanges.deleteOld',
-          );
-        }
-      } catch (_) {}
 
       if (!mounted) return;
 
@@ -704,8 +585,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
     final showDocRef = fs.collection('user_accounts_show').doc(showId);
     final showUserDocRef = showDocRef.collection('users').doc(id);
 
-    int readOps = 0;
-
     try {
       final englishName = await _fetchEnglishNameByArea(draft.division, draft.area) ?? draft.area;
       await _syncAccountCounts(
@@ -717,13 +596,11 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
 
       await fs.runTransaction((tx) async {
         final userSnap = await tx.get(userRef);
-        readOps += 1;
         if (userSnap.exists) {
           throw Exception('동일 ID가 이미 존재합니다: $id');
         }
 
         final showSnap = await tx.get(showDocRef);
-        readOps += 1;
         final showData = showSnap.data() ?? <String, dynamic>{};
         final activeLimit = _normalizeLimit(showData['activeLimit']);
         final totalLimit = _normalizeLimit(showData['totalLimit']);
@@ -760,22 +637,6 @@ class _UserAccountsTabState extends State<UserAccountsTab> {
         tx.set(showUserDocRef, showMap, SetOptions(merge: true));
       });
 
-      try {
-        if (readOps > 0) {
-          await UsageReporter.instance.report(
-            area: draft.area,
-            action: 'read',
-            n: readOps,
-            source: 'UserAccountsTab._createAccount.tx.get',
-          );
-        }
-        await UsageReporter.instance.report(
-          area: draft.area,
-          action: 'write',
-          n: 3,
-          source: 'UserAccountsTab._createAccount.set',
-        );
-      } catch (_) {}
 
       if (!mounted) return;
 
