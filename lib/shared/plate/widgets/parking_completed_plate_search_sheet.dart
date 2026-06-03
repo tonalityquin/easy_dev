@@ -81,6 +81,27 @@ class _ParkingCompletedPlateSearchSheetState
 
   bool _isValidPlate(String value) => RegExp(r'^\d{4}$').hasMatch(value.trim());
 
+  void _completeSearch({
+    List<PlateModel>? results,
+    List<PlateOutLogSearchResult>? outLogResults,
+  }) {
+    if (!mounted) return;
+    setState(() {
+      _results = results ?? <PlateModel>[];
+      _outLogResults = outLogResults ?? <PlateOutLogSearchResult>[];
+      _hasSearched = true;
+      _isLoading = false;
+    });
+  }
+
+  void _finishLoadingAsSearched() {
+    if (!mounted) return;
+    setState(() {
+      _isLoading = false;
+      _hasSearched = true;
+    });
+  }
+
   void _resetSearch() {
     if (!mounted) return;
     setState(() {
@@ -105,15 +126,13 @@ class _ParkingCompletedPlateSearchSheetState
   }
 
   Future<void> _refreshSearchResults() async {
-    if (!mounted) return;
-    if (_isLoading) return;
+    if (!mounted || _isLoading) return;
 
     final q = _controller.text.trim();
     final area = widget.area.trim();
     final mode = _searchMode;
 
-    if (!_isValidPlate(q)) return;
-    if (area.isEmpty) return;
+    if (!_isValidPlate(q) || area.isEmpty) return;
 
     setState(() => _isLoading = true);
 
@@ -126,13 +145,13 @@ class _ParkingCompletedPlateSearchSheetState
           area: area,
         );
 
-        if (!mounted || _searchMode != mode) return;
-        setState(() {
-          _outLogResults = results;
-          _results.clear();
-          _hasSearched = true;
-          _isLoading = false;
-        });
+        if (!mounted) return;
+        if (_searchMode != mode) {
+          setState(() => _isLoading = false);
+          return;
+        }
+
+        _completeSearch(outLogResults: results);
         return;
       }
 
@@ -150,34 +169,37 @@ class _ParkingCompletedPlateSearchSheetState
       final filtered =
           results.where((p) => allowedTypes.contains(p.type)).toList();
 
-      if (!mounted || _searchMode != mode) return;
-      setState(() {
-        _results = filtered;
-        _outLogResults.clear();
-        _hasSearched = true;
-        _isLoading = false;
-      });
-    } catch (_) {
       if (!mounted) return;
-      setState(() => _isLoading = false);
+      if (_searchMode != mode) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      _completeSearch(results: filtered);
+    } catch (_) {
+      _finishLoadingAsSearched();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('검색 중 오류가 발생했습니다.')),
+      );
     }
   }
 
   Future<bool> _showDeleteDialog(
-    BuildContext rootContext,
-    PlateModel selected,
-  ) async {
+      BuildContext rootContext,
+      PlateModel selected,
+      ) async {
     final deleter = rootContext.read<DeletePlate>();
 
     final confirmed = await showDialog<bool>(
-          context: rootContext,
-          useRootNavigator: true,
-          builder: (dialogContext) => PlateRemoveDialog(
-            onConfirm: () {
-              Navigator.of(dialogContext).pop(true);
-            },
-          ),
-        ) ??
+      context: rootContext,
+      useRootNavigator: true,
+      builder: (dialogContext) => PlateRemoveDialog(
+        onConfirm: () {
+          Navigator.of(dialogContext).pop(true);
+        },
+      ),
+    ) ??
         false;
 
     if (!confirmed) return false;
@@ -239,18 +261,18 @@ class _ParkingCompletedPlateSearchSheetState
   }
 
   Future<void> _openStatusBottomSheet(
-    BuildContext rootContext,
-    PlateModel selected,
-  ) async {
+      BuildContext rootContext,
+      PlateModel selected,
+      ) async {
     Future<void> onRequestEntry() async {
       if (selected.typeEnum != PlateType.parkingCompleted) return;
 
       await rootContext.read<MovementPlate>().goBackToParkingRequest(
-            fromType: PlateType.parkingCompleted,
-            plateNumber: selected.plateNumber,
-            area: selected.area,
-            newLocation: '미지정',
-          );
+        fromType: PlateType.parkingCompleted,
+        plateNumber: selected.plateNumber,
+        area: selected.area,
+        newLocation: '미지정',
+      );
 
       await _refreshSearchResults();
     }
@@ -421,9 +443,9 @@ class _ParkingCompletedPlateSearchSheetState
                             isLoading: _isLoading,
                             onPressed: valid
                                 ? () async {
-                                    await _refreshSearchResults();
-                                    widget.onSearch?.call(value.text.trim());
-                                  }
+                              await _refreshSearchResults();
+                              widget.onSearch?.call(value.text.trim());
+                            }
                                 : null,
                           );
                         },
@@ -439,13 +461,13 @@ class _ParkingCompletedPlateSearchSheetState
       bottomNavigationBar: _hasSearched
           ? const SizedBox.shrink()
           : _AnimatedSearchKeypad(
-              slideAnimation: _slideAnimation,
-              fadeAnimation: _fadeAnimation,
-              controller: _controller,
-              maxLength: 4,
-              onComplete: () => setState(() {}),
-              onReset: _resetSearch,
-            ),
+        slideAnimation: _slideAnimation,
+        fadeAnimation: _fadeAnimation,
+        controller: _controller,
+        maxLength: 4,
+        onComplete: () => setState(() {}),
+        onReset: _resetSearch,
+      ),
     );
   }
 
@@ -747,24 +769,24 @@ class _SearchButton extends StatelessWidget {
         ),
         child: isLoading
             ? SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(fg),
-                ),
-              )
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(fg),
+          ),
+        )
             : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.search, size: 18),
-                  SizedBox(width: 8),
-                  Text(
-                    '검색',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-                  ),
-                ],
-              ),
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Icon(Icons.search, size: 18),
+            SizedBox(width: 8),
+            Text(
+              '검색',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -919,7 +941,7 @@ class _EmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final Color fg =
-        (tone == _EmptyTone.danger) ? cs.error : cs.onSurfaceVariant;
+    (tone == _EmptyTone.danger) ? cs.error : cs.onSurfaceVariant;
     final Color bg = (tone == _EmptyTone.danger)
         ? cs.errorContainer.withOpacity(0.6)
         : cs.surfaceContainerLow;
