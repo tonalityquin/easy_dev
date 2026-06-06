@@ -1,14 +1,10 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../shared/plate/domain/enums/plate_type.dart';
-import '../../../shared/tts/application/plate_tts_event_hub.dart';
 import '../../dev/application/area_state.dart';
 import '../../tablet/applications/tablet_work_session_state.dart';
-import 'panels/personal_search_panel.dart';
-import 'widgets/personal_sticky_notice_bar.dart';
+import 'panels/personal_home_panel.dart';
+import 'widgets/personal_side_menu.dart';
 import 'widgets/personal_top_navigation.dart';
 
 class PersonalPage extends StatefulWidget {
@@ -19,64 +15,16 @@ class PersonalPage extends StatefulWidget {
 }
 
 class _PersonalPageState extends State<PersonalPage> {
-  final List<String> _completedChips = <String>[];
-  final Set<String> _completedChipSet = <String>{};
-  final Set<String> _selectedChips = <String>{};
-  String? _areaCache;
-  StreamSubscription<PlateTtsEvent>? _ttsEventSub;
+  final GlobalKey<PersonalHomePanelState> _homeKey = GlobalKey<PersonalHomePanelState>();
+  bool _menuOpen = false;
 
-  void _addCompletedChip(String plateNumber) {
-    if (_completedChipSet.add(plateNumber)) {
-      setState(() => _completedChips.insert(0, plateNumber));
-    }
+  void _toggleMenu() {
+    setState(() => _menuOpen = !_menuOpen);
   }
 
-  void _removeCompletedChip(String plateNumber) {
-    if (_completedChipSet.remove(plateNumber)) {
-      setState(() {
-        _completedChips.remove(plateNumber);
-        _selectedChips.remove(plateNumber);
-      });
-    }
-  }
-
-  void _toggleChipSelection(String plateNumber) {
-    setState(() {
-      if (_selectedChips.contains(plateNumber)) {
-        _selectedChips.remove(plateNumber);
-      } else {
-        _selectedChips.add(plateNumber);
-      }
-    });
-  }
-
-  void _clearChipsForAreaChange() {
-    setState(() {
-      _completedChips.clear();
-      _completedChipSet.clear();
-      _selectedChips.clear();
-    });
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    PlateTtsEventHub.ensureStarted();
-    _ttsEventSub = PlateTtsEventHub.stream.listen((e) {
-      final currentArea = context.read<AreaState>().currentArea.trim();
-      if (currentArea.isEmpty || e.area != currentArea) return;
-      if (e.type == PlateType.departureCompleted.firestoreValue) {
-        final p = e.plateNumber.trim();
-        if (p.isNotEmpty) _addCompletedChip(p);
-      }
-    });
-  }
-
-  @override
-  void dispose() {
-    _ttsEventSub?.cancel();
-    _ttsEventSub = null;
-    super.dispose();
+  void _closeMenu() {
+    if (!_menuOpen) return;
+    setState(() => _menuOpen = false);
   }
 
   @override
@@ -87,47 +35,43 @@ class _PersonalPageState extends State<PersonalPage> {
     final workStateReady = workState.isReady;
     final workActive = workState.isActive;
     final canRenderWorkingContent = workStateReady && workActive;
-
-    if (_areaCache != area) {
-      _areaCache = area;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _clearChipsForAreaChange();
-      });
-    }
-
-    final pageContent = canRenderWorkingContent
-        ? ColoredBox(
-            color: cs.surface,
-            child: PersonalSearchPanel(
-              key: ValueKey('personal-mobile-pane-$area'),
-              area: area,
-            ),
-          )
-        : const SizedBox.expand();
+    final size = MediaQuery.of(context).size;
+    final menuWidth = size.width < 420 ? size.width * .86 : 360.0;
 
     final scaffold = Scaffold(
       backgroundColor: cs.surface,
-      appBar: PreferredSize(
-        preferredSize: const Size.fromHeight(kToolbarHeight),
-        child: SafeArea(
-          bottom: false,
-          child: PersonalTopNavigation(isAreaSelectable: canRenderWorkingContent),
-        ),
-      ),
       body: SafeArea(
         top: false,
         bottom: true,
         child: Column(
           children: [
-            if (canRenderWorkingContent)
-              PersonalStickyNoticeBar(
-                plates: _completedChips,
-                selectedPlates: _selectedChips,
-                onToggleSelect: _toggleChipSelection,
-                onRemove: _removeCompletedChip,
-              ),
+            PersonalTopNavigation(
+              menuOpen: _menuOpen,
+              enabled: true,
+              onMenuPressed: _toggleMenu,
+            ),
             Expanded(
-              child: pageContent,
+              child: Stack(
+                children: [
+                  canRenderWorkingContent
+                      ? ColoredBox(
+                          color: cs.surface,
+                          child: PersonalHomePanel(
+                            key: _homeKey,
+                            area: area,
+                          ),
+                        )
+                      : const SizedBox.expand(),
+                  if (!workStateReady)
+                    const Positioned.fill(
+                      child: _PersonalWorkSessionLoadingOverlay(),
+                    )
+                  else if (!workActive)
+                    const Positioned.fill(
+                      child: _PersonalWorkSessionInactiveOverlay(),
+                    ),
+                ],
+              ),
             ),
           ],
         ),
@@ -138,21 +82,47 @@ class _PersonalPageState extends State<PersonalPage> {
       canPop: false,
       onPopInvoked: (didPop) {
         if (didPop) return;
+        if (_menuOpen) {
+          _closeMenu();
+        }
       },
       child: Stack(
         children: [
-          IgnorePointer(
-            ignoring: !canRenderWorkingContent,
-            child: scaffold,
-          ),
-          if (!workStateReady)
-            const Positioned.fill(
-              child: _PersonalWorkSessionLoadingOverlay(),
-            )
-          else if (!workActive)
-            const Positioned.fill(
-              child: _PersonalWorkSessionInactiveOverlay(),
+          scaffold,
+          if (_menuOpen)
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _closeMenu,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  color: Colors.black.withOpacity(.24),
+                ),
+              ),
             ),
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+            top: 0,
+            bottom: 0,
+            right: _menuOpen ? 0 : -menuWidth,
+            width: menuWidth,
+            child: PersonalSideMenu(
+              onClose: _closeMenu,
+              onAddVehicle: () async {
+                await _homeKey.currentState?.addVehicleFromMenu();
+              },
+              onRefreshContent: () async {
+                await _homeKey.currentState?.refreshEverythingFromMenu();
+              },
+              onOpenTodo: () async {
+                await _homeKey.currentState?.openTodoDialogFromMenu();
+              },
+              onOpenCalendar: () async {
+                await _homeKey.currentState?.openCalendarDialogFromMenu();
+              },
+            ),
+          ),
         ],
       ),
     );
@@ -285,7 +255,7 @@ class _PersonalWorkSessionInactiveOverlay extends StatelessWidget {
                   ),
                   const SizedBox(height: 14),
                   Text(
-                    '업무 시작 버튼을 누르면 개인형 모바일 화면이 다시 활성화되고 현재 지역 기준 검색 기능을 다시 사용할 수 있습니다.',
+                    '앱 사용 시작 버튼을 누르면 개인형 홈이 다시 활성화되고 내 차량 상태 확인과 출차 요청 기능을 다시 사용할 수 있습니다.',
                     style: (text.bodyMedium ?? const TextStyle()).copyWith(
                       color: cs.onSurfaceVariant,
                       fontWeight: FontWeight.w600,
@@ -298,7 +268,7 @@ class _PersonalWorkSessionInactiveOverlay extends StatelessWidget {
                       await context.read<TabletWorkSessionState>().startWork();
                     },
                     icon: const Icon(Icons.play_arrow_rounded),
-                    label: const Text('업무 시작'),
+                    label: const Text('앱 사용 시작'),
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(52),
                       backgroundColor: cs.primary,

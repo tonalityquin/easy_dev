@@ -588,47 +588,15 @@ class _DevUnlockHotspotState extends State<_DevUnlockHotspot> {
     final dialogContext = AppNavigator.context;
     if (dialogContext == null) return;
 
-    final controller = TextEditingController();
-    try {
-      final ok = await showDialog<bool>(
-        context: dialogContext,
-        barrierDismissible: true,
-        builder: (context) {
-          return AlertDialog(
-            title: const Text('개발자 모드 잠금 해제'),
-            content: TextField(
-              controller: controller,
-              autofocus: true,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: '비밀번호',
-                hintText: '비밀번호를 입력하세요',
-              ),
-              onSubmitted: (_) => Navigator.of(context).pop(true),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('취소'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('확인'),
-              ),
-            ],
-          );
-        },
-      );
+    final input = await showDialog<String>(
+      context: dialogContext,
+      barrierDismissible: true,
+      builder: (_) => const _DevUnlockPasswordDialog(),
+    );
 
-      if (ok == true) {
-        final input = controller.text;
-        if (input == kDevUnlockPassword) {
-          DevQuickActions.setEnabled(true);
-          DevQuickActions.mountIfNeeded();
-        }
-      }
-    } finally {
-      controller.dispose();
+    if (input == kDevUnlockPassword) {
+      DevQuickActions.setEnabled(true);
+      DevQuickActions.mountIfNeeded();
     }
   }
 
@@ -695,6 +663,54 @@ class NotFoundPage extends StatelessWidget {
           textAlign: TextAlign.center,
         ),
       ),
+    );
+  }
+}
+
+class _DevUnlockPasswordDialog extends StatefulWidget {
+  const _DevUnlockPasswordDialog();
+
+  @override
+  State<_DevUnlockPasswordDialog> createState() => _DevUnlockPasswordDialogState();
+}
+
+class _DevUnlockPasswordDialogState extends State<_DevUnlockPasswordDialog> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    Navigator.of(context).pop(_controller.text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('개발자 모드 잠금 해제'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        obscureText: true,
+        decoration: const InputDecoration(
+          labelText: '비밀번호',
+          hintText: '비밀번호를 입력하세요',
+        ),
+        onSubmitted: (_) => _submit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('취소'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('확인'),
+        ),
+      ],
     );
   }
 }
