@@ -569,11 +569,15 @@ class _ParkingGrid3DViewState extends State<_ParkingGrid3DView>
   late final Animation<double> _alertAnim;
 
   bool get _hasDepartureAlert {
-    if (widget.model.towerStatus == ParkingSlotStatus.departureRequest) {
+    if (widget.model.towerStatus == ParkingSlotStatus.departureRequest ||
+        widget.model.towerStatus == ParkingSlotStatus.departureInProgress) {
       return true;
     }
     for (final s in widget.model.childSlots) {
-      if (s.status == ParkingSlotStatus.departureRequest) return true;
+      if (s.status == ParkingSlotStatus.departureRequest ||
+          s.status == ParkingSlotStatus.departureInProgress) {
+        return true;
+      }
     }
     return false;
   }
@@ -594,11 +598,13 @@ class _ParkingGrid3DViewState extends State<_ParkingGrid3DView>
     super.didUpdateWidget(oldWidget);
 
     bool had = false;
-    if (oldWidget.model.towerStatus == ParkingSlotStatus.departureRequest) {
+    if (oldWidget.model.towerStatus == ParkingSlotStatus.departureRequest ||
+        oldWidget.model.towerStatus == ParkingSlotStatus.departureInProgress) {
       had = true;
     } else {
       for (final s in oldWidget.model.childSlots) {
-        if (s.status == ParkingSlotStatus.departureRequest) {
+        if (s.status == ParkingSlotStatus.departureRequest ||
+            s.status == ParkingSlotStatus.departureInProgress) {
           had = true;
           break;
         }
@@ -1033,6 +1039,9 @@ class _ParkingGrid3DPainter extends CustomPainter {
         case ParkingSlotStatus.parked:
           opacity = isOrtho ? 0.12 : 0.10;
           break;
+        case ParkingSlotStatus.departureInProgress:
+          opacity = isOrtho ? 0.16 : 0.14;
+          break;
         case ParkingSlotStatus.departureRequest:
           opacity = isOrtho ? 0.14 : 0.12;
           break;
@@ -1144,6 +1153,8 @@ class _ParkingGrid3DPainter extends CustomPainter {
       switch (s) {
         case ParkingSlotStatus.parked:
           return parkedGreen;
+        case ParkingSlotStatus.departureInProgress:
+          return cs.error;
         case ParkingSlotStatus.departureRequest:
           return departRed;
         case ParkingSlotStatus.parkingRequest:
@@ -1235,7 +1246,8 @@ class _ParkingGrid3DPainter extends CustomPainter {
 
       final bool isOccupied = s.status != ParkingSlotStatus.empty;
       final bool fromGroupHint = s.statusFromGroup;
-      final bool isDeparture = s.status == ParkingSlotStatus.departureRequest;
+      final bool isDeparture = s.status == ParkingSlotStatus.departureRequest ||
+          s.status == ParkingSlotStatus.departureInProgress;
 
       final gT = _stableHash01(s.groupName);
 
@@ -2058,6 +2070,8 @@ class _ParkingGrid3DPainter extends CustomPainter {
         switch (s) {
           case ParkingSlotStatus.parked:
             return parkedGreen;
+          case ParkingSlotStatus.departureInProgress:
+            return cs.error;
           case ParkingSlotStatus.departureRequest:
             return departRed;
           case ParkingSlotStatus.parkingRequest:

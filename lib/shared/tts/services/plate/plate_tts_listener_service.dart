@@ -490,8 +490,23 @@ class PlateTtsListenerService {
           final spokenTail = _convertToKoreanDigits(_digitsOnly(tail));
 
           bool didSpeak = false;
+          final prevTypeForUi = _lastTypes[docId];
+          final isDepartureCompletedUiEvent =
+              _isTabletMode(_currentMode ?? '') &&
+                  newType == PlateType.departureCompleted.firestoreValue &&
+                  (change.type == PlateTtsChangeType.added ||
+                      prevTypeForUi == null ||
+                      prevTypeForUi != newType);
 
           if (!_isEnabledForType(newType)) {
+            if (isDepartureCompletedUiEvent) {
+              _emitUiEvent(
+                docId: docId,
+                type: newType,
+                plateNumber: plateNumber,
+                location: location,
+              );
+            }
             _log('skip by filter: type=$newType id=$docId (seq=$mySeq)');
             _lastTypes[docId] = newType;
             continue;
@@ -597,7 +612,7 @@ class PlateTtsListenerService {
 
           _lastTypes[docId] = newType;
 
-          if (didSpeak) {
+          if (didSpeak || isDepartureCompletedUiEvent) {
             _emitUiEvent(
               docId: docId,
               type: newType,

@@ -28,6 +28,8 @@ String _nameKey(String raw) => _normalizeName(raw).toLowerCase();
 
 int _statusPriority(ParkingSlotStatus s) {
   switch (s) {
+    case ParkingSlotStatus.departureInProgress:
+      return 4;
     case ParkingSlotStatus.departureRequest:
       return 3;
     case ParkingSlotStatus.parkingRequest:
@@ -64,12 +66,16 @@ class _ViewRow {
   final String plateNumber;
   final String location;
   final DateTime? createdAt;
+  final bool isSelected;
+  final String? selectedBy;
 
   const _ViewRow({
     required this.plateId,
     required this.plateNumber,
     required this.location,
     required this.createdAt,
+    this.isSelected = false,
+    this.selectedBy,
   });
 }
 
@@ -81,6 +87,8 @@ List<_ViewRow> _rowsFromViewRows(List<ViewRowData> rows) {
           plateNumber: e.plateNumber,
           location: e.location,
           createdAt: e.createdAt,
+          isSelected: e.isSelected,
+          selectedBy: e.selectedBy,
         ),
       )
       .toList(growable: false);
@@ -96,6 +104,9 @@ ParkingGridOverlay _buildGridOverlayFromViews({
 
   void applyRows(List<_ViewRow> rows, ParkingSlotStatus status) {
     for (final r in rows) {
+      final effectiveStatus = status == ParkingSlotStatus.departureRequest && r.isSelected
+          ? ParkingSlotStatus.departureInProgress
+          : status;
       final seg = _splitLocationSegments(r.location);
       if (seg.length < 2) continue;
 
@@ -113,10 +124,10 @@ ParkingGridOverlay _buildGridOverlayFromViews({
       if (no != null) {
         final slotKey = '$groupKey|$no';
         final prev = slotStatusByKey[slotKey] ?? ParkingSlotStatus.empty;
-        slotStatusByKey[slotKey] = _mergeStatus(prev, status);
+        slotStatusByKey[slotKey] = _mergeStatus(prev, effectiveStatus);
       } else {
         final prev = groupStatusByKey[groupKey] ?? ParkingSlotStatus.empty;
-        groupStatusByKey[groupKey] = _mergeStatus(prev, status);
+        groupStatusByKey[groupKey] = _mergeStatus(prev, effectiveStatus);
       }
     }
   }
@@ -192,6 +203,7 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
 
   int _occupiedCount = 0;
   int _departureRequestsCount = 0;
+  int _departureInProgressCount = 0;
   ParkingGridOverlay _gridOverlay = const ParkingGridOverlay.empty();
 
   bool _isCountLoading = true;
@@ -386,6 +398,7 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
       setState(() {
         _occupiedCount = 0;
         _departureRequestsCount = 0;
+        _departureInProgressCount = 0;
         _gridOverlay = const ParkingGridOverlay.empty();
         _isCountLoading = false;
         _hadError = false;
@@ -414,11 +427,13 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
           departureRequests: _latestDepartureRequests,
         );
         final pcCount = _latestParkingCompleted.length;
-        final drCount = _latestDepartureRequests.length;
+        final drivingCount = _latestDepartureRequests.where((e) => e.isSelected).length;
+        final drCount = _latestDepartureRequests.length - drivingCount;
         final ready = _pcReady && _drReady;
         setState(() {
           _occupiedCount = pcCount;
           _departureRequestsCount = drCount;
+          _departureInProgressCount = drivingCount;
           _gridOverlay = overlay;
           _isCountLoading = !ready;
           _hadError = false;
@@ -445,6 +460,7 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
       setState(() {
         _occupiedCount = 0;
         _departureRequestsCount = 0;
+        _departureInProgressCount = 0;
         _gridOverlay = const ParkingGridOverlay.empty();
         _isCountLoading = false;
         _hadError = true;
@@ -529,13 +545,15 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
     }
 
     final occupiedCount = _occupiedCount;
+    final departureRequestRows = _latestDepartureRequests.where((e) => !e.isSelected);
+    final departureInProgressRows = _latestDepartureRequests.where((e) => e.isSelected);
     final textMetricsByLocation = buildTextParkingPreviewMetricsByLocations(
       locations: _cachedLocations,
       parkingCompletedLocations: _latestParkingCompleted.map((e) => e.location),
-      departureRequestLocations:
-          _latestDepartureRequests.map((e) => e.location),
+      departureRequestLocations: departureRequestRows.map((e) => e.location),
+      departureInProgressLocations: departureInProgressRows.map((e) => e.location),
     );
-    final totalOccupied = occupiedCount + _departureRequestsCount;
+    final totalOccupied = occupiedCount + _departureRequestsCount + _departureInProgressCount;
     final double usageRatio =
         totalCapacity == 0 ? 0 : totalOccupied / totalCapacity;
     final String usagePercent = (usageRatio * 100).toStringAsFixed(1);
@@ -626,7 +644,7 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
             textAlign: TextAlign.center,
           ),
           Text(
-            '주차 $occupiedCount대 · 출차 요청 $_departureRequestsCount대',
+            '주차 $occupiedCount대 · 출차 요청 $_departureRequestsCount대 · 출차 중 $_departureInProgressCount대',
             style: TextStyle(
                 fontSize: 13,
                 color: cs.onSurfaceVariant,

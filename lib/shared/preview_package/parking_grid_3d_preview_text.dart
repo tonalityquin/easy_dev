@@ -291,12 +291,17 @@ extension _ParkingGridTextPreviewPart on _ParkingGrid3DPreviewCardState {
           ]) ??
           0,
     );
+    final departureInProgressCount = max(
+      0,
+      liveMetrics?.departureInProgressCount ?? 0,
+    );
     final available = capacity > 0 ? max(capacity - plateCount, 0) : null;
     final overCapacity = capacity > 0 && plateCount > capacity;
     final statusColor = overCapacity || available == 0 ? cs.error : cs.primary;
 
     final currentVehicleTone = cs.primary;
     final departureTone = cs.error;
+    final inProgressTone = cs.error;
 
     final metricRows = <Widget>[
       Row(
@@ -306,7 +311,6 @@ extension _ParkingGridTextPreviewPart on _ParkingGrid3DPreviewCardState {
               cs: cs,
               label: '수용 대수',
               value: capacity > 0 ? '${capacity}대' : '미설정',
-              hint: capacity > 0 ? '설정값 기준' : '입력 필요',
               icon: Icons.local_parking_rounded,
               tone: cs.primary,
             ),
@@ -317,7 +321,6 @@ extension _ParkingGridTextPreviewPart on _ParkingGrid3DPreviewCardState {
               cs: cs,
               label: '입차 완료',
               value: '${plateCount}대',
-              hint: plateCount > 0 ? '실제 집계값' : '현재 없음',
               icon: Icons.directions_car_filled_rounded,
               tone: currentVehicleTone,
               emphasize: true,
@@ -334,7 +337,6 @@ extension _ParkingGridTextPreviewPart on _ParkingGrid3DPreviewCardState {
               cs: cs,
               label: '여유 대수',
               value: available == null ? '계산 불가' : '${available}대',
-              hint: overCapacity ? '수용 초과' : '수용-현재',
               icon: Icons.add_road_rounded,
               tone: statusColor,
             ),
@@ -345,13 +347,30 @@ extension _ParkingGridTextPreviewPart on _ParkingGrid3DPreviewCardState {
               cs: cs,
               label: '출차 요청',
               value: '${departureRequestCount}건',
-              hint: departureRequestCount > 0 ? '처리 필요' : '요청 없음',
               icon: Icons.logout_rounded,
               tone: departureTone,
               emphasize: true,
               animate: departureRequestCount > 0,
             ),
           ),
+        ],
+      ),
+      const SizedBox(height: 10),
+      Row(
+        children: [
+          Expanded(
+            child: _textStatCard(
+              cs: cs,
+              label: '출차 중',
+              value: '${departureInProgressCount}건',
+              icon: Icons.directions_car_filled_rounded,
+              tone: inProgressTone,
+              emphasize: departureInProgressCount > 0,
+              animate: departureInProgressCount > 0,
+            ),
+          ),
+          const SizedBox(width: 10),
+          const Expanded(child: SizedBox.shrink()),
         ],
       ),
     ];

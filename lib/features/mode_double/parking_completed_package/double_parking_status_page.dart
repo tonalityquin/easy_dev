@@ -27,6 +27,8 @@ String _nameKey(String raw) => _normalizeName(raw).toLowerCase();
 
 int _statusPriority(ParkingSlotStatus s) {
   switch (s) {
+    case ParkingSlotStatus.departureInProgress:
+      return 4;
     case ParkingSlotStatus.departureRequest:
       return 3;
     case ParkingSlotStatus.parkingRequest:

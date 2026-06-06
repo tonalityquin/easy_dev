@@ -5,24 +5,31 @@ import '../../../../shared/plate/application/common/view_doc_rows_store.dart';
 import '../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../dev/application/area_state.dart';
 
+@immutable
+class TabletCompletedDepartureNotice {
+  const TabletCompletedDepartureNotice({
+    required this.docId,
+    required this.tail4,
+    required this.completedAt,
+  });
+
+  final String docId;
+  final String tail4;
+  final DateTime completedAt;
+}
+
 class LeftPaneDeparturePlates extends StatelessWidget {
   const LeftPaneDeparturePlates({
     super.key,
     this.columns = 3,
+    this.completedNotices = const <TabletCompletedDepartureNotice>[],
   }) : assert(columns > 0);
 
   final int columns;
+  final List<TabletCompletedDepartureNotice> completedNotices;
 
   Color _tintOnSurface(ColorScheme cs, {required double opacity}) {
     return Color.alphaBlend(cs.primary.withOpacity(opacity), cs.surface);
-  }
-
-  static String _digitsOnly(String s) => s.replaceAll(RegExp(r'[^0-9]'), '');
-
-  static String _tail4Digits(String plateNumber) {
-    final d = _digitsOnly(plateNumber);
-    if (d.length <= 4) return d;
-    return d.substring(d.length - 4);
   }
 
   static List<_DepartureRow> _rowsFromViewRows(List<ViewRowData> rows) {
@@ -30,14 +37,18 @@ class LeftPaneDeparturePlates extends StatelessWidget {
         .map(
           (row) => _DepartureRow(
             plateDocId: row.plateId,
-            plateNumber: row.plateNumber,
             tail4: _tail4Digits(row.plateNumber),
             primaryAt: row.primaryAt ?? row.updatedAt ?? row.createdAt,
+            isSelected: row.isSelected,
+            selectedBy: row.selectedBy,
           ),
         )
         .toList(growable: false);
 
     out.sort((a, b) {
+      final aSelected = a.isSelected ? 0 : 1;
+      final bSelected = b.isSelected ? 0 : 1;
+      if (aSelected != bSelected) return aSelected.compareTo(bSelected);
       final ad = a.primaryAt;
       final bd = b.primaryAt;
       if (ad == null && bd == null) return a.plateDocId.compareTo(b.plateDocId);
@@ -57,8 +68,10 @@ class LeftPaneDeparturePlates extends StatelessWidget {
     final text = Theme.of(context).textTheme;
     final currentArea =
         context.select<AreaState, String?>((s) => s.currentArea) ?? '';
-    final iconBg = _tintOnSurface(cs,
-        opacity: cs.brightness == Brightness.dark ? 0.18 : 0.10);
+    final iconBg = _tintOnSurface(
+      cs,
+      opacity: cs.brightness == Brightness.dark ? 0.18 : 0.10,
+    );
 
     final header = Row(
       children: [
@@ -78,7 +91,7 @@ class LeftPaneDeparturePlates extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '출차 요청 번호판(뒷 4자리)',
+                '태블릿 출차 현황',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: (text.titleMedium ?? const TextStyle()).copyWith(
@@ -88,7 +101,7 @@ class LeftPaneDeparturePlates extends StatelessWidget {
               ),
               const SizedBox(height: 1),
               Text(
-                currentArea.isEmpty ? '지역: -' : '지역: $currentArea',
+                currentArea.isEmpty ? '지역 -' : '지역 $currentArea',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style:
@@ -103,18 +116,7 @@ class LeftPaneDeparturePlates extends StatelessWidget {
       ],
     );
 
-    if (currentArea.trim().isEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          header,
-          const SizedBox(height: 10),
-          const _InfoBox(
-            text: '지역이 설정되지 않았습니다.',
-          ),
-        ],
-      );
-    }
+    final area = currentArea.trim();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -122,14 +124,92 @@ class LeftPaneDeparturePlates extends StatelessWidget {
         header,
         const SizedBox(height: 10),
         Expanded(
-          child: _DepartureRequestGrid(
-            area: currentArea.trim(),
-            columns: columns,
-            colorScheme: cs,
-            textTheme: text,
+          flex: 3,
+          child: _PanelSection(
+            title: '출차 요청',
+            icon: Icons.logout,
+            accentColor: cs.primary,
+            child: area.isEmpty
+                ? const SizedBox.expand()
+                : _DepartureRequestGrid(
+                    area: area,
+                    columns: columns,
+                    colorScheme: cs,
+                    textTheme: text,
+                  ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Expanded(
+          flex: 2,
+          child: _PanelSection(
+            title: '업무 중 출차 완료',
+            icon: Icons.check_circle_outline,
+            accentColor: cs.tertiary,
+            child: _CompletedDepartureGrid(
+              notices: completedNotices,
+              columns: columns,
+              colorScheme: cs,
+              textTheme: text,
+            ),
           ),
         ),
       ],
+    );
+  }
+}
+
+class _PanelSection extends StatelessWidget {
+  const _PanelSection({
+    required this.title,
+    required this.icon,
+    required this.accentColor,
+    required this.child,
+  });
+
+  final String title;
+  final IconData icon;
+  final Color accentColor;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cs.outlineVariant.withOpacity(.65)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+            child: Row(
+              children: [
+                Icon(icon, size: 18, color: accentColor),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: (text.titleSmall ?? const TextStyle()).copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: cs.onSurface,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Divider(height: 1, thickness: 1, color: cs.outlineVariant),
+          Expanded(child: child),
+        ],
+      ),
     );
   }
 }
@@ -190,12 +270,14 @@ class _DepartureRequestGridState extends State<_DepartureRequestGrid> {
       builder: (context, snap) {
         if (snap.hasError) {
           debugPrint(
-              '[TabletLeftPane][departure_requests_view] a=$_boundArea error=${snap.error}');
-          return const _InfoBox(text: '출차 요청 목록을 불러오지 못했습니다.');
+            '[TabletLeftPane][departure_requests_view] a=$_boundArea error=${snap.error}',
+          );
+          return const SizedBox.expand();
         }
         if (!snap.hasData) {
           debugPrint(
-              '[TabletLeftPane][departure_requests_view] a=$_boundArea loading...');
+            '[TabletLeftPane][departure_requests_view] a=$_boundArea loading...',
+          );
           return const Center(child: CircularProgressIndicator());
         }
 
@@ -206,50 +288,116 @@ class _DepartureRequestGridState extends State<_DepartureRequestGrid> {
         );
 
         if (rows.isEmpty) {
-          return const _InfoBox(text: '출차 요청이 없습니다.');
+          return const SizedBox.expand();
         }
 
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            const cross = 10.0;
-            const main = 10.0;
-            const pad = 6.0 * 2;
-            final maxW = constraints.maxWidth;
-
-            const minTileW = 72.0;
-            var effectiveColumns = widget.columns;
-            while (effectiveColumns > 1) {
-              final w = (maxW - pad - cross * (effectiveColumns - 1)) /
-                  effectiveColumns;
-              if (w >= minTileW) break;
-              effectiveColumns -= 1;
-            }
-
-            final tileW = (maxW - pad - cross * (effectiveColumns - 1)) /
-                effectiveColumns;
-            const desiredH = 84.0;
-            final aspect = (tileW / desiredH).clamp(0.55, 1.10);
-            return GridView.builder(
-              padding: const EdgeInsets.all(6),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: effectiveColumns,
-                crossAxisSpacing: cross,
-                mainAxisSpacing: main,
-                childAspectRatio: aspect,
-              ),
-              itemCount: rows.length,
-              itemBuilder: (context, i) {
-                final r = rows[i];
-                final tail = r.tail4.isEmpty ? '-' : r.tail4;
-                return _PlateTile(
-                  tail4: tail,
-                  plateNumber: r.plateNumber,
-                  cs: cs,
-                  text: text,
-                );
-              },
+        return _PlateGrid(
+          itemCount: rows.length,
+          columns: widget.columns,
+          minTileWidth: 72,
+          desiredTileHeight: 90,
+          itemBuilder: (context, index) {
+            final row = rows[index];
+            final tail = row.tail4.isEmpty ? '-' : row.tail4;
+            return _PlateTile(
+              tail4: tail,
+              colorScheme: cs,
+              textTheme: text,
+              completed: false,
+              inProgress: row.isSelected,
             );
           },
+        );
+      },
+    );
+  }
+}
+
+class _CompletedDepartureGrid extends StatelessWidget {
+  const _CompletedDepartureGrid({
+    required this.notices,
+    required this.columns,
+    required this.colorScheme,
+    required this.textTheme,
+  });
+
+  final List<TabletCompletedDepartureNotice> notices;
+  final int columns;
+  final ColorScheme colorScheme;
+  final TextTheme textTheme;
+
+  @override
+  Widget build(BuildContext context) {
+    if (notices.isEmpty) {
+      return const SizedBox.expand();
+    }
+
+    return _PlateGrid(
+      itemCount: notices.length,
+      columns: columns,
+      minTileWidth: 78,
+      desiredTileHeight: 98,
+      itemBuilder: (context, index) {
+        final notice = notices[index];
+        final tail = notice.tail4.isEmpty ? '-' : notice.tail4;
+        return _PlateTile(
+          tail4: tail,
+          colorScheme: colorScheme,
+          textTheme: textTheme,
+          completed: true,
+          timeLabel: _formatTime(notice.completedAt),
+        );
+      },
+    );
+  }
+}
+
+class _PlateGrid extends StatelessWidget {
+  const _PlateGrid({
+    required this.itemCount,
+    required this.columns,
+    required this.minTileWidth,
+    required this.desiredTileHeight,
+    required this.itemBuilder,
+  });
+
+  final int itemCount;
+  final int columns;
+  final double minTileWidth;
+  final double desiredTileHeight;
+  final IndexedWidgetBuilder itemBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const cross = 10.0;
+        const main = 10.0;
+        const pad = 6.0 * 2;
+        final maxW = constraints.maxWidth;
+
+        var effectiveColumns = columns;
+        while (effectiveColumns > 1) {
+          final w =
+              (maxW - pad - cross * (effectiveColumns - 1)) / effectiveColumns;
+          if (w >= minTileWidth) break;
+          effectiveColumns -= 1;
+        }
+
+        final tileW =
+            (maxW - pad - cross * (effectiveColumns - 1)) / effectiveColumns;
+        final aspect = (tileW / desiredTileHeight).clamp(0.55, 1.10).toDouble();
+
+        return GridView.builder(
+          padding: const EdgeInsets.all(6),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: effectiveColumns,
+            crossAxisSpacing: cross,
+            mainAxisSpacing: main,
+            childAspectRatio: aspect,
+          ),
+          itemCount: itemCount,
+          itemBuilder: itemBuilder,
         );
       },
     );
@@ -259,76 +407,57 @@ class _DepartureRequestGridState extends State<_DepartureRequestGrid> {
 class _DepartureRow {
   const _DepartureRow({
     required this.plateDocId,
-    required this.plateNumber,
     required this.tail4,
     required this.primaryAt,
+    required this.isSelected,
+    required this.selectedBy,
   });
 
   final String plateDocId;
-  final String plateNumber;
   final String tail4;
   final DateTime? primaryAt;
-}
-
-class _InfoBox extends StatelessWidget {
-  const _InfoBox({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: cs.outlineVariant.withOpacity(.6)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.info_outline, color: cs.onSurfaceVariant),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: (textTheme.bodyMedium ?? const TextStyle(fontSize: 14))
-                  .copyWith(
-                color: cs.onSurfaceVariant,
-                height: 1.35,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  final bool isSelected;
+  final String? selectedBy;
 }
 
 class _PlateTile extends StatelessWidget {
   const _PlateTile({
     required this.tail4,
-    required this.plateNumber,
-    required this.cs,
-    required this.text,
+    required this.colorScheme,
+    required this.textTheme,
+    required this.completed,
+    this.inProgress = false,
+    this.timeLabel,
   });
 
   final String tail4;
-  final String plateNumber;
-  final ColorScheme cs;
-  final TextTheme text;
+  final ColorScheme colorScheme;
+  final TextTheme textTheme;
+  final bool completed;
+  final bool inProgress;
+  final String? timeLabel;
 
   @override
   Widget build(BuildContext context) {
+    final cs = colorScheme;
+    final accent = completed
+        ? cs.tertiary
+        : inProgress
+            ? cs.error
+            : cs.primary;
+    final background = completed || inProgress
+        ? Color.alphaBlend(accent.withOpacity(.08), cs.surface)
+        : cs.surface;
+
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: cs.surface,
+        color: background,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.outlineVariant.withOpacity(.7)),
+        border: Border.all(
+          color: completed || inProgress
+              ? accent.withOpacity(.40)
+              : cs.outlineVariant.withOpacity(.70),
+        ),
         boxShadow: [
           BoxShadow(
             color: cs.shadow.withOpacity(.07),
@@ -341,37 +470,80 @@ class _PlateTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  tail4,
-                  maxLines: 1,
-                  softWrap: false,
-                  style: (text.headlineSmall ?? const TextStyle(fontSize: 20))
-                      .copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: cs.onSurface,
+            Row(
+              children: [
+                if (completed) ...[
+                  Icon(Icons.check_circle_outline, color: accent, size: 18),
+                  const SizedBox(width: 5),
+                ] else if (inProgress) ...[
+                  Icon(Icons.directions_car_filled, color: accent, size: 18),
+                  const SizedBox(width: 5),
+                ],
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      tail4,
+                      maxLines: 1,
+                      softWrap: false,
+                      style: (textTheme.headlineSmall ??
+                              const TextStyle(fontSize: 20))
+                          .copyWith(
+                        fontWeight: FontWeight.w900,
+                        color: cs.onSurface,
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
-            const SizedBox(height: 1),
-            Text(
-              plateNumber,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: (text.bodySmall ?? const TextStyle(fontSize: 12)).copyWith(
-                color: cs.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
+            if (completed && timeLabel != null) ...[
+              const SizedBox(height: 2),
+              Text(
+                '완료 $timeLabel',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style:
+                    (textTheme.labelSmall ?? const TextStyle(fontSize: 11))
+                        .copyWith(
+                  color: accent,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
-            ),
+            ] else if (inProgress) ...[
+              const SizedBox(height: 2),
+              Text(
+                '출차 중',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style:
+                    (textTheme.labelSmall ?? const TextStyle(fontSize: 11))
+                        .copyWith(
+                  color: accent,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
+}
+
+String _digitsOnly(String s) => s.replaceAll(RegExp(r'[^0-9]'), '');
+
+String _tail4Digits(String plateNumber) {
+  final d = _digitsOnly(plateNumber);
+  if (d.length <= 4) return d;
+  return d.substring(d.length - 4);
+}
+
+String _formatTime(DateTime value) {
+  final h = value.hour.toString().padLeft(2, '0');
+  final m = value.minute.toString().padLeft(2, '0');
+  return '$h:$m';
 }

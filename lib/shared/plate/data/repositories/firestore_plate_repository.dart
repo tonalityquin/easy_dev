@@ -154,6 +154,8 @@ List<ViewRowData> _viewRowsFromSnapshot(
     final primaryAt = _viewRowToDate(map[primaryAtField]);
     final updatedAt = _viewRowToDate(map['updatedAt']);
     final createdAt = primaryAt ?? updatedAt;
+    final isSelected = map['isSelected'] == true;
+    final selectedBy = (map['selectedBy'] as String?)?.trim();
 
     out.add(
       ViewRowData(
@@ -163,6 +165,8 @@ List<ViewRowData> _viewRowsFromSnapshot(
         primaryAt: primaryAt,
         updatedAt: updatedAt,
         createdAt: createdAt,
+        isSelected: isSelected,
+        selectedBy: selectedBy == null || selectedBy.isEmpty ? null : selectedBy,
       ),
     );
   }
@@ -429,6 +433,8 @@ class FirestorePlateRepository implements PlateRepository {
             'plateNumber': plateNumber,
             'location': location.isNotEmpty ? location : _kLocUnknown,
             primaryAtField: FieldValue.serverTimestamp(),
+            'isSelected': false,
+            'selectedBy': null,
             'updatedAt': FieldValue.serverTimestamp(),
           },
         },

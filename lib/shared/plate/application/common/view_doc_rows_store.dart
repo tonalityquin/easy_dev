@@ -8,6 +8,8 @@ class ViewRowData {
   final DateTime? primaryAt;
   final DateTime? updatedAt;
   final DateTime? createdAt;
+  final bool isSelected;
+  final String? selectedBy;
 
   const ViewRowData({
     required this.plateId,
@@ -16,6 +18,8 @@ class ViewRowData {
     required this.primaryAt,
     required this.updatedAt,
     required this.createdAt,
+    this.isSelected = false,
+    this.selectedBy,
   });
 }
 

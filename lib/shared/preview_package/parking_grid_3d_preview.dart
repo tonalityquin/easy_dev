@@ -13,12 +13,14 @@ import 'parking_grid_3d_view_picker_dialog.dart';
 part 'parking_grid_3d_preview_text.dart';
 part 'parking_grid_3d_preview_structured.dart';
 
-enum ParkingSlotStatus { empty, parkingRequest, parked, departureRequest }
+enum ParkingSlotStatus { empty, parkingRequest, parked, departureRequest, departureInProgress }
 
 enum _PreviewEntryKind { structured, text }
 
 int _slotStatusPriority(ParkingSlotStatus s) {
   switch (s) {
+    case ParkingSlotStatus.departureInProgress:
+      return 4;
     case ParkingSlotStatus.departureRequest:
       return 3;
     case ParkingSlotStatus.parkingRequest:
@@ -38,21 +40,26 @@ ParkingSlotStatus _mergeSlotStatus(ParkingSlotStatus a, ParkingSlotStatus b) {
 class TextParkingPreviewMetrics {
   final int parkingCompletedCount;
   final int departureRequestCount;
+  final int departureInProgressCount;
 
   const TextParkingPreviewMetrics({
     this.parkingCompletedCount = 0,
     this.departureRequestCount = 0,
+    this.departureInProgressCount = 0,
   });
 
   TextParkingPreviewMetrics copyWith({
     int? parkingCompletedCount,
     int? departureRequestCount,
+    int? departureInProgressCount,
   }) {
     return TextParkingPreviewMetrics(
       parkingCompletedCount:
       parkingCompletedCount ?? this.parkingCompletedCount,
       departureRequestCount:
       departureRequestCount ?? this.departureRequestCount,
+      departureInProgressCount:
+      departureInProgressCount ?? this.departureInProgressCount,
     );
   }
 }
@@ -347,6 +354,7 @@ Map<String, TextParkingPreviewMetrics> buildTextParkingPreviewMetricsByLocations
   required List<LocationModel> locations,
   Iterable<String> parkingCompletedLocations = const <String>[],
   Iterable<String> departureRequestLocations = const <String>[],
+  Iterable<String> departureInProgressLocations = const <String>[],
 }) {
   final aliasToCanonicals = <String, Set<String>>{};
   final result = <String, TextParkingPreviewMetrics>{};
@@ -380,25 +388,37 @@ Map<String, TextParkingPreviewMetrics> buildTextParkingPreviewMetricsByLocations
   }
 
   void accumulate(
-      Iterable<String> rawLocations, {
-        required bool isDepartureRequest,
-      }) {
+    Iterable<String> rawLocations, {
+    required bool isDepartureRequest,
+    bool isDepartureInProgress = false,
+  }) {
     for (final raw in rawLocations) {
       final canonical = resolveCanonical(raw);
       if (canonical == null) continue;
       final current = result[canonical] ?? const TextParkingPreviewMetrics();
-      result[canonical] = isDepartureRequest
-          ? current.copyWith(
-        departureRequestCount: current.departureRequestCount + 1,
-      )
-          : current.copyWith(
-        parkingCompletedCount: current.parkingCompletedCount + 1,
-      );
+      if (isDepartureInProgress) {
+        result[canonical] = current.copyWith(
+          departureInProgressCount: current.departureInProgressCount + 1,
+        );
+      } else if (isDepartureRequest) {
+        result[canonical] = current.copyWith(
+          departureRequestCount: current.departureRequestCount + 1,
+        );
+      } else {
+        result[canonical] = current.copyWith(
+          parkingCompletedCount: current.parkingCompletedCount + 1,
+        );
+      }
     }
   }
 
   accumulate(parkingCompletedLocations, isDepartureRequest: false);
   accumulate(departureRequestLocations, isDepartureRequest: true);
+  accumulate(
+    departureInProgressLocations,
+    isDepartureRequest: true,
+    isDepartureInProgress: true,
+  );
 
   return result;
 }

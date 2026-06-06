@@ -5,6 +5,8 @@ class RealTimeRowVM {
   final DateTime? primaryAt;
   final DateTime? updatedAt;
   final DateTime? createdAt;
+  final bool isSelected;
+  final String? selectedBy;
 
   const RealTimeRowVM({
     required this.plateId,
@@ -13,5 +15,7 @@ class RealTimeRowVM {
     required this.primaryAt,
     required this.updatedAt,
     required this.createdAt,
+    this.isSelected = false,
+    this.selectedBy,
   });
 }

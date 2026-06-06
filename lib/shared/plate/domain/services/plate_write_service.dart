@@ -410,17 +410,28 @@ class PlateWriteService {
             ? _toBool(fields[PlateFields.isSelected])
             : beforeSelected;
 
+        final String beforeSelectedBy =
+            ((before[PlateFields.selectedBy] as String?) ?? '').trim();
+        final String afterSelectedBy = (() {
+          final raw = fields[PlateFields.selectedBy];
+          if (raw is String) return raw.trim();
+          if (fields.containsKey(PlateFields.selectedBy)) return '';
+          return beforeSelectedBy;
+        })();
+
         final bool typeChanged = beforeType != afterType;
         final bool areaChanged = beforeArea != afterArea;
         final bool locationChanged = beforeLocation != afterLocation;
         final bool plateNumberChanged = beforePlateNumber != afterPlateNumber;
         final bool selectedChanged = beforeSelected != afterSelected;
+        final bool selectedByChanged = beforeSelectedBy != afterSelectedBy;
 
         final bool affectsViews = typeChanged ||
             areaChanged ||
             locationChanged ||
             plateNumberChanged ||
-            selectedChanged;
+            selectedChanged ||
+            selectedByChanged;
 
         if (!affectsViews) {
           return;
@@ -461,10 +472,14 @@ class PlateWriteService {
           required String location,
           String? primaryTimeField,
           dynamic primaryTimeValue,
+          bool includeSelectionState = false,
+          bool isSelected = false,
+          String? selectedBy,
         }) {
           if (area.trim().isEmpty) return;
 
           final ref = _viewRef(collection, area.trim());
+          final selectedByValue = isSelected ? selectedBy?.trim() : null;
 
           final item = <String, dynamic>{
             'plateNumber': plateNumber,
@@ -474,6 +489,11 @@ class PlateWriteService {
             if (primaryTimeField != null)
               primaryTimeField:
                   primaryTimeValue ?? FieldValue.serverTimestamp(),
+            if (includeSelectionState) 'isSelected': isSelected,
+            if (includeSelectionState)
+              'selectedBy': selectedByValue == null || selectedByValue.isEmpty
+                  ? null
+                  : selectedByValue,
           };
 
           tx.set(
@@ -518,40 +538,30 @@ class PlateWriteService {
           }
 
           if (afterIsReq) {
-            if (afterSelected) {
-              if (typeChanged ||
-                  areaChanged ||
-                  selectedChanged ||
-                  locationChanged ||
-                  plateNumberChanged) {
-                _txRemoveViewItem(
-                  collection: reqCollection,
-                  area: afterArea,
-                  plateDocId: documentId,
-                );
-              }
-            } else {
-              if (typeChanged ||
-                  areaChanged ||
-                  selectedChanged ||
-                  locationChanged ||
-                  plateNumberChanged) {
-                final reqAt = _extractTimestampForAny(
-                  before: before,
-                  fields: fields,
-                  keys: const <String>['parkingRequestedAt', 'requestTime'],
-                );
+            if (typeChanged ||
+                areaChanged ||
+                selectedChanged ||
+                selectedByChanged ||
+                locationChanged ||
+                plateNumberChanged) {
+              final reqAt = _extractTimestampForAny(
+                before: before,
+                fields: fields,
+                keys: const <String>['parkingRequestedAt', 'requestTime'],
+              );
 
-                _txUpsertViewItemFields(
-                  collection: reqCollection,
-                  area: afterArea,
-                  plateDocId: documentId,
-                  plateNumber: afterPlateNumber,
-                  location: afterLocation,
-                  primaryTimeField: 'parkingRequestedAt',
-                  primaryTimeValue: reqAt,
-                );
-              }
+              _txUpsertViewItemFields(
+                collection: reqCollection,
+                area: afterArea,
+                plateDocId: documentId,
+                plateNumber: afterPlateNumber,
+                location: afterLocation,
+                primaryTimeField: 'parkingRequestedAt',
+                primaryTimeValue: reqAt,
+                includeSelectionState: true,
+                isSelected: afterSelected,
+                selectedBy: afterSelectedBy,
+              );
             }
           }
         }
@@ -599,40 +609,30 @@ class PlateWriteService {
           }
 
           if (afterIsDep) {
-            if (afterSelected) {
-              if (typeChanged ||
-                  areaChanged ||
-                  selectedChanged ||
-                  locationChanged ||
-                  plateNumberChanged) {
-                _txRemoveViewItem(
-                  collection: depCollection,
-                  area: afterArea,
-                  plateDocId: documentId,
-                );
-              }
-            } else {
-              if (typeChanged ||
-                  areaChanged ||
-                  selectedChanged ||
-                  locationChanged ||
-                  plateNumberChanged) {
-                final depAt = _extractTimestampForAny(
-                  before: before,
-                  fields: fields,
-                  keys: const <String>['departureRequestedAt'],
-                );
+            if (typeChanged ||
+                areaChanged ||
+                selectedChanged ||
+                selectedByChanged ||
+                locationChanged ||
+                plateNumberChanged) {
+              final depAt = _extractTimestampForAny(
+                before: before,
+                fields: fields,
+                keys: const <String>['departureRequestedAt'],
+              );
 
-                _txUpsertViewItemFields(
-                  collection: depCollection,
-                  area: afterArea,
-                  plateDocId: documentId,
-                  plateNumber: afterPlateNumber,
-                  location: afterLocation,
-                  primaryTimeField: 'departureRequestedAt',
-                  primaryTimeValue: depAt,
-                );
-              }
+              _txUpsertViewItemFields(
+                collection: depCollection,
+                area: afterArea,
+                plateDocId: documentId,
+                plateNumber: afterPlateNumber,
+                location: afterLocation,
+                primaryTimeField: 'departureRequestedAt',
+                primaryTimeValue: depAt,
+                includeSelectionState: true,
+                isSelected: afterSelected,
+                selectedBy: afterSelectedBy,
+              );
             }
           }
         }
@@ -865,46 +865,37 @@ class PlateWriteService {
           final viewRef =
               _firestore.collection('departure_requests_view').doc(docArea);
 
-          if (isSelected) {
-            tx.set(
-              viewRef,
-              <String, dynamic>{
-                'area': docArea,
-                'updatedAt': FieldValue.serverTimestamp(),
-                'items': <String, dynamic>{
-                  id: FieldValue.delete(),
+          final plateNumber = ((data['plateNumber'] as String?) ??
+                  _fallbackPlateFromDocId(id))
+              .trim();
+
+          final location = _normalizeLocation(data['location']);
+
+          final depRequestedAt = data['departureRequestedAt'];
+          final selectedByValue = isSelected ? selectedBy?.trim() : null;
+
+          tx.set(
+            viewRef,
+            <String, dynamic>{
+              'area': docArea,
+              'updatedAt': FieldValue.serverTimestamp(),
+              'items': <String, dynamic>{
+                id: <String, dynamic>{
+                  'plateNumber': plateNumber,
+                  PlateFields.plateNumber: plateNumber,
+                  'location': location,
+                  'departureRequestedAt':
+                      depRequestedAt ?? FieldValue.serverTimestamp(),
+                  'isSelected': isSelected,
+                  'selectedBy': selectedByValue == null || selectedByValue.isEmpty
+                      ? null
+                      : selectedByValue,
+                  'updatedAt': FieldValue.serverTimestamp(),
                 }
-              },
-              SetOptions(merge: true),
-            );
-          } else {
-            final plateNumber = ((data['plateNumber'] as String?) ??
-                    _fallbackPlateFromDocId(id))
-                .trim();
-
-            final location = _normalizeLocation(data['location']);
-
-            final depRequestedAt = data['departureRequestedAt'];
-
-            tx.set(
-              viewRef,
-              <String, dynamic>{
-                'area': docArea,
-                'updatedAt': FieldValue.serverTimestamp(),
-                'items': <String, dynamic>{
-                  id: <String, dynamic>{
-                    'plateNumber': plateNumber,
-                    PlateFields.plateNumber: plateNumber,
-                    'location': location,
-                    'departureRequestedAt':
-                        depRequestedAt ?? FieldValue.serverTimestamp(),
-                    'updatedAt': FieldValue.serverTimestamp(),
-                  }
-                }
-              },
-              SetOptions(merge: true),
-            );
-          }
+              }
+            },
+            SetOptions(merge: true),
+          );
         }
 
         if (typeEnum == PlateType.parkingRequests && docArea.isNotEmpty) {
@@ -915,45 +906,36 @@ class PlateWriteService {
           final viewRef =
               _firestore.collection('parking_requests_view').doc(docArea);
 
-          if (isSelected) {
-            tx.set(
-              viewRef,
-              <String, dynamic>{
-                'area': docArea,
-                'updatedAt': FieldValue.serverTimestamp(),
-                'items': <String, dynamic>{
-                  id: FieldValue.delete(),
+          final plateNumber = ((data['plateNumber'] as String?) ??
+                  _fallbackPlateFromDocId(id))
+              .trim();
+
+          final location = _normalizeLocation(data['location']);
+
+          final reqAt = data['requestTime'] ?? data['parkingRequestedAt'];
+          final selectedByValue = isSelected ? selectedBy?.trim() : null;
+
+          tx.set(
+            viewRef,
+            <String, dynamic>{
+              'area': docArea,
+              'updatedAt': FieldValue.serverTimestamp(),
+              'items': <String, dynamic>{
+                id: <String, dynamic>{
+                  'plateNumber': plateNumber,
+                  PlateFields.plateNumber: plateNumber,
+                  'location': location,
+                  'parkingRequestedAt': reqAt ?? FieldValue.serverTimestamp(),
+                  'isSelected': isSelected,
+                  'selectedBy': selectedByValue == null || selectedByValue.isEmpty
+                      ? null
+                      : selectedByValue,
+                  'updatedAt': FieldValue.serverTimestamp(),
                 }
-              },
-              SetOptions(merge: true),
-            );
-          } else {
-            final plateNumber = ((data['plateNumber'] as String?) ??
-                    _fallbackPlateFromDocId(id))
-                .trim();
-
-            final location = _normalizeLocation(data['location']);
-
-            final reqAt = data['requestTime'] ?? data['parkingRequestedAt'];
-
-            tx.set(
-              viewRef,
-              <String, dynamic>{
-                'area': docArea,
-                'updatedAt': FieldValue.serverTimestamp(),
-                'items': <String, dynamic>{
-                  id: <String, dynamic>{
-                    'plateNumber': plateNumber,
-                    PlateFields.plateNumber: plateNumber,
-                    'location': location,
-                    'parkingRequestedAt': reqAt ?? FieldValue.serverTimestamp(),
-                    'updatedAt': FieldValue.serverTimestamp(),
-                  }
-                }
-              },
-              SetOptions(merge: true),
-            );
-          }
+              }
+            },
+            SetOptions(merge: true),
+          );
         }
       });
     } on FirebaseException {

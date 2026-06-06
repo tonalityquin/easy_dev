@@ -23,6 +23,8 @@ class ParkingStatusOverlaySpec {
 
 int _statusPriority(ParkingSlotStatus s) {
   switch (s) {
+    case ParkingSlotStatus.departureInProgress:
+      return 4;
     case ParkingSlotStatus.departureRequest:
       return 3;
     case ParkingSlotStatus.parkingRequest:
@@ -108,6 +110,12 @@ class _ParkingStatusPreviewCardAreaState extends State<ParkingStatusPreviewCardA
 
     void applyRows(List<ViewRowData> rows, ParkingSlotStatus status) {
       for (final r in rows) {
+        final effectiveStatus =
+            (status == ParkingSlotStatus.departureRequest ||
+                    status == ParkingSlotStatus.parkingRequest) &&
+                r.isSelected
+                ? ParkingSlotStatus.departureInProgress
+                : status;
         final seg = _splitLocationSegments(r.location);
         if (seg.length < 2) continue;
 
@@ -124,10 +132,10 @@ class _ParkingStatusPreviewCardAreaState extends State<ParkingStatusPreviewCardA
         if (no != null) {
           final slotKey = '$base|$no';
           final prev = slotStatusByKey[slotKey] ?? ParkingSlotStatus.empty;
-          slotStatusByKey[slotKey] = _mergeStatus(prev, status);
+          slotStatusByKey[slotKey] = _mergeStatus(prev, effectiveStatus);
         } else {
           final prev = groupStatusByKey[base] ?? ParkingSlotStatus.empty;
-          groupStatusByKey[base] = _mergeStatus(prev, status);
+          groupStatusByKey[base] = _mergeStatus(prev, effectiveStatus);
         }
       }
     }
@@ -152,6 +160,7 @@ class _ParkingStatusPreviewCardAreaState extends State<ParkingStatusPreviewCardA
   ) {
     final parkingCompletedLocations = <String>[];
     final departureRequestLocations = <String>[];
+    final departureInProgressLocations = <String>[];
 
     for (final spec in widget.overlay) {
       final collection = spec.collection.trim();
@@ -162,10 +171,22 @@ class _ParkingStatusPreviewCardAreaState extends State<ParkingStatusPreviewCardA
           parkingCompletedLocations.addAll(rows.map((e) => e.location));
           break;
         case ParkingSlotStatus.departureRequest:
-          departureRequestLocations.addAll(rows.map((e) => e.location));
+          departureRequestLocations.addAll(
+            rows.where((e) => !e.isSelected).map((e) => e.location),
+          );
+          departureInProgressLocations.addAll(
+            rows.where((e) => e.isSelected).map((e) => e.location),
+          );
+          break;
+        case ParkingSlotStatus.departureInProgress:
+          departureInProgressLocations.addAll(rows.map((e) => e.location));
+          break;
+        case ParkingSlotStatus.parkingRequest:
+          departureInProgressLocations.addAll(
+            rows.where((e) => e.isSelected).map((e) => e.location),
+          );
           break;
         case ParkingSlotStatus.empty:
-        case ParkingSlotStatus.parkingRequest:
           break;
       }
     }
@@ -174,6 +195,7 @@ class _ParkingStatusPreviewCardAreaState extends State<ParkingStatusPreviewCardA
       locations: locations,
       parkingCompletedLocations: parkingCompletedLocations,
       departureRequestLocations: departureRequestLocations,
+      departureInProgressLocations: departureInProgressLocations,
     );
   }
 
