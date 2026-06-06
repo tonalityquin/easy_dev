@@ -505,6 +505,37 @@ class MinorLoginCard extends StatelessWidget {
   }
 }
 
+
+class PersonalLoginCard extends StatelessWidget {
+  const PersonalLoginCard({super.key, this.enabled = true});
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = _selectorCardTitle(context, '개인형');
+
+    return _selectorCardShell(
+      context: context,
+      child: CardBody(
+        icon: Icons.phone_iphone_rounded,
+        titleWidget: title,
+        featureText: '모바일 직접 출차 요청',
+        traceName: '개인형',
+        traceMeta: {
+          'to': AppRoutes.personalLogin,
+          'requiredMode': 'personal',
+        },
+        onPressed: () => Navigator.of(context).pushReplacementNamed(
+          AppRoutes.personalLogin,
+          arguments: {'requiredMode': 'personal'},
+        ),
+        enabled: enabled,
+        disabledHint: '저장된 모드가 personal일 때만 선택할 수 있어요',
+      ),
+    );
+  }
+}
+
 class TabletCard extends StatelessWidget {
   const TabletCard({super.key, this.enabled = true});
   final bool enabled;
@@ -522,6 +553,7 @@ class TabletCard extends StatelessWidget {
         traceMeta: {'to': AppRoutes.tabletLogin, 'requiredMode': 'tablet'},
         onPressed: () => Navigator.of(context).pushReplacementNamed(
           AppRoutes.tabletLogin,
+          arguments: {'requiredMode': 'tablet'},
         ),
         enabled: enabled,
         disabledHint: '저장된 모드가 tablet일 때만 선택할 수 있어요',

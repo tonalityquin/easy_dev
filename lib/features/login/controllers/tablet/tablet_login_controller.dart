@@ -5,6 +5,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import '../../../../app/di/routes.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/account/domain/repositories/user_repository.dart';
+import '../../../../features/tablet/applications/tablet_pad_mode_state.dart';
 import '../../../../shared/tts/application/tts_ownership.dart';
 import '../../../../shared/tts/application/tts_user_filters.dart';
 import '../../../dev/application/area_state.dart';
@@ -14,6 +15,8 @@ import '../../applications/tablet/tablet_login_validate.dart';
 String _ts() => DateTime.now().toIso8601String();
 
 class TabletLoginController {
+  TabletLoginController(this.context);
+
   final BuildContext context;
 
   final TextEditingController nameController = TextEditingController();
@@ -29,7 +32,9 @@ class TabletLoginController {
 
   bool _inited = false;
 
-  TabletLoginController(this.context);
+  PadMode get _targetPadMode => PadMode.big;
+
+  String get _savedMode => 'tablet';
 
   String _normalizeHandle(String v) {
     final lower = v.trim().toLowerCase();
@@ -58,6 +63,8 @@ class TabletLoginController {
           '[LOGIN-TABLET][${_ts()}] autoLogin check → isLoggedIn=$isLoggedIn');
       if (isLoggedIn && context.mounted) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!context.mounted) return;
+          context.read<TabletPadModeState>().setMode(_targetPadMode);
           debugPrint(
               '[LOGIN-TABLET][${_ts()}] autoLogin → pushReplacementNamed(AppRoutes.tablet)');
           Navigator.pushReplacementNamed(context, AppRoutes.tablet);
@@ -148,16 +155,17 @@ class TabletLoginController {
         await prefs.setString('handle', handle);
         await prefs.setString('selectedArea', areaName);
         await prefs.setString('englishSelectedAreaName', englishAreaName);
-        await prefs.setString('mode', 'tablet');
+        await prefs.setString('mode', _savedMode);
 
         await TtsOwnership.setOwner(TtsOwner.foreground);
         debugPrint(
-            '[LOGIN-TABLET][${_ts()}] prefs saved (handle/selectedArea/englishSelectedAreaName/mode & owner=foreground)');
+            '[LOGIN-TABLET][${_ts()}] prefs saved (handle/selectedArea/englishSelectedAreaName/mode=$_savedMode & owner=foreground)');
 
         await userState.updateLoginTablet(sessionTablet);
         debugPrint('[LOGIN-TABLET][${_ts()}] userState.updateLoginTablet done');
 
         areaState.updateArea(areaName);
+        context.read<TabletPadModeState>().setMode(_targetPadMode);
         debugPrint(
             '[LOGIN-TABLET][${_ts()}] areaState.updateArea("$areaName")');
 

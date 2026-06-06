@@ -147,6 +147,10 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
     switch (v) {
       case 'service':
         return null;
+      case 'personal':
+      case 'mobile':
+      case 'direct':
+        return 'personal';
       case 'tablet':
         return 'tablet';
       case 'single':
@@ -173,51 +177,66 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
 
         final mode = _normalizeMode(_savedMode);
 
-        final bool singleEnabled;
+        final bool personalEnabled;
         final bool tabletEnabled;
+        final bool singleEnabled;
         final bool doubleEnabled;
         final bool tripleEnabled;
         final bool minorEnabled;
 
         if (mode == null) {
-          singleEnabled = true;
+          personalEnabled = true;
           tabletEnabled = true;
+          singleEnabled = true;
           doubleEnabled = true;
           tripleEnabled = true;
           minorEnabled = true;
-        } else if (mode == 'single') {
-          singleEnabled = true;
+        } else if (mode == 'personal') {
+          personalEnabled = true;
           tabletEnabled = false;
+          singleEnabled = false;
           doubleEnabled = false;
           tripleEnabled = false;
           minorEnabled = false;
         } else if (mode == 'tablet') {
-          singleEnabled = false;
+          personalEnabled = false;
           tabletEnabled = true;
+          singleEnabled = false;
+          doubleEnabled = false;
+          tripleEnabled = false;
+          minorEnabled = false;
+        } else if (mode == 'single') {
+          personalEnabled = false;
+          tabletEnabled = false;
+          singleEnabled = true;
           doubleEnabled = false;
           tripleEnabled = false;
           minorEnabled = false;
         } else if (mode == 'double') {
-          singleEnabled = false;
+          personalEnabled = false;
           tabletEnabled = false;
+          singleEnabled = false;
           doubleEnabled = true;
           tripleEnabled = false;
           minorEnabled = false;
         } else if (mode == 'triple') {
-          singleEnabled = false;
+          personalEnabled = false;
           tabletEnabled = false;
+          singleEnabled = false;
           doubleEnabled = false;
           tripleEnabled = true;
           minorEnabled = false;
         } else if (mode == 'minor') {
-          singleEnabled = false;
+          personalEnabled = false;
           tabletEnabled = false;
+          singleEnabled = false;
           doubleEnabled = false;
           tripleEnabled = false;
           minorEnabled = true;
         } else {
-          singleEnabled = true;
+          personalEnabled = true;
           tabletEnabled = true;
+          singleEnabled = true;
           doubleEnabled = true;
           tripleEnabled = true;
           minorEnabled = true;
@@ -228,15 +247,16 @@ class _SelectorHubsPageState extends State<SelectorHubsPage> {
             child: const ExperienceCard(),
           ),
           CardsPagerPage.pair(
-            primary: DoubleLoginCard(enabled: doubleEnabled),
-            secondary: TripleLoginCard(enabled: tripleEnabled),
+            primary: PersonalLoginCard(enabled: personalEnabled),
+            secondary: TabletCard(enabled: tabletEnabled),
           ),
           CardsPagerPage.pair(
-            primary: MinorLoginCard(enabled: minorEnabled),
-            secondary: SingleLoginCard(enabled: singleEnabled),
+            primary: SingleLoginCard(enabled: singleEnabled),
+            secondary: DoubleLoginCard(enabled: doubleEnabled),
           ),
           CardsPagerPage.pair(
-            primary: TabletCard(enabled: tabletEnabled),
+            primary: TripleLoginCard(enabled: tripleEnabled),
+            secondary: MinorLoginCard(enabled: minorEnabled),
           ),
           if (_devAuthorized)
             CardsPagerPage.pair(

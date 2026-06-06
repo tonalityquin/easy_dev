@@ -7,12 +7,14 @@ import '../../../../app/theme/brand_theme.dart';
 import '../../../account/applications/user_state.dart';
 import '../../controllers/double/double_login_controller.dart';
 import '../../controllers/minor/minor_login_controller.dart';
+import '../../controllers/personal/personal_login_controller.dart';
 import '../../controllers/service/service_login_controller.dart';
 import '../../controllers/single/single_login_controller.dart';
 import '../../controllers/tablet/tablet_login_controller.dart';
 import '../../controllers/triple/triple_login_controller.dart';
 import '../double/double_login_form.dart';
 import '../minor/minor_login_form.dart';
+import '../personal/personal_login_form.dart';
 import '../single/single_login_form.dart';
 import '../tablet/tablet_login_form.dart';
 import '../triple/triple_login_form.dart';
@@ -33,6 +35,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   ServiceLoginController? _serviceLoginController;
   SingleLoginController? _singleLoginController;
+  PersonalLoginController? _personalController;
   TabletLoginController? _tabletController;
   DoubleLoginController? _doubleLoginController;
   TripleLoginController? _tripleLoginController;
@@ -56,6 +59,10 @@ class _LoginScreenState extends State<LoginScreen>
     switch (v) {
       case 'service':
         return 'service';
+      case 'personal':
+      case 'mobile':
+      case 'direct':
+        return 'personal';
       case 'tablet':
         return 'tablet';
       case 'single':
@@ -84,6 +91,15 @@ class _LoginScreenState extends State<LoginScreen>
 
   void _createControllerForMode() {
     switch (_mode) {
+      case 'personal':
+        _personalController = PersonalLoginController(context);
+
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _personalController?.initState();
+        });
+        break;
+
       case 'tablet':
         _tabletController = TabletLoginController(context);
 
@@ -203,10 +219,11 @@ class _LoginScreenState extends State<LoginScreen>
 
   String _defaultRouteForMode() {
     switch (_mode) {
+      case 'personal':
+      case 'tablet':
+        return AppRoutes.tablet;
       case 'single':
         return AppRoutes.singleCommute;
-      case 'tablet':
-        return AppRoutes.commute;
       case 'double':
         return AppRoutes.doubleCommute;
       case 'triple':
@@ -239,6 +256,8 @@ class _LoginScreenState extends State<LoginScreen>
 
   Widget _buildLoginForm() {
     switch (_mode) {
+      case 'personal':
+        return PersonalLoginForm(controller: _personalController!);
       case 'tablet':
         return TabletLoginForm(controller: _tabletController!);
       case 'single':
@@ -257,7 +276,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   void _maybeInitControllerAuto() {
     if (_didInitAuto) return;
-    if (_mode == 'tablet') return;
+    if (_mode == 'personal' || _mode == 'tablet') return;
 
     _didInitAuto = true;
 
@@ -445,6 +464,9 @@ class _LoginScreenState extends State<LoginScreen>
     _loginAnimationController.dispose();
 
     switch (_mode) {
+      case 'personal':
+        _personalController?.dispose();
+        break;
       case 'tablet':
         _tabletController?.dispose();
         break;

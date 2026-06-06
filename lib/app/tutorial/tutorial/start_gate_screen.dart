@@ -28,6 +28,10 @@ class _StartGateScreenState extends State<StartGateScreen> {
     switch (v) {
       case 'service':
         return null;
+      case 'personal':
+      case 'mobile':
+      case 'direct':
+        return 'personal';
       case 'tablet':
         return 'tablet';
       case 'single':
@@ -51,10 +55,12 @@ class _StartGateScreenState extends State<StartGateScreen> {
     final prefs = await SharedPreferences.getInstance();
     final mode = _normalizeMode(prefs.getString('mode'));
     switch (mode) {
-      case 'single':
-        return AppRoutes.singleLogin;
+      case 'personal':
+        return AppRoutes.personalLogin;
       case 'tablet':
         return AppRoutes.tabletLogin;
+      case 'single':
+        return AppRoutes.singleLogin;
       case 'double':
         return AppRoutes.doubleLogin;
       case 'triple':

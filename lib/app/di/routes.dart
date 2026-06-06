@@ -14,6 +14,7 @@ import '../../features/headquarter/page/sheets/company_calendar_page.dart';
 import '../../features/headquarter/page/sheets/timesheet_page.dart';
 import '../../features/login/pages/common/login_screen.dart';
 import '../../features/mode_single/page/single_inside_screen.dart';
+import '../../features/personal/pages/personal_page.dart';
 import '../../features/selector/page/selector_hubs_page.dart';
 import '../../features/tablet/pages/tablet_page.dart';
 import '../../shared/page/pages/double/double_type_page.dart';
@@ -39,6 +40,7 @@ class AppRoutes {
   static const descriptionIntro = '/description_intro';
 
   static const serviceLogin = '/service_login';
+  static const personalLogin = '/personal_login';
   static const tabletLogin = '/tablet_login';
   static const doubleLogin = '/double_login';
   static const singleLogin = '/single_login';
@@ -63,6 +65,7 @@ class AppRoutes {
   static const minorTypePage = '/minor_type_page';
 
   static const tablet = '/tablet_page';
+  static const personal = '/personal_page';
   static const faq = '/faq';
 
   static const communityStub = '/community_stub';
@@ -96,6 +99,7 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.selector: (context) => const SelectorHubsPage(),
   AppRoutes.descriptionIntro: (context) => const DescriptionPage(),
   AppRoutes.serviceLogin: (context) => const LoginScreen(),
+  AppRoutes.personalLogin: (context) => const LoginScreen(mode: 'personal'),
   AppRoutes.tabletLogin: (context) => const LoginScreen(mode: 'tablet'),
   AppRoutes.singleLogin: (context) => const LoginScreen(mode: 'single'),
   AppRoutes.doubleLogin: (context) => const LoginScreen(mode: 'double'),
@@ -113,6 +117,7 @@ final Map<String, WidgetBuilder> appRoutes = {
   AppRoutes.tripleTypePage: (context) => const TripleTypePage(),
   AppRoutes.minorTypePage: (context) => const MinorTypePage(),
   AppRoutes.tablet: (context) => const TabletPage(),
+  AppRoutes.personal: (context) => const PersonalPage(),
   AppRoutes.faq: (context) => const FaqPage(),
   AppRoutes.communityStub: (context) => const CommunityStubPage(),
   AppRoutes.headStub: (context) => const HeadStubPage(),
