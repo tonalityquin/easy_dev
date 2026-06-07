@@ -7,6 +7,7 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/overlay_edge_side_config.dart';
+import 'overlay_access_guard.dart';
 
 const Color kCiSoftLinenBg = Color(0xFFF2EDE3);
 const Color kCiSoftLinenAccent = Color(0xFF2F6F6D);
@@ -145,61 +146,73 @@ class _QuickOverlayHomeState extends State<QuickOverlayHome>
     });
 
     _sub = FlutterOverlayWindow.overlayListener.listen((event) {
-      if (!mounted) return;
-
-      if (event == '__work_finished__') {
-        _cancelShortBreak();
-        if (!mounted) return;
-        setState(() {
-          _uiMode = OverlayUIMode.workFinished;
-          _overlayStartedAt = DateTime.now();
-          _elapsed = Duration.zero;
-        });
-        return;
-      }
-
-      if (event == '__checkout_nudge__') {
-        _cancelShortBreak();
-        if (!mounted) return;
-        setState(() {
-          _uiMode = OverlayUIMode.checkoutNudge;
-          _overlayStartedAt = DateTime.now();
-          _elapsed = Duration.zero;
-        });
-        return;
-      }
-
-      if (event is String && event.startsWith('__mode:')) {
-        _cancelShortBreak();
-
-        final raw = event.substring('__mode:'.length);
-        setState(() {
-          if (raw.startsWith('topHalf')) {
-            _uiMode =
-                _topHalfAllowed ? OverlayUIMode.topHalf : OverlayUIMode.bubble;
-          } else {
-            _uiMode = OverlayUIMode.bubble;
-          }
-        });
-        return;
-      }
-
-      if (event == '__collapse__') {
-        _cancelShortBreak();
-        _loadEdgeSide();
-        if (!mounted) return;
-        setState(() {
-          _overlayStartedAt = DateTime.now();
-          _elapsed = Duration.zero;
-        });
-      }
+      unawaited(_handleOverlayEvent(event));
     });
+  }
+
+  Future<void> _handleOverlayEvent(dynamic event) async {
+    if (!mounted) return;
+    if (await OverlayAccessGuard.closeIfBlocked()) return;
+    if (!mounted) return;
+
+    if (event == '__work_finished__') {
+      _cancelShortBreak();
+      if (!mounted) return;
+      setState(() {
+        _uiMode = OverlayUIMode.workFinished;
+        _overlayStartedAt = DateTime.now();
+        _elapsed = Duration.zero;
+      });
+      return;
+    }
+
+    if (event == '__checkout_nudge__') {
+      _cancelShortBreak();
+      if (!mounted) return;
+      setState(() {
+        _uiMode = OverlayUIMode.checkoutNudge;
+        _overlayStartedAt = DateTime.now();
+        _elapsed = Duration.zero;
+      });
+      return;
+    }
+
+    if (event is String && event.startsWith('__mode:')) {
+      _cancelShortBreak();
+
+      final raw = event.substring('__mode:'.length);
+      setState(() {
+        if (raw.startsWith('topHalf')) {
+          _uiMode =
+              _topHalfAllowed ? OverlayUIMode.topHalf : OverlayUIMode.bubble;
+        } else {
+          _uiMode = OverlayUIMode.bubble;
+        }
+      });
+      return;
+    }
+
+    if (event == '__collapse__') {
+      _cancelShortBreak();
+      _loadEdgeSide();
+      if (!mounted) return;
+      setState(() {
+        _overlayStartedAt = DateTime.now();
+        _elapsed = Duration.zero;
+      });
+    }
   }
 
   Future<void> _loadAppMode() async {
     final prefs = await SharedPreferences.getInstance();
     final mode = prefs.getString(kAppModePrefsKey);
-    final isSimple = mode == kAppModeSimpleValue;
+
+    if (OverlayAccessGuard.isBlockedMode(mode)) {
+      await OverlayAccessGuard.closeIfBlocked();
+      return;
+    }
+
+    final isSimple = OverlayAccessGuard.normalizeMode(mode) == kAppModeSimpleValue;
 
     if (!mounted) return;
     setState(() {

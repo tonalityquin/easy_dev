@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../application/common/view_doc_rows_store.dart';
 import '../../domain/enums/plate_type.dart';
 import '../../domain/models/plate_log_model.dart';
@@ -202,6 +203,21 @@ class FirestorePlateRepository implements PlateRepository {
     final canonical = _canonicalPlateNumber(plateNumber);
     return '${canonical}_$safeArea';
   }
+
+  Future<void> _showMonthlyFirebaseDebug({
+    required String operation,
+    Object? error,
+    StackTrace? stackTrace,
+    Map<String, Object?> details = const <String, Object?>{},
+  }) {
+    return DevFirebaseDebugDialog.show(
+      operation: operation,
+      error: error,
+      stackTrace: stackTrace,
+      details: details,
+    );
+  }
+
 
   String _resolveLogDocId({
     String? plateId,
@@ -731,17 +747,53 @@ class FirestorePlateRepository implements PlateRepository {
         return null;
       }
       return PlateStatusRecord.fromMap(data, docId: docId);
-    } on FirebaseException catch (e) {
+    } on FirebaseException catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.fetchMonthlyPlateStatus',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'docId': docId,
+          'plateNumber': plateNumber,
+          'area': safeArea,
+          'query': 'monthly_plate_status/$docId',
+        },
+      );
       throw MonthlyPlateStatusReadException(
         'monthly_plate_status 조회에 실패했습니다.',
         cause: e,
       );
-    } on TimeoutException catch (e) {
+    } on TimeoutException catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.fetchMonthlyPlateStatus.timeout',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'docId': docId,
+          'plateNumber': plateNumber,
+          'area': safeArea,
+          'query': 'monthly_plate_status/$docId',
+        },
+      );
       throw MonthlyPlateStatusReadException(
         'monthly_plate_status 조회 중 시간이 초과되었습니다.',
         cause: e,
       );
-    } catch (e) {
+    } catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.fetchMonthlyPlateStatus.unknown',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'docId': docId,
+          'plateNumber': plateNumber,
+          'area': safeArea,
+          'query': 'monthly_plate_status/$docId',
+        },
+      );
       throw MonthlyPlateStatusReadException(
         'monthly_plate_status 조회 중 알 수 없는 오류가 발생했습니다.',
         cause: e,
@@ -757,26 +809,144 @@ class FirestorePlateRepository implements PlateRepository {
     required String customStatus,
     required List<String> statusList,
     String? countType,
-  }) {
-    return _statusService.upsertMonthlyMemoAndStatus(
-      plateNumber: plateNumber,
-      area: area,
-      createdBy: createdBy,
-      customStatus: customStatus,
-      statusList: statusList,
-      countType: countType,
-    );
+  }) async {
+    try {
+      await _statusService.upsertMonthlyMemoAndStatus(
+        plateNumber: plateNumber,
+        area: area,
+        createdBy: createdBy,
+        customStatus: customStatus,
+        statusList: statusList,
+        countType: countType,
+      );
+    } on FirebaseException catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.upsertMonthlyMemoAndStatus',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'docId': _plateDocId(plateNumber, area),
+          'plateNumber': plateNumber,
+          'area': area,
+          'createdBy': createdBy,
+          'customStatus': customStatus,
+          'statusList': statusList,
+          'countType': countType,
+          'writePath': 'PlateStatusService.upsertMonthlyMemoAndStatus',
+        },
+      );
+      throw MonthlyPlateStatusWriteException(
+        'monthly_plate_status 반영에 실패했습니다.',
+        cause: e,
+      );
+    } on TimeoutException catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.upsertMonthlyMemoAndStatus.timeout',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'docId': _plateDocId(plateNumber, area),
+          'plateNumber': plateNumber,
+          'area': area,
+          'createdBy': createdBy,
+          'customStatus': customStatus,
+          'statusList': statusList,
+          'countType': countType,
+          'writePath': 'PlateStatusService.upsertMonthlyMemoAndStatus',
+        },
+      );
+      throw MonthlyPlateStatusWriteException(
+        'monthly_plate_status 반영 중 시간이 초과되었습니다.',
+        cause: e,
+      );
+    } catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.upsertMonthlyMemoAndStatus.unknown',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'docId': _plateDocId(plateNumber, area),
+          'plateNumber': plateNumber,
+          'area': area,
+          'createdBy': createdBy,
+          'customStatus': customStatus,
+          'statusList': statusList,
+          'countType': countType,
+          'writePath': 'PlateStatusService.upsertMonthlyMemoAndStatus',
+        },
+      );
+      throw MonthlyPlateStatusWriteException(
+        'monthly_plate_status 반영 중 알 수 없는 오류가 발생했습니다.',
+        cause: e,
+      );
+    }
   }
 
   @override
   Future<void> clearMonthlyMemoAndStatus({
     required String plateNumber,
     required String area,
-  }) {
-    return _statusService.clearMonthlyMemoAndStatus(
-      plateNumber: plateNumber,
-      area: area,
-    );
+  }) async {
+    try {
+      await _statusService.clearMonthlyMemoAndStatus(
+        plateNumber: plateNumber,
+        area: area,
+      );
+    } on FirebaseException catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.clearMonthlyMemoAndStatus',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'docId': _plateDocId(plateNumber, area),
+          'plateNumber': plateNumber,
+          'area': area,
+          'writePath': 'PlateStatusService.clearMonthlyMemoAndStatus',
+        },
+      );
+      throw MonthlyPlateStatusWriteException(
+        'monthly_plate_status 반영에 실패했습니다.',
+        cause: e,
+      );
+    } on TimeoutException catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.clearMonthlyMemoAndStatus.timeout',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'docId': _plateDocId(plateNumber, area),
+          'plateNumber': plateNumber,
+          'area': area,
+          'writePath': 'PlateStatusService.clearMonthlyMemoAndStatus',
+        },
+      );
+      throw MonthlyPlateStatusWriteException(
+        'monthly_plate_status 반영 중 시간이 초과되었습니다.',
+        cause: e,
+      );
+    } catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.clearMonthlyMemoAndStatus.unknown',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'docId': _plateDocId(plateNumber, area),
+          'plateNumber': plateNumber,
+          'area': area,
+          'writePath': 'PlateStatusService.clearMonthlyMemoAndStatus',
+        },
+      );
+      throw MonthlyPlateStatusWriteException(
+        'monthly_plate_status 반영 중 알 수 없는 오류가 발생했습니다.',
+        cause: e,
+      );
+    }
   }
 
   @override
@@ -822,13 +992,29 @@ class FirestorePlateRepository implements PlateRepository {
       return false;
     }
 
-    final qs = await _firestore
-        .collection('monthly_plate_status')
-        .where('area', isEqualTo: safeArea)
-        .limit(1)
-        .get();
+    try {
+      final qs = await _firestore
+          .collection('monthly_plate_status')
+          .where('area', isEqualTo: safeArea)
+          .limit(1)
+          .get();
 
-    return qs.docs.isNotEmpty;
+      return qs.docs.isNotEmpty;
+    } catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.hasMonthlyParkingByArea',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'area': safeArea,
+          'query': 'where(area == $safeArea).limit(1)',
+          'filters': 'area == $safeArea',
+          'limit': 1,
+        },
+      );
+      rethrow;
+    }
   }
 
   @override
@@ -840,7 +1026,7 @@ class FirestorePlateRepository implements PlateRepository {
       return Stream.value(const <PlateStatusRecord>[]);
     }
 
-    return _firestore
+    final stream = _firestore
         .collection('monthly_plate_status')
         .where('type', isEqualTo: '정기')
         .where('area', isEqualTo: safeArea)
@@ -849,6 +1035,33 @@ class FirestorePlateRepository implements PlateRepository {
         .map((snapshot) => snapshot.docs
             .map((doc) => PlateStatusRecord.fromMap(doc.data(), docId: doc.id))
             .toList(growable: false));
+
+    return stream.transform(
+      StreamTransformer<List<PlateStatusRecord>, List<PlateStatusRecord>>.fromHandlers(
+        handleError: (Object error, StackTrace stackTrace, EventSink<List<PlateStatusRecord>> sink) {
+          unawaited(
+            _showMonthlyFirebaseDebug(
+              operation: 'monthly.watchMonthlyPlateStatuses',
+              error: error,
+              stackTrace: stackTrace,
+              details: <String, Object?>{
+                'collection': 'monthly_plate_status',
+                'area': safeArea,
+                'query': 'where(type == 정기).where(area == $safeArea).orderBy(updatedAt desc)',
+                'filters': <String, Object?>{
+                  'type': '정기',
+                  'area': safeArea,
+                },
+                'orderBy': 'updatedAt desc',
+                'indexDebug': 'if FirebaseException.code == failed-precondition, firebase.message usually contains the composite index creation link',
+                'compositeIndexCandidate': 'monthly_plate_status: type ASC, area ASC, updatedAt DESC',
+              },
+            ),
+          );
+          sink.addError(error, stackTrace);
+        },
+      ),
+    );
   }
 
   @override
@@ -859,19 +1072,38 @@ class FirestorePlateRepository implements PlateRepository {
     if (trimmed.isEmpty) {
       return;
     }
-    await _firestore.collection('monthly_plate_status').doc(trimmed).delete();
+
+    try {
+      await _firestore.collection('monthly_plate_status').doc(trimmed).delete();
+    } catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.deleteMonthlyPlateStatus',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'docId': trimmed,
+          'writePath': 'monthly_plate_status/$trimmed delete',
+        },
+      );
+      rethrow;
+    }
   }
 
   @override
-  Future<void> recordMonthlyPayment({
+  Future<void> recordMonthlyPaymentAndMaybeExtend({
     required String plateNumber,
     required String area,
     required String paidBy,
     required int amount,
     required String note,
     required bool extended,
+    String? startDate,
+    String? endDate,
+    String? extendedBy,
   }) async {
     final docId = _plateDocId(plateNumber, area);
+    final ref = _firestore.collection('monthly_plate_status').doc(docId);
     final historyEntry = <String, dynamic>{
       'paidAt': DateTime.now().toIso8601String(),
       'paidBy': paidBy,
@@ -880,12 +1112,50 @@ class FirestorePlateRepository implements PlateRepository {
       'extended': extended,
     };
 
-    await _firestore.collection('monthly_plate_status').doc(docId).set(
-      <String, dynamic>{
-        'payment_history': FieldValue.arrayUnion([historyEntry]),
-      },
-      SetOptions(merge: true),
-    );
+    final payload = <String, dynamic>{
+      'payment_history': FieldValue.arrayUnion([historyEntry]),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    if (extended &&
+        startDate != null &&
+        startDate.trim().isNotEmpty &&
+        endDate != null &&
+        endDate.trim().isNotEmpty) {
+      payload['startDate'] = startDate.trim();
+      payload['endDate'] = endDate.trim();
+      payload['extendedAt'] = FieldValue.serverTimestamp();
+      payload['extendedBy'] = extendedBy ?? paidBy;
+    }
+
+    final batch = _firestore.batch();
+    batch.set(ref, payload, SetOptions(merge: true));
+
+    try {
+      await batch.commit();
+    } catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.recordMonthlyPaymentAndMaybeExtend',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'docId': docId,
+          'plateNumber': plateNumber,
+          'area': area,
+          'paidBy': paidBy,
+          'amount': amount,
+          'note': note,
+          'extended': extended,
+          'startDate': startDate,
+          'endDate': endDate,
+          'extendedBy': extendedBy,
+          'writePath': 'monthly_plate_status/$docId batch.set merge',
+          'fieldUpdates': payload.keys.toList(growable: false),
+        },
+      );
+      rethrow;
+    }
   }
 
   @override
@@ -897,16 +1167,35 @@ class FirestorePlateRepository implements PlateRepository {
     required String extendedBy,
   }) async {
     final docId = _plateDocId(plateNumber, area);
-    await _firestore.collection('monthly_plate_status').doc(docId).set(
-      <String, dynamic>{
-        'startDate': startDate,
-        'endDate': endDate,
-        'updatedAt': FieldValue.serverTimestamp(),
-        'extendedAt': FieldValue.serverTimestamp(),
-        'extendedBy': extendedBy,
-      },
-      SetOptions(merge: true),
-    );
+    try {
+      await _firestore.collection('monthly_plate_status').doc(docId).set(
+        <String, dynamic>{
+          'startDate': startDate,
+          'endDate': endDate,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'extendedAt': FieldValue.serverTimestamp(),
+          'extendedBy': extendedBy,
+        },
+        SetOptions(merge: true),
+      );
+    } catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.extendMonthlyDateRange',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'docId': docId,
+          'plateNumber': plateNumber,
+          'area': area,
+          'startDate': startDate,
+          'endDate': endDate,
+          'extendedBy': extendedBy,
+          'writePath': 'monthly_plate_status/$docId set merge',
+        },
+      );
+      rethrow;
+    }
   }
 
   @override
@@ -916,16 +1205,33 @@ class FirestorePlateRepository implements PlateRepository {
     required String clearedBy,
   }) async {
     final docId = _plateDocId(plateNumber, area);
-    await _firestore.collection('monthly_plate_status').doc(docId).set(
-      <String, dynamic>{
-        'customStatus': '',
-        'statusList': <String>[],
-        'updatedAt': FieldValue.serverTimestamp(),
-        'clearedAt': FieldValue.serverTimestamp(),
-        'clearedBy': clearedBy,
-      },
-      SetOptions(merge: true),
-    );
+    try {
+      await _firestore.collection('monthly_plate_status').doc(docId).set(
+        <String, dynamic>{
+          'customStatus': '',
+          'statusList': <String>[],
+          'updatedAt': FieldValue.serverTimestamp(),
+          'clearedAt': FieldValue.serverTimestamp(),
+          'clearedBy': clearedBy,
+        },
+        SetOptions(merge: true),
+      );
+    } catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.clearMonthlyMemoAndStatusWithAudit',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'docId': docId,
+          'plateNumber': plateNumber,
+          'area': area,
+          'clearedBy': clearedBy,
+          'writePath': 'monthly_plate_status/$docId set merge',
+        },
+      );
+      rethrow;
+    }
   }
 
   @override
@@ -1068,6 +1374,7 @@ class FirestorePlateRepository implements PlateRepository {
   Future<void> setMonthlyPlateStatus({
     required String plateNumber,
     required String area,
+    required String region,
     required String createdBy,
     required String customStatus,
     required List<String> statusList,
@@ -1080,23 +1387,116 @@ class FirestorePlateRepository implements PlateRepository {
     required String periodUnit,
     String? specialNote,
     bool? isExtended,
-  }) {
-    return _statusService.setMonthlyPlateStatus(
-      plateNumber: plateNumber,
-      area: area,
-      createdBy: createdBy,
-      customStatus: customStatus,
-      statusList: statusList,
-      countType: countType,
-      regularAmount: regularAmount,
-      regularDurationHours: regularDurationHours,
-      regularType: regularType,
-      startDate: startDate,
-      endDate: endDate,
-      periodUnit: periodUnit,
-      specialNote: specialNote,
-      isExtended: isExtended,
-    );
+  }) async {
+    try {
+      await _statusService.setMonthlyPlateStatus(
+        plateNumber: plateNumber,
+        area: area,
+        region: region,
+        createdBy: createdBy,
+        customStatus: customStatus,
+        statusList: statusList,
+        countType: countType,
+        regularAmount: regularAmount,
+        regularDurationHours: regularDurationHours,
+        regularType: regularType,
+        startDate: startDate,
+        endDate: endDate,
+        periodUnit: periodUnit,
+        specialNote: specialNote,
+        isExtended: isExtended,
+      );
+    } on FirebaseException catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.setMonthlyPlateStatus',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'docId': _plateDocId(plateNumber, area),
+          'plateNumber': plateNumber,
+          'area': area,
+          'region': region,
+          'createdBy': createdBy,
+          'customStatus': customStatus,
+          'statusList': statusList,
+          'countType': countType,
+          'regularAmount': regularAmount,
+          'regularDurationHours': regularDurationHours,
+          'regularType': regularType,
+          'startDate': startDate,
+          'endDate': endDate,
+          'periodUnit': periodUnit,
+          'specialNote': specialNote,
+          'isExtended': isExtended,
+          'writePath': 'PlateStatusService.setMonthlyPlateStatus',
+        },
+      );
+      throw MonthlyPlateStatusWriteException(
+        'monthly_plate_status 반영에 실패했습니다.',
+        cause: e,
+      );
+    } on TimeoutException catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.setMonthlyPlateStatus.timeout',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'docId': _plateDocId(plateNumber, area),
+          'plateNumber': plateNumber,
+          'area': area,
+          'region': region,
+          'createdBy': createdBy,
+          'customStatus': customStatus,
+          'statusList': statusList,
+          'countType': countType,
+          'regularAmount': regularAmount,
+          'regularDurationHours': regularDurationHours,
+          'regularType': regularType,
+          'startDate': startDate,
+          'endDate': endDate,
+          'periodUnit': periodUnit,
+          'specialNote': specialNote,
+          'isExtended': isExtended,
+          'writePath': 'PlateStatusService.setMonthlyPlateStatus',
+        },
+      );
+      throw MonthlyPlateStatusWriteException(
+        'monthly_plate_status 반영 중 시간이 초과되었습니다.',
+        cause: e,
+      );
+    } catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.setMonthlyPlateStatus.unknown',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'docId': _plateDocId(plateNumber, area),
+          'plateNumber': plateNumber,
+          'area': area,
+          'region': region,
+          'createdBy': createdBy,
+          'customStatus': customStatus,
+          'statusList': statusList,
+          'countType': countType,
+          'regularAmount': regularAmount,
+          'regularDurationHours': regularDurationHours,
+          'regularType': regularType,
+          'startDate': startDate,
+          'endDate': endDate,
+          'periodUnit': periodUnit,
+          'specialNote': specialNote,
+          'isExtended': isExtended,
+          'writePath': 'PlateStatusService.setMonthlyPlateStatus',
+        },
+      );
+      throw MonthlyPlateStatusWriteException(
+        'monthly_plate_status 반영 중 알 수 없는 오류가 발생했습니다.',
+        cause: e,
+      );
+    }
   }
 
   @override
@@ -1117,17 +1517,65 @@ class FirestorePlateRepository implements PlateRepository {
         statusList: statusList,
         skipIfDocMissing: skipIfDocMissing,
       );
-    } on FirebaseException catch (e) {
+    } on FirebaseException catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.setMonthlyMemoAndStatusOnly',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'docId': _plateDocId(plateNumber, area),
+          'plateNumber': plateNumber,
+          'area': area,
+          'createdBy': createdBy,
+          'customStatus': customStatus,
+          'statusList': statusList,
+          'skipIfDocMissing': skipIfDocMissing,
+          'writePath': 'PlateStatusService.setMonthlyMemoAndStatusOnly',
+        },
+      );
       throw MonthlyPlateStatusWriteException(
         'monthly_plate_status 반영에 실패했습니다.',
         cause: e,
       );
-    } on TimeoutException catch (e) {
+    } on TimeoutException catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.setMonthlyMemoAndStatusOnly.timeout',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'docId': _plateDocId(plateNumber, area),
+          'plateNumber': plateNumber,
+          'area': area,
+          'createdBy': createdBy,
+          'customStatus': customStatus,
+          'statusList': statusList,
+          'skipIfDocMissing': skipIfDocMissing,
+          'writePath': 'PlateStatusService.setMonthlyMemoAndStatusOnly',
+        },
+      );
       throw MonthlyPlateStatusWriteException(
         'monthly_plate_status 반영 중 시간이 초과되었습니다.',
         cause: e,
       );
-    } catch (e) {
+    } catch (e, st) {
+      await _showMonthlyFirebaseDebug(
+        operation: 'monthly.setMonthlyMemoAndStatusOnly.unknown',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'docId': _plateDocId(plateNumber, area),
+          'plateNumber': plateNumber,
+          'area': area,
+          'createdBy': createdBy,
+          'customStatus': customStatus,
+          'statusList': statusList,
+          'skipIfDocMissing': skipIfDocMissing,
+          'writePath': 'PlateStatusService.setMonthlyMemoAndStatusOnly',
+        },
+      );
       throw MonthlyPlateStatusWriteException(
         'monthly_plate_status 반영 중 알 수 없는 오류가 발생했습니다.',
         cause: e,

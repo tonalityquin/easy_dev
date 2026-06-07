@@ -48,7 +48,7 @@ class _DrivingBadge extends StatelessWidget {
           Icon(Icons.directions_car_filled, size: 12, color: colorScheme.error),
           const SizedBox(width: 3),
           Text(
-            '출차 중',
+            '주행 중',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: (textTheme.labelSmall ?? const TextStyle(fontSize: 11))

@@ -170,6 +170,7 @@ class PlateStatusService {
   Future<void> setMonthlyPlateStatus({
     required String plateNumber,
     required String area,
+    required String region,
     required String createdBy,
     required String customStatus,
     required List<String> statusList,
@@ -221,6 +222,7 @@ class PlateStatusService {
         'endDate': endDate,
         'periodUnit': periodUnit,
         'area': area,
+        'region': region.trim().isEmpty ? '전국' : region.trim(),
         if (specialNote != null) 'specialNote': specialNote,
         if (isExtended != null) 'isExtended': isExtended,
       };

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../shared/plate/application/common/movement_plate.dart';
 import '../../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../../shared/plate/domain/models/plate_model.dart';
@@ -76,7 +77,19 @@ class _PersonalVehicleStatusSheetState extends State<PersonalVehicleStatusSheet>
         _plate = plate;
         _loading = false;
       });
-    } catch (e) {
+    } catch (e, st) {
+      await DevFirebaseDebugDialog.show(
+        context: context,
+        operation: 'personal.vehicleStatusSheet.refresh',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'area': widget.area,
+          'vehicleId': widget.vehicle.id,
+          'plateNumberInput': widget.vehicle.plateNumber,
+          'source': 'PersonalVehicleStatusService.fetchCurrentVehiclePlate',
+        },
+      );
       if (!mounted) return;
       setState(() {
         _error = '차량 상태를 불러오지 못했습니다.';
@@ -103,7 +116,25 @@ class _PersonalVehicleStatusSheetState extends State<PersonalVehicleStatusSheet>
       await showPersonalDepartureRequestedSuccessDialog(context, plate);
       if (!mounted) return;
       Navigator.of(context).pop(true);
-    } catch (e) {
+    } catch (e, st) {
+      await DevFirebaseDebugDialog.show(
+        context: context,
+        operation: 'personal.departureRequest.submit',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'plates',
+          'plateNumber': plate.plateNumber,
+          'area': plate.area,
+          'location': plate.location,
+          'currentType': plate.type,
+          'expectedFromType': PlateType.parkingCompleted.firestoreValue,
+          'targetType': PlateType.departureRequests.firestoreValue,
+          'forceViewSync': true,
+          'writePath': 'MovementPlate.setDepartureRequested',
+          'viewWrites': 'parking_completed_view remove, departure_requests_view upsert',
+        },
+      );
       if (!mounted) return;
       setState(() {
         _requesting = false;

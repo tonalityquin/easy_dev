@@ -5,8 +5,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../app/di/routes.dart';
+import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../features/dev/application/area_state.dart';
 import '../../../../features/tablet/applications/tablet_pad_mode_state.dart';
+import '../../../../shared/auth/five_digit_password_generator.dart';
 import '../../../selector/application/dev_auth.dart';
 import '../../applications/tablet/tablet_login_network_service.dart';
 
@@ -28,10 +30,12 @@ class PersonalAccountCreateResult {
   const PersonalAccountCreateResult({
     required this.success,
     required this.message,
+    this.password,
   });
 
   final bool success;
   final String message;
+  final String? password;
 }
 
 class PersonalLoginController {
@@ -42,17 +46,17 @@ class PersonalLoginController {
 
   final TextEditingController nameController = TextEditingController();
   final TextEditingController phoneController = TextEditingController();
-  final TextEditingController gmailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
 
   final FocusNode nameFocus = FocusNode();
   final FocusNode phoneFocus = FocusNode();
-  final FocusNode gmailFocus = FocusNode();
+  final FocusNode passwordFocus = FocusNode();
 
   bool isLoading = false;
+  bool obscurePassword = true;
   bool isLoggedIn = false;
   String? loggedInAccountId;
   String? loggedInName;
-  String? loggedInEmail;
 
   bool _inited = false;
 
@@ -70,16 +74,21 @@ class PersonalLoginController {
   }
 
   Future<void> _restorePersonalSession() async {
+    var mode = '';
+    var phone = '';
+    var selectedArea = '';
+    var accountId = '';
+
     try {
       final prefs = await SharedPreferences.getInstance();
-      final mode = (prefs.getString('mode') ?? '').trim().toLowerCase();
-      final phone = _normalizePhone(
+      mode = (prefs.getString('mode') ?? '').trim().toLowerCase();
+      phone = _normalizePhone(
         prefs.getString('phone') ?? prefs.getString('personalPhone') ?? '',
       );
-      final selectedArea = (prefs.getString('selectedArea') ?? '').trim();
+      selectedArea = (prefs.getString('selectedArea') ?? '').trim();
       if (mode != _savedMode || phone.isEmpty || selectedArea.isEmpty) return;
 
-      final accountId = _accountDocId(phone: phone, area: selectedArea);
+      accountId = _accountDocId(phone: phone, area: selectedArea);
       if (accountId.isEmpty) return;
 
       final snap = await _personalAccountsRef.doc(accountId).get();
@@ -94,10 +103,8 @@ class PersonalLoginController {
       isLoggedIn = true;
       loggedInAccountId = snap.id;
       loggedInName = (data['name'] ?? prefs.getString('personalName') ?? '').toString();
-      loggedInEmail = (data['email'] ?? data['gmail'] ?? prefs.getString('personalEmail') ?? '').toString();
       nameController.text = loggedInName ?? '';
       phoneController.text = _formatPhoneForDisplay(storedPhone);
-      gmailController.text = loggedInEmail ?? '';
       if (context.mounted) {
         final division = _divisionFromData(data);
         context.read<AreaState>().setAreaLocalOnly(
@@ -113,6 +120,22 @@ class PersonalLoginController {
       debugPrint('[LOGIN-PERSONAL][${_ts()}] restore personal session ok: ${snap.id}');
     } catch (e, st) {
       debugPrint('[LOGIN-PERSONAL][${_ts()}] restore personal session error: $e\n$st');
+      await DevFirebaseDebugDialog.show(
+        context: context,
+        operation: 'personal_accounts.restoreSession',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'personal_accounts',
+          'docId': accountId,
+          'mode': mode,
+          'phone': phone,
+          'selectedArea': selectedArea,
+          'read': 'doc($accountId).get()',
+          'queryShape': 'direct-document-read',
+          'compositeIndex': 'not-required',
+        },
+      );
     }
   }
 
@@ -200,6 +223,13 @@ class PersonalLoginController {
     return null;
   }
 
+  String? _validatePassword(String password) {
+    final value = password.trim();
+    if (value.isEmpty) return '비밀번호를 입력하세요.';
+    if (!RegExp(r'^\d{5}$').hasMatch(value)) return '비밀번호는 5자리 숫자입니다.';
+    return null;
+  }
+
   String? _validateDivision(String division) {
     if (division.trim().isEmpty) return '구역을 입력하세요.';
     return null;
@@ -208,19 +238,28 @@ class PersonalLoginController {
   String? validatePersonalInputs({
     required String name,
     required String phone,
-    required String gmail,
+    String? password,
   }) {
-    return _validateName(name) ?? _validatePhone(phone) ?? _validateGmail(gmail);
+    final basicError = _validateName(name) ?? _validatePhone(phone);
+    if (basicError != null) return basicError;
+    if (password != null) return _validatePassword(password);
+    return null;
   }
 
   String? validatePersonalAccountCreateInputs({
     required String name,
     required String phone,
     required String gmail,
+    required String password,
     required String area,
     required String division,
   }) {
-    return validatePersonalInputs(name: name, phone: phone, gmail: gmail) ??
+    return validatePersonalInputs(
+          name: name,
+          phone: phone,
+          password: password,
+        ) ??
+        _validateGmail(gmail) ??
         _validateArea(area) ??
         _validateDivision(division);
   }
@@ -232,7 +271,7 @@ class PersonalLoginController {
   }) {
     final inputName = nameController.text.trim();
     final inputPhone = _normalizePhone(phoneController.text);
-    final inputGmail = _normalizeGmail(gmailController.text);
+    final inputPassword = passwordController.text.trim();
     final inputSelectedArea = '';
     final docId = inputPhone.isEmpty || inputSelectedArea.isEmpty
         ? ''
@@ -245,7 +284,7 @@ class PersonalLoginController {
       if (docId.isNotEmpty) '문서 ID: $docId',
       '입력 이름: $inputName',
       '입력 전화번호: $inputPhone',
-      '입력 지메일: $inputGmail',
+      '입력 비밀번호 길이: ${inputPassword.length}',
       if (inputSelectedArea.isNotEmpty) '입력 지역: $inputSelectedArea',
       if (error != null) '오류: $error',
       if (stackTrace != null) '스택: $stackTrace',
@@ -273,6 +312,7 @@ class PersonalLoginController {
     required String name,
     required String phone,
     required String email,
+    required String password,
     required String area,
     required String division,
   }) {
@@ -284,6 +324,7 @@ class PersonalLoginController {
       'phone': digits,
       'email': _normalizeGmail(email),
       'gmail': _normalizeGmail(email),
+      'password': password.trim(),
       'mode': 'personal',
       'modes': const <String>['personal'],
       'role': 'personal',
@@ -303,10 +344,15 @@ class PersonalLoginController {
     return DevAuth.isDeveloperLoggedIn();
   }
 
+  String generatePersonalPassword() {
+    return FiveDigitPasswordGenerator.generate();
+  }
+
   Future<PersonalAccountCreateResult> createPersonalAccount({
     required String name,
     required String phone,
     required String gmail,
+    required String password,
     required String area,
     required String division,
   }) async {
@@ -314,11 +360,17 @@ class PersonalLoginController {
       name: name,
       phone: phone,
       gmail: gmail,
+      password: password,
       area: area,
       division: division,
     );
     if (error != null) {
       return PersonalAccountCreateResult(success: false, message: error);
+    }
+
+    final passwordError = _validatePassword(password);
+    if (passwordError != null) {
+      return PersonalAccountCreateResult(success: false, message: passwordError);
     }
 
     final isConn = await TabletLoginNetworkService().isConnected();
@@ -349,17 +401,38 @@ class PersonalLoginController {
           name: name,
           phone: phoneDigits,
           email: email,
+          password: password.trim(),
           area: normalizedArea,
           division: division,
         ),
       );
       debugPrint('[LOGIN-PERSONAL][${_ts()}] personal account created: $docId');
-      return const PersonalAccountCreateResult(
+      return PersonalAccountCreateResult(
         success: true,
         message: '개인형 계정을 생성했습니다.',
+        password: password.trim(),
       );
     } catch (e, st) {
       debugPrint('[LOGIN-PERSONAL][${_ts()}] create personal account error: $e\n$st');
+      await DevFirebaseDebugDialog.show(
+        context: context,
+        operation: 'personal_accounts.createPersonalAccount',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'personal_accounts',
+          'docId': docId,
+          'phone': phoneDigits,
+          'email': email,
+          'area': normalizedArea,
+          'division': division,
+          'phase': 'exists-check-or-create-set',
+          'read': 'doc($docId).get()',
+          'write': 'doc($docId).set(newPersonalAccountMap)',
+          'queryShape': 'direct-document-read-and-write',
+          'compositeIndex': 'not-required',
+        },
+      );
       return const PersonalAccountCreateResult(
         success: false,
         message: '계정을 생성하지 못했습니다.',
@@ -370,9 +443,13 @@ class PersonalLoginController {
   Future<PersonalLoginResult> login(StateSetter setState) async {
     final name = nameController.text.trim();
     final phoneDigits = _normalizePhone(phoneController.text);
-    final gmail = _normalizeGmail(gmailController.text);
+    final password = passwordController.text.trim();
 
-    final error = validatePersonalInputs(name: name, phone: phoneDigits, gmail: gmail);
+    final error = validatePersonalInputs(
+      name: name,
+      phone: phoneDigits,
+      password: password,
+    );
     if (error != null) {
       return _loginFailureResult(error);
     }
@@ -395,6 +472,8 @@ class PersonalLoginController {
 
       QueryDocumentSnapshot<Map<String, dynamic>>? matchedDoc;
       Map<String, dynamic>? matchedData;
+      var profileMatched = false;
+      var passwordMissingForMatchedProfile = false;
 
       for (final doc in query.docs) {
         final data = doc.data();
@@ -403,9 +482,16 @@ class PersonalLoginController {
 
         final storedName = (data['name'] ?? '').toString().trim();
         final storedPhone = _normalizePhone((data['phone'] ?? '').toString());
-        final storedEmail = _normalizeGmail((data['email'] ?? data['gmail'] ?? '').toString());
-        final matched = storedName == name && storedPhone == phoneDigits && storedEmail == gmail;
-        if (!matched) continue;
+        final profileMatches = storedName == name && storedPhone == phoneDigits;
+        if (!profileMatches) continue;
+
+        profileMatched = true;
+        final storedPassword = (data['password'] ?? '').toString().trim();
+        if (storedPassword.isEmpty) {
+          passwordMissingForMatchedProfile = true;
+          continue;
+        }
+        if (storedPassword != password) continue;
 
         matchedDoc = doc;
         matchedData = data;
@@ -425,12 +511,17 @@ class PersonalLoginController {
       }
 
       if (matchedDoc == null || matchedData == null) {
+        if (passwordMissingForMatchedProfile) {
+          return _loginFailureResult('개인형 계정에 비밀번호가 없습니다. 개발자 모드에서 비밀번호가 포함된 계정으로 다시 생성하세요.');
+        }
+        if (profileMatched) {
+          return _loginFailureResult('비밀번호가 일치하지 않습니다.');
+        }
         return _loginFailureResult('입력한 계정 정보가 일치하지 않습니다.');
       }
 
       final storedName = (matchedData['name'] ?? '').toString().trim();
       final storedPhone = _normalizePhone((matchedData['phone'] ?? '').toString());
-      final storedEmail = _normalizeGmail((matchedData['email'] ?? matchedData['gmail'] ?? '').toString());
       final selectedArea = _selectedAreaFromData(matchedData);
       final division = _divisionFromData(matchedData);
       if (selectedArea.isEmpty) {
@@ -452,7 +543,6 @@ class PersonalLoginController {
       await prefs.setString('personalAccountId', matchedDoc.id);
       await prefs.setString('personalName', storedName);
       await prefs.setString('personalPhone', storedPhone);
-      await prefs.setString('personalEmail', storedEmail);
 
       await _personalAccountsRef.doc(matchedDoc.id).set(
         <String, dynamic>{
@@ -474,10 +564,29 @@ class PersonalLoginController {
       isLoggedIn = true;
       loggedInAccountId = matchedDoc.id;
       loggedInName = storedName;
-      loggedInEmail = storedEmail;
 
       return PersonalLoginResult(success: true, message: '$storedName님, 개인형 로그인에 성공했습니다.');
     } catch (e, st) {
+      await DevFirebaseDebugDialog.show(
+        context: context,
+        operation: 'personal_accounts.login',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'personal_accounts',
+          'inputName': name,
+          'inputPhone': phoneDigits,
+          'inputPasswordLength': password.length,
+          'query': 'where(phone == $phoneDigits).limit(20)',
+          'queryShape': 'single-field-equality-with-limit',
+          'filters': 'phone == $phoneDigits',
+          'orderBy': 'none',
+          'limit': 20,
+          'compositeIndex': 'not-required-for-this-shape-unless-rules-or-console-error-requires-it',
+          'indexDebug': 'if FirebaseException.code == failed-precondition, use firebase.message console index link',
+          'postLoginWrite': 'doc(matchedDoc.id).set(isSaved,lastLoginAt,updatedAt,merge)',
+        },
+      );
       return _loginFailureResult('로그인 중 오류가 발생했습니다.', error: e, stackTrace: st);
     } finally {
       if (context.mounted) {
@@ -512,14 +621,27 @@ class PersonalLoginController {
       await prefs.remove('personalPhone');
       await prefs.remove('personalEmail');
 
+      passwordController.clear();
       isLoggedIn = false;
       loggedInAccountId = null;
       loggedInName = null;
-      loggedInEmail = null;
 
       return const PersonalLoginResult(success: true, message: '개인형 로그아웃이 완료되었습니다.');
     } catch (e, st) {
       debugPrint('[LOGIN-PERSONAL][${_ts()}] logout error: $e\n$st');
+      await DevFirebaseDebugDialog.show(
+        context: context,
+        operation: 'personal_accounts.loginScreenLogout',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'personal_accounts',
+          'accountId': loggedInAccountId,
+          'write': 'doc(accountId).set(isSaved=false,lastLogoutAt,updatedAt,merge)',
+          'queryShape': 'direct-document-write',
+          'compositeIndex': 'not-required',
+        },
+      );
       return const PersonalLoginResult(success: false, message: '로그아웃 중 오류가 발생했습니다.');
     } finally {
       if (context.mounted) {
@@ -528,7 +650,9 @@ class PersonalLoginController {
     }
   }
 
-  void togglePassword() {}
+  void togglePassword() {
+    obscurePassword = !obscurePassword;
+  }
 
   void formatPhoneNumber(String value, StateSetter setState) {
     final digits = _normalizePhone(value);
@@ -542,24 +666,17 @@ class PersonalLoginController {
     });
   }
 
-  void formatGmail(String value, StateSetter setState) {
-    final normalized = value.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9._%+@-]'), '');
-    setState(() {
-      gmailController.value = TextEditingValue(
-        text: normalized,
-        selection: TextSelection.collapsed(offset: normalized.length),
-      );
-    });
-  }
 
   void fillLoginFields({
     required String name,
     required String phone,
-    required String gmail,
+    String? password,
   }) {
     nameController.text = name.trim();
     phoneController.text = _formatPhoneForDisplay(_normalizePhone(phone));
-    gmailController.text = _normalizeGmail(gmail);
+    if (password != null) {
+      passwordController.text = password.trim();
+    }
   }
 
   InputDecoration inputDecoration({
@@ -624,9 +741,9 @@ class PersonalLoginController {
   void dispose() {
     nameController.dispose();
     phoneController.dispose();
-    gmailController.dispose();
+    passwordController.dispose();
     nameFocus.dispose();
     phoneFocus.dispose();
-    gmailFocus.dispose();
+    passwordFocus.dispose();
   }
 }

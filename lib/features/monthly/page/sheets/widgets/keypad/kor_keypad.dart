@@ -12,15 +12,17 @@ import 'kor_keypad/kor_7.dart';
 import 'kor_keypad/kor_8.dart';
 import 'kor_keypad/kor_9.dart';
 
+const _korInk = Color(0xFF101828);
+const _korMuted = Color(0xFF667085);
+const _korLine = Color(0xFFD8DEE8);
+const _korPanel = Color(0xFFFFFFFF);
+const _korBlue = Color(0xFF2563EB);
+
 class KorKeypad extends StatefulWidget {
   final TextEditingController controller;
   final VoidCallback? onComplete;
   final VoidCallback? onReset;
-
-  
   final int maxLength;
-
-  
   final double height;
 
   const KorKeypad({
@@ -36,7 +38,7 @@ class KorKeypad extends StatefulWidget {
   State<KorKeypad> createState() => _KorKeypadState();
 }
 
-class _KorKeypadState extends State<KorKeypad> with TickerProviderStateMixin {
+class _KorKeypadState extends State<KorKeypad> {
   String? activeSubLayout;
 
   final Map<String, String> keyToSubLayout = const {
@@ -52,152 +54,51 @@ class _KorKeypadState extends State<KorKeypad> with TickerProviderStateMixin {
     'ㅎ': 'kor0',
   };
 
-  final Map<String, AnimationController> _controllers = {};
-  final Map<String, bool> _isPressed = {};
-
-  @override
-  void dispose() {
-    for (final c in _controllers.values) {
-      c.dispose();
-    }
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Semantics(
       container: true,
       label: '한글 키패드',
       child: Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 6,
-              offset: Offset(0, -2),
-            ),
-          ],
+        padding: const EdgeInsets.all(12),
+        decoration: const BoxDecoration(
+          color: _korPanel,
+          border: Border(top: BorderSide(color: _korLine)),
         ),
-        padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 12),
         child: SizedBox(
           height: widget.height,
-          child: (activeSubLayout == null)
-              ? _buildMainLayoutExpanded()
-              : _buildActiveSubLayoutExpanded(),
+          child: activeSubLayout == null ? _buildMainLayout() : _buildActiveSubLayout(),
         ),
       ),
     );
   }
 
-  
-  Widget _buildMainLayoutExpanded() {
+  Widget _buildMainLayout() {
     const rows = [
       ['ㄱ', 'ㄴ', 'ㄷ'],
       ['ㄹ', 'ㅁ', 'ㅂ'],
       ['ㅅ', 'ㅇ', 'ㅈ'],
-      ['공란', 'ㅎ', '공란'],
+      ['공란', 'ㅎ', '지움'],
     ];
     return Column(
-      children: List.generate(rows.length, (r) {
+      children: rows.map((row) {
         return Expanded(
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: List.generate(rows[r].length, (c) {
-              final label = rows[r][c];
-              return _buildMainKeyButton(label, r, c);
-            }),
+            children: row.map((label) {
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: _KorMainButton(
+                    label: label,
+                    onTap: () => _handleMainKeyTap(label),
+                  ),
+                ),
+              );
+            }).toList(),
           ),
         );
-      }),
+      }).toList(),
     );
-  }
-
-  Widget _buildMainKeyButton(String label, int rowIndex, int colIndex) {
-    if (label.isEmpty) {
-      return const Expanded(child: SizedBox());
-    }
-
-    final id = '$label#$rowIndex:$colIndex';
-    _controllers.putIfAbsent(
-      id,
-          () => AnimationController(
-        duration: const Duration(milliseconds: 80),
-        vsync: this,
-        lowerBound: 0.0,
-        upperBound: 0.1,
-      ),
-    );
-    _isPressed.putIfAbsent(id, () => false);
-
-    final controller = _controllers[id]!;
-    final animation = Tween(begin: 1.0, end: 0.85).animate(
-      CurvedAnimation(parent: controller, curve: Curves.easeOut),
-    );
-
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.all(4.0),
-        child: GestureDetector(
-          onTapDown: (_) {
-            HapticFeedback.selectionClick();
-            setState(() => _isPressed[id] = true);
-            controller.forward();
-          },
-          onTapUp: (_) {
-            setState(() => _isPressed[id] = false);
-            Future.delayed(const Duration(milliseconds: 100), () {
-              if (mounted) controller.reverse();
-            });
-            _handleMainKeyTap(label);
-          },
-          onTapCancel: () {
-            setState(() => _isPressed[id] = false);
-            controller.reverse();
-          },
-          child: Semantics(
-            button: true,
-            label: _semanticLabel(label),
-            child: ScaleTransition(
-              scale: animation,
-              child: Container(
-                constraints: const BoxConstraints(minHeight: 48),
-                padding: const EdgeInsets.symmetric(vertical: 12.0),
-                decoration: BoxDecoration(
-                  color: _isPressed[id]!
-                      ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.6)
-                      : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
-                  borderRadius: BorderRadius.zero,
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outlineVariant,
-                  ),
-                ),
-                child: Center(
-                  child: Text(
-                    label,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _semanticLabel(String label) {
-    return (label == '공란') ? '공란' : '자음 $label';
-  }
-
-  
-  Widget _buildActiveSubLayoutExpanded() {
-    final child = _buildActiveSubLayout();
-    return SizedBox.expand(child: child);
   }
 
   Widget _buildActiveSubLayout() {
@@ -228,6 +129,11 @@ class _KorKeypadState extends State<KorKeypad> with TickerProviderStateMixin {
   }
 
   void _handleMainKeyTap(String key) {
+    HapticFeedback.selectionClick();
+    if (key == '지움') {
+      widget.controller.clear();
+      return;
+    }
     if (keyToSubLayout.containsKey(key)) {
       setState(() => activeSubLayout = keyToSubLayout[key]);
     } else if (key == '공란') {
@@ -236,21 +142,48 @@ class _KorKeypadState extends State<KorKeypad> with TickerProviderStateMixin {
   }
 
   void _handleSubKeyTap(String key) {
+    HapticFeedback.selectionClick();
     if (key == 'back') {
       setState(() => activeSubLayout = null);
       return;
     }
-    _processKeyInput(key);
-  }
-
-  void _processKeyInput(String key) {
     if (widget.controller.text.length >= widget.maxLength) {
       Future.microtask(() => widget.onComplete?.call());
       return;
     }
-    setState(() {
-      widget.controller.text += key;
-    });
+    setState(() => widget.controller.text += key);
     Future.microtask(() => widget.onComplete?.call());
+  }
+}
+
+class _KorMainButton extends StatelessWidget {
+  const _KorMainButton({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final utility = label == '공란' || label == '지움';
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: utility ? const Color(0xFFF1F5F9) : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: utility ? _korLine : _korBlue.withOpacity(.18)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: utility ? _korMuted : _korInk,
+            fontWeight: FontWeight.w900,
+            fontSize: utility ? 14 : 20,
+          ),
+        ),
+      ),
+    );
   }
 }

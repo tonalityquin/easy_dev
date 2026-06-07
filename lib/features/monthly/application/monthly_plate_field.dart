@@ -1,25 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-
-
+const _fieldInk = Color(0xFF101828);
+const _fieldMuted = Color(0xFF667085);
+const _fieldLine = Color(0xFFD8DEE8);
+const _fieldBlue = Color(0xFF2563EB);
 
 class MonthlyPlateField extends StatelessWidget {
   final int frontDigitCount;
   final bool hasMiddleChar;
   final int backDigitCount;
-
   final TextEditingController frontController;
   final TextEditingController? middleController;
   final TextEditingController backController;
-
   final TextEditingController activeController;
   final ValueChanged<TextEditingController> onKeypadStateChanged;
-
-  
   final bool isEditMode;
-
-  
   final double middleBoxWidth;
 
   const MonthlyPlateField({
@@ -33,11 +29,10 @@ class MonthlyPlateField extends StatelessWidget {
     required this.activeController,
     required this.onKeypadStateChanged,
     this.isEditMode = false,
-    this.middleBoxWidth = 56,
+    this.middleBoxWidth = 54,
   }) : assert(!hasMiddleChar || middleController != null, 'hasMiddleChar=true이면 middleController가 필요합니다.');
 
-  static const _radius = 12.0;
-  static const _anim = Duration(milliseconds: 180);
+  static const _duration = Duration(milliseconds: 160);
 
   @override
   Widget build(BuildContext context) {
@@ -45,105 +40,91 @@ class MonthlyPlateField extends StatelessWidget {
       children: [
         Expanded(
           flex: frontDigitCount,
-          child: _buildBoxInput(
-            context,
-            frontController,
-            
+          child: _BoxInput(
+            controller: frontController,
+            activeController: activeController,
             maxLen: frontDigitCount,
-            isMiddle: false,
             isKorean: false,
+            isEditMode: isEditMode,
+            onKeypadStateChanged: onKeypadStateChanged,
           ),
         ),
         if (hasMiddleChar) const SizedBox(width: 8),
         if (hasMiddleChar)
           SizedBox(
             width: middleBoxWidth,
-            child: _buildBoxInput(
-              context,
-              middleController!,
+            child: _BoxInput(
+              controller: middleController!,
+              activeController: activeController,
               maxLen: 1,
-              isMiddle: true,
               isKorean: true,
+              isEditMode: isEditMode,
+              onKeypadStateChanged: onKeypadStateChanged,
             ),
           ),
         const SizedBox(width: 8),
         Expanded(
           flex: backDigitCount,
-          child: _buildBoxInput(
-            context,
-            backController,
-            
+          child: _BoxInput(
+            controller: backController,
+            activeController: activeController,
             maxLen: backDigitCount,
-            isMiddle: false,
             isKorean: false,
+            isEditMode: isEditMode,
+            onKeypadStateChanged: onKeypadStateChanged,
           ),
         ),
       ],
     );
   }
+}
 
-  BoxDecoration _fieldBox({
-    required bool isActive,
-    required bool enabled,
-    required ColorScheme cs,
-  }) {
-    final bg = !enabled
-        ? cs.surfaceVariant.withOpacity(.55)
-        : (isActive ? cs.primaryContainer.withOpacity(.35) : cs.surface);
+class _BoxInput extends StatelessWidget {
+  const _BoxInput({
+    required this.controller,
+    required this.activeController,
+    required this.maxLen,
+    required this.isKorean,
+    required this.isEditMode,
+    required this.onKeypadStateChanged,
+  });
 
-    return BoxDecoration(
-      color: bg,
-      borderRadius: BorderRadius.circular(_radius),
-      border: Border.all(
-        color: isActive ? cs.primary.withOpacity(.55) : cs.outlineVariant.withOpacity(.65),
-        width: isActive ? 1.6 : 1.0,
-      ),
-      boxShadow: isActive
-          ? [
-        BoxShadow(
-          color: cs.shadow.withOpacity(.12),
-          blurRadius: 10,
-          offset: const Offset(0, 4),
-        ),
-      ]
-          : const [],
-    );
-  }
+  final TextEditingController controller;
+  final TextEditingController activeController;
+  final int maxLen;
+  final bool isKorean;
+  final bool isEditMode;
+  final ValueChanged<TextEditingController> onKeypadStateChanged;
 
-  TextStyle _textStyle(
-      BuildContext context, {
-        required ColorScheme cs,
-        required bool enabled,
-        required bool isKorean,
-      }) {
-    final tt = Theme.of(context).textTheme;
-
-    final base = (isKorean ? tt.titleMedium : tt.titleSmall) ?? const TextStyle(fontSize: 16);
-    return base.copyWith(
-      fontSize: isKorean ? 20 : 18,
-      color: enabled ? cs.onSurface : cs.onSurface.withOpacity(.45),
-      fontWeight: isKorean ? FontWeight.w800 : FontWeight.w700,
-      letterSpacing: .6,
-      height: 1.1,
-    );
-  }
-
-  Widget _buildBoxInput(
-      BuildContext context,
-      TextEditingController controller, {
-        required int maxLen,
-        required bool isMiddle,
-        required bool isKorean,
-      }) {
-    final cs = Theme.of(context).colorScheme;
-    final isActive = controller == activeController;
+  @override
+  Widget build(BuildContext context) {
+    final isActive = controller == activeController && !isEditMode;
     final enabled = !isEditMode;
+    final background = enabled
+        ? isActive
+            ? const Color(0xFFEFF6FF)
+            : const Color(0xFFF8FAFC)
+        : const Color(0xFFEFF2F7);
 
     return AnimatedContainer(
-      duration: _anim,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-      decoration: _fieldBox(isActive: isActive, enabled: enabled, cs: cs),
+      duration: MonthlyPlateField._duration,
+      height: 54,
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: isActive ? _fieldBlue : _fieldLine, width: isActive ? 1.6 : 1),
+        boxShadow: isActive
+            ? [
+                BoxShadow(
+                  color: _fieldBlue.withOpacity(.12),
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
+                ),
+              ]
+            : const [],
+      ),
       child: Stack(
+        alignment: Alignment.center,
         children: [
           TextField(
             controller: controller,
@@ -157,36 +138,34 @@ class MonthlyPlateField extends StatelessWidget {
               if (!isKorean) FilteringTextInputFormatter.digitsOnly,
               if (isKorean) FilteringTextInputFormatter.allow(RegExp(r'[ㄱ-ㅎㅏ-ㅣ가-힣]')),
             ],
-            style: _textStyle(
-              context,
-              cs: cs,
-              enabled: enabled,
-              isKorean: isKorean,
+            style: TextStyle(
+              color: enabled ? _fieldInk : _fieldMuted,
+              fontWeight: FontWeight.w900,
+              fontSize: isKorean ? 20 : 18,
+              letterSpacing: isKorean ? 0 : .8,
             ),
             decoration: const InputDecoration(
               isDense: true,
-              counterText: "",
+              counterText: '',
               border: InputBorder.none,
-              focusedBorder: InputBorder.none,
               enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
               disabledBorder: InputBorder.none,
               contentPadding: EdgeInsets.zero,
             ),
-            onTap: isEditMode ? null : () => onKeypadStateChanged(controller),
+            onTap: enabled ? () => onKeypadStateChanged(controller) : null,
           ),
-
-          
           Positioned(
-            right: 0,
-            top: 0,
+            right: 8,
+            top: 8,
             child: AnimatedOpacity(
+              duration: MonthlyPlateField._duration,
               opacity: isActive ? 1 : 0,
-              duration: _anim,
               child: Container(
-                width: 10,
-                height: 10,
+                width: 8,
+                height: 8,
                 decoration: BoxDecoration(
-                  color: cs.primary,
+                  color: _fieldBlue,
                   borderRadius: BorderRadius.circular(999),
                 ),
               ),

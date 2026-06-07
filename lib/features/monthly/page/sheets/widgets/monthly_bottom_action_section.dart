@@ -24,35 +24,21 @@ class MonthlyBottomActionSection extends StatefulWidget {
 class _MonthlyBottomActionSectionState extends State<MonthlyBottomActionSection> {
   @override
   Widget build(BuildContext context) {
-    final String label = widget.isEditMode ? '수정' : '정기 정산 생성';
-    final IconData icon = widget.isEditMode ? Icons.save_outlined : Icons.add_circle_outline;
+    final label = widget.isEditMode ? '수정 저장' : '정기권 생성';
+    final icon = widget.isEditMode ? Icons.save_outlined : Icons.add_circle_outline;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const SizedBox(height: 6),
-
-        
-        MonthlyAnimatedActionButton(
-          isLoading: widget.controller.isLoading,
-          enabled: true, 
-          buttonLabel: label,
-          leadingIcon: icon,
-          onPressed: () async {
-            if (widget.isEditMode) {
-              await widget.controller.updatePlateEntry(
-                context,
-                widget.onStateRefresh,
-              );
-            } else {
-              await widget.controller.submitPlateEntry(
-                context,
-                widget.onStateRefresh,
-              );
-            }
-          },
-        ),
-      ],
+    return MonthlyAnimatedActionButton(
+      isLoading: widget.controller.isLoading,
+      enabled: !widget.controller.isLoading,
+      buttonLabel: label,
+      leadingIcon: icon,
+      onPressed: () async {
+        if (widget.isEditMode) {
+          await widget.controller.updatePlateEntry(context, widget.onStateRefresh);
+        } else {
+          await widget.controller.submitPlateEntry(context, widget.onStateRefresh);
+        }
+      },
     );
   }
 }

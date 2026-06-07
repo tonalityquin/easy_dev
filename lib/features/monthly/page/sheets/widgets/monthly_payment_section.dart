@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../../controllers/monthly_plate_controller.dart';
+
+const _paymentInk = Color(0xFF101828);
+const _paymentMuted = Color(0xFF667085);
+const _paymentPanel = Color(0xFFFFFFFF);
+const _paymentLine = Color(0xFFD8DEE8);
+const _paymentBlue = Color(0xFF2563EB);
+const _paymentGreen = Color(0xFF059669);
+
 class MonthlyPaymentSection extends StatefulWidget {
   final MonthlyPlateController controller;
   final Function(bool?) onExtendedChanged;
@@ -18,7 +26,6 @@ class MonthlyPaymentSection extends StatefulWidget {
 class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
   final TextEditingController _noteController = TextEditingController();
   bool _isPaying = false;
-
   final List<String> _paymentHistoryLog = [];
 
   @override
@@ -45,7 +52,6 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
 
   Future<void> _handlePayment() async {
     FocusScope.of(context).unfocus();
-
     widget.controller.specialNote = _noteController.text.trim();
 
     if (!widget.controller.validatePaymentBeforeWrite(context)) return;
@@ -54,80 +60,70 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
     try {
       await widget.controller.processPayment(context);
       if (!mounted) return;
-
       final label = _formatNow();
+      final extended = widget.controller.isExtended;
       setState(() {
         _paymentHistoryLog.insert(
           0,
-          '$label - 결제 완료'
-              '${_noteController.text.trim().isNotEmpty ? ' | 메모: ${_noteController.text.trim()}' : ''}'
-              '${widget.controller.isExtended ? ' | 연장' : ''}',
+          '$label 결제 완료${_noteController.text.trim().isNotEmpty ? ' · ${_noteController.text.trim()}' : ''}${extended ? ' · 기간 연장' : ''}',
         );
       });
-
       _noteController.clear();
       widget.controller.specialNote = '';
-
       widget.controller.isExtended = false;
       widget.onExtendedChanged(false);
+      ScaffoldMessenger.maybeOf(context)
+        ?..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('결제가 저장되었습니다.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
     } catch (_) {
       if (!mounted) return;
+      ScaffoldMessenger.maybeOf(context)
+        ?..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('결제 저장에 실패했습니다. 다시 시도해주세요.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
     } finally {
       if (mounted) setState(() => _isPaying = false);
     }
   }
 
-  InputDecoration _svcInputDecoration(BuildContext context, {required String label}) {
-    final cs = Theme.of(context).colorScheme;
-
+  InputDecoration _inputDecoration({required String label}) {
     return InputDecoration(
       labelText: label,
-      floatingLabelStyle: TextStyle(
-        color: cs.primary,
-        fontWeight: FontWeight.w700,
-      ),
+      labelStyle: const TextStyle(color: _paymentMuted, fontWeight: FontWeight.w800),
+      floatingLabelStyle: const TextStyle(color: _paymentBlue, fontWeight: FontWeight.w900),
       isDense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 13, vertical: 14),
       filled: true,
-      fillColor: cs.surfaceVariant.withOpacity(.30),
+      fillColor: const Color(0xFFF8FAFC),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: cs.outlineVariant.withOpacity(.65)),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: _paymentLine),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: cs.primary, width: 1.2),
+        borderRadius: BorderRadius.circular(14),
+        borderSide: const BorderSide(color: _paymentBlue, width: 1.4),
       ),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: cs.error.withOpacity(.8)),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide(color: cs.error, width: 1.4),
-      ),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
-
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
-        boxShadow: [
-          BoxShadow(
-            color: cs.shadow.withOpacity(.06),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: _paymentPanel,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _paymentLine),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -135,142 +131,139 @@ class _MonthlyPaymentSectionState extends State<MonthlyPaymentSection> {
           Row(
             children: [
               Container(
-                width: 34,
-                height: 34,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
-                  color: cs.primaryContainer.withOpacity(.60),
+                  color: const Color(0xFFEFF6FF),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
                 ),
-                child: Icon(Icons.payment_outlined, color: cs.primary),
+                child: const Icon(Icons.point_of_sale_outlined, color: _paymentBlue, size: 19),
               ),
               const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  '결제',
-                  style: text.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: cs.onSurface,
-                  ),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '결제 입력',
+                      style: TextStyle(color: _paymentInk, fontWeight: FontWeight.w900, fontSize: 16),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      '메모와 연장 여부를 확인한 뒤 저장합니다.',
+                      style: TextStyle(color: _paymentMuted, fontWeight: FontWeight.w700, fontSize: 12),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           TextFormField(
             controller: _noteController,
-            decoration: _svcInputDecoration(context, label: '특이사항(결제 메모)'),
+            decoration: _inputDecoration(label: '결제 메모'),
             maxLines: 2,
+            style: const TextStyle(color: _paymentInk, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _isPaying ? null : _handlePayment,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: cs.primary,
-                    foregroundColor: cs.onPrimary,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    shape: const StadiumBorder(),
-                    textStyle: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  icon: _isPaying
-                      ? SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(cs.onPrimary),
-                    ),
-                  )
-                      : const Icon(Icons.payment),
-                  label: Text(_isPaying ? '처리 중...' : '결제 저장'),
-                ),
+          InkWell(
+            onTap: () {
+              final next = !widget.controller.isExtended;
+              setState(() => widget.controller.isExtended = next);
+              widget.onExtendedChanged(next);
+            },
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              padding: const EdgeInsets.all(13),
+              decoration: BoxDecoration(
+                color: widget.controller.isExtended ? const Color(0xFFECFDF3) : const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: widget.controller.isExtended ? _paymentGreen.withOpacity(.28) : _paymentLine),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: cs.surfaceVariant.withOpacity(.30),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
-                  ),
-                  child: CheckboxListTile(
-                    dense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-                    controlAffinity: ListTileControlAffinity.leading,
+              child: Row(
+                children: [
+                  Checkbox(
                     value: widget.controller.isExtended,
+                    activeColor: _paymentGreen,
                     onChanged: (val) {
-                      setState(() {
-                        widget.controller.isExtended = val ?? false;
-                      });
+                      setState(() => widget.controller.isExtended = val ?? false);
                       widget.onExtendedChanged(val);
                     },
-                    title: Text(
-                      '연장 여부',
-                      style: text.bodyMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: cs.onSurface,
-                      ),
-                    ),
-                    activeColor: cs.primary,
                   ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Icon(Icons.history, color: cs.onSurfaceVariant, size: 18),
-              const SizedBox(width: 8),
-              Text(
-                '최근 결제 내역(로컬)',
-                style: text.titleSmall?.copyWith(fontWeight: FontWeight.w900),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (_paymentHistoryLog.isEmpty)
-            Text(
-              '결제 내역이 없습니다.',
-              style: text.bodyMedium?.copyWith(color: cs.onSurfaceVariant.withOpacity(.70)),
-            )
-          else
-            Container(
-              decoration: BoxDecoration(
-                color: cs.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
-              ),
-              child: Column(
-                children: [
-                  for (int i = 0; i < _paymentHistoryLog.length; i++) ...[
-                    ListTile(
-                      dense: true,
-                      title: Text(
-                        _paymentHistoryLog[i],
-                        style: text.bodyMedium?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      leading: Container(
-                        width: 8,
-                        height: 8,
-                        decoration: BoxDecoration(
-                          color: cs.primary.withOpacity(.85),
-                          borderRadius: BorderRadius.circular(99),
+                  const SizedBox(width: 4),
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '결제 후 다음 기간으로 연장',
+                          style: TextStyle(color: _paymentInk, fontWeight: FontWeight.w900),
                         ),
-                      ),
+                        SizedBox(height: 2),
+                        Text(
+                          '결제 내역 저장과 기간 갱신을 한 번에 처리합니다.',
+                          style: TextStyle(color: _paymentMuted, fontWeight: FontWeight.w700, fontSize: 12),
+                        ),
+                      ],
                     ),
-                    if (i != _paymentHistoryLog.length - 1)
-                      Divider(height: 1, color: cs.outlineVariant.withOpacity(.45)),
-                  ],
+                  ),
                 ],
               ),
             ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _isPaying ? null : _handlePayment,
+              style: FilledButton.styleFrom(
+                backgroundColor: _paymentInk,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                minimumSize: const Size.fromHeight(56),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+              icon: _isPaying
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.check_circle_outline),
+              label: Text(
+                _isPaying ? '처리 중...' : '결제 저장',
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ),
+          ),
+          if (_paymentHistoryLog.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Text(
+              '이번 화면 처리 내역',
+              style: TextStyle(color: _paymentInk, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
+            ..._paymentHistoryLog.map((item) {
+              return Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.all(11),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: _paymentLine),
+                ),
+                child: Text(
+                  item,
+                  style: const TextStyle(color: _paymentSlate, fontWeight: FontWeight.w800),
+                ),
+              );
+            }),
+          ],
         ],
       ),
     );
   }
 }
+
+const _paymentSlate = Color(0xFF334155);

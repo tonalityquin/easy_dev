@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../../app/init/app_exit_service.dart';
 import '../../../../../app/init/logout_helper.dart';
 import '../../../../../app/theme/brand_theme.dart';
+import '../../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../../app/theme/theme_prefs_controller.dart';
 import '../../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../../dev/application/area_state.dart';
@@ -89,8 +90,19 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
       await prefs.setBool(_prefsHasMonthlyKey, exists);
 
       return exists;
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('월주차 존재 여부 확인 실패: $e');
+      await DevFirebaseDebugDialog.show(
+        context: context,
+        operation: 'tablet.monthly_plate_status.exists',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'area': area,
+          'widget': 'TabletTopNavigation',
+        },
+      );
       return null;
     }
   }
@@ -123,9 +135,20 @@ class _TabletTopNavigationState extends State<TabletTopNavigation> {
       setState(() => _lastRefreshAt = DateTime.now());
       refreshDialog();
       debugPrint('데이터를 새로고침했습니다.');
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('수동 새로고침 실패: $e');
       if (!mounted) return;
+      await DevFirebaseDebugDialog.show(
+        context: context,
+        operation: 'tablet.manualRefreshAll',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'area': context.read<AreaState>().currentArea.trim(),
+          'widgets': 'LocationState.manualLocationRefresh, BillState.manualBillRefresh, monthly_plate_status',
+          'widget': 'TabletTopNavigation',
+        },
+      );
       refreshDialog();
       debugPrint('새로고침 실패: $e');
     } finally {

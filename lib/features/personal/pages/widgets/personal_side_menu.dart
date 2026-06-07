@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../app/di/routes.dart';
 import '../../../../app/init/app_exit_service.dart';
+import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../app/theme/brand_theme.dart';
 import '../../../../app/theme/theme_prefs_controller.dart';
 import '../../../../shared/plate/domain/repositories/plate_repository.dart';
@@ -58,13 +59,30 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
       final exists = await repo.hasMonthlyParkingByArea(area: area);
       await prefs.setBool(_prefsHasMonthlyKey, exists);
       return exists;
-    } catch (_) {
+    } catch (e, st) {
+      await DevFirebaseDebugDialog.show(
+        context: context,
+        operation: 'personal.monthly_plate_status.exists',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'monthly_plate_status',
+          'area': area,
+          'query': 'where(area == $area).limit(1)',
+          'filters': 'area == $area',
+          'orderBy': 'none',
+          'limit': 1,
+          'queryShape': 'single-field-equality-with-limit',
+          'compositeIndex': 'not-required-for-this-shape-unless-console-error-requires-it',
+        },
+      );
       return null;
     }
   }
 
   Future<void> _refreshAll() async {
     if (_refreshing) return;
+    final debugArea = context.read<AreaState>().currentArea.trim();
     setState(() => _refreshing = true);
     try {
       await context.read<LocationState>().manualLocationRefresh();
@@ -73,10 +91,20 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
       await widget.onRefreshContent();
       if (!mounted) return;
       setState(() => _lastRefreshAt = DateTime.now());
-      _showSnack('상태를 새로고침했습니다.', success: true);
-    } catch (_) {
+      _showSnack('데이터를 갱신했습니다.', success: true);
+    } catch (e, st) {
+      await DevFirebaseDebugDialog.show(
+        context: context,
+        operation: 'personal.sideMenu.refreshAll',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'area': debugArea,
+          'steps': 'locations.manualLocationRefresh, bill.manualBillRefresh, monthly_plate_status.exists, onRefreshContent',
+        },
+      );
       if (!mounted) return;
-      _showSnack('상태 새로고침 중 오류가 발생했습니다.', success: false);
+      _showSnack('데이터 갱신 중 오류가 발생했습니다.', success: false);
     } finally {
       if (!mounted) return;
       setState(() => _refreshing = false);
@@ -208,38 +236,57 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
   }
 
   Future<void> _logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    final accountId = (prefs.getString('personalAccountId') ?? '').trim();
-    if (accountId.isNotEmpty) {
-      await FirebaseFirestore.instance.collection('personal_accounts').doc(accountId).set(
-        <String, dynamic>{
-          'isSaved': false,
-          'lastLogoutAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
+    var accountId = '';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      accountId = (prefs.getString('personalAccountId') ?? '').trim();
+      if (accountId.isNotEmpty) {
+        await FirebaseFirestore.instance.collection('personal_accounts').doc(accountId).set(
+          <String, dynamic>{
+            'isSaved': false,
+            'lastLogoutAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+      }
+
+      await prefs.remove('mode');
+      await prefs.remove('phone');
+      await prefs.remove('selectedArea');
+      await prefs.remove('division');
+      await prefs.remove('role');
+      await prefs.remove('position');
+      await prefs.remove('personalAccountId');
+      await prefs.remove('personalName');
+      await prefs.remove('personalPhone');
+      await prefs.remove('personalEmail');
+
+      if (!mounted) return;
+      Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.selector, (route) => false);
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text('개인형 로그아웃이 완료되었습니다.'),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
+    } catch (e, st) {
+      await DevFirebaseDebugDialog.show(
+        context: context,
+        operation: 'personal.sideMenu.logout',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'personal_accounts',
+          'accountId': accountId,
+          'write': 'doc(accountId).set(isSaved=false,lastLogoutAt,updatedAt,merge)',
+          'queryShape': 'direct-document-write',
+          'compositeIndex': 'not-required',
+        },
+      );
+      if (!mounted) return;
+      _showSnack('로그아웃 중 오류가 발생했습니다.', success: false);
     }
-
-    await prefs.remove('mode');
-    await prefs.remove('phone');
-    await prefs.remove('selectedArea');
-    await prefs.remove('division');
-    await prefs.remove('role');
-    await prefs.remove('position');
-    await prefs.remove('personalAccountId');
-    await prefs.remove('personalName');
-    await prefs.remove('personalPhone');
-    await prefs.remove('personalEmail');
-
-    if (!mounted) return;
-    Navigator.of(context).pushNamedAndRemoveUntil(AppRoutes.selector, (route) => false);
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      const SnackBar(
-        content: Text('개인형 로그아웃이 완료되었습니다.'),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
   }
 
   Future<void> _exitApp() async {
@@ -347,14 +394,11 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  _MenuInfoCard(area: area),
-                  const SizedBox(height: 16),
-                  _MenuSectionLabel(label: '바로가기'),
+                  const SizedBox(height: 10),
                   _MenuTile(
                     icon: Icons.refresh_rounded,
-                    title: _refreshing ? '상태 새로고침 중...' : '상태 새로고침',
-                    subtitle: _lastRefreshAt == null ? '내 차량, 위치, 정산 상태를 다시 확인' : '마지막 동기화 ${_formatLastSync(_lastRefreshAt!)}',
+                    title: _refreshing ? '데이터 갱신 중...' : '데이터 갱신',
+                    subtitle: _lastRefreshAt == null ? '내 차량, 위치, 정산 데이터를 다시 불러옵니다' : '마지막 동기화 ${_formatLastSync(_lastRefreshAt!)}',
                     trailing: _refreshing
                         ? SizedBox(
                             width: 18,
@@ -364,6 +408,8 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
                         : null,
                     onTap: _refreshing ? null : _refreshAll,
                   ),
+                  const SizedBox(height: 8),
+                  _MenuSectionLabel(label: '바로가기'),
                   _MenuTile(
                     icon: Icons.checklist_rounded,
                     title: '할 일 관리',
@@ -408,44 +454,6 @@ class _PersonalSideMenuState extends State<PersonalSideMenu> {
 
   String _themeModeLabel(String id) {
     return themeModeSpecs().firstWhere((m) => m.id == id, orElse: () => themeModeSpecs().first).label;
-  }
-}
-
-class _MenuInfoCard extends StatelessWidget {
-  const _MenuInfoCard({required this.area});
-
-  final String area;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final text = Theme.of(context).textTheme;
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Color.alphaBlend(cs.primary.withOpacity(.07), cs.surface),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: cs.primary.withOpacity(.12)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.near_me_rounded, color: cs.primary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              '차량 추가, 상태 새로고침, 할 일과 달력 관리는 메뉴에서 실행합니다. 홈은 내 차량 위치와 일정 확인에 집중합니다.',
-              style: text.bodySmall?.copyWith(
-                color: cs.onSurfaceVariant,
-                fontWeight: FontWeight.w700,
-                height: 1.35,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 

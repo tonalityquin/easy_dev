@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../app/utils/dev_firebase_debug_dialog.dart';
+
 import '../../../../shared/plate/domain/enums/plate_type.dart';
 import '../../../../shared/plate/domain/models/plate_model.dart';
+import '../../../../shared/plate/domain/services/plate_status_record.dart';
 import '../../application/personal_calendar_store.dart';
+import '../../application/personal_monthly_parking_sync_service.dart';
 import '../../application/personal_saved_vehicle_store.dart';
 import '../../application/personal_todo_store.dart';
 import '../../application/personal_vehicle_status_service.dart';
@@ -33,17 +37,23 @@ class PersonalHomePanelState extends State<PersonalHomePanel> {
   final PersonalVehicleStatusService _statusService = PersonalVehicleStatusService();
   final PersonalTodoStore _todoStore = PersonalTodoStore();
   final PersonalCalendarStore _calendarStore = PersonalCalendarStore();
-  final PageController _pageController = PageController();
+  final PersonalMonthlyParkingSyncService _monthlySyncService = PersonalMonthlyParkingSyncService();
+  static const int _pageLoopBase = 3000;
+  final PageController _pageController = PageController(initialPage: _pageLoopBase);
 
   List<PersonalSavedVehicle> _vehicles = const <PersonalSavedVehicle>[];
   List<PersonalTodoItem> _todos = const <PersonalTodoItem>[];
   List<PersonalCalendarEvent> _events = const <PersonalCalendarEvent>[];
   final Map<String, PlateModel?> _statusByVehicleId = <String, PlateModel?>{};
+  final Map<String, PlateStatusRecord?> _monthlyStatusByVehicleId = <String, PlateStatusRecord?>{};
   final Set<String> _loadingVehicleIds = <String>{};
+  final Set<String> _loadingMonthlyVehicleIds = <String>{};
   bool _loadingVehicles = true;
   String _personalName = '';
   String? _selectedVehicleId;
   int _pageIndex = 0;
+  int _rawPageIndex = _pageLoopBase;
+  bool _showMonthlyParkingPanel = false;
   DateTime _selectedCalendarDay = _today();
 
   @override
@@ -135,20 +145,28 @@ class PersonalHomePanelState extends State<PersonalHomePanel> {
   void _clearStaleStatuses(List<PersonalSavedVehicle> vehicles) {
     final valid = vehicles.map((e) => e.id).toSet();
     _statusByVehicleId.removeWhere((id, _) => !valid.contains(id));
+    _monthlyStatusByVehicleId.removeWhere((id, _) => !valid.contains(id));
     _loadingVehicleIds.removeWhere((id) => !valid.contains(id));
+    _loadingMonthlyVehicleIds.removeWhere((id) => !valid.contains(id));
     if (vehicles.isEmpty) {
       _statusByVehicleId.clear();
+      _monthlyStatusByVehicleId.clear();
       _loadingVehicleIds.clear();
+      _loadingMonthlyVehicleIds.clear();
+      _showMonthlyParkingPanel = false;
     }
   }
 
   Future<void> _refreshAllStatuses() async {
     final area = widget.area.trim();
     if (area.isEmpty || _vehicles.isEmpty) {
-      if (mounted && _vehicles.isEmpty) {
+      if (mounted) {
         setState(() {
           _statusByVehicleId.clear();
+          _monthlyStatusByVehicleId.clear();
           _loadingVehicleIds.clear();
+          _loadingMonthlyVehicleIds.clear();
+          _showMonthlyParkingPanel = false;
         });
       }
       return;
@@ -161,22 +179,55 @@ class PersonalHomePanelState extends State<PersonalHomePanel> {
   Future<void> _refreshVehicleStatus(PersonalSavedVehicle vehicle) async {
     final area = widget.area.trim();
     if (area.isEmpty) return;
-    setState(() => _loadingVehicleIds.add(vehicle.id));
+    setState(() {
+      _loadingVehicleIds.add(vehicle.id);
+      _loadingMonthlyVehicleIds.add(vehicle.id);
+    });
     try {
       final plate = await _statusService.fetchCurrentVehiclePlate(
         plateNumber: vehicle.plateNumber,
         area: area,
       );
+      final monthly = await _statusService.fetchMonthlyParkingStatus(
+        plateNumber: vehicle.plateNumber,
+        area: area,
+      );
+      await _monthlySyncService.syncVehicleMonthlyParking(
+        vehicle: vehicle,
+        record: monthly,
+        calendarStore: _calendarStore,
+        todoStore: _todoStore,
+      );
+      final syncedTodos = await _todoStore.load();
+      final syncedEvents = await _calendarStore.load();
       if (!mounted) return;
       setState(() {
         _statusByVehicleId[vehicle.id] = plate;
+        _monthlyStatusByVehicleId[vehicle.id] = monthly;
+        _todos = syncedTodos;
+        _events = syncedEvents;
         _loadingVehicleIds.remove(vehicle.id);
+        _loadingMonthlyVehicleIds.remove(vehicle.id);
       });
-    } catch (_) {
+    } catch (e, st) {
+      await DevFirebaseDebugDialog.show(
+        context: context,
+        operation: 'personal.home.vehicleStatusRefresh',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'area': area,
+          'vehicleId': vehicle.id,
+          'plateNumberInput': vehicle.plateNumber,
+          'source': 'PersonalVehicleStatusService.fetchCurrentVehiclePlate, PersonalVehicleStatusService.fetchMonthlyParkingStatus',
+        },
+      );
       if (!mounted) return;
       setState(() {
         _statusByVehicleId[vehicle.id] = null;
+        _monthlyStatusByVehicleId[vehicle.id] = null;
         _loadingVehicleIds.remove(vehicle.id);
+        _loadingMonthlyVehicleIds.remove(vehicle.id);
       });
     }
   }
@@ -244,6 +295,43 @@ class PersonalHomePanelState extends State<PersonalHomePanel> {
     );
   }
 
+  int _logicalPageIndex(int rawIndex) => rawIndex % 3;
+
+  void _handlePageChanged(int rawIndex) {
+    final logicalIndex = _logicalPageIndex(rawIndex);
+    setState(() {
+      _rawPageIndex = rawIndex;
+      _pageIndex = logicalIndex;
+      if (logicalIndex != 0) {
+        _showMonthlyParkingPanel = false;
+      }
+    });
+  }
+
+  void _goToPage(int logicalIndex) {
+    final target = logicalIndex.clamp(0, 2).toInt();
+    if (target == 0 && _showMonthlyParkingPanel) {
+      setState(() => _showMonthlyParkingPanel = false);
+    }
+    if (!_pageController.hasClients) {
+      setState(() => _pageIndex = target);
+      return;
+    }
+    var delta = target - _pageIndex;
+    if (delta > 1) delta -= 3;
+    if (delta < -1) delta += 3;
+    _pageController.animateToPage(
+      _rawPageIndex + delta,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  void _toggleVehiclePanel() {
+    if (_selectedVehicle == null) return;
+    setState(() => _showMonthlyParkingPanel = !_showMonthlyParkingPanel);
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
@@ -252,30 +340,42 @@ class PersonalHomePanelState extends State<PersonalHomePanel> {
     return Column(
       children: [
         Expanded(
-          child: PageView(
+          child: PageView.builder(
             controller: _pageController,
-            onPageChanged: (index) => setState(() => _pageIndex = index),
-            children: [
-              _VehicleLocationPage(
-                name: _personalName,
-                area: widget.area,
-                vehicles: _vehicles,
-                selectedVehicle: _selectedVehicle,
-                statusByVehicleId: _statusByVehicleId,
-                loadingVehicleIds: _loadingVehicleIds,
-                loadingVehicles: _loadingVehicles,
-                onSelectVehicle: (vehicle) => setState(() => _selectedVehicleId = vehicle.id),
-                onRefreshVehicle: _refreshVehicleStatus,
-                onOpenVehicle: _openVehicle,
-              ),
-              _TodayTodoPage(
-                todos: _todos,
-                events: _events,
-                onToggleTodo: _toggleTodo,
-                onOpenTodo: _openTodoDialog,
-                onOpenCalendar: _openCalendarDialog,
-              ),
-              _CalendarFocusPage(
+            onPageChanged: _handlePageChanged,
+            itemBuilder: (context, rawIndex) {
+              final index = _logicalPageIndex(rawIndex);
+              if (index == 0) {
+                return _VehicleLocationPage(
+                  name: _personalName,
+                  area: widget.area,
+                  vehicles: _vehicles,
+                  selectedVehicle: _selectedVehicle,
+                  statusByVehicleId: _statusByVehicleId,
+                  monthlyStatusByVehicleId: _monthlyStatusByVehicleId,
+                  loadingVehicleIds: _loadingVehicleIds,
+                  loadingMonthlyVehicleIds: _loadingMonthlyVehicleIds,
+                  loadingVehicles: _loadingVehicles,
+                  showMonthlyParkingPanel: _showMonthlyParkingPanel,
+                  onToggleVehiclePanel: _toggleVehiclePanel,
+                  onSelectVehicle: (vehicle) => setState(() {
+                    _selectedVehicleId = vehicle.id;
+                    _showMonthlyParkingPanel = false;
+                  }),
+                  onRefreshVehicle: _refreshVehicleStatus,
+                  onOpenVehicle: _openVehicle,
+                );
+              }
+              if (index == 1) {
+                return _TodayTodoPage(
+                  todos: _todos,
+                  events: _events,
+                  onToggleTodo: _toggleTodo,
+                  onOpenTodo: _openTodoDialog,
+                  onOpenCalendar: _openCalendarDialog,
+                );
+              }
+              return _CalendarFocusPage(
                 todos: _todos,
                 events: _events,
                 selectedDay: _selectedCalendarDay,
@@ -283,8 +383,8 @@ class PersonalHomePanelState extends State<PersonalHomePanel> {
                 onToggleTodo: _toggleTodo,
                 onOpenTodo: _openTodoDialog,
                 onOpenCalendar: _openCalendarDialog,
-              ),
-            ],
+              );
+            },
           ),
         ),
         Container(
@@ -295,13 +395,7 @@ class PersonalHomePanelState extends State<PersonalHomePanel> {
           ),
           child: _PageSwitcher(
             current: _pageIndex,
-            onTap: (index) {
-              _pageController.animateToPage(
-                index,
-                duration: const Duration(milliseconds: 260),
-                curve: Curves.easeOutCubic,
-              );
-            },
+            onTap: _goToPage,
           ),
         ),
       ],
@@ -316,8 +410,12 @@ class _VehicleLocationPage extends StatelessWidget {
     required this.vehicles,
     required this.selectedVehicle,
     required this.statusByVehicleId,
+    required this.monthlyStatusByVehicleId,
     required this.loadingVehicleIds,
+    required this.loadingMonthlyVehicleIds,
     required this.loadingVehicles,
+    required this.showMonthlyParkingPanel,
+    required this.onToggleVehiclePanel,
     required this.onSelectVehicle,
     required this.onRefreshVehicle,
     required this.onOpenVehicle,
@@ -328,8 +426,12 @@ class _VehicleLocationPage extends StatelessWidget {
   final List<PersonalSavedVehicle> vehicles;
   final PersonalSavedVehicle? selectedVehicle;
   final Map<String, PlateModel?> statusByVehicleId;
+  final Map<String, PlateStatusRecord?> monthlyStatusByVehicleId;
   final Set<String> loadingVehicleIds;
+  final Set<String> loadingMonthlyVehicleIds;
   final bool loadingVehicles;
+  final bool showMonthlyParkingPanel;
+  final VoidCallback onToggleVehiclePanel;
   final ValueChanged<PersonalSavedVehicle> onSelectVehicle;
   final Future<void> Function(PersonalSavedVehicle) onRefreshVehicle;
   final Future<void> Function(PersonalSavedVehicle) onOpenVehicle;
@@ -338,7 +440,9 @@ class _VehicleLocationPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final vehicle = selectedVehicle;
     final plate = vehicle == null ? null : statusByVehicleId[vehicle.id];
+    final monthlyStatus = vehicle == null ? null : monthlyStatusByVehicleId[vehicle.id];
     final loading = vehicle != null && loadingVehicleIds.contains(vehicle.id);
+    final loadingMonthly = vehicle != null && loadingMonthlyVehicleIds.contains(vehicle.id);
     return RefreshIndicator(
       onRefresh: () async {
         final current = selectedVehicle;
@@ -348,39 +452,48 @@ class _VehicleLocationPage extends StatelessWidget {
       child: _ResponsivePage(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
         child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          _HomeHero(
-            name: name,
-            area: area,
-            vehicleCount: vehicles.length,
-            activePlate: plate,
-            hasSelectedVehicle: vehicle != null,
-            onOpenSelected: vehicle == null ? null : () => onOpenVehicle(vehicle),
-          ),
-          const SizedBox(height: 12),
-          if (loadingVehicles)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 48),
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else if (vehicles.isEmpty)
-            const _EmptyVehicleLocationState()
-          else ...[
-            _VehicleSelector(
-              vehicles: vehicles,
-              selectedId: vehicle?.id,
-              statuses: statusByVehicleId,
-              onSelect: onSelectVehicle,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _HomeHero(
+              name: name,
+              area: area,
+              vehicleCount: vehicles.length,
+              activePlate: plate,
+              hasSelectedVehicle: vehicle != null,
+              onOpenSelected: vehicle == null ? null : () => onOpenVehicle(vehicle),
             ),
             const SizedBox(height: 12),
-            _LocationMapCard(vehicle: vehicle!, plate: plate, loading: loading),
+            if (loadingVehicles)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 48),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (vehicles.isEmpty)
+              const _EmptyVehicleLocationState()
+            else ...[
+              _VehicleSelector(
+                vehicles: vehicles,
+                selectedId: vehicle?.id,
+                statuses: statusByVehicleId,
+                onSelect: onSelectVehicle,
+              ),
+              const SizedBox(height: 12),
+              _VehicleSwipeDeck(
+                showMonthlyParkingPanel: showMonthlyParkingPanel,
+                onToggle: onToggleVehiclePanel,
+                mapCard: _LocationMapCard(vehicle: vehicle!, plate: plate, loading: loading),
+                monthlyCard: _MonthlyParkingInfoCard(
+                  vehicle: vehicle,
+                  monthlyStatus: monthlyStatus,
+                  loading: loadingMonthly,
+                ),
+              ),
+            ],
+            SizedBox(height: MediaQuery.of(context).size.height < 680 ? 12 : 20),
           ],
-          SizedBox(height: MediaQuery.of(context).size.height < 680 ? 12 : 20),
-        ],
-          ),
         ),
-      );
+      ),
+    );
   }
 }
 
@@ -724,6 +837,256 @@ class _VehicleSelector extends StatelessWidget {
   }
 }
 
+
+class _VehicleSwipeDeck extends StatelessWidget {
+  const _VehicleSwipeDeck({
+    required this.showMonthlyParkingPanel,
+    required this.onToggle,
+    required this.mapCard,
+    required this.monthlyCard,
+  });
+
+  final bool showMonthlyParkingPanel;
+  final VoidCallback onToggle;
+  final Widget mapCard;
+  final Widget monthlyCard;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onVerticalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        if (velocity < -180) onToggle();
+      },
+      child: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 240),
+        switchInCurve: Curves.easeOutCubic,
+        switchOutCurve: Curves.easeOutCubic,
+        transitionBuilder: (child, animation) {
+          final offsetAnimation = Tween<Offset>(
+            begin: const Offset(0, .05),
+            end: Offset.zero,
+          ).animate(animation);
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(position: offsetAnimation, child: child),
+          );
+        },
+        child: showMonthlyParkingPanel
+            ? KeyedSubtree(key: const ValueKey<String>('monthlyParkingPanel'), child: monthlyCard)
+            : KeyedSubtree(key: const ValueKey<String>('locationMapPanel'), child: mapCard),
+      ),
+    );
+  }
+}
+
+class _MonthlyParkingInfoCard extends StatelessWidget {
+  const _MonthlyParkingInfoCard({
+    required this.vehicle,
+    required this.monthlyStatus,
+    required this.loading,
+  });
+
+  final PersonalSavedVehicle vehicle;
+  final PlateStatusRecord? monthlyStatus;
+  final bool loading;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    final height = MediaQuery.of(context).size.height < 700 ? 330.0 : 360.0;
+    final record = monthlyStatus;
+
+    return Container(
+      height: height,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
+        boxShadow: [
+          BoxShadow(color: cs.shadow.withOpacity(.04), blurRadius: 18, offset: const Offset(0, 8)),
+        ],
+      ),
+      child: loading
+          ? const Center(child: CircularProgressIndicator())
+          : record == null
+              ? _MonthlyParkingEmptyState(vehicle: vehicle)
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(color: cs.primaryContainer, borderRadius: BorderRadius.circular(16)),
+                          child: Icon(Icons.local_parking_rounded, color: cs.onPrimaryContainer),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('월주차 정보', style: text.titleMedium?.copyWith(color: cs.onSurface, fontWeight: FontWeight.w900)),
+                              const SizedBox(height: 3),
+                              Text(vehicle.displayPlate, style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w800)),
+                            ],
+                          ),
+                        ),
+                        _MonthlyStatusChip(record: record),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          _MonthlyInfoRow(
+                            icon: Icons.date_range_rounded,
+                            label: '기간 / 만료 상태',
+                            value: _monthlyPeriodSummary(record),
+                          ),
+                          const SizedBox(height: 7),
+                          _MonthlyInfoRow(
+                            icon: Icons.apartment_rounded,
+                            label: '정산명',
+                            value: _emptyDash(record.countType),
+                          ),
+                          const SizedBox(height: 7),
+                          _MonthlyInfoRow(
+                            icon: Icons.payments_rounded,
+                            label: '요금',
+                            value: _formatWon(record.regularAmount),
+                          ),
+                          const SizedBox(height: 7),
+                          _MonthlyInfoRow(
+                            icon: Icons.receipt_long_rounded,
+                            label: '최근 결제',
+                            value: _recentPaymentSummary(record),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.keyboard_double_arrow_up_rounded, size: 18, color: cs.onSurfaceVariant),
+                        const SizedBox(width: 4),
+                        Text(
+                          '위로 밀어 도면 보기',
+                          style: text.labelSmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w900),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+    );
+  }
+}
+
+class _MonthlyParkingEmptyState extends StatelessWidget {
+  const _MonthlyParkingEmptyState({required this.vehicle});
+
+  final PersonalSavedVehicle vehicle;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.local_parking_outlined, color: cs.primary, size: 46),
+          const SizedBox(height: 12),
+          Text(vehicle.displayPlate, style: text.titleMedium?.copyWith(color: cs.onSurface, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 6),
+          Text(
+            '현재 지점에 등록된 월주차 정보가 없습니다.',
+            textAlign: TextAlign.center,
+            style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700, height: 1.4),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.keyboard_double_arrow_up_rounded, size: 18, color: cs.onSurfaceVariant),
+              const SizedBox(width: 4),
+              Text('위로 밀어 도면 보기', style: text.labelSmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w900)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MonthlyStatusChip extends StatelessWidget {
+  const _MonthlyStatusChip({required this.record});
+
+  final PlateStatusRecord record;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final label = _monthlyStatusLabel(record);
+    final expired = label == '만료';
+    final urgent = label == '오늘 만료' || label == '만료 임박';
+    final bg = expired
+        ? cs.errorContainer
+        : urgent
+            ? cs.tertiaryContainer
+            : cs.primaryContainer;
+    final fg = expired
+        ? cs.onErrorContainer
+        : urgent
+            ? cs.onTertiaryContainer
+            : cs.onPrimaryContainer;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+      child: Text(label, style: TextStyle(color: fg, fontWeight: FontWeight.w900, fontSize: 12)),
+    );
+  }
+}
+
+class _MonthlyInfoRow extends StatelessWidget {
+  const _MonthlyInfoRow({required this.icon, required this.label, required this.value});
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(color: cs.surfaceContainerLow, borderRadius: BorderRadius.circular(18)),
+      child: Row(
+        children: [
+          Icon(icon, size: 17, color: cs.primary),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.labelSmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 2),
+                Text(value, maxLines: 1, overflow: TextOverflow.ellipsis, style: text.bodySmall?.copyWith(color: cs.onSurface, fontWeight: FontWeight.w900)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _LocationMapCard extends StatelessWidget {
   const _LocationMapCard({required this.vehicle, required this.plate, required this.loading});
 
@@ -784,7 +1147,7 @@ class _MapEmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              '현재 주차 중인 위치 정보가 없습니다. 메뉴의 상태 새로고침 또는 차량 상세 보기를 이용해 주세요.',
+              '현재 주차 중인 위치 정보가 없습니다. 메뉴의 데이터 갱신 또는 차량 상세 보기를 이용해 주세요.',
               textAlign: TextAlign.center,
               style: text.bodySmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700, height: 1.4),
             ),
@@ -1146,6 +1509,111 @@ class _PageSwitcher extends StatelessWidget {
       ),
     );
   }
+}
+
+
+String _emptyDash(String? value) {
+  final text = (value ?? '').trim();
+  return text.isEmpty ? '-' : text;
+}
+
+DateTime? _parseMonthlyDate(String? value) {
+  final text = (value ?? '').trim();
+  if (text.isEmpty) return null;
+  final normalized = text.replaceAll('.', '-').replaceAll('/', '-');
+  final direct = DateTime.tryParse(normalized);
+  if (direct != null) return DateTime(direct.year, direct.month, direct.day);
+  final match = RegExp(r'^(\d{4})-(\d{1,2})-(\d{1,2})').firstMatch(normalized);
+  if (match == null) return null;
+  final year = int.tryParse(match.group(1)!);
+  final month = int.tryParse(match.group(2)!);
+  final day = int.tryParse(match.group(3)!);
+  if (year == null || month == null || day == null) return null;
+  return DateTime(year, month, day);
+}
+
+int? _monthlyDaysLeft(PlateStatusRecord record) {
+  final end = _parseMonthlyDate(record.endDate);
+  if (end == null) return null;
+  return end.difference(_today()).inDays;
+}
+
+String _monthlyStatusLabel(PlateStatusRecord record) {
+  final days = _monthlyDaysLeft(record);
+  if (days == null) return '기간 확인 필요';
+  if (days < 0) return '만료';
+  if (days == 0) return '오늘 만료';
+  if (days <= 7) return '만료 임박';
+  return '이용 중';
+}
+
+String _monthlyDdayText(PlateStatusRecord record) {
+  final days = _monthlyDaysLeft(record);
+  if (days == null) return 'D-Day 확인 불가';
+  if (days < 0) return '만료';
+  if (days == 0) return 'D-Day';
+  return 'D-$days';
+}
+
+String _monthlyPeriodSummary(PlateStatusRecord record) {
+  final start = _emptyDash(record.startDate);
+  final end = _emptyDash(record.endDate);
+  final range = start == '-' && end == '-' ? '-' : '$start ~ $end';
+  final status = _monthlyStatusLabel(record);
+  final dday = _monthlyDdayText(record);
+  if (range == '-') return '$status · $dday';
+  return '$range · $status · $dday';
+}
+
+String _formatWon(int? value) {
+  if (value == null || value <= 0) return '-';
+  final raw = value.toString();
+  final buffer = StringBuffer();
+  for (var i = 0; i < raw.length; i++) {
+    final left = raw.length - i;
+    buffer.write(raw[i]);
+    if (left > 1 && left % 3 == 1) buffer.write(',');
+  }
+  return '${buffer}원';
+}
+
+String _formatPaymentAmount(String? amountText) {
+  final text = (amountText ?? '').trim();
+  if (text.isEmpty) return '-';
+  final normalized = text.replaceAll(',', '').replaceAll('원', '').trim();
+  final amount = int.tryParse(normalized);
+  if (amount == null) return text;
+  return _formatWon(amount);
+}
+
+PlateStatusPaymentRecord? _latestPayment(PlateStatusRecord record) {
+  if (record.paymentHistory.isEmpty) return null;
+  final payments = List<PlateStatusPaymentRecord>.from(record.paymentHistory);
+  payments.sort((a, b) {
+    final at = a.paidAt?.millisecondsSinceEpoch ?? -1;
+    final bt = b.paidAt?.millisecondsSinceEpoch ?? -1;
+    if (at != bt) return bt.compareTo(at);
+    return record.paymentHistory.indexOf(b).compareTo(record.paymentHistory.indexOf(a));
+  });
+  return payments.first;
+}
+
+String _formatMonthlyPaymentDate(PlateStatusPaymentRecord payment) {
+  if (payment.paidAt != null) return _formatDate(payment.paidAt!);
+  final raw = (payment.paidAtRaw ?? '').trim();
+  if (raw.isEmpty) return '';
+  final parsed = DateTime.tryParse(raw);
+  if (parsed != null) return _formatDate(parsed);
+  return raw;
+}
+
+String _recentPaymentSummary(PlateStatusRecord record) {
+  final payment = _latestPayment(record);
+  if (payment == null) return '-';
+  final amount = _formatPaymentAmount(payment.amountText);
+  final date = _formatMonthlyPaymentDate(payment);
+  if (date.isEmpty) return amount;
+  return '$date · $amount';
 }
 
 IconData _statusIcon(PlateType? type) {

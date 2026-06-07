@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../shared/plate/application/common/view_doc_rows_store.dart';
 import '../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../dev/application/area_state.dart';
@@ -271,6 +274,20 @@ class _DepartureRequestGridState extends State<_DepartureRequestGrid> {
         if (snap.hasError) {
           debugPrint(
             '[TabletLeftPane][departure_requests_view] a=$_boundArea error=${snap.error}',
+          );
+          unawaited(
+            DevFirebaseDebugDialog.show(
+              context: context,
+              operation: 'tablet.departure_requests_view.listen',
+              error: snap.error,
+              stackTrace: snap.stackTrace,
+              details: <String, Object?>{
+                'collection': 'departure_requests_view',
+                'area': _boundArea,
+                'primaryAtField': 'departureRequestedAt',
+                'widget': 'LeftPaneDeparturePlates',
+              },
+            ),
           );
           return const SizedBox.expand();
         }

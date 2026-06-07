@@ -644,7 +644,7 @@ class _TripleParkingStatusPageState extends State<TripleParkingStatusPage> {
             textAlign: TextAlign.center,
           ),
           Text(
-            '주차 $occupiedCount대 · 출차 요청 $_departureRequestsCount대 · 출차 중 $_departureInProgressCount대',
+            '주차 $occupiedCount대 · 출차 요청 $_departureRequestsCount대 · 주행 중 $_departureInProgressCount대',
             style: TextStyle(
                 fontSize: 13,
                 color: cs.onSurfaceVariant,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../shared/plate/application/common/movement_plate.dart';
 import '../../../../shared/plate/data/repositories/firestore_plate_repository.dart';
 import '../../../../shared/plate/domain/enums/plate_type.dart';
@@ -194,10 +195,26 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
       setState(() => _isLoading = false);
 
       await _showUnifiedSearchDialog(results);
-    } catch (e) {
+    } catch (e, st) {
       if (!mounted) return;
       setState(() => _isLoading = false);
       debugPrint('검색 중 오류가 발생했습니다: $e');
+      await DevFirebaseDebugDialog.show(
+        context: context,
+        operation: 'tablet.plates.fourDigitForTabletQuery',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'plates',
+          'area': widget.area,
+          'plateFourDigit': _controller.text,
+          'types': <String>[
+            PlateType.parkingCompleted.firestoreValue,
+            PlateType.departureCompleted.firestoreValue,
+          ],
+          'widget': 'RightPaneSearchPanel',
+        },
+      );
     }
   }
 
@@ -262,9 +279,24 @@ class _RightPaneSearchPanelState extends State<RightPaneSearchPanel>
 
             if (!dialogCtx.mounted) return;
             Navigator.of(dialogCtx).pop(_UnifiedDialogCloseReason.confirmed);
-          } catch (e) {
+          } catch (e, st) {
             if (!dialogCtx.mounted) return;
             debugPrint('출차 요청 처리 중 오류가 발생했습니다: $e');
+            await DevFirebaseDebugDialog.show(
+              context: dialogCtx,
+              operation: 'tablet.movement.setDepartureRequested',
+              error: e,
+              stackTrace: st,
+              details: <String, Object?>{
+                'collection': 'plates',
+                'area': plate.area,
+                'location': plate.location,
+                'plateId': plate.id,
+                'plateFourDigit': plate.plateFourDigit,
+                'forceViewSync': true,
+                'widget': 'RightPaneSearchPanel.confirmDepartureRequested',
+              },
+            );
             setStateSB(() => busy = false);
           }
         }

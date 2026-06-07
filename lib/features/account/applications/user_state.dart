@@ -6,6 +6,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
 import '../../../app/init/work_schedule_prefs.dart';
+import '../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../shared/tts/application/tts_ownership.dart';
 import '../../../shared/tts/application/tts_user_filters.dart';
 import '../../../shared/tts/services/plate/plate_tts_listener_service.dart';
@@ -698,8 +699,19 @@ class UserState extends ChangeNotifier {
       }
 
       await _clearUserPrefsSelective(keepArea: true);
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('clearUserToPhone error: $e');
+      await DevFirebaseDebugDialog.show(
+        operation: _isTablet ? 'tablet.logout.updateStatus' : 'user.logout.updateStatus',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'isTablet': _isTablet,
+          'tabletId': _tablet?.id,
+          'userId': _user?.id,
+          'source': 'UserState.clearUserToPhone',
+        },
+      );
     } finally {
       try {
         PlateTtsListenerService.stop();
@@ -712,6 +724,15 @@ class UserState extends ChangeNotifier {
       } catch (e, st) {
         debugPrint(
             '[USER-STATE][${DateTime.now().toIso8601String()}] clearUserToPhone Firebase signOut failed: $e\n$st');
+        await DevFirebaseDebugDialog.show(
+          operation: 'firebaseAuth.signOutFirebaseOnly',
+          error: e,
+          stackTrace: st,
+          details: <String, Object?>{
+            'isTablet': _isTablet,
+            'source': 'UserState.clearUserToPhone.finally',
+          },
+        );
       }
 
       _hasClockInToday = false;
@@ -1056,8 +1077,16 @@ class UserState extends ChangeNotifier {
       await _areaState.initializeArea(selectedArea);
 
       await _startTtsForArea(selectedArea);
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('loadTabletToLogIn, 오류: $e');
+      await DevFirebaseDebugDialog.show(
+        operation: 'tablet.autoLogin.loadTabletToLogIn',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'source': 'UserState.loadTabletToLogIn',
+        },
+      );
     }
   }
 

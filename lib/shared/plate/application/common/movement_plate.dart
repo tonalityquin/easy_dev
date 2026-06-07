@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../domain/enums/plate_type.dart';
 import '../../domain/models/plate_model.dart';
@@ -133,8 +134,20 @@ class MovementPlate extends ChangeNotifier {
         location: location,
         primaryAtField: 'parkingCompletedAt',
       );
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('⚠️ parking_completed_view upsert 실패: $e');
+      await DevFirebaseDebugDialog.show(
+        operation: 'movement.parking_completed_view.upsert',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': _parkingCompletedViewCollection,
+          'area': area,
+          'plateDocId': plateDocId,
+          'location': location,
+          'forceViewSync': forceViewSync,
+        },
+      );
     }
   }
 
@@ -158,8 +171,19 @@ class MovementPlate extends ChangeNotifier {
         area: area,
         plateDocId: plateDocId,
       );
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('⚠️ parking_completed_view remove 실패: $e');
+      await DevFirebaseDebugDialog.show(
+        operation: 'movement.parking_completed_view.remove',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': _parkingCompletedViewCollection,
+          'area': area,
+          'plateDocId': plateDocId,
+          'forceViewSync': forceViewSync,
+        },
+      );
     }
   }
 
@@ -188,8 +212,20 @@ class MovementPlate extends ChangeNotifier {
         location: location,
         primaryAtField: 'departureRequestedAt',
       );
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('⚠️ departure_requests_view upsert 실패: $e');
+      await DevFirebaseDebugDialog.show(
+        operation: 'movement.departure_requests_view.upsert',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': _departureRequestsViewCollection,
+          'area': area,
+          'plateDocId': plateDocId,
+          'location': location,
+          'forceViewSync': forceViewSync,
+        },
+      );
     }
   }
 
@@ -213,8 +249,19 @@ class MovementPlate extends ChangeNotifier {
         area: area,
         plateDocId: plateDocId,
       );
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('⚠️ departure_requests_view remove 실패: $e');
+      await DevFirebaseDebugDialog.show(
+        operation: 'movement.departure_requests_view.remove',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': _departureRequestsViewCollection,
+          'area': area,
+          'plateDocId': plateDocId,
+          'forceViewSync': forceViewSync,
+        },
+      );
     }
   }
 
@@ -243,8 +290,20 @@ class MovementPlate extends ChangeNotifier {
         location: location,
         primaryAtField: 'parkingRequestedAt',
       );
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('⚠️ parking_requests_view upsert 실패: $e');
+      await DevFirebaseDebugDialog.show(
+        operation: 'movement.parking_requests_view.upsert',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': _parkingRequestsViewCollection,
+          'area': area,
+          'plateDocId': plateDocId,
+          'location': location,
+          'forceViewSync': forceViewSync,
+        },
+      );
     }
   }
 
@@ -268,8 +327,19 @@ class MovementPlate extends ChangeNotifier {
         area: area,
         plateDocId: plateDocId,
       );
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('⚠️ parking_requests_view remove 실패: $e');
+      await DevFirebaseDebugDialog.show(
+        operation: 'movement.parking_requests_view.remove',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': _parkingRequestsViewCollection,
+          'area': area,
+          'plateDocId': plateDocId,
+          'forceViewSync': forceViewSync,
+        },
+      );
     }
   }
 

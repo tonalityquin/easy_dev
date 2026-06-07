@@ -1,4 +1,3 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 
 import '../../../domain/models/tablet/tablet_model.dart';
@@ -7,6 +6,7 @@ import 'widgets/tablet_input_section.dart';
 import 'widgets/tablet_password_display.dart';
 import 'widgets/tablet_role_dropdown_section.dart';
 import 'widgets/tablet_role_type.dart';
+import '../../../../../shared/auth/five_digit_password_generator.dart';
 
 class TabletSettingBottomSheet extends StatefulWidget {
   
@@ -150,8 +150,7 @@ class _TabletSettingBottomSheetState extends State<TabletSettingBottomSheet> {
   }
 
   String _generateRandomPassword() {
-    final random = Random();
-    return (10000 + random.nextInt(90000)).toString(); 
+    return FiveDigitPasswordGenerator.generate();
   }
 
   

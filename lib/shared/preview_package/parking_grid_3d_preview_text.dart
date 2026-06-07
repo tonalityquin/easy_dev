@@ -361,7 +361,7 @@ extension _ParkingGridTextPreviewPart on _ParkingGrid3DPreviewCardState {
           Expanded(
             child: _textStatCard(
               cs: cs,
-              label: '출차 중',
+              label: '주행 중',
               value: '${departureInProgressCount}건',
               icon: Icons.directions_car_filled_rounded,
               tone: inProgressTone,

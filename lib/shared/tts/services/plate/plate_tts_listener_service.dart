@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../app/utils/dev_firebase_debug_dialog.dart';
+
 import '../../../plate/domain/enums/plate_type.dart';
 import '../../../plate/domain/repositories/plate_tts_listener_repository.dart';
 import '../../application/parking_requests_dirty_hub.dart';
@@ -96,6 +98,19 @@ class PlateTtsListenerService {
       _cachedOwner = null;
       _lastOwnerCheckedAt = DateTime.now();
       _log('owner check error reason=$reason err=$e\n$st');
+      unawaited(
+        DevFirebaseDebugDialog.show(
+          operation: 'tts.ownerCheck',
+          error: e,
+          stackTrace: st,
+          details: <String, Object?>{
+            'reason': reason,
+            'localRole': _localRole.name,
+            'cachedOwner': _cachedOwner?.name,
+            'currentArea': _currentArea,
+          },
+        ),
+      );
       return false;
     } finally {
       _ownerCheckBusy = false;
@@ -624,6 +639,20 @@ class PlateTtsListenerService {
       }, onError: (e, st) {
         if (mySeq != _listenSeq) return;
         _log('listen error: $e\n$st (seq=$mySeq)');
+        unawaited(
+          DevFirebaseDebugDialog.show(
+            operation: 'tts.plates.listen',
+            error: e,
+            stackTrace: st,
+            details: <String, Object?>{
+              'area': _currentArea,
+              'mode': _currentMode,
+              'seq': mySeq,
+              'role': _localRole.name,
+              'source': 'PlateTTS.listen.error',
+            },
+          ),
+        );
         _printReadSummary(prefix: 'READ SUMMARY (listen-error)');
         _annotateUsage(area: _currentArea, source: 'PlateTTS.listen.error');
       }, onDone: () {
@@ -634,6 +663,20 @@ class PlateTtsListenerService {
       });
     } catch (e, st) {
       _log('START ERROR: $e\n$st (seq=$mySeq)');
+      unawaited(
+        DevFirebaseDebugDialog.show(
+          operation: 'tts.plates.start',
+          error: e,
+          stackTrace: st,
+          details: <String, Object?>{
+            'area': area,
+            'mode': mode,
+            'seq': mySeq,
+            'role': _localRole.name,
+            'typesToMonitor': typesToMonitor.map((e) => e.firestoreValue).toList(growable: false),
+          },
+        ),
+      );
       _printReadSummary(prefix: 'READ SUMMARY (start-error)');
     }
   }
@@ -659,8 +702,22 @@ class PlateTtsListenerService {
           'location': location,
           'ts': DateTime.now().millisecondsSinceEpoch,
         });
-      } catch (e) {
+      } catch (e, st) {
         _log('sendDataToMain failed: $e');
+        unawaited(
+          DevFirebaseDebugDialog.show(
+            operation: 'tts.plateUiEvent.sendDataToMain',
+            error: e,
+            stackTrace: st,
+            details: <String, Object?>{
+              'area': area,
+              'type': t,
+              'docId': docId,
+              'role': _localRole.name,
+              'plateNumberEmpty': plateNumber.trim().isEmpty,
+            },
+          ),
+        );
       }
       return;
     }
@@ -696,6 +753,23 @@ class PlateTtsListenerService {
       _baselineUpdatedAt = null;
       _baselineDocId = null;
       _log('baseline fetch error: $e\n$st');
+      unawaited(
+        DevFirebaseDebugDialog.show(
+          operation: 'tts.plates.baseline',
+          error: e,
+          stackTrace: st,
+          details: <String, Object?>{
+            'area': currentArea,
+            'types': types.map((e) => e.firestoreValue).toList(growable: false),
+            'role': _localRole.name,
+            'mode': _currentMode,
+            'enabled': _enabled,
+            'filters.parking': _filters.parking,
+            'filters.departure': _filters.departure,
+            'filters.completed': _filters.completed,
+          },
+        ),
+      );
     }
   }
 

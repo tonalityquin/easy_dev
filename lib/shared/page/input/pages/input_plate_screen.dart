@@ -167,6 +167,17 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
     return '${p}_$a';
   }
 
+  void _showFloatingMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
 
   Future<void> _loadHasMonthlyParkingFlag() async {
     try {
@@ -575,10 +586,7 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
           title: StatusDialog.monthlyDocNotFound,
         );
       } else if (result.failure == _MonthlyFetchFailureType.readError) {
-        await StatusDialog.showFailure(
-          context,
-          title: StatusDialog.monthlyDocReadFailed,
-        );
+        _showFloatingMessage('정기 주차 정보를 불러오지 못했습니다.');
       }
       return;
     }
@@ -643,20 +651,10 @@ class _InputPlateScreenState extends State<InputPlateScreen> {
       );
     } on MonthlyPlateStatusWriteException catch (e) {
       debugPrint('[_applyMonthlyMemoAndStatusOnly] repository error: $e');
-      if (mounted) {
-        await StatusDialog.showFailure(
-          context,
-          title: StatusDialog.monthlyApplyFailed,
-        );
-      }
+      _showFloatingMessage('정기 메모 반영에 실패했습니다.');
     } catch (e) {
       debugPrint('[_applyMonthlyMemoAndStatusOnly] error: $e');
-      if (mounted) {
-        await StatusDialog.showFailure(
-          context,
-          title: StatusDialog.monthlyApplyFailed,
-        );
-      }
+      _showFloatingMessage('정기 메모 반영에 실패했습니다.');
     } finally {
       if (mounted) setState(() => _monthlyApplying = false);
     }

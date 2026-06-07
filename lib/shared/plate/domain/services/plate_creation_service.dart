@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../enums/plate_type.dart';
 import '../models/plate_model.dart';
 import 'plate_billing_count_service.dart';
@@ -664,9 +665,43 @@ class PlateCreationService {
 
     try {
       await statusDocRef.set(payload, SetOptions(merge: true));
-    } on FirebaseException {
+    } on FirebaseException catch (e, st) {
+      await DevFirebaseDebugDialog.show(
+        operation: 'monthly.plateCreation.memoStatus.upsert',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': _monthlyPlateStatusCollection,
+          'docId': plateDocId,
+          'plateNumber': plateNumber,
+          'area': area,
+          'selectedBillType': selectedBillType,
+          'billingType': billingType,
+          'createdBy': userName,
+          'customStatus': memo,
+          'statusList': statuses,
+          'writePath': 'PlateCreationService.addPlate monthly_plate_status set merge',
+        },
+      );
       rethrow;
-    } catch (_) {
+    } catch (e, st) {
+      await DevFirebaseDebugDialog.show(
+        operation: 'monthly.plateCreation.memoStatus.upsert.unknown',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': _monthlyPlateStatusCollection,
+          'docId': plateDocId,
+          'plateNumber': plateNumber,
+          'area': area,
+          'selectedBillType': selectedBillType,
+          'billingType': billingType,
+          'createdBy': userName,
+          'customStatus': memo,
+          'statusList': statuses,
+          'writePath': 'PlateCreationService.addPlate monthly_plate_status set merge',
+        },
+      );
       rethrow;
     }
   }

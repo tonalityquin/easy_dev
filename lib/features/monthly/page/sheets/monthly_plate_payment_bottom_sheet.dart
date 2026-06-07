@@ -1,7 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
+import '../../application/monthly_date_range_calculator.dart';
 import '../../controllers/monthly_plate_controller.dart';
 import 'widgets/monthly_payment_section.dart';
+
+const _payInk = Color(0xFF101828);
+const _payMuted = Color(0xFF667085);
+const _payCanvas = Color(0xFFF3F6FA);
+const _payPanel = Color(0xFFFFFFFF);
+const _payLine = Color(0xFFD8DEE8);
+const _payBlue = Color(0xFF2563EB);
+const _payGreen = Color(0xFF059669);
 
 class MonthlyPaymentBottomSheet extends StatefulWidget {
   final MonthlyPlateController controller;
@@ -12,105 +22,34 @@ class MonthlyPaymentBottomSheet extends StatefulWidget {
   });
 
   @override
-  State<MonthlyPaymentBottomSheet> createState() =>
-      _MonthlyPaymentBottomSheetState();
+  State<MonthlyPaymentBottomSheet> createState() => _MonthlyPaymentBottomSheetState();
 }
 
 class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
-  static const String _screenTag = 'monthly payment';
-
-  Widget _buildScreenTag(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
-    final base = tt.labelSmall ??
-        const TextStyle(fontSize: 11, fontWeight: FontWeight.w600);
-    final style = base.copyWith(
-      color: cs.onSurfaceVariant.withOpacity(.72),
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.2,
-    );
-
-    return IgnorePointer(
-      child: Align(
-        alignment: Alignment.topLeft,
-        child: Padding(
-          padding: const EdgeInsets.only(left: 4, top: 4),
-          child: Semantics(
-            label: 'screen_tag: $_screenTag',
-            child: Text(_screenTag, style: style),
-          ),
-        ),
-      ),
-    );
+  String _won(String value) {
+    final amount = int.tryParse(value.trim());
+    if (amount == null) return value.trim().isEmpty ? '-' : value;
+    return '₩${NumberFormat.decimalPattern('ko_KR').format(amount)}';
   }
 
-  Widget _buildPaymentSummaryCard(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
+  Widget _summaryCard() {
     final c = widget.controller;
-
     final plate = c.buildPlateNumber();
-    final countType = (c.nameController?.text.trim().isNotEmpty ?? false)
-        ? c.nameController!.text.trim()
-        : '-';
-    final regularType = (c.selectedRegularType?.trim().isNotEmpty ?? false)
-        ? c.selectedRegularType!.trim()
-        : '-';
-    final amount = (c.amountController?.text.trim().isNotEmpty ?? false)
-        ? c.amountController!.text.trim()
-        : '-';
-    final duration = (c.durationController?.text.trim().isNotEmpty ?? false)
-        ? c.durationController!.text.trim()
-        : '-';
-
-    final periodUnit = c.selectedPeriodUnit;
+    final countType = (c.nameController?.text.trim().isNotEmpty ?? false) ? c.nameController!.text.trim() : '-';
+    final regularType = (c.selectedRegularType?.trim().isNotEmpty ?? false) ? c.selectedRegularType!.trim() : '-';
+    final amount = (c.amountController?.text.trim().isNotEmpty ?? false) ? c.amountController!.text.trim() : '-';
+    final duration = (c.durationController?.text.trim().isNotEmpty ?? false) ? c.durationController!.text.trim() : '-';
     final startDate = c.startDateController?.text.trim() ?? '';
     final endDate = c.endDateController?.text.trim() ?? '';
-
-    Widget kv(String k, String v) => Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Row(
-            children: [
-              SizedBox(
-                width: 92,
-                child: Text(
-                  k,
-                  style:
-                      (tt.bodySmall ?? const TextStyle(fontSize: 12)).copyWith(
-                    color: cs.onSurfaceVariant.withOpacity(.78),
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Text(
-                  v,
-                  style:
-                      (tt.bodyMedium ?? const TextStyle(fontSize: 14)).copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: cs.onSurface,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
+    final nextStart = c.previewExtendedStartDate();
+    final nextEnd = c.previewExtendedEndDate();
 
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
-        boxShadow: [
-          BoxShadow(
-            color: cs.shadow.withOpacity(.06),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: _payPanel,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _payLine),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -118,53 +57,93 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
           Row(
             children: [
               Container(
-                width: 34,
-                height: 34,
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
-                  color: cs.primaryContainer.withOpacity(.65),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
+                  color: _payInk,
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(Icons.directions_car_outlined, color: cs.primary),
+                child: const Icon(Icons.receipt_long_outlined, color: Colors.white),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
-                child: Text(
-                  '결제 대상 정보',
-                  style: (tt.titleMedium ?? const TextStyle(fontSize: 16))
-                      .copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: cs.onSurface,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      plate,
+                      style: const TextStyle(
+                        color: _payInk,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 22,
+                        letterSpacing: -.3,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '$countType · $regularType',
+                      style: const TextStyle(color: _payMuted, fontWeight: FontWeight.w800),
+                    ),
+                  ],
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: cs.surfaceVariant.withOpacity(.70),
+                  color: const Color(0xFFEFF6FF),
                   borderRadius: BorderRadius.circular(999),
-                  border: Border.all(color: cs.outlineVariant.withOpacity(.70)),
+                  border: Border.all(color: _payBlue.withOpacity(.18)),
                 ),
-                child: Text(
-                  '읽기 전용',
-                  style:
-                      (tt.bodySmall ?? const TextStyle(fontSize: 12)).copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: cs.onSurfaceVariant.withOpacity(.85),
-                  ),
+                child: const Text(
+                  '결제 대상',
+                  style: TextStyle(color: _payBlue, fontWeight: FontWeight.w900, fontSize: 12),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          kv('번호판', plate),
-          kv('지역', c.dropdownValue),
-          kv('정산 이름', countType),
-          kv('주차 타입', regularType),
-          kv('금액', amount),
-          kv('기간', '$duration $periodUnit'),
-          kv('시작/종료', '$startDate ~ $endDate'),
+          const SizedBox(height: 18),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: _payInk,
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '이번 결제 금액',
+                  style: TextStyle(color: Color(0xFFB8C2D6), fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _won(amount),
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 28),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          _PayKv(label: '현재 기간', value: '$startDate ~ $endDate'),
+          _PayKv(label: '기간 단위', value: '$duration ${c.selectedPeriodUnit}'),
+          _PayKv(label: '번호판 지역', value: c.dropdownValue),
+          if (c.isExtended && nextStart != null && nextEnd != null) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFECFDF3),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _payGreen.withOpacity(.22)),
+              ),
+              child: Text(
+                '연장 후 기간: ${MonthlyDateRangeCalculator.format(nextStart)} ~ ${MonthlyDateRangeCalculator.format(nextEnd)}',
+                style: const TextStyle(color: _payGreen, fontWeight: FontWeight.w900),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -172,112 +151,126 @@ class _MonthlyPaymentBottomSheetState extends State<MonthlyPaymentBottomSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
-
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
     final screenHeight = MediaQuery.of(context).size.height;
-    final effectiveHeight = screenHeight - bottomInset;
 
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(bottom: bottomInset),
         child: SizedBox(
-          height: effectiveHeight,
-          child: Stack(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: cs.surface,
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(16)),
-                  border: Border.all(color: cs.outlineVariant.withOpacity(.55)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: cs.shadow.withOpacity(.10),
-                      blurRadius: 12,
-                      offset: const Offset(0, -2),
-                    ),
-                  ],
+          height: screenHeight - bottomInset,
+          child: Container(
+            decoration: const BoxDecoration(
+              color: _payCanvas,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+              border: Border(top: BorderSide(color: _payLine)),
+            ),
+            child: Column(
+              children: [
+                const SizedBox(height: 10),
+                Container(
+                  width: 46,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFCBD5E1),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
                 ),
-                child: Column(
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        margin: const EdgeInsets.only(bottom: 16),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
                         decoration: BoxDecoration(
-                          color: cs.outlineVariant.withOpacity(.60),
-                          borderRadius: BorderRadius.circular(2),
+                          color: _payBlue,
+                          borderRadius: BorderRadius.circular(14),
                         ),
+                        child: const Icon(Icons.payments_outlined, color: Colors.white),
                       ),
-                    ),
-                    Row(
-                      children: [
-                        Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: cs.primaryContainer.withOpacity(.65),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                                color: cs.outlineVariant.withOpacity(.55)),
-                          ),
-                          child:
-                              Icon(Icons.payments_outlined, color: cs.primary),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            '결제',
-                            style:
-                                (tt.titleLarge ?? const TextStyle(fontSize: 18))
-                                    .copyWith(
-                              fontWeight: FontWeight.w900,
-                              color: cs.onSurface,
-                            ),
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: '닫기',
-                          onPressed: () {
-                            final nav =
-                                Navigator.of(context, rootNavigator: true);
-                            if (nav.canPop()) nav.pop();
-                          },
-                          icon: Icon(Icons.close, color: cs.onSurfaceVariant),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    Expanded(
-                      child: SingleChildScrollView(
+                      const SizedBox(width: 12),
+                      const Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _buildPaymentSummaryCard(context),
-                            const SizedBox(height: 16),
-                            MonthlyPaymentSection(
-                              controller: widget.controller,
-                              onExtendedChanged: (val) {
-                                setState(() {
-                                  widget.controller.isExtended = val ?? false;
-                                });
-                              },
+                            Text(
+                              '결제 처리',
+                              style: TextStyle(color: _payInk, fontWeight: FontWeight.w900, fontSize: 20),
+                            ),
+                            SizedBox(height: 3),
+                            Text(
+                              '결제 저장과 기간 연장을 한 번에 처리합니다.',
+                              style: TextStyle(color: _payMuted, fontWeight: FontWeight.w700),
                             ),
                           ],
                         ),
                       ),
-                    ),
-                  ],
+                      IconButton(
+                        tooltip: '닫기',
+                        onPressed: () {
+                          final nav = Navigator.of(context, rootNavigator: true);
+                          if (nav.canPop()) nav.pop();
+                        },
+                        icon: const Icon(Icons.close, color: _payMuted),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              _buildScreenTag(context),
-            ],
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _summaryCard(),
+                        const SizedBox(height: 14),
+                        MonthlyPaymentSection(
+                          controller: widget.controller,
+                          onExtendedChanged: (val) {
+                            setState(() => widget.controller.isExtended = val ?? false);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _PayKv extends StatelessWidget {
+  const _PayKv({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 90,
+            child: Text(
+              label,
+              style: const TextStyle(color: _payMuted, fontWeight: FontWeight.w800),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(color: _payInk, fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
       ),
     );
   }

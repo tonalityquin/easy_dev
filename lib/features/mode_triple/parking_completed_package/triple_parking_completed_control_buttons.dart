@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../../app/models/capability.dart';
+import '../../dev/application/area_state.dart';
 import '../../dashboard/widgets/productivity_sheet.dart';
 import '../triple_departure_completed_bottom_sheet.dart';
 
@@ -22,7 +26,12 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
     final Color selectedItemColor = cs.primary;
     final Color unselectedItemColor = cs.onSurfaceVariant.withOpacity(.65);
 
-    final Color productivityColor = cs.secondary;
+    final canUseMonthly = context.select<AreaState, bool>(
+      (state) => state.capabilitiesOfCurrentArea.contains(Capability.monthly),
+    );
+
+    final Color productivityColor =
+        canUseMonthly ? cs.secondary : cs.onSurfaceVariant.withOpacity(.38);
     final Color searchColor = cs.error;
     final Color successColor = cs.tertiary;
 
@@ -38,7 +47,7 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
       items: [
         BottomNavigationBarItem(
           icon: Icon(Icons.dashboard_customize_rounded, color: productivityColor),
-          label: '도구',
+          label: '정기 주차',
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.manage_search_rounded, color: searchColor),
@@ -52,6 +61,7 @@ class TripleParkingCompletedControlButtons extends StatelessWidget {
       onTap: (index) async {
         switch (index) {
           case idxProductivity:
+            if (!canUseMonthly) return;
             await ProductivitySheet.togglePanel();
             break;
           case idxSmartSearch:

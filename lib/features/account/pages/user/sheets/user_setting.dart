@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 
 import '../../../domain/models/user/user_model.dart';
@@ -8,6 +6,7 @@ import '../sheets/widgets/user_password_display_section.dart';
 import '../sheets/widgets/user_role_dropdown_section.dart';
 import '../sheets/widgets/user_role_type_section.dart';
 import '../sheets/widgets/user_validation_helpers_section.dart';
+import '../../../../../shared/auth/five_digit_password_generator.dart';
 
 class UserSettingBottomSheet extends StatefulWidget {
   final void Function(
@@ -239,8 +238,7 @@ class _UserSettingBottomSheetState extends State<UserSettingBottomSheet> {
   }
 
   String _generateRandomPassword() {
-    final random = Random();
-    return (10000 + random.nextInt(90000)).toString();
+    return FiveDigitPasswordGenerator.generate();
   }
 
   int _toMinutes(TimeOfDay time) => time.hour * 60 + time.minute;

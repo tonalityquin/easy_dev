@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../domain/models/tablet/tablet_model.dart';
 import '../../domain/models/user/user_model.dart';
 
@@ -137,14 +138,35 @@ class UserReadService {
     try {
       final snap = await _getTabletCollectionRef().doc(docId).get();
 
-
       if (snap.exists && snap.data() != null) {
         return TabletModel.fromMap(snap.id, snap.data()!);
       }
-    } on FirebaseException {
+    } on FirebaseException catch (e, st) {
+      await DevFirebaseDebugDialog.show(
+        operation: 'tablet_accounts.getTabletByHandleAndAreaName',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'tablet_accounts',
+          'docId': docId,
+          'handle': h,
+          'areaName': name,
+        },
+      );
       return null;
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('DB 조회 중 예외 발생: $e');
+      await DevFirebaseDebugDialog.show(
+        operation: 'tablet_accounts.getTabletByHandleAndAreaName.parse',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'tablet_accounts',
+          'docId': docId,
+          'handle': h,
+          'areaName': name,
+        },
+      );
     }
     return null;
   }
@@ -159,15 +181,34 @@ class UserReadService {
           .limit(1)
           .get();
 
-
       if (qs.docs.isNotEmpty) {
         final doc = qs.docs.first;
         return TabletModel.fromMap(doc.id, doc.data());
       }
-    } on FirebaseException {
+    } on FirebaseException catch (e, st) {
+      await DevFirebaseDebugDialog.show(
+        operation: 'tablet_accounts.getTabletByHandle',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'tablet_accounts',
+          'query': 'where(handle == $h).limit(1)',
+          'handle': h,
+        },
+      );
       return null;
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('DB 조회 중 예외 발생: $e');
+      await DevFirebaseDebugDialog.show(
+        operation: 'tablet_accounts.getTabletByHandle.parse',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'tablet_accounts',
+          'query': 'where(handle == $h).limit(1)',
+          'handle': h,
+        },
+      );
     }
     return null;
   }

@@ -4,6 +4,7 @@ import 'dart:developer' as dev;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../enums/plate_type.dart';
 import '../models/plate_log_model.dart';
 import '../models/plate_model.dart';
@@ -639,11 +640,37 @@ class PlateWriteService {
       });
 
       debugPrint("✅ 문서 업데이트 완료(+view sync): $documentId");
-    } on FirebaseException catch (e) {
+    } on FirebaseException catch (e, st) {
       debugPrint("🔥 문서 업데이트 실패: $e");
+      unawaited(
+        DevFirebaseDebugDialog.show(
+          operation: 'plateWrite.updatePlate',
+          error: e,
+          stackTrace: st,
+          details: <String, Object?>{
+            'collection': 'plates',
+            'documentId': documentId,
+            'updatedFields': updatedFields.keys.toList(growable: false),
+            'hasLog': log != null,
+          },
+        ),
+      );
       rethrow;
-    } catch (e) {
+    } catch (e, st) {
       debugPrint("🔥 문서 업데이트 실패: $e");
+      unawaited(
+        DevFirebaseDebugDialog.show(
+          operation: 'plateWrite.updatePlate',
+          error: e,
+          stackTrace: st,
+          details: <String, Object?>{
+            'collection': 'plates',
+            'documentId': documentId,
+            'updatedFields': updatedFields.keys.toList(growable: false),
+            'hasLog': log != null,
+          },
+        ),
+      );
       rethrow;
     }
   }
@@ -782,9 +809,41 @@ class PlateWriteService {
 
         tx.update(docRef, update);
       });
-    } on FirebaseException {
+    } on FirebaseException catch (e, st) {
+      unawaited(
+        DevFirebaseDebugDialog.show(
+          operation: 'plateWrite.transitionPlateType',
+          error: e,
+          stackTrace: st,
+          details: <String, Object?>{
+            'collection': 'plates',
+            'plateId': plateId,
+            'actor': actor,
+            'fromType': fromType,
+            'toType': toType,
+            'extraFields': extraFields?.keys.toList(growable: false),
+            'forceOverride': forceOverride,
+          },
+        ),
+      );
       rethrow;
-    } catch (e) {
+    } catch (e, st) {
+      unawaited(
+        DevFirebaseDebugDialog.show(
+          operation: 'plateWrite.transitionPlateType',
+          error: e,
+          stackTrace: st,
+          details: <String, Object?>{
+            'collection': 'plates',
+            'plateId': plateId,
+            'actor': actor,
+            'fromType': fromType,
+            'toType': toType,
+            'extraFields': extraFields?.keys.toList(growable: false),
+            'forceOverride': forceOverride,
+          },
+        ),
+      );
       throw Exception("DB 업데이트 실패: $e");
     }
   }
@@ -938,9 +997,37 @@ class PlateWriteService {
           );
         }
       });
-    } on FirebaseException {
+    } on FirebaseException catch (e, st) {
+      unawaited(
+        DevFirebaseDebugDialog.show(
+          operation: 'plateWrite.recordWhoPlateClick',
+          error: e,
+          stackTrace: st,
+          details: <String, Object?>{
+            'collection': 'plates',
+            'plateId': id,
+            'isSelected': isSelected,
+            'selectedBy': selectedBy,
+            'areaArgument': area,
+          },
+        ),
+      );
       rethrow;
-    } catch (e) {
+    } catch (e, st) {
+      unawaited(
+        DevFirebaseDebugDialog.show(
+          operation: 'plateWrite.recordWhoPlateClick',
+          error: e,
+          stackTrace: st,
+          details: <String, Object?>{
+            'collection': 'plates',
+            'plateId': id,
+            'isSelected': isSelected,
+            'selectedBy': selectedBy,
+            'areaArgument': area,
+          },
+        ),
+      );
       throw Exception("DB 업데이트 실패: $e");
     }
   }

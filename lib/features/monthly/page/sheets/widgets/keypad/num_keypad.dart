@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-class NumKeypad extends StatefulWidget {
+const _keyInk = Color(0xFF101828);
+const _keyMuted = Color(0xFF667085);
+const _keyLine = Color(0xFFD8DEE8);
+const _keyPanel = Color(0xFFFFFFFF);
+const _keyBlue = Color(0xFF2563EB);
+
+class NumKeypad extends StatelessWidget {
   final TextEditingController controller;
   final int maxLength;
   final VoidCallback? onComplete;
   final ValueChanged<bool>? onChangeFrontDigitMode;
-  final VoidCallback? onReset;
-  final Color? backgroundColor;
-  final TextStyle? textStyle;
   final bool enableDigitModeSwitch;
-
-  
-  final double height;
+  final VoidCallback? onReset;
 
   const NumKeypad({
     super.key,
@@ -20,42 +21,47 @@ class NumKeypad extends StatefulWidget {
     required this.maxLength,
     this.onComplete,
     this.onChangeFrontDigitMode,
+    this.enableDigitModeSwitch = false,
     this.onReset,
-    this.backgroundColor,
-    this.textStyle,
-    this.enableDigitModeSwitch = true,
-    this.height = 248.0,
   });
 
-  @override
-  State<NumKeypad> createState() => _NumKeypadState();
-}
-
-class _NumKeypadState extends State<NumKeypad> with TickerProviderStateMixin {
-  final Map<String, AnimationController> _controllers = {};
-  final Map<String, bool> _isPressed = {};
-
-  @override
-  void dispose() {
-    for (final c in _controllers.values) {
-      c.dispose();
-    }
-    super.dispose();
+  List<String> _lastRowKeys() {
+    if (enableDigitModeSwitch) return ['두자리', '0', '세자리'];
+    if (onReset != null) return ['처음', '0', '삭제'];
+    return ['', '0', '삭제'];
   }
 
-  List<String> _lastRowKeys() {
-    if (widget.enableDigitModeSwitch) {
-      return ['두자리', '0', '세자리'];
-    } else if (widget.onReset != null) {
-      return ['처음', '0', '처음']; 
-    } else {
-      return ['', '0', ''];
+  void _handleKeyTap(String key) {
+    HapticFeedback.selectionClick();
+    if (key.isEmpty) return;
+    if (key == '두자리') {
+      onChangeFrontDigitMode?.call(false);
+      return;
+    }
+    if (key == '세자리') {
+      onChangeFrontDigitMode?.call(true);
+      return;
+    }
+    if (key == '처음') {
+      onReset?.call();
+      return;
+    }
+    if (key == '삭제') {
+      if (controller.text.isNotEmpty) {
+        controller.text = controller.text.substring(0, controller.text.length - 1);
+      }
+      return;
+    }
+    if (controller.text.length < maxLength) {
+      controller.text += key;
+      if (controller.text.length == maxLength) {
+        Future.microtask(() => onComplete?.call());
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final bg = widget.backgroundColor ?? Theme.of(context).colorScheme.surface;
     final rows = <List<String>>[
       ['1', '2', '3'],
       ['4', '5', '6'],
@@ -63,147 +69,76 @@ class _NumKeypadState extends State<NumKeypad> with TickerProviderStateMixin {
       _lastRowKeys(),
     ];
 
-    return Semantics(
-      container: true,
-      label: '숫자 키패드',
-      child: Container(
-        decoration: BoxDecoration(
-          color: bg,
-          boxShadow: const [
-            BoxShadow(
-              color: Colors.black12,
-              blurRadius: 6,
-              offset: Offset(0, -2),
-            ),
-          ],
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 12),
-        child: SizedBox(
-          height: widget.height,
-          child: Column(
-            children: List.generate(rows.length, (r) {
-              return Expanded(child: _buildRow(rows[r], rowIndex: r));
-            }),
-          ),
-        ),
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: const BoxDecoration(
+        color: _keyPanel,
+        border: Border(top: BorderSide(color: _keyLine)),
       ),
-    );
-  }
-
-  Widget _buildRow(List<String> keys, {required int rowIndex}) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: List.generate(keys.length, (col) {
-        return _buildKeyButton(keys[col], rowIndex: rowIndex, colIndex: col);
-      }),
-    );
-  }
-
-  Widget _buildKeyButton(String label, {required int rowIndex, required int colIndex}) {
-    if (label.isEmpty) {
-      return const Expanded(child: SizedBox());
-    }
-
-    
-    final id = '$label#$rowIndex:$colIndex';
-
-    _controllers.putIfAbsent(
-      id,
-          () => AnimationController(
-        duration: const Duration(milliseconds: 80),
-        vsync: this,
-        lowerBound: 0.0,
-        upperBound: 0.1,
-      ),
-    );
-    _isPressed.putIfAbsent(id, () => false);
-
-    final controller = _controllers[id]!;
-    final animation = Tween(begin: 1.0, end: 0.85).animate(
-      CurvedAnimation(parent: controller, curve: Curves.easeOut),
-    );
-
-    final labelStyle = (widget.textStyle ??
-        const TextStyle(fontSize: 18, fontWeight: FontWeight.w500))
-        .copyWith(color: Theme.of(context).colorScheme.onSurface);
-
-    return Expanded(
-      child: Padding(
-        padding: const EdgeInsets.all(4.0),
-        child: GestureDetector(
-          onTapDown: (_) {
-            HapticFeedback.selectionClick();
-            setState(() => _isPressed[id] = true);
-            controller.forward();
-          },
-          onTapUp: (_) {
-            setState(() => _isPressed[id] = false);
-            Future.delayed(const Duration(milliseconds: 100), () {
-              if (mounted) controller.reverse();
-            });
-            _handleKeyTap(label);
-          },
-          onTapCancel: () {
-            setState(() => _isPressed[id] = false);
-            controller.reverse();
-          },
-          child: Semantics(
-            button: true,
-            label: _semanticLabel(label),
-            child: ScaleTransition(
-              scale: animation,
-              child: Container(
-                
-                constraints: const BoxConstraints(minHeight: 48),
-                padding: const EdgeInsets.symmetric(vertical: 12.0),
-                decoration: BoxDecoration(
-                  color: _isPressed[id]!
-                      ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.6)
-                      : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.4),
-                  borderRadius: BorderRadius.zero,
-                  border: Border.all(
-                    color: Theme.of(context).colorScheme.outlineVariant,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: rows.map((row) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: row.map((label) {
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: _KeyButton(
+                      label: label,
+                      isUtility: label.length > 1,
+                      onTap: () => _handleKeyTap(label),
+                    ),
                   ),
-                ),
-                child: Center(child: Text(label, style: labelStyle)),
-              ),
+                );
+              }).toList(),
             ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
+class _KeyButton extends StatelessWidget {
+  const _KeyButton({
+    required this.label,
+    required this.isUtility,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isUtility;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final empty = label.isEmpty;
+    return InkWell(
+      onTap: empty ? null : onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        height: 52,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: empty
+              ? Colors.transparent
+              : isUtility
+                  ? const Color(0xFFF1F5F9)
+                  : const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(16),
+          border: empty ? null : Border.all(color: isUtility ? _keyLine : _keyBlue.withOpacity(.18)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isUtility ? _keyMuted : _keyInk,
+            fontWeight: FontWeight.w900,
+            fontSize: isUtility ? 14 : 20,
           ),
         ),
       ),
     );
-  }
-
-  String _semanticLabel(String label) {
-    switch (label) {
-      case '두자리':
-        return '두 자리 모드';
-      case '세자리':
-        return '세 자리 모드';
-      case '처음':
-        return '처음으로';
-      default:
-        return (RegExp(r'^[0-9]$').hasMatch(label)) ? '숫자 $label' : label;
-    }
-  }
-
-  void _handleKeyTap(String key) {
-    if (key == '두자리') {
-      widget.onChangeFrontDigitMode?.call(false);
-      return;
-    } else if (key == '세자리') {
-      widget.onChangeFrontDigitMode?.call(true);
-      return;
-    } else if (key == '처음') {
-      widget.onReset?.call();
-      return;
-    }
-
-    if (widget.controller.text.length < widget.maxLength) {
-      widget.controller.text += key;
-      if (widget.controller.text.length == widget.maxLength) {
-        Future.microtask(() => widget.onComplete?.call());
-      }
-    }
   }
 }

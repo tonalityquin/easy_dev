@@ -1,18 +1,18 @@
-import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../../features/account/applications/user_state.dart';
+
+import '../../account/applications/user_state.dart';
 import '../../../shared/plate/domain/repositories/plate_repository.dart';
-import '../../dev/application/area_state.dart';
+import '../application/monthly_area_resolver.dart';
+import '../application/monthly_date_range_calculator.dart';
 
 class MonthlyPlateController {
   final TextEditingController controllerFrontDigit = TextEditingController();
   final TextEditingController controllerMidDigit = TextEditingController();
   final TextEditingController controllerBackDigit = TextEditingController();
-
   final TextEditingController locationController = TextEditingController();
   final TextEditingController customStatusController = TextEditingController();
-
   final TextEditingController? nameController;
   final TextEditingController? amountController;
   final TextEditingController? durationController;
@@ -24,25 +24,33 @@ class MonthlyPlateController {
   bool showKeypad = true;
   bool isLoading = false;
   bool isLocationSelected = false;
+  bool isThreeDigit = true;
+  bool isEditMode = false;
+  bool isExtended = false;
 
   String dropdownValue = '전국';
   String selectedBillType = '정기';
-
   String specialNote = '';
-  bool isExtended = false;
+  String? fetchedCustomStatus;
+  String? selectedRegularType;
+  String selectedPeriodUnit = '월';
+  String? docIdToEdit;
 
   int selectedBasicStandard = 0;
   int selectedBasicAmount = 0;
   int selectedAddStandard = 0;
   int selectedAddAmount = 0;
 
-  bool isThreeDigit = true;
-  String? fetchedCustomStatus;
-
   List<String> statuses = [];
   List<bool> isSelected = [];
   List<String> selectedStatuses = [];
   List<String> fetchedStatusList = [];
+  final List<XFile> capturedImages = [];
+
+  TextEditingController? regularAmountController;
+  TextEditingController? regularDurationController;
+
+  bool _listenersAdded = false;
 
   static const List<String> regions = [
     '전국',
@@ -72,18 +80,6 @@ class MonthlyPlateController {
     '협정',
   ];
 
-  final List<XFile> capturedImages = [];
-
-  TextEditingController? regularAmountController;
-  TextEditingController? regularDurationController;
-  String? selectedRegularType;
-  String selectedPeriodUnit = '월';
-
-  bool isEditMode = false;
-  String? docIdToEdit;
-
-  bool _listenersAdded = false;
-
   MonthlyPlateController({
     this.regularAmountController,
     this.regularDurationController,
@@ -99,29 +95,82 @@ class MonthlyPlateController {
   }
 
   bool get hasStatusOrMemo =>
-      customStatusController.text.trim().isNotEmpty ||
-      selectedStatuses.isNotEmpty;
+      customStatusController.text.trim().isNotEmpty || selectedStatuses.isNotEmpty;
 
   PlateRepository _plateRepository(BuildContext context) {
     return context.read<PlateRepository>();
   }
 
+  String currentArea(BuildContext context) {
+    return MonthlyAreaResolver.readCurrentArea(context);
+  }
+
+  void _showMessage(BuildContext context, String message) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.maybeOf(context)
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
   bool _validateBeforeWrite(BuildContext context) {
     if (!isInputValid()) {
+      _showMessage(context, '차량번호를 완성해주세요.');
       return false;
     }
 
-    final startTxt = startDateController?.text.trim() ?? '';
-    final durTxt = durationController?.text.trim() ?? '';
-    final dur = int.tryParse(durTxt);
-
-    if (startTxt.isEmpty || durTxt.isEmpty || dur == null || dur <= 0) {
+    final area = currentArea(context);
+    if (area.isEmpty) {
+      _showMessage(context, '현재 지점을 먼저 선택해주세요.');
       return false;
     }
 
-    final start = DateTime.tryParse(startTxt);
-    final end = DateTime.tryParse(endDateController?.text.trim() ?? '');
-    if (start == null || end == null || start.isAfter(end)) {
+    final name = nameController?.text.trim() ?? '';
+    if (name.isEmpty) {
+      _showMessage(context, '정기 정산 이름을 입력해주세요.');
+      return false;
+    }
+
+    if ((selectedRegularType ?? '').trim().isEmpty) {
+      _showMessage(context, '주차 타입을 선택해주세요.');
+      return false;
+    }
+
+    final amount = int.tryParse(amountController?.text.trim() ?? '');
+    if (amount == null || amount <= 0) {
+      _showMessage(context, '정기 요금은 1원 이상이어야 합니다.');
+      return false;
+    }
+
+    final duration = int.tryParse(durationController?.text.trim() ?? '');
+    if (duration == null || duration <= 0) {
+      _showMessage(context, '기간은 1 이상이어야 합니다.');
+      return false;
+    }
+
+    final start = MonthlyDateRangeCalculator.parseStrict(
+      startDateController?.text.trim() ?? '',
+    );
+    final end = MonthlyDateRangeCalculator.parseStrict(
+      endDateController?.text.trim() ?? '',
+    );
+
+    if (start == null) {
+      _showMessage(context, '시작일을 YYYY-MM-DD 형식으로 선택해주세요.');
+      return false;
+    }
+
+    if (end == null) {
+      _showMessage(context, '종료일을 YYYY-MM-DD 형식으로 선택해주세요.');
+      return false;
+    }
+
+    if (start.isAfter(end)) {
+      _showMessage(context, '종료일은 시작일보다 빠를 수 없습니다.');
       return false;
     }
 
@@ -141,32 +190,7 @@ class MonthlyPlateController {
   }
 
   String formatDate(DateTime date) {
-    return '${date.year.toString().padLeft(4, '0')}-'
-        '${date.month.toString().padLeft(2, '0')}-'
-        '${date.day.toString().padLeft(2, '0')}';
-  }
-
-  DateTime _addMonths(DateTime dt, int months) {
-    final y = dt.year + ((dt.month - 1 + months) ~/ 12);
-    final m = ((dt.month - 1 + months) % 12) + 1;
-    final lastDay = DateTime(y, m + 1, 0).day;
-    final d = dt.day > lastDay ? lastDay : dt.day;
-    return DateTime(y, m, d);
-  }
-
-  DateTime _calcInclusiveEnd(DateTime start, int dur, String unit) {
-    if (dur <= 0) return start;
-
-    switch (unit) {
-      case '일':
-        return start.add(Duration(days: dur - 1));
-      case '주':
-        return start.add(Duration(days: dur * 7 - 1));
-      case '월':
-      default:
-        final exclusive = _addMonths(start, dur);
-        return exclusive.subtract(const Duration(days: 1));
-    }
+    return MonthlyDateRangeCalculator.format(date);
   }
 
   void _addInputListeners() {
@@ -230,6 +254,11 @@ class MonthlyPlateController {
     selectedBillType = '정기';
     regularAmountController?.clear();
     regularDurationController?.clear();
+    nameController?.clear();
+    amountController?.clear();
+    durationController?.clear();
+    startDateController?.clear();
+    endDateController?.clear();
     selectedRegularType = null;
     selectedPeriodUnit = '월';
     specialNote = '';
@@ -243,84 +272,116 @@ class MonthlyPlateController {
   }
 
   void updateEndDateFromDuration() {
-    final startText = startDateController?.text.trim();
-    final durationText = durationController?.text.trim();
-    if (startText == null || durationText == null) return;
-
-    final start = DateTime.tryParse(startText);
-    final dur = int.tryParse(durationText);
-    if (start == null || dur == null || dur <= 0) return;
-
-    final end = _calcInclusiveEnd(start, dur, selectedPeriodUnit);
+    final start = MonthlyDateRangeCalculator.parseStrict(
+      startDateController?.text.trim() ?? '',
+    );
+    final duration = int.tryParse(durationController?.text.trim() ?? '');
+    if (start == null || duration == null || duration <= 0) return;
+    final end = MonthlyDateRangeCalculator.calculateEndDate(
+      startDate: start,
+      duration: duration,
+      periodUnit: selectedPeriodUnit,
+    );
     endDateController?.text = formatDate(end);
+  }
+
+  DateTime? previewExtendedStartDate() {
+    final currentEnd = MonthlyDateRangeCalculator.parseStrict(
+      endDateController?.text.trim() ?? '',
+    );
+    if (currentEnd == null) return null;
+    return MonthlyDateRangeCalculator.calculateNextStartDate(currentEnd);
+  }
+
+  DateTime? previewExtendedEndDate() {
+    final currentEnd = MonthlyDateRangeCalculator.parseStrict(
+      endDateController?.text.trim() ?? '',
+    );
+    final duration = int.tryParse(durationController?.text.trim() ?? '');
+    if (currentEnd == null || duration == null || duration <= 0) return null;
+    return MonthlyDateRangeCalculator.calculateNextEndDate(
+      currentEndDate: currentEnd,
+      duration: duration,
+      periodUnit: selectedPeriodUnit,
+    );
   }
 
   Future<void> extendDatesIfNeeded() async {
     if (!isExtended) return;
-
-    final currentEnd = DateTime.tryParse(endDateController?.text.trim() ?? '');
-    if (currentEnd == null) return;
-
-    final dur = int.tryParse(durationController?.text.trim() ?? '');
-    if (dur == null || dur <= 0) return;
-
-    final newStart = currentEnd.add(const Duration(days: 1));
-    final newEnd = _calcInclusiveEnd(newStart, dur, selectedPeriodUnit);
-
-    startDateController?.text = formatDate(newStart);
-    endDateController?.text = formatDate(newEnd);
+    final nextStart = previewExtendedStartDate();
+    final nextEnd = previewExtendedEndDate();
+    if (nextStart == null || nextEnd == null) return;
+    startDateController?.text = formatDate(nextStart);
+    endDateController?.text = formatDate(nextEnd);
   }
 
   bool validatePaymentBeforeWrite(BuildContext context) {
     if (!isInputValid()) {
+      _showMessage(context, '차량번호를 완성해주세요.');
+      return false;
+    }
+
+    final area = currentArea(context);
+    if (area.isEmpty) {
+      _showMessage(context, '현재 지점을 먼저 선택해주세요.');
       return false;
     }
 
     final amount = int.tryParse(amountController?.text.trim() ?? '');
     if (amount == null || amount <= 0) {
+      _showMessage(context, '결제 금액은 1원 이상이어야 합니다.');
       return false;
+    }
+
+    if (isExtended) {
+      final nextStart = previewExtendedStartDate();
+      final nextEnd = previewExtendedEndDate();
+      if (nextStart == null || nextEnd == null) {
+        _showMessage(context, '연장할 기간을 계산할 수 없습니다. 기간 정보를 확인해주세요.');
+        return false;
+      }
     }
 
     return true;
   }
 
   Future<void> processPayment(BuildContext context) async {
-    await recordPaymentHistory(context);
+    final plateNumber = buildPlateNumber();
+    final area = currentArea(context);
+    final userName = context.read<UserState>().name;
+    String? nextStartText;
+    String? nextEndText;
 
     if (isExtended) {
-      await extendDatesIfNeeded();
-
-      final area = context.read<AreaState>().currentArea;
-      final plateNumber = buildPlateNumber();
-
-      await _plateRepository(context).extendMonthlyDateRange(
-        plateNumber: plateNumber,
-        area: area,
-        startDate: startDateController?.text.trim() ?? '',
-        endDate: endDateController?.text.trim() ?? '',
-        extendedBy: context.read<UserState>().name,
-      );
+      final nextStart = previewExtendedStartDate();
+      final nextEnd = previewExtendedEndDate();
+      if (nextStart != null && nextEnd != null) {
+        nextStartText = formatDate(nextStart);
+        nextEndText = formatDate(nextEnd);
+      }
     }
-  }
 
-  Future<void> recordPaymentHistory(BuildContext context) async {
-    final plateNumber = buildPlateNumber();
-    final area = context.read<AreaState>().currentArea;
-    final userName = context.read<UserState>().name;
-
-    await _plateRepository(context).recordMonthlyPayment(
+    await _plateRepository(context).recordMonthlyPaymentAndMaybeExtend(
       plateNumber: plateNumber,
       area: area,
       paidBy: userName,
       amount: int.tryParse(amountController?.text.trim() ?? '') ?? 0,
       note: specialNote,
       extended: isExtended,
+      startDate: nextStartText,
+      endDate: nextEndText,
+      extendedBy: isExtended ? userName : null,
     );
+
+    if (isExtended && nextStartText != null && nextEndText != null) {
+      startDateController?.text = nextStartText;
+      endDateController?.text = nextEndText;
+    }
   }
 
   Future<void> deleteCustomStatusFromFirestore(BuildContext context) async {
     final plateNumber = buildPlateNumber();
-    final area = context.read<AreaState>().currentArea;
+    final area = currentArea(context);
     final userName = context.read<UserState>().name;
 
     await _plateRepository(context).clearMonthlyMemoAndStatusWithAudit(
@@ -349,24 +410,22 @@ class MonthlyPlateController {
       final front = parts[0];
       final mid = parts[1];
       final back = parts[2];
-
       isThreeDigit = front.length == 3;
-
       controllerFrontDigit.text = front;
       controllerMidDigit.text = mid;
       controllerBackDigit.text = back;
     }
 
-    dropdownValue = data['region'] ?? '전국';
-    nameController?.text = data['countType'] ?? '';
-    amountController?.text = (data['regularAmount'] ?? 0).toString();
-    durationController?.text = (data['regularDurationHours'] ?? 0).toString();
-    selectedRegularType = data['regularType'] ?? '';
-    selectedPeriodUnit = data['periodUnit'] ?? '월';
-    startDateController?.text = data['startDate'] ?? '';
-    endDateController?.text = data['endDate'] ?? '';
-    customStatusController.text = data['customStatus'] ?? '';
-    specialNote = data['specialNote'] ?? '';
+    dropdownValue = (data['region'] ?? '전국').toString();
+    nameController?.text = (data['countType'] ?? '').toString();
+    amountController?.text = (data['regularAmount'] ?? '').toString();
+    durationController?.text = (data['regularDurationHours'] ?? '').toString();
+    selectedRegularType = (data['regularType'] ?? '').toString();
+    selectedPeriodUnit = (data['periodUnit'] ?? '월').toString();
+    startDateController?.text = (data['startDate'] ?? '').toString();
+    endDateController?.text = (data['endDate'] ?? '').toString();
+    customStatusController.text = (data['customStatus'] ?? '').toString();
+    specialNote = (data['specialNote'] ?? '').toString();
 
     final statusList = data['statusList'] as List<dynamic>? ?? [];
     selectedStatuses = statusList.map((e) => e.toString()).toList();
@@ -379,9 +438,8 @@ class MonthlyPlateController {
     if (!_validateBeforeWrite(context)) return;
 
     final nav = Navigator.of(context, rootNavigator: true);
-
     final plateNumber = buildPlateNumber();
-    final area = context.read<AreaState>().currentArea;
+    final area = currentArea(context);
     final userName = context.read<UserState>().name;
 
     isLoading = true;
@@ -397,13 +455,13 @@ class MonthlyPlateController {
       await _plateRepository(context).setMonthlyPlateStatus(
         plateNumber: plateNumber,
         area: area,
+        region: dropdownValue.trim().isEmpty ? '전국' : dropdownValue.trim(),
         customStatus: customStatusController.text.trim(),
         statusList: selectedStatuses,
         createdBy: userName,
         countType: nameController?.text.trim() ?? '',
         regularAmount: int.tryParse(amountController?.text.trim() ?? '') ?? 0,
-        regularDurationHours:
-            int.tryParse(durationController?.text.trim() ?? '') ?? 0,
+        regularDurationHours: int.tryParse(durationController?.text.trim() ?? '') ?? 0,
         regularType: selectedRegularType ?? '정기 주차',
         startDate: startDateController?.text.trim() ?? '',
         endDate: endDateController?.text.trim() ?? '',
@@ -412,17 +470,16 @@ class MonthlyPlateController {
         isExtended: isExtended,
       );
 
-      await extendDatesIfNeeded();
-
       if (!context.mounted) return;
-
+      _showMessage(context, '정기 주차 정보가 수정되었습니다.');
+      if (nav.canPop()) nav.pop();
       if (nav.canPop()) nav.pop();
       resetForm();
     } catch (e) {
       if (!context.mounted) return;
-
       if (nav.canPop()) nav.pop();
-      debugPrint('수정 실패: ${e.toString()}');
+      _showMessage(context, '수정에 실패했습니다. 다시 시도해주세요.');
+      debugPrint('월주차 수정 실패: ${e.toString()}');
     } finally {
       isLoading = false;
       if (context.mounted) refreshUI();
@@ -436,9 +493,8 @@ class MonthlyPlateController {
     if (!_validateBeforeWrite(context)) return;
 
     final nav = Navigator.of(context, rootNavigator: true);
-
     final plateNumber = buildPlateNumber();
-    final area = context.read<AreaState>().currentArea;
+    final area = currentArea(context);
     final userName = context.read<UserState>().name;
 
     selectedBillType = '정기';
@@ -455,13 +511,13 @@ class MonthlyPlateController {
       await _plateRepository(context).setMonthlyPlateStatus(
         plateNumber: plateNumber,
         area: area,
+        region: dropdownValue.trim().isEmpty ? '전국' : dropdownValue.trim(),
         customStatus: customStatusController.text.trim(),
         statusList: selectedStatuses,
         createdBy: userName,
         countType: nameController?.text.trim() ?? '',
         regularAmount: int.tryParse(amountController?.text.trim() ?? '') ?? 0,
-        regularDurationHours:
-            int.tryParse(durationController?.text.trim() ?? '') ?? 0,
+        regularDurationHours: int.tryParse(durationController?.text.trim() ?? '') ?? 0,
         regularType: selectedRegularType ?? '정기 주차',
         startDate: startDateController?.text.trim() ?? '',
         endDate: endDateController?.text.trim() ?? '',
@@ -471,14 +527,15 @@ class MonthlyPlateController {
       );
 
       if (!context.mounted) return;
-
+      _showMessage(context, '정기 주차가 등록되었습니다.');
+      if (nav.canPop()) nav.pop();
       if (nav.canPop()) nav.pop();
       resetForm();
     } catch (e) {
       if (!context.mounted) return;
-
       if (nav.canPop()) nav.pop();
-      debugPrint('등록 실패: ${e.toString()}');
+      _showMessage(context, '등록에 실패했습니다. 다시 시도해주세요.');
+      debugPrint('월주차 등록 실패: ${e.toString()}');
     } finally {
       isLoading = false;
       if (context.mounted) refreshUI();

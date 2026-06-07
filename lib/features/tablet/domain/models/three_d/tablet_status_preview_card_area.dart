@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../../app/utils/dev_firebase_debug_dialog.dart';
+
 import '../../../../../shared/plate/application/common/view_doc_rows_store.dart';
 import '../../../../../shared/plate/domain/repositories/plate_repository.dart';
 import '../../../../location/applications/location_state.dart';
@@ -206,9 +208,24 @@ class _ParkingStatusPreviewCardAreaState
             _rowsByCollection[collection] = _rowsFromViewRows(rows);
           });
         },
-        onError: (error) {
+        onError: (error, stackTrace) {
           debugPrint(
             'ParkingStatusPreviewCardArea subscribe error [$collection/$area]: $error',
+          );
+          unawaited(
+            DevFirebaseDebugDialog.show(
+              context: context,
+              operation: 'tablet.grid.three_d.watchViewRows',
+              error: error,
+              stackTrace: stackTrace,
+              details: <String, Object?>{
+                'collection': collection,
+                'area': area,
+                'primaryAtField': _primaryAtFieldForCollection(collection),
+                'overlayStatus': spec.status.name,
+                'widget': 'ParkingStatusPreviewCardArea',
+              },
+            ),
           );
           if (!mounted) return;
           setState(() {

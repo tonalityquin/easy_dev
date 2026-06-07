@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import '../../../../app/di/routes.dart';
+import '../../../../app/utils/dev_firebase_debug_dialog.dart';
 import '../../../../features/account/applications/user_state.dart';
 import '../../../../features/account/domain/repositories/user_repository.dart';
 import '../../../../features/tablet/applications/tablet_pad_mode_state.dart';
@@ -201,6 +202,19 @@ class TabletLoginController {
       return false;
     } catch (e, st) {
       debugPrint('[LOGIN-TABLET][${_ts()}] login error: $e\n$st');
+      await DevFirebaseDebugDialog.show(
+        context: context,
+        operation: 'tablet.login',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'handle': handle,
+          'nameLength': name.length,
+          'passwordLength': password.length,
+          'targetMode': _savedMode,
+          'controller': 'TabletLoginController',
+        },
+      );
       return false;
     } finally {
       if (context.mounted) {

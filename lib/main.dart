@@ -15,6 +15,7 @@ import 'app/init/app_exit_flag.dart';
 import 'app/init/checkout_nudge_guard.dart';
 import 'app/init/app_navigator.dart';
 import 'app/init/quick_overlay_main.dart';
+import 'app/init/overlay_access_guard.dart';
 import 'app/theme/theme_prefs_controller.dart';
 import 'features/community/application/game/game_quick_actions.dart';
 import 'features/dashboard/applications/common/firebase_google_auth_bridge.dart';
@@ -159,6 +160,7 @@ Future<bool> ensureOverlayPermission(BuildContext context) async {
 }
 
 Future<void> openQuickOverlay(BuildContext context) async {
+  if (await OverlayAccessGuard.closeIfBlocked()) return;
   if (!await ensureOverlayPermission(context)) return;
 
   final mode = await OverlayModeConfig.getMode();
@@ -450,6 +452,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   Future<void> _startOverlayFromLifecycle() async {
     try {
+      if (await OverlayAccessGuard.closeIfBlocked()) {
+        _lifecycleOverlayWire = null;
+        debugPrint(
+            '[OVERLAY][${_ts()}] blocked app mode → skip auto start');
+        return;
+      }
+
       final granted = await FlutterOverlayWindow.isPermissionGranted();
       if (!granted) {
         debugPrint(
@@ -459,6 +468,13 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
       final request = await _resolveLifecycleOverlayRequest();
       final wire = request.wire;
+
+      if (await OverlayAccessGuard.closeIfBlocked()) {
+        _lifecycleOverlayWire = null;
+        debugPrint(
+            '[OVERLAY][${_ts()}] blocked app mode after request → skip auto start');
+        return;
+      }
 
       if (await FlutterOverlayWindow.isActive()) {
         if (_lifecycleOverlayWire == wire) {

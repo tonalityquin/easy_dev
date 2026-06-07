@@ -21,6 +21,7 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
   final TextEditingController _gmailController = TextEditingController();
   final TextEditingController _areaController = TextEditingController();
   final TextEditingController _divisionController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   final FocusNode _nameFocus = FocusNode();
   final FocusNode _phoneFocus = FocusNode();
   final FocusNode _gmailFocus = FocusNode();
@@ -31,12 +32,19 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
   String? _errorMessage;
 
   @override
+  void initState() {
+    super.initState();
+    _passwordController.text = widget.controller.generatePersonalPassword();
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
     _gmailController.dispose();
     _areaController.dispose();
     _divisionController.dispose();
+    _passwordController.dispose();
     _nameFocus.dispose();
     _phoneFocus.dispose();
     _gmailFocus.dispose();
@@ -96,12 +104,29 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
     });
   }
 
+  void _regeneratePassword() {
+    if (_isSaving) return;
+    setState(() {
+      _passwordController.text = widget.controller.generatePersonalPassword();
+      _errorMessage = null;
+    });
+  }
+
+  Future<void> _copyPassword() async {
+    final password = _passwordController.text.trim();
+    if (password.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: password));
+    if (!mounted) return;
+    _showSnack('비밀번호를 복사했습니다.', success: true);
+  }
+
   Future<void> _create() async {
     FocusScope.of(context).unfocus();
     final error = widget.controller.validatePersonalAccountCreateInputs(
       name: _nameController.text,
       phone: _phoneController.text,
       gmail: _gmailController.text,
+      password: _passwordController.text,
       area: _areaController.text,
       division: _divisionController.text,
     );
@@ -119,6 +144,7 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
       name: _nameController.text,
       phone: _phoneController.text,
       gmail: _gmailController.text,
+      password: _passwordController.text,
       area: _areaController.text,
       division: _divisionController.text,
     );
@@ -131,7 +157,7 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
       widget.controller.fillLoginFields(
         name: _nameController.text,
         phone: _phoneController.text,
-        gmail: _gmailController.text,
+        password: result.password ?? _passwordController.text,
       );
       HapticFeedback.selectionClick();
       Navigator.of(context).pop(true);
@@ -150,12 +176,14 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
     required String label,
     required IconData icon,
     String? helperText,
+    Widget? suffixIcon,
   }) {
     final cs = Theme.of(context).colorScheme;
     return InputDecoration(
       labelText: label,
       helperText: helperText,
       prefixIcon: Icon(icon),
+      suffixIcon: suffixIcon,
       filled: true,
       fillColor: cs.surfaceContainerLow,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
@@ -186,7 +214,7 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               Text(
-                '개발자 모드에서 personal_accounts에 전화번호-지역 문서 ID로 개인형 계정을 생성합니다.',
+                '개발자 모드에서 personal_accounts에 전화번호-지역 문서 ID와 자동 생성 5자리 비밀번호로 개인형 계정을 생성합니다.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: cs.onSurfaceVariant,
                   fontWeight: FontWeight.w600,
@@ -235,6 +263,37 @@ class _PersonalSignUpDialogState extends State<PersonalSignUpDialog> {
                   label: '지메일 계정',
                   icon: Icons.alternate_email,
                   helperText: 'local-part 또는 전체 gmail.com 주소를 입력하세요.',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _passwordController,
+                enabled: !_isSaving,
+                readOnly: true,
+                keyboardType: TextInputType.number,
+                inputFormatters: <TextInputFormatter>[
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(5),
+                ],
+                decoration: _decoration(
+                  label: '자동 생성 비밀번호',
+                  icon: Icons.lock_rounded,
+                  helperText: '생성 후 개인형 로그인 비밀번호로 사용됩니다.',
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: <Widget>[
+                      IconButton(
+                        onPressed: _isSaving ? null : _regeneratePassword,
+                        icon: const Icon(Icons.refresh_rounded),
+                        tooltip: '재생성',
+                      ),
+                      IconButton(
+                        onPressed: _isSaving ? null : _copyPassword,
+                        icon: const Icon(Icons.copy_rounded),
+                        tooltip: '복사',
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 12),

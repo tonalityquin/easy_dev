@@ -344,8 +344,6 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
 
     final cs = Theme.of(context).colorScheme;
     final name = _controller.loggedInName ?? '개인형 계정';
-    final email = _controller.loggedInEmail ?? '';
-
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -360,7 +358,7 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              email.isEmpty ? '$name 로그인 상태' : '$name · $email 로그인 상태',
+              '$name 로그인 상태',
               style: TextStyle(
                 color: cs.onPrimaryContainer,
                 fontWeight: FontWeight.w800,
@@ -431,7 +429,7 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
                       keyboardType: TextInputType.phone,
                       textInputAction: TextInputAction.next,
                       onChanged: (value) => _controller.formatPhoneNumber(value, setState),
-                      onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.gmailFocus),
+                      onSubmitted: (_) => FocusScope.of(context).requestFocus(_controller.passwordFocus),
                       decoration: _controller.inputDecoration(
                         label: '전화번호',
                         icon: Icons.phone,
@@ -439,18 +437,28 @@ class _PersonalLoginFormState extends State<PersonalLoginForm> {
                     ),
                     const SizedBox(height: 16),
                     TextField(
-                      controller: _controller.gmailController,
-                      focusNode: _controller.gmailFocus,
-                      keyboardType: TextInputType.emailAddress,
-                      textCapitalization: TextCapitalization.none,
-                      autocorrect: false,
-                      enableSuggestions: false,
+                      controller: _controller.passwordController,
+                      focusNode: _controller.passwordFocus,
+                      obscureText: _controller.obscurePassword,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: <TextInputFormatter>[
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(5),
+                      ],
                       textInputAction: TextInputAction.done,
-                      onChanged: (value) => _controller.formatGmail(value, setState),
                       onSubmitted: (_) => _onLoginButtonPressed(),
                       decoration: _controller.inputDecoration(
-                        label: '지메일 계정',
-                        icon: Icons.alternate_email,
+                        label: '비밀번호(5자리)',
+                        icon: Icons.lock,
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _controller.obscurePassword
+                                ? Icons.visibility_off
+                                : Icons.visibility,
+                          ),
+                          onPressed: () => setState(() => _controller.togglePassword()),
+                          tooltip: _controller.obscurePassword ? '표시' : '숨기기',
+                        ),
                       ),
                     ),
                     const SizedBox(height: 32),

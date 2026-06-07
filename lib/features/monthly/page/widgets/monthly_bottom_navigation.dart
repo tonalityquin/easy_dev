@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 
-
-
-
+const _bottomPanel = Color(0xFFFFFFFF);
+const _bottomLine = Color(0xFFD8DEE8);
 
 class MonthlyBottomNavigation extends StatelessWidget {
   final bool showKeypad;
@@ -20,65 +19,39 @@ class MonthlyBottomNavigation extends StatelessWidget {
     this.backgroundColor,
   });
 
-  static const _kDuration = Duration(milliseconds: 180);
+  static const _duration = Duration(milliseconds: 180);
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    final Color baseBg = backgroundColor ?? cs.surface;
-    final Color effectiveBg = showKeypad ? cs.surfaceVariant.withOpacity(.55) : baseBg;
-
-    final Color borderTop =
-    showKeypad ? cs.primary.withOpacity(.18) : cs.outlineVariant.withOpacity(.50);
-
     return GestureDetector(
       onTap: onTap ?? () {},
       child: SafeArea(
         top: false,
         child: AnimatedContainer(
-          duration: _kDuration,
+          duration: _duration,
           curve: Curves.easeOut,
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: effectiveBg,
-            border: Border(top: BorderSide(color: borderTop, width: 1)),
+            color: backgroundColor ?? _bottomPanel,
+            border: const Border(top: BorderSide(color: _bottomLine)),
             boxShadow: [
               BoxShadow(
-                color: cs.shadow.withOpacity(.08),
-                blurRadius: 12,
-                offset: const Offset(0, -2),
+                color: Colors.black.withOpacity(.08),
+                blurRadius: 14,
+                offset: const Offset(0, -3),
               ),
             ],
           ),
-          child: _buildContent(),
+          child: AnimatedSwitcher(
+            duration: _duration,
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            child: showKeypad
+                ? KeyedSubtree(key: const ValueKey('keypad'), child: keypad)
+                : KeyedSubtree(key: const ValueKey('action'), child: actionButton),
+          ),
         ),
       ),
-    );
-  }
-
-  Widget _buildContent() {
-    return Stack(
-      children: [
-        AnimatedOpacity(
-          duration: _kDuration,
-          opacity: showKeypad ? 0.0 : 1.0,
-          curve: Curves.easeOut,
-          child: Offstage(
-            offstage: showKeypad,
-            child: actionButton,
-          ),
-        ),
-        AnimatedOpacity(
-          duration: _kDuration,
-          opacity: showKeypad ? 1.0 : 0.0,
-          curve: Curves.easeOut,
-          child: Offstage(
-            offstage: !showKeypad,
-            child: keypad,
-          ),
-        ),
-      ],
     );
   }
 }

@@ -159,13 +159,16 @@ abstract class PlateRepository {
     required String documentId,
   });
 
-  Future<void> recordMonthlyPayment({
+  Future<void> recordMonthlyPaymentAndMaybeExtend({
     required String plateNumber,
     required String area,
     required String paidBy,
     required int amount,
     required String note,
     required bool extended,
+    String? startDate,
+    String? endDate,
+    String? extendedBy,
   });
 
   Future<void> extendMonthlyDateRange({
@@ -252,6 +255,7 @@ abstract class PlateRepository {
   Future<void> setMonthlyPlateStatus({
     required String plateNumber,
     required String area,
+    required String region,
     required String createdBy,
     required String customStatus,
     required List<String> statusList,

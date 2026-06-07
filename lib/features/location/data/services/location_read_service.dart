@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../../app/utils/dev_firebase_debug_dialog.dart';
+
 import '../../domain/models/location_model.dart';
 
 class LocationReadService {
@@ -21,6 +23,20 @@ class LocationReadService {
         debugPrint('❌ locations.read 실패(area=$cleanArea): $e');
         debugPrint('stack: $st');
       }
+      await DevFirebaseDebugDialog.show(
+        operation: 'personal.locations.read',
+        error: e,
+        stackTrace: st,
+        details: <String, Object?>{
+          'collection': 'locations',
+          'area': cleanArea,
+          'query': 'where(area == $cleanArea)',
+          'filters': 'area == $cleanArea',
+          'orderBy': 'none',
+          'queryShape': 'single-field-equality',
+          'compositeIndex': 'not-required-for-this-shape-unless-console-error-requires-it',
+        },
+      );
       rethrow;
     }
 
@@ -29,9 +45,6 @@ class LocationReadService {
     for (final doc in snapshot.docs) {
       final data = doc.data();
       try {
-        
-        
-        
         results.add(LocationModel.fromMap(doc.id, data));
       } catch (e, st) {
         if (kDebugMode) {
@@ -39,6 +52,17 @@ class LocationReadService {
           debugPrint('stack: $st');
           debugPrint('rawKeys(<=30): ${data.keys.take(30).toList()}');
         }
+        await DevFirebaseDebugDialog.show(
+          operation: 'personal.locations.parse',
+          error: e,
+          stackTrace: st,
+          details: <String, Object?>{
+            'collection': 'locations',
+            'docId': doc.id,
+            'area': cleanArea,
+            'rawKeys': data.keys.take(40).toList(growable: false),
+          },
+        );
       }
     }
 
